@@ -58,6 +58,15 @@ pub enum RtpOutputEvent {
     Err(PayloadingError),
 }
 
+impl RtpOutputEvent {
+    pub fn data_size(&self) -> u64 {
+        match self {
+            Self::Data(packet) => packet.data_size(),
+            _ => 0,
+        }
+    }
+}
+
 impl RtpOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
@@ -65,6 +74,11 @@ impl RtpOutput {
         options: RtpOutputOptions,
     ) -> Result<(Self, Port), OutputInitError> {
         let mtu = options.connection_options.mtu();
+
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Rtp,
+        });
 
         let (socket, port) = match &options.connection_options {
             RtpOutputConnectionOptions::Udp { port, ip } => udp::udp_socket(ip, *port)?,
@@ -159,6 +173,7 @@ impl RtpOutput {
                     output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         payloader_options: payloader_options(PayloadedCodec::H264, mtu),
                         chunks_sender: sender,
@@ -175,6 +190,7 @@ impl RtpOutput {
                     output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         payloader_options: payloader_options(PayloadedCodec::H264, mtu),
                         chunks_sender: sender,
@@ -186,6 +202,7 @@ impl RtpOutput {
                     output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         payloader_options: payloader_options(PayloadedCodec::Vp8, mtu),
                         chunks_sender: sender,
@@ -197,6 +214,7 @@ impl RtpOutput {
                     output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         payloader_options: payloader_options(PayloadedCodec::Vp9, mtu),
                         chunks_sender: sender,
@@ -233,6 +251,7 @@ impl RtpOutput {
                 output_ref.clone(),
                 RtpAudioTrackThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_ref.clone(),
                     encoder_options: options.clone(),
                     payloader_options: payloader_options(PayloadedCodec::Opus, 48_000, mtu),
                     chunks_sender: sender,

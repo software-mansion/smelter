@@ -15,6 +15,7 @@ pub(crate) enum OutputStatsEvent {
     Hls(HlsOutputStatsEvent),
     Mp4(Mp4OutputStatsEvent),
     Rtmp(RtmpOutputStatsEvent),
+    Rtp(RtpOutputStatsEvent),
 }
 
 impl From<&OutputStatsEvent> for OutputProtocolKind {
@@ -25,6 +26,7 @@ impl From<&OutputStatsEvent> for OutputProtocolKind {
             OutputStatsEvent::Hls(_) => Self::Hls,
             OutputStatsEvent::Mp4(_) => Self::Mp4,
             OutputStatsEvent::Rtmp(_) => Self::Rtmp,
+            OutputStatsEvent::Rtp(_) => Self::Rtp,
         }
     }
 }
@@ -190,6 +192,39 @@ impl RtmpOutputTrackStatsEvent {
         match track_kind {
             StatsTrackKind::Video => RtmpOutputStatsEvent::Video(self).into_event(output_ref),
             StatsTrackKind::Audio => RtmpOutputStatsEvent::Audio(self).into_event(output_ref),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RtpOutputStatsEvent {
+    Video(RtpOutputTrackStatsEvent),
+    Audio(RtpOutputTrackStatsEvent),
+}
+
+impl RtpOutputStatsEvent {
+    pub fn into_event(self, output_ref: &Ref<OutputId>) -> StatsEvent {
+        StatsEvent::Output {
+            output_ref: output_ref.clone(),
+            event: OutputStatsEvent::Rtp(self),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RtpOutputTrackStatsEvent {
+    ChunkSize(u64),
+}
+
+impl RtpOutputTrackStatsEvent {
+    pub(crate) fn into_event(
+        self,
+        output_ref: &Ref<OutputId>,
+        track_kind: StatsTrackKind,
+    ) -> StatsEvent {
+        match track_kind {
+            StatsTrackKind::Video => RtpOutputStatsEvent::Video(self).into_event(output_ref),
+            StatsTrackKind::Audio => RtpOutputStatsEvent::Audio(self).into_event(output_ref),
         }
     }
 }
