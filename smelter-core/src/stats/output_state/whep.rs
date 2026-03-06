@@ -2,9 +2,7 @@ use std::time::Duration;
 
 use crate::stats::{
     WhepOutputStatsEvent, WhepOutputTrackStatsEvent,
-    output_reports::{
-        WhepOutputStatsReport, WhepOutputTrackSlidingWindowStatsReport, WhepOutputTrackStatsReport,
-    },
+    output_reports::{WhepOutputStatsReport, WhepOutputTrackStatsReport},
     utils::SlidingWindowValue,
 };
 
@@ -16,7 +14,7 @@ pub struct WhepOutputState {
 
 #[derive(Debug)]
 pub struct WhepOutputTrackState {
-    pub bitrate_10_secs: SlidingWindowValue<u64>,
+    pub bitrate_1_sec: SlidingWindowValue<u64>,
 }
 
 impl WhepOutputState {
@@ -45,24 +43,22 @@ impl WhepOutputState {
 impl WhepOutputTrackState {
     pub fn new() -> Self {
         Self {
-            bitrate_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
+            bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
         }
     }
 
     pub fn report(&mut self) -> WhepOutputTrackStatsReport {
         WhepOutputTrackStatsReport {
-            last_10_seconds: WhepOutputTrackSlidingWindowStatsReport {
-                bitrate_avg: self.bitrate_10_secs.sum()
-                    / self.bitrate_10_secs.window_size().as_secs(),
-            },
+            bitrate_avg_1_second: self.bitrate_1_sec.sum()
+                / self.bitrate_1_sec.window_size().as_secs(),
         }
     }
 
     pub fn handle_event(&mut self, event: WhepOutputTrackStatsEvent) {
         match event {
-            WhepOutputTrackStatsEvent::ChunkSize(chunk_size_bytes) => {
+            WhepOutputTrackStatsEvent::BytesSent(chunk_size_bytes) => {
                 let chunk_size_bits = chunk_size_bytes * 8;
-                self.bitrate_10_secs.push(chunk_size_bits);
+                self.bitrate_1_sec.push(chunk_size_bits);
             }
         }
     }

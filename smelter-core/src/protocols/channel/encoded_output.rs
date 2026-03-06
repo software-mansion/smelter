@@ -33,6 +33,12 @@ pub struct EncodedOutputChunk {
     pub kind: MediaKind,
 }
 
+impl EncodedOutputChunk {
+    pub fn data_size(&self) -> u64 {
+        self.data.len() as u64
+    }
+}
+
 impl EncodedOutputEvent {
     pub fn data_size(&self) -> u64 {
         match self {

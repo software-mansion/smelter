@@ -2,9 +2,7 @@ use std::time::Duration;
 
 use crate::stats::{
     RtmpOutputStatsEvent, RtmpOutputTrackStatsEvent,
-    output_reports::{
-        RtmpOutputStatsReport, RtmpOutputTrackSlidingWindowStatsReport, RtmpOutputTrackStatsReport,
-    },
+    output_reports::{RtmpOutputStatsReport, RtmpOutputTrackStatsReport},
     utils::SlidingWindowValue,
 };
 
@@ -16,7 +14,7 @@ pub struct RtmpOutputState {
 
 #[derive(Debug)]
 pub struct RtmpOutputTrackState {
-    pub bitrate_10_secs: SlidingWindowValue<u64>,
+    pub bitrate_1_sec: SlidingWindowValue<u64>,
 }
 
 impl RtmpOutputState {
@@ -45,24 +43,28 @@ impl RtmpOutputState {
 impl RtmpOutputTrackState {
     pub fn new() -> Self {
         Self {
-            bitrate_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
+            bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
         }
     }
 
     pub fn report(&mut self) -> RtmpOutputTrackStatsReport {
+        // RtmpOutputTrackStatsReport {
+        //     last_10_seconds: RtmpOutputTrackSlidingWindowStatsReport {
+        //         bitrate_avg: self.bitrate_10_secs.sum()
+        //             / self.bitrate_10_secs.window_size().as_secs(),
+        //     },
+        // }
         RtmpOutputTrackStatsReport {
-            last_10_seconds: RtmpOutputTrackSlidingWindowStatsReport {
-                bitrate_avg: self.bitrate_10_secs.sum()
-                    / self.bitrate_10_secs.window_size().as_secs(),
-            },
+            bitrate_avg_1_second: self.bitrate_1_sec.sum()
+                / self.bitrate_1_sec.window_size().as_secs(),
         }
     }
 
     pub fn handle_event(&mut self, event: RtmpOutputTrackStatsEvent) {
         match event {
-            RtmpOutputTrackStatsEvent::ChunkSize(chunk_size_bytes) => {
+            RtmpOutputTrackStatsEvent::BytesSent(chunk_size_bytes) => {
                 let chunk_size_bits = chunk_size_bytes * 8;
-                self.bitrate_10_secs.push(chunk_size_bits);
+                self.bitrate_1_sec.push(chunk_size_bits);
             }
         }
     }

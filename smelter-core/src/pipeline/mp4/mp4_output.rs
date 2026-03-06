@@ -134,6 +134,10 @@ impl Mp4Output {
                 let _span =
                     tracing::info_span!("MP4 writer", output_id = output_ref.to_string()).entered();
 
+                let mp4_stats_sender = Mp4OutputStatsSender {
+                    stats_sender: ctx.stats_sender.clone(),
+                    output_ref: output_ref.clone(),
+                };
                 run_ffmpeg_output_thread(
                     &ctx,
                     &output_ref,
@@ -141,6 +145,7 @@ impl Mp4Output {
                     video_stream,
                     audio_stream,
                     encoded_chunks_receiver,
+                    mp4_stats_sender,
                 );
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
@@ -169,13 +174,8 @@ impl Mp4Output {
                     output_ref.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
-                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
-                        chunk_size_event: Some(|size, output_ref| {
-                            Mp4OutputTrackStatsEvent::ChunkSize(size)
-                                .into_event(output_ref, StatsTrackKind::Video)
-                        }),
                     },
                 )?
             }
@@ -189,13 +189,8 @@ impl Mp4Output {
                     output_ref.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
-                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
-                        chunk_size_event: Some(|size, output_ref| {
-                            Mp4OutputTrackStatsEvent::ChunkSize(size)
-                                .into_event(output_ref, StatsTrackKind::Video)
-                        }),
                     },
                 )?
             }
@@ -244,13 +239,8 @@ impl Mp4Output {
                 output_ref.clone(),
                 AudioEncoderThreadOptions {
                     ctx: ctx.clone(),
-                    output_ref: output_ref.clone(),
                     encoder_options: options,
                     chunks_sender: encoded_chunks_sender,
-                    chunk_size_event: Some(|size, output_ref| {
-                        Mp4OutputTrackStatsEvent::ChunkSize(size)
-                            .into_event(output_ref, StatsTrackKind::Audio)
-                    }),
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {
@@ -315,6 +305,7 @@ fn run_ffmpeg_output_thread(
     mut video_stream: Option<StreamState>,
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
+    mp4_stats_sender: Mp4OutputStatsSender,
 ) {
     let mut eos_state = EosState::new(video_stream.is_some(), audio_stream.is_some());
     let mut timestamp_offset = None;
@@ -339,7 +330,13 @@ fn run_ffmpeg_output_thread(
                         }
                     },
                 };
-                if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
+                if let Err(err) = write_chunk(
+                    chunk,
+                    stream,
+                    &mut output_ctx,
+                    timestamp_offset,
+                    &mp4_stats_sender,
+                ) {
                     let try_write_trailer =
                         !matches!(err, OutputMp4RuntimeError::NoSpaceLeftOnDevice);
                     ctx.event_emitter.emit(Event::OutputError {
@@ -381,6 +378,7 @@ fn write_chunk(
     stream: &StreamState,
     output_ctx: &mut ffmpeg::format::context::Output,
     timestamp_offset: Duration,
+    mp4_stats_sender: &Mp4OutputStatsSender,
 ) -> Result<(), OutputMp4RuntimeError> {
     let pts = chunk.pts.saturating_sub(timestamp_offset);
     let dts = chunk
@@ -412,6 +410,7 @@ fn write_chunk(
         } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
         err => OutputMp4RuntimeError::PacketWriteError(err),
     })?;
+    mp4_stats_sender.bytes_sent_event(chunk.data_size(), chunk.kind.into());
     Ok(())
 }
 
@@ -467,5 +466,18 @@ impl EosState {
     fn is_complete(&self) -> bool {
         (self.received_video_eos.unwrap_or(true) && self.received_audio_eos.unwrap_or(true))
             || self.should_abort
+    }
+}
+
+struct Mp4OutputStatsSender {
+    stats_sender: StatsSender,
+    output_ref: Ref<OutputId>,
+}
+
+impl Mp4OutputStatsSender {
+    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+        self.stats_sender.send(
+            Mp4OutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+        );
     }
 }

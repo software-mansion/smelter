@@ -8,6 +8,7 @@ pub enum OutputStatsReport {
     Hls(HlsOutputStatsReport),
     Mp4(Mp4OutputStatsReport),
     Rtmp(RtmpOutputStatsReport),
+    Rtp(RtpOutputStatsReport),
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -18,12 +19,7 @@ pub struct WhepOutputStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct WhepOutputTrackStatsReport {
-    pub last_10_seconds: WhepOutputTrackSlidingWindowStatsReport,
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct WhepOutputTrackSlidingWindowStatsReport {
-    pub bitrate_avg: u64,
+    pub bitrate_avg_1_second: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -34,12 +30,7 @@ pub struct WhipOutputStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct WhipOutputTrackStatsReport {
-    pub last_10_seconds: WhipOutputTrackSlidingWindowStatsReport,
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct WhipOutputTrackSlidingWindowStatsReport {
-    pub bitrate_avg: u64,
+    pub bitrate_avg_1_second: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -50,12 +41,7 @@ pub struct HlsOutputStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct HlsOutputTrackStatsReport {
-    pub last_10_seconds: HlsOutputTrackSlidingWindowStatsReport,
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct HlsOutputTrackSlidingWindowStatsReport {
-    pub bitrate_avg: u64,
+    pub bitrate_avg_1_second: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -66,12 +52,7 @@ pub struct Mp4OutputStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Mp4OutputTrackStatsReport {
-    pub last_10_seconds: Mp4OutputTrackSlidingWindowStatsReport,
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct Mp4OutputTrackSlidingWindowStatsReport {
-    pub bitrate_avg: u64,
+    pub bitrate_avg_1_second: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -82,10 +63,16 @@ pub struct RtmpOutputStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct RtmpOutputTrackStatsReport {
-    pub last_10_seconds: RtmpOutputTrackSlidingWindowStatsReport,
+    pub bitrate_avg_1_second: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
-pub struct RtmpOutputTrackSlidingWindowStatsReport {
-    pub bitrate_avg: u64,
+pub struct RtpOutputStatsReport {
+    pub video: RtpOutputTrackStatsReport,
+    pub audio: RtpOutputTrackStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct RtpOutputTrackStatsReport {
+    pub bitrate_avg_1_second: u64,
 }

@@ -4,8 +4,8 @@ use crate::{
         OutputStatsEvent,
         output_reports::OutputStatsReport,
         output_state::{
-            hls::HlsOutputState, mp4::Mp4OutputState, rtmp::RtmpOutputState, whep::WhepOutputState,
-            whip::WhipOutputState,
+            hls::HlsOutputState, mp4::Mp4OutputState, rtmp::RtmpOutputState, rtp::RtpOutputState,
+            whep::WhepOutputState, whip::WhipOutputState,
         },
     },
 };
@@ -15,6 +15,7 @@ use tracing::error;
 pub mod hls;
 pub mod mp4;
 pub mod rtmp;
+pub mod rtp;
 pub mod whep;
 pub mod whip;
 
@@ -25,6 +26,7 @@ pub enum OutputStatsState {
     Hls(HlsOutputState),
     Mp4(Mp4OutputState),
     Rtmp(RtmpOutputState),
+    Rtp(RtpOutputState),
 }
 
 impl OutputStatsState {
@@ -34,7 +36,7 @@ impl OutputStatsState {
             OutputProtocolKind::Whip => OutputStatsState::Whip(WhipOutputState::new()),
             OutputProtocolKind::Hls => OutputStatsState::Hls(HlsOutputState::new()),
             OutputProtocolKind::Mp4 => OutputStatsState::Mp4(Mp4OutputState::new()),
-            OutputProtocolKind::Rtp => unimplemented!(),
+            OutputProtocolKind::Rtp => OutputStatsState::Rtp(RtpOutputState::new()),
             OutputProtocolKind::Rtmp => OutputStatsState::Rtmp(RtmpOutputState::new()),
             OutputProtocolKind::RawDataChannel => unimplemented!(),
             OutputProtocolKind::EncodedDataChannel => unimplemented!(),
@@ -48,6 +50,7 @@ impl OutputStatsState {
             Self::Hls(state) => OutputStatsReport::Hls(state.report()),
             Self::Mp4(state) => OutputStatsReport::Mp4(state.report()),
             Self::Rtmp(state) => OutputStatsReport::Rtmp(state.report()),
+            Self::Rtp(state) => OutputStatsReport::Rtp(state.report()),
         }
     }
 
@@ -66,6 +69,9 @@ impl OutputStatsState {
                 state.handle_event(event)
             }
             (OutputStatsState::Rtmp(state), OutputStatsEvent::Rtmp(event)) => {
+                state.handle_event(event)
+            }
+            (OutputStatsState::Rtp(state), OutputStatsEvent::Rtp(event)) => {
                 state.handle_event(event)
             }
             (state, event) => {

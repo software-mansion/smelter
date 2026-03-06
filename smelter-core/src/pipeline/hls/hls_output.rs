@@ -119,12 +119,17 @@ impl HlsOutput {
                 let _span =
                     tracing::info_span!("HLS writer", output_id = output_ref.to_string()).entered();
 
+                let hls_stats_sender = HlsOutputStatsSender {
+                    stats_sender: ctx.stats_sender.clone(),
+                    output_ref: output_ref.clone(),
+                };
                 run_ffmpeg_output_thread(
                     output_ctx,
                     video_stream,
                     audio_stream,
                     encoded_chunks_receiver,
                     ctx.output_framerate,
+                    hls_stats_sender,
                 );
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
@@ -153,13 +158,8 @@ impl HlsOutput {
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
-                        output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
-                        chunk_size_event: Some(|size, output_ref| {
-                            HlsOutputTrackStatsEvent::ChunkSize(size)
-                                .into_event(output_ref, StatsTrackKind::Video)
-                        }),
                     },
                 )?
             }
@@ -173,13 +173,8 @@ impl HlsOutput {
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
-                        output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
-                        chunk_size_event: Some(|size, output_ref| {
-                            HlsOutputTrackStatsEvent::ChunkSize(size)
-                                .into_event(output_ref, StatsTrackKind::Video)
-                        }),
                     },
                 )?
             }
@@ -228,13 +223,8 @@ impl HlsOutput {
                 output_id.clone(),
                 AudioEncoderThreadOptions {
                     ctx: ctx.clone(),
-                    output_ref: output_id.clone(),
                     encoder_options: options,
                     chunks_sender: encoded_chunks_sender,
-                    chunk_size_event: Some(|size, output_ref| {
-                        HlsOutputTrackStatsEvent::ChunkSize(size)
-                            .into_event(output_ref, StatsTrackKind::Audio)
-                    }),
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {
@@ -298,6 +288,7 @@ fn run_ffmpeg_output_thread(
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
     framerate: Framerate,
+    hls_stats_sender: HlsOutputStatsSender,
 ) {
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
     let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
@@ -314,6 +305,7 @@ fn run_ffmpeg_output_thread(
                     &mut output_ctx,
                     framerate.get_interval_duration(),
                     timestamp_offset,
+                    &hls_stats_sender,
                 );
             }
             EncodedOutputEvent::VideoEOS => match received_video_eos {
@@ -352,6 +344,7 @@ fn write_chunk(
     output_ctx: &mut ffmpeg::format::context::Output,
     frame_duration: Duration,
     timestamp_offset: Duration,
+    hls_stats_sender: &HlsOutputStatsSender,
 ) {
     let stream = match chunk.kind {
         MediaKind::Video(_) => match video_stream {
@@ -403,7 +396,23 @@ fn write_chunk(
         packet.set_flags(ffmpeg::packet::Flags::KEY)
     }
 
-    if let Err(err) = packet.write(output_ctx) {
-        error!("Failed to write packet to HLS file: {}.", err);
+    match packet.write(output_ctx) {
+        Ok(_) => {
+            hls_stats_sender.bytes_sent_event(chunk.data_size(), chunk.kind.into());
+        }
+        Err(err) => error!("Failed to write packet to HLS file: {}.", err),
+    }
+}
+
+struct HlsOutputStatsSender {
+    stats_sender: StatsSender,
+    output_ref: Ref<OutputId>,
+}
+
+impl HlsOutputStatsSender {
+    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+        self.stats_sender.send(
+            HlsOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+        );
     }
 }

@@ -16,7 +16,6 @@ pub(crate) struct WhepAudioTrackThreadHandle {
 
 pub(super) struct WhepAudioTrackThreadOptions<Encoder: AudioEncoder> {
     pub ctx: Arc<PipelineCtx>,
-    pub output_ref: Ref<OutputId>,
     pub encoder_options: Encoder::Options,
     pub chunks_sender: broadcast::Sender<EncodedOutputEvent>,
 }
@@ -24,8 +23,6 @@ pub(super) struct WhepAudioTrackThreadOptions<Encoder: AudioEncoder> {
 pub(super) struct WhepAudioTrackThread<Encoder: AudioEncoder> {
     stream: Box<dyn Iterator<Item = EncodedOutputEvent>>,
     chunks_sender: broadcast::Sender<EncodedOutputEvent>,
-    output_ref: Ref<OutputId>,
-    stats_sender: StatsSender,
     _encoder: PhantomData<Encoder>,
 }
 
@@ -41,11 +38,9 @@ where
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let WhepAudioTrackThreadOptions {
             ctx,
-            output_ref,
             encoder_options,
             chunks_sender,
         } = options;
-        let stats_sender = ctx.stats_sender.clone();
 
         let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
 
@@ -68,8 +63,6 @@ where
         let state = Self {
             stream: Box::new(stream),
             chunks_sender,
-            output_ref,
-            stats_sender,
             _encoder: PhantomData,
         };
         let output = WhepAudioTrackThreadHandle {
@@ -80,10 +73,6 @@ where
 
     fn run(self) {
         for event in self.stream {
-            self.stats_sender.send(vec![
-                WhepOutputTrackStatsEvent::ChunkSize(event.data_size())
-                    .into_event(&self.output_ref, StatsTrackKind::Audio),
-            ]);
             if self.chunks_sender.send(event).is_err() {
                 warn!("Failed to send encoded audio chunk from encoder. Channel closed.");
                 return;
