@@ -3,7 +3,9 @@ fn main() {
     use std::{io::Write, num::NonZeroU32};
     use vk_video::{
         Frame, VulkanInstance,
-        parameters::{RateControl, VideoParameters},
+        parameters::{
+            RateControl, VideoParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+        },
     };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -24,16 +26,18 @@ fn main() {
     let frame_count = args[3].parse::<u32>().expect("parse frame count");
 
     let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_adapter = vulkan_instance.create_adapter(None).unwrap();
+    let vulkan_adapter = vulkan_instance
+        .create_adapter(&VulkanAdapterDescriptor::default())
+        .unwrap();
     let vulkan_device = vulkan_adapter
-        .create_device(
-            wgpu::Features::IMMEDIATES,
-            wgpu::ExperimentalFeatures::disabled(),
-            wgpu::Limits {
+        .create_device(&VulkanDeviceDescriptor {
+            wgpu_features: wgpu::Features::IMMEDIATES,
+            wgpu_limits: wgpu::Limits {
                 max_immediate_size: 4,
                 ..Default::default()
             },
-        )
+            ..Default::default()
+        })
         .unwrap();
 
     let wgpu_state = WgpuState::new(

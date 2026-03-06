@@ -282,25 +282,25 @@ impl ResizingPipeline {
             vec![layout_input.clone(), layout_output.clone()],
         )?);
 
-        let mut front = wgpu::naga::front::wgsl::Frontend::new();
+        let mut front = naga::front::wgsl::Frontend::new();
         let parsed = front.parse(include_str!("shader.wgsl")).unwrap();
-        let mut validator = wgpu::naga::valid::Validator::new(
-            wgpu::naga::valid::ValidationFlags::all(),
-            wgpu::naga::valid::Capabilities::all(),
+        let mut validator = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
         );
         validator
-            .subgroup_stages(wgpu::naga::valid::ShaderStages::COMPUTE)
-            .subgroup_operations(wgpu::naga::valid::SubgroupOperationSet::all());
+            .subgroup_stages(naga::valid::ShaderStages::COMPUTE)
+            .subgroup_operations(naga::valid::SubgroupOperationSet::all());
         let module_info = validator.validate(&parsed).unwrap();
-        let compiled = wgpu::naga::back::spv::write_vec(
+        let compiled = naga::back::spv::write_vec(
             &parsed,
             &module_info,
-            &wgpu::naga::back::spv::Options {
+            &naga::back::spv::Options {
                 lang_version: (1, 6),
                 ..Default::default()
             },
-            Some(&wgpu::naga::back::spv::PipelineOptions {
-                shader_stage: wgpu::naga::ShaderStage::Compute,
+            Some(&naga::back::spv::PipelineOptions {
+                shader_stage: naga::ShaderStage::Compute,
                 entry_point: "main".into(),
             }),
         )
