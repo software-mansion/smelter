@@ -7,7 +7,7 @@ use std::{
 use tracing::{debug, warn};
 
 use crate::{
-    RtmpServerConnectionError, RtmpStreamError,
+    RtmpServerConnectionError, RtmpStreamError, TlsConfig,
     amf0::Amf0Value,
     message::{
         CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageOk, RtmpMessage,
@@ -30,9 +30,13 @@ pub(crate) const PUBLISHED_MESSAGE_STREAM_ID: u32 = 1;
 pub(crate) fn handle_connection(
     socket: TcpStream,
     on_connection: Arc<Mutex<OnConnectionCallback>>,
+    tls_config: Option<TlsConfig>,
 ) -> Result<(), RtmpServerConnectionError> {
     let should_close = Arc::new(AtomicBool::new(false));
-    let transport = RtmpTransport::tcp_server_stream(socket); // TODO: support TLS on input
+    let transport = match &tls_config {
+        Some(tls_config) => RtmpTransport::tls_server_stream(socket, tls_config)?,
+        None => RtmpTransport::tcp_server_stream(socket),
+    };
     let mut stream = RtmpByteStream::new(transport, should_close);
 
     Handshake::perform_as_server(&mut stream)?;

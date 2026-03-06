@@ -48,6 +48,8 @@ pub struct Config {
 
     pub rtmp_server_port: u16,
     pub rtmp_enable: bool,
+    pub rtmp_tls_cert_file: Option<Arc<str>>,
+    pub rtmp_tls_key_file: Option<Arc<str>>,
 }
 
 #[derive(Debug, Clone)]
@@ -320,6 +322,15 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => true,
     };
 
+    let rtmp_tls_cert_file = match env::var("SMELTER_RTMP_TLS_CERT_FILE") {
+        Ok(path) => Some(Arc::from(path.as_str())),
+        Err(_) => None,
+    };
+    let rtmp_tls_key_file = match env::var("SMELTER_RTMP_TLS_KEY_FILE") {
+        Ok(path) => Some(Arc::from(path.as_str())),
+        Err(_) => None,
+    };
+
     let log_file = match env::var("SMELTER_LOG_FILE") {
         Ok(path) => Some(Arc::from(PathBuf::from(path))),
         Err(_) => None,
@@ -365,6 +376,8 @@ fn try_read_config() -> Result<Config, String> {
         webrtc_nat_1to1_ips,
         rtmp_server_port,
         rtmp_enable,
+        rtmp_tls_cert_file,
+        rtmp_tls_key_file,
         rendering_mode,
     };
     Ok(config)

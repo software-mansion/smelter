@@ -20,15 +20,17 @@ pub struct RtmpConnection {
     pub receiver: Receiver<RtmpEvent>,
 }
 
-// TODO add SSL/TLS
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub port: u16,
-    pub use_ssl: bool,
-    pub cert_file: Option<Arc<str>>,
-    pub key_file: Option<Arc<str>>,
-    pub ca_cert_file: Option<Arc<str>>,
+    pub tls: Option<TlsConfig>,
     pub client_timeout_secs: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TlsConfig {
+    pub cert_file: Arc<str>,
+    pub key_file: Arc<str>,
 }
 
 pub struct RtmpServer {

@@ -550,7 +550,11 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     let (stats_monitor, stats_sender) = StatsMonitor::new();
 
     let rtmp_state = match opts.rtmp_server {
-        PipelineRtmpServerOptions::Enable { port } => Some(RtmpPipelineState::new(port)),
+        PipelineRtmpServerOptions::Enable {
+            port,
+            tls_cert_file,
+            tls_key_file,
+        } => Some(RtmpPipelineState::new(port, tls_cert_file, tls_key_file)),
         PipelineRtmpServerOptions::Disable => None,
     };
 
