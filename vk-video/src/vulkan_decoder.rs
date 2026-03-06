@@ -88,20 +88,19 @@ pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
     pub(crate) decode_result: DecodeResult<DecodeSubmissionImageInfo>,
     pub(crate) semaphore_wait_value: SemaphoreWaitValue,
     pub(crate) decoder: &'borrow mut VulkanDecoder<'decoder>,
+    pub(crate) input_buffer: DecodeInputBuffer,
 }
 
 impl<'a, 'b> DecodeSubmission<'a, 'b> {
     fn download_output(self) -> Result<DecodeResult<RawFrameData>, VulkanDecoderError> {
         let raw_frame_data = self.decoder.download_output(&self.decode_result.frame)?;
+        let frame = RawFrameData {
+            frame: raw_frame_data,
+            width: self.decode_result.frame.image.extent.width,
+            height: self.decode_result.frame.image.extent.height,
+        };
 
-        Ok(DecodeResult {
-            frame: RawFrameData {
-                frame: raw_frame_data,
-                width: self.decode_result.frame.image.extent.width,
-                height: self.decode_result.frame.image.extent.height,
-            },
-            metadata: self.decode_result.metadata,
-        })
+        self.finish(frame)
     }
 
     fn output_to_wgpu_texture(self) -> Result<DecodeResult<wgpu::Texture>, VulkanDecoderError> {
@@ -109,8 +108,14 @@ impl<'a, 'b> DecodeSubmission<'a, 'b> {
             .decoder
             .output_to_wgpu_texture(&self.decode_result.frame)?;
 
+        self.finish(wgpu_texture)
+    }
+
+    fn finish<T>(self, output: T) -> Result<DecodeResult<T>, VulkanDecoderError> {
+        self.decoder.free_input_buffer(self.input_buffer);
+
         Ok(DecodeResult {
-            frame: wgpu_texture,
+            frame: output,
             metadata: self.decode_result.metadata,
         })
     }
@@ -184,6 +189,12 @@ impl VulkanDecoder<'_> {
 }
 
 impl<'a> VulkanDecoder<'a> {
+    pub(crate) fn free_input_buffer(&mut self, buffer: DecodeInputBuffer) {
+        if let Some(session) = &mut self.video_session_resources {
+            session.decode_buffer_pool.free(buffer);
+        }
+    }
+
     pub fn decode_to_bytes(
         &mut self,
         decoder_instructions: &[DecoderInstruction],
@@ -282,14 +293,6 @@ impl<'a> VulkanDecoder<'a> {
         Ok(())
     }
 
-    fn pad_size_to_alignment(size: u64, align: u64) -> u64 {
-        if size % align == 0 {
-            size
-        } else {
-            (size + align) / align * align
-        }
-    }
-
     fn process_idr<'b>(
         &'b mut self,
         decode_information: &DecodeInformation,
@@ -327,15 +330,15 @@ impl<'a> VulkanDecoder<'a> {
         }
 
         // upload data to a buffer
-        let size = Self::pad_size_to_alignment(
-            decode_information.rbsp_bytes.len() as u64,
+        let size = (decode_information.rbsp_bytes.len() as u64).next_multiple_of(
             self.decoding_device
                 .profile_capabilities
                 .video_capabilities
-                .min_bitstream_buffer_offset_alignment,
+                .min_bitstream_buffer_size_alignment,
         );
 
-        video_session_resources.decode_buffer.upload_data(
+        let mut buffer = video_session_resources.decode_buffer_pool.buffer()?;
+        buffer.upload_data(
             &decode_information.rbsp_bytes,
             size,
             &video_session_resources.parameters.profile_info,
@@ -537,7 +540,7 @@ impl<'a> VulkanDecoder<'a> {
 
         // fill out the final struct and issue the command
         let decode_info = vk::VideoDecodeInfoKHR::default()
-            .src_buffer(*video_session_resources.decode_buffer.buffer)
+            .src_buffer(*buffer.buffer)
             .src_buffer_offset(0)
             .src_buffer_range(size)
             .dst_picture_resource(*dst_picture_resource_info)
@@ -604,6 +607,7 @@ impl<'a> VulkanDecoder<'a> {
             },
             semaphore_wait_value,
             decoder: self,
+            input_buffer: buffer,
         })
     }
 
