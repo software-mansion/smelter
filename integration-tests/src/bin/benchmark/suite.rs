@@ -112,16 +112,16 @@ pub fn full_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
         // - different encoder presets
         // - different input/output ratios
         benchmark_set_constant_input_output_ratio(ctx),
-        // benchmark multiple encoding presets with ffmpeg encoder / single input no decoder
-        benchmark_set_ffmpeg_h264_encoder_preset(ctx),
-        // benchmark multiple output resolutions with encoder / single input no decoder
-        benchmark_set_output_resolutions(ctx),
-        // rendering only / multiple outputs no encoder / single input no decoder
-        benchmark_set_renderer_only(ctx),
-        // decoder only tests / one output low resolution no encoder blank scene
-        benchmark_set_decoder_only(ctx),
-        // encoder only tests / one input passthrough scene
-        benchmark_set_encoder_only(ctx),
+        //// benchmark multiple encoding presets with ffmpeg encoder / single input no decoder
+        //benchmark_set_ffmpeg_h264_encoder_preset(ctx),
+        //// benchmark multiple output resolutions with encoder / single input no decoder
+        //benchmark_set_output_resolutions(ctx),
+        //// rendering only / multiple outputs no encoder / single input no decoder
+        //benchmark_set_renderer_only(ctx),
+        //// decoder only tests / one output low resolution no encoder blank scene
+        //benchmark_set_decoder_only(ctx),
+        //// encoder only tests / one input passthrough scene
+        //benchmark_set_encoder_only(ctx),
     ]
     .concat()
 }
@@ -261,31 +261,34 @@ fn benchmark_set_constant_input_output_ratio(
         ("4 inputs per output", four_video_layout, 4),
     ];
     let const_input_output_ratio_encoder_presets = [
-        FfmpegH264EncoderPreset::Ultrafast,
-        FfmpegH264EncoderPreset::Veryfast,
-        FfmpegH264EncoderPreset::Fast,
+        //EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Ultrafast),
+        //EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Veryfast),
+        //EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
+        EncoderOptions::VulkanH264,
     ];
 
     let const_input_output_ratio_input = [
-        (
-            "bbb_mp4_480p24fps",
-            InputFile::Mp4(ctx.bbb_mp4_480p24fps.clone()),
-        ),
-        (
-            "bbb_mp4_720p24fps",
-            InputFile::Mp4(ctx.bbb_mp4_720p24fps.clone()),
-        ),
+        //(
+        //    "bbb_mp4_480p24fps",
+        //    InputFile::Mp4(ctx.bbb_mp4_480p24fps.clone()),
+        //),
+        //(
+        //    "bbb_mp4_720p24fps",
+        //    InputFile::Mp4(ctx.bbb_mp4_720p24fps.clone()),
+        //),
         (
             "bbb_mp4_1080p30fps",
             InputFile::Mp4(ctx.bbb_mp4_1080p30fps.clone()),
         ),
-        (
-            "bbb_mp4_2160p30fps",
-            InputFile::Mp4(ctx.bbb_mp4_2160p30fps.clone()),
-        ),
+        //(
+        //    "bbb_mp4_2160p30fps",
+        //    InputFile::Mp4(ctx.bbb_mp4_2160p30fps.clone()),
+        //),
     ];
 
-    let const_input_output_ratio_decoder = supported_decoders(ctx);
+    let const_input_output_ratio_decoder = vec![
+            VideoDecoderOptions::VulkanH264,
+        ];
 
     const_input_output_ratio_decoder
         .iter()
@@ -315,7 +318,7 @@ fn benchmark_set_constant_input_output_ratio(
                 input_count: value * scene.2,
                 output_count: value,
                 scene_builder: scene.1,
-                encoder: EncoderOptions::FfmpegH264(encoder),
+                encoder,
                 decoder,
                 input_file: input.1.clone(),
                 ..ctx.default()

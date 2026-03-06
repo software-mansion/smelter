@@ -1,0 +1,14 @@
+[
+  {
+    "id": "1 input per output - preset: VulkanH264, input: bbb_mp4_1080p30fps, decoder: VulkanH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: VulkanH264, input: bbb_mp4_1080p30fps, decoder: VulkanH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: VulkanH264, input: bbb_mp4_1080p30fps, decoder: VulkanH264",
+    "config": null
+  }
+]
