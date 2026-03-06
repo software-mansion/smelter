@@ -46,6 +46,11 @@ impl HlsOutput {
     ) -> Result<Self, OutputInitError> {
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Hls,
+        });
+
         let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "hls")
             .map_err(OutputInitError::FfmpegError)?;
 

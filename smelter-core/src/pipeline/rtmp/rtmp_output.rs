@@ -69,6 +69,11 @@ impl RtmpClientOutput {
             None => (None, None),
         };
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Rtmp,
+        });
+
         let client = Self::establish_connection(options.connection, &video_config, &audio_config)?;
         std::thread::Builder::new()
             .name(format!("RTMP sender thread for output {output_ref}"))

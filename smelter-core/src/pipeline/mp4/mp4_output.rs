@@ -69,6 +69,11 @@ impl Mp4Output {
             };
         }
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Mp4,
+        });
+
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
         let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "mp4")
             .map_err(OutputInitError::FfmpegError)?;

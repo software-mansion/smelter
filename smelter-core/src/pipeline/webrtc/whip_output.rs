@@ -57,6 +57,11 @@ impl WhipOutput {
     ) -> Result<Self, OutputInitError> {
         let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
 
+        ctx.stats_sender.send(vec![StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Whip,
+        }]);
+
         let span = span!(
             Level::INFO,
             "WHIP client task",
