@@ -1,8 +1,4 @@
-use std::{
-    sync::{Arc, mpsc},
-    thread::JoinHandle,
-    time::Duration,
-};
+use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
 use crossbeam_channel::Sender;
 use rtmp::{AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent};
@@ -18,24 +14,69 @@ use crate::{
     error::DecoderInitError,
     pipeline::{
         decoder::{DecoderThreadHandle, fdk_aac::FdkAacDecoder, ffmpeg_h264, vulkan_h264},
-        rtmp::rtmp_input::decoder_thread::{
-            AudioDecoderThread, AudioDecoderThreadOptions, VideoDecoderThread,
-            VideoDecoderThreadOptions,
+        rtmp::rtmp_input::{
+            decoder_thread::{
+                AudioDecoderThread, AudioDecoderThreadOptions, VideoDecoderThread,
+                VideoDecoderThreadOptions,
+            },
+            state::RtmpInputState,
         },
-        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, input_buffer::InputBuffer},
+        utils::{
+            H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread, input_buffer::InputBuffer,
+        },
     },
-    utils::InitializableThread,
 };
 
 use crate::prelude::*;
 
-pub(crate) struct RtmpConnectionOptions {
-    pub app: Arc<str>,
-    pub stream_key: Arc<str>,
-    pub frame_sender: Sender<PipelineEvent<Frame>>,
-    pub samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
-    pub video_decoders: RtmpServerInputVideoDecoders,
-    pub buffer: InputBuffer,
+pub(crate) fn start_connection_thread(
+    ctx: Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
+    input: &RtmpInputState,
+    conn: rtmp::RtmpConnection,
+) -> JoinHandle<()> {
+    let app = conn.app().to_string();
+    let stream_key = conn.stream_key().to_string();
+    let input_id = input_ref.to_string();
+    let mut state = RtmpConnectionState {
+        ctx,
+        input_ref: input_ref.clone(),
+        frame_sender: input.frame_sender.clone(),
+        samples_sender: input.input_samples_sender.clone(),
+        video_decoders: input.video_decoders.clone(),
+        buffer: input.buffer.clone(),
+        first_packet_offset: None,
+        video_track_state: TrackState::BeforeFirstEvent,
+        audio_track_state: TrackState::BeforeFirstEvent,
+    };
+    std::thread::Builder::new()
+        .name(format!("RTMP thread for input {input_id}"))
+        .spawn(move || {
+            let _span = span!(
+                Level::INFO,
+                "RTMP thread",
+                input_id = input_id,
+                app = app,
+                stream_key = stream_key,
+            )
+            .entered();
+            info!("RTMP stream connection established");
+
+            for event in &conn {
+                if let Err(err) = state.handle_rtmp_event(event) {
+                    match err {
+                        RtmpConnectionError::DecoderChannelClosed => {
+                            error!("{}", ErrorStack::new(&err).into_string());
+                            break;
+                        }
+                        _ => warn!("{}", ErrorStack::new(&err).into_string()),
+                    }
+                }
+            }
+
+            info!("RTMP stream connection closed");
+        })
+        .unwrap()
 }
 
 enum TrackState {
@@ -85,20 +126,6 @@ struct RtmpConnectionState {
 }
 
 impl RtmpConnectionState {
-    fn new(ctx: Arc<PipelineCtx>, input_ref: Ref<InputId>, options: RtmpConnectionOptions) -> Self {
-        Self {
-            ctx,
-            input_ref,
-            frame_sender: options.frame_sender,
-            samples_sender: options.samples_sender,
-            video_decoders: options.video_decoders,
-            buffer: options.buffer,
-            first_packet_offset: None,
-            video_track_state: TrackState::BeforeFirstEvent,
-            audio_track_state: TrackState::BeforeFirstEvent,
-        }
-    }
-
     fn handle_rtmp_event(&mut self, rtmp_event: RtmpEvent) -> Result<(), RtmpConnectionError> {
         match rtmp_event {
             RtmpEvent::H264Config(config) => self.process_video_config(config)?,
@@ -242,41 +269,4 @@ impl RtmpConnectionState {
         self.buffer.recalculate_buffer(pts);
         pts
     }
-}
-
-pub(crate) fn start_connection_thread(
-    ctx: Arc<PipelineCtx>,
-    input_ref: Ref<InputId>,
-    receiver: mpsc::Receiver<RtmpEvent>,
-    options: RtmpConnectionOptions,
-) -> JoinHandle<()> {
-    std::thread::Builder::new()
-        .name(format!("RTMP thread for input {input_ref}"))
-        .spawn(move || {
-            let _span = span!(
-                Level::INFO,
-                "RTMP thread",
-                input_id = input_ref.id().to_string(),
-                app = options.app.to_string(),
-                stream_key = options.stream_key.to_string(),
-            )
-            .entered();
-            let mut state = RtmpConnectionState::new(ctx, input_ref, options);
-            info!("RTMP stream connection opened");
-
-            while let Ok(rtmp_event) = receiver.recv() {
-                if let Err(err) = state.handle_rtmp_event(rtmp_event) {
-                    match err {
-                        RtmpConnectionError::DecoderChannelClosed => {
-                            error!("{}", ErrorStack::new(&err).into_string());
-                            break;
-                        }
-                        _ => warn!("{}", ErrorStack::new(&err).into_string()),
-                    }
-                }
-            }
-
-            info!("RTMP stream connection closed");
-        })
-        .unwrap()
 }
