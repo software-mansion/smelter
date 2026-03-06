@@ -1,0 +1,69 @@
+use std::time::Duration;
+
+use crate::stats::{
+    RtmpOutputStatsEvent, RtmpOutputTrackStatsEvent,
+    output_reports::{
+        RtmpOutputStatsReport, RtmpOutputTrackSlidingWindowStatsReport, RtmpOutputTrackStatsReport,
+    },
+    utils::SlidingWindowValue,
+};
+
+#[derive(Debug)]
+pub struct RtmpOutputState {
+    pub video: RtmpOutputTrackState,
+    pub audio: RtmpOutputTrackState,
+}
+
+#[derive(Debug)]
+pub struct RtmpOutputTrackState {
+    pub bitrate_10_secs: SlidingWindowValue<u64>,
+}
+
+impl RtmpOutputState {
+    pub fn new() -> Self {
+        Self {
+            video: RtmpOutputTrackState::new(),
+            audio: RtmpOutputTrackState::new(),
+        }
+    }
+
+    pub fn report(&mut self) -> RtmpOutputStatsReport {
+        RtmpOutputStatsReport {
+            video: self.video.report(),
+            audio: self.audio.report(),
+        }
+    }
+
+    pub fn handle_event(&mut self, event: RtmpOutputStatsEvent) {
+        match event {
+            RtmpOutputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
+            RtmpOutputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+        }
+    }
+}
+
+impl RtmpOutputTrackState {
+    pub fn new() -> Self {
+        Self {
+            bitrate_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
+        }
+    }
+
+    pub fn report(&mut self) -> RtmpOutputTrackStatsReport {
+        RtmpOutputTrackStatsReport {
+            last_10_seconds: RtmpOutputTrackSlidingWindowStatsReport {
+                bitrate_avg: self.bitrate_10_secs.sum()
+                    / self.bitrate_10_secs.window_size().as_secs(),
+            },
+        }
+    }
+
+    pub fn handle_event(&mut self, event: RtmpOutputTrackStatsEvent) {
+        match event {
+            RtmpOutputTrackStatsEvent::ChunkSize(chunk_size_bytes) => {
+                let chunk_size_bits = chunk_size_bytes * 8;
+                self.bitrate_10_secs.push(chunk_size_bits);
+            }
+        }
+    }
+}

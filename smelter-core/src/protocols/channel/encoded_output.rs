@@ -33,6 +33,15 @@ pub struct EncodedOutputChunk {
     pub kind: MediaKind,
 }
 
+impl EncodedOutputEvent {
+    pub fn data_size(&self) -> u64 {
+        match self {
+            Self::Data(data) => data.data.len() as u64,
+            Self::AudioEOS | Self::VideoEOS => 0,
+        }
+    }
+}
+
 impl fmt::Debug for EncodedOutputChunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let len = self.data.len();

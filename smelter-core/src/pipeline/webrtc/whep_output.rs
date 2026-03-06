@@ -56,6 +56,11 @@ impl WhepOutput {
         };
         let bearer_token = options.bearer_token.clone();
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Whep,
+        });
+
         let video_options = options
             .video
             .as_ref()
@@ -97,6 +102,7 @@ impl WhepOutput {
                     output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
                     },
@@ -112,6 +118,7 @@ impl WhepOutput {
                     output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
                     },
@@ -122,6 +129,7 @@ impl WhepOutput {
                     output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
                     },
@@ -132,6 +140,7 @@ impl WhepOutput {
                     output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
                     },
@@ -157,6 +166,7 @@ impl WhepOutput {
                 output_ref.clone(),
                 WhepAudioTrackThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_ref.clone(),
                     encoder_options: options.clone(),
                     chunks_sender: sender,
                 },

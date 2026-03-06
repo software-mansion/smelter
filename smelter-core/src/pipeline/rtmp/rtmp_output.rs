@@ -69,6 +69,11 @@ impl RtmpClientOutput {
             None => (None, None),
         };
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Rtmp,
+        });
+
         let client = Self::establish_connection(options.connection, &video_config, &audio_config)?;
         std::thread::Builder::new()
             .name(format!("RTMP sender thread for output {output_ref}"))
@@ -131,8 +136,13 @@ impl RtmpClientOutput {
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            RtmpOutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -146,8 +156,13 @@ impl RtmpClientOutput {
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            RtmpOutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -183,8 +198,13 @@ impl RtmpClientOutput {
                 output_id.clone(),
                 AudioEncoderThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_id.clone(),
                     encoder_options: options,
                     chunks_sender,
+                    chunk_size_event: Some(|size, output_ref| {
+                        RtmpOutputTrackStatsEvent::ChunkSize(size)
+                            .into_event(output_ref, StatsTrackKind::Audio)
+                    }),
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {

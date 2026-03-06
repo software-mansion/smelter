@@ -26,6 +26,7 @@ pub(crate) struct WhipVideoTrackThreadHandle {
 
 pub(super) struct WhipVideoTrackThreadOptions<Encoder: VideoEncoder> {
     pub ctx: Arc<PipelineCtx>,
+    pub output_ref: Ref<OutputId>,
     pub encoder_options: Encoder::Options,
     pub payloader_options: PayloaderOptions,
     pub chunks_sender: mpsc::Sender<RtpPacket>,
@@ -34,6 +35,8 @@ pub(super) struct WhipVideoTrackThreadOptions<Encoder: VideoEncoder> {
 pub(super) struct WhipVideoTrackThread<Encoder: VideoEncoder> {
     stream: Box<dyn Iterator<Item = RtpPacket>>,
     chunks_sender: mpsc::Sender<RtpPacket>,
+    output_ref: Ref<OutputId>,
+    stats_sender: StatsSender,
     _encoder: PhantomData<Encoder>,
 }
 
@@ -49,10 +52,12 @@ where
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let WhipVideoTrackThreadOptions {
             ctx,
+            output_ref,
             encoder_options,
             payloader_options,
             chunks_sender,
         } = options;
+        let stats_sender = ctx.stats_sender.clone();
 
         let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
         let (encoded_stream, encoder_ctx) = VideoEncoderStream::<Encoder, _>::new(
@@ -77,7 +82,9 @@ where
 
         let state = Self {
             stream: Box::new(stream),
+            output_ref,
             chunks_sender,
+            stats_sender,
             _encoder: PhantomData,
         };
         let output = WhipVideoTrackThreadHandle {
@@ -90,6 +97,10 @@ where
 
     fn run(self) {
         for event in self.stream {
+            self.stats_sender.send(vec![
+                WhipOutputTrackStatsEvent::ChunkSize(event.data_size())
+                    .into_event(&self.output_ref, StatsTrackKind::Video),
+            ]);
             if self.chunks_sender.blocking_send(event).is_err() {
                 warn!("Failed to send encoded video chunk from encoder. Channel closed.");
                 return;

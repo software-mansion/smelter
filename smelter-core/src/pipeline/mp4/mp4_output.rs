@@ -69,6 +69,11 @@ impl Mp4Output {
             };
         }
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Mp4,
+        });
+
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
         let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "mp4")
             .map_err(OutputInitError::FfmpegError)?;
@@ -164,8 +169,13 @@ impl Mp4Output {
                     output_ref.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            Mp4OutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -179,8 +189,13 @@ impl Mp4Output {
                     output_ref.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            Mp4OutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -229,8 +244,13 @@ impl Mp4Output {
                 output_ref.clone(),
                 AudioEncoderThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_ref.clone(),
                     encoder_options: options,
                     chunks_sender: encoded_chunks_sender,
+                    chunk_size_event: Some(|size, output_ref| {
+                        Mp4OutputTrackStatsEvent::ChunkSize(size)
+                            .into_event(output_ref, StatsTrackKind::Audio)
+                    }),
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {

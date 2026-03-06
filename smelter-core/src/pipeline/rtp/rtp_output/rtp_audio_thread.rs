@@ -23,6 +23,7 @@ pub(crate) struct RtpAudioTrackThreadHandle {
 
 pub(super) struct RtpAudioTrackThreadOptions<Encoder: AudioEncoder> {
     pub ctx: Arc<PipelineCtx>,
+    pub output_ref: Ref<OutputId>,
     pub encoder_options: Encoder::Options,
     pub payloader_options: PayloaderOptions,
     pub chunks_sender: Sender<RtpOutputEvent>,
@@ -31,6 +32,8 @@ pub(super) struct RtpAudioTrackThreadOptions<Encoder: AudioEncoder> {
 pub(super) struct RtpAudioTrackThread<Encoder: AudioEncoder> {
     stream: Box<dyn Iterator<Item = RtpOutputEvent>>,
     chunks_sender: Sender<RtpOutputEvent>,
+    output_ref: Ref<OutputId>,
+    stats_sender: StatsSender,
     _encoder: PhantomData<Encoder>,
 }
 
@@ -46,11 +49,13 @@ where
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let RtpAudioTrackThreadOptions {
             ctx,
+            output_ref,
             encoder_options,
             payloader_options,
             chunks_sender,
         } = options;
 
+        let stats_sender = ctx.stats_sender.clone();
         let ssrc = payloader_options.ssrc;
         let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
 
@@ -79,6 +84,8 @@ where
         let state = Self {
             stream: Box::new(stream),
             chunks_sender,
+            output_ref,
+            stats_sender,
             _encoder: PhantomData,
         };
         let output = RtpAudioTrackThreadHandle {
@@ -89,6 +96,10 @@ where
 
     fn run(self) {
         for event in self.stream {
+            self.stats_sender.send(vec![
+                RtpOutputTrackStatsEvent::ChunkSize(event.data_size())
+                    .into_event(&self.output_ref, StatsTrackKind::Audio),
+            ]);
             if self.chunks_sender.send(event).is_err() {
                 warn!("Failed to send encoded audio chunk from encoder. Channel closed.");
                 return;
