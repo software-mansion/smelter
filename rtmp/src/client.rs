@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, atomic::AtomicBool},
-};
+use std::collections::HashMap;
 
 use tracing::{debug, warn};
 
@@ -18,6 +15,7 @@ use crate::{
         byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
     },
     transport::RtmpTransport,
+    utils::ShutdownCondition,
 };
 
 const CONNECT_TRANSACTION_ID: u32 = 1;
@@ -34,6 +32,7 @@ pub struct RtmpClientConfig {
 pub struct RtmpClient {
     state: RtmpClientState,
     stream_id: u32,
+    shutdown_condition: ShutdownCondition,
 }
 
 struct RtmpClientState {
@@ -47,14 +46,14 @@ struct RtmpClientState {
 
 impl RtmpClient {
     pub fn connect(config: RtmpClientConfig) -> Result<Self, RtmpConnectionError> {
-        let should_close = Arc::new(AtomicBool::new(false));
+        let shutdown_condition = ShutdownCondition::default();
 
         let transport = if config.use_tls {
             RtmpTransport::tls_client(&config.host, config.port)?
         } else {
             RtmpTransport::tcp_client(&config.host, config.port)?
         };
-        let mut socket = RtmpByteStream::new(transport, should_close);
+        let mut socket = RtmpByteStream::new(transport, shutdown_condition.clone());
 
         Handshake::perform_as_client(&mut socket)?;
         debug!("Handshake complete");
@@ -68,7 +67,11 @@ impl RtmpClient {
         let stream_id = state.negotiate_connection(&config.app, &config.stream_key)?;
         debug!("Negotiation complete");
 
-        Ok(Self { state, stream_id })
+        Ok(Self {
+            state,
+            stream_id,
+            shutdown_condition,
+        })
     }
 
     pub fn send<T>(&mut self, event: T) -> Result<(), RtmpStreamError>
@@ -86,6 +89,12 @@ impl RtmpClient {
             self.state.default_msg_handler(msg)?;
         }
         Ok(())
+    }
+}
+
+impl Drop for RtmpClient {
+    fn drop(&mut self) {
+        self.shutdown_condition.mark_for_shutdown();
     }
 }
 

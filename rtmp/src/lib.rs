@@ -8,6 +8,7 @@ mod message;
 mod protocol;
 mod server;
 mod transport;
+mod utils;
 
 pub use client::*;
 pub use error::*;

@@ -1,45 +1,20 @@
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
-    mpsc::Receiver,
-};
+use std::sync::Arc;
 
-use crate::{
-    RtmpConnectionError, RtmpEvent, RtmpStreamError, server::listen_thread::start_listener_thread,
-};
+use crate::{RtmpConnectionError, RtmpStreamError};
 
 mod connection;
-mod listen_thread;
+mod connection_thread;
+mod instance;
+mod listener_thread;
 mod negotiation;
 
-pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
+pub use connection::RtmpServerConnection;
+pub use instance::RtmpServer;
 
-pub struct RtmpConnection {
-    app: Arc<str>,
-    stream_key: Arc<str>,
-    receiver: Receiver<RtmpEvent>,
-}
-
-impl RtmpConnection {
-    pub fn app(&self) -> &Arc<str> {
-        &self.app
-    }
-
-    pub fn stream_key(&self) -> &Arc<str> {
-        &self.stream_key
-    }
-}
-
-impl Iterator for &RtmpConnection {
-    type Item = RtmpEvent;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.receiver.recv().ok()
-    }
-}
+pub type OnConnectionCallback = Box<dyn FnMut(RtmpServerConnection) + Send + 'static>;
 
 #[derive(Debug, Clone)]
-pub struct ServerConfig {
+pub struct RtmpServerConfig {
     pub port: u16,
     pub tls: Option<TlsConfig>,
     pub client_timeout_secs: u64,
@@ -51,11 +26,6 @@ pub struct TlsConfig {
     pub key_file: Arc<str>,
 }
 
-pub struct RtmpServer {
-    config: ServerConfig,
-    shutdown: Arc<AtomicBool>,
-}
-
 #[derive(thiserror::Error, Debug)]
 pub(super) enum RtmpServerConnectionError {
     #[error("Failed to establish RTMP connection.")]
@@ -63,27 +33,7 @@ pub(super) enum RtmpServerConnectionError {
 
     #[error("Connection failed")]
     ConnectionFailed(#[from] RtmpStreamError),
-}
 
-impl RtmpServer {
-    pub fn config(&self) -> ServerConfig {
-        self.config.clone()
-    }
-
-    pub fn start(
-        config: ServerConfig,
-        on_connection: OnConnectionCallback,
-    ) -> Result<Arc<Mutex<Self>>, std::io::Error> {
-        start_listener_thread(config, on_connection)
-    }
-
-    pub fn shutdown(&self) {
-        self.shutdown.store(true, Ordering::Relaxed);
-    }
-}
-
-impl Drop for RtmpServer {
-    fn drop(&mut self) {
-        self.shutdown();
-    }
+    #[error("Received connection during RTMP server shutdown")]
+    ShutdownInProgress,
 }

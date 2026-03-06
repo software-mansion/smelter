@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 bytes = "1"
+crossbeam-channel = "0.5.15"
 tracing = "0.1.40"
 thiserror = "1.0.40"
 url = "2.5.2"
