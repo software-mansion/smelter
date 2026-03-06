@@ -1,11 +1,11 @@
-use rtmp::{RtmpConnection, RtmpEvent, RtmpServer, ServerConfig};
+use rtmp::{RtmpEvent, RtmpServer, RtmpServerConnection, RtmpServerConfig};
 use std::thread;
 use tracing::info;
 
 fn main() {
     tracing_subscriber::fmt::init();
 
-    let config = ServerConfig {
+    let config = RtmpServerConfig {
         port: 1935,
         use_ssl: false,
         cert_file: None,
@@ -14,7 +14,7 @@ fn main() {
         client_timeout_secs: 30,
     };
 
-    let on_connection = Box::new(|conn: RtmpConnection| {
+    let on_connection = Box::new(|conn: RtmpServerConnection| {
         let app = conn.app().to_string();
         let stream_key = conn.stream_key().to_string();
 

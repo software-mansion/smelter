@@ -1,10 +1,6 @@
-use std::{
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
+use std::{sync::Arc, thread, time::Duration};
 
-use rtmp::{RtmpConnection, RtmpServer, ServerConfig};
+use rtmp::{RtmpServer, RtmpServerConnection, RtmpServerConfig};
 use smelter_render::error::ErrorStack;
 use tracing::{error, warn};
 
@@ -31,11 +27,11 @@ impl RtmpPipelineState {
 pub fn spawn_rtmp_server(
     ctx: Arc<PipelineCtx>,
     state: &RtmpPipelineState,
-) -> Result<Arc<Mutex<RtmpServer>>, InitPipelineError> {
+) -> Result<RtmpServer, InitPipelineError> {
     let port = state.port;
     let inputs = state.inputs.clone();
 
-    let config = ServerConfig {
+    let config = RtmpServerConfig {
         port,
         use_ssl: false,
         cert_file: None,
@@ -70,7 +66,7 @@ pub fn spawn_rtmp_server(
 fn handle_incoming_connection(
     ctx: Arc<PipelineCtx>,
     inputs: RtmpInputsState,
-    conn: RtmpConnection,
+    conn: RtmpServerConnection,
 ) -> Result<(), RtmpServerError> {
     let input_ref = inputs.find_by_app_stream_key(conn.app(), conn.stream_key())?;
     inputs.get_mut_with(&input_ref, |input| {

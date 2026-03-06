@@ -33,7 +33,7 @@ pub(crate) fn start_connection_thread(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     input: &RtmpInputState,
-    conn: rtmp::RtmpConnection,
+    conn: rtmp::RtmpServerConnection,
 ) -> JoinHandle<()> {
     let app = conn.app().to_string();
     let stream_key = conn.stream_key().to_string();
