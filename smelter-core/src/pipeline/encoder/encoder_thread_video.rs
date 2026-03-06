@@ -21,11 +21,14 @@ pub(crate) struct VideoEncoderThreadOptions<Encoder: VideoEncoder> {
     pub ctx: Arc<PipelineCtx>,
     pub encoder_options: Encoder::Options,
     pub chunks_sender: Sender<EncodedOutputEvent>,
+    pub output_ref: Ref<OutputId>,
 }
 
 pub(crate) struct VideoEncoderThread<Encoder: VideoEncoder> {
     stream: Box<dyn Iterator<Item = EncodedOutputEvent>>,
     chunks_sender: Sender<EncodedOutputEvent>,
+    output_ref: Ref<OutputId>,
+    stats_sender: StatsSender,
     _encoder: PhantomData<Encoder>,
 }
 
@@ -43,7 +46,9 @@ where
             ctx,
             encoder_options,
             chunks_sender,
+            output_ref,
         } = options;
+        let stats_sender = ctx.stats_sender.clone();
 
         let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
         let (encoded_stream, encoder_ctx) = VideoEncoderStream::<Encoder, _>::new(
@@ -60,6 +65,8 @@ where
         let state = Self {
             stream: Box::new(stream),
             chunks_sender,
+            output_ref,
+            stats_sender,
             _encoder: PhantomData,
         };
         let output = VideoEncoderThreadHandle {
@@ -72,6 +79,10 @@ where
 
     fn run(self) {
         for event in self.stream {
+            self.stats_sender.send(vec![
+                HlsOutputTrackStatsEvent::ChunkSize(event.data_size())
+                    .into_event(&self.output_ref, StatsTrackKind::Video),
+            ]);
             if self.chunks_sender.send(event).is_err() {
                 warn!("Failed to send encoded video chunk from encoder. Channel closed.");
                 return;

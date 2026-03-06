@@ -148,6 +148,7 @@ impl HlsOutput {
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
                     },
@@ -163,6 +164,7 @@ impl HlsOutput {
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
                     },
@@ -213,6 +215,7 @@ impl HlsOutput {
                 output_id.clone(),
                 AudioEncoderThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_id.clone(),
                     encoder_options: options,
                     chunks_sender: encoded_chunks_sender,
                 },

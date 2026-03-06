@@ -12,6 +12,7 @@ pub(crate) enum StatsTrackKind {
 pub(crate) enum OutputStatsEvent {
     Whep(WhepOutputStatsEvent),
     Whip(WhipOutputStatsEvent),
+    Hls(HlsOutputStatsEvent),
 }
 
 impl From<&OutputStatsEvent> for OutputProtocolKind {
@@ -19,6 +20,7 @@ impl From<&OutputStatsEvent> for OutputProtocolKind {
         match value {
             OutputStatsEvent::Whep(_) => Self::Whep,
             OutputStatsEvent::Whip(_) => Self::Whip,
+            OutputStatsEvent::Hls(_) => Self::Hls,
         }
     }
 }
@@ -85,6 +87,39 @@ impl WhipOutputTrackStatsEvent {
         match track_kind {
             StatsTrackKind::Video => WhipOutputStatsEvent::Video(self).into_event(output_ref),
             StatsTrackKind::Audio => WhipOutputStatsEvent::Audio(self).into_event(output_ref),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum HlsOutputStatsEvent {
+    Video(HlsOutputTrackStatsEvent),
+    Audio(HlsOutputTrackStatsEvent),
+}
+
+impl HlsOutputStatsEvent {
+    pub fn into_event(self, output_ref: &Ref<OutputId>) -> StatsEvent {
+        StatsEvent::Output {
+            output_ref: output_ref.clone(),
+            event: OutputStatsEvent::Hls(self),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum HlsOutputTrackStatsEvent {
+    ChunkSize(u64),
+}
+
+impl HlsOutputTrackStatsEvent {
+    pub(crate) fn into_event(
+        self,
+        output_ref: &Ref<OutputId>,
+        track_kind: StatsTrackKind,
+    ) -> StatsEvent {
+        match track_kind {
+            StatsTrackKind::Video => HlsOutputStatsEvent::Video(self).into_event(output_ref),
+            StatsTrackKind::Audio => HlsOutputStatsEvent::Audio(self).into_event(output_ref),
         }
     }
 }
