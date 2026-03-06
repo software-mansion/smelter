@@ -117,6 +117,7 @@ pub async fn setup_video_track(
                 output_ref.clone(),
                 WhipVideoTrackThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_ref.clone(),
                     encoder_options: options,
                     payloader_options: payloader_options(
                         PayloadedCodec::H264,
@@ -132,6 +133,7 @@ pub async fn setup_video_track(
                 output_ref.clone(),
                 WhipVideoTrackThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_ref.clone(),
                     encoder_options: options,
                     payloader_options: payloader_options(
                         PayloadedCodec::H264,
@@ -146,6 +148,7 @@ pub async fn setup_video_track(
             output_ref.clone(),
             WhipVideoTrackThreadOptions {
                 ctx: ctx.clone(),
+                output_ref: output_ref.clone(),
                 encoder_options: options,
                 payloader_options: payloader_options(
                     PayloadedCodec::Vp8,
@@ -159,6 +162,7 @@ pub async fn setup_video_track(
             output_ref.clone(),
             WhipVideoTrackThreadOptions {
                 ctx: ctx.clone(),
+                output_ref: output_ref.clone(),
                 encoder_options: options,
                 payloader_options: payloader_options(
                     PayloadedCodec::Vp9,
@@ -230,6 +234,7 @@ pub async fn setup_audio_track(
             output_id.clone(),
             WhipAudioTrackThreadOptions {
                 ctx: ctx.clone(),
+                output_ref: output_id.clone(),
                 encoder_options: options,
                 payloader_options: payloader_options(
                     PayloadedCodec::Opus,

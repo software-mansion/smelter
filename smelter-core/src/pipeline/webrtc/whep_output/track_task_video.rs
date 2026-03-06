@@ -66,8 +66,8 @@ where
         let state = Self {
             stream: Box::new(stream),
             output_ref,
-            stats_sender,
             chunks_sender,
+            stats_sender,
             _encoder: PhantomData,
         };
         let output = WhepVideoTrackThreadHandle {

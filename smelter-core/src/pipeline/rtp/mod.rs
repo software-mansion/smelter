@@ -25,6 +25,12 @@ pub enum RtpInputEvent {
     LostPacket,
 }
 
+impl RtpPacket {
+    pub fn data_size(&self) -> u64 {
+        self.packet.payload.len() as u64
+    }
+}
+
 impl std::fmt::Debug for RtpPacket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let first_bytes = &self.packet.payload[0..usize::min(10, self.packet.payload.len())];
