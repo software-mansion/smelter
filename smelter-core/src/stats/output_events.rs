@@ -38,8 +38,6 @@ impl WhepOutputStatsEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum WhepOutputTrackStatsEvent {
-    PacketSent,
-    NackReceived,
     ChunkSize(u64),
 }
 
