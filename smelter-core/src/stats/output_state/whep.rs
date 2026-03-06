@@ -16,12 +16,6 @@ pub struct WhepOutputState {
 
 #[derive(Debug)]
 pub struct WhepOutputTrackState {
-    pub packets_sent: u64,
-    pub nacks_received: u64,
-
-    pub packets_sent_10_secs: SlidingWindowValue<u64>,
-    pub nacks_received_10_secs: SlidingWindowValue<u64>,
-
     pub bitrate_10_secs: SlidingWindowValue<u64>,
 }
 
@@ -51,25 +45,13 @@ impl WhepOutputState {
 impl WhepOutputTrackState {
     pub fn new() -> Self {
         Self {
-            packets_sent: 0,
-            packets_sent_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
-
-            nacks_received: 0,
-            nacks_received_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
-
             bitrate_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
         }
     }
 
     pub fn report(&mut self) -> WhepOutputTrackStatsReport {
         WhepOutputTrackStatsReport {
-            packets_sent: self.packets_sent,
-            nacks_received: self.nacks_received,
-
             last_10_seconds: WhepOutputTrackSlidingWindowStatsReport {
-                packets_sent: self.packets_sent_10_secs.sum(),
-                nacks_received: self.nacks_received_10_secs.sum(),
-
                 bitrate_avg: self.bitrate_10_secs.sum()
                     / self.bitrate_10_secs.window_size().as_secs(),
             },
@@ -78,14 +60,6 @@ impl WhepOutputTrackState {
 
     pub fn handle_event(&mut self, event: WhepOutputTrackStatsEvent) {
         match event {
-            WhepOutputTrackStatsEvent::PacketSent => {
-                self.packets_sent += 1;
-                self.packets_sent_10_secs.push(1);
-            }
-            WhepOutputTrackStatsEvent::NackReceived => {
-                self.nacks_received += 1;
-                self.nacks_received_10_secs.push(1);
-            }
             WhepOutputTrackStatsEvent::ChunkSize(chunk_size_bytes) => {
                 let chunk_size_bits = chunk_size_bytes * 8;
                 self.bitrate_10_secs.push(chunk_size_bits);

@@ -14,14 +14,10 @@ pub struct WhepOutputStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct WhepOutputTrackStatsReport {
-    pub packets_sent: u64,
-    pub nacks_received: u64,
     pub last_10_seconds: WhepOutputTrackSlidingWindowStatsReport,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct WhepOutputTrackSlidingWindowStatsReport {
-    pub packets_sent: u64,
-    pub nacks_received: u64,
     pub bitrate_avg: u64,
 }

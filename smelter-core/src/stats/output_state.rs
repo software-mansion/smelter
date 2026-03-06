@@ -39,6 +39,7 @@ impl OutputStatsState {
             (OutputStatsState::Whep(state), OutputStatsEvent::Whep(event)) => {
                 state.handle_event(event)
             }
+            #[allow(unreachable_patterns)]
             (state, event) => {
                 error!(?state, ?event, "Wrong event type for input")
             }
