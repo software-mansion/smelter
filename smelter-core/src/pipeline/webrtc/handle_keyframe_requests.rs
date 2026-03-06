@@ -8,7 +8,6 @@ use webrtc::{
 
 use crate::PipelineCtx;
 
-// TODO: (@jbrs) Think of how to do nack handling here for stats
 pub(crate) fn handle_keyframe_requests(
     ctx: &Arc<PipelineCtx>,
     sender: Arc<RTCRtpSender>,
