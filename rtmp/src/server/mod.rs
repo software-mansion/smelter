@@ -15,9 +15,27 @@ mod negotiation;
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 
 pub struct RtmpConnection {
-    pub app: Arc<str>,
-    pub stream_key: Arc<str>,
-    pub receiver: Receiver<RtmpEvent>,
+    app: Arc<str>,
+    stream_key: Arc<str>,
+    receiver: Receiver<RtmpEvent>,
+}
+
+impl RtmpConnection {
+    pub fn app(&self) -> &Arc<str> {
+        &self.app
+    }
+
+    pub fn stream_key(&self) -> &Arc<str> {
+        &self.stream_key
+    }
+}
+
+impl Iterator for &RtmpConnection {
+    type Item = RtmpEvent;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.receiver.recv().ok()
+    }
 }
 
 // TODO add SSL/TLS
