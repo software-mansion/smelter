@@ -5,6 +5,7 @@ use serde::Serialize;
 pub enum OutputStatsReport {
     Whep(WhepOutputStatsReport),
     Whip(WhipOutputStatsReport),
+    Hls(HlsOutputStatsReport),
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -36,5 +37,21 @@ pub struct WhipOutputTrackStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct WhipOutputTrackSlidingWindowStatsReport {
+    pub bitrate_avg: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct HlsOutputStatsReport {
+    pub video: HlsOutputTrackStatsReport,
+    pub audio: HlsOutputTrackStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct HlsOutputTrackStatsReport {
+    pub last_10_seconds: HlsOutputTrackSlidingWindowStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct HlsOutputTrackSlidingWindowStatsReport {
     pub bitrate_avg: u64,
 }

@@ -3,12 +3,13 @@ use crate::{
     stats::{
         OutputStatsEvent,
         output_reports::OutputStatsReport,
-        output_state::{whep::WhepOutputState, whip::WhipOutputState},
+        output_state::{hls::HlsOutputState, whep::WhepOutputState, whip::WhipOutputState},
     },
 };
 
 use tracing::error;
 
+pub mod hls;
 pub mod whep;
 pub mod whip;
 
@@ -16,6 +17,7 @@ pub mod whip;
 pub enum OutputStatsState {
     Whep(WhepOutputState),
     Whip(WhipOutputState),
+    Hls(HlsOutputState),
 }
 
 impl OutputStatsState {
@@ -23,7 +25,7 @@ impl OutputStatsState {
         match kind {
             OutputProtocolKind::Whep => OutputStatsState::Whep(WhepOutputState::new()),
             OutputProtocolKind::Whip => OutputStatsState::Whip(WhipOutputState::new()),
-            OutputProtocolKind::Hls => unimplemented!(),
+            OutputProtocolKind::Hls => OutputStatsState::Hls(HlsOutputState::new()),
             OutputProtocolKind::Mp4 => unimplemented!(),
             OutputProtocolKind::Rtp => unimplemented!(),
             OutputProtocolKind::Rtmp => unimplemented!(),
@@ -36,6 +38,7 @@ impl OutputStatsState {
         match self {
             Self::Whep(state) => OutputStatsReport::Whep(state.report()),
             Self::Whip(state) => OutputStatsReport::Whip(state.report()),
+            Self::Hls(state) => OutputStatsReport::Hls(state.report()),
         }
     }
 
@@ -47,7 +50,9 @@ impl OutputStatsState {
             (OutputStatsState::Whip(state), OutputStatsEvent::Whip(event)) => {
                 state.handle_event(event)
             }
-            #[allow(unreachable_patterns)]
+            (OutputStatsState::Hls(state), OutputStatsEvent::Hls(event)) => {
+                state.handle_event(event)
+            }
             (state, event) => {
                 error!(?state, ?event, "Wrong event type for input")
             }

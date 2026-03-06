@@ -164,6 +164,7 @@ impl Mp4Output {
                     output_ref.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
                     },
@@ -179,6 +180,7 @@ impl Mp4Output {
                     output_ref.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
                     },
@@ -229,6 +231,7 @@ impl Mp4Output {
                 output_ref.clone(),
                 AudioEncoderThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_ref.clone(),
                     encoder_options: options,
                     chunks_sender: encoded_chunks_sender,
                 },

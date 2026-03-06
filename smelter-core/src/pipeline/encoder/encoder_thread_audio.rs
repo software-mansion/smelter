@@ -21,11 +21,14 @@ pub(crate) struct AudioEncoderThreadOptions<Encoder: AudioEncoder> {
     pub ctx: Arc<PipelineCtx>,
     pub encoder_options: Encoder::Options,
     pub chunks_sender: Sender<EncodedOutputEvent>,
+    pub output_ref: Ref<OutputId>,
 }
 
 pub(crate) struct AudioEncoderThread<Encoder: AudioEncoder> {
     stream: Box<dyn Iterator<Item = EncodedOutputEvent>>,
     chunks_sender: Sender<EncodedOutputEvent>,
+    output_ref: Ref<OutputId>,
+    stats_sender: StatsSender,
     _encoder: PhantomData<Encoder>,
 }
 
@@ -43,7 +46,9 @@ where
             ctx,
             encoder_options,
             chunks_sender,
+            output_ref,
         } = options;
+        let stats_sender = ctx.stats_sender.clone();
 
         let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
         let resampled_stream = ResampledForEncoderStream::new(
@@ -65,6 +70,8 @@ where
         let state = Self {
             stream: Box::new(stream),
             chunks_sender,
+            output_ref,
+            stats_sender,
             _encoder: PhantomData,
         };
         let output = AudioEncoderThreadHandle {
@@ -76,6 +83,10 @@ where
 
     fn run(self) {
         for event in self.stream {
+            self.stats_sender.send(vec![
+                HlsOutputTrackStatsEvent::ChunkSize(event.data_size())
+                    .into_event(&self.output_ref, StatsTrackKind::Audio),
+            ]);
             if self.chunks_sender.send(event).is_err() {
                 warn!("Failed to send encoded audio chunk from encoder. Channel closed.");
                 return;
