@@ -48,6 +48,7 @@ impl EncodedDataOutput {
                             output_ref: output_id.clone(),
                             encoder_options: options.clone(),
                             chunks_sender: sender.clone(),
+                            chunk_size_event: None,
                         },
                     )?)
                 }
@@ -59,6 +60,7 @@ impl EncodedDataOutput {
                             output_ref: output_id.clone(),
                             encoder_options: options.clone(),
                             chunks_sender: sender.clone(),
+                            chunk_size_event: None,
                         },
                     )?)
                 }
@@ -70,6 +72,7 @@ impl EncodedDataOutput {
                             output_ref: output_id.clone(),
                             encoder_options: options.clone(),
                             chunks_sender: sender.clone(),
+                            chunk_size_event: None,
                         },
                     )?)
                 }
@@ -81,6 +84,7 @@ impl EncodedDataOutput {
                             output_ref: output_id.clone(),
                             encoder_options: options.clone(),
                             chunks_sender: sender.clone(),
+                            chunk_size_event: None,
                         },
                     )?)
                 }
@@ -98,6 +102,7 @@ impl EncodedDataOutput {
                             output_ref: output_id.clone(),
                             encoder_options: options.clone(),
                             chunks_sender: sender.clone(),
+                            chunk_size_event: None,
                         },
                     )?)
                 }
@@ -109,6 +114,7 @@ impl EncodedDataOutput {
                             output_ref: output_id.clone(),
                             encoder_options: options.clone(),
                             chunks_sender: sender.clone(),
+                            chunk_size_event: None,
                         },
                     )?)
                 }

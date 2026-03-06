@@ -22,6 +22,7 @@ pub(crate) struct VideoEncoderThreadOptions<Encoder: VideoEncoder> {
     pub encoder_options: Encoder::Options,
     pub chunks_sender: Sender<EncodedOutputEvent>,
     pub output_ref: Ref<OutputId>,
+    pub chunk_size_event: Option<fn(u64, &Ref<OutputId>) -> StatsEvent>,
 }
 
 pub(crate) struct VideoEncoderThread<Encoder: VideoEncoder> {
@@ -29,6 +30,7 @@ pub(crate) struct VideoEncoderThread<Encoder: VideoEncoder> {
     chunks_sender: Sender<EncodedOutputEvent>,
     output_ref: Ref<OutputId>,
     stats_sender: StatsSender,
+    chunk_size_event: Option<fn(u64, &Ref<OutputId>) -> StatsEvent>,
     _encoder: PhantomData<Encoder>,
 }
 
@@ -47,6 +49,7 @@ where
             encoder_options,
             chunks_sender,
             output_ref,
+            chunk_size_event,
         } = options;
         let stats_sender = ctx.stats_sender.clone();
 
@@ -67,6 +70,7 @@ where
             chunks_sender,
             output_ref,
             stats_sender,
+            chunk_size_event,
             _encoder: PhantomData,
         };
         let output = VideoEncoderThreadHandle {
@@ -79,10 +83,10 @@ where
 
     fn run(self) {
         for event in self.stream {
-            self.stats_sender.send(vec![
-                HlsOutputTrackStatsEvent::ChunkSize(event.data_size())
-                    .into_event(&self.output_ref, StatsTrackKind::Video),
-            ]);
+            if let Some(make_event) = self.chunk_size_event {
+                self.stats_sender
+                    .send(vec![make_event(event.data_size(), &self.output_ref)]);
+            }
             if self.chunks_sender.send(event).is_err() {
                 warn!("Failed to send encoded video chunk from encoder. Channel closed.");
                 return;

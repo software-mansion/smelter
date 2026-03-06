@@ -167,6 +167,10 @@ impl Mp4Output {
                         output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            Mp4OutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -183,6 +187,10 @@ impl Mp4Output {
                         output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            Mp4OutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -234,6 +242,10 @@ impl Mp4Output {
                     output_ref: output_ref.clone(),
                     encoder_options: options,
                     chunks_sender: encoded_chunks_sender,
+                    chunk_size_event: Some(|size, output_ref| {
+                        Mp4OutputTrackStatsEvent::ChunkSize(size)
+                            .into_event(output_ref, StatsTrackKind::Audio)
+                    }),
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {

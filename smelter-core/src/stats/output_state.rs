@@ -4,8 +4,8 @@ use crate::{
         OutputStatsEvent,
         output_reports::OutputStatsReport,
         output_state::{
-            hls::HlsOutputState, mp4::Mp4OutputState, rtmp::RtmpOutputState,
-            whep::WhepOutputState, whip::WhipOutputState,
+            hls::HlsOutputState, mp4::Mp4OutputState, rtmp::RtmpOutputState, whep::WhepOutputState,
+            whip::WhipOutputState,
         },
     },
 };

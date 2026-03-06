@@ -134,6 +134,10 @@ impl RtmpClientOutput {
                         output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            RtmpOutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -150,6 +154,10 @@ impl RtmpClientOutput {
                         output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            RtmpOutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -188,6 +196,10 @@ impl RtmpClientOutput {
                     output_ref: output_id.clone(),
                     encoder_options: options,
                     chunks_sender,
+                    chunk_size_event: Some(|size, output_ref| {
+                        RtmpOutputTrackStatsEvent::ChunkSize(size)
+                            .into_event(output_ref, StatsTrackKind::Audio)
+                    }),
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {

@@ -151,6 +151,10 @@ impl HlsOutput {
                         output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            HlsOutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -167,6 +171,10 @@ impl HlsOutput {
                         output_ref: output_id.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: encoded_chunks_sender,
+                        chunk_size_event: Some(|size, output_ref| {
+                            HlsOutputTrackStatsEvent::ChunkSize(size)
+                                .into_event(output_ref, StatsTrackKind::Video)
+                        }),
                     },
                 )?
             }
@@ -218,6 +226,10 @@ impl HlsOutput {
                     output_ref: output_id.clone(),
                     encoder_options: options,
                     chunks_sender: encoded_chunks_sender,
+                    chunk_size_event: Some(|size, output_ref| {
+                        HlsOutputTrackStatsEvent::ChunkSize(size)
+                            .into_event(output_ref, StatsTrackKind::Audio)
+                    }),
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {

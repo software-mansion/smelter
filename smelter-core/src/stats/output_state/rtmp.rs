@@ -3,8 +3,7 @@ use std::time::Duration;
 use crate::stats::{
     RtmpOutputStatsEvent, RtmpOutputTrackStatsEvent,
     output_reports::{
-        RtmpOutputStatsReport, RtmpOutputTrackSlidingWindowStatsReport,
-        RtmpOutputTrackStatsReport,
+        RtmpOutputStatsReport, RtmpOutputTrackSlidingWindowStatsReport, RtmpOutputTrackStatsReport,
     },
     utils::SlidingWindowValue,
 };
