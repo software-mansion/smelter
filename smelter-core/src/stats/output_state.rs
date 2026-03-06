@@ -3,13 +3,18 @@ use crate::{
     stats::{
         OutputStatsEvent,
         output_reports::OutputStatsReport,
-        output_state::{hls::HlsOutputState, whep::WhepOutputState, whip::WhipOutputState},
+        output_state::{
+            hls::HlsOutputState, mp4::Mp4OutputState, rtmp::RtmpOutputState,
+            whep::WhepOutputState, whip::WhipOutputState,
+        },
     },
 };
 
 use tracing::error;
 
 pub mod hls;
+pub mod mp4;
+pub mod rtmp;
 pub mod whep;
 pub mod whip;
 
@@ -18,6 +23,8 @@ pub enum OutputStatsState {
     Whep(WhepOutputState),
     Whip(WhipOutputState),
     Hls(HlsOutputState),
+    Mp4(Mp4OutputState),
+    Rtmp(RtmpOutputState),
 }
 
 impl OutputStatsState {
@@ -26,9 +33,9 @@ impl OutputStatsState {
             OutputProtocolKind::Whep => OutputStatsState::Whep(WhepOutputState::new()),
             OutputProtocolKind::Whip => OutputStatsState::Whip(WhipOutputState::new()),
             OutputProtocolKind::Hls => OutputStatsState::Hls(HlsOutputState::new()),
-            OutputProtocolKind::Mp4 => unimplemented!(),
+            OutputProtocolKind::Mp4 => OutputStatsState::Mp4(Mp4OutputState::new()),
             OutputProtocolKind::Rtp => unimplemented!(),
-            OutputProtocolKind::Rtmp => unimplemented!(),
+            OutputProtocolKind::Rtmp => OutputStatsState::Rtmp(RtmpOutputState::new()),
             OutputProtocolKind::RawDataChannel => unimplemented!(),
             OutputProtocolKind::EncodedDataChannel => unimplemented!(),
         }
@@ -39,6 +46,8 @@ impl OutputStatsState {
             Self::Whep(state) => OutputStatsReport::Whep(state.report()),
             Self::Whip(state) => OutputStatsReport::Whip(state.report()),
             Self::Hls(state) => OutputStatsReport::Hls(state.report()),
+            Self::Mp4(state) => OutputStatsReport::Mp4(state.report()),
+            Self::Rtmp(state) => OutputStatsReport::Rtmp(state.report()),
         }
     }
 
@@ -51,6 +60,12 @@ impl OutputStatsState {
                 state.handle_event(event)
             }
             (OutputStatsState::Hls(state), OutputStatsEvent::Hls(event)) => {
+                state.handle_event(event)
+            }
+            (OutputStatsState::Mp4(state), OutputStatsEvent::Mp4(event)) => {
+                state.handle_event(event)
+            }
+            (OutputStatsState::Rtmp(state), OutputStatsEvent::Rtmp(event)) => {
                 state.handle_event(event)
             }
             (state, event) => {
