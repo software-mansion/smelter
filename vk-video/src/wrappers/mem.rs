@@ -83,6 +83,34 @@ impl Drop for MemoryAllocation {
     }
 }
 
+pub(crate) struct DecodeInputBufferPool<'a> {
+    freelist: Vec<DecodeInputBuffer>,
+    allocator: Arc<Allocator>,
+    profile: Arc<H264DecodeProfileInfo<'a>>,
+}
+
+impl<'a> DecodeInputBufferPool<'a> {
+    pub(crate) fn new(allocator: Arc<Allocator>, profile: Arc<H264DecodeProfileInfo<'a>>) -> Self {
+        Self {
+            allocator,
+            freelist: Vec::new(),
+            profile
+        }
+    }
+
+    pub(crate) fn buffer(&mut self) -> Result<DecodeInputBuffer, VulkanDecoderError> {
+        if let Some(buffer) = self.freelist.pop() {
+            return Ok(buffer);
+        }
+
+        DecodeInputBuffer::new(self.allocator.clone(), &self.profile)
+    }
+
+    pub(crate) fn free(&mut self, buffer: DecodeInputBuffer) {
+        self.freelist.push(buffer);
+    }
+}
+
 pub(crate) struct DecodeInputBuffer {
     pub(crate) buffer: Buffer,
     capacity: u64,

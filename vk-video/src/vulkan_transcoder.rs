@@ -14,7 +14,7 @@ use crate::{
     vulkan_decoder::{DecodeResult, FrameSorter, ImageModifiers, VulkanDecoder},
     vulkan_encoder::{FullEncoderParameters, H264EncodeProfileInfo, VulkanEncoder},
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
-    wrappers::SemaphoreWaitValue,
+    wrappers::{DecodeInputBuffer, SemaphoreWaitValue},
 };
 
 mod pipeline;
@@ -40,6 +40,7 @@ pub enum TranscoderError {
 pub(crate) struct ResizedImages {
     images: ResizeSubmission,
     decoder_wait_value: SemaphoreWaitValue,
+    input_buffer: DecodeInputBuffer,
 }
 
 pub struct Transcoder {
@@ -184,6 +185,7 @@ impl Transcoder {
                 frame: ResizedImages {
                     images: output,
                     decoder_wait_value: frame.semaphore_wait_value,
+                    input_buffer: frame.input_buffer,
                 },
                 metadata: frame.decode_result.metadata,
             });
@@ -240,6 +242,9 @@ impl Transcoder {
         self.decoder
             .tracker
             .mark_waited(resized_images.data.decoder_wait_value);
+        self.decoder
+            .free_input_buffer(resized_images.data.input_buffer);
+
         self.resizing_pipeline
             .mark_command_buffers_completed(resized_images.data.decoder_wait_value);
         self.resizing_pipeline
