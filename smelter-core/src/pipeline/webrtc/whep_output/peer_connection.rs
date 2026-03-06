@@ -336,9 +336,6 @@ fn handle_cleanup_on_disconnect(
 ) {
     match state {
         RTCPeerConnectionState::Connected => {
-            stats_sender.send(vec![
-                WhepOutputStatsEvent::PeerConnected.into_event(&output_ref),
-            ]);
             if let Ok(mut handle) = cleanup_task_handle.lock()
                 && let Some(task) = handle.take()
             {

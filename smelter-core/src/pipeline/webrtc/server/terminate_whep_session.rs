@@ -19,7 +19,7 @@ pub async fn handle_terminate_whep_session(
 
     state
         .outputs
-        .remove_session(&output_ref, &session_id)
+        .remove_session(&output_ref, &session_id, &state.ctx.stats_sender)
         .await?;
 
     info!(?session_id, output_id=?output_ref.id(), "WHEP session terminated");

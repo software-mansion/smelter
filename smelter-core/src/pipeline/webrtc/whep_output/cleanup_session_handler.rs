@@ -12,6 +12,7 @@ pub(crate) struct OnCleanupSessionHdlr {
     outputs: WhepOutputsState,
     output_ref: Ref<OutputId>,
     session_id: Arc<str>,
+    stats_sender: StatsSender,
 }
 
 impl OnCleanupSessionHdlr {
@@ -19,11 +20,13 @@ impl OnCleanupSessionHdlr {
         outputs: &WhepOutputsState,
         output_ref: &Ref<OutputId>,
         session_id: &Arc<str>,
+        stats_sender: &StatsSender,
     ) -> Self {
         Self {
             outputs: outputs.clone(),
             output_ref: output_ref.clone(),
             session_id: session_id.clone(),
+            stats_sender: stats_sender.clone(),
         }
     }
 
@@ -32,8 +35,12 @@ impl OnCleanupSessionHdlr {
             outputs,
             output_ref,
             session_id,
+            stats_sender,
         } = self;
-        if let Err(err) = outputs.remove_session(output_ref, session_id).await {
+        if let Err(err) = outputs
+            .remove_session(output_ref, session_id, stats_sender)
+            .await
+        {
             warn!(?session_id, output_id=?output_ref.id(), "Failed to remove session: {err}");
         }
     }
