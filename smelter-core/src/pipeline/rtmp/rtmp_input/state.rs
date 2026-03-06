@@ -49,13 +49,13 @@ impl RtmpInputState {
 }
 
 impl RtmpInputsState {
-    pub fn get_with<T, Func: FnOnce(&RtmpInputState) -> Result<T, RtmpServerError>>(
+    pub fn get_mut_with<T, Func: FnOnce(&mut RtmpInputState) -> Result<T, RtmpServerError>>(
         &self,
         input_ref: &Ref<InputId>,
         func: Func,
     ) -> Result<T, RtmpServerError> {
-        let guard = self.0.lock().unwrap();
-        match guard.get(input_ref) {
+        let mut guard = self.0.lock().unwrap();
+        match guard.get_mut(input_ref) {
             Some(input) => func(input),
             None => Err(RtmpServerError::InputNotFound(input_ref.id().clone())),
         }
@@ -88,41 +88,28 @@ impl RtmpInputsState {
         app: &Arc<str>,
         stream_key: &Arc<str>,
     ) -> Result<Ref<InputId>, RtmpServerError> {
-        let app = app.clone();
-        let stream_key = stream_key.clone();
         let guard = self.0.lock().unwrap();
         let (input_ref, _) = guard
             .iter()
-            .find(|(_, input)| input.app == app && input.stream_key == stream_key)
-            .ok_or(RtmpServerError::NotRegisteredAppStreamKeyPair { app, stream_key })?;
+            .find(|(_, input)| &input.app == app && &input.stream_key == stream_key)
+            .ok_or_else(|| RtmpServerError::NotRegisteredAppStreamKeyPair {
+                app: app.clone(),
+                stream_key: stream_key.clone(),
+            })?;
         Ok(input_ref.clone())
     }
+}
 
-    pub(crate) fn has_active_connection(&self, input_ref: &Ref<InputId>) -> bool {
-        let mut guard = self.0.lock().unwrap();
-        let Some(input) = guard.get_mut(input_ref) else {
-            return false;
-        };
-        match &input.connection_handle {
-            Some(handle) if handle.is_finished() => {
-                input.connection_handle = None;
-                false
-            }
-            Some(_handle) => true,
-            None => false,
-        }
-    }
-
-    pub(crate) fn set_connection_handle(
+impl RtmpInputState {
+    pub fn ensure_no_active_connection(
         &self,
         input_ref: &Ref<InputId>,
-        handle: JoinHandle<()>,
     ) -> Result<(), RtmpServerError> {
-        let mut guard = self.0.lock().unwrap();
-        let input = guard
-            .get_mut(input_ref)
-            .ok_or(RtmpServerError::InputNotFound(input_ref.id().clone()))?;
-        input.connection_handle = Some(handle);
-        Ok(())
+        match &self.connection_handle {
+            Some(handle) if !handle.is_finished() => Err(RtmpServerError::ConnectionAlreadyActive(
+                input_ref.id().clone(),
+            )),
+            _ => Ok(()),
+        }
     }
 }

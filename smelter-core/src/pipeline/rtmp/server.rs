@@ -9,8 +9,7 @@ use smelter_render::error::ErrorStack;
 use tracing::{error, warn};
 
 use crate::pipeline::rtmp::rtmp_input::{
-    connection::{RtmpConnectionOptions, start_connection_thread},
-    state::RtmpInputsState,
+    connection::start_connection_thread, state::RtmpInputsState,
 };
 
 use crate::prelude::*;
@@ -73,27 +72,11 @@ fn handle_incoming_connection(
     inputs: RtmpInputsState,
     conn: RtmpConnection,
 ) -> Result<(), RtmpServerError> {
-    let input_ref = inputs.find_by_app_stream_key(&conn.app, &conn.stream_key)?;
-
-    if inputs.has_active_connection(&input_ref) {
-        return Err(RtmpServerError::ConnectionAlreadyActive(
-            input_ref.id().clone(),
-        ));
-    }
-
-    let options = inputs.get_with(&input_ref, |input| {
-        Ok(RtmpConnectionOptions {
-            app: input.app.clone(),
-            stream_key: input.stream_key.clone(),
-            frame_sender: input.frame_sender.clone(),
-            samples_sender: input.input_samples_sender.clone(),
-            video_decoders: input.video_decoders.clone(),
-            buffer: input.buffer.clone(),
-        })
-    })?;
-
-    let handle = start_connection_thread(ctx, input_ref.clone(), conn.receiver, options);
-    inputs.set_connection_handle(&input_ref, handle)?;
-
-    Ok(())
+    let input_ref = inputs.find_by_app_stream_key(conn.app(), conn.stream_key())?;
+    inputs.get_mut_with(&input_ref, |input| {
+        input.ensure_no_active_connection(&input_ref)?;
+        let handle = start_connection_thread(ctx, &input_ref, input, conn);
+        input.connection_handle = Some(handle);
+        Ok(())
+    })
 }
