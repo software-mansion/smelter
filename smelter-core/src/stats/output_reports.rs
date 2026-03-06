@@ -6,6 +6,8 @@ pub enum OutputStatsReport {
     Whep(WhepOutputStatsReport),
     Whip(WhipOutputStatsReport),
     Hls(HlsOutputStatsReport),
+    Mp4(Mp4OutputStatsReport),
+    Rtmp(RtmpOutputStatsReport),
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -53,5 +55,37 @@ pub struct HlsOutputTrackStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct HlsOutputTrackSlidingWindowStatsReport {
+    pub bitrate_avg: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Mp4OutputStatsReport {
+    pub video: Mp4OutputTrackStatsReport,
+    pub audio: Mp4OutputTrackStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Mp4OutputTrackStatsReport {
+    pub last_10_seconds: Mp4OutputTrackSlidingWindowStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Mp4OutputTrackSlidingWindowStatsReport {
+    pub bitrate_avg: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct RtmpOutputStatsReport {
+    pub video: RtmpOutputTrackStatsReport,
+    pub audio: RtmpOutputTrackStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct RtmpOutputTrackStatsReport {
+    pub last_10_seconds: RtmpOutputTrackSlidingWindowStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct RtmpOutputTrackSlidingWindowStatsReport {
     pub bitrate_avg: u64,
 }
