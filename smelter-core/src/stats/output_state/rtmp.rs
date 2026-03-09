@@ -48,12 +48,6 @@ impl RtmpOutputTrackState {
     }
 
     pub fn report(&mut self) -> RtmpOutputTrackStatsReport {
-        // RtmpOutputTrackStatsReport {
-        //     last_10_seconds: RtmpOutputTrackSlidingWindowStatsReport {
-        //         bitrate_avg: self.bitrate_10_secs.sum()
-        //             / self.bitrate_10_secs.window_size().as_secs(),
-        //     },
-        // }
         RtmpOutputTrackStatsReport {
             bitrate_avg_1_second: self.bitrate_1_sec.sum()
                 / self.bitrate_1_sec.window_size().as_secs(),
