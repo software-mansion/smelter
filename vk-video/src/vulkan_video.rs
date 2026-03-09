@@ -190,7 +190,7 @@ impl BytesDecoder {
         frame: EncodedInputChunk<&[u8]>,
     ) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
         let nalus = self.parser.parse(frame.data, frame.pts)?;
-        self.decode_nalus(nalus)
+        self.decode_aus_to_bytes(nalus)
     }
 
     /// Flush all frames from the decoder.
@@ -199,7 +199,7 @@ impl BytesDecoder {
     /// that need to be presented before the already decoded frames.
     pub fn flush(&mut self) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
         let nalus = self.parser.flush()?;
-        let mut frames = self.decode_nalus(nalus)?;
+        let mut frames = self.decode_aus_to_bytes(nalus)?;
         frames.append(&mut self.frame_sorter.flush());
         Ok(frames)
     }
@@ -211,11 +211,19 @@ impl BytesDecoder {
         self.reference_ctx.mark_missed_frames();
     }
 
-    fn decode_nalus(
+    #[cfg(feature = "expose_parsers")]
+    pub fn decode_access_units(
         &mut self,
-        nalus: Vec<AccessUnit>,
+        access_units: Vec<AccessUnit>,
     ) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, nalus)?;
+        self.decode_aus_to_bytes(access_units)
+    }
+
+    fn decode_aus_to_bytes(
+        &mut self,
+        access_units: Vec<AccessUnit>,
+    ) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
+        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
         let unsorted_frames = self.vulkan_decoder.decode_to_bytes(&instructions)?;
         let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
         Ok(sorted_frames)
