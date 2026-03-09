@@ -14,7 +14,7 @@ use crate::{
     device::DecodingDevice,
     vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers},
     wrappers::{
-        DecodeInputBuffer, DecodingQueryPool, H264DecodeProfileInfo, OpenCommandBuffer,
+        DecodeInputBufferPool, DecodingQueryPool, H264DecodeProfileInfo, OpenCommandBuffer,
         SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc,
     },
 };
@@ -30,7 +30,7 @@ pub(super) struct VideoSessionResources<'a> {
     pub(crate) sps: FxHashMap<u8, SeqParameterSet>,
     pub(crate) pps: FxHashMap<(u8, u8), PicParameterSet>,
     pub(crate) decode_query_pool: Option<DecodingQueryPool>,
-    pub(crate) decode_buffer: DecodeInputBuffer,
+    pub(crate) decode_buffer_pool: DecodeInputBufferPool<'a>,
     parameters_scheduled_for_reset: Option<SessionParams<'a>>,
     image_modifiers: ImageModifiers,
 }
@@ -133,8 +133,8 @@ impl<'a> VideoSessionResources<'a> {
             None
         };
 
-        let decode_buffer =
-            DecodeInputBuffer::new(decoding_device.allocator.clone(), &profile_info)?;
+        let decode_buffer_pool =
+            DecodeInputBufferPool::new(decoding_device.allocator.clone(), profile_info.clone());
 
         let parameters = SessionParams {
             max_coded_extent,
@@ -153,7 +153,7 @@ impl<'a> VideoSessionResources<'a> {
             sps,
             pps: FxHashMap::default(),
             decode_query_pool,
-            decode_buffer,
+            decode_buffer_pool,
             parameters_scheduled_for_reset: None,
             image_modifiers,
         })
@@ -238,10 +238,10 @@ impl<'a> VideoSessionResources<'a> {
                 )?),
                 false => None,
             };
-            self.decode_buffer = DecodeInputBuffer::new(
+            self.decode_buffer_pool = DecodeInputBufferPool::new(
                 decoding_device.allocator.clone(),
-                &new_params.profile_info,
-            )?;
+                new_params.profile_info.clone(),
+            );
         }
 
         self.video_session = VideoSession::new(
