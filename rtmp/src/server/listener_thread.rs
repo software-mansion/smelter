@@ -21,7 +21,7 @@ pub(super) fn start_listener_thread(
     let listener = TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], config.port)))?;
     listener
         .set_nonblocking(true)
-        .expect("Cannot set blocking tcp input stream");
+        .expect("Cannot set non-blocking TCP input stream");
     info!("RTMP server running on port {}", config.port);
 
     let (conn_sender, conn_receiver) = unbounded();
