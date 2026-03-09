@@ -25,6 +25,9 @@ pub enum RtmpConnectionError {
     #[error("Invalid DNS name: {0}")]
     InvalidDnsName(#[from] rustls::pki_types::InvalidDnsNameError),
 
+    #[error("TLS configuration error: {0}")]
+    TlsConfig(String),
+
     #[error(transparent)]
     StreamError(#[from] RtmpStreamError),
 }
@@ -37,6 +40,7 @@ impl RtmpConnectionError {
             Self::TcpSocket(_) => true,
             Self::Tls(_) => true,
             Self::InvalidDnsName(_) => true,
+            Self::TlsConfig(_) => true,
             Self::StreamError(err) => err.is_critical(),
             _ => true,
         }

@@ -1,6 +1,6 @@
 use std::{
     io::ErrorKind,
-    net::{SocketAddr, TcpListener},
+    net::{SocketAddr, TcpListener, TcpStream},
     sync::{
         Arc, Mutex, Weak,
         atomic::{AtomicBool, Ordering},
@@ -12,7 +12,9 @@ use std::{
 use tracing::{error, info};
 
 use crate::{
-    OnConnectionCallback, RtmpServer, ServerConfig, server::connection::handle_connection,
+    OnConnectionCallback, RtmpServer, RtmpServerConnectionError, ServerConfig, TlsConfig,
+    protocol::byte_stream::RtmpByteStream, server::connection::handle_connection,
+    transport::RtmpTransport,
 };
 
 pub(super) fn start_listener_thread(
@@ -25,10 +27,9 @@ pub(super) fn start_listener_thread(
     listener.set_nonblocking(true).unwrap();
     let on_connection = Arc::new(Mutex::new(on_connection));
 
+    let tls = config.tls.clone();
     let shutdown = Arc::new(AtomicBool::new(false));
     let server = Arc::new(Mutex::new(RtmpServer { config, shutdown }));
-
-    info!("RTMP server running on port {port}");
 
     let server_weak: Weak<Mutex<RtmpServer>> = Arc::downgrade(&server);
 
@@ -50,8 +51,16 @@ pub(super) fn start_listener_thread(
                         info!("New connection from: {peer_addr:?}");
 
                         let on_connection_clone = on_connection.clone();
+                        let stream = match create_rtmp_byte_stream(socket, &tls) {
+                            Ok(stream) => stream,
+                            Err(err) => {
+                                error!(?err, "Failed to initialize RTMP connection");
+                                continue;
+                            }
+                        };
+
                         thread::spawn(move || {
-                            if let Err(err) = handle_connection(socket, on_connection_clone) {
+                            if let Err(err) = handle_connection(stream, on_connection_clone) {
                                 error!(?err, "Connection terminated with an error");
                             }
                         });
@@ -69,4 +78,17 @@ pub(super) fn start_listener_thread(
         .unwrap();
 
     Ok(server)
+}
+
+fn create_rtmp_byte_stream(
+    socket: TcpStream,
+    tls: &Option<TlsConfig>,
+) -> Result<RtmpByteStream, RtmpServerConnectionError> {
+    let should_close = Arc::new(AtomicBool::new(false));
+    let transport = match tls {
+        Some(tls_config) => RtmpTransport::tls_server_stream(socket, tls_config)?,
+        None => RtmpTransport::tcp_server_stream(socket),
+    };
+
+    Ok(RtmpByteStream::new(transport, should_close))
 }

@@ -4,11 +4,14 @@ use std::{
     sync::Arc,
 };
 
-use rustls::{ClientConnection, RootCertStore, StreamOwned, pki_types::ServerName};
+use rustls::{
+    ClientConnection, RootCertStore, ServerConfig, ServerConnection, StreamOwned,
+    pki_types::{CertificateDer, PrivateKeyDer, ServerName, pem::PemObject},
+};
 use rustls_native_certs::load_native_certs;
 use tracing::warn;
 
-use crate::RtmpConnectionError;
+use crate::{RtmpConnectionError, server::TlsConfig};
 
 pub(crate) struct TlsClientStream(StreamOwned<ClientConnection, TcpStream>);
 
@@ -47,6 +50,45 @@ impl Read for TlsClientStream {
 }
 
 impl Write for TlsClientStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+pub(crate) struct TlsServerStream(StreamOwned<ServerConnection, TcpStream>);
+
+impl TlsServerStream {
+    pub fn new(socket: TcpStream, tls: &TlsConfig) -> Result<Self, RtmpConnectionError> {
+        let certs = CertificateDer::pem_file_iter(tls.cert_file.as_ref())
+            .map_err(|e| RtmpConnectionError::TlsConfig(format!("Failed to read cert file: {e}")))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                RtmpConnectionError::TlsConfig(format!("Failed to parse cert file: {e}"))
+            })?;
+
+        let key = PrivateKeyDer::from_pem_file(tls.key_file.as_ref())
+            .map_err(|e| RtmpConnectionError::TlsConfig(format!("Failed to read key file: {e}")))?;
+
+        let config = ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)?;
+
+        let conn = ServerConnection::new(Arc::new(config))?;
+        Ok(Self(StreamOwned::new(conn, socket)))
+    }
+}
+
+impl Read for TlsServerStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl Write for TlsServerStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0.write(buf)
     }

@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
-    net::TcpStream,
-    sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
+    sync::{Arc, Mutex, mpsc::channel},
 };
 
 use tracing::{debug, warn};
@@ -20,7 +19,6 @@ use crate::{
         OnConnectionCallback, RtmpConnection,
         negotiation::{NegotiationProgress, NegotiationResult, PEER_BANDWIDTH, WINDOW_ACK_SIZE},
     },
-    transport::RtmpTransport,
 };
 
 /// For server we can pick this number for client it would be based on value
@@ -28,13 +26,9 @@ use crate::{
 pub(crate) const PUBLISHED_MESSAGE_STREAM_ID: u32 = 1;
 
 pub(crate) fn handle_connection(
-    socket: TcpStream,
+    mut stream: RtmpByteStream,
     on_connection: Arc<Mutex<OnConnectionCallback>>,
 ) -> Result<(), RtmpServerConnectionError> {
-    let should_close = Arc::new(AtomicBool::new(false));
-    let transport = RtmpTransport::tcp_server_stream(socket); // TODO: support TLS on input
-    let mut stream = RtmpByteStream::new(transport, should_close);
-
     Handshake::perform_as_server(&mut stream)?;
     debug!("Handshake complete");
 
