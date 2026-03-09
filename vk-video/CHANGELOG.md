@@ -6,9 +6,9 @@
 - `EncoderParameters` has an extra field, which determines whether stream parameters are inlined in the output stream.
 - Changed adapter and device creation API
 
-
 ### ✨ New features
 - One-to-many transcoders via `VulkanDevice::create_transcoder`
+- Made `wgpu` dependency optional via `wgpu` feature (enabled by default)
 
 ### 🐛 Bug fixes
 
