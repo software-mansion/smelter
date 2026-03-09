@@ -42,7 +42,7 @@ impl EncodedOutputChunk {
 impl EncodedOutputEvent {
     pub fn data_size(&self) -> u64 {
         match self {
-            Self::Data(data) => data.data.len() as u64,
+            Self::Data(data) => data.data_size(),
             Self::AudioEOS | Self::VideoEOS => 0,
         }
     }
