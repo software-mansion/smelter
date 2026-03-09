@@ -345,28 +345,30 @@ fn run_synced_av(
             (false, false) => match (&pending_video, &pending_audio) {
                 (Some(video), Some(audio)) => {
                     if video.pts <= audio.pts {
-                        rtmp_stats_sender
-                            .bytes_sent_event(video.data_size(), StatsTrackKind::Video);
+                        let data_size = video.data_size();
                         client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
+                        rtmp_stats_sender.bytes_sent_event(data_size, StatsTrackKind::Video);
                     } else {
-                        rtmp_stats_sender
-                            .bytes_sent_event(audio.data_size(), StatsTrackKind::Audio);
+                        let data_size = audio.data_size();
                         client.send(audio_chunk_to_event(
                             pending_audio.take().unwrap(),
                             channels,
                         ))?;
+                        rtmp_stats_sender.bytes_sent_event(data_size, StatsTrackKind::Audio);
                     }
                 }
                 (Some(video), None) => {
-                    rtmp_stats_sender.bytes_sent_event(video.data_size(), StatsTrackKind::Video);
+                    let data_size = video.data_size();
                     client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
+                    rtmp_stats_sender.bytes_sent_event(data_size, StatsTrackKind::Video);
                 }
                 (None, Some(audio)) => {
-                    rtmp_stats_sender.bytes_sent_event(audio.data_size(), StatsTrackKind::Audio);
+                    let data_size = audio.data_size();
                     client.send(audio_chunk_to_event(
                         pending_audio.take().unwrap(),
                         channels,
                     ))?;
+                    rtmp_stats_sender.bytes_sent_event(data_size, StatsTrackKind::Audio);
                 }
                 (None, None) => break,
             },
