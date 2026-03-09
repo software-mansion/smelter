@@ -64,9 +64,9 @@ struct ServerInstance {
     shutdown_condition: ShutdownCondition,
 }
 
-impl Drop for RtmpServer {
+impl Drop for ServerInstance {
     fn drop(&mut self) {
-        self.shutdown();
+        self.shutdown_condition.mark_for_shutdown();
     }
 }
 
