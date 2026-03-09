@@ -82,6 +82,7 @@ regex = "1.11.2"
 smelter-api = { workspace = true }
 smelter-render = { workspace = true }
 smelter-core = { workspace = true }
+rtmp = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

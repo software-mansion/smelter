@@ -7,6 +7,7 @@ use std::{
 };
 
 use rand::Rng;
+use rtmp::TlsConfig;
 use smelter_core::DEFAULT_BUFFER_DURATION;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures};
 use tracing::{error, warn};
@@ -48,8 +49,7 @@ pub struct Config {
 
     pub rtmp_server_port: u16,
     pub rtmp_enable: bool,
-    pub rtmp_tls_cert_file: Option<Arc<str>>,
-    pub rtmp_tls_key_file: Option<Arc<str>>,
+    pub rtmp_tls_config: Option<TlsConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -331,6 +331,14 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => None,
     };
 
+    let rtmp_tls_config = match (rtmp_tls_cert_file, rtmp_tls_key_file) {
+        (Some(cert_file), Some(key_file)) => Some(TlsConfig {
+            cert_file,
+            key_file,
+        }),
+        _ => None,
+    };
+
     let log_file = match env::var("SMELTER_LOG_FILE") {
         Ok(path) => Some(Arc::from(PathBuf::from(path))),
         Err(_) => None,
@@ -376,8 +384,7 @@ fn try_read_config() -> Result<Config, String> {
         webrtc_nat_1to1_ips,
         rtmp_server_port,
         rtmp_enable,
-        rtmp_tls_cert_file,
-        rtmp_tls_key_file,
+        rtmp_tls_config,
         rendering_mode,
     };
     Ok(config)

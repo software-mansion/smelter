@@ -142,8 +142,7 @@ pub fn pipeline_options_from_config(
         rtmp_server: match opt.rtmp_enable {
             true => PipelineRtmpServerOptions::Enable {
                 port: opt.rtmp_server_port,
-                tls_cert_file: opt.rtmp_tls_cert_file.clone(),
-                tls_key_file: opt.rtmp_tls_key_file.clone(),
+                tls_config: opt.rtmp_tls_config.clone(),
             },
             false => PipelineRtmpServerOptions::Disable,
         },
