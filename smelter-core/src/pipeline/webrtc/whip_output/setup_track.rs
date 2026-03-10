@@ -110,6 +110,7 @@ pub async fn setup_video_track(
         Some(e) => e.ssrc,
         None => rand::rng().random::<u32>(),
     };
+
     let (sender, receiver) = mpsc::channel(1000);
     let handle = match options {
         VideoEncoderOptions::FfmpegH264(options) => {
@@ -224,6 +225,7 @@ pub async fn setup_audio_track(
         Some(e) => e.ssrc,
         None => rand::rng().random::<u32>(),
     };
+
     let (sender, receiver) = mpsc::channel(1000);
     let handle = match options {
         AudioEncoderOptions::Opus(options) => WhipAudioTrackThread::<OpusEncoder>::spawn(

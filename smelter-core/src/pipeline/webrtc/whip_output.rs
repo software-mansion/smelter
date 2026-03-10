@@ -57,6 +57,11 @@ impl WhipOutput {
     ) -> Result<Self, OutputInitError> {
         let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Whip,
+        });
+
         let span = span!(
             Level::INFO,
             "WHIP client task",
@@ -176,6 +181,11 @@ impl WhipClientTask {
         let mut next_video_packet = None;
         let mut next_audio_packet = None;
 
+        let stats_sender = WhipOutputStatsSender {
+            stats_sender: self.ctx.stats_sender.clone(),
+            output_ref: self.output_ref.clone(),
+        };
+
         loop {
             match (
                 &next_video_packet,
@@ -230,7 +240,11 @@ impl WhipClientTask {
                     if audio.timestamp > video.timestamp {
                         if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
                             match track.write_rtp(&p.packet).await {
-                                Ok(_) => trace!(packet=?p, "Video RTP packet written to track"),
+                                Ok(_) => {
+                                    trace!(packet=?p, "Video RTP packet written to track");
+                                    stats_sender
+                                        .bytes_sent_event(p.len() as u64, StatsTrackKind::Video);
+                                }
                                 Err(err) => {
                                     warn!("RTP write error {}", err);
                                     break;
@@ -240,7 +254,11 @@ impl WhipClientTask {
                     } else if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track)
                     {
                         match track.write_rtp(&p.packet).await {
-                            Ok(_) => trace!(packet=?p, "Audio RTP packet written to track"),
+                            Ok(_) => {
+                                trace!(packet=?p, "Audio RTP packet written to track");
+                                stats_sender
+                                    .bytes_sent_event(p.len() as u64, StatsTrackKind::Audio);
+                            }
                             Err(err) => {
                                 warn!("RTP write error {}", err);
                                 break;
@@ -252,7 +270,11 @@ impl WhipClientTask {
                 (None, Some(_)) if video_receiver.is_none() => {
                     if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track) {
                         match track.write_rtp(&p.packet).await {
-                            Ok(_) => trace!(packet=?p, "Audio RTP packet written to track"),
+                            Ok(_) => {
+                                trace!(packet=?p, "Audio RTP packet written to track");
+                                stats_sender
+                                    .bytes_sent_event(p.len() as u64, StatsTrackKind::Audio);
+                            }
                             Err(err) => {
                                 warn!("RTP write error {}", err);
                                 break;
@@ -264,7 +286,11 @@ impl WhipClientTask {
                 (Some(_), None) if audio_receiver.is_none() => {
                     if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
                         match track.write_rtp(&p.packet).await {
-                            Ok(_) => trace!(packet=?p, "Video RTP packet written to track"),
+                            Ok(_) => {
+                                trace!(packet=?p, "Video RTP packet written to track");
+                                stats_sender
+                                    .bytes_sent_event(p.len() as u64, StatsTrackKind::Video);
+                            }
                             Err(err) => {
                                 warn!("RTP write error {}", err);
                                 break;
@@ -333,4 +359,17 @@ fn wait_with_deadline<T>(
     }
     result_receiver.close();
     Err(OutputInitError::WhipInitTimeout)
+}
+
+struct WhipOutputStatsSender {
+    stats_sender: StatsSender,
+    output_ref: Ref<OutputId>,
+}
+
+impl WhipOutputStatsSender {
+    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+        self.stats_sender.send(
+            WhipOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+        );
+    }
 }

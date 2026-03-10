@@ -56,6 +56,11 @@ impl WhepOutput {
         };
         let bearer_token = options.bearer_token.clone();
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Whep,
+        });
+
         let video_options = options
             .video
             .as_ref()
@@ -91,6 +96,7 @@ impl WhepOutput {
         options: VideoEncoderOptions,
     ) -> Result<WhepVideoConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
+
         let thread_handle = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 WhepVideoTrackThread::<FfmpegH264Encoder>::spawn(
@@ -152,6 +158,7 @@ impl WhepOutput {
         options: AudioEncoderOptions,
     ) -> Result<WhepAudioConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
+
         let thread_handle = match options.clone() {
             AudioEncoderOptions::Opus(options) => WhepAudioTrackThread::<OpusEncoder>::spawn(
                 output_ref.clone(),
@@ -198,5 +205,18 @@ impl Output for WhepOutput {
 
     fn kind(&self) -> OutputProtocolKind {
         OutputProtocolKind::Whep
+    }
+}
+
+struct WhepOutputStatsSender {
+    stats_sender: StatsSender,
+    output_ref: Ref<OutputId>,
+}
+
+impl WhepOutputStatsSender {
+    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+        self.stats_sender.send(
+            WhepOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+        );
     }
 }

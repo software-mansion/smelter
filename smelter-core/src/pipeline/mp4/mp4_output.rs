@@ -69,6 +69,11 @@ impl Mp4Output {
             };
         }
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Mp4,
+        });
+
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
         let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "mp4")
             .map_err(OutputInitError::FfmpegError)?;
@@ -299,6 +304,11 @@ fn run_ffmpeg_output_thread(
     let mut eos_state = EosState::new(video_stream.is_some(), audio_stream.is_some());
     let mut timestamp_offset = None;
 
+    let stats_sender = Mp4OutputStatsSender {
+        stats_sender: ctx.stats_sender.clone(),
+        output_ref: output_ref.clone(),
+    };
+
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
@@ -319,6 +329,8 @@ fn run_ffmpeg_output_thread(
                         }
                     },
                 };
+
+                stats_sender.bytes_sent_event(chunk.data.len() as u64, chunk.kind.into());
                 if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
                     let try_write_trailer =
                         !matches!(err, OutputMp4RuntimeError::NoSpaceLeftOnDevice);
@@ -447,5 +459,18 @@ impl EosState {
     fn is_complete(&self) -> bool {
         (self.received_video_eos.unwrap_or(true) && self.received_audio_eos.unwrap_or(true))
             || self.should_abort
+    }
+}
+
+struct Mp4OutputStatsSender {
+    stats_sender: StatsSender,
+    output_ref: Ref<OutputId>,
+}
+
+impl Mp4OutputStatsSender {
+    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+        self.stats_sender.send(
+            Mp4OutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+        );
     }
 }

@@ -66,6 +66,11 @@ impl RtpOutput {
     ) -> Result<(Self, Port), OutputInitError> {
         let mtu = options.connection_options.mtu();
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Rtp,
+        });
+
         let (socket, port) = match &options.connection_options {
             RtpOutputConnectionOptions::Udp { port, ip } => udp::udp_socket(ip, *port)?,
             RtpOutputConnectionOptions::TcpServer { port } => tcp_server::tcp_socket(*port)?,
