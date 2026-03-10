@@ -87,7 +87,7 @@ impl ImageHeap {
                     .as_ref()
                     .unwrap()
                     .family_index as u32,
-                self.device.queues.wgpu.family_index as u32,
+                self.device.queues.compute.family_index as u32,
             ];
             let create_info = vk::ImageCreateInfo::default()
                 .flags(vk::ImageCreateFlags::EXTENDED_USAGE | vk::ImageCreateFlags::MUTABLE_FORMAT)
@@ -326,7 +326,8 @@ impl ResizingPipeline {
             shader_module,
         )?;
 
-        let buffer_pool = CommandBufferPool::new(device.clone(), device.queues.wgpu.family_index)?;
+        let buffer_pool =
+            CommandBufferPool::new(device.clone(), device.queues.compute.family_index)?;
 
         Ok(Self {
             image_heap,
@@ -523,7 +524,7 @@ impl ResizingPipeline {
 
         unsafe {
             self.device.device.queue_submit2(
-                *self.device.queues.wgpu.queue.lock().unwrap(),
+                *self.device.queues.compute.queue.lock().unwrap(),
                 &[submit_info],
                 vk::Fence::null(),
             )?;

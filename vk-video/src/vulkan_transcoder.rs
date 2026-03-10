@@ -69,7 +69,7 @@ impl Transcoder {
                 create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
                     | vk::ImageCreateFlags::MUTABLE_FORMAT,
                 usage_flags: vk::ImageUsageFlags::STORAGE,
-                additional_queue_index: device.queues.wgpu.family_index,
+                additional_queue_index: device.queues.compute.family_index,
             },
         )
         .map_err(DecoderError::VulkanDecoderError)?;
