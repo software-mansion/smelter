@@ -69,6 +69,7 @@ pub(crate) type DecoderTracker = Tracker<DecoderTrackerKind>;
 pub(crate) struct DecodeSubmissionImageInfo {
     pub(crate) image: Arc<Image>,
     pub(crate) layer: u32,
+    pub(crate) cropped_extent: vk::Extent2D,
 }
 
 pub(crate) struct DecodeResultMetadata {
@@ -95,8 +96,8 @@ impl<'a, 'b> DecodeSubmission<'a, 'b> {
         let raw_frame_data = self.decoder.download_output(&self.decode_result.frame)?;
         let frame = RawFrameData {
             frame: raw_frame_data,
-            width: self.decode_result.frame.image.extent.width,
-            height: self.decode_result.frame.image.extent.height,
+            width: self.decode_result.frame.cropped_extent.width,
+            height: self.decode_result.frame.cropped_extent.height,
         };
 
         self.finish(frame)
@@ -321,6 +322,12 @@ impl<'a> VulkanDecoder<'a> {
             .video_session_resources
             .as_mut()
             .ok_or(VulkanDecoderError::NoSession)?;
+
+        let cropped_extent = video_session_resources
+            .sps
+            .get(&decode_information.sps_id)
+            .ok_or(VulkanDecoderError::NoSession)?
+            .size()?;
 
         if is_idr {
             video_session_resources.ensure_session(
@@ -596,6 +603,7 @@ impl<'a> VulkanDecoder<'a> {
                 frame: DecodeSubmissionImageInfo {
                     image: target_image,
                     layer: target_layer as u32,
+                    cropped_extent,
                 },
                 metadata: DecodeResultMetadata {
                     pic_order_cnt: decode_information.picture_info.PicOrderCnt_for_decoding[0],
@@ -624,8 +632,8 @@ impl<'a> VulkanDecoder<'a> {
                 .unwrap()
         };
         let copy_extent = vk::Extent3D {
-            width: decode_output.image.extent.width,
-            height: decode_output.image.extent.height,
+            width: decode_output.cropped_extent.width,
+            height: decode_output.cropped_extent.height,
             depth: 1,
         };
 
@@ -822,21 +830,19 @@ impl<'a> VulkanDecoder<'a> {
         &mut self,
         decode_output: &DecodeSubmissionImageInfo,
     ) -> Result<Vec<u8>, VulkanDecoderError> {
-        let (mut dst_buffer, wait_value) = self.copy_image_to_buffer(
-            &decode_output.image,
-            decode_output.image.extent,
-            decode_output.layer,
-        )?;
+        let extent = vk::Extent3D {
+            width: decode_output.cropped_extent.width,
+            height: decode_output.cropped_extent.height,
+            depth: 1,
+        };
+        let (mut dst_buffer, wait_value) =
+            self.copy_image_to_buffer(&decode_output.image, extent, decode_output.layer)?;
 
         self.tracker.wait_for(wait_value, u64::MAX)?;
 
         let output = unsafe {
-            dst_buffer.download_data_from_buffer(
-                decode_output.image.extent.width as usize
-                    * decode_output.image.extent.height as usize
-                    * 3
-                    / 2,
-            )?
+            dst_buffer
+                .download_data_from_buffer(extent.width as usize * extent.height as usize * 3 / 2)?
         };
 
         Ok(output)
