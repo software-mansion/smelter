@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use smelter_render::{required_wgpu_features, set_required_wgpu_limits};
 use tracing::info;
+use vk_video::{capabilities::VulkanDeviceType, parameters::VulkanDeviceDescriptor};
 
 use crate::graphics_context::{
     CreateGraphicsContextError, GraphicsContext, GraphicsContextOptions, VulkanCtx,
@@ -19,7 +20,7 @@ pub fn create_vulkan_graphics_ctx(
         ..
     } = opts;
 
-    let vulkan_features = features | required_wgpu_features() | wgpu::Features::TEXTURE_FORMAT_NV12;
+    let wgpu_features = features | required_wgpu_features() | wgpu::Features::TEXTURE_FORMAT_NV12;
 
     let limits = set_required_wgpu_limits(limits);
 
@@ -28,10 +29,10 @@ pub fn create_vulkan_graphics_ctx(
         None => vk_video::VulkanInstance::new(),
     }?;
 
-    log_available_adapters(&instance, compatible_surface)?;
+    log_available_adapters(&instance)?;
 
     let adapter = instance
-        .iter_adapters(compatible_surface)?
+        .iter_adapters()?
         .filter(|a| match device_id {
             Some(device_id) => a.info().device_properties.device_id == device_id,
             None => true,
@@ -45,6 +46,10 @@ pub fn create_vulkan_graphics_ctx(
             }
             None => true,
         })
+        .filter(|a| match compatible_surface {
+            Some(surface) => a.supports_surface(surface),
+            None => true,
+        })
         .sorted_by_key(|a| {
             let video_based_priority = match (a.supports_decoding(), a.supports_encoding()) {
                 (true, true) => 0,
@@ -52,8 +57,8 @@ pub fn create_vulkan_graphics_ctx(
                 (false, false) => 2,
             };
             let performance_based_priority = match a.info().device_type {
-                wgpu::DeviceType::DiscreteGpu => 0,
-                wgpu::DeviceType::IntegratedGpu => 1,
+                VulkanDeviceType::DISCRETE_GPU => 0,
+                VulkanDeviceType::INTEGRATED_GPU => 1,
                 _ => 3,
             };
 
@@ -64,11 +69,11 @@ pub fn create_vulkan_graphics_ctx(
 
     let adapter_info = adapter.info();
     info!("Using {} adapter with Vulkan backend", adapter_info.name);
-    let device = adapter.create_device(
-        vulkan_features,
-        unsafe { wgpu::ExperimentalFeatures::enabled() },
-        limits.clone(),
-    )?;
+    let device = adapter.create_device(&VulkanDeviceDescriptor {
+        wgpu_features,
+        wgpu_experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
+        wgpu_limits: limits.clone(),
+    })?;
 
     Ok(GraphicsContext {
         device: device.wgpu_device().into(),
@@ -81,10 +86,9 @@ pub fn create_vulkan_graphics_ctx(
 
 fn log_available_adapters(
     instance: &vk_video::VulkanInstance,
-    compatible_surface: Option<&wgpu::Surface>,
 ) -> Result<(), CreateGraphicsContextError> {
     let adapters: Vec<_> = instance
-        .iter_adapters(compatible_surface)?
+        .iter_adapters()?
         .map(|adapter| {
             let info = adapter.info();
             format!("\n - {info:?}")

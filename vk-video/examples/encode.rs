@@ -7,7 +7,9 @@ fn main() {
 
     use vk_video::{
         Frame, RawFrameData, VulkanInstance,
-        parameters::{RateControl, VideoParameters},
+        parameters::{
+            RateControl, VideoParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+        },
     };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -28,16 +30,11 @@ fn main() {
         std::fs::File::open(&args[1]).unwrap_or_else(|e| panic!("open {}: {}", args[1], e));
 
     let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_adapter = vulkan_instance.create_adapter(None).unwrap();
+    let vulkan_adapter = vulkan_instance
+        .create_adapter(&VulkanAdapterDescriptor::default())
+        .unwrap();
     let vulkan_device = vulkan_adapter
-        .create_device(
-            wgpu::Features::empty(),
-            wgpu::ExperimentalFeatures::disabled(),
-            wgpu::Limits {
-                max_immediate_size: 128,
-                ..Default::default()
-            },
-        )
+        .create_device(&VulkanDeviceDescriptor::default())
         .unwrap();
 
     let mut encoder = vulkan_device

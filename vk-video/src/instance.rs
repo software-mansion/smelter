@@ -2,11 +2,17 @@ use std::sync::Arc;
 
 use ash::{Entry, vk};
 
-use crate::{VulkanInitError, adapter::VulkanAdapter, wrappers::*};
+use crate::{
+    VulkanInitError,
+    adapter::{VulkanAdapter, VulkanAdapterDescriptor},
+    wrappers::*,
+};
 
 /// Context for all encoders and decoders. Also contains a [`wgpu::Instance`].
 pub struct VulkanInstance {
+    #[cfg(feature = "wgpu")]
     pub(crate) wgpu_instance: wgpu::Instance,
+
     _entry: Arc<Entry>,
     pub(crate) instance: Arc<Instance>,
     _debug_messenger: Option<DebugMessenger>,
@@ -16,10 +22,6 @@ impl VulkanInstance {
     pub fn new() -> Result<Arc<Self>, VulkanInitError> {
         let entry = Arc::new(unsafe { Entry::load()? });
         Self::new_from_entry(entry)
-    }
-
-    pub fn wgpu_instance(&self) -> wgpu::Instance {
-        self.wgpu_instance.clone()
     }
 
     pub fn new_from(
@@ -64,16 +66,9 @@ impl VulkanInstance {
 
         let extensions = vec![vk::EXT_DEBUG_UTILS_NAME];
 
-        let wgpu_extensions = wgpu::hal::vulkan::Instance::desired_extensions(
-            &entry,
-            api_version,
-            wgpu::InstanceFlags::empty(),
-        )?;
-
-        let extensions = extensions
-            .into_iter()
-            .chain(wgpu_extensions)
-            .collect::<Vec<_>>();
+        let extensions = extensions.into_iter().collect::<Vec<_>>();
+        #[cfg(feature = "wgpu")]
+        let extensions = merge_with_wgpu_instance_extensions(&entry, api_version, extensions)?;
 
         let extension_ptrs = extensions.iter().map(|e| e.as_ptr()).collect::<Vec<_>>();
 
@@ -102,55 +97,56 @@ impl VulkanInstance {
             None
         };
 
-        let instance_clone = instance.clone();
-
-        let wgpu_instance = unsafe {
-            wgpu::hal::vulkan::Instance::from_raw(
-                (*entry).clone(),
-                instance.instance.clone(),
-                api_version,
-                0,
-                None,
-                extensions,
-                wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER,
-                wgpu::MemoryBudgetThresholds::default(),
-                false,
-                Some(Box::new(move || {
-                    drop(instance_clone);
-                })),
-            )?
-        };
-
+        #[cfg(feature = "wgpu")]
         let wgpu_instance =
-            unsafe { wgpu::Instance::from_hal::<wgpu::hal::vulkan::Api>(wgpu_instance) };
+            create_wgpu_instance(&entry, instance.clone(), api_version, extensions)?;
 
         Ok(Self {
             _entry: entry,
             instance,
             _debug_messenger: debug_messenger,
+
+            #[cfg(feature = "wgpu")]
             wgpu_instance,
         }
         .into())
     }
 
-    /// Creates an adapter that supports both decoding and encoding.
-    ///
-    /// If your hardware only supports one of the operations, use [`VulkanInstance::iter_adapters`] and choose an adapter manually.
+    #[cfg(feature = "wgpu")]
+    pub fn wgpu_instance(&self) -> wgpu::Instance {
+        self.wgpu_instance.clone()
+    }
+
+    /// Creates an adapter that meets requirements specified in the descriptor.
     pub fn create_adapter<'a>(
         &'a self,
-        compatible_surface: Option<&'a wgpu::Surface<'_>>,
+        descriptor: &VulkanAdapterDescriptor,
     ) -> Result<VulkanAdapter<'a>, VulkanInitError> {
-        self.iter_adapters(compatible_surface)?
-            .find(|a| a.supports_decoding() && a.supports_encoding())
+        self.iter_adapters()?
+            .find(|adapter| {
+                if (descriptor.supports_decoding && !adapter.supports_decoding())
+                    || (descriptor.supports_encoding && !adapter.supports_encoding())
+                {
+                    return false;
+                }
+
+                #[cfg(feature = "wgpu")]
+                if let Some(surface) = descriptor.compatible_surface
+                    && !adapter.supports_surface(surface)
+                {
+                    return false;
+                }
+
+                true
+            })
             .ok_or(VulkanInitError::NoDevice)
     }
 
     /// Iterator over all available [`VulkanAdapter`]s that support at least decoding or encoding.
     pub fn iter_adapters<'a>(
         &'a self,
-        compatible_surface: Option<&'a wgpu::Surface<'_>>,
     ) -> Result<impl Iterator<Item = VulkanAdapter<'a>> + 'a, VulkanInitError> {
-        crate::adapter::iter_adapters(self, compatible_surface)
+        crate::adapter::iter_adapters(self)
     }
 }
 
@@ -158,4 +154,46 @@ impl std::fmt::Debug for VulkanInstance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VulkanInstance").finish()
     }
+}
+
+#[cfg(feature = "wgpu")]
+fn merge_with_wgpu_instance_extensions(
+    entry: &Entry,
+    api_version: u32,
+    extensions: Vec<&'static std::ffi::CStr>,
+) -> Result<Vec<&'static std::ffi::CStr>, crate::WgpuInitError> {
+    let wgpu_extensions = wgpu::hal::vulkan::Instance::desired_extensions(
+        entry,
+        api_version,
+        wgpu::InstanceFlags::empty(),
+    )?;
+
+    Ok([extensions, wgpu_extensions].concat())
+}
+
+#[cfg(feature = "wgpu")]
+fn create_wgpu_instance(
+    entry: &Entry,
+    instance: Arc<Instance>,
+    api_version: u32,
+    extensions: Vec<&'static std::ffi::CStr>,
+) -> Result<wgpu::Instance, crate::WgpuInitError> {
+    let wgpu_instance = unsafe {
+        wgpu::hal::vulkan::Instance::from_raw(
+            (*entry).clone(),
+            instance.instance.clone(),
+            api_version,
+            0,
+            None,
+            extensions,
+            wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER,
+            wgpu::MemoryBudgetThresholds::default(),
+            false,
+            Some(Box::new(move || {
+                drop(instance);
+            })),
+        )?
+    };
+
+    Ok(unsafe { wgpu::Instance::from_hal::<wgpu::hal::vulkan::Api>(wgpu_instance) })
 }
