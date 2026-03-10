@@ -1,15 +1,11 @@
 use std::{
     collections::VecDeque,
     io::{self, ErrorKind, Read, Write},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
 };
 
 use bytes::Buf;
 
-use crate::{RtmpStreamError, transport::RtmpTransport};
+use crate::{RtmpStreamError, transport::RtmpTransport, utils::ShutdownCondition};
 
 /// Buffered RTMP socket combining read and write operations on a single transport.
 pub(crate) struct RtmpByteStream {
@@ -19,11 +15,11 @@ pub(crate) struct RtmpByteStream {
 }
 
 impl RtmpByteStream {
-    pub fn new(transport: RtmpTransport, should_close: Arc<AtomicBool>) -> Self {
+    pub fn new(transport: RtmpTransport, shutdown_cond: ShutdownCondition) -> Self {
         Self {
             transport,
-            reader: BufferedReader::new(should_close.clone()),
-            writer: BufferedWriter::new(should_close),
+            reader: BufferedReader::new(shutdown_cond.clone()),
+            writer: BufferedWriter::new(shutdown_cond),
         }
     }
 
@@ -63,16 +59,16 @@ impl RtmpByteStream {
 }
 
 struct BufferedReader {
-    should_close: Arc<AtomicBool>,
+    shutdown_condition: ShutdownCondition,
     buf: VecDeque<u8>,
     read_buf: Vec<u8>,
     bytes_read: u64,
 }
 
 impl BufferedReader {
-    fn new(should_close: Arc<AtomicBool>) -> Self {
+    fn new(shutdown_condition: ShutdownCondition) -> Self {
         Self {
-            should_close,
+            shutdown_condition,
             buf: VecDeque::new(),
             read_buf: vec![0; 65536],
             bytes_read: 0,
@@ -81,10 +77,11 @@ impl BufferedReader {
 
     fn read(&mut self, transport: &mut RtmpTransport) -> Result<(), RtmpStreamError> {
         loop {
-            let should_close = self.should_close.load(Ordering::Relaxed);
             if let Err(err) = self.try_read(transport) {
                 match err.kind() {
-                    ErrorKind::WouldBlock | ErrorKind::TimedOut if !should_close => {
+                    ErrorKind::WouldBlock | ErrorKind::TimedOut
+                        if !self.shutdown_condition.should_close() =>
+                    {
                         continue;
                     }
                     _ => return Err(err.into()),
@@ -110,14 +107,14 @@ impl BufferedReader {
 }
 
 struct BufferedWriter {
-    should_close: Arc<AtomicBool>,
+    shutdown_condition: ShutdownCondition,
     buf: Vec<u8>,
 }
 
 impl BufferedWriter {
-    fn new(should_close: Arc<AtomicBool>) -> Self {
+    fn new(shutdown_condition: ShutdownCondition) -> Self {
         Self {
-            should_close,
+            shutdown_condition,
             buf: Vec::new(),
         }
     }
@@ -131,13 +128,14 @@ impl BufferedWriter {
                 Ok(n) => {
                     self.buf.drain(..n);
                 }
-                Err(err) => {
-                    let should_close = self.should_close.load(Ordering::Relaxed);
-                    match err.kind() {
-                        ErrorKind::WouldBlock | ErrorKind::TimedOut if !should_close => continue,
-                        _ => return Err(err),
+                Err(err) => match err.kind() {
+                    ErrorKind::WouldBlock | ErrorKind::TimedOut
+                        if !self.shutdown_condition.should_close() =>
+                    {
+                        continue;
                     }
-                }
+                    _ => return Err(err),
+                },
             }
         }
         Ok(())
