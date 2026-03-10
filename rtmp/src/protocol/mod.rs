@@ -34,6 +34,8 @@ pub enum MessageType {
 
     CommandMessageAmf3,
     CommandMessageAmf0,
+
+    AggregateMessage,
 }
 
 impl MessageType {
@@ -51,6 +53,7 @@ impl MessageType {
             17 => Ok(MessageType::CommandMessageAmf3),
             18 => Ok(MessageType::DataMessageAmf0),
             20 => Ok(MessageType::CommandMessageAmf0),
+            22 => Ok(MessageType::AggregateMessage),
             _ => Err(RtmpMessageParseError::InvalidMessageType(value)),
         }
     }
@@ -69,6 +72,7 @@ impl MessageType {
             MessageType::CommandMessageAmf3 => 17,
             MessageType::DataMessageAmf0 => 18,
             MessageType::CommandMessageAmf0 => 20,
+            MessageType::AggregateMessage => 22,
         }
     }
 }

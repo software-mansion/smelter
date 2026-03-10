@@ -5,6 +5,7 @@ use crate::{
     amf0::decode_amf0_values,
     message::{
         RtmpMessage,
+        aggregate::parse_aggregate_message,
         command::CommandMessage,
         event::{audio_event_from_raw, video_event_from_raw},
         user_control::UserControlMessage,
@@ -90,6 +91,9 @@ impl RtmpMessage {
                 )));
             }
             MessageType::UserControl => RtmpMessage::UserControl(UserControlMessage::from_raw(p)?),
+            MessageType::AggregateMessage => {
+                RtmpMessage::AggregateMessage(parse_aggregate_message(msg)?)
+            }
         };
         Ok(result)
     }
