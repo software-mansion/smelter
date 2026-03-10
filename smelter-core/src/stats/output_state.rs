@@ -75,7 +75,7 @@ impl OutputStatsState {
                 state.handle_event(event)
             }
             (state, event) => {
-                error!(?state, ?event, "Wrong event type for input")
+                error!(?state, ?event, "Wrong event type for output.")
             }
         }
     }
