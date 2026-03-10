@@ -1,9 +1,11 @@
-use crate::{RtmpEvent, amf0::Amf0Value};
+use crate::{RtmpEvent, amf0::Amf0Value, message::shared::SharedObject};
 
+mod aggregate;
 mod command;
 mod event;
 mod parse;
 mod serialize;
+mod shared;
 mod user_control;
 
 pub(crate) use command::{
@@ -65,4 +67,7 @@ pub(crate) enum RtmpMessage {
         event: RtmpEvent,
         stream_id: u32,
     },
+
+    SharedObject(SharedObject),
+    AggregateMessage(Vec<RtmpMessage>),
 }
