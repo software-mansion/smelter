@@ -134,10 +134,6 @@ impl Mp4Output {
                 let _span =
                     tracing::info_span!("MP4 writer", output_id = output_ref.to_string()).entered();
 
-                let mp4_stats_sender = Mp4OutputStatsSender {
-                    stats_sender: ctx.stats_sender.clone(),
-                    output_ref: output_ref.clone(),
-                };
                 run_ffmpeg_output_thread(
                     &ctx,
                     &output_ref,
@@ -145,7 +141,6 @@ impl Mp4Output {
                     video_stream,
                     audio_stream,
                     encoded_chunks_receiver,
-                    mp4_stats_sender,
                 );
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
@@ -305,10 +300,14 @@ fn run_ffmpeg_output_thread(
     mut video_stream: Option<StreamState>,
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
-    mp4_stats_sender: Mp4OutputStatsSender,
 ) {
     let mut eos_state = EosState::new(video_stream.is_some(), audio_stream.is_some());
     let mut timestamp_offset = None;
+
+    let stats_sender = Mp4OutputStatsSender {
+        stats_sender: ctx.stats_sender.clone(),
+        output_ref: output_ref.clone(),
+    };
 
     for packet in packets_receiver {
         match packet {
@@ -330,13 +329,9 @@ fn run_ffmpeg_output_thread(
                         }
                     },
                 };
-                if let Err(err) = write_chunk(
-                    chunk,
-                    stream,
-                    &mut output_ctx,
-                    timestamp_offset,
-                    &mp4_stats_sender,
-                ) {
+
+                stats_sender.bytes_sent_event(chunk.data.len() as u64, chunk.kind.into());
+                if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
                     let try_write_trailer =
                         !matches!(err, OutputMp4RuntimeError::NoSpaceLeftOnDevice);
                     ctx.event_emitter.emit(Event::OutputError {
@@ -378,7 +373,6 @@ fn write_chunk(
     stream: &StreamState,
     output_ctx: &mut ffmpeg::format::context::Output,
     timestamp_offset: Duration,
-    mp4_stats_sender: &Mp4OutputStatsSender,
 ) -> Result<(), OutputMp4RuntimeError> {
     let pts = chunk.pts.saturating_sub(timestamp_offset);
     let dts = chunk
@@ -410,7 +404,6 @@ fn write_chunk(
         } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
         err => OutputMp4RuntimeError::PacketWriteError(err),
     })?;
-    mp4_stats_sender.bytes_sent_event(chunk.data.len() as u64, chunk.kind.into());
     Ok(())
 }
 
