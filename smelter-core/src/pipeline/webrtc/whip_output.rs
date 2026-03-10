@@ -181,7 +181,7 @@ impl WhipClientTask {
         let mut next_video_packet = None;
         let mut next_audio_packet = None;
 
-        let whip_stats_sender = WhipOutputStatsSender {
+        let stats_sender = WhipOutputStatsSender {
             stats_sender: self.ctx.stats_sender.clone(),
             output_ref: self.output_ref.clone(),
         };
@@ -242,7 +242,7 @@ impl WhipClientTask {
                             match track.write_rtp(&p.packet).await {
                                 Ok(_) => {
                                     trace!(packet=?p, "Video RTP packet written to track");
-                                    whip_stats_sender
+                                    stats_sender
                                         .bytes_sent_event(p.len() as u64, StatsTrackKind::Video);
                                 }
                                 Err(err) => {
@@ -256,7 +256,7 @@ impl WhipClientTask {
                         match track.write_rtp(&p.packet).await {
                             Ok(_) => {
                                 trace!(packet=?p, "Audio RTP packet written to track");
-                                whip_stats_sender
+                                stats_sender
                                     .bytes_sent_event(p.len() as u64, StatsTrackKind::Audio);
                             }
                             Err(err) => {
@@ -272,7 +272,7 @@ impl WhipClientTask {
                         match track.write_rtp(&p.packet).await {
                             Ok(_) => {
                                 trace!(packet=?p, "Audio RTP packet written to track");
-                                whip_stats_sender
+                                stats_sender
                                     .bytes_sent_event(p.len() as u64, StatsTrackKind::Audio);
                             }
                             Err(err) => {
@@ -288,7 +288,7 @@ impl WhipClientTask {
                         match track.write_rtp(&p.packet).await {
                             Ok(_) => {
                                 trace!(packet=?p, "Video RTP packet written to track");
-                                whip_stats_sender
+                                stats_sender
                                     .bytes_sent_event(p.len() as u64, StatsTrackKind::Video);
                             }
                             Err(err) => {
