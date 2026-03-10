@@ -98,7 +98,7 @@ pub async fn stream_media_to_peer(
 
                 if let Some(stream) = stream {
                     let track_kind: StatsTrackKind = chunk.kind.into();
-                    let data_size = chunk.data_size();
+                    let data_size = chunk.len();
 
                     let result =
                         send_chunk_to_peer(chunk, &stream.track, &mut stream.payloader).await;
