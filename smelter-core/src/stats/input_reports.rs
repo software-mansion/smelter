@@ -6,6 +6,7 @@ pub enum InputStatsReport {
     Whip(WhipInputStatsReport),
     Whep(WhepInputStatsReport),
     Hls(HlsInputStatsReport),
+    Rtmp(RtmpInputStatsReport),
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -42,6 +43,17 @@ pub struct RtpJitterBufferSlidingWindowStatsReport {
     pub input_buffer_avg_secs: f64,
     pub input_buffer_max_secs: f64,
     pub input_buffer_min_secs: f64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct RtmpInputStatsReport {
+    pub video: RtmpInputTrackStatsReport,
+    pub audio: RtmpInputTrackStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct RtmpInputTrackStatsReport {
+    pub bitrate_avg_1_second: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
