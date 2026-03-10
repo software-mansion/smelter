@@ -26,8 +26,8 @@ pub enum RtpInputEvent {
 }
 
 impl RtpPacket {
-    pub fn len(&self) -> u64 {
-        self.packet.payload.len() as u64
+    pub fn len(&self) -> usize {
+        self.packet.payload.len()
     }
 }
 

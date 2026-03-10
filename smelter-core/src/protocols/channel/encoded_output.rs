@@ -34,13 +34,13 @@ pub struct EncodedOutputChunk {
 }
 
 impl EncodedOutputChunk {
-    pub fn len(&self) -> u64 {
-        self.data.len() as u64
+    pub fn len(&self) -> usize {
+        self.data.len()
     }
 }
 
 impl EncodedOutputEvent {
-    pub fn len(&self) -> u64 {
+    pub fn len(&self) -> usize {
         match self {
             Self::Data(data) => data.len(),
             Self::AudioEOS | Self::VideoEOS => 0,

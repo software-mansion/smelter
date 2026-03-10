@@ -103,7 +103,7 @@ pub async fn stream_media_to_peer(
                     let result =
                         send_chunk_to_peer(chunk, &stream.track, &mut stream.payloader).await;
                     match result {
-                        Ok(_) => whep_stats_sender.bytes_sent_event(data_size, track_kind),
+                        Ok(_) => whep_stats_sender.bytes_sent_event(data_size as u64, track_kind),
                         Err(err) => {
                             error!("{}", ErrorStack::new(&err).into_string());
                             break;
