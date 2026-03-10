@@ -141,6 +141,12 @@ pub enum FlvVideoTagParseError {
 
     #[error("Invalid video tag, packet too short.")]
     TooShort,
+
+    #[error("Unknown enhanced video packet type: {0}")]
+    UnknownExVideoPacketType(u8),
+
+    #[error("Unknown video FourCC: {0:?}")]
+    UnknownVideoFourCc([u8; 4]),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -159,6 +165,12 @@ pub enum FlvAudioTagParseError {
 
     #[error("Invalid audio tag, packet too short.")]
     TooShort,
+
+    #[error("Unknown enhanced audio packet type: {0}")]
+    UnknownExAudioPacketType(u8),
+
+    #[error("Unknown audio FourCC: {0:?}")]
+    UnknownAudioFourCc([u8; 4]),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
