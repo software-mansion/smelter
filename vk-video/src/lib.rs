@@ -15,9 +15,9 @@ mod vulkan_transcoder;
 #[cfg(vulkan)]
 pub(crate) mod wrappers;
 
-#[cfg(vulkan)]
+#[cfg(all(vulkan, feature = "wgpu"))]
 mod wgpu_helpers;
-#[cfg(vulkan)]
+#[cfg(all(vulkan, feature = "wgpu"))]
 pub use wgpu_helpers::*;
 
 #[cfg(vulkan)]
