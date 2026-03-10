@@ -20,7 +20,7 @@ pub(crate) struct RtmpInputState {
     pub stream_key: Arc<str>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
-    pub video_decoders: RtmpServerInputVideoDecoders,
+    pub decoders: RtmpServerInputDecoders,
     pub buffer: InputBuffer,
     pub connection_handle: Option<JoinHandle<()>>,
 }
@@ -30,7 +30,7 @@ pub(crate) struct RtmpInputStateOptions {
     pub stream_key: Arc<str>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
-    pub video_decoders: RtmpServerInputVideoDecoders,
+    pub decoders: RtmpServerInputDecoders,
     pub buffer: InputBuffer,
 }
 
@@ -41,7 +41,7 @@ impl RtmpInputState {
             stream_key: options.stream_key,
             frame_sender: options.frame_sender,
             input_samples_sender: options.input_samples_sender,
-            video_decoders: options.video_decoders,
+            decoders: options.decoders,
             buffer: options.buffer,
             connection_handle: None,
         }
