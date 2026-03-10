@@ -4,6 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use ::rtmp::TlsConfig;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};
 use tokio::runtime::Runtime;
 
@@ -99,8 +100,7 @@ pub enum PipelineWhipWhepServerOptions {
 pub enum PipelineRtmpServerOptions {
     Enable {
         port: u16,
-        tls_cert_file: Option<Arc<str>>,
-        tls_key_file: Option<Arc<str>>,
+        tls_config: Option<TlsConfig>,
     },
     Disable,
 }

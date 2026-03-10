@@ -12,21 +12,15 @@ use crate::prelude::*;
 
 pub struct RtmpPipelineState {
     pub port: u16,
-    pub tls_cert_file: Option<Arc<str>>,
-    pub tls_key_file: Option<Arc<str>>,
+    pub tls_config: Option<TlsConfig>,
     pub inputs: RtmpInputsState,
 }
 
 impl RtmpPipelineState {
-    pub fn new(
-        port: u16,
-        tls_cert_file: Option<Arc<str>>,
-        tls_key_file: Option<Arc<str>>,
-    ) -> Arc<Self> {
+    pub fn new(port: u16, tls_config: Option<TlsConfig>) -> Arc<Self> {
         Arc::new(Self {
             port,
-            tls_cert_file,
-            tls_key_file,
+            tls_config,
             inputs: RtmpInputsState::default(),
         })
     }
@@ -38,14 +32,7 @@ pub fn spawn_rtmp_server(
 ) -> Result<RtmpServer, InitPipelineError> {
     let port = state.port;
     let inputs = state.inputs.clone();
-
-    let tls = match (&state.tls_cert_file, &state.tls_key_file) {
-        (Some(cert_file), Some(key_file)) => Some(TlsConfig {
-            cert_file: cert_file.clone(),
-            key_file: key_file.clone(),
-        }),
-        _ => None,
-    };
+    let tls = state.tls_config.clone();
 
     let config = RtmpServerConfig {
         port,
