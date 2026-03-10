@@ -288,7 +288,7 @@ fn run_ffmpeg_output_thread(
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
     framerate: Framerate,
-    hls_stats_sender: HlsOutputStatsSender,
+    stats_sender: HlsOutputStatsSender,
 ) {
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
     let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
@@ -297,6 +297,7 @@ fn run_ffmpeg_output_thread(
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
+                stats_sender.bytes_sent_event(chunk.data.len() as u64, chunk.kind.into());
                 let timestamp_offset = *timestamp_offset.get_or_insert(chunk.pts);
                 write_chunk(
                     chunk,
@@ -305,7 +306,6 @@ fn run_ffmpeg_output_thread(
                     &mut output_ctx,
                     framerate.get_interval_duration(),
                     timestamp_offset,
-                    &hls_stats_sender,
                 );
             }
             EncodedOutputEvent::VideoEOS => match received_video_eos {
@@ -344,7 +344,6 @@ fn write_chunk(
     output_ctx: &mut ffmpeg::format::context::Output,
     frame_duration: Duration,
     timestamp_offset: Duration,
-    hls_stats_sender: &HlsOutputStatsSender,
 ) {
     let stream = match chunk.kind {
         MediaKind::Video(_) => match video_stream {
@@ -396,11 +395,8 @@ fn write_chunk(
         packet.set_flags(ffmpeg::packet::Flags::KEY)
     }
 
-    match packet.write(output_ctx) {
-        Ok(_) => {
-            hls_stats_sender.bytes_sent_event(chunk.data.len() as u64, chunk.kind.into());
-        }
-        Err(err) => error!("Failed to write packet to HLS file: {}.", err),
+    if let Err(err) = packet.write(output_ctx) {
+        error!("Failed to write packet to HLS file: {}.", err);
     }
 }
 
