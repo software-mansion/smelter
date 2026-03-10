@@ -398,7 +398,7 @@ fn write_chunk(
 
     match packet.write(output_ctx) {
         Ok(_) => {
-            hls_stats_sender.bytes_sent_event(chunk.len() as u64, chunk.kind.into());
+            hls_stats_sender.bytes_sent_event(chunk.data.len() as u64, chunk.kind.into());
         }
         Err(err) => error!("Failed to write packet to HLS file: {}.", err),
     }

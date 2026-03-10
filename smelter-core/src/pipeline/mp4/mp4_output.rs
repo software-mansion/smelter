@@ -410,7 +410,7 @@ fn write_chunk(
         } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
         err => OutputMp4RuntimeError::PacketWriteError(err),
     })?;
-    mp4_stats_sender.bytes_sent_event(chunk.len() as u64, chunk.kind.into());
+    mp4_stats_sender.bytes_sent_event(chunk.data.len() as u64, chunk.kind.into());
     Ok(())
 }
 
