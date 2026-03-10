@@ -59,7 +59,7 @@ impl WhepOutputStatsEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum WhepOutputTrackStatsEvent {
-    BytesSent(u64),
+    BytesSent(usize),
 }
 
 impl WhepOutputTrackStatsEvent {
@@ -92,7 +92,7 @@ impl WhipOutputStatsEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum WhipOutputTrackStatsEvent {
-    BytesSent(u64),
+    BytesSent(usize),
 }
 
 impl WhipOutputTrackStatsEvent {
@@ -125,7 +125,7 @@ impl HlsOutputStatsEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum HlsOutputTrackStatsEvent {
-    BytesSent(u64),
+    BytesSent(usize),
 }
 
 impl HlsOutputTrackStatsEvent {
@@ -158,7 +158,7 @@ impl Mp4OutputStatsEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Mp4OutputTrackStatsEvent {
-    BytesSent(u64),
+    BytesSent(usize),
 }
 
 impl Mp4OutputTrackStatsEvent {
@@ -191,7 +191,7 @@ impl RtmpOutputStatsEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RtmpOutputTrackStatsEvent {
-    BytesSent(u64),
+    BytesSent(usize),
 }
 
 impl RtmpOutputTrackStatsEvent {
@@ -227,7 +227,7 @@ impl RtpOutputStatsEvent {
 #[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RtpOutputTrackStatsEvent {
-    BytesSent(u64),
+    BytesSent(usize),
 }
 
 #[allow(unused)]

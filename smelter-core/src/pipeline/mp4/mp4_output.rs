@@ -330,7 +330,7 @@ fn run_ffmpeg_output_thread(
                     },
                 };
 
-                stats_sender.bytes_sent_event(chunk.data.len() as u64, chunk.kind.into());
+                stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
                 if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
                     let try_write_trailer =
                         !matches!(err, OutputMp4RuntimeError::NoSpaceLeftOnDevice);
@@ -468,7 +468,7 @@ struct Mp4OutputStatsSender {
 }
 
 impl Mp4OutputStatsSender {
-    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+    fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
             Mp4OutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
         );

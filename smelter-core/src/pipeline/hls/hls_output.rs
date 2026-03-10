@@ -297,7 +297,7 @@ fn run_ffmpeg_output_thread(
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
-                stats_sender.bytes_sent_event(chunk.data.len() as u64, chunk.kind.into());
+                stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
                 let timestamp_offset = *timestamp_offset.get_or_insert(chunk.pts);
                 write_chunk(
                     chunk,
@@ -406,7 +406,7 @@ struct HlsOutputStatsSender {
 }
 
 impl HlsOutputStatsSender {
-    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+    fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
             HlsOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
         );

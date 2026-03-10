@@ -57,7 +57,7 @@ impl RtmpOutputTrackState {
     pub fn handle_event(&mut self, event: RtmpOutputTrackStatsEvent) {
         match event {
             RtmpOutputTrackStatsEvent::BytesSent(chunk_size_bytes) => {
-                let chunk_size_bits = chunk_size_bytes * 8;
+                let chunk_size_bits = 8 * chunk_size_bytes as u64;
                 self.bitrate_1_sec.push(chunk_size_bits);
             }
         }
