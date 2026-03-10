@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 use ash::vk::{self, Handle};
 use vk_mem::Alloc;
@@ -84,7 +84,7 @@ impl Drop for MemoryAllocation {
 }
 
 pub(crate) struct DecodeInputBufferPool<'a> {
-    freelist: Vec<DecodeInputBuffer>,
+    freelist: Arc<Mutex<Vec<DecodeInputBuffer>>>,
     allocator: Arc<Allocator>,
     profile: Arc<H264DecodeProfileInfo<'a>>,
 }
@@ -93,21 +93,21 @@ impl<'a> DecodeInputBufferPool<'a> {
     pub(crate) fn new(allocator: Arc<Allocator>, profile: Arc<H264DecodeProfileInfo<'a>>) -> Self {
         Self {
             allocator,
-            freelist: Vec::new(),
+            freelist: Arc::new(Mutex::new(Vec::new())),
             profile,
         }
     }
 
     pub(crate) fn buffer(&mut self) -> Result<DecodeInputBuffer, VulkanDecoderError> {
-        if let Some(buffer) = self.freelist.pop() {
+        if let Some(buffer) = self.freelist.lock().unwrap().pop() {
             return Ok(buffer);
         }
 
-        DecodeInputBuffer::new(self.allocator.clone(), &self.profile)
-    }
-
-    pub(crate) fn free(&mut self, buffer: DecodeInputBuffer) {
-        self.freelist.push(buffer);
+        DecodeInputBuffer::new(
+            self.allocator.clone(),
+            &self.profile,
+            Arc::downgrade(&self.freelist),
+        )
     }
 }
 
@@ -115,12 +115,14 @@ pub(crate) struct DecodeInputBuffer {
     pub(crate) buffer: Buffer,
     capacity: u64,
     allocator: Arc<Allocator>,
+    pool_freelist: Weak<Mutex<Vec<DecodeInputBuffer>>>,
 }
 
 impl DecodeInputBuffer {
     pub(crate) fn new(
         allocator: Arc<Allocator>,
         profile: &H264DecodeProfileInfo,
+        pool_freelist: Weak<Mutex<Vec<DecodeInputBuffer>>>,
     ) -> Result<Self, VulkanDecoderError> {
         const INITIAL_SIZE: u64 = 1024 * 1024; // 1MiB
         let buffer = Buffer::new_decode(allocator.clone(), INITIAL_SIZE, profile)?;
@@ -129,6 +131,7 @@ impl DecodeInputBuffer {
             buffer,
             capacity: INITIAL_SIZE,
             allocator,
+            pool_freelist,
         })
     }
 
@@ -155,6 +158,12 @@ impl DecodeInputBuffer {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn release_to_pool(self) {
+        if let Some(pool_freelist) = self.pool_freelist.upgrade() {
+            pool_freelist.lock().unwrap().push(self);
+        }
     }
 }
 

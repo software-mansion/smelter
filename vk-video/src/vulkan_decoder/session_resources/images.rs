@@ -8,7 +8,7 @@ use crate::{
     vulkan_decoder::Image,
     wrappers::{
         CodingImageBundle, DecodedPicturesBuffer, H264DecodeProfileInfo, ImageLayoutTracker,
-        OpenCommandBuffer,
+        ImageWithView, OpenCommandBuffer,
     },
 };
 
@@ -142,5 +142,13 @@ impl<'a> DecodingImages<'a> {
 
     pub(crate) fn reset_all_allocations(&mut self) {
         self.dpb.reset_all_allocations();
+    }
+
+    pub(crate) fn dpb_image_with_view(&self) -> Arc<ImageWithView> {
+        self.dpb.image.image_with_view.clone()
+    }
+
+    pub(crate) fn dst_image_with_view(&self) -> Option<Arc<ImageWithView>> {
+        self.dst_image.as_ref().map(|i| i.image_with_view.clone())
     }
 }

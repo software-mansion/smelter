@@ -23,13 +23,13 @@ mod images;
 mod parameters;
 
 pub(super) struct VideoSessionResources<'a> {
-    pub(crate) video_session: VideoSession,
+    pub(crate) video_session: Arc<VideoSession>,
     pub(crate) parameters: SessionParams<'a>,
     pub(crate) parameters_manager: VideoSessionParametersManager,
     pub(crate) decoding_images: DecodingImages<'a>,
     pub(crate) sps: FxHashMap<u8, SeqParameterSet>,
     pub(crate) pps: FxHashMap<(u8, u8), PicParameterSet>,
-    pub(crate) decode_query_pool: Option<DecodingQueryPool>,
+    pub(crate) decode_query_pool: Option<Arc<DecodingQueryPool>>,
     pub(crate) decode_buffer_pool: DecodeInputBufferPool<'a>,
     parameters_scheduled_for_reset: Option<SessionParams<'a>>,
     image_modifiers: ImageModifiers,
@@ -91,7 +91,7 @@ impl<'a> VideoSessionResources<'a> {
         let max_active_references = sps.max_num_ref_frames;
         let max_num_reorder_frames = calculate_max_num_reorder_frames(&sps)?;
 
-        let video_session = VideoSession::new(
+        let video_session = Arc::new(VideoSession::new(
             &decoding_device.vulkan_device,
             &decoding_device.h264_decode_queues,
             &profile_info.profile_info.profile_info,
@@ -103,7 +103,7 @@ impl<'a> VideoSessionResources<'a> {
                 .profile_capabilities
                 .video_capabilities
                 .std_header_version,
-        )?;
+        )?);
 
         let mut parameters_manager =
             VideoSessionParametersManager::new(decoding_device, video_session.session)?;
@@ -125,10 +125,10 @@ impl<'a> VideoSessionResources<'a> {
             .h264_decode_queues
             .supports_result_status_queries()
         {
-            Some(DecodingQueryPool::new(
+            Some(Arc::new(DecodingQueryPool::new(
                 decoding_device.vulkan_device.device.clone(),
                 profile_info.profile_info.profile_info,
-            )?)
+            )?))
         } else {
             None
         };
@@ -232,10 +232,10 @@ impl<'a> VideoSessionResources<'a> {
                 .h264_decode_queues
                 .supports_result_status_queries()
             {
-                true => Some(DecodingQueryPool::new(
+                true => Some(Arc::new(DecodingQueryPool::new(
                     decoding_device.vulkan_device.device.clone(),
                     new_params.profile_info.profile_info.profile_info,
-                )?),
+                )?)),
                 false => None,
             };
             self.decode_buffer_pool = DecodeInputBufferPool::new(
@@ -244,7 +244,7 @@ impl<'a> VideoSessionResources<'a> {
             );
         }
 
-        self.video_session = VideoSession::new(
+        self.video_session = Arc::new(VideoSession::new(
             &decoding_device.vulkan_device,
             &decoding_device.h264_decode_queues,
             &new_params.profile_info.profile_info.profile_info,
@@ -256,7 +256,7 @@ impl<'a> VideoSessionResources<'a> {
                 .profile_capabilities
                 .video_capabilities
                 .std_header_version,
-        )?;
+        )?);
 
         self.parameters_manager
             .change_session(self.video_session.session)?;

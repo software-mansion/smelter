@@ -84,11 +84,21 @@ pub(crate) struct DecodeResult<T> {
     pub(crate) metadata: DecodeResultMetadata,
 }
 
+/// Vulkan resources that must be kept alive while a decode submission is in flight.
+pub(crate) struct InFlightDecodeResources {
+    _video_session: Arc<VideoSession>,
+    _video_session_params: Arc<VideoSessionParameters>,
+    _dpb_image_with_view: Arc<ImageWithView>,
+    _dst_image_with_view: Option<Arc<ImageWithView>>,
+}
+
 pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
     pub(crate) decode_result: DecodeResult<DecodeSubmissionImageInfo>,
     pub(crate) semaphore_wait_value: SemaphoreWaitValue,
     pub(crate) decoder: &'borrow mut VulkanDecoder<'decoder>,
     pub(crate) input_buffer: DecodeInputBuffer,
+    pub(crate) decode_query_pool: Option<Arc<DecodingQueryPool>>,
+    pub(crate) in_flight_resources: InFlightDecodeResources,
 }
 
 impl<'a, 'b> DecodeSubmission<'a, 'b> {
@@ -112,7 +122,11 @@ impl<'a, 'b> DecodeSubmission<'a, 'b> {
     }
 
     fn finish<T>(self, output: T) -> Result<DecodeResult<T>, VulkanDecoderError> {
-        self.decoder.free_input_buffer(self.input_buffer);
+        self.input_buffer.release_to_pool();
+
+        if let Some(query_pool) = self.decode_query_pool {
+            query_pool.check_results_blocking()?;
+        }
 
         Ok(DecodeResult {
             frame: output,
@@ -189,12 +203,6 @@ impl VulkanDecoder<'_> {
 }
 
 impl<'a> VulkanDecoder<'a> {
-    pub(crate) fn free_input_buffer(&mut self, buffer: DecodeInputBuffer) {
-        if let Some(session) = &mut self.video_session_resources {
-            session.decode_buffer_pool.free(buffer);
-        }
-    }
-
     pub fn decode_to_bytes(
         &mut self,
         decoder_instructions: &[DecoderInstruction],
@@ -590,6 +598,20 @@ impl<'a> VulkanDecoder<'a> {
         self.reference_id_to_dpb_slot_index
             .insert(reference_id, new_reference_slot_index);
 
+        let in_flight_resources = InFlightDecodeResources {
+            _video_session: video_session_resources.video_session.clone(),
+            _video_session_params: video_session_resources
+                .parameters_manager
+                .parameters
+                .clone(),
+            _dpb_image_with_view: video_session_resources
+                .decoding_images
+                .dpb_image_with_view(),
+            _dst_image_with_view: video_session_resources
+                .decoding_images
+                .dst_image_with_view(),
+        };
+
         Ok(DecodeSubmission {
             decode_result: DecodeResult {
                 frame: DecodeSubmissionImageInfo {
@@ -606,8 +628,10 @@ impl<'a> VulkanDecoder<'a> {
                 },
             },
             semaphore_wait_value,
-            decoder: self,
+            decode_query_pool: video_session_resources.decode_query_pool.clone(),
+            in_flight_resources,
             input_buffer: buffer,
+            decoder: self,
         })
     }
 
@@ -745,19 +769,6 @@ impl<'a> VulkanDecoder<'a> {
             )?;
 
         self.tracker.wait_for(semaphore_wait_value, u64::MAX)?;
-
-        let result = self
-            .video_session_resources
-            .as_ref()
-            .and_then(|s| s.decode_query_pool.as_ref())
-            .map(|pool| pool.get_result_blocking());
-
-        if let Some(result) = result {
-            let result = result?;
-            if result.as_raw() < 0 {
-                return Err(VulkanDecoderError::DecodeOperationFailed(result));
-            }
-        }
 
         let image = Arc::new(image);
         let image_clone = image.clone();

@@ -16,11 +16,12 @@ use super::H264DecodeProfileInfo;
 /// existing id is prohibited), this is an abstraction which provides the capability to replace an
 /// existing sps or pps.
 pub(crate) struct VideoSessionParametersManager {
-    pub(crate) parameters: VideoSessionParameters,
+    pub(crate) parameters: Arc<VideoSessionParameters>,
     sps: HashMap<u8, VkSequenceParameterSet>,
     pps: HashMap<(u8, u8), VkPictureParameterSet>,
     device: Arc<Device>,
     session: vk::VideoSessionKHR,
+    update_sequence_count: u32,
 }
 
 impl VideoSessionParametersManager {
@@ -29,18 +30,19 @@ impl VideoSessionParametersManager {
         session: vk::VideoSessionKHR,
     ) -> Result<Self, VulkanDecoderError> {
         Ok(Self {
-            parameters: VideoSessionParameters::new(
+            parameters: Arc::new(VideoSessionParameters::new(
                 vulkan_ctx.device.clone(),
                 session,
                 &[],
                 &[],
                 None,
                 None,
-            )?,
+            )?),
             sps: HashMap::new(),
             pps: HashMap::new(),
             device: vulkan_ctx.device.clone(),
             session,
+            update_sequence_count: 0,
         })
     }
 
@@ -60,8 +62,14 @@ impl VideoSessionParametersManager {
         let sps = self.sps.values().map(|sps| sps.sps).collect::<Vec<_>>();
         let pps = self.pps.values().map(|pps| pps.pps).collect::<Vec<_>>();
 
-        self.parameters =
-            VideoSessionParameters::new(self.device.clone(), session, &sps, &pps, None, None)?;
+        self.parameters = Arc::new(VideoSessionParameters::new(
+            self.device.clone(),
+            session,
+            &sps,
+            &pps,
+            None,
+            None,
+        )?);
 
         Ok(())
     }
@@ -73,24 +81,13 @@ impl VideoSessionParametersManager {
         match self.sps.entry(key) {
             std::collections::hash_map::Entry::Occupied(mut e) => {
                 e.insert(sps.into());
-
-                self.parameters = VideoSessionParameters::new(
-                    self.device.clone(),
-                    self.session,
-                    &[self.sps[&key].sps],
-                    &[],
-                    Some(&self.parameters),
-                    None,
-                )?
+                self.recreate_parameters(&[self.sps[&key].sps], &[])
             }
             std::collections::hash_map::Entry::Vacant(e) => {
                 e.insert(sps.into());
-
-                self.parameters.add(&[self.sps[&key].sps], &[])?;
+                self.add_parameters(&[self.sps[&key].sps], &[])
             }
         }
-
-        Ok(())
     }
 
     pub(crate) fn put_pps(&mut self, pps: &PicParameterSet) -> Result<(), VulkanDecoderError> {
@@ -98,24 +95,40 @@ impl VideoSessionParametersManager {
         match self.pps.entry(key) {
             std::collections::hash_map::Entry::Occupied(mut e) => {
                 e.insert(pps.into());
-
-                self.parameters = VideoSessionParameters::new(
-                    self.device.clone(),
-                    self.session,
-                    &[],
-                    &[self.pps[&key].pps],
-                    Some(&self.parameters),
-                    None,
-                )?;
+                self.recreate_parameters(&[], &[self.pps[&key].pps])
             }
 
             std::collections::hash_map::Entry::Vacant(e) => {
                 e.insert(pps.into());
-
-                self.parameters.add(&[], &[self.pps[&key].pps])?;
+                self.add_parameters(&[], &[self.pps[&key].pps])
             }
         }
+    }
 
+    fn add_parameters(
+        &mut self,
+        sps: &[vk::native::StdVideoH264SequenceParameterSet],
+        pps: &[vk::native::StdVideoH264PictureParameterSet],
+    ) -> Result<(), VulkanDecoderError> {
+        self.update_sequence_count += 1;
+        self.parameters.add(sps, pps, self.update_sequence_count)?;
+        Ok(())
+    }
+
+    fn recreate_parameters(
+        &mut self,
+        initial_sps: &[vk::native::StdVideoH264SequenceParameterSet],
+        initial_pps: &[vk::native::StdVideoH264PictureParameterSet],
+    ) -> Result<(), VulkanDecoderError> {
+        self.update_sequence_count = 0;
+        self.parameters = Arc::new(VideoSessionParameters::new(
+            self.device.clone(),
+            self.session,
+            initial_sps,
+            initial_pps,
+            Some(&self.parameters),
+            None,
+        )?);
         Ok(())
     }
 }
