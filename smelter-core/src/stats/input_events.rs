@@ -97,7 +97,7 @@ impl RtmpInputStatsEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RtmpInputTrackStatsEvent {
-    BytesReceived(u64),
+    BytesReceived(usize),
 }
 
 impl RtmpInputTrackStatsEvent {

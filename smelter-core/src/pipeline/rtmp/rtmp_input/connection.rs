@@ -210,7 +210,7 @@ impl RtmpConnectionState {
         };
 
         self.ctx.stats_sender.send(
-            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len() as u64)
+            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
                 .into_event(&self.input_ref, StatsTrackKind::Video),
         );
         sender
@@ -259,7 +259,7 @@ impl RtmpConnectionState {
         };
 
         self.ctx.stats_sender.send(
-            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len() as u64)
+            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
                 .into_event(&self.input_ref, StatsTrackKind::Audio),
         );
         sender
