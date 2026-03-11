@@ -122,8 +122,8 @@ impl HlsInputTrackState {
             HlsInputTrackStatsEvent::InputBufferSize(duration) => {
                 self.input_buffer_10_secs.push(duration)
             }
-            HlsInputTrackStatsEvent::ChunkSize(chunk_size_bytes) => {
-                let chunk_size_bits = chunk_size_bytes * 8;
+            HlsInputTrackStatsEvent::BytesReceived(chunk_size_bytes) => {
+                let chunk_size_bits = 8 * chunk_size_bytes as u64;
                 self.bitrate_1_sec.push(chunk_size_bits);
             }
         }

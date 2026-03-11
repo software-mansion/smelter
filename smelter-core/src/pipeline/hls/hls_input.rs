@@ -564,12 +564,12 @@ impl HlsInputTrackStatsSender {
         packet_pts: Duration,
         stream_state: &StreamState,
     ) {
-        let chunk_size = packet.size() as u64;
+        let chunk_size = packet.size();
         let input_buffer = stream_state.buffer.size();
         let effective_buffer = packet_pts.saturating_sub(stream_state.queue_sync_point.elapsed());
         let events = [
             HlsInputTrackStatsEvent::PacketReceived,
-            HlsInputTrackStatsEvent::ChunkSize(chunk_size),
+            HlsInputTrackStatsEvent::BytesReceived(chunk_size),
             HlsInputTrackStatsEvent::InputBufferSize(input_buffer),
             HlsInputTrackStatsEvent::EffectiveBuffer(effective_buffer),
         ];

@@ -152,7 +152,7 @@ impl Mp4InputTrackStatsEvent {
 pub(crate) enum HlsInputTrackStatsEvent {
     PacketReceived,
     DiscontinuityDetected,
-    ChunkSize(u64),
+    BytesReceived(usize),
     EffectiveBuffer(Duration),
     InputBufferSize(Duration),
 }
