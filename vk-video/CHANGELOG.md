@@ -11,6 +11,7 @@
 - Made `wgpu` dependency optional via `wgpu` feature (enabled by default)
 
 ### 🐛 Bug fixes
+- Fix graphical bugs when the decoded bitstream switches to a lower resolution mid-stream
 
 ## [v0.2.1](https://github.com/software-mansion/smelter/releases/tag/vk-video%2Fv0.2.1)
 
