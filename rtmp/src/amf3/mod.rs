@@ -5,6 +5,7 @@ use bytes::Bytes;
 
 mod decoding;
 mod encoding;
+mod error;
 
 #[cfg(test)]
 mod amf3_tests;

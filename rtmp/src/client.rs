@@ -315,7 +315,7 @@ fn send_connect(stream: &mut RtmpMessageStream, app: &str) -> Result<(), RtmpCon
             // TODO: add config option
             ("videoCodecs", AmfValue::Number(0x00FF as f64)), // all RTMP supported
             ("videoFunction", AmfValue::Number(0.0)),
-            ("objectEncoding", AmfValue::Number(0.0)), // TODO: add amf3
+            ("objectEncoding", AmfValue::Number(0.0)),
         ]
         .into_iter()
         .map(|(k, v)| (k.into(), v)),

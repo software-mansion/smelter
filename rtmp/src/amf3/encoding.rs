@@ -1,6 +1,9 @@
 use bytes::{BufMut, Bytes};
 
-use crate::{Amf3EncodingError, AmfEncodingError, amf3::*};
+use crate::{
+    AmfEncodingError,
+    amf3::{error::Amf3EncodingError, *},
+};
 
 pub(crate) const U29_MAX: u32 = (1 << 29) - 1;
 pub(crate) const U28_MAX: u32 = (1 << 28) - 1;
