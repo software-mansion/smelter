@@ -4,6 +4,7 @@ use ash::vk;
 
 use crate::{
     VulkanDevice,
+    parameters::ScalingAlgorithm,
     vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
     vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState, H264EncodeProfileInfo},
     vulkan_transcoder::TranscoderError,
@@ -15,6 +16,32 @@ use crate::{
 
 const MAX_OUTPUTS: u32 = 8;
 const MAX_FRAMES_IN_FLIGHT: u32 = 16; // The max reorder in h264
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct PushConstants {
+    output_count: u32,
+    width: u32,
+    height: u32,
+    scaling_algorithm: [u32; MAX_OUTPUTS as usize],
+}
+
+impl PushConstants {
+    fn new(output_configs: &[OutputConfig], cropped_size: vk::Extent2D) -> Self {
+        let mut result = PushConstants {
+            output_count: output_configs.len() as u32,
+            width: cropped_size.width,
+            height: cropped_size.height,
+            scaling_algorithm: [0; _],
+        };
+
+        for (i, config) in output_configs.iter().enumerate() {
+            result.scaling_algorithm[i] = config.scaling_algorithm as u32;
+        }
+
+        result
+    }
+}
 
 pub(crate) struct ResizingImageBundle {
     pub(crate) image: Arc<Image>,
@@ -129,6 +156,7 @@ pub(crate) struct OutputConfig {
     pub(crate) width: u32,
     pub(crate) height: u32,
     pub(crate) profile: H264EncodeProfileInfo<'static>,
+    pub(crate) scaling_algorithm: ScalingAlgorithm,
 }
 
 pub(crate) struct Descriptors {
@@ -270,7 +298,7 @@ impl ResizingPipeline {
             layout_output.set_layout,
         ];
         let push_constants = [vk::PushConstantRange::default()
-            .size(12)
+            .size(std::mem::size_of::<PushConstants>() as u32)
             .offset(0)
             .stage_flags(vk::ShaderStageFlags::COMPUTE)];
         let create_info = vk::PipelineLayoutCreateInfo::default()
@@ -470,16 +498,14 @@ impl ResizingPipeline {
                 ],
                 &[],
             );
-            let mut push_data = [0u8; 12];
-            push_data[0..4].copy_from_slice(&(outputs.len() as u32).to_ne_bytes());
-            push_data[4..8].copy_from_slice(&input_cropped_extent.width.to_ne_bytes());
-            push_data[8..12].copy_from_slice(&input_cropped_extent.height.to_ne_bytes());
+
+            let push_constants = PushConstants::new(&self.image_heap.configs, input_cropped_extent);
             self.device.device.cmd_push_constants(
                 buffer.buffer(),
                 self.pipeline.layout.layout,
                 vk::ShaderStageFlags::COMPUTE,
                 0,
-                &push_data,
+                bytemuck::bytes_of(&push_constants),
             );
             self.device
                 .device

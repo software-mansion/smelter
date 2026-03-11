@@ -22,6 +22,32 @@ pub mod parameters {
     pub use ash::vk::VideoEncodeTuningModeKHR as EncoderTuningMode;
     pub use ash::vk::VideoEncodeUsageFlagsKHR as EncoderUsageFlags;
 
+    /// Scaling algorithm used when resizing frames in the transcoder.
+    #[derive(Debug, Clone, Copy, Default)]
+    #[repr(u32)]
+    pub enum ScalingAlgorithm {
+        NearestNeighbor,
+        #[default]
+        Bilinear,
+        Lanczos3,
+    }
+
+    /// Configuration for a single transcoder output.
+    #[derive(Debug, Clone, Copy)]
+    pub struct TranscoderOutputConfig {
+        pub encoder_parameters: EncoderParameters,
+        pub scaling_algorithm: ScalingAlgorithm,
+    }
+
+    impl From<EncoderParameters> for TranscoderOutputConfig {
+        fn from(encoder_parameters: EncoderParameters) -> Self {
+            Self {
+                encoder_parameters,
+                scaling_algorithm: ScalingAlgorithm::default(),
+            }
+        }
+    }
+
     /// A profile in H264 is a set of codec features used while encoding a specific video.
     /// Baseline uses the fewest features, Main can use more and High even more than Main.
     #[derive(Debug, Clone, Copy)]
