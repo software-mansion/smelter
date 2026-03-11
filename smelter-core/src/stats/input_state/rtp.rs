@@ -14,6 +14,8 @@ pub struct RtpJitterBufferState {
     pub packets_received_10_secs: SlidingWindowValue<u64>,
     pub effective_buffer_10_secs: SlidingWindowValue<Duration>,
     pub input_buffer_10_secs: SlidingWindowValue<Duration>,
+
+    pub bitrate_1_sec: SlidingWindowValue<u64>,
 }
 
 impl RtpJitterBufferState {
@@ -25,6 +27,7 @@ impl RtpJitterBufferState {
             packets_received_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             effective_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             input_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
+            bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
         }
     }
 
@@ -44,6 +47,10 @@ impl RtpJitterBufferState {
             RtpJitterBufferStatsEvent::InputBufferSize(duration) => {
                 self.input_buffer_10_secs.push(duration);
             }
+            RtpJitterBufferStatsEvent::BytesReceived(chunk_size_bytes) => {
+                let chunk_size_bits = 8 * chunk_size_bytes as u64;
+                self.bitrate_1_sec.push(chunk_size_bits);
+            }
         }
     }
 
@@ -51,6 +58,8 @@ impl RtpJitterBufferState {
         RtpJitterBufferStatsReport {
             packets_lost: self.packets_lost,
             packets_received: self.packets_received,
+            bitrate_avg_1_second: self.bitrate_1_sec.sum()
+                / self.bitrate_1_sec.window_size().as_secs(),
             last_10_secs: RtpJitterBufferSlidingWindowStatsReport {
                 packets_lost: self.packets_lost_10_secs.sum(),
                 packets_received: self.packets_received_10_secs.sum(),

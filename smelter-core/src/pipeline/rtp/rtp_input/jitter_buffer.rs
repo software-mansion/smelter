@@ -96,6 +96,9 @@ impl RtpJitterBuffer {
         }
 
         (self.on_stats_event)(RtpJitterBufferStatsEvent::RtpPacketReceived);
+        (self.on_stats_event)(RtpJitterBufferStatsEvent::BytesReceived(
+            packet.payload.len(),
+        ));
 
         let pts = self
             .timestamp_sync

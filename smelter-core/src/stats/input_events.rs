@@ -62,6 +62,7 @@ impl WhepInputStatsEvent {
 pub(crate) enum RtpJitterBufferStatsEvent {
     RtpPacketLost,
     RtpPacketReceived,
+    BytesReceived(usize),
     EffectiveBuffer(Duration),
     InputBufferSize(Duration),
 }

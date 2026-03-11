@@ -26,6 +26,7 @@ pub struct WhepInputStatsReport {
 pub struct RtpJitterBufferStatsReport {
     pub packets_lost: u64,
     pub packets_received: u64,
+    pub bitrate_avg_1_second: u64,
     pub last_10_secs: RtpJitterBufferSlidingWindowStatsReport,
 }
 
