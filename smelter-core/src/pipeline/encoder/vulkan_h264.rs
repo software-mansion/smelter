@@ -86,6 +86,8 @@ impl VideoEncoder for VulkanH264Encoder {
         let gop_size = NonZero::new(gop_size_raw).unwrap_or(NonZero::new(1).unwrap());
 
         encoder_params.idr_period = Some(gop_size);
+        encoder_params.color_description = Some(vk_video::parameters::ColorDescription::BT709);
+        encoder_params.use_full_color_range = Some(false);
 
         if options.bitstream_format == H264BitstreamFormat::Avcc {
             encoder_params.inline_stream_params = Some(false);

@@ -3,9 +3,15 @@ use std::ptr::NonNull;
 use ash::vk;
 use h264_reader::nal::sps::{FrameMbsFlags, SeqParameterSet};
 
-use crate::VulkanDecoderError;
+use crate::{
+    VulkanDecoderError,
+    device::{ColorDescription, Rational},
+    parameters::H264Profile,
+};
 
 const MACROBLOCK_SIZE: u32 = 16;
+pub(crate) const MAX_FRAME_NUM: u32 = 1 << 7;
+const LOG2_MAX_FRAME_NUM_MINUS_4: u8 = (MAX_FRAME_NUM.ilog2() as u8) - 4;
 
 pub(crate) trait SeqParameterSetExt {
     fn size(&self) -> Result<vk::Extent2D, VulkanDecoderError>;
@@ -74,8 +80,10 @@ pub(crate) struct VkSequenceParameterSet {
     /// # Safety
     /// Do not modify this pointer or anything it points to
     offset_for_ref_frame: Option<NonNull<[i32]>>,
-    // in the future, heap-allocated VUI and HRD parameters can be put here to have everything
-    // together
+
+    /// # Safety
+    /// Do not modify this pointer or anything it points to
+    vui_ptr: Option<NonNull<vk::native::StdVideoH264SequenceParameterSetVui>>,
 }
 
 impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
@@ -238,6 +246,7 @@ impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
             },
             scaling_lists_ptr,
             offset_for_ref_frame,
+            vui_ptr: None,
         }
     }
 }
@@ -249,6 +258,118 @@ impl Drop for VkSequenceParameterSet {
 
         self.offset_for_ref_frame
             .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
+
+        self.vui_ptr.map(|p| unsafe { Box::from_raw(p.as_ptr()) });
+    }
+}
+
+impl VkSequenceParameterSet {
+    #[allow(non_snake_case)]
+    pub(crate) fn new_encode(
+        profile: H264Profile,
+        width: u32,
+        height: u32,
+        max_references: u32,
+        color_description: ColorDescription,
+        use_full_color_range: bool,
+        framerate: Rational,
+    ) -> VkSequenceParameterSet {
+        // separate_colour_plane_flag is 0 so the crop units are based on SubWidthC and SubHeightC for YUV420
+        // with enabled frame_mbs_only_flag
+        let (CropUnitX, CropUnitY) = (2, 2);
+
+        let width_offset = (MACROBLOCK_SIZE - (width % MACROBLOCK_SIZE)) % MACROBLOCK_SIZE;
+        let height_offset = (MACROBLOCK_SIZE - (height % MACROBLOCK_SIZE)) % MACROBLOCK_SIZE;
+
+        let pic_width_in_mbs_minus1 = (width + width_offset) / MACROBLOCK_SIZE - 1;
+        let pic_height_in_map_units_minus1 = (height + height_offset) / MACROBLOCK_SIZE - 1;
+        let frame_crop_right_offset = width_offset / CropUnitX;
+        let frame_crop_bottom_offset = height_offset / CropUnitY;
+
+        let vui = Box::new(vk::native::StdVideoH264SequenceParameterSetVui {
+            flags: vk::native::StdVideoH264SpsVuiFlags {
+                _bitfield_align_1: [],
+                _bitfield_1: vk::native::StdVideoH264SpsVuiFlags::new_bitfield_1(
+                    0,
+                    0,
+                    0,
+                    1,                           // video_signal_type_present_flag
+                    use_full_color_range as u32, // video_full_range_flag
+                    1,                           // color_description_present_flag
+                    0,
+                    1, // timing_info_present_flag
+                    0,
+                    1, // bitstream_restriction_flag
+                    0,
+                    0,
+                ),
+                __bindgen_padding_0: 0,
+            },
+            aspect_ratio_idc: 0,
+            sar_width: 0,
+            sar_height: 0,
+            video_format: 5, // unspecified
+            colour_primaries: color_description.colour_primaries,
+            transfer_characteristics: color_description.transfer_characteristics,
+            matrix_coefficients: color_description.matrix_coefficients,
+            num_units_in_tick: framerate.denominator.get(),
+            time_scale: framerate.numerator * 2,
+            max_num_reorder_frames: 0,  // TODO: B frames
+            max_dec_frame_buffering: 0, // TODO: B frames
+            chroma_sample_loc_type_top_field: 0,
+            chroma_sample_loc_type_bottom_field: 0,
+            reserved1: 0,
+            pHrdParameters: std::ptr::null(),
+        });
+        let vui_ptr = NonNull::from(Box::leak(vui));
+
+        let sps = vk::native::StdVideoH264SequenceParameterSet {
+            flags: vk::native::StdVideoH264SpsFlags {
+                _bitfield_align_1: [0; 0],
+                __bindgen_padding_0: 0,
+                _bitfield_1: vk::native::StdVideoH264SpsFlags::new_bitfield_1(
+                    0, 0, 0, 0, 0, 1, // flag 5 equal to 1 turns off B-slices
+                    1, // ffmpeg
+                    0, 1, // 1 - no fields
+                    0, // only for pic_order_cnt_type 1
+                    0, 0, 0, // ffmpeg
+                    1, // use frame cropping
+                    0, 1, // vui
+                ),
+            },
+            profile_idc: profile.to_profile_idc(),
+            level_idc: vk::native::StdVideoH264LevelIdc_STD_VIDEO_H264_LEVEL_IDC_4_1,
+            chroma_format_idc:
+                vk::native::StdVideoH264ChromaFormatIdc_STD_VIDEO_H264_CHROMA_FORMAT_IDC_420,
+            seq_parameter_set_id: 0,
+            bit_depth_luma_minus8: 0,
+            bit_depth_chroma_minus8: 0,
+            log2_max_frame_num_minus4: LOG2_MAX_FRAME_NUM_MINUS_4, // TODO: see how this impacts output
+            pic_order_cnt_type: vk::native::StdVideoH264PocType_STD_VIDEO_H264_POC_TYPE_0,
+            offset_for_non_ref_pic: 0, // only for pic_order_cnt_type 1
+            offset_for_top_to_bottom_field: 0, // only for pic_order_cnt_type 1
+            log2_max_pic_order_cnt_lsb_minus4: 4, // only for pic_order_cnt_type 0
+            num_ref_frames_in_pic_order_cnt_cycle: 0, // only for pic_order_cnt_type 1
+            max_num_ref_frames: max_references as u8,
+            reserved1: 0,
+            pic_width_in_mbs_minus1,
+            pic_height_in_map_units_minus1,
+            frame_crop_left_offset: 0,
+            frame_crop_right_offset,
+            frame_crop_top_offset: 0,
+            frame_crop_bottom_offset,
+            reserved2: 0,
+            pOffsetForRefFrame: std::ptr::null(),
+            pScalingLists: std::ptr::null(),
+            pSequenceParameterSetVui: vui_ptr.as_ptr(),
+        };
+
+        Self {
+            sps,
+            scaling_lists_ptr: None,
+            offset_for_ref_frame: None,
+            vui_ptr: Some(vui_ptr),
+        }
     }
 }
 
@@ -678,5 +799,38 @@ impl Drop for VkPictureParameterSet {
     fn drop(&mut self) {
         self.scaling_list_ptr
             .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
+    }
+}
+
+impl VkPictureParameterSet {
+    pub fn new_encode() -> Self {
+        let pps = vk::native::StdVideoH264PictureParameterSet {
+            flags: vk::native::StdVideoH264PpsFlags {
+                __bindgen_padding_0: [0; 3],
+                _bitfield_align_1: [],
+                _bitfield_1: vk::native::StdVideoH264PpsFlags::new_bitfield_1(
+                    0, 0, 0, 1, // maybe turn off to enable superfast decoding
+                    0, // think about this -- think really hard, it seems this
+                    // means you need to supply the weights yourself
+                    0, 1, 0,
+                ),
+            },
+            seq_parameter_set_id: 0,
+            pic_parameter_set_id: 0,
+            num_ref_idx_l0_default_active_minus1: 0,
+            num_ref_idx_l1_default_active_minus1: 0,
+            weighted_bipred_idc:
+                vk::native::StdVideoH264WeightedBipredIdc_STD_VIDEO_H264_WEIGHTED_BIPRED_IDC_DEFAULT, // for b frames
+            pic_init_qp_minus26: 0, // no idea what this is, ffmpeg sets this to -4, BBB has 0
+            pic_init_qs_minus26: 0, // no idea what this is, ffmpeg sets this to 0, BBB has 0
+            chroma_qp_index_offset: 0, // no idea what this is, ffmpeg sets this to 0, BBB has 0
+            second_chroma_qp_index_offset: 0, // no idea what this is, ffmpeg sets this to 0, BBB has 0
+            pScalingLists: std::ptr::null(),
+        };
+
+        Self {
+            pps,
+            scaling_list_ptr: None,
+        }
     }
 }

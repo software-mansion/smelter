@@ -112,6 +112,44 @@ pub struct VideoParameters {
     pub target_framerate: Rational,
 }
 
+/// Color description for H.264 VUI parameters.
+/// Values correspond to ITU-T H.264 Tables E-3, E-4, E-5.
+#[derive(Debug, Clone, Copy)]
+pub struct ColorDescription {
+    pub colour_primaries: u8,
+    pub transfer_characteristics: u8,
+    pub matrix_coefficients: u8,
+}
+
+impl Default for ColorDescription {
+    fn default() -> Self {
+        Self::UNSPECIFIED
+    }
+}
+
+impl ColorDescription {
+    pub const UNSPECIFIED: Self = Self {
+        colour_primaries: 2,
+        transfer_characteristics: 2,
+        matrix_coefficients: 2,
+    };
+    pub const BT709: Self = Self {
+        colour_primaries: 1,
+        transfer_characteristics: 1,
+        matrix_coefficients: 1,
+    };
+    pub const BT601_NTSC: Self = Self {
+        colour_primaries: 6,
+        transfer_characteristics: 6,
+        matrix_coefficients: 6,
+    };
+    pub const BT601_PAL: Self = Self {
+        colour_primaries: 5,
+        transfer_characteristics: 6,
+        matrix_coefficients: 5,
+    };
+}
+
 /// Parameters for encoder creation
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderParameters {
@@ -148,6 +186,14 @@ pub struct EncoderParameters {
     /// If `false`, SPS/PPS can be retrieved separately using methods defined on the encoder.
     /// If [`None`], defaults to `true`.
     pub inline_stream_params: Option<bool>,
+
+    /// Color description included in the VUI parameters.
+    /// If [`None`], defaults to [`ColorDescription::UNSPECIFIED`].
+    pub color_description: Option<ColorDescription>,
+
+    /// Sets the `video_full_range_flag` in the VUI parameters
+    /// If [`None`], defaults to `true`.
+    pub use_full_color_range: Option<bool>,
 }
 
 /// Open connection to a coding-capable device. Also contains a [`wgpu::Device`], a [`wgpu::Queue`] and
@@ -448,6 +494,8 @@ impl VulkanDevice {
             content_flags: Some(EncoderContentFlags::DEFAULT),
             tuning_mode: Some(EncoderTuningMode::LOW_LATENCY),
             inline_stream_params: None,
+            color_description: None,
+            use_full_color_range: None,
         })
     }
 
@@ -476,6 +524,8 @@ impl VulkanDevice {
             content_flags: Some(EncoderContentFlags::DEFAULT),
             tuning_mode: Some(EncoderTuningMode::HIGH_QUALITY),
             inline_stream_params: None,
+            color_description: None,
+            use_full_color_range: None,
         })
     }
 
@@ -622,6 +672,8 @@ impl VulkanDevice {
         let content_flags = encoder_parameters
             .content_flags
             .unwrap_or(vk::VideoEncodeContentFlagsKHR::DEFAULT);
+        let color_description = encoder_parameters.color_description.unwrap_or_default();
+        let use_full_color_range = encoder_parameters.use_full_color_range.unwrap_or(true);
 
         Ok(FullEncoderParameters {
             idr_period,
@@ -636,6 +688,8 @@ impl VulkanDevice {
             tuning_mode,
             content_flags,
             inline_stream_params: encoder_parameters.inline_stream_params.unwrap_or(true),
+            color_description,
+            use_full_color_range,
         })
     }
 

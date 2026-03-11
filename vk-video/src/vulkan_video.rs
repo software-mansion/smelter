@@ -11,8 +11,8 @@ pub mod capabilities {
 pub mod parameters {
     pub use crate::adapter::VulkanAdapterDescriptor;
     pub use crate::device::{
-        DecoderParameters, EncoderParameters, MissedFrameHandling, Rational, VideoParameters,
-        VulkanDeviceDescriptor,
+        ColorDescription, DecoderParameters, EncoderParameters, MissedFrameHandling, Rational,
+        VideoParameters, VulkanDeviceDescriptor,
     };
     pub use crate::vulkan_encoder::RateControl;
 
