@@ -5,7 +5,7 @@ use ash::vk;
 use crate::{
     DecoderError, EncodedInputChunk, EncodedOutputChunk, Frame, VulkanCommonError, VulkanDevice,
     VulkanEncoderError,
-    device::EncoderParameters,
+    parameters::TranscoderOutputConfig,
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
         h264::H264Parser,
@@ -56,7 +56,7 @@ pub struct Transcoder {
 impl Transcoder {
     pub(crate) fn new(
         device: Arc<VulkanDevice>,
-        parameters: Vec<EncoderParameters>,
+        output_configs: Vec<TranscoderOutputConfig>,
     ) -> Result<Self, TranscoderError> {
         let decoder = VulkanDecoder::new(
             Arc::new(
@@ -78,10 +78,12 @@ impl Transcoder {
         let reference_ctx = ReferenceContext::default();
         let sorter = FrameSorter::new();
 
-        let parameters = parameters
+        let scaling_algorithms: Vec<_> =
+            output_configs.iter().map(|c| c.scaling_algorithm).collect();
+
+        let parameters = output_configs
             .iter()
-            .copied()
-            .map(|p| device.validate_and_fill_encoder_parameters(p))
+            .map(|c| device.validate_and_fill_encoder_parameters(c.encoder_parameters))
             .collect::<Result<Vec<_>, _>>()?;
 
         let encoders = parameters
@@ -90,8 +92,9 @@ impl Transcoder {
             .map(|p| VulkanEncoder::new(Arc::new(device.encoding_device()?), p))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let output_configs = output_configs(&parameters);
-        let pipeline = pipeline::ResizingPipeline::new(device.clone(), output_configs)?;
+        let pipeline_output_configs =
+            make_pipeline_output_configs(&parameters, &scaling_algorithms);
+        let pipeline = pipeline::ResizingPipeline::new(device.clone(), pipeline_output_configs)?;
 
         Ok(Self {
             decoder,
@@ -258,13 +261,18 @@ impl Transcoder {
     }
 }
 
-fn output_configs(parameters: &[FullEncoderParameters]) -> Vec<OutputConfig> {
+fn make_pipeline_output_configs(
+    parameters: &[FullEncoderParameters],
+    scaling_algorithms: &[crate::parameters::ScalingAlgorithm],
+) -> Vec<OutputConfig> {
     parameters
         .iter()
-        .map(|p| OutputConfig {
+        .zip(scaling_algorithms.iter())
+        .map(|(p, &scaling)| OutputConfig {
             width: p.width.get(),
             height: p.height.get(),
             profile: H264EncodeProfileInfo::new_encode(p),
+            scaling_algorithm: scaling,
         })
         .collect()
 }
