@@ -214,7 +214,7 @@ struct WhepOutputStatsSender {
 }
 
 impl WhepOutputStatsSender {
-    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+    fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
             WhepOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
         );

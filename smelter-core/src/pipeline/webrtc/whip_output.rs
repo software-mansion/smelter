@@ -242,8 +242,7 @@ impl WhipClientTask {
                             match track.write_rtp(&p.packet).await {
                                 Ok(_) => {
                                     trace!(packet=?p, "Video RTP packet written to track");
-                                    stats_sender
-                                        .bytes_sent_event(p.len() as u64, StatsTrackKind::Video);
+                                    stats_sender.bytes_sent_event(p.len(), StatsTrackKind::Video);
                                 }
                                 Err(err) => {
                                     warn!("RTP write error {}", err);
@@ -256,8 +255,7 @@ impl WhipClientTask {
                         match track.write_rtp(&p.packet).await {
                             Ok(_) => {
                                 trace!(packet=?p, "Audio RTP packet written to track");
-                                stats_sender
-                                    .bytes_sent_event(p.len() as u64, StatsTrackKind::Audio);
+                                stats_sender.bytes_sent_event(p.len(), StatsTrackKind::Audio);
                             }
                             Err(err) => {
                                 warn!("RTP write error {}", err);
@@ -272,8 +270,7 @@ impl WhipClientTask {
                         match track.write_rtp(&p.packet).await {
                             Ok(_) => {
                                 trace!(packet=?p, "Audio RTP packet written to track");
-                                stats_sender
-                                    .bytes_sent_event(p.len() as u64, StatsTrackKind::Audio);
+                                stats_sender.bytes_sent_event(p.len(), StatsTrackKind::Audio);
                             }
                             Err(err) => {
                                 warn!("RTP write error {}", err);
@@ -288,8 +285,7 @@ impl WhipClientTask {
                         match track.write_rtp(&p.packet).await {
                             Ok(_) => {
                                 trace!(packet=?p, "Video RTP packet written to track");
-                                stats_sender
-                                    .bytes_sent_event(p.len() as u64, StatsTrackKind::Video);
+                                stats_sender.bytes_sent_event(p.len(), StatsTrackKind::Video);
                             }
                             Err(err) => {
                                 warn!("RTP write error {}", err);
@@ -367,7 +363,7 @@ struct WhipOutputStatsSender {
 }
 
 impl WhipOutputStatsSender {
-    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+    fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
             WhipOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
         );

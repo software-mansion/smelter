@@ -57,7 +57,7 @@ impl WhipOutputTrackState {
     pub fn handle_event(&mut self, event: WhipOutputTrackStatsEvent) {
         match event {
             WhipOutputTrackStatsEvent::BytesSent(chunk_size_bytes) => {
-                let chunk_size_bits = chunk_size_bytes * 8;
+                let chunk_size_bits = 8 * chunk_size_bytes as u64;
                 self.bitrate_1_sec.push(chunk_size_bits);
             }
         }

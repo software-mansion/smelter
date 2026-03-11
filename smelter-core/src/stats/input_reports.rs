@@ -6,6 +6,8 @@ pub enum InputStatsReport {
     Whip(WhipInputStatsReport),
     Whep(WhepInputStatsReport),
     Hls(HlsInputStatsReport),
+    Rtmp(RtmpInputStatsReport),
+    Mp4(Mp4InputStatsReport),
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -24,6 +26,7 @@ pub struct WhepInputStatsReport {
 pub struct RtpJitterBufferStatsReport {
     pub packets_lost: u64,
     pub packets_received: u64,
+    pub bitrate_avg_1_second: u64,
     pub last_10_secs: RtpJitterBufferSlidingWindowStatsReport,
 }
 
@@ -45,6 +48,28 @@ pub struct RtpJitterBufferSlidingWindowStatsReport {
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
+pub struct RtmpInputStatsReport {
+    pub video: RtmpInputTrackStatsReport,
+    pub audio: RtmpInputTrackStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct RtmpInputTrackStatsReport {
+    pub bitrate_avg_1_second: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Mp4InputStatsReport {
+    pub video: Mp4InputTrackStatsReport,
+    pub audio: Mp4InputTrackStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Mp4InputTrackStatsReport {
+    pub bitrate_avg_1_second: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct HlsInputStatsReport {
     pub video: HlsInputTrackStatsReport,
     pub audio: HlsInputTrackStatsReport,
@@ -56,6 +81,8 @@ pub struct HlsInputStatsReport {
 pub struct HlsInputTrackStatsReport {
     pub packets_received: u64,
     pub discontinuities_detected: u32,
+    pub bitrate_avg_1_second: u64,
+
     pub last_10_seconds: HlsInputTrackSlidingWindowStatsReport,
 }
 
@@ -63,7 +90,6 @@ pub struct HlsInputTrackStatsReport {
 pub struct HlsInputTrackSlidingWindowStatsReport {
     pub packets_received: u64,
     pub discontinuities_detected: u32,
-    pub bitrate_avg: u64,
 
     /// Measured when packet leaves jitter buffer. This value represents
     /// how much time packet has to reach the queue to be processed.

@@ -276,14 +276,14 @@ fn run_rtmp_output_thread(
         ),
         (Some(video), None) => {
             while let Ok(EncodedOutputEvent::Data(chunk)) = video.chunks_receiver.recv() {
-                stats_sender.bytes_sent_event(chunk.data.len() as u64, StatsTrackKind::Video);
+                stats_sender.bytes_sent_event(chunk.data.len(), StatsTrackKind::Video);
                 client.send(video_chunk_to_event(chunk))?;
             }
             Ok(())
         }
         (None, Some(audio)) => {
             while let Ok(EncodedOutputEvent::Data(chunk)) = audio.chunks_receiver.recv() {
-                stats_sender.bytes_sent_event(chunk.data.len() as u64, StatsTrackKind::Audio);
+                stats_sender.bytes_sent_event(chunk.data.len(), StatsTrackKind::Audio);
                 client.send(audio_chunk_to_event(chunk, channels))?;
             }
             Ok(())
@@ -345,12 +345,10 @@ fn run_synced_av(
             (false, false) => match (&pending_video, &pending_audio) {
                 (Some(video), Some(audio)) => {
                     if video.pts <= audio.pts {
-                        rtmp_stats_sender
-                            .bytes_sent_event(video.data.len() as u64, StatsTrackKind::Video);
+                        rtmp_stats_sender.bytes_sent_event(video.data.len(), StatsTrackKind::Video);
                         client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
                     } else {
-                        rtmp_stats_sender
-                            .bytes_sent_event(audio.data.len() as u64, StatsTrackKind::Audio);
+                        rtmp_stats_sender.bytes_sent_event(audio.data.len(), StatsTrackKind::Audio);
                         client.send(audio_chunk_to_event(
                             pending_audio.take().unwrap(),
                             channels,
@@ -358,13 +356,11 @@ fn run_synced_av(
                     }
                 }
                 (Some(video), None) => {
-                    rtmp_stats_sender
-                        .bytes_sent_event(video.data.len() as u64, StatsTrackKind::Video);
+                    rtmp_stats_sender.bytes_sent_event(video.data.len(), StatsTrackKind::Video);
                     client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
                 }
                 (None, Some(audio)) => {
-                    rtmp_stats_sender
-                        .bytes_sent_event(audio.data.len() as u64, StatsTrackKind::Audio);
+                    rtmp_stats_sender.bytes_sent_event(audio.data.len(), StatsTrackKind::Audio);
                     client.send(audio_chunk_to_event(
                         pending_audio.take().unwrap(),
                         channels,
@@ -384,7 +380,7 @@ struct RtmpOutputStatsSender {
 }
 
 impl RtmpOutputStatsSender {
-    fn bytes_sent_event(&self, size: u64, track_kind: StatsTrackKind) {
+    fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
             RtmpOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
         );

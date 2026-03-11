@@ -54,6 +54,11 @@ impl Mp4Input {
         };
         let buffer = InputBuffer::new(&ctx, options.buffer);
 
+        ctx.stats_sender.send(StatsEvent::NewInput {
+            input_ref: input_ref.clone(),
+            kind: InputProtocolKind::Mp4,
+        });
+
         let video = Mp4FileReader::from_path(&source.path)?.find_h264_track();
         let video_duration = video.as_ref().and_then(|track| track.duration());
         let audio = Mp4FileReader::from_path(&source.path)?.find_aac_track();
@@ -148,6 +153,7 @@ impl Mp4Input {
         if options.should_loop {
             start_thread_with_loop(
                 ctx.clone(),
+                input_ref.clone(),
                 buffer,
                 video_handle,
                 video_track,
@@ -161,6 +167,7 @@ impl Mp4Input {
         } else {
             start_thread_single_run(
                 ctx.clone(),
+                input_ref.clone(),
                 buffer,
                 video_handle,
                 video_track,
@@ -211,6 +218,7 @@ impl Mp4Input {
 #[allow(clippy::too_many_arguments)]
 fn start_thread_with_loop(
     ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
     buffer: InputBuffer,
     video_handle: Option<DecoderThreadHandle>,
     video_track: Option<Track<File>>,
@@ -250,6 +258,8 @@ fn start_thread_with_loop(
                         let should_close = should_close.clone();
                         let should_close_input = should_close_input.clone();
                         let buffer = buffer.clone();
+                        let stats_sender = ctx.stats_sender.clone();
+                        let input_ref = input_ref.clone();
                         std::thread::Builder::new()
                             .name("mp4 reader - video".to_string())
                             .spawn(move || {
@@ -264,6 +274,10 @@ fn start_thread_with_loop(
                                     last_sample_pts.fetch_max(
                                         (chunk.pts + duration).as_nanos() as u64,
                                         Ordering::Relaxed,
+                                    );
+                                    stats_sender.send(
+                                        Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
+                                            .into_event(&input_ref, StatsTrackKind::Video),
                                     );
 
                                     // add buffer after recording last sample
@@ -298,6 +312,8 @@ fn start_thread_with_loop(
                         let should_close = should_close.clone();
                         let should_close_input = should_close_input.clone();
                         let buffer = buffer.clone();
+                        let stats_sender = ctx.stats_sender.clone();
+                        let input_ref = input_ref.clone();
                         std::thread::Builder::new()
                             .name("mp4 reader - audio".to_string())
                             .spawn(move || {
@@ -313,6 +329,10 @@ fn start_thread_with_loop(
                                     last_sample_pts.fetch_max(
                                         (chunk.pts + duration).as_nanos() as u64,
                                         Ordering::Relaxed,
+                                    );
+                                    stats_sender.send(
+                                        Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
+                                            .into_event(&input_ref, StatsTrackKind::Audio),
                                     );
 
                                     // add buffer after recording last sample
@@ -370,6 +390,7 @@ fn start_thread_with_loop(
 #[allow(clippy::too_many_arguments)]
 fn start_thread_single_run(
     ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
     buffer: InputBuffer,
     video_handle: Option<DecoderThreadHandle>,
     video_track: Option<Track<File>>,
@@ -384,6 +405,8 @@ fn start_thread_single_run(
     if let (Some(handle), Some(mut track)) = (video_handle, video_track) {
         let should_close = should_close.clone();
         let buffer = buffer.clone();
+        let stats_sender = ctx.stats_sender.clone();
+        let input_ref = input_ref.clone();
         std::thread::Builder::new()
             .name("mp4 reader - video".to_string())
             .spawn(move || {
@@ -392,6 +415,11 @@ fn start_thread_single_run(
                     buffer.recalculate_buffer(chunk.pts + offset);
                     chunk.pts = chunk.pts + offset + buffer.size();
                     chunk.dts = chunk.dts.map(|dts| dts + offset);
+
+                    stats_sender.send(
+                        Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
+                            .into_event(&input_ref, StatsTrackKind::Video),
+                    );
                     trace!(?chunk, "Sending video chunk");
                     if handle
                         .chunk_sender
@@ -414,6 +442,8 @@ fn start_thread_single_run(
     if let (Some(handle), Some(mut track)) = (audio_handle, audio_track) {
         let should_close = should_close.clone();
         let buffer = buffer.clone();
+        let stats_sender = ctx.stats_sender.clone();
+        let input_ref = input_ref.clone();
         std::thread::Builder::new()
             .name("mp4 reader - audio".to_string())
             .spawn(move || {
@@ -422,6 +452,11 @@ fn start_thread_single_run(
                     buffer.recalculate_buffer(chunk.pts + offset);
                     chunk.pts = chunk.pts + offset + buffer.size();
                     chunk.dts = chunk.dts.map(|dts| dts + offset);
+
+                    stats_sender.send(
+                        Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
+                            .into_event(&input_ref, StatsTrackKind::Audio),
+                    );
                     trace!(?chunk, "Sending audio chunk");
                     if handle
                         .chunk_sender

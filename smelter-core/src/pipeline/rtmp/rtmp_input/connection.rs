@@ -209,6 +209,10 @@ impl RtmpConnectionState {
             kind: MediaKind::Video(VideoCodec::H264),
         };
 
+        self.ctx.stats_sender.send(
+            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
+                .into_event(&self.input_ref, StatsTrackKind::Video),
+        );
         sender
             .send(PipelineEvent::Data(chunk))
             .map_err(|_| RtmpConnectionError::DecoderChannelClosed)?;
@@ -254,6 +258,10 @@ impl RtmpConnectionState {
             kind: MediaKind::Audio(AudioCodec::Aac),
         };
 
+        self.ctx.stats_sender.send(
+            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
+                .into_event(&self.input_ref, StatsTrackKind::Audio),
+        );
         sender
             .send(PipelineEvent::Data(chunk))
             .map_err(|_| RtmpConnectionError::DecoderChannelClosed)?;
