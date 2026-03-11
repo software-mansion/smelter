@@ -179,7 +179,10 @@ impl Transcoder {
                 .iter_mut()
                 .map(|e| &mut e.tracker)
                 .collect::<Vec<_>>();
-            let output = self.resizing_pipeline.run(&mut frame, &mut trackers)?;
+            let cropped_extent = frame.decode_result.frame.cropped_extent;
+            let output = self
+                .resizing_pipeline
+                .run(&mut frame, &mut trackers, cropped_extent)?;
 
             let sorted = self.sorter.put(DecodeResult {
                 frame: ResizedImages {

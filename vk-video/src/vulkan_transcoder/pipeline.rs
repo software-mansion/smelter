@@ -270,7 +270,7 @@ impl ResizingPipeline {
             layout_output.set_layout,
         ];
         let push_constants = [vk::PushConstantRange::default()
-            .size(4)
+            .size(12)
             .offset(0)
             .stage_flags(vk::ShaderStageFlags::COMPUTE)];
         let create_info = vk::PipelineLayoutCreateInfo::default()
@@ -412,6 +412,7 @@ impl ResizingPipeline {
         &mut self,
         input_submission: &mut DecodeSubmission,
         encoder_trackers: &mut [&mut EncoderTracker],
+        input_cropped_extent: vk::Extent2D,
     ) -> Result<ResizeSubmission, TranscoderError> {
         let input = ResizingImageBundle::new(
             input_submission.decode_result.frame.image.clone(),
@@ -468,12 +469,16 @@ impl ResizingPipeline {
                 ],
                 &[],
             );
+            let mut push_data = [0u8; 12];
+            push_data[0..4].copy_from_slice(&(outputs.len() as u32).to_ne_bytes());
+            push_data[4..8].copy_from_slice(&input_cropped_extent.width.to_ne_bytes());
+            push_data[8..12].copy_from_slice(&input_cropped_extent.height.to_ne_bytes());
             self.device.device.cmd_push_constants(
                 buffer.buffer(),
                 self.pipeline.layout.layout,
                 vk::ShaderStageFlags::COMPUTE,
                 0,
-                &(outputs.len() as u32).to_ne_bytes(),
+                &push_data,
             );
             self.device
                 .device

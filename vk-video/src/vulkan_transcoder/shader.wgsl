@@ -4,14 +4,20 @@
 @group(1) @binding(0) var dest_y: binding_array<texture_storage_2d<r8unorm, write>, 8>;
 @group(2) @binding(0) var dest_uv: binding_array<texture_storage_2d<rg8unorm, write>, 8>;
 
-var<immediate> output_number: u32;
+struct Immediates {
+  output_number: u32,
+  input_width: u32,
+  input_height: u32,
+}
+
+var<immediate> imm: Immediates;
 
 @compute
 @workgroup_size(256)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   var remaining_offset: u32 = id.x;
   var i: u32 = 0;
-  for ( ; i < output_number; i++ ) {
+  for ( ; i < imm.output_number; i++ ) {
     let size = textureDimensions(dest_y[i]);
     let total_size = (size.x * size.y + 255) / 256 * 256;
     if (remaining_offset < total_size) {
@@ -21,7 +27,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     remaining_offset -= total_size;
   }
 
-  if i >= output_number {
+  if i >= imm.output_number {
     return;
   }
 
@@ -35,7 +41,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   }
 
   let float_coords = (vec2<f32>(coords_output) + 0.5) / vec2<f32>(size);
-  let input_size = textureDimensions(source_y);
+  let input_size = vec2(imm.input_width, imm.input_height);
   let coords_input = vec2<u32>(vec2<f32>(input_size) * float_coords);
 
   let input_y = textureLoad(source_y, coords_input);
