@@ -11,10 +11,13 @@ pub mod capabilities {
 pub mod parameters {
     pub use crate::adapter::VulkanAdapterDescriptor;
     pub use crate::device::{
-        DecoderParameters, EncoderParameters, MissedFrameHandling, Rational, VideoParameters,
-        VulkanDeviceDescriptor,
+        ColorRange, ColorSpace, DecoderParameters, EncoderParameters, MissedFrameHandling,
+        Rational, VideoParameters, VulkanDeviceDescriptor,
     };
     pub use crate::vulkan_encoder::RateControl;
+
+    #[cfg(feature = "wgpu")]
+    pub use crate::wgpu_helpers::WgpuConverterParameters;
 
     pub use ash::vk::VideoDecodeUsageFlagsKHR as DecoderUsageFlags;
 
@@ -89,6 +92,11 @@ pub use crate::instance::VulkanInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 pub use crate::vulkan_decoder::VulkanDecoderError;
 pub use crate::vulkan_encoder::VulkanEncoderError;
+
+#[cfg(feature = "wgpu")]
+pub use crate::wgpu_helpers::{
+    WgpuConverterInitError, WgpuNv12ToRgbaConverter, WgpuRgbaToNv12Converter,
+};
 
 use crate::parser::{
     decoder_instructions::compile_to_decoder_instructions, h264::H264Parser,

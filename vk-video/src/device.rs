@@ -112,6 +112,24 @@ pub struct VideoParameters {
     pub target_framerate: Rational,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub enum ColorSpace {
+    #[default]
+    Unspecified,
+    BT709,
+    BT601Ntsc,
+    BT601Pal,
+}
+
+/// Whether the video signal uses the full or limited range of sample values.
+#[derive(Debug, Clone, Copy)]
+pub enum ColorRange {
+    /// Luma and chroma use the full [0, 255] range.
+    Full,
+    /// Luma is restricted to [16, 235] and chroma to [16, 240].
+    Limited,
+}
+
 /// Parameters for encoder creation
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderParameters {
@@ -148,6 +166,14 @@ pub struct EncoderParameters {
     /// If `false`, SPS/PPS can be retrieved separately using methods defined on the encoder.
     /// If [`None`], defaults to `true`.
     pub inline_stream_params: Option<bool>,
+
+    /// Color space of the encoded output.
+    /// If [`None`], defaults to [`ColorSpace::Unspecified`].
+    pub color_space: Option<ColorSpace>,
+
+    /// Color range of the encoded output.
+    /// If [`None`], defaults to [`ColorRange::Limited`].
+    pub color_range: Option<ColorRange>,
 }
 
 /// Open connection to a coding-capable device. Also contains a [`wgpu::Device`], a [`wgpu::Queue`] and
@@ -448,6 +474,8 @@ impl VulkanDevice {
             content_flags: Some(EncoderContentFlags::DEFAULT),
             tuning_mode: Some(EncoderTuningMode::LOW_LATENCY),
             inline_stream_params: None,
+            color_space: None,
+            color_range: None,
         })
     }
 
@@ -476,6 +504,8 @@ impl VulkanDevice {
             content_flags: Some(EncoderContentFlags::DEFAULT),
             tuning_mode: Some(EncoderTuningMode::HIGH_QUALITY),
             inline_stream_params: None,
+            color_space: None,
+            color_range: None,
         })
     }
 
@@ -612,7 +642,6 @@ impl VulkanDevice {
                 problem: format!("Framerate is {framerate:?}. The numerator should be != 0.",),
             });
         }
-
         let usage_flags = encoder_parameters
             .usage_flags
             .unwrap_or(vk::VideoEncodeUsageFlagsKHR::DEFAULT);
@@ -622,6 +651,10 @@ impl VulkanDevice {
         let content_flags = encoder_parameters
             .content_flags
             .unwrap_or(vk::VideoEncodeContentFlagsKHR::DEFAULT);
+        let color_space = encoder_parameters.color_space.unwrap_or_default();
+        let color_range = encoder_parameters
+            .color_range
+            .unwrap_or(ColorRange::Limited);
 
         Ok(FullEncoderParameters {
             idr_period,
@@ -636,6 +669,8 @@ impl VulkanDevice {
             tuning_mode,
             content_flags,
             inline_stream_params: encoder_parameters.inline_stream_params.unwrap_or(true),
+            color_space,
+            color_range,
         })
     }
 

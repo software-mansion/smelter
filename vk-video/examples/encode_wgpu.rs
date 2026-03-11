@@ -112,6 +112,8 @@ impl WgpuState {
         width: std::num::NonZeroU32,
         height: std::num::NonZeroU32,
     ) -> WgpuState {
+        use vk_video::parameters::{ColorRange, ColorSpace, WgpuConverterParameters};
+
         let shader = wgpu::include_wgsl!("encode_wgpu.wgsl");
         let shader = device.create_shader_module(shader);
 
@@ -201,7 +203,14 @@ impl WgpuState {
             ..Default::default()
         });
 
-        let rgba_to_nv12_converter = WgpuRgbaToNv12Converter::new(&device);
+        let rgba_to_nv12_converter = WgpuRgbaToNv12Converter::new(
+            &device,
+            WgpuConverterParameters {
+                color_space: ColorSpace::BT709,
+                color_range: ColorRange::Limited,
+            },
+        )
+        .unwrap();
         let rgba_bg = rgba_to_nv12_converter.create_input_bind_group(&rgba_texture);
 
         WgpuState {

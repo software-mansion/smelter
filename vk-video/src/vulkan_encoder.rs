@@ -5,21 +5,18 @@ use std::{
 };
 
 use ash::vk;
-use encode_parameter_sets::{pps, sps};
 
 use crate::{
     EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
-    device::{EncodingDevice, Rational},
+    device::{ColorRange, ColorSpace, EncodingDevice, Rational},
     parameters::H264Profile,
     wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
         ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
         SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
-        VideoSessionParameters,
+        VideoSessionParameters, VkPictureParameterSet, VkSequenceParameterSet,
     },
 };
-
-mod encode_parameter_sets;
 
 const MB: u64 = 1024 * 1024;
 
@@ -59,6 +56,9 @@ pub enum VulkanEncoderError {
         field: &'static str,
         problem: String,
     },
+
+    #[error("Framerate numerator * 2 must fit in u32")]
+    FramerateOverflow,
 
     #[cfg(feature = "wgpu")]
     #[error(transparent)]
@@ -153,19 +153,22 @@ impl VideoSessionResources<'_> {
             vk::ImageLayout::VIDEO_ENCODE_DPB_KHR,
         )?;
 
-        let sps = sps(
+        let sps = VkSequenceParameterSet::new_encode(
             parameters.profile,
             extent.width,
             extent.height,
             max_references,
+            parameters.color_space,
+            parameters.color_range,
+            parameters.framerate,
         )?;
-        let pps = pps();
+        let pps = VkPictureParameterSet::new_encode();
 
         let session_parameters = VideoSessionParameters::new(
             encoding_device.vulkan_device.device.clone(),
             video_session.session,
-            &[sps],
-            &[pps],
+            &[sps.sps],
+            &[pps.pps],
             None,
             Some(parameters.quality_level),
         )?;
@@ -421,6 +424,8 @@ pub struct FullEncoderParameters {
     pub(crate) tuning_mode: vk::VideoEncodeTuningModeKHR,
     pub(crate) content_flags: vk::VideoEncodeContentFlagsKHR,
     pub(crate) inline_stream_params: bool,
+    pub(crate) color_space: ColorSpace,
+    pub(crate) color_range: ColorRange,
 }
 
 impl<'a> VulkanEncoder<'a> {

@@ -4,6 +4,28 @@ mod rgba_to_nv12;
 pub use nv12_to_rgba::*;
 pub use rgba_to_nv12::*;
 
+use crate::device::{ColorRange, ColorSpace};
+
+#[derive(Debug, thiserror::Error)]
+pub enum WgpuConverterInitError {
+    // TODO: Remove once we add more converters
+    #[error("Only limited range BT709 is supported")]
+    OnlyLimitedBT709Supported,
+}
+
+/// Parameters for NV12 ↔ RGBA texture conversion.
+///
+/// Used by [`WgpuNv12ToRgbaConverter`] and [`WgpuRgbaToNv12Converter`] to describe
+/// the color properties of the NV12 textures.
+#[derive(Debug, Clone, Copy)]
+pub struct WgpuConverterParameters {
+    /// The color space of the NV12 data.
+    pub color_space: ColorSpace,
+
+    /// Whether the NV12 data uses full or limited sample range.
+    pub color_range: ColorRange,
+}
+
 struct WgpuSampler {
     bgl: wgpu::BindGroupLayout,
     bg: wgpu::BindGroup,

@@ -25,7 +25,7 @@ impl VideoSessionParameters {
         template: Option<&Self>,
         encode_quality_level: Option<u32>,
     ) -> Result<Self, VulkanCommonError> {
-        let parameters_add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
+        let decode_add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
             .std_sp_ss(initial_sps)
             .std_pp_ss(initial_pps);
 
@@ -47,7 +47,7 @@ impl VideoSessionParameters {
         let mut h264_decode_info = vk::VideoDecodeH264SessionParametersCreateInfoKHR::default()
             .max_std_sps_count(32)
             .max_std_pps_count(32)
-            .parameters_add_info(&parameters_add_info);
+            .parameters_add_info(&decode_add_info);
 
         let mut h264_encode_info = vk::VideoEncodeH264SessionParametersCreateInfoKHR::default()
             .max_std_sps_count(32)
