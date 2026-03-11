@@ -4,7 +4,7 @@ use tracing::{debug, warn};
 
 use crate::{
     RtmpConnectionError, RtmpEvent, RtmpMessageParseError,
-    amf0::Amf0Value,
+    amf0::AmfValue,
     error::RtmpStreamError,
     message::{
         CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageConnectSuccess,
@@ -283,7 +283,7 @@ impl NegotiationProgress {
         }
     }
 
-    fn try_match_on_status(&self, msg: &RtmpMessage) -> Option<(Amf0Value, u32)> {
+    fn try_match_on_status(&self, msg: &RtmpMessage) -> Option<(AmfValue, u32)> {
         let NegotiationProgress::WaitingForOnStatus { stream_id } = self else {
             return None;
         };
@@ -309,13 +309,13 @@ fn send_connect(stream: &mut RtmpMessageStream, app: &str) -> Result<(), RtmpCon
             ("app", app.into()),
             ("flashVer", "FMS/3,0,1,123".into()),
             // True if proxy is being used
-            ("fpad", Amf0Value::Boolean(false)),
+            ("fpad", AmfValue::Boolean(false)),
             // TODO: add config option
-            ("audioCodecs", Amf0Value::Number(0x0FFF as f64)), // all RTMP supported
+            ("audioCodecs", AmfValue::Number(0x0FFF as f64)), // all RTMP supported
             // TODO: add config option
-            ("videoCodecs", Amf0Value::Number(0x00FF as f64)), // all RTMP supported
-            ("videoFunction", Amf0Value::Number(0.0)),
-            ("objectEncoding", Amf0Value::Number(0.0)), // TODO: add amf3
+            ("videoCodecs", AmfValue::Number(0x00FF as f64)), // all RTMP supported
+            ("videoFunction", AmfValue::Number(0.0)),
+            ("objectEncoding", AmfValue::Number(0.0)), // TODO: add amf3
         ]
         .into_iter()
         .map(|(k, v)| (k.into(), v)),
@@ -336,7 +336,7 @@ fn send_create_stream(stream: &mut RtmpMessageStream) -> Result<(), RtmpConnecti
     stream.write_msg(RtmpMessage::CommandMessage {
         msg: CommandMessage::CreateStream {
             transaction_id: CREATE_STREAM_TRANSACTION_ID,
-            command_object: Amf0Value::Null,
+            command_object: AmfValue::Null,
         },
         stream_id: CONTROL_MESSAGE_STREAM_ID,
     })?;

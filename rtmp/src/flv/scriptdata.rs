@@ -4,7 +4,7 @@ use bytes::Bytes;
 
 use crate::{
     AmfDecodingError, AmfEncodingError,
-    amf0::{Amf0Value, decode_amf0_values, encode_amf0_values},
+    amf0::{AmfValue, decode_amf_values, encode_amf_values},
 };
 
 /// Struct representing flv SCRIPTDATA.
@@ -40,47 +40,47 @@ impl ScriptData {
             return Ok(Self { values: vec![] });
         }
 
-        let amf_values = decode_amf0_values(data)?;
+        let amf_values = decode_amf_values(data)?;
         let values = amf_values.into_iter().map(ScriptDataValue::from).collect();
         Ok(Self { values })
     }
 
     pub fn serialize(&self) -> Result<Bytes, AmfEncodingError> {
         let amf_values: Vec<_> = self.values.iter().cloned().map(Into::into).collect();
-        encode_amf0_values(&amf_values)
+        encode_amf_values(&amf_values)
     }
 }
 
-impl From<Amf0Value> for ScriptDataValue {
-    fn from(value: Amf0Value) -> Self {
+impl From<AmfValue> for ScriptDataValue {
+    fn from(value: AmfValue) -> Self {
         match value {
-            Amf0Value::Number(n) => Self::Number(n),
-            Amf0Value::Boolean(b) => Self::Boolean(b),
-            Amf0Value::String(s) => Self::String(s),
-            Amf0Value::Object(obj) => Self::Object(
+            AmfValue::Number(n) => Self::Number(n),
+            AmfValue::Boolean(b) => Self::Boolean(b),
+            AmfValue::String(s) => Self::String(s),
+            AmfValue::Object(obj) => Self::Object(
                 obj.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            Amf0Value::Null => Self::Null,
-            Amf0Value::Undefined => Self::Undefined,
-            Amf0Value::EcmaArray(map) => Self::EcmaArray(
+            AmfValue::Null => Self::Null,
+            AmfValue::Undefined => Self::Undefined,
+            AmfValue::EcmaArray(map) => Self::EcmaArray(
                 map.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            Amf0Value::StrictArray(array) => {
+            AmfValue::StrictArray(array) => {
                 Self::StrictArray(array.into_iter().map(Self::from).collect())
             }
-            Amf0Value::Date {
+            AmfValue::Date {
                 unix_time,
                 timezone_offset,
             } => Self::Date {
                 unix_time,
                 timezone_offset,
             },
-            Amf0Value::LongString(s) => Self::LongString(s),
-            Amf0Value::TypedObject {
+            AmfValue::LongString(s) => Self::LongString(s),
+            AmfValue::TypedObject {
                 class_name,
                 properties,
             } => {
@@ -97,7 +97,7 @@ impl From<Amf0Value> for ScriptDataValue {
     }
 }
 
-impl From<ScriptDataValue> for Amf0Value {
+impl From<ScriptDataValue> for AmfValue {
     fn from(value: ScriptDataValue) -> Self {
         match value {
             ScriptDataValue::Number(n) => Self::Number(n),
