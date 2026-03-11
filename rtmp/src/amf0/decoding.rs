@@ -2,7 +2,7 @@ use bytes::{Buf, Bytes};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::{AmfDecodingError, amf0::*, amf3::Amf3DecoderState};
+use crate::{AmfDecodingError, amf0::*};
 
 const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 
@@ -70,7 +70,6 @@ impl Amf0DecoderState {
                     properties,
                 }
             }
-            AVMPLUS_OBJECT => Amf0Value::AvmPlus(self.decode_avmplus_object()?),
             _ => return Err(AmfDecodingError::UnknownType(marker)),
         };
         Ok(amf_value)
@@ -195,11 +194,6 @@ impl Amf0DecoderState {
             properties: pairs.clone(),
         });
         Ok((class_name, pairs))
-    }
-
-    fn decode_avmplus_object(&mut self) -> Result<Amf3Value, AmfDecodingError> {
-        let mut amf3_decoder = Amf3DecoderState::new(&mut self.buf);
-        amf3_decoder.decode_value()
     }
 
     fn decode_object_pairs(&mut self) -> Result<HashMap<String, Amf0Value>, AmfDecodingError> {

@@ -1,8 +1,5 @@
-use bytes::Buf;
-
 use crate::{
-    AmfDecodingError, RtmpEvent, RtmpMessageParseError, ScriptData,
-    amf0::decode_amf0_values,
+    RtmpEvent, RtmpMessageParseError, ScriptData,
     message::{
         RtmpMessage,
         command::CommandMessage,
@@ -13,25 +10,14 @@ use crate::{
 };
 
 impl RtmpMessage {
-    pub fn from_raw(mut msg: RawMessage) -> Result<Self, RtmpMessageParseError> {
+    pub fn from_raw(msg: RawMessage) -> Result<Self, RtmpMessageParseError> {
         let p = &msg.payload;
         let msg_type = MessageType::try_from_raw(msg.msg_type)?;
         let result = match msg_type {
             MessageType::Audio => audio_event_from_raw(msg)?,
             MessageType::Video => video_event_from_raw(msg)?,
 
-            MessageType::DataMessageAmf3 => {
-                let format_selector = msg.payload.get_u8();
-                if format_selector != 0 {
-                    return Err(AmfDecodingError::InvalidFormatSelector.into());
-                }
-
-                RtmpMessage::Event {
-                    event: RtmpEvent::Metadata(ScriptData::parse(msg.payload)?),
-                    stream_id: msg.stream_id,
-                }
-            }
-            MessageType::DataMessageAmf0 => RtmpMessage::Event {
+            MessageType::DataMessage => RtmpMessage::Event {
                 event: RtmpEvent::Metadata(ScriptData::parse(msg.payload)?),
                 stream_id: msg.stream_id,
             },
@@ -62,17 +48,7 @@ impl RtmpMessage {
                 return Err(RtmpMessageParseError::PayloadTooShort);
             }
 
-            MessageType::CommandMessageAmf3 => {
-                let format_selector = msg.payload.get_u8();
-                if format_selector != 0 {
-                    return Err(AmfDecodingError::InvalidFormatSelector.into());
-                }
-                RtmpMessage::CommandMessageAmf3 {
-                    values: decode_amf0_values(msg.payload)?,
-                    stream_id: msg.stream_id,
-                }
-            }
-            MessageType::CommandMessageAmf0 => RtmpMessage::CommandMessage {
+            MessageType::CommandMessage => RtmpMessage::CommandMessage {
                 msg: CommandMessage::from_amf0_bytes(msg.payload)?,
                 stream_id: msg.stream_id,
             },

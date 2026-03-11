@@ -2,17 +2,10 @@ use bytes::{BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::{AmfEncodingError, amf0::*, amf3::Amf3EncoderState};
+use crate::{AmfEncodingError, amf0::*};
 
 pub fn encode_amf0_values(amf_values: &[Amf0Value]) -> Result<Bytes, AmfEncodingError> {
     let encoder = Amf0EncoderState::new(BytesMut::new());
-    encoder.encode_values(amf_values)
-}
-
-pub fn encode_avmplus_values(amf_values: &[Amf0Value]) -> Result<Bytes, AmfEncodingError> {
-    let mut buf = BytesMut::new();
-    buf.put_u8(0);
-    let encoder = Amf0EncoderState::new(buf);
     encoder.encode_values(amf_values)
 }
 
@@ -51,7 +44,6 @@ impl Amf0EncoderState {
                 class_name,
                 properties,
             } => self.put_typed_object(class_name, properties)?,
-            Amf0Value::AvmPlus(amf3_value) => self.put_avmplus_object(amf3_value)?,
         };
         Ok(())
     }
@@ -139,12 +131,6 @@ impl Amf0EncoderState {
         self.buf.put_u16(class_name.len() as u16);
         self.buf.put_slice(class_name.as_bytes());
         self.put_keyval_map(properties)
-    }
-
-    fn put_avmplus_object(&mut self, amf3_value: &Amf3Value) -> Result<(), AmfEncodingError> {
-        self.buf.put_u8(AVMPLUS_OBJECT);
-        let mut amf3_encoder = Amf3EncoderState::new(&mut self.buf);
-        amf3_encoder.put_value(amf3_value)
     }
 
     fn put_keyval_map(&mut self, map: &HashMap<String, Amf0Value>) -> Result<(), AmfEncodingError> {

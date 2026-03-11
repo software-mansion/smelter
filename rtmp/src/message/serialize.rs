@@ -2,7 +2,6 @@ use bytes::Bytes;
 
 use crate::{
     RtmpMessageSerializeError,
-    amf0::encode_avmplus_values,
     message::{
         CONTROL_MESSAGE_STREAM_ID, MAIN_CHUNK_STREAM_ID, RESERVED_CHUNK_STREAM_ID, RtmpMessage,
         event::event_into_raw,
@@ -44,13 +43,6 @@ impl RtmpMessage {
                 timestamp: 0,
                 payload: msg.into_raw(),
             },
-            RtmpMessage::CommandMessageAmf3 { values, stream_id } => RawMessage {
-                msg_type: MessageType::CommandMessageAmf3.into_raw(),
-                stream_id,
-                chunk_stream_id: MAIN_CHUNK_STREAM_ID,
-                timestamp: 0,
-                payload: encode_avmplus_values(&values)?,
-            },
             RtmpMessage::SetChunkSize { chunk_size } => RawMessage {
                 msg_type: MessageType::SetChunkSize.into_raw(),
                 stream_id: 0,
@@ -60,7 +52,7 @@ impl RtmpMessage {
             },
             RtmpMessage::Event { event, stream_id } => event_into_raw(event, stream_id)?,
             RtmpMessage::CommandMessage { msg, stream_id } => RawMessage {
-                msg_type: MessageType::CommandMessageAmf0.into_raw(),
+                msg_type: MessageType::CommandMessage.into_raw(),
                 stream_id,
                 chunk_stream_id: MAIN_CHUNK_STREAM_ID,
                 timestamp: 0,

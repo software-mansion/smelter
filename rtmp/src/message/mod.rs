@@ -1,4 +1,4 @@
-use crate::{RtmpEvent, amf0::Amf0Value};
+use crate::RtmpEvent;
 
 mod command;
 mod event;
@@ -55,12 +55,6 @@ pub(crate) enum RtmpMessage {
         stream_id: u32,
     },
 
-    // Explanation why it is a sequence of amf0 values and not amf3 values:
-    // https://zenomt.github.io/rtmp-errata-addenda/rtmp-errata-addenda.html#name-object-encoding-3-2
-    CommandMessageAmf3 {
-        values: Vec<Amf0Value>,
-        stream_id: u32,
-    },
     Event {
         event: RtmpEvent,
         stream_id: u32,
