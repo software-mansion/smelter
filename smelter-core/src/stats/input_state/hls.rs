@@ -24,7 +24,7 @@ pub struct HlsInputTrackState {
     pub discontinuities_detected: u32,
     pub discontinuities_detected_10_secs: SlidingWindowValue<u32>,
 
-    pub bitrate_10_secs: SlidingWindowValue<u64>,
+    pub bitrate_1_sec: SlidingWindowValue<u64>,
 
     pub effective_buffer_10_secs: SlidingWindowValue<Duration>,
     pub input_buffer_10_secs: SlidingWindowValue<Duration>,
@@ -78,7 +78,7 @@ impl HlsInputTrackState {
             discontinuities_detected: 0,
             discontinuities_detected_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
 
-            bitrate_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
+            bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
 
             effective_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             input_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
@@ -89,11 +89,11 @@ impl HlsInputTrackState {
         HlsInputTrackStatsReport {
             packets_received: self.packets_received,
             discontinuities_detected: self.discontinuities_detected,
+            bitrate_avg_1_second: self.bitrate_1_sec.sum()
+                / self.bitrate_1_sec.window_size().as_secs(),
             last_10_seconds: HlsInputTrackSlidingWindowStatsReport {
                 packets_received: self.packets_received_10_secs.sum(),
                 discontinuities_detected: self.discontinuities_detected_10_secs.sum(),
-                bitrate_avg: self.bitrate_10_secs.sum()
-                    / self.bitrate_10_secs.window_size().as_secs(),
 
                 effective_buffer_avg_secs: self.effective_buffer_10_secs.avg().as_secs_f64(),
                 effective_buffer_max_secs: self.effective_buffer_10_secs.max().as_secs_f64(),
@@ -124,7 +124,7 @@ impl HlsInputTrackState {
             }
             HlsInputTrackStatsEvent::ChunkSize(chunk_size_bytes) => {
                 let chunk_size_bits = chunk_size_bytes * 8;
-                self.bitrate_10_secs.push(chunk_size_bits);
+                self.bitrate_1_sec.push(chunk_size_bits);
             }
         }
     }

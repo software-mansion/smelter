@@ -80,6 +80,8 @@ pub struct HlsInputStatsReport {
 pub struct HlsInputTrackStatsReport {
     pub packets_received: u64,
     pub discontinuities_detected: u32,
+    pub bitrate_avg_1_second: u64,
+
     pub last_10_seconds: HlsInputTrackSlidingWindowStatsReport,
 }
 
@@ -87,7 +89,6 @@ pub struct HlsInputTrackStatsReport {
 pub struct HlsInputTrackSlidingWindowStatsReport {
     pub packets_received: u64,
     pub discontinuities_detected: u32,
-    pub bitrate_avg: u64,
 
     /// Measured when packet leaves jitter buffer. This value represents
     /// how much time packet has to reach the queue to be processed.
