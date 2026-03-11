@@ -125,6 +125,20 @@ impl<'a> VulkanAdapter<'a> {
             })
             .map(|(i, _)| i)?;
 
+        let compute_queue_idx = queues
+            .iter()
+            .enumerate()
+            .find(|(_, q)| {
+                q.queue_family_properties
+                    .queue_flags
+                    .contains(vk::QueueFlags::COMPUTE)
+                    && !q
+                        .queue_family_properties
+                        .queue_flags
+                        .intersects(vk::QueueFlags::GRAPHICS)
+            })
+            .map(|(i, _)| i)?;
+
         let graphics_transfer_compute_queue_idx = queues
             .iter()
             .enumerate()
@@ -213,10 +227,17 @@ impl<'a> VulkanAdapter<'a> {
             queue_indices: QueueIndices {
                 transfer: QueueIndex {
                     family_index: transfer_queue_idx,
-                    queue_count: 1, // Currently we can only handle 1 queue
+                    queue_count: queue_counts[transfer_queue_idx] as usize,
                     video_properties: video_properties[transfer_queue_idx],
                     query_result_status_properties: query_result_status_properties
                         [transfer_queue_idx],
+                },
+                compute: QueueIndex {
+                    family_index: compute_queue_idx,
+                    queue_count: queue_counts[compute_queue_idx] as usize,
+                    video_properties: video_properties[compute_queue_idx],
+                    query_result_status_properties: query_result_status_properties
+                        [compute_queue_idx],
                 },
                 h264_decode: decode_queue_idx.map(|idx| QueueIndex {
                     family_index: idx,

@@ -286,11 +286,22 @@ impl VulkanDevice {
                         .collect::<Vec<_>>()
                 });
         let transfer_queue = queue_from_device(device.clone(), &queue_indices.transfer, 0);
+        let compute_queue =
+            if queue_indices.compute.family_index == queue_indices.transfer.family_index {
+                if queue_indices.transfer.queue_count > 1 {
+                    queue_from_device(device.clone(), &queue_indices.transfer, 1)
+                } else {
+                    transfer_queue.clone()
+                }
+            } else {
+                queue_from_device(device.clone(), &queue_indices.compute, 0)
+            };
         let wgpu_queue =
             queue_from_device(device.clone(), &queue_indices.graphics_transfer_compute, 0);
 
         let queues = Queues {
             transfer: transfer_queue,
+            compute: compute_queue,
             h264_decode: VideoQueues::new(h264_decode_queues.into_boxed_slice()).map(Arc::new),
             h264_encode: VideoQueues::new(h264_encode_queues.into_boxed_slice()).map(Arc::new),
             wgpu: wgpu_queue,
