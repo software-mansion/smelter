@@ -15,7 +15,7 @@ const POW_2_32: f64 = (1i64 << 32) as f64;
 #[derive(Debug)]
 /// State that should be shared between different RTP tracks to use for synchronization.
 pub(crate) struct RtpNtpSyncPoint {
-    /// First 32 bits represent seconds, last 32 bytes fraction of the second.
+    /// First 32 bits represent seconds, last 32 bits fraction of the second.
     /// Represents NTP time of sync point
     ntp_time: RwLock<Option<u64>>,
 }
