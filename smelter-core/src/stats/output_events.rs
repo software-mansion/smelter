@@ -46,6 +46,9 @@ impl From<&OutputStatsEvent> for OutputProtocolKind {
 pub(crate) enum WhepOutputStatsEvent {
     Video(WhepOutputTrackStatsEvent),
     Audio(WhepOutputTrackStatsEvent),
+
+    PeerConnected,
+    PeerDisconnected,
 }
 
 impl WhepOutputStatsEvent {

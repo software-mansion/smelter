@@ -12,6 +12,7 @@ use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
     handle_keyframe_requests::handle_keyframe_requests,
     whep_output::{
+        WhepOutputStatsSender,
         cleanup_session_handler::OnCleanupSessionHdlr,
         init_payloaders::{init_audio_payloader, init_video_payloader},
         peer_connection::PeerConnection,
@@ -96,11 +97,9 @@ pub async fn handle_create_whep_session(
 
     let session_id = outputs.add_session(&output_ref, peer_connection.clone())?;
 
-    peer_connection.on_peer_connection_cleanup(OnCleanupSessionHdlr::new(
-        &outputs,
-        &output_ref,
-        &session_id,
-    ));
+    let stats_sender = WhepOutputStatsSender::new(output_ref.clone(), ctx.stats_sender.clone());
+    let cleanup_session_handler = OnCleanupSessionHdlr::new(&outputs, &output_ref, &session_id);
+    peer_connection.on_peer_connection_cleanup(cleanup_session_handler, stats_sender);
 
     tokio::spawn(stream_media_to_peer(
         ctx.clone(),

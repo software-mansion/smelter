@@ -36,7 +36,7 @@ use webrtc::{
 use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
     supported_codec_parameters::{h264_codec_params, vp8_codec_params, vp9_codec_params},
-    whep_output::cleanup_session_handler::OnCleanupSessionHdlr,
+    whep_output::{WhepOutputStatsSender, cleanup_session_handler::OnCleanupSessionHdlr},
 };
 
 use crate::prelude::*;
@@ -246,7 +246,11 @@ impl PeerConnection {
         Ok(self.pc.close().await?)
     }
 
-    pub fn on_peer_connection_cleanup(&self, cleanup_session_handler: OnCleanupSessionHdlr) {
+    pub fn on_peer_connection_cleanup(
+        &self,
+        cleanup_session_handler: OnCleanupSessionHdlr,
+        stats_sender: WhepOutputStatsSender,
+    ) {
         let pc = self.pc.clone();
         let cleanup_task_handle = Arc::new(Mutex::new(None));
 
@@ -257,6 +261,7 @@ impl PeerConnection {
                     pc.clone(),
                     cleanup_task_handle.clone(),
                     cleanup_session_handler.clone(),
+                    stats_sender.clone(),
                 );
                 Box::pin(async {})
             }
@@ -322,9 +327,11 @@ fn handle_cleanup_on_disconnect(
     pc: Arc<RTCPeerConnection>,
     cleanup_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     remove_session_handler: OnCleanupSessionHdlr,
+    stats_sender: WhepOutputStatsSender,
 ) {
     match state {
         RTCPeerConnectionState::Connected => {
+            stats_sender.peer_connected_event();
             if let Ok(mut handle) = cleanup_task_handle.lock()
                 && let Some(task) = handle.take()
             {
@@ -332,6 +339,7 @@ fn handle_cleanup_on_disconnect(
             }
         }
         RTCPeerConnectionState::Failed | RTCPeerConnectionState::Disconnected => {
+            stats_sender.peer_disconnected_event();
             if let Ok(handle @ None) = cleanup_task_handle.lock().as_deref_mut() {
                 // schedule task only if none is pending, crucial in transitions failed <-> disconnected
                 let task = tokio::spawn(async move {

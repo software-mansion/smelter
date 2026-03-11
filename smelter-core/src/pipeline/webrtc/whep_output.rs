@@ -208,15 +208,33 @@ impl Output for WhepOutput {
     }
 }
 
-struct WhepOutputStatsSender {
+#[derive(Clone)]
+pub(in crate::pipeline) struct WhepOutputStatsSender {
     stats_sender: StatsSender,
     output_ref: Ref<OutputId>,
 }
 
 impl WhepOutputStatsSender {
-    fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
+    pub(super) fn new(output_ref: Ref<OutputId>, stats_sender: StatsSender) -> Self {
+        Self {
+            output_ref,
+            stats_sender,
+        }
+    }
+
+    pub(super) fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
             WhepOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
         );
+    }
+
+    pub(super) fn peer_connected_event(&self) {
+        self.stats_sender
+            .send(WhepOutputStatsEvent::PeerConnected.into_event(&self.output_ref));
+    }
+
+    pub(super) fn peer_disconnected_event(&self) {
+        self.stats_sender
+            .send(WhepOutputStatsEvent::PeerDisconnected.into_event(&self.output_ref));
     }
 }
