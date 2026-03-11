@@ -54,6 +54,11 @@ impl Mp4Input {
         };
         let buffer = InputBuffer::new(&ctx, options.buffer);
 
+        ctx.stats_sender.send(StatsEvent::NewInput {
+            input_ref: input_ref.clone(),
+            kind: InputProtocolKind::Mp4,
+        });
+
         let video = Mp4FileReader::from_path(&source.path)?.find_h264_track();
         let video_duration = video.as_ref().and_then(|track| track.duration());
         let audio = Mp4FileReader::from_path(&source.path)?.find_aac_track();
