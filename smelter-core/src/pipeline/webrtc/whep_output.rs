@@ -10,11 +10,10 @@ use crate::{
         },
         output::{Output, OutputAudio, OutputVideo},
         webrtc::whep_output::{
-            connection_state::{
-                WhepAudioConnectionOptions, WhepOutputConnectionStateOptions,
+            state::{
+                WhepAudioConnectionOptions, WhepOutputConnectionStateOptions, WhepOutputsState,
                 WhepVideoConnectionOptions,
             },
-            state::WhepOutputsState,
             track_task_audio::{
                 WhepAudioTrackThread, WhepAudioTrackThreadHandle, WhepAudioTrackThreadOptions,
             },
@@ -28,9 +27,8 @@ use crate::{
 
 use crate::prelude::*;
 
-pub(crate) mod cleanup_session_handler;
-pub(super) mod connection_state;
 pub(super) mod init_payloaders;
+pub(crate) mod pc_state_change;
 pub(super) mod peer_connection;
 pub(super) mod state;
 pub(super) mod stream_media_to_peer;

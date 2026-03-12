@@ -1,14 +1,7 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use rand::Rng;
-use tokio::{
-    sync::watch,
-    task::JoinHandle,
-    time::{sleep, timeout},
-};
+use tokio::{sync::watch, time::timeout};
 use tracing::debug;
 use webrtc::{
     api::{
@@ -36,12 +29,11 @@ use webrtc::{
 use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
     supported_codec_parameters::{h264_codec_params, vp8_codec_params, vp9_codec_params},
-    whep_output::cleanup_session_handler::OnCleanupSessionHdlr,
 };
 
 use crate::prelude::*;
 
-use super::WhepOutputStatsSender;
+use super::pc_state_change::ConnectionStateChangeHdlr;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerConnection {
@@ -248,28 +240,13 @@ impl PeerConnection {
         Ok(self.pc.close().await?)
     }
 
-    pub fn on_peer_connection_cleanup(
-        &self,
-        cleanup_session_handler: OnCleanupSessionHdlr,
-        stats_sender: WhepOutputStatsSender,
-        session_id: &Arc<str>,
-    ) {
+    pub fn on_connection_state_change(&self, handler: ConnectionStateChangeHdlr) {
         let pc = self.pc.clone();
-        let session_id = session_id.clone();
-        let cleanup_task_handle = Arc::new(Mutex::new(None));
-
-        self.pc.on_peer_connection_state_change(Box::new({
-            move |state: RTCPeerConnectionState| {
-                stats_sender.peer_state_changed(&session_id, state);
-                handle_cleanup_on_disconnect(
-                    state,
-                    pc.clone(),
-                    cleanup_task_handle.clone(),
-                    cleanup_session_handler.clone(),
-                );
+        self.pc
+            .on_peer_connection_state_change(Box::new(move |state: RTCPeerConnectionState| {
+                handler.on_state_change(&pc, state);
                 Box::pin(async {})
-            }
-        }));
+            }));
     }
 }
 
@@ -324,43 +301,6 @@ fn register_codecs(
         }
     }
     Ok(())
-}
-
-fn handle_cleanup_on_disconnect(
-    state: RTCPeerConnectionState,
-    pc: Arc<RTCPeerConnection>,
-    cleanup_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
-    remove_session_handler: OnCleanupSessionHdlr,
-) {
-    match state {
-        RTCPeerConnectionState::Connected => {
-            if let Ok(mut handle) = cleanup_task_handle.lock()
-                && let Some(task) = handle.take()
-            {
-                task.abort();
-            }
-        }
-        RTCPeerConnectionState::Failed | RTCPeerConnectionState::Disconnected => {
-            if let Ok(handle @ None) = cleanup_task_handle.lock().as_deref_mut() {
-                // schedule task only if none is pending, crucial in transitions failed <-> disconnected
-                let task = tokio::spawn(async move {
-                    sleep(Duration::from_secs(150)).await; // 2 min 30 s
-
-                    let current_state = pc.connection_state();
-                    if current_state != RTCPeerConnectionState::Connected
-                        && current_state != RTCPeerConnectionState::Connecting
-                        && current_state != RTCPeerConnectionState::Closed
-                    {
-                        remove_session_handler.call_handler().await;
-                    }
-                });
-                *handle = Some(task);
-            }
-        }
-        _ => {
-            // Other states aren't crucial for cleanup
-        }
-    }
 }
 
 fn create_opus_codec_params(
