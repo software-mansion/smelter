@@ -11,10 +11,12 @@ use crate::{
         h264::H264Parser,
         reference_manager::ReferenceContext,
     },
-    vulkan_decoder::{DecodeResult, FrameSorter, ImageModifiers, VulkanDecoder},
+    vulkan_decoder::{
+        DecodeResult, FrameSorter, ImageModifiers, InFlightDecodeResources, VulkanDecoder,
+    },
     vulkan_encoder::{FullEncoderParameters, H264EncodeProfileInfo, VulkanEncoder},
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
-    wrappers::{DecodeInputBuffer, SemaphoreWaitValue},
+    wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
 };
 
 mod pipeline;
@@ -40,7 +42,9 @@ pub enum TranscoderError {
 pub(crate) struct ResizedImages {
     images: ResizeSubmission,
     decoder_wait_value: SemaphoreWaitValue,
+    decode_query_pool: Option<Arc<DecodingQueryPool>>,
     input_buffer: DecodeInputBuffer,
+    _in_flight_resources: InFlightDecodeResources,
 }
 
 pub struct Transcoder {
@@ -191,7 +195,9 @@ impl Transcoder {
                 frame: ResizedImages {
                     images: output,
                     decoder_wait_value: frame.semaphore_wait_value,
+                    decode_query_pool: frame.decode_query_pool,
                     input_buffer: frame.input_buffer,
+                    _in_flight_resources: frame.in_flight_resources,
                 },
                 metadata: frame.decode_result.metadata,
             });
@@ -249,13 +255,18 @@ impl Transcoder {
         self.decoder
             .tracker
             .mark_waited(resized_images.data.decoder_wait_value);
-        self.decoder
-            .free_input_buffer(resized_images.data.input_buffer);
+        resized_images.data.input_buffer.release_to_pool();
 
         self.resizing_pipeline
             .mark_command_buffers_completed(resized_images.data.decoder_wait_value);
         self.resizing_pipeline
             .free_submission(resized_images.data.images);
+
+        if let Some(query_pool) = resized_images.data.decode_query_pool {
+            query_pool
+                .check_results_blocking()
+                .map_err(DecoderError::VulkanDecoderError)?;
+        }
 
         Ok(results)
     }

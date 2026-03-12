@@ -13,7 +13,6 @@ use super::{Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
 
 pub(crate) struct VideoSessionParameters {
     pub(crate) parameters: vk::VideoSessionParametersKHR,
-    update_sequence_count: u32,
     device: Arc<Device>,
 }
 
@@ -72,23 +71,22 @@ impl VideoSessionParameters {
 
         Ok(Self {
             parameters,
-            update_sequence_count: 0,
             device: device.clone(),
         })
     }
 
     pub(crate) fn add(
-        &mut self,
+        &self,
         sps: &[vk::native::StdVideoH264SequenceParameterSet],
         pps: &[vk::native::StdVideoH264PictureParameterSet],
+        update_sequence_count: u32,
     ) -> Result<(), VulkanCommonError> {
         let mut parameters_add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
             .std_sp_ss(sps)
             .std_pp_ss(pps);
 
-        self.update_sequence_count += 1;
         let update_info = vk::VideoSessionParametersUpdateInfoKHR::default()
-            .update_sequence_count(self.update_sequence_count)
+            .update_sequence_count(update_sequence_count)
             .push_next(&mut parameters_add_info);
 
         unsafe {
@@ -341,7 +339,7 @@ impl ImageWithView {
 }
 
 pub(crate) struct CodingImageBundle<'a> {
-    pub(crate) image_with_view: ImageWithView,
+    pub(crate) image_with_view: Arc<ImageWithView>,
     pub(crate) video_resource_info: Vec<vk::VideoPictureResourceInfoKHR<'a>>,
 }
 
@@ -517,7 +515,7 @@ impl<'a> CodingImageBundle<'a> {
             .collect();
 
         Ok(Self {
-            image_with_view,
+            image_with_view: Arc::new(image_with_view),
             video_resource_info,
         })
     }
