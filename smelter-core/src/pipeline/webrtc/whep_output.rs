@@ -195,7 +195,7 @@ impl WhepOutput {
 
 impl Drop for WhepOutput {
     fn drop(&mut self) {
-        self.outputs_state.ensure_output_closed(&self.output_ref);
+        self.outputs_state.remove_output(&self.output_ref);
     }
 }
 

@@ -2,7 +2,6 @@ use crate::pipeline::webrtc::{
     WhipWhepServerState,
     error::WhipWhepServerError,
     trickle_ice_utils::{ice_fragment_unmarshal, validate_content_type},
-    whip_input::state::WhipInputSession,
 };
 
 use axum::{
@@ -27,18 +26,22 @@ pub async fn handle_new_whip_ice_candidates(
 
     let session = state
         .inputs
-        .get_with(&input_ref, |input| Ok(input.session.clone()))?;
+        .get_with(&input_ref, |input| match &input.session {
+            Some(s) => Ok(Some((s.peer_connection.downgrade(), s.session_id.clone()))),
+            None => Ok(None),
+        })?;
 
-    let Some(session) = session else {
+    let Some((peer_connection, session_id)) = session else {
         return Err(WhipWhepServerError::InternalError(format!(
             "None peer connection for {input_ref}"
         )));
     };
 
-    let WhipInputSession {
-        peer_connection,
-        session_id,
-    } = session;
+    let Some(peer_connection) = peer_connection.upgrade() else {
+        return Err(WhipWhepServerError::BadRequest(
+            "Peer connection already closed".to_string(),
+        ));
+    };
 
     for candidate in ice_fragment_unmarshal(&sdp_fragment_content) {
         if let Err(err) = peer_connection.add_ice_candidate(candidate.clone()).await {

@@ -46,7 +46,7 @@ impl ConnectionStateChangeHdlr {
         self.clone().handle_cleanup_on_disconnect(pc.clone(), state);
     }
 
-    async fn cleanup_session(&self) {
+    fn cleanup_session(&self) {
         let ConnectionStateChangeHdlr {
             outputs,
             output_ref,
@@ -54,7 +54,7 @@ impl ConnectionStateChangeHdlr {
             stats_sender,
             ..
         } = self;
-        if let Err(err) = outputs.remove_session(output_ref, session_id).await {
+        if let Err(err) = outputs.remove_session(output_ref, session_id) {
             warn!(?session_id, output_id=?output_ref.id(), "Failed to remove session: {err}");
         }
         stats_sender.peer_state_changed(session_id, RTCPeerConnectionState::Closed);
@@ -79,12 +79,15 @@ impl ConnectionStateChangeHdlr {
                     let task = tokio::spawn(async move {
                         sleep(Duration::from_secs(150)).await; // 2 min 30 s
 
-                        let current_state = pc.connection_state();
-                        if current_state != RTCPeerConnectionState::Connected
-                            && current_state != RTCPeerConnectionState::Connecting
-                            && current_state != RTCPeerConnectionState::Closed
-                        {
-                            self.cleanup_session().await;
+                        let should_cleanup = [
+                            RTCPeerConnectionState::Unspecified,
+                            RTCPeerConnectionState::Failed,
+                            RTCPeerConnectionState::Disconnected,
+                        ]
+                        .contains(&pc.connection_state());
+
+                        if should_cleanup {
+                            self.cleanup_session();
                         }
                     });
                     *handle = Some(task);

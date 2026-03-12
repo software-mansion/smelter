@@ -27,6 +27,12 @@ pub async fn handle_new_whep_ice_candidates(
 
     let peer_connection = state.outputs.get_session(&output_ref, &session_id)?;
 
+    let Some(peer_connection) = peer_connection.upgrade() else {
+        return Err(WhipWhepServerError::BadRequest(
+            "Peer connection already closed".to_string(),
+        ));
+    };
+
     for candidate in ice_fragment_unmarshal(&sdp_fragment_content) {
         if let Err(err) = peer_connection.add_ice_candidate(candidate.clone()).await {
             return Err(WhipWhepServerError::BadRequest(format!(
