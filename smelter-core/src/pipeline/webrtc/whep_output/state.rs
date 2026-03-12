@@ -5,6 +5,7 @@ use std::{
 
 use axum::http::HeaderMap;
 use smelter_render::OutputId;
+use tokio::sync::broadcast;
 use tracing::error;
 use uuid::Uuid;
 
@@ -12,8 +13,8 @@ use crate::pipeline::webrtc::{
     bearer_token::validate_token,
     error::WhipWhepServerError,
     whep_output::{
-        connection_state::{WhepOutputConnectionState, WhepOutputConnectionStateOptions},
-        peer_connection::PeerConnection,
+        peer_connection::PeerConnection, track_task_audio::WhepAudioTrackThreadHandle,
+        track_task_video::WhepVideoTrackThreadHandle,
     },
 };
 
@@ -173,6 +174,46 @@ impl WhepOutputsState {
                     }
                 });
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WhepOutputConnectionStateOptions {
+    pub bearer_token: Option<Arc<str>>,
+    pub video_options: Option<WhepVideoConnectionOptions>,
+    pub audio_options: Option<WhepAudioConnectionOptions>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WhepOutputConnectionState {
+    pub bearer_token: Option<Arc<str>>,
+    pub sessions: HashMap<Arc<str>, PeerConnection>,
+    pub video_options: Option<WhepVideoConnectionOptions>,
+    pub audio_options: Option<WhepAudioConnectionOptions>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WhepVideoConnectionOptions {
+    pub encoder: VideoEncoderOptions,
+    pub receiver: Arc<broadcast::Receiver<EncodedOutputEvent>>,
+    pub track_thread_handle: WhepVideoTrackThreadHandle,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WhepAudioConnectionOptions {
+    pub encoder: AudioEncoderOptions,
+    pub receiver: Arc<broadcast::Receiver<EncodedOutputEvent>>,
+    pub track_thread_handle: WhepAudioTrackThreadHandle,
+}
+
+impl WhepOutputConnectionState {
+    pub fn new(options: WhepOutputConnectionStateOptions) -> Self {
+        WhepOutputConnectionState {
+            bearer_token: options.bearer_token,
+            sessions: HashMap::new(),
+            video_options: options.video_options,
+            audio_options: options.audio_options,
         }
     }
 }
