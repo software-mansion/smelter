@@ -28,6 +28,7 @@ use webrtc::{
 
 use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
+    h264_offer_filter::filter_h264_codecs_by_offer,
     supported_codec_parameters::{h264_codec_params, vp8_codec_params, vp9_codec_params},
 };
 
@@ -45,6 +46,7 @@ impl PeerConnection {
         ctx: &Arc<PipelineCtx>,
         video_encoder: &Option<VideoEncoderOptions>,
         audio_encoder: &Option<AudioEncoderOptions>,
+        offer: &RTCSessionDescription,
     ) -> Result<Self, WhipWhepServerError> {
         let mut media_engine = MediaEngine::default();
 
@@ -52,6 +54,7 @@ impl PeerConnection {
             &mut media_engine,
             video_encoder.clone(),
             audio_encoder.clone(),
+            offer,
         )?;
 
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
@@ -181,11 +184,10 @@ impl PeerConnection {
 
     pub async fn negotiate_connection(
         &self,
-        offer: String,
+        offer: RTCSessionDescription,
         video_sender: Option<Arc<RTCRtpSender>>,
         audio_sender: Option<Arc<RTCRtpSender>>,
     ) -> Result<RTCSessionDescription, WhipWhepServerError> {
-        let offer = RTCSessionDescription::offer(offer)?;
         self.set_remote_description(offer).await?;
 
         // allow audio/video only stream, when on second track codec wasn't succesfully negotiated
@@ -254,11 +256,13 @@ fn register_codecs(
     media_engine: &mut MediaEngine,
     video_encoder: Option<VideoEncoderOptions>,
     audio_encoder: Option<AudioEncoderOptions>,
+    offer: &RTCSessionDescription,
 ) -> Result<(), WhipWhepServerError> {
     if let Some(encoder) = video_encoder {
         match encoder {
             VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
-                for codec in h264_codec_params() {
+                let codecs = filter_h264_codecs_by_offer(offer, h264_codec_params());
+                for codec in codecs {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }

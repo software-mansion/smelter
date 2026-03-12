@@ -38,6 +38,7 @@ pub fn vp9_codec_params() -> Vec<RTCRtpCodecParameters> {
 
 pub fn h264_codec_params() -> Vec<RTCRtpCodecParameters> {
     let codec_configs = [
+        // Constrained Baseline, level 3.1
         (
             "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
             102,
@@ -46,6 +47,7 @@ pub fn h264_codec_params() -> Vec<RTCRtpCodecParameters> {
             "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f",
             127,
         ),
+        // Constrained Baseline extended, level 3.1
         (
             "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
             125,
@@ -54,9 +56,32 @@ pub fn h264_codec_params() -> Vec<RTCRtpCodecParameters> {
             "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f",
             108,
         ),
+        // Main, level 3.1
+        (
+            "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d001f",
+            104,
+        ),
+        (
+            "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=4d001f",
+            105,
+        ),
+        // High, level 3.1
+        (
+            "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64001f",
+            106,
+        ),
+        (
+            "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=64001f",
+            107,
+        ),
+        // High, level 5.0
         (
             "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032",
             123,
+        ),
+        (
+            "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=640032",
+            124,
         ),
     ];
 

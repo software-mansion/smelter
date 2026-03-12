@@ -5,7 +5,8 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, Response, StatusCode},
 };
-use tracing::trace;
+use tracing::debug;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
 use crate::pipeline::webrtc::{
     WhipWhepServerState,
@@ -27,7 +28,7 @@ pub async fn handle_create_whep_session(
 ) -> Result<Response<Body>, WhipWhepServerError> {
     let endpoint_id = Arc::from(endpoint_id.clone());
     let output_ref = state.outputs.find_by_endpoint_id(&endpoint_id)?;
-    trace!("SDP offer: {}", offer);
+    debug!("SDP offer: {}", offer);
 
     validate_sdp_content_type(&headers)?;
     let outputs = state.outputs;
@@ -55,7 +56,10 @@ pub async fn handle_create_whep_session(
         }
     })?;
 
-    let peer_connection = PeerConnection::new(&ctx, &video_encoder, &audio_encoder).await?;
+    let parsed_offer = RTCSessionDescription::offer(offer)?;
+
+    let peer_connection =
+        PeerConnection::new(&ctx, &video_encoder, &audio_encoder, &parsed_offer).await?;
 
     let (video_media_stream, video_sender) = match (&video_encoder, video_receiver) {
         (Some(encoder), Some(receiver)) => {
@@ -90,9 +94,9 @@ pub async fn handle_create_whep_session(
     };
 
     let sdp_answer = peer_connection
-        .negotiate_connection(offer, video_sender.clone(), audio_sender.clone())
+        .negotiate_connection(parsed_offer, video_sender.clone(), audio_sender.clone())
         .await?;
-    trace!("SDP answer: {}", sdp_answer.sdp);
+    debug!("SDP answer: {}", sdp_answer.sdp);
 
     let session_id = outputs.add_session(&output_ref, peer_connection.clone())?;
 
