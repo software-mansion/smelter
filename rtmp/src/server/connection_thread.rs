@@ -8,7 +8,7 @@ use tracing::{debug, warn};
 
 use crate::{
     RtmpServerConnectionError, RtmpStreamError,
-    amf0::Amf0Value,
+    amf0::AmfValue,
     message::{
         CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageOk, RtmpMessage,
         UserControlMessage,
@@ -109,8 +109,8 @@ impl RtmpServerConnectionState {
                 self.stream.write_msg(RtmpMessage::CommandMessage {
                     msg: CommandMessageOk {
                         transaction_id,
-                        command_object: Amf0Value::Null,
-                        response: Amf0Value::Number(PUBLISHED_MESSAGE_STREAM_ID as f64),
+                        command_object: AmfValue::Null,
+                        response: AmfValue::Number(PUBLISHED_MESSAGE_STREAM_ID as f64),
                     }
                     .into(),
                     stream_id: CONTROL_MESSAGE_STREAM_ID,
@@ -137,7 +137,7 @@ impl RtmpServerConnectionState {
                 );
 
                 self.stream.write_msg(RtmpMessage::CommandMessage {
-                    msg: CommandMessage::OnStatus(Amf0Value::Object(status_info)),
+                    msg: CommandMessage::OnStatus(AmfValue::Object(status_info)),
                     stream_id: PUBLISHED_MESSAGE_STREAM_ID,
                 })?;
                 return Ok(result);
@@ -163,7 +163,7 @@ impl RtmpServerConnectionState {
         let props = HashMap::from_iter(
             [
                 ("fmsVer", "FMS/3,0,1,123".into()),
-                ("capabilities", Amf0Value::Number(31.0)),
+                ("capabilities", AmfValue::Number(31.0)),
             ]
             .into_iter()
             .map(|(k, v)| (k.into(), v)),
@@ -173,7 +173,7 @@ impl RtmpServerConnectionState {
                 ("level", "status".into()),
                 ("code", "NetConnection.Connect.Success".into()),
                 ("description", "Connection succeeded".into()),
-                ("objectEncoding", Amf0Value::Number(0 as f64)), // AMF0 encoding
+                ("objectEncoding", AmfValue::Number(0 as f64)), // AMF0 encoding
             ]
             .into_iter()
             .map(|(k, v)| (k.into(), v)),
@@ -181,8 +181,8 @@ impl RtmpServerConnectionState {
         self.stream.write_msg(RtmpMessage::CommandMessage {
             msg: CommandMessageOk {
                 transaction_id,
-                command_object: Amf0Value::Object(props),
-                response: Amf0Value::Object(info),
+                command_object: AmfValue::Object(props),
+                response: AmfValue::Object(info),
             }
             .into(),
             stream_id: CONTROL_MESSAGE_STREAM_ID,

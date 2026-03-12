@@ -4,8 +4,7 @@ use bytes::Bytes;
 
 use crate::{
     AmfDecodingError, AmfEncodingError,
-    amf0::{Amf0Value, decode_amf0_values, encode_amf0_values},
-    amf3::Amf3Value,
+    amf0::{AmfValue, decode_amf_values, encode_amf_values},
 };
 
 /// Struct representing flv SCRIPTDATA.
@@ -33,51 +32,6 @@ pub enum ScriptDataValue {
         class_name: String,
         properties: HashMap<String, ScriptDataValue>,
     },
-    ExtendedScriptData(ExtendedScriptDataValue),
-}
-
-#[derive(Debug, Clone)]
-pub enum ExtendedScriptDataValue {
-    Undefined,
-    Null,
-    Boolean(bool),
-    Integer(i32),
-    Double(f64),
-    String(String),
-    XmlDoc(String),
-    Date(f64),
-    Array {
-        associative: HashMap<String, ExtendedScriptDataValue>,
-        dense: Vec<ExtendedScriptDataValue>,
-    },
-    Object {
-        class_name: Option<String>,
-        sealed_count: usize,
-        values: Vec<(String, ExtendedScriptDataValue)>,
-    },
-    Xml(String),
-    ByteArray(Bytes),
-    VectorInt {
-        fixed_length: bool,
-        values: Vec<i32>,
-    },
-    VectorUInt {
-        fixed_length: bool,
-        values: Vec<u32>,
-    },
-    VectorDouble {
-        fixed_length: bool,
-        values: Vec<f64>,
-    },
-    VectorObject {
-        fixed_length: bool,
-        class_name: Option<String>,
-        values: Vec<ExtendedScriptDataValue>,
-    },
-    Dictionary {
-        weak_references: bool,
-        entries: Vec<(ExtendedScriptDataValue, ExtendedScriptDataValue)>,
-    },
 }
 
 impl ScriptData {
@@ -86,47 +40,47 @@ impl ScriptData {
             return Ok(Self { values: vec![] });
         }
 
-        let amf_values = decode_amf0_values(data)?;
+        let amf_values = decode_amf_values(data)?;
         let values = amf_values.into_iter().map(ScriptDataValue::from).collect();
         Ok(Self { values })
     }
 
     pub fn serialize(&self) -> Result<Bytes, AmfEncodingError> {
         let amf_values: Vec<_> = self.values.iter().cloned().map(Into::into).collect();
-        encode_amf0_values(&amf_values)
+        encode_amf_values(&amf_values)
     }
 }
 
-impl From<Amf0Value> for ScriptDataValue {
-    fn from(value: Amf0Value) -> Self {
+impl From<AmfValue> for ScriptDataValue {
+    fn from(value: AmfValue) -> Self {
         match value {
-            Amf0Value::Number(n) => Self::Number(n),
-            Amf0Value::Boolean(b) => Self::Boolean(b),
-            Amf0Value::String(s) => Self::String(s),
-            Amf0Value::Object(obj) => Self::Object(
+            AmfValue::Number(n) => Self::Number(n),
+            AmfValue::Boolean(b) => Self::Boolean(b),
+            AmfValue::String(s) => Self::String(s),
+            AmfValue::Object(obj) => Self::Object(
                 obj.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            Amf0Value::Null => Self::Null,
-            Amf0Value::Undefined => Self::Undefined,
-            Amf0Value::EcmaArray(map) => Self::EcmaArray(
+            AmfValue::Null => Self::Null,
+            AmfValue::Undefined => Self::Undefined,
+            AmfValue::EcmaArray(map) => Self::EcmaArray(
                 map.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            Amf0Value::StrictArray(array) => {
+            AmfValue::StrictArray(array) => {
                 Self::StrictArray(array.into_iter().map(Self::from).collect())
             }
-            Amf0Value::Date {
+            AmfValue::Date {
                 unix_time,
                 timezone_offset,
             } => Self::Date {
                 unix_time,
                 timezone_offset,
             },
-            Amf0Value::LongString(s) => Self::LongString(s),
-            Amf0Value::TypedObject {
+            AmfValue::LongString(s) => Self::LongString(s),
+            AmfValue::TypedObject {
                 class_name,
                 properties,
             } => {
@@ -139,14 +93,11 @@ impl From<Amf0Value> for ScriptDataValue {
                     properties: tag_properties,
                 }
             }
-            Amf0Value::AvmPlus(amf3_value) => {
-                ScriptDataValue::ExtendedScriptData(amf3_value.into())
-            }
         }
     }
 }
 
-impl From<ScriptDataValue> for Amf0Value {
+impl From<ScriptDataValue> for AmfValue {
     fn from(value: ScriptDataValue) -> Self {
         match value {
             ScriptDataValue::Number(n) => Self::Number(n),
@@ -186,94 +137,6 @@ impl From<ScriptDataValue> for Amf0Value {
                 Self::TypedObject {
                     class_name,
                     properties: tag_properties,
-                }
-            }
-            // TODO: implement
-            ScriptDataValue::ExtendedScriptData(_ex_script) => unimplemented!(),
-        }
-    }
-}
-
-impl From<Amf3Value> for ExtendedScriptDataValue {
-    fn from(value: Amf3Value) -> Self {
-        match value {
-            Amf3Value::Undefined => Self::Undefined,
-            Amf3Value::Null => Self::Null,
-            Amf3Value::Boolean(b) => Self::Boolean(b),
-            Amf3Value::Integer(i) => Self::Integer(i),
-            Amf3Value::Double(d) => Self::Double(d),
-            Amf3Value::String(s) => Self::String(s),
-            Amf3Value::XmlDoc(xd) => Self::String(xd),
-            Amf3Value::Date(d) => Self::Date(d),
-            Amf3Value::Array { associative, dense } => {
-                let dense = dense.into_iter().map(Self::from).collect();
-                let associative = associative
-                    .into_iter()
-                    .map(|(key, value)| (key, value.into()))
-                    .collect();
-                Self::Array { associative, dense }
-            }
-            Amf3Value::Object {
-                class_name,
-                sealed_count,
-                values,
-            } => {
-                let values = values
-                    .into_iter()
-                    .map(|(key, value)| (key, value.into()))
-                    .collect();
-                Self::Object {
-                    class_name,
-                    sealed_count,
-                    values,
-                }
-            }
-            Amf3Value::Xml(x) => Self::Xml(x),
-            Amf3Value::ByteArray(ba) => Self::ByteArray(ba),
-            Amf3Value::VectorInt {
-                fixed_length,
-                values,
-            } => Self::VectorInt {
-                fixed_length,
-                values,
-            },
-            Amf3Value::VectorUInt {
-                fixed_length,
-                values,
-            } => Self::VectorUInt {
-                fixed_length,
-                values,
-            },
-            Amf3Value::VectorDouble {
-                fixed_length,
-                values,
-            } => Self::VectorDouble {
-                fixed_length,
-                values,
-            },
-            Amf3Value::VectorObject {
-                fixed_length,
-                class_name,
-                values,
-            } => {
-                let values = values.into_iter().map(Self::from).collect();
-                Self::VectorObject {
-                    fixed_length,
-                    class_name,
-                    values,
-                }
-            }
-            Amf3Value::Dictionary {
-                weak_references,
-                entries,
-            } => {
-                let entries = entries
-                    .into_iter()
-                    .map(|(key, value)| (key.into(), value.into()))
-                    .collect();
-                Self::Dictionary {
-                    weak_references,
-                    entries,
                 }
             }
         }

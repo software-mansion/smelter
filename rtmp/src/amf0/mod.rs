@@ -3,10 +3,8 @@ use std::collections::HashMap;
 mod decoding;
 mod encoding;
 
-pub use decoding::decode_amf0_values;
-pub use encoding::{encode_amf0_values, encode_avmplus_values};
-
-use crate::amf3::Amf3Value;
+pub use decoding::decode_amf_values;
+pub use encoding::encode_amf_values;
 
 const NUMBER: u8 = 0x00;
 const BOOLEAN: u8 = 0x01;
@@ -20,18 +18,17 @@ const STRICT_ARRAY: u8 = 0x0A;
 const DATE: u8 = 0x0B;
 const LONG_STRING: u8 = 0x0C;
 const TYPED_OBJECT: u8 = 0x10;
-const AVMPLUS_OBJECT: u8 = 0x11;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Amf0Value {
+pub enum AmfValue {
     Number(f64),
     Boolean(bool),
     String(String),
-    Object(HashMap<String, Amf0Value>),
+    Object(HashMap<String, AmfValue>),
     Null,
     Undefined,
-    EcmaArray(HashMap<String, Amf0Value>),
-    StrictArray(Vec<Amf0Value>),
+    EcmaArray(HashMap<String, AmfValue>),
+    StrictArray(Vec<AmfValue>),
     Date {
         unix_time: f64,
         timezone_offset: i16,
@@ -39,37 +36,18 @@ pub enum Amf0Value {
     LongString(String),
     TypedObject {
         class_name: String,
-        properties: HashMap<String, Amf0Value>,
+        properties: HashMap<String, AmfValue>,
     },
-    AvmPlus(Amf3Value),
 }
 
-impl From<&'_ str> for Amf0Value {
+impl From<&'_ str> for AmfValue {
     fn from(val: &'_ str) -> Self {
-        Amf0Value::String(val.to_string())
+        AmfValue::String(val.to_string())
     }
 }
 
-impl From<String> for Amf0Value {
+impl From<String> for AmfValue {
     fn from(val: String) -> Self {
-        Amf0Value::String(val)
-    }
-}
-
-#[cfg(test)]
-mod amf0_tests {
-    use crate::amf0::{Amf0Value, decode_amf0_values, encode_amf0_values};
-    use crate::amf3::Amf3Value;
-
-    #[test]
-    fn test_avmplus() {
-        let avmplus_values = vec![
-            Amf0Value::AvmPlus(Amf3Value::Null),
-            Amf0Value::AvmPlus(Amf3Value::Integer(-2137)),
-            Amf0Value::AvmPlus(Amf3Value::Integer(2137_2137)),
-        ];
-        let amf0_bytes = encode_amf0_values(&avmplus_values).unwrap();
-        let decoded_avmplus_values = decode_amf0_values(amf0_bytes).unwrap();
-        assert_eq!(decoded_avmplus_values, avmplus_values);
+        AmfValue::String(val)
     }
 }

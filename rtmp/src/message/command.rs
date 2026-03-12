@@ -4,7 +4,7 @@ use bytes::Bytes;
 
 use crate::{
     AmfEncodingError, CommandMessageParseError,
-    amf0::{Amf0Value, decode_amf0_values, encode_amf0_values},
+    amf0::{AmfValue, decode_amf_values, encode_amf_values},
 };
 
 /// Command messages carry AMF-encoded commands between the client and server.
@@ -19,21 +19,21 @@ pub(crate) enum CommandMessage {
     Connect {
         transaction_id: u32,
         /// key-value pairs e.g. app, audioCodecs, videoCodecs, objectEncoding
-        command_object: HashMap<String, Amf0Value>,
-        optional_args: Option<Amf0Value>,
+        command_object: HashMap<String, AmfValue>,
+        optional_args: Option<AmfValue>,
     },
     /// 7.2.1.2 Sender -> Receiver
     Call {
         procedure_name: String,
         transaction_id: u32,
-        command_object: Amf0Value,
-        optional_args: Option<Amf0Value>,
+        command_object: AmfValue,
+        optional_args: Option<AmfValue>,
     },
 
     /// 7.2.1.3 Client -> Server
     CreateStream {
         transaction_id: u32,
-        command_object: Amf0Value, // should be null
+        command_object: AmfValue, // should be null
     },
 
     // ---------------------------------------------------------------
@@ -51,7 +51,7 @@ pub(crate) enum CommandMessage {
     /// 7.2.2.2 Client -> Server
     Play2 {
         transaction_id: u32,
-        parameters: Amf0Value,
+        parameters: AmfValue,
     },
 
     /// 7.2.2.3 Client -> Server
@@ -92,7 +92,7 @@ pub(crate) enum CommandMessage {
     ///
     /// transaction_id = 0
     /// command_object = null
-    OnStatus(Amf0Value),
+    OnStatus(AmfValue),
 
     /// _result or _error response
     Result(Result<CommandMessageOk, CommandMessageError>),
@@ -100,22 +100,22 @@ pub(crate) enum CommandMessage {
     /// Close command (NetConnection)
     Close {
         transaction_id: u32,
-        command_object: Amf0Value,
+        command_object: AmfValue,
     },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CommandMessageOk {
     pub transaction_id: u32,
-    pub command_object: Amf0Value,
-    pub response: Amf0Value,
+    pub command_object: AmfValue,
+    pub response: AmfValue,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CommandMessageError {
     transaction_id: u32,
-    command_object: Amf0Value,
-    response: Amf0Value,
+    command_object: AmfValue,
+    response: AmfValue,
 }
 
 pub(crate) trait CommandMessageResultExt {
@@ -151,8 +151,8 @@ impl CommandMessageOk {
         &self,
     ) -> Result<CommandMessageConnectSuccess, CommandMessageParseError> {
         let properties = match &self.command_object {
-            Amf0Value::Object(obj) => obj.clone(),
-            Amf0Value::Null => HashMap::new(),
+            AmfValue::Object(obj) => obj.clone(),
+            AmfValue::Null => HashMap::new(),
             _ => {
                 return Err(CommandMessageParseError::UnexpectedValueType {
                     field: "properties",
@@ -161,8 +161,8 @@ impl CommandMessageOk {
         };
 
         let information = match &self.response {
-            Amf0Value::Object(obj) => obj.clone(),
-            Amf0Value::Null => HashMap::new(),
+            AmfValue::Object(obj) => obj.clone(),
+            AmfValue::Null => HashMap::new(),
             _ => {
                 return Err(CommandMessageParseError::UnexpectedValueType {
                     field: "information",
@@ -183,7 +183,7 @@ impl CommandMessageOk {
         &self,
     ) -> Result<CommandMessageCreateStreamSuccess, CommandMessageParseError> {
         let stream_id = match &self.response {
-            Amf0Value::Number(n) => *n as u32,
+            AmfValue::Number(n) => *n as u32,
             _ => {
                 return Err(CommandMessageParseError::UnexpectedValueType { field: "stream_id" });
             }
@@ -195,8 +195,8 @@ impl CommandMessageOk {
 /// Parsed connect _result response (spec 7.2.1.1, server -> client).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CommandMessageConnectSuccess {
-    pub properties: HashMap<String, Amf0Value>,
-    pub information: HashMap<String, Amf0Value>,
+    pub properties: HashMap<String, AmfValue>,
+    pub information: HashMap<String, AmfValue>,
 }
 
 /// Parsed createStream _result response (spec 7.2.1.3, server -> client).
@@ -207,21 +207,21 @@ pub(crate) struct CommandMessageCreateStreamSuccess {
 
 impl CommandMessage {
     pub fn from_amf0_bytes(payload: Bytes) -> Result<Self, CommandMessageParseError> {
-        let values = decode_amf0_values(payload)?;
+        let values = decode_amf_values(payload)?;
         Self::from_values(values)
     }
 
     pub fn into_amf0_bytes(self) -> Result<Bytes, AmfEncodingError> {
         let values = self.into_values();
-        encode_amf0_values(&values)
+        encode_amf_values(&values)
     }
 
-    fn from_values(mut values: Vec<Amf0Value>) -> Result<Self, CommandMessageParseError> {
+    fn from_values(mut values: Vec<AmfValue>) -> Result<Self, CommandMessageParseError> {
         if values.is_empty() {
             return Err(CommandMessageParseError::MissingCommandName);
         }
         let command_name = match &values[0] {
-            Amf0Value::String(s) => s.clone(),
+            AmfValue::String(s) => s.clone(),
             _ => {
                 return Err(CommandMessageParseError::UnexpectedValueType {
                     field: "command_name",
@@ -233,7 +233,7 @@ impl CommandMessage {
             return Err(CommandMessageParseError::MissingTransactionId);
         }
         let transaction_id = match &values[1] {
-            Amf0Value::Number(n) => *n as u32,
+            AmfValue::Number(n) => *n as u32,
             _ => {
                 return Err(CommandMessageParseError::UnexpectedValueType {
                     field: "transaction_id",
@@ -383,7 +383,7 @@ impl CommandMessage {
         }
     }
 
-    fn into_values(self) -> Vec<Amf0Value> {
+    fn into_values(self) -> Vec<AmfValue> {
         match self {
             CommandMessage::Connect {
                 transaction_id,
@@ -391,9 +391,9 @@ impl CommandMessage {
                 optional_args,
             } => {
                 let mut v = vec![
-                    Amf0Value::String("connect".into()),
-                    Amf0Value::Number(transaction_id as f64),
-                    Amf0Value::Object(command_object),
+                    AmfValue::String("connect".into()),
+                    AmfValue::Number(transaction_id as f64),
+                    AmfValue::Object(command_object),
                 ];
                 if let Some(args) = optional_args {
                     v.push(args);
@@ -408,8 +408,8 @@ impl CommandMessage {
                 optional_args,
             } => {
                 let mut v = vec![
-                    Amf0Value::String(procedure_name),
-                    Amf0Value::Number(transaction_id as f64),
+                    AmfValue::String(procedure_name),
+                    AmfValue::Number(transaction_id as f64),
                     command_object,
                 ];
                 if let Some(args) = optional_args {
@@ -422,8 +422,8 @@ impl CommandMessage {
                 transaction_id,
                 command_object,
             } => vec![
-                Amf0Value::String("createStream".into()),
-                Amf0Value::Number(transaction_id as f64),
+                AmfValue::String("createStream".into()),
+                AmfValue::Number(transaction_id as f64),
                 command_object,
             ],
 
@@ -435,17 +435,17 @@ impl CommandMessage {
                 reset,
             } => {
                 let mut v = vec![
-                    Amf0Value::String("play".into()),
-                    Amf0Value::Number(transaction_id as f64),
-                    Amf0Value::Null,
-                    Amf0Value::String(stream_name),
+                    AmfValue::String("play".into()),
+                    AmfValue::Number(transaction_id as f64),
+                    AmfValue::Null,
+                    AmfValue::String(stream_name),
                 ];
                 if let Some(s) = start {
-                    v.push(Amf0Value::Number(s));
+                    v.push(AmfValue::Number(s));
                     if let Some(d) = duration {
-                        v.push(Amf0Value::Number(d));
+                        v.push(AmfValue::Number(d));
                         if let Some(r) = reset {
-                            v.push(Amf0Value::Boolean(r));
+                            v.push(AmfValue::Boolean(r));
                         }
                     }
                 }
@@ -456,9 +456,9 @@ impl CommandMessage {
                 transaction_id,
                 parameters,
             } => vec![
-                Amf0Value::String("play2".into()),
-                Amf0Value::Number(transaction_id as f64),
-                Amf0Value::Null,
+                AmfValue::String("play2".into()),
+                AmfValue::Number(transaction_id as f64),
+                AmfValue::Null,
                 parameters,
             ],
 
@@ -466,51 +466,51 @@ impl CommandMessage {
                 transaction_id,
                 stream_id,
             } => vec![
-                Amf0Value::String("deleteStream".into()),
-                Amf0Value::Number(transaction_id as f64),
-                Amf0Value::Null,
-                Amf0Value::Number(stream_id as f64),
+                AmfValue::String("deleteStream".into()),
+                AmfValue::Number(transaction_id as f64),
+                AmfValue::Null,
+                AmfValue::Number(stream_id as f64),
             ],
 
             CommandMessage::ReceiveAudio {
                 transaction_id,
                 bool_flag,
             } => vec![
-                Amf0Value::String("receiveAudio".into()),
-                Amf0Value::Number(transaction_id as f64),
-                Amf0Value::Null,
-                Amf0Value::Boolean(bool_flag),
+                AmfValue::String("receiveAudio".into()),
+                AmfValue::Number(transaction_id as f64),
+                AmfValue::Null,
+                AmfValue::Boolean(bool_flag),
             ],
 
             CommandMessage::ReceiveVideo {
                 transaction_id,
                 bool_flag,
             } => vec![
-                Amf0Value::String("receiveVideo".into()),
-                Amf0Value::Number(transaction_id as f64),
-                Amf0Value::Null,
-                Amf0Value::Boolean(bool_flag),
+                AmfValue::String("receiveVideo".into()),
+                AmfValue::Number(transaction_id as f64),
+                AmfValue::Null,
+                AmfValue::Boolean(bool_flag),
             ],
 
             CommandMessage::Publish {
                 stream_key: publishing_name,
                 publishing_type,
             } => vec![
-                Amf0Value::String("publish".into()),
-                Amf0Value::Number(0 as f64),
-                Amf0Value::Null,
-                Amf0Value::String(publishing_name),
-                Amf0Value::String(publishing_type),
+                AmfValue::String("publish".into()),
+                AmfValue::Number(0 as f64),
+                AmfValue::Null,
+                AmfValue::String(publishing_name),
+                AmfValue::String(publishing_type),
             ],
 
             CommandMessage::Seek {
                 transaction_id,
                 milliseconds,
             } => vec![
-                Amf0Value::String("seek".into()),
-                Amf0Value::Number(transaction_id as f64),
-                Amf0Value::Null,
-                Amf0Value::Number(milliseconds),
+                AmfValue::String("seek".into()),
+                AmfValue::Number(transaction_id as f64),
+                AmfValue::Null,
+                AmfValue::Number(milliseconds),
             ],
 
             CommandMessage::Pause {
@@ -518,17 +518,17 @@ impl CommandMessage {
                 pause,
                 milliseconds,
             } => vec![
-                Amf0Value::String("pause".into()),
-                Amf0Value::Number(transaction_id as f64),
-                Amf0Value::Null,
-                Amf0Value::Boolean(pause),
-                Amf0Value::Number(milliseconds),
+                AmfValue::String("pause".into()),
+                AmfValue::Number(transaction_id as f64),
+                AmfValue::Null,
+                AmfValue::Boolean(pause),
+                AmfValue::Number(milliseconds),
             ],
 
             CommandMessage::OnStatus(info_object) => vec![
-                Amf0Value::String("onStatus".into()),
-                Amf0Value::Number(0.0),
-                Amf0Value::Null,
+                AmfValue::String("onStatus".into()),
+                AmfValue::Number(0.0),
+                AmfValue::Null,
                 info_object,
             ],
 
@@ -546,8 +546,8 @@ impl CommandMessage {
                     }) => ("_error", transaction_id, command_object, response),
                 };
                 vec![
-                    Amf0Value::String(command_name.into()),
-                    Amf0Value::Number(transaction_id as f64),
+                    AmfValue::String(command_name.into()),
+                    AmfValue::Number(transaction_id as f64),
                     command_object,
                     response,
                 ]
@@ -558,8 +558,8 @@ impl CommandMessage {
                 command_object,
             } => {
                 vec![
-                    Amf0Value::String("close".into()),
-                    Amf0Value::Number(transaction_id as f64),
+                    AmfValue::String("close".into()),
+                    AmfValue::Number(transaction_id as f64),
                     command_object,
                 ]
             }
@@ -567,64 +567,64 @@ impl CommandMessage {
     }
 }
 
-fn take_value(values: &mut [Amf0Value], index: usize) -> Amf0Value {
+fn take_value(values: &mut [AmfValue], index: usize) -> AmfValue {
     if index < values.len() {
         values[index].clone()
     } else {
-        Amf0Value::Null
+        AmfValue::Null
     }
 }
 
 fn take_object(
-    values: &mut [Amf0Value],
+    values: &mut [AmfValue],
     index: usize,
-) -> Result<HashMap<String, Amf0Value>, CommandMessageParseError> {
+) -> Result<HashMap<String, AmfValue>, CommandMessageParseError> {
     match values.get(index) {
-        Some(Amf0Value::Object(obj)) => Ok(obj.clone()),
-        Some(Amf0Value::Null) | None => Ok(HashMap::new()),
+        Some(AmfValue::Object(obj)) => Ok(obj.clone()),
+        Some(AmfValue::Null) | None => Ok(HashMap::new()),
         _ => Err(CommandMessageParseError::UnexpectedValueType {
             field: "command_object",
         }),
     }
 }
 
-fn take_string(values: &mut [Amf0Value], index: usize) -> Result<String, CommandMessageParseError> {
+fn take_string(values: &mut [AmfValue], index: usize) -> Result<String, CommandMessageParseError> {
     match values.get(index) {
-        Some(Amf0Value::String(s)) => Ok(s.clone()),
+        Some(AmfValue::String(s)) => Ok(s.clone()),
         _ => Err(CommandMessageParseError::UnexpectedValueType {
             field: "string_field",
         }),
     }
 }
 
-fn take_number(values: &mut [Amf0Value], index: usize) -> Result<f64, CommandMessageParseError> {
+fn take_number(values: &mut [AmfValue], index: usize) -> Result<f64, CommandMessageParseError> {
     match values.get(index) {
-        Some(Amf0Value::Number(n)) => Ok(*n),
+        Some(AmfValue::Number(n)) => Ok(*n),
         _ => Err(CommandMessageParseError::UnexpectedValueType {
             field: "number_field",
         }),
     }
 }
 
-fn take_bool(values: &mut [Amf0Value], index: usize) -> Result<bool, CommandMessageParseError> {
+fn take_bool(values: &mut [AmfValue], index: usize) -> Result<bool, CommandMessageParseError> {
     match values.get(index) {
-        Some(Amf0Value::Boolean(b)) => Ok(*b),
+        Some(AmfValue::Boolean(b)) => Ok(*b),
         _ => Err(CommandMessageParseError::UnexpectedValueType {
             field: "bool_field",
         }),
     }
 }
 
-fn take_optional_number(values: &[Amf0Value], index: usize) -> Option<f64> {
+fn take_optional_number(values: &[AmfValue], index: usize) -> Option<f64> {
     match values.get(index) {
-        Some(Amf0Value::Number(n)) => Some(*n),
+        Some(AmfValue::Number(n)) => Some(*n),
         _ => None,
     }
 }
 
-fn take_optional_bool(values: &[Amf0Value], index: usize) -> Option<bool> {
+fn take_optional_bool(values: &[AmfValue], index: usize) -> Option<bool> {
     match values.get(index) {
-        Some(Amf0Value::Boolean(b)) => Some(*b),
+        Some(AmfValue::Boolean(b)) => Some(*b),
         _ => None,
     }
 }
@@ -636,10 +636,10 @@ mod tests {
     #[test]
     fn connect_roundtrip() {
         let mut obj = HashMap::new();
-        obj.insert("app".into(), Amf0Value::String("testapp".into()));
+        obj.insert("app".into(), AmfValue::String("testapp".into()));
         obj.insert(
             "tcUrl".into(),
-            Amf0Value::String("rtmp://localhost/testapp".into()),
+            AmfValue::String("rtmp://localhost/testapp".into()),
         );
 
         let msg = CommandMessage::Connect {
@@ -669,7 +669,7 @@ mod tests {
     fn create_stream_roundtrip() {
         let msg = CommandMessage::CreateStream {
             transaction_id: 2,
-            command_object: Amf0Value::Null,
+            command_object: AmfValue::Null,
         };
 
         let encoded = msg.into_amf0_bytes().unwrap();
@@ -681,7 +681,7 @@ mod tests {
                 command_object,
             } => {
                 assert_eq!(transaction_id, 2);
-                assert_eq!(command_object, Amf0Value::Null);
+                assert_eq!(command_object, AmfValue::Null);
             }
             other => panic!("Expected CreateStream, got {other:?}"),
         }
@@ -743,24 +743,24 @@ mod tests {
     #[test]
     fn on_status_roundtrip() {
         let mut info = HashMap::new();
-        info.insert("level".into(), Amf0Value::String("status".into()));
+        info.insert("level".into(), AmfValue::String("status".into()));
         info.insert(
             "code".into(),
-            Amf0Value::String("NetStream.Play.Start".into()),
+            AmfValue::String("NetStream.Play.Start".into()),
         );
         info.insert(
             "description".into(),
-            Amf0Value::String("Started playing.".into()),
+            AmfValue::String("Started playing.".into()),
         );
 
-        let msg = CommandMessage::OnStatus(Amf0Value::Object(info.clone()));
+        let msg = CommandMessage::OnStatus(AmfValue::Object(info.clone()));
 
         let encoded = msg.into_amf0_bytes().unwrap();
         let decoded = CommandMessage::from_amf0_bytes(encoded).unwrap();
 
         match decoded {
             CommandMessage::OnStatus(info_object) => {
-                assert_eq!(info_object, Amf0Value::Object(info));
+                assert_eq!(info_object, AmfValue::Object(info));
             }
             other => panic!("Expected OnStatus, got {other:?}"),
         }
@@ -770,8 +770,8 @@ mod tests {
     fn result_roundtrip() {
         let msg = CommandMessage::Result(Ok(CommandMessageOk {
             transaction_id: 1,
-            command_object: Amf0Value::Null,
-            response: Amf0Value::Number(1.0),
+            command_object: AmfValue::Null,
+            response: AmfValue::Number(1.0),
         }));
 
         let encoded = msg.into_amf0_bytes().unwrap();
@@ -784,8 +784,8 @@ mod tests {
                 response,
             })) => {
                 assert_eq!(transaction_id, 1);
-                assert_eq!(command_object, Amf0Value::Null);
-                assert_eq!(response, Amf0Value::Number(1.0));
+                assert_eq!(command_object, AmfValue::Null);
+                assert_eq!(response, AmfValue::Number(1.0));
             }
             other => panic!("Expected Result(Ok), got {other:?}"),
         }

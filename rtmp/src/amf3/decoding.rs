@@ -487,7 +487,7 @@ where
                 .clone();
             Ok(amf_trait)
         } else if (u28 & TRAIT_EXTERNALIZABLE_FLAG) != 0 {
-            Err(AmfDecodingError::ExternalizableTrait)
+            unimplemented!()
         } else {
             const DYNAMIC_MEMBERS_FLAG: usize = 0b1;
 

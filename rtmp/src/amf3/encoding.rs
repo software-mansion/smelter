@@ -1,6 +1,9 @@
 use bytes::{BufMut, Bytes};
 
-use crate::{Amf3EncodingError, AmfEncodingError, amf3::*};
+use crate::{
+    AmfEncodingError,
+    amf3::{error::Amf3EncodingError, *},
+};
 
 pub(crate) const U29_MAX: u32 = (1 << 29) - 1;
 pub(crate) const U28_MAX: u32 = (1 << 28) - 1;
@@ -22,7 +25,7 @@ where
         Self { buf }
     }
 
-    pub(crate) fn put_value(&mut self, amf3_value: &Amf3Value) -> Result<(), AmfEncodingError> {
+    pub(crate) fn put_value(&mut self, amf3_value: &Amf3Value) -> Result<(), Amf3EncodingError> {
         match amf3_value {
             Amf3Value::Undefined => self.put_undefined(),
             Amf3Value::Null => self.put_null(),
@@ -84,9 +87,9 @@ where
         }
     }
 
-    fn put_integer(&mut self, i29: i32) -> Result<(), AmfEncodingError> {
+    fn put_integer(&mut self, i29: i32) -> Result<(), Amf3EncodingError> {
         if !(I29_MIN..=I29_MAX).contains(&i29) {
-            return Err(Amf3EncodingError::OutOfRangeInteger.into());
+            return Err(Amf3EncodingError::OutOfRangeInteger);
         }
 
         self.put_marker(INTEGER);
@@ -104,14 +107,14 @@ where
         self.buf.put_f64(d);
     }
 
-    fn put_string(&mut self, s: &str) -> Result<(), AmfEncodingError> {
+    fn put_string(&mut self, s: &str) -> Result<(), Amf3EncodingError> {
         self.put_marker(STRING);
         self.put_string_raw(s)
     }
 
-    fn put_string_raw(&mut self, s: &str) -> Result<(), AmfEncodingError> {
+    fn put_string_raw(&mut self, s: &str) -> Result<(), Amf3EncodingError> {
         if s.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::StringTooLong(s.len()).into());
+            return Err(Amf3EncodingError::StringTooLong(s.len()));
         }
         let u29s = self.encode_u29(((s.len() as u32) << 1) | 0b1)?;
         self.buf.put_slice(&u29s);
@@ -119,9 +122,9 @@ where
         Ok(())
     }
 
-    fn put_xml_doc(&mut self, xd: &str) -> Result<(), AmfEncodingError> {
+    fn put_xml_doc(&mut self, xd: &str) -> Result<(), Amf3EncodingError> {
         if xd.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::StringTooLong(xd.len()).into());
+            return Err(Amf3EncodingError::StringTooLong(xd.len()));
         }
         self.put_marker(XML_DOC);
         let u29x = self.encode_u29(((xd.len() as u32) << 1) | 0b1)?;
@@ -130,7 +133,7 @@ where
         Ok(())
     }
 
-    fn put_date(&mut self, d: f64) -> Result<(), AmfEncodingError> {
+    fn put_date(&mut self, d: f64) -> Result<(), Amf3EncodingError> {
         self.put_marker(DATE);
 
         // For date the only necessary information is if it is a value (`U29D` set to 1). Remaining
@@ -145,9 +148,9 @@ where
         &mut self,
         associative: &HashMap<String, Amf3Value>,
         dense: &Vec<Amf3Value>,
-    ) -> Result<(), AmfEncodingError> {
+    ) -> Result<(), Amf3EncodingError> {
         if dense.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::ArrayTooLong(dense.len()).into());
+            return Err(Amf3EncodingError::ArrayTooLong(dense.len()));
         }
 
         self.put_marker(ARRAY);
@@ -169,16 +172,15 @@ where
         class_name: Option<&String>,
         sealed_count: usize,
         values: &[(String, Amf3Value)],
-    ) -> Result<(), AmfEncodingError> {
+    ) -> Result<(), Amf3EncodingError> {
         if sealed_count > MAX_SEALED_COUNT as usize {
-            return Err(Amf3EncodingError::SealedMembersCountTooLarge(sealed_count).into());
+            return Err(Amf3EncodingError::SealedMembersCountTooLarge(sealed_count));
         }
         if sealed_count > values.len() {
             return Err(Amf3EncodingError::SealedCountTooLarge {
                 sealed_count,
                 actual_members: values.len(),
-            }
-            .into());
+            });
         }
 
         let mut u29o = ((sealed_count as u32) << 4) | 0b0011;
@@ -220,9 +222,9 @@ where
         Ok(())
     }
 
-    fn put_xml(&mut self, x: &str) -> Result<(), AmfEncodingError> {
+    fn put_xml(&mut self, x: &str) -> Result<(), Amf3EncodingError> {
         if x.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::StringTooLong(x.len()).into());
+            return Err(Amf3EncodingError::StringTooLong(x.len()));
         }
         self.put_marker(XML);
         let u29x = self.encode_u29(((x.len() as u32) << 1) | 0b1)?;
@@ -231,9 +233,9 @@ where
         Ok(())
     }
 
-    fn put_byte_array(&mut self, ba: &Bytes) -> Result<(), AmfEncodingError> {
+    fn put_byte_array(&mut self, ba: &Bytes) -> Result<(), Amf3EncodingError> {
         if ba.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::ArrayTooLong(ba.len()).into());
+            return Err(Amf3EncodingError::ArrayTooLong(ba.len()));
         }
 
         self.put_marker(BYTE_ARRAY);
@@ -247,9 +249,9 @@ where
         &mut self,
         fixed_length: bool,
         values: &[i32],
-    ) -> Result<(), AmfEncodingError> {
+    ) -> Result<(), Amf3EncodingError> {
         if values.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::VectorTooLong(values.len()).into());
+            return Err(Amf3EncodingError::VectorTooLong(values.len()));
         }
 
         self.put_marker(VECTOR_INT);
@@ -266,9 +268,9 @@ where
         &mut self,
         fixed_length: bool,
         values: &[u32],
-    ) -> Result<(), AmfEncodingError> {
+    ) -> Result<(), Amf3EncodingError> {
         if values.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::VectorTooLong(values.len()).into());
+            return Err(Amf3EncodingError::VectorTooLong(values.len()));
         }
 
         self.put_marker(VECTOR_UINT);
@@ -285,9 +287,9 @@ where
         &mut self,
         fixed_length: bool,
         values: &[f64],
-    ) -> Result<(), AmfEncodingError> {
+    ) -> Result<(), Amf3EncodingError> {
         if values.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::VectorTooLong(values.len()).into());
+            return Err(Amf3EncodingError::VectorTooLong(values.len()));
         }
 
         self.put_marker(VECTOR_DOUBLE);
@@ -305,9 +307,9 @@ where
         fixed_length: bool,
         class_name: Option<&String>,
         values: &[Amf3Value],
-    ) -> Result<(), AmfEncodingError> {
+    ) -> Result<(), Amf3EncodingError> {
         if values.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::VectorTooLong(values.len()).into());
+            return Err(Amf3EncodingError::VectorTooLong(values.len()));
         }
 
         self.put_marker(VECTOR_OBJECT);
@@ -328,9 +330,9 @@ where
         &mut self,
         weak_references: bool,
         entries: &[(Amf3Value, Amf3Value)],
-    ) -> Result<(), AmfEncodingError> {
+    ) -> Result<(), Amf3EncodingError> {
         if entries.len() > U28_MAX as usize {
-            return Err(Amf3EncodingError::DictionaryTooLong(entries.len()).into());
+            return Err(Amf3EncodingError::DictionaryTooLong(entries.len()));
         }
 
         self.put_marker(DICTIONARY);
@@ -344,7 +346,7 @@ where
         Ok(())
     }
 
-    fn encode_u29(&self, mut u29: u32) -> Result<Bytes, AmfEncodingError> {
+    fn encode_u29(&self, mut u29: u32) -> Result<Bytes, Amf3EncodingError> {
         const ONE_BYTE_MAX: u32 = 2u32.pow(7) - 1;
         const TWO_BYTE_MAX: u32 = 2u32.pow(14) - 1;
         const THREE_BYTE_MAX: u32 = 2u32.pow(21) - 1;
@@ -356,7 +358,7 @@ where
             n if n <= THREE_BYTE_MAX => 3,
             n if n <= FOUR_BYTE_MAX => 4,
             _ => {
-                return Err(Amf3EncodingError::OutOfRangeU29.into());
+                return Err(Amf3EncodingError::OutOfRangeU29);
             }
         };
 

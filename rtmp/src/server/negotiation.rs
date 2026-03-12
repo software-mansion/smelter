@@ -1,7 +1,7 @@
 use std::{ops::Deref, sync::Arc};
 
 use crate::{
-    amf0::Amf0Value,
+    amf0::AmfValue,
     message::{CommandMessage, RtmpMessage},
 };
 
@@ -58,7 +58,7 @@ impl NegotiationProgress {
         };
 
         let app = match command_object.get("app") {
-            Some(Amf0Value::String(app)) => app,
+            Some(AmfValue::String(app)) => app,
             None | Some(_) => "",
         };
 
