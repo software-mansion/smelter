@@ -235,6 +235,24 @@ impl Queue {
         self.audio_queue.lock().unwrap().remove_input(input_id);
     }
 
+    pub fn pause_input(&self, input_id: &InputId) {
+        let pts = Instant::now().duration_since(self.sync_point);
+        self.video_queue.lock().unwrap().pause_input(input_id, pts);
+        self.audio_queue.lock().unwrap().pause_input(input_id, pts);
+    }
+
+    pub fn unpause_input(&self, input_id: &InputId) {
+        let pts = Instant::now().duration_since(self.sync_point);
+        self.video_queue
+            .lock()
+            .unwrap()
+            .unpause_input(input_id, pts);
+        self.audio_queue
+            .lock()
+            .unwrap()
+            .unpause_input(input_id, pts);
+    }
+
     pub(super) fn start(
         self: &Arc<Self>,
         video_sender: Sender<QueueVideoOutput>,

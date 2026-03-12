@@ -230,6 +230,30 @@ impl SmelterState {
         Ok(())
     }
 
+    pub fn update_input(&self) -> Result<()> {
+        let input_names = self
+            .inputs
+            .iter()
+            .enumerate()
+            .map(|(idx, i)| OrderedItem::new(idx, i.name()))
+            .collect::<Vec<_>>();
+        if input_names.is_empty() {
+            println!("No inputs to update.");
+            return Ok(());
+        }
+        let selected = Select::new("Select input:", input_names).prompt()?;
+
+        let actions = vec!["Pause", "Unpause"];
+        let action = Select::new("Select action:", actions).prompt()?;
+        let pause = action == "Pause";
+
+        let update_route = format!("input/{}/update", selected.name);
+        examples::post(&update_route, &json!({ "pause": pause }))
+            .with_context(|| "Input update failed".to_string())?;
+
+        Ok(())
+    }
+
     pub fn unregister_input(&mut self) -> Result<()> {
         let input_names = self
             .inputs

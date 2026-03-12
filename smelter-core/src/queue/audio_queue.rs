@@ -6,7 +6,10 @@ use std::{
 
 use crate::{
     event::{Event, EventEmitter},
-    queue::{SharedState, utils::EmitEventOnce},
+    queue::{
+        SharedState,
+        utils::{EmitEventOnce, PauseState},
+    },
 };
 
 use crate::prelude::*;
@@ -57,6 +60,8 @@ impl AudioQueue {
 
                 offset_from_start: opts.offset,
 
+                pause_state: PauseState::new(),
+
                 emit_once_delivered_event: EmitEventOnce::new(
                     Event::AudioInputStreamDelivered(input_id.clone()),
                     &self.event_emitter,
@@ -75,6 +80,20 @@ impl AudioQueue {
 
     pub fn remove_input(&mut self, input_id: &InputId) {
         self.inputs.remove(input_id);
+    }
+
+    pub fn pause_input(&mut self, input_id: &InputId, pts: Duration) {
+        if let Some(input) = self.inputs.get_mut(input_id) {
+            input.pause_state.pause(pts);
+        }
+    }
+
+    pub fn unpause_input(&mut self, input_id: &InputId, pts: Duration) {
+        if let Some(input) = self.inputs.get_mut(input_id) {
+            let first_pts_received = input.shared_state.first_pts().is_some();
+            input.pause_state.unpause(pts, first_pts_received);
+            input.queue.clear();
+        }
     }
 
     pub(super) fn pop_samples_set(
@@ -163,6 +182,8 @@ struct AudioQueueInput {
     sync_point: Instant,
     shared_state: SharedState,
 
+    pause_state: PauseState,
+
     emit_once_delivered_event: EmitEventOnce,
     emit_once_playing_event: EmitEventOnce,
     emit_once_eos_event: EmitEventOnce,
@@ -178,6 +199,13 @@ impl AudioQueueInput {
         pts_range: (Duration, Duration),
         queue_start_pts: Duration,
     ) -> AudioEvent {
+        if self.pause_state.is_paused() {
+            return AudioEvent {
+                required: false,
+                event: PipelineEvent::Data(vec![]),
+            };
+        }
+
         // ignore result, we only need to ensure samples are enqueued
         self.try_enqueue_until_ready_for_pts(pts_range, queue_start_pts);
 
@@ -215,7 +243,7 @@ impl AudioQueueInput {
         pts_range: (Duration, Duration),
         queue_start_pts: Duration,
     ) -> bool {
-        if self.eos_received {
+        if self.pause_state.is_paused() || self.eos_received {
             return true;
         }
 
@@ -271,8 +299,9 @@ impl AudioQueueInput {
 
         if self.offset_from_start.is_none() {
             match self.receiver.try_recv()? {
-                PipelineEvent::Data(batch) => {
+                PipelineEvent::Data(mut batch) => {
                     let _ = self.shared_state.get_or_init_first_pts(batch.start_pts);
+                    batch.start_pts += self.pause_state.pts_offset();
                     self.queue.push_back(batch);
                 }
                 PipelineEvent::EOS => self.eos_received = true,
@@ -286,7 +315,8 @@ impl AudioQueueInput {
                 // pts start from sync point
                 PipelineEvent::Data(mut batch) => {
                     let first_pts = self.shared_state.get_or_init_first_pts(batch.start_pts);
-                    batch.start_pts = offset_pts + batch.start_pts - first_pts;
+                    batch.start_pts =
+                        offset_pts + batch.start_pts - first_pts + self.pause_state.pts_offset();
                     self.queue.push_back(batch);
                 }
                 PipelineEvent::EOS => self.eos_received = true,
