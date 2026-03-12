@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::pipeline::rtp::rtp_input::rollover_state::RolloverState;
 
@@ -15,7 +15,7 @@ const POW_2_32: f64 = (1i64 << 32) as f64;
 #[derive(Debug)]
 /// State that should be shared between different RTP tracks to use for synchronization.
 pub(crate) struct RtpNtpSyncPoint {
-    /// First 32 bytes represent seconds, last 32 bytes fraction of the second.
+    /// First 32 bits represent seconds, last 32 bits fraction of the second.
     /// Represents NTP time of sync point
     ntp_time: RwLock<Option<u64>>,
 }
@@ -53,6 +53,9 @@ impl RtpNtpSyncPoint {
         }
 
         let mut guard = self.ntp_time.write().unwrap();
+        if guard.is_some() {
+            return;
+        }
         let mut rtp_timestamp_diff = cmp_rtp_timestamp as f64 - sr_rtp_timestamp as f64;
         if rtp_timestamp_diff > u32::MAX as f64 / 2.0 {
             rtp_timestamp_diff = rtp_timestamp_diff - u32::MAX as f64 - 1.0;
@@ -240,8 +243,18 @@ impl RtpTimestampSync {
 
         let new_offset_secs = pts_secs + pts_diff_secs;
 
-        debug!(old_offset_secs=?self.sync_offset_secs, ?new_offset_secs, "Updating RTP sync offset");
-
-        self.sync_offset_secs = Some(new_offset_secs)
+        // Validate that the NTP-based offset is reasonable. We can hit that issue when:
+        // - receiving stream from SFU that modifies RTP packet but not RTCP packets.
+        // - BroadcastBox if you connect to server over WHEP before starting stream
+        let offset_diff_secs = (new_offset_secs - self.sync_offset_secs.unwrap_or(0.0)).abs();
+        if offset_diff_secs > 2.0 {
+            error!(
+                offset_diff_secs,
+                "NTP sync offset differs too much from initial estimate, ignoring."
+            );
+        } else {
+            debug!(old_offset_secs=?self.sync_offset_secs, ?new_offset_secs, "Updating RTP sync offset");
+            self.sync_offset_secs = Some(new_offset_secs);
+        }
     }
 }

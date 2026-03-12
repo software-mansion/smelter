@@ -119,7 +119,7 @@ impl HlsOutput {
                 let _span =
                     tracing::info_span!("HLS writer", output_id = output_ref.to_string()).entered();
 
-                let hls_stats_sender = HlsOutputStatsSender {
+                let stats_sender = HlsOutputStatsSender {
                     stats_sender: ctx.stats_sender.clone(),
                     output_ref: output_ref.clone(),
                 };
@@ -129,7 +129,7 @@ impl HlsOutput {
                     audio_stream,
                     encoded_chunks_receiver,
                     ctx.output_framerate,
-                    hls_stats_sender,
+                    stats_sender,
                 );
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));

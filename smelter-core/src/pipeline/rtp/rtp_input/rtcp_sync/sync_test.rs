@@ -453,6 +453,50 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_second_stream() {
     );
 }
 
+/// Test that mismatched SR and media RTP timestamps (common with SFUs in WHEP)
+/// don't produce negative PTS when the pipeline has been running for a while.
+#[test]
+fn test_rtcp_sync_rejects_mismatched_sr_timestamps() {
+    let queue_sync_point = Instant::now();
+    let sync_point = RtpNtpSyncPoint::new();
+
+    let mut stream_1 = RtpTimestampSync::new(queue_sync_point, sync_point.clone(), 48_000);
+    let mut stream_2 = RtpTimestampSync::new(queue_sync_point, sync_point.clone(), 90_000);
+
+    // Simulate pipeline running for ~20000 seconds before WHEP input starts
+    // by using a large initial offset in NTP calculations.
+    // First packets arrive "now" (sync_offset ≈ 0 since queue_sync_point = Instant::now())
+    let stream_1_first_pts = stream_1.pts_from_timestamp(100_000_000);
+    let stream_2_first_pts = stream_2.pts_from_timestamp(200_000_000);
+
+    // Both should have PTS near 0 (since queue_sync_point is "now")
+    assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
+    assert_duration_eq(stream_2_first_pts, Duration::ZERO, PREC_RUNTIME);
+
+    // Simulate mismatched SR: SFU forwards original sender's SR with rtp_time
+    // from a completely different timeline (sender running for hours).
+    // Media rtp_ts=100M but SR rtp_time=2.1B (huge mismatch)
+    stream_1.on_sender_report(REFERENCE_NTP_TIME, 2_100_000_000);
+
+    // After the mismatched sync, subsequent packets should still have reasonable PTS
+    // (the bad NTP offset should be rejected)
+    let stream_1_second_pts = stream_1.pts_from_timestamp(100_048_000); // +1 second
+    assert_duration_eq(
+        stream_1_second_pts,
+        stream_1_first_pts + Duration::from_secs(1),
+        PREC_RUNTIME,
+    );
+
+    // Stream 2 should also not be affected
+    stream_2.on_sender_report(REFERENCE_NTP_TIME, 3_000_000_000);
+    let stream_2_second_pts = stream_2.pts_from_timestamp(200_090_000); // +1 second
+    assert_duration_eq(
+        stream_2_second_pts,
+        stream_2_first_pts + Duration::from_secs(1),
+        PREC_RUNTIME,
+    );
+}
+
 fn assert_duration_eq(left: Duration, right: Duration, precision: Duration) {
     if left > right + precision || right > left + precision {
         panic!("{left:?} != right {right:?} (precision: {precision:?})")
