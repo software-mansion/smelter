@@ -19,14 +19,14 @@ pub(crate) struct WhepVideoTrackThreadHandle {
     pub config: VideoEncoderConfig,
 }
 
-pub(crate) struct WhepVideoTrackThreadOptions<Encoder: VideoEncoder> {
+pub(super) struct WhepVideoTrackThreadOptions<Encoder: VideoEncoder> {
     pub ctx: Arc<PipelineCtx>,
     pub encoder_options: Encoder::Options,
     pub chunks_sender: broadcast::Sender<EncodedOutputEvent>,
     pub stats_sender: WhepOutputStatsSender,
 }
 
-pub(crate) struct WhepVideoTrackThread<Encoder: VideoEncoder> {
+pub(super) struct WhepVideoTrackThread<Encoder: VideoEncoder> {
     stream: Box<dyn Iterator<Item = EncodedOutputEvent>>,
     chunks_sender: broadcast::Sender<EncodedOutputEvent>,
     _encoder: PhantomData<Encoder>,
