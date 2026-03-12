@@ -1,6 +1,7 @@
-use std::time::Duration;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use smelter_render::OutputId;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
 use crate::{
     Ref,
@@ -14,10 +15,14 @@ use crate::{
 
 use super::OutputStatsEvent;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) enum WhepOutputStatsEvent {
     Video(WhepOutputTrackStatsEvent),
     Audio(WhepOutputTrackStatsEvent),
+    PeerStateChanged {
+        session_id: Arc<str>,
+        state: RTCPeerConnectionState,
+    },
 }
 
 impl WhepOutputStatsEvent {
@@ -51,6 +56,7 @@ impl WhepOutputTrackStatsEvent {
 pub struct WhepOutputState {
     pub video: WhepOutputTrackState,
     pub audio: WhepOutputTrackState,
+    pub peers: HashMap<Arc<str>, RTCPeerConnectionState>,
 }
 
 #[derive(Debug)]
@@ -63,13 +69,21 @@ impl WhepOutputState {
         Self {
             video: WhepOutputTrackState::new(),
             audio: WhepOutputTrackState::new(),
+            peers: HashMap::new(),
         }
     }
 
     pub fn report(&mut self) -> WhepOutputStatsReport {
+        let connected_peers = self
+            .peers
+            .values()
+            .filter(|state| **state == RTCPeerConnectionState::Connected)
+            .count() as u64;
+
         WhepOutputStatsReport {
             video: self.video.report(),
             audio: self.audio.report(),
+            connected_peers,
         }
     }
 
@@ -77,6 +91,9 @@ impl WhepOutputState {
         match event {
             WhepOutputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
             WhepOutputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+            WhepOutputStatsEvent::PeerStateChanged { session_id, state } => {
+                self.peers.insert(session_id, state);
+            }
         }
     }
 }

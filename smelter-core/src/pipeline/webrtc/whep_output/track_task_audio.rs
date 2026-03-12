@@ -3,6 +3,7 @@ use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::broadcast;
 use tracing::warn;
 
+use crate::pipeline::webrtc::whep_output::WhepOutputStatsSender;
 use crate::prelude::*;
 use crate::{
     pipeline::encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
@@ -18,6 +19,7 @@ pub(super) struct WhepAudioTrackThreadOptions<Encoder: AudioEncoder> {
     pub ctx: Arc<PipelineCtx>,
     pub encoder_options: Encoder::Options,
     pub chunks_sender: broadcast::Sender<EncodedOutputEvent>,
+    pub stats_sender: WhepOutputStatsSender,
 }
 
 pub(super) struct WhepAudioTrackThread<Encoder: AudioEncoder> {
@@ -40,6 +42,7 @@ where
             ctx,
             encoder_options,
             chunks_sender,
+            stats_sender,
         } = options;
 
         let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
@@ -55,8 +58,11 @@ where
         let (encoded_stream, _encoder_ctx) =
             AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
 
-        let stream = encoded_stream.flatten().map(|event| match event {
-            PipelineEvent::Data(packet) => EncodedOutputEvent::Data(packet),
+        let stream = encoded_stream.flatten().map(move |event| match event {
+            PipelineEvent::Data(packet) => {
+                stats_sender.bytes_sent_event(packet.data.len(), StatsTrackKind::Audio);
+                EncodedOutputEvent::Data(packet)
+            }
             PipelineEvent::EOS => EncodedOutputEvent::AudioEOS,
         });
 

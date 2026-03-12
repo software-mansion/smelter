@@ -15,6 +15,7 @@ pub enum OutputStatsReport {
 pub struct WhepOutputStatsReport {
     pub video: WhepOutputTrackStatsReport,
     pub audio: WhepOutputTrackStatsReport,
+    pub connected_peers: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]

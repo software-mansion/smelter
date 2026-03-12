@@ -61,16 +61,25 @@ impl WhepOutput {
             kind: OutputProtocolKind::Whep,
         });
 
+        let stats_sender = WhepOutputStatsSender {
+            stats_sender: ctx.stats_sender.clone(),
+            output_ref: output_ref.clone(),
+        };
+
         let video_options = options
             .video
             .as_ref()
-            .map(|video| Self::init_video_thread(&ctx, &output_ref, video.clone()))
+            .map(|video| {
+                Self::init_video_thread(&ctx, &output_ref, video.clone(), stats_sender.clone())
+            })
             .transpose()?;
 
         let audio_options = options
             .audio
             .as_ref()
-            .map(|audio| Self::init_audio_thread(&ctx, &output_ref, audio.clone()))
+            .map(|audio| {
+                Self::init_audio_thread(&ctx, &output_ref, audio.clone(), stats_sender.clone())
+            })
             .transpose()?;
 
         state.outputs.add_output(
@@ -94,6 +103,7 @@ impl WhepOutput {
         ctx: &Arc<PipelineCtx>,
         output_ref: &Ref<OutputId>,
         options: VideoEncoderOptions,
+        stats_sender: WhepOutputStatsSender,
     ) -> Result<WhepVideoConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
 
@@ -105,6 +115,7 @@ impl WhepOutput {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
+                        stats_sender,
                     },
                 )?
             }
@@ -120,6 +131,7 @@ impl WhepOutput {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
+                        stats_sender,
                     },
                 )?
             }
@@ -130,6 +142,7 @@ impl WhepOutput {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
+                        stats_sender,
                     },
                 )?
             }
@@ -140,6 +153,7 @@ impl WhepOutput {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
+                        stats_sender,
                     },
                 )?
             }
@@ -156,6 +170,7 @@ impl WhepOutput {
         ctx: &Arc<PipelineCtx>,
         output_ref: &Ref<OutputId>,
         options: AudioEncoderOptions,
+        stats_sender: WhepOutputStatsSender,
     ) -> Result<WhepAudioConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
 
@@ -166,6 +181,7 @@ impl WhepOutput {
                     ctx: ctx.clone(),
                     encoder_options: options.clone(),
                     chunks_sender: sender,
+                    stats_sender,
                 },
             )?,
             AudioEncoderOptions::FdkAac(_options) => {
@@ -208,6 +224,7 @@ impl Output for WhepOutput {
     }
 }
 
+#[derive(Debug, Clone)]
 struct WhepOutputStatsSender {
     stats_sender: StatsSender,
     output_ref: Ref<OutputId>,

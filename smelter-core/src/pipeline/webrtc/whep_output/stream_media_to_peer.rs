@@ -7,10 +7,7 @@ use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::Track
 
 use crate::{
     event::Event,
-    pipeline::{
-        rtp::payloader::Payloader,
-        webrtc::{error::WhepError, whep_output::WhepOutputStatsSender},
-    },
+    pipeline::{rtp::payloader::Payloader, webrtc::error::WhepError},
 };
 
 use crate::prelude::*;
@@ -29,11 +26,6 @@ pub async fn stream_media_to_peer(
 ) {
     let mut next_video_event = None;
     let mut next_audio_event = None;
-
-    let stats_sender = WhepOutputStatsSender {
-        stats_sender: ctx.stats_sender.clone(),
-        output_ref: output_ref.clone(),
-    };
 
     loop {
         match (
@@ -97,7 +89,6 @@ pub async fn stream_media_to_peer(
                 };
 
                 if let Some(stream) = stream {
-                    stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
                     let result =
                         send_chunk_to_peer(chunk, &stream.track, &mut stream.payloader).await;
                     if let Err(err) = result {

@@ -40,6 +40,7 @@ use crate::pipeline::webrtc::{
 };
 
 use crate::prelude::*;
+use crate::stats::{StatsSender, WhepOutputStatsEvent};
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerConnection {
@@ -246,12 +247,25 @@ impl PeerConnection {
         Ok(self.pc.close().await?)
     }
 
-    pub fn on_peer_connection_cleanup(&self, cleanup_session_handler: OnCleanupSessionHdlr) {
+    pub fn on_peer_connection_cleanup(
+        &self,
+        cleanup_session_handler: OnCleanupSessionHdlr,
+        stats_sender: StatsSender,
+        output_ref: Ref<OutputId>,
+        session_id: Arc<str>,
+    ) {
         let pc = self.pc.clone();
         let cleanup_task_handle = Arc::new(Mutex::new(None));
 
         self.pc.on_peer_connection_state_change(Box::new({
             move |state: RTCPeerConnectionState| {
+                stats_sender.send(
+                    WhepOutputStatsEvent::PeerStateChanged {
+                        session_id: session_id.clone(),
+                        state,
+                    }
+                    .into_event(&output_ref),
+                );
                 handle_cleanup_on_disconnect(
                     state,
                     pc.clone(),

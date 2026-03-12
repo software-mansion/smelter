@@ -38,7 +38,7 @@ impl From<MediaKind> for StatsTrackKind {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) enum OutputStatsEvent {
     Whep(WhepOutputStatsEvent),
     Whip(WhipOutputStatsEvent),
