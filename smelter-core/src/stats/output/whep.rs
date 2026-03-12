@@ -91,9 +91,14 @@ impl WhepOutputState {
         match event {
             WhepOutputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
             WhepOutputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
-            WhepOutputStatsEvent::PeerStateChanged { session_id, state } => {
-                self.peers.insert(session_id, state);
-            }
+            WhepOutputStatsEvent::PeerStateChanged { session_id, state } => match state {
+                RTCPeerConnectionState::Closed => {
+                    self.peers.remove(&session_id);
+                }
+                state => {
+                    self.peers.insert(session_id, state);
+                }
+            },
         }
     }
 }

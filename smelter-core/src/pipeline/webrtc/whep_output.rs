@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
 use crate::{
     pipeline::{
@@ -61,10 +62,7 @@ impl WhepOutput {
             kind: OutputProtocolKind::Whep,
         });
 
-        let stats_sender = WhepOutputStatsSender {
-            stats_sender: ctx.stats_sender.clone(),
-            output_ref: output_ref.clone(),
-        };
+        let stats_sender = WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
 
         let video_options = options
             .video
@@ -225,15 +223,34 @@ impl Output for WhepOutput {
 }
 
 #[derive(Debug, Clone)]
-struct WhepOutputStatsSender {
+pub(crate) struct WhepOutputStatsSender {
     stats_sender: StatsSender,
     output_ref: Ref<OutputId>,
+}
+
+impl WhepOutputStatsSender {
+    pub fn new(stats_sender: StatsSender, output_ref: Ref<OutputId>) -> Self {
+        Self {
+            stats_sender,
+            output_ref,
+        }
+    }
 }
 
 impl WhepOutputStatsSender {
     fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
             WhepOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+        );
+    }
+
+    pub(super) fn peer_state_changed(&self, session_id: &Arc<str>, state: RTCPeerConnectionState) {
+        self.stats_sender.send(
+            WhepOutputStatsEvent::PeerStateChanged {
+                session_id: session_id.clone(),
+                state,
+            }
+            .into_event(&self.output_ref),
         );
     }
 }
