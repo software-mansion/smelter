@@ -12,7 +12,7 @@ use crate::pipeline::{
         peer_connection_recvonly::RecvonlyPeerConnection,
         whip_input::{
             WhipTrackContext, on_track::handle_on_track, state::WhipInputSession,
-            video_preferences::params_from_video_preferences,
+            video_preferences::video_params_compliant_with_offer,
         },
     },
 };
@@ -32,7 +32,7 @@ pub(crate) async fn create_new_whip_session(
             input.jitter_buffer_options.clone(),
         ))
     })?;
-    let video_codecs = params_from_video_preferences(&video_preferences);
+    let video_codecs = video_params_compliant_with_offer(&video_preferences, &offer);
 
     let peer_connection = RecvonlyPeerConnection::new(&state.ctx, &video_codecs).await?;
 

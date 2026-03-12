@@ -2,12 +2,16 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 use tracing::warn;
-use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
+use webrtc::{
+    peer_connection::sdp::session_description::RTCSessionDescription,
+    rtp_transceiver::rtp_codec::RTCRtpCodecParameters,
+};
 
 use crate::{
     codecs::VideoDecoderOptions,
-    pipeline::webrtc::supported_codec_parameters::{
-        h264_codec_params, vp8_codec_params, vp9_codec_params,
+    pipeline::webrtc::{
+        h264_offer_filter::filter_h264_codecs_by_offer,
+        supported_codec_parameters::{h264_codec_params, vp8_codec_params, vp9_codec_params},
     },
     prelude::WebrtcVideoDecoderOptions,
 };
@@ -59,7 +63,20 @@ pub(super) fn resolve_video_preferences(
     Ok(video_preferences)
 }
 
-pub(super) fn params_from_video_preferences(
+/// Builds codec parameters from video preferences, filtered to only include H264 variants
+/// whose exact `profile-level-id` + `packetization-mode` appear in the SDP offer.
+///
+/// This works around a webrtc-rs bug where the SDP answer can contain H264 fmtp parameters
+/// from our codec preferences instead of from the negotiated (offer) codecs.
+pub(super) fn video_params_compliant_with_offer(
+    video_preferences: &[VideoDecoderOptions],
+    offer: &RTCSessionDescription,
+) -> Vec<RTCRtpCodecParameters> {
+    let codecs = params_from_video_preferences(video_preferences);
+    filter_h264_codecs_by_offer(offer, codecs)
+}
+
+fn params_from_video_preferences(
     video_preferences: &[VideoDecoderOptions],
 ) -> Vec<RTCRtpCodecParameters> {
     video_preferences
