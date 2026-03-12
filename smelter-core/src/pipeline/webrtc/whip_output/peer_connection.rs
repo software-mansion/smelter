@@ -10,6 +10,7 @@ use webrtc::{
     interceptor::registry::Registry,
     peer_connection::{
         RTCPeerConnection, configuration::RTCConfiguration,
+        peer_connection_state::RTCPeerConnectionState,
         sdp::session_description::RTCSessionDescription,
     },
     rtp_transceiver::{
@@ -19,7 +20,7 @@ use webrtc::{
     stats::StatsReport,
 };
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use crate::pipeline::webrtc::whip_output::codec_preferences::CodecParameters;
 
@@ -70,6 +71,17 @@ impl PeerConnection {
         Ok(Self {
             pc: peer_connection,
         })
+    }
+
+    pub fn on_connection_state_change(
+        &self,
+        f: impl Fn(RTCPeerConnectionState) + Send + Sync + 'static,
+    ) {
+        self.pc
+            .on_peer_connection_state_change(Box::new(move |state: RTCPeerConnectionState| {
+                f(state);
+                Box::pin(async {})
+            }));
     }
 
     pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WebrtcClientError> {
@@ -141,5 +153,33 @@ impl PeerConnection {
 
     pub async fn get_stats(&self) -> StatsReport {
         self.pc.get_stats().await
+    }
+
+    pub fn downgrade(&self) -> WeakPeerConnection {
+        WeakPeerConnection {
+            pc: Arc::downgrade(&self.pc),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct WeakPeerConnection {
+    pc: Weak<RTCPeerConnection>,
+}
+
+impl WeakPeerConnection {
+    pub fn upgrade(&self) -> Option<PeerConnection> {
+        self.pc.upgrade().map(|pc| PeerConnection { pc })
+    }
+}
+
+impl Drop for PeerConnection {
+    fn drop(&mut self) {
+        if let Ok(handle) = tokio::runtime::Handle::try_current()
+            && Arc::strong_count(&self.pc) == 1
+        {
+            let pc = self.pc.clone();
+            handle.spawn(async move { pc.close().await });
+        }
     }
 }
