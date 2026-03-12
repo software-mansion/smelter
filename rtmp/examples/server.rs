@@ -8,7 +8,6 @@ fn main() {
     let config = RtmpServerConfig {
         port: 1935,
         tls: None,
-        client_timeout_secs: 30,
     };
 
     let on_connection = Box::new(|conn: RtmpServerConnection| {

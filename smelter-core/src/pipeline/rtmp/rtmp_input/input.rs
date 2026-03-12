@@ -43,7 +43,7 @@ impl RtmpServerInput {
                 stream_key: options.stream_key,
                 frame_sender,
                 input_samples_sender,
-                video_decoders: options.video_decoders,
+                decoders: options.decoders,
                 buffer,
             },
         )?;

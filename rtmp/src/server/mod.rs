@@ -17,7 +17,6 @@ pub type OnConnectionCallback = Box<dyn FnMut(RtmpServerConnection) + Send + 'st
 pub struct RtmpServerConfig {
     pub port: u16,
     pub tls: Option<TlsConfig>,
-    pub client_timeout_secs: u64,
 }
 
 #[derive(Debug, Clone)]

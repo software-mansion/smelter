@@ -36,12 +36,10 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             })
             .transpose()?;
 
-        let video_decoders = core::RtmpServerInputVideoDecoders { h264 };
-
         let input_options = core::RtmpServerInputOptions {
             app,
             stream_key,
-            video_decoders,
+            decoders: core::RtmpServerInputDecoders { h264 },
             buffer,
         };
 

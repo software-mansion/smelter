@@ -42,8 +42,10 @@ impl RtmpConnectionOptions {
             return Err(RtmpConnectionUrlError::InvalidFormat);
         };
 
-        let default_port = if use_tls { 443 } else { 1935 };
-        let port = url.port().unwrap_or(default_port);
+        let port = url.port().unwrap_or(match use_tls {
+            true => 443,
+            false => 1935,
+        });
 
         let mut path_segments = url.path().trim_start_matches('/').splitn(2, '/');
         let app = path_segments.next().unwrap_or("").to_string();
@@ -63,12 +65,12 @@ impl RtmpConnectionOptions {
 pub struct RtmpServerInputOptions {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
-    pub video_decoders: RtmpServerInputVideoDecoders,
+    pub decoders: RtmpServerInputDecoders,
     pub buffer: InputBufferOptions,
 }
 
 #[derive(Debug, Clone)]
-pub struct RtmpServerInputVideoDecoders {
+pub struct RtmpServerInputDecoders {
     pub h264: Option<VideoDecoderOptions>,
 }
 

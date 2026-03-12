@@ -34,11 +34,7 @@ pub fn spawn_rtmp_server(
     let inputs = state.inputs.clone();
     let tls = state.tls_config.clone();
 
-    let config = RtmpServerConfig {
-        port,
-        tls,
-        client_timeout_secs: 30,
-    };
+    let config = RtmpServerConfig { port, tls };
 
     let on_connection = Box::new(move |conn| {
         if let Err(err) = handle_incoming_connection(ctx.clone(), inputs.clone(), conn) {
