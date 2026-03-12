@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use smelter_render::InputId;
 
-use crate::stats::{input_state::InputStatsState, output_state::OutputStatsState};
+use crate::stats::{input::InputStatsState, output::OutputStatsState};
 
 use crate::prelude::*;
 

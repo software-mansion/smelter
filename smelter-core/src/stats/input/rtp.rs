@@ -1,10 +1,18 @@
 use std::time::Duration;
 
 use crate::stats::{
-    RtpJitterBufferStatsEvent,
     input_reports::{RtpJitterBufferSlidingWindowStatsReport, RtpJitterBufferStatsReport},
     utils::SlidingWindowValue,
 };
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RtpJitterBufferStatsEvent {
+    RtpPacketLost,
+    RtpPacketReceived,
+    BytesReceived(usize),
+    EffectiveBuffer(Duration),
+    InputBufferSize(Duration),
+}
 
 #[derive(Debug)]
 pub struct RtpJitterBufferState {
