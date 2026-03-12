@@ -52,7 +52,7 @@ impl RtmpMessage {
             },
             RtmpMessage::Event { event, stream_id } => event_into_raw(event, stream_id)?,
             RtmpMessage::CommandMessage { msg, stream_id } => RawMessage {
-                msg_type: MessageType::CommandMessage.into_raw(),
+                msg_type: MessageType::CommandMessageAmf0.into_raw(),
                 stream_id,
                 chunk_stream_id: MAIN_CHUNK_STREAM_ID,
                 timestamp: 0,

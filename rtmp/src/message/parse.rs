@@ -17,7 +17,7 @@ impl RtmpMessage {
             MessageType::Audio => audio_event_from_raw(msg)?,
             MessageType::Video => video_event_from_raw(msg)?,
 
-            MessageType::DataMessage => RtmpMessage::Event {
+            MessageType::DataMessageAmf0 => RtmpMessage::Event {
                 event: RtmpEvent::Metadata(ScriptData::parse(msg.payload)?),
                 stream_id: msg.stream_id,
             },
@@ -48,7 +48,7 @@ impl RtmpMessage {
                 return Err(RtmpMessageParseError::PayloadTooShort);
             }
 
-            MessageType::CommandMessage => RtmpMessage::CommandMessage {
+            MessageType::CommandMessageAmf0 => RtmpMessage::CommandMessage {
                 msg: CommandMessage::from_amf0_bytes(msg.payload)?,
                 stream_id: msg.stream_id,
             },

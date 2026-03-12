@@ -29,9 +29,9 @@ pub enum MessageType {
 
     Audio,
     Video,
-    DataMessage,
+    DataMessageAmf0,
 
-    CommandMessage,
+    CommandMessageAmf0,
 }
 
 impl MessageType {
@@ -45,8 +45,8 @@ impl MessageType {
             6 => Ok(MessageType::SetPeerBandwidth),
             8 => Ok(MessageType::Audio),
             9 => Ok(MessageType::Video),
-            18 => Ok(MessageType::DataMessage),
-            20 => Ok(MessageType::CommandMessage),
+            18 => Ok(MessageType::DataMessageAmf0),
+            20 => Ok(MessageType::CommandMessageAmf0),
             _ => Err(RtmpMessageParseError::InvalidMessageType(value)),
         }
     }
@@ -61,8 +61,8 @@ impl MessageType {
             MessageType::SetPeerBandwidth => 6,
             MessageType::Audio => 8,
             MessageType::Video => 9,
-            MessageType::DataMessage => 18,
-            MessageType::CommandMessage => 20,
+            MessageType::DataMessageAmf0 => 18,
+            MessageType::CommandMessageAmf0 => 20,
         }
     }
 }

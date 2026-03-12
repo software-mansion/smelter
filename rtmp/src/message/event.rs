@@ -175,7 +175,7 @@ pub(super) fn event_into_raw(
             .serialize()?,
         },
         RtmpEvent::Metadata(script_data) => RawMessage {
-            msg_type: MessageType::DataMessage.into_raw(),
+            msg_type: MessageType::DataMessageAmf0.into_raw(),
             stream_id,
             chunk_stream_id: MAIN_CHUNK_STREAM_ID,
             timestamp: 0,
