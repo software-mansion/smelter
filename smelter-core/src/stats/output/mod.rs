@@ -1,23 +1,67 @@
 use crate::{
-    OutputProtocolKind,
+    MediaKind, OutputProtocolKind,
     stats::{
-        OutputStatsEvent,
+        output::hls::HlsOutputState, output::mp4::Mp4OutputState, output::rtmp::RtmpOutputState,
+        output::rtp::RtpOutputState, output::whep::WhepOutputState, output::whip::WhipOutputState,
         output_reports::OutputStatsReport,
-        output_state::{
-            hls::HlsOutputState, mp4::Mp4OutputState, rtmp::RtmpOutputState, rtp::RtpOutputState,
-            whep::WhepOutputState, whip::WhipOutputState,
-        },
     },
 };
 
 use tracing::error;
 
-pub mod hls;
-pub mod mp4;
-pub mod rtmp;
-pub mod rtp;
-pub mod whep;
-pub mod whip;
+pub(super) mod hls;
+pub(super) mod mp4;
+pub(super) mod rtmp;
+pub(super) mod rtp;
+pub(super) mod whep;
+pub(super) mod whip;
+
+pub(crate) use hls::{HlsOutputStatsEvent, HlsOutputTrackStatsEvent};
+pub(crate) use mp4::{Mp4OutputStatsEvent, Mp4OutputTrackStatsEvent};
+pub(crate) use rtmp::{RtmpOutputStatsEvent, RtmpOutputTrackStatsEvent};
+pub(crate) use rtp::RtpOutputStatsEvent;
+pub(crate) use whep::{WhepOutputStatsEvent, WhepOutputTrackStatsEvent};
+pub(crate) use whip::{WhipOutputStatsEvent, WhipOutputTrackStatsEvent};
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum StatsTrackKind {
+    Video,
+    Audio,
+}
+
+impl From<MediaKind> for StatsTrackKind {
+    fn from(value: MediaKind) -> Self {
+        match value {
+            MediaKind::Video(_) => Self::Video,
+            MediaKind::Audio(_) => Self::Audio,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum OutputStatsEvent {
+    Whep(WhepOutputStatsEvent),
+    Whip(WhipOutputStatsEvent),
+    Hls(HlsOutputStatsEvent),
+    Mp4(Mp4OutputStatsEvent),
+    Rtmp(RtmpOutputStatsEvent),
+
+    #[allow(unused)]
+    Rtp(RtpOutputStatsEvent),
+}
+
+impl From<&OutputStatsEvent> for OutputProtocolKind {
+    fn from(value: &OutputStatsEvent) -> Self {
+        match value {
+            OutputStatsEvent::Whep(_) => Self::Whep,
+            OutputStatsEvent::Whip(_) => Self::Whip,
+            OutputStatsEvent::Hls(_) => Self::Hls,
+            OutputStatsEvent::Mp4(_) => Self::Mp4,
+            OutputStatsEvent::Rtmp(_) => Self::Rtmp,
+            OutputStatsEvent::Rtp(_) => Self::Rtp,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum OutputStatsState {

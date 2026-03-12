@@ -1,12 +1,44 @@
 use std::time::Duration;
 
-use crate::stats::{
-    HlsInputStatsEvent, HlsInputTrackStatsEvent,
-    input_reports::{
-        HlsInputStatsReport, HlsInputTrackSlidingWindowStatsReport, HlsInputTrackStatsReport,
+use smelter_render::InputId;
+
+use crate::{
+    Ref,
+    stats::{
+        input_reports::{
+            HlsInputStatsReport, HlsInputTrackSlidingWindowStatsReport, HlsInputTrackStatsReport,
+        },
+        state::StatsEvent,
+        utils::SlidingWindowValue,
     },
-    utils::SlidingWindowValue,
 };
+
+use super::InputStatsEvent;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum HlsInputStatsEvent {
+    Video(HlsInputTrackStatsEvent),
+    Audio(HlsInputTrackStatsEvent),
+    CorruptedPacketReceived,
+}
+
+impl HlsInputStatsEvent {
+    pub fn into_event(self, input_ref: &Ref<InputId>) -> StatsEvent {
+        StatsEvent::Input {
+            input_ref: input_ref.clone(),
+            event: InputStatsEvent::Hls(self),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum HlsInputTrackStatsEvent {
+    PacketReceived,
+    DiscontinuityDetected,
+    BytesReceived(usize),
+    EffectiveBuffer(Duration),
+    InputBufferSize(Duration),
+}
 
 #[derive(Debug)]
 pub struct HlsInputState {

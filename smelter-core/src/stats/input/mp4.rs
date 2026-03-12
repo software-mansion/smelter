@@ -1,10 +1,51 @@
 use std::time::Duration;
 
-use crate::stats::{
-    Mp4InputStatsEvent, Mp4InputTrackStatsEvent,
-    input_reports::{Mp4InputStatsReport, Mp4InputTrackStatsReport},
-    utils::SlidingWindowValue,
+use smelter_render::InputId;
+
+use crate::{
+    Ref,
+    stats::{
+        StatsTrackKind,
+        input_reports::{Mp4InputStatsReport, Mp4InputTrackStatsReport},
+        state::StatsEvent,
+        utils::SlidingWindowValue,
+    },
 };
+
+use super::InputStatsEvent;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Mp4InputStatsEvent {
+    Video(Mp4InputTrackStatsEvent),
+    Audio(Mp4InputTrackStatsEvent),
+}
+
+impl Mp4InputStatsEvent {
+    pub fn into_event(self, input_ref: &Ref<InputId>) -> StatsEvent {
+        StatsEvent::Input {
+            input_ref: input_ref.clone(),
+            event: InputStatsEvent::Mp4(self),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Mp4InputTrackStatsEvent {
+    BytesReceived(usize),
+}
+
+impl Mp4InputTrackStatsEvent {
+    pub(crate) fn into_event(
+        self,
+        input_ref: &Ref<InputId>,
+        track_kind: StatsTrackKind,
+    ) -> StatsEvent {
+        match track_kind {
+            StatsTrackKind::Video => Mp4InputStatsEvent::Video(self).into_event(input_ref),
+            StatsTrackKind::Audio => Mp4InputStatsEvent::Audio(self).into_event(input_ref),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Mp4InputState {

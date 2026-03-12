@@ -1,7 +1,30 @@
-use crate::stats::{
-    WhepInputStatsEvent, input_reports::WhepInputStatsReport,
-    input_state::rtp::RtpJitterBufferState,
+use smelter_render::InputId;
+
+use crate::{
+    Ref,
+    stats::{
+        input::rtp::{RtpJitterBufferState, RtpJitterBufferStatsEvent},
+        input_reports::WhepInputStatsReport,
+        state::StatsEvent,
+    },
 };
+
+use super::InputStatsEvent;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum WhepInputStatsEvent {
+    VideoRtp(RtpJitterBufferStatsEvent),
+    AudioRtp(RtpJitterBufferStatsEvent),
+}
+
+impl WhepInputStatsEvent {
+    pub fn into_event(self, input_ref: &Ref<InputId>) -> StatsEvent {
+        StatsEvent::Input {
+            input_ref: input_ref.clone(),
+            event: InputStatsEvent::Whep(self),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct WhepInputState {

@@ -1,10 +1,51 @@
 use std::time::Duration;
 
-use crate::stats::{
-    HlsOutputStatsEvent, HlsOutputTrackStatsEvent,
-    output_reports::{HlsOutputStatsReport, HlsOutputTrackStatsReport},
-    utils::SlidingWindowValue,
+use smelter_render::OutputId;
+
+use crate::{
+    Ref,
+    stats::{
+        StatsTrackKind,
+        output_reports::{HlsOutputStatsReport, HlsOutputTrackStatsReport},
+        state::StatsEvent,
+        utils::SlidingWindowValue,
+    },
 };
+
+use super::OutputStatsEvent;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum HlsOutputStatsEvent {
+    Video(HlsOutputTrackStatsEvent),
+    Audio(HlsOutputTrackStatsEvent),
+}
+
+impl HlsOutputStatsEvent {
+    pub fn into_event(self, output_ref: &Ref<OutputId>) -> StatsEvent {
+        StatsEvent::Output {
+            output_ref: output_ref.clone(),
+            event: OutputStatsEvent::Hls(self),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum HlsOutputTrackStatsEvent {
+    BytesSent(usize),
+}
+
+impl HlsOutputTrackStatsEvent {
+    pub(crate) fn into_event(
+        self,
+        output_ref: &Ref<OutputId>,
+        track_kind: StatsTrackKind,
+    ) -> StatsEvent {
+        match track_kind {
+            StatsTrackKind::Video => HlsOutputStatsEvent::Video(self).into_event(output_ref),
+            StatsTrackKind::Audio => HlsOutputStatsEvent::Audio(self).into_event(output_ref),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct HlsOutputState {

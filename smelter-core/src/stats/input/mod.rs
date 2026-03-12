@@ -1,23 +1,47 @@
 use tracing::error;
 
-pub mod hls;
-pub mod mp4;
-pub mod rtmp;
-pub mod rtp;
-pub mod whep;
-pub mod whip;
+pub(super) mod hls;
+pub(super) mod mp4;
+pub(super) mod rtmp;
+pub(super) mod rtp;
+pub(super) mod whep;
+pub(super) mod whip;
 
 use crate::{
     InputProtocolKind,
     stats::{
-        InputStatsEvent,
-        input_reports::InputStatsReport,
-        input_state::{
-            hls::HlsInputState, mp4::Mp4InputState, rtmp::RtmpInputState, whep::WhepInputState,
-            whip::WhipInputState,
-        },
+        input::hls::HlsInputState, input::mp4::Mp4InputState, input::rtmp::RtmpInputState,
+        input::whep::WhepInputState, input::whip::WhipInputState, input_reports::InputStatsReport,
     },
 };
+
+pub(crate) use hls::{HlsInputStatsEvent, HlsInputTrackStatsEvent};
+pub(crate) use mp4::{Mp4InputStatsEvent, Mp4InputTrackStatsEvent};
+pub(crate) use rtmp::{RtmpInputStatsEvent, RtmpInputTrackStatsEvent};
+pub(crate) use rtp::RtpJitterBufferStatsEvent;
+pub(crate) use whep::WhepInputStatsEvent;
+pub(crate) use whip::WhipInputStatsEvent;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum InputStatsEvent {
+    Whip(WhipInputStatsEvent),
+    Whep(WhepInputStatsEvent),
+    Hls(HlsInputStatsEvent),
+    Rtmp(RtmpInputStatsEvent),
+    Mp4(Mp4InputStatsEvent),
+}
+
+impl From<&InputStatsEvent> for InputProtocolKind {
+    fn from(value: &InputStatsEvent) -> Self {
+        match value {
+            InputStatsEvent::Whip(_) => InputProtocolKind::Whip,
+            InputStatsEvent::Whep(_) => InputProtocolKind::Whep,
+            InputStatsEvent::Hls(_) => InputProtocolKind::Hls,
+            InputStatsEvent::Rtmp(_) => InputProtocolKind::Rtmp,
+            InputStatsEvent::Mp4(_) => InputProtocolKind::Mp4,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum InputStatsState {

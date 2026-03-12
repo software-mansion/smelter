@@ -1,10 +1,51 @@
 use std::time::Duration;
 
-use crate::stats::{
-    RtmpInputStatsEvent, RtmpInputTrackStatsEvent,
-    input_reports::{RtmpInputStatsReport, RtmpInputTrackStatsReport},
-    utils::SlidingWindowValue,
+use smelter_render::InputId;
+
+use crate::{
+    Ref,
+    stats::{
+        StatsTrackKind,
+        input_reports::{RtmpInputStatsReport, RtmpInputTrackStatsReport},
+        state::StatsEvent,
+        utils::SlidingWindowValue,
+    },
 };
+
+use super::InputStatsEvent;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RtmpInputStatsEvent {
+    Video(RtmpInputTrackStatsEvent),
+    Audio(RtmpInputTrackStatsEvent),
+}
+
+impl RtmpInputStatsEvent {
+    pub fn into_event(self, input_ref: &Ref<InputId>) -> StatsEvent {
+        StatsEvent::Input {
+            input_ref: input_ref.clone(),
+            event: InputStatsEvent::Rtmp(self),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RtmpInputTrackStatsEvent {
+    BytesReceived(usize),
+}
+
+impl RtmpInputTrackStatsEvent {
+    pub(crate) fn into_event(
+        self,
+        input_ref: &Ref<InputId>,
+        track_kind: StatsTrackKind,
+    ) -> StatsEvent {
+        match track_kind {
+            StatsTrackKind::Video => RtmpInputStatsEvent::Video(self).into_event(input_ref),
+            StatsTrackKind::Audio => RtmpInputStatsEvent::Audio(self).into_event(input_ref),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct RtmpInputState {
