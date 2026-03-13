@@ -151,7 +151,7 @@ pub async fn status_handler(
     ),
     tags = ["metadata_request"],
 )]
-pub(super) async fn stats_handler(
+pub async fn stats_handler(
     State(state): State<Arc<ApiState>>,
 ) -> Result<impl IntoResponse, ApiError> {
     let pipeline = state.pipeline()?;

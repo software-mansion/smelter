@@ -889,7 +889,7 @@
     "/status": {
       "get": {
         "tags": [
-          "status_request"
+          "metadata_request"
         ],
         "operationId": "get_status",
         "responses": {
@@ -899,6 +899,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InstanceStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "tags": [
+          "metadata_request"
+        ],
+        "operationId": "get_stats",
+        "responses": {
+          "200": {
+            "description": "Statistics for inputs and outputs fetched successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsReport"
                 }
               }
             }
@@ -1435,6 +1465,113 @@
         },
         "additionalProperties": false
       },
+      "HlsInputStatsReport": {
+        "type": "object",
+        "required": [
+          "video",
+          "audio",
+          "corrupted_packets_received",
+          "corrputed_packets_received_last_10_seconds"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/HlsInputTrackStatsReport"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/HlsInputTrackStatsReport"
+          },
+          "corrupted_packets_received": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "corrputed_packets_received_last_10_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "HlsInputTrackSlidingWindowStatsReport": {
+        "type": "object",
+        "required": [
+          "packets_received",
+          "discontinuities_detected",
+          "effective_buffer_avg_secs",
+          "effective_buffer_max_secs",
+          "effective_buffer_min_secs",
+          "input_buffer_avg_secs",
+          "input_buffer_max_secs",
+          "input_buffer_min_secs"
+        ],
+        "properties": {
+          "packets_received": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "discontinuities_detected": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "effective_buffer_avg_secs": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
+          },
+          "effective_buffer_max_secs": {
+            "type": "number",
+            "format": "double"
+          },
+          "effective_buffer_min_secs": {
+            "type": "number",
+            "format": "double"
+          },
+          "input_buffer_avg_secs": {
+            "type": "number",
+            "format": "double",
+            "description": "Size of the InputBuffer"
+          },
+          "input_buffer_max_secs": {
+            "type": "number",
+            "format": "double"
+          },
+          "input_buffer_min_secs": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "HlsInputTrackStatsReport": {
+        "type": "object",
+        "required": [
+          "packets_received",
+          "discontinuities_detected",
+          "bitrate_avg_1_second",
+          "last_10_seconds"
+        ],
+        "properties": {
+          "packets_received": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "discontinuities_detected": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "last_10_seconds": {
+            "$ref": "#/components/schemas/HlsInputTrackSlidingWindowStatsReport"
+          }
+        }
+      },
       "HlsOutput": {
         "type": "object",
         "required": [
@@ -1477,6 +1614,34 @@
           }
         },
         "additionalProperties": false
+      },
+      "HlsOutputStatsReport": {
+        "type": "object",
+        "required": [
+          "video",
+          "audio"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/HlsOutputTrackStatsReport"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/HlsOutputTrackStatsReport"
+          }
+        }
+      },
+      "HlsOutputTrackStatsReport": {
+        "type": "object",
+        "required": [
+          "bitrate_avg_1_second"
+        ],
+        "properties": {
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
       },
       "HlsVideoDecoderOptions": {
         "type": "string",
@@ -1861,6 +2026,65 @@
         },
         "additionalProperties": false
       },
+      "InputStatsReport": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "whip"
+            ],
+            "properties": {
+              "whip": {
+                "$ref": "#/components/schemas/WhipInputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "whep"
+            ],
+            "properties": {
+              "whep": {
+                "$ref": "#/components/schemas/WhepInputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "hls"
+            ],
+            "properties": {
+              "hls": {
+                "$ref": "#/components/schemas/HlsInputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "rtmp"
+            ],
+            "properties": {
+              "rtmp": {
+                "$ref": "#/components/schemas/RtmpInputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "mp4"
+            ],
+            "properties": {
+              "mp4": {
+                "$ref": "#/components/schemas/Mp4InputStatsReport"
+              }
+            }
+          }
+        ]
+      },
       "InputStream": {
         "type": "object",
         "required": [
@@ -2099,6 +2323,34 @@
         },
         "additionalProperties": false
       },
+      "Mp4InputStatsReport": {
+        "type": "object",
+        "required": [
+          "video",
+          "audio"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/Mp4InputTrackStatsReport"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/Mp4InputTrackStatsReport"
+          }
+        }
+      },
+      "Mp4InputTrackStatsReport": {
+        "type": "object",
+        "required": [
+          "bitrate_avg_1_second"
+        ],
+        "properties": {
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "Mp4Output": {
         "type": "object",
         "required": [
@@ -2146,6 +2398,34 @@
           }
         },
         "additionalProperties": false
+      },
+      "Mp4OutputStatsReport": {
+        "type": "object",
+        "required": [
+          "video",
+          "audio"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/Mp4OutputTrackStatsReport"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/Mp4OutputTrackStatsReport"
+          }
+        }
+      },
+      "Mp4OutputTrackStatsReport": {
+        "type": "object",
+        "required": [
+          "bitrate_avg_1_second"
+        ],
+        "properties": {
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
       },
       "Mp4VideoDecoderOptions": {
         "type": "string",
@@ -2662,6 +2942,76 @@
           }
         },
         "additionalProperties": false
+      },
+      "OutputStatsReport": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "whep"
+            ],
+            "properties": {
+              "whep": {
+                "$ref": "#/components/schemas/WhepOutputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "whip"
+            ],
+            "properties": {
+              "whip": {
+                "$ref": "#/components/schemas/WhipOutputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "hls"
+            ],
+            "properties": {
+              "hls": {
+                "$ref": "#/components/schemas/HlsOutputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "mp4"
+            ],
+            "properties": {
+              "mp4": {
+                "$ref": "#/components/schemas/Mp4OutputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "rtmp"
+            ],
+            "properties": {
+              "rtmp": {
+                "$ref": "#/components/schemas/RtmpOutputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "rtp"
+            ],
+            "properties": {
+              "rtp": {
+                "$ref": "#/components/schemas/RtpOutputStatsReport"
+              }
+            }
+          }
+        ]
       },
       "OutputWhepAudioOptions": {
         "type": "object",
@@ -3599,6 +3949,34 @@
         },
         "additionalProperties": false
       },
+      "RtmpInputStatsReport": {
+        "type": "object",
+        "required": [
+          "video",
+          "audio"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/RtmpInputTrackStatsReport"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/RtmpInputTrackStatsReport"
+          }
+        }
+      },
+      "RtmpInputTrackStatsReport": {
+        "type": "object",
+        "required": [
+          "bitrate_avg_1_second"
+        ],
+        "properties": {
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "RtmpOutput": {
         "type": "object",
         "required": [
@@ -3633,6 +4011,34 @@
           }
         },
         "additionalProperties": false
+      },
+      "RtmpOutputStatsReport": {
+        "type": "object",
+        "required": [
+          "video",
+          "audio"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/RtmpOutputTrackStatsReport"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/RtmpOutputTrackStatsReport"
+          }
+        }
+      },
+      "RtmpOutputTrackStatsReport": {
+        "type": "object",
+        "required": [
+          "bitrate_avg_1_second"
+        ],
+        "properties": {
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
       },
       "RtmpVideoDecoderOptions": {
         "type": "string",
@@ -3757,6 +4163,86 @@
         },
         "additionalProperties": false
       },
+      "RtpJitterBufferSlidingWindowStatsReport": {
+        "type": "object",
+        "required": [
+          "packets_lost",
+          "packets_received",
+          "effective_buffer_avg_secs",
+          "effective_buffer_max_secs",
+          "effective_buffer_min_secs",
+          "input_buffer_avg_secs",
+          "input_buffer_max_secs",
+          "input_buffer_min_secs"
+        ],
+        "properties": {
+          "packets_lost": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "packets_received": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "effective_buffer_avg_secs": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
+          },
+          "effective_buffer_max_secs": {
+            "type": "number",
+            "format": "double"
+          },
+          "effective_buffer_min_secs": {
+            "type": "number",
+            "format": "double"
+          },
+          "input_buffer_avg_secs": {
+            "type": "number",
+            "format": "double",
+            "description": "Size of the InputBuffer"
+          },
+          "input_buffer_max_secs": {
+            "type": "number",
+            "format": "double"
+          },
+          "input_buffer_min_secs": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "RtpJitterBufferStatsReport": {
+        "type": "object",
+        "required": [
+          "packets_lost",
+          "packets_received",
+          "bitrate_avg_1_second",
+          "last_10_secs"
+        ],
+        "properties": {
+          "packets_lost": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "packets_received": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "last_10_secs": {
+            "$ref": "#/components/schemas/RtpJitterBufferSlidingWindowStatsReport"
+          }
+        }
+      },
       "RtpOutput": {
         "type": "object",
         "required": [
@@ -3809,6 +4295,34 @@
           }
         },
         "additionalProperties": false
+      },
+      "RtpOutputStatsReport": {
+        "type": "object",
+        "required": [
+          "video",
+          "audio"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/RtpOutputTrackStatsReport"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/RtpOutputTrackStatsReport"
+          }
+        }
+      },
+      "RtpOutputTrackStatsReport": {
+        "type": "object",
+        "required": [
+          "bitrate_avg_1_second"
+        ],
+        "properties": {
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
       },
       "RtpVideoDecoderOptions": {
         "type": "string",
@@ -4211,6 +4725,33 @@
           }
         },
         "additionalProperties": false
+      },
+      "StatsReport": {
+        "type": "object",
+        "required": [
+          "inputs",
+          "outputs"
+        ],
+        "properties": {
+          "inputs": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InputStatsReport"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "outputs": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OutputStatsReport"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
       },
       "Text": {
         "type": "object",
@@ -5115,6 +5656,21 @@
         },
         "additionalProperties": false
       },
+      "WhepInputStatsReport": {
+        "type": "object",
+        "required": [
+          "video_rtp",
+          "audio_rtp"
+        ],
+        "properties": {
+          "video_rtp": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+          },
+          "audio_rtp": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+          }
+        }
+      },
       "WhepOutput": {
         "type": "object",
         "properties": {
@@ -5149,6 +5705,40 @@
           }
         },
         "additionalProperties": false
+      },
+      "WhepOutputStatsReport": {
+        "type": "object",
+        "required": [
+          "video",
+          "audio",
+          "connected_peers"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/WhepOutputTrackStatsReport"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/WhepOutputTrackStatsReport"
+          },
+          "connected_peers": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "WhepOutputTrackStatsReport": {
+        "type": "object",
+        "required": [
+          "bitrate_avg_1_second"
+        ],
+        "properties": {
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
       },
       "WhepVideoDecoderOptions": {
         "type": "string",
@@ -5474,6 +6064,21 @@
         },
         "additionalProperties": false
       },
+      "WhipInputStatsReport": {
+        "type": "object",
+        "required": [
+          "video_rtp",
+          "audio_rtp"
+        ],
+        "properties": {
+          "video_rtp": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+          },
+          "audio_rtp": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+          }
+        }
+      },
       "WhipOutput": {
         "type": "object",
         "required": [
@@ -5514,6 +6119,38 @@
           }
         },
         "additionalProperties": false
+      },
+      "WhipOutputStatsReport": {
+        "type": "object",
+        "required": [
+          "video",
+          "audio",
+          "is_connected"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/WhipOutputTrackStatsReport"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/WhipOutputTrackStatsReport"
+          },
+          "is_connected": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WhipOutputTrackStatsReport": {
+        "type": "object",
+        "required": [
+          "bitrate_avg_1_second"
+        ],
+        "properties": {
+          "bitrate_avg_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
       },
       "WhipVideoDecoderOptions": {
         "type": "string",
