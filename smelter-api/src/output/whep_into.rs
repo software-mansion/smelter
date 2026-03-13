@@ -109,6 +109,7 @@ impl WhepVideoEncoderOptions {
                     .transpose()?,
                 keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
                 preset: core::VulkanH264EncoderPreset::HighQuality,
+                bitstream_format: core::H264BitstreamFormat::AnnexB,
             }),
             WhepVideoEncoderOptions::FfmpegVp8 {
                 bitrate,

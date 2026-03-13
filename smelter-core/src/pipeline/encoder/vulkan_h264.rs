@@ -10,6 +10,7 @@ use vk_video::{
 use crate::{
     graphics_context::GraphicsContext,
     pipeline::encoder::utils::{bitrate_from_resolution_framerate, gop_size_from_ms_framerate},
+    pipeline::utils::{annexb_to_avcc, build_avc_decoder_config},
     prelude::*,
 };
 
@@ -18,6 +19,7 @@ use super::{VideoEncoder, VideoEncoderConfig};
 pub struct VulkanH264Encoder {
     encoder: WgpuTexturesEncoder,
     ctx: GraphicsContext,
+    bitstream_format: H264BitstreamFormat,
 }
 
 impl VideoEncoder for VulkanH264Encoder {
@@ -85,17 +87,28 @@ impl VideoEncoder for VulkanH264Encoder {
 
         encoder_params.idr_period = Some(gop_size);
 
+        if options.bitstream_format == H264BitstreamFormat::Avcc {
+            encoder_params.inline_stream_params = Some(false);
+        }
+
         let encoder = device.create_wgpu_textures_encoder(encoder_params)?;
+
+        let extradata = if options.bitstream_format == H264BitstreamFormat::Avcc {
+            build_avc_decoder_config(&[encoder.sps()?, encoder.pps()?].concat())
+        } else {
+            None
+        };
 
         Ok((
             Self {
                 encoder,
                 ctx: ctx.graphics_context.clone(),
+                bitstream_format: options.bitstream_format,
             },
             VideoEncoderConfig {
                 resolution: options.resolution,
                 output_format: OutputFrameFormat::Nv12WgpuTexture,
-                extradata: None,
+                extradata,
             },
         ))
     }
@@ -120,8 +133,13 @@ impl VideoEncoder for VulkanH264Encoder {
         };
         match result {
             Ok(chunk) => {
+                let data = if self.bitstream_format == H264BitstreamFormat::Avcc {
+                    annexb_to_avcc(&chunk.data)
+                } else {
+                    chunk.data.into()
+                };
                 vec![EncodedOutputChunk {
-                    data: chunk.data.into(),
+                    data,
                     pts: frame.pts,
                     dts: None,
                     is_keyframe: chunk.is_keyframe,

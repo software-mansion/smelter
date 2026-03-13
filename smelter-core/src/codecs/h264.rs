@@ -41,6 +41,7 @@ pub struct VulkanH264EncoderOptions {
     pub bitrate: Option<VulkanH264EncoderRateControl>,
     pub keyframe_interval: Duration,
     pub preset: VulkanH264EncoderPreset,
+    pub bitstream_format: H264BitstreamFormat,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

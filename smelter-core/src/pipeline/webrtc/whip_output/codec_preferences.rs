@@ -72,6 +72,7 @@ pub(super) fn resolve_video_preferences(
                             bitrate: None,
                             preset: VulkanH264EncoderPreset::HighQuality,
                             keyframe_interval: KEYFRAME_INTERVAL,
+                            bitstream_format: H264BitstreamFormat::AnnexB,
                         })
                     } else {
                         VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
