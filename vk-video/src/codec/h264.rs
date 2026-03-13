@@ -1,7 +1,13 @@
+use std::ptr::null_mut;
+
 use ash::vk;
 
-use crate::codec::Codec;
+use crate::codec::{
+    Codec, CodecSpecificEncodeCapabilities, CodecSpecificEncoderQualityLevelProperties,
+};
 
+// Don't know why this is necessary, but other derive macros complain that it should be here
+#[derive(Debug, Clone)]
 pub(crate) struct H264Codec;
 pub(crate) struct H264Parameters<'a> {
     pub(crate) sps: &'a [vk::native::StdVideoH264SequenceParameterSet],
@@ -9,7 +15,6 @@ pub(crate) struct H264Parameters<'a> {
 }
 
 impl Codec for H264Codec {
-    // Parameters
     type InitialParameters<'a> = H264Parameters<'a>;
 
     type VideoDecodeSessionParametersAddInfo<'a> =
@@ -54,5 +59,48 @@ impl Codec for H264Codec {
             .max_std_sps_count(32)
             .max_std_pps_count(32)
             .parameters_add_info(add_info)
+    }
+
+    type CodecSpecificEncodeCapabilities<'a> = vk::VideoEncodeH264CapabilitiesKHR<'a>;
+    type CodecSpecificEncodeQualityLevelProperties<'a> =
+        vk::VideoEncodeH264QualityLevelPropertiesKHR<'a>;
+
+    fn static_codec_capabilities<'a>(
+        codec_caps: &Self::CodecSpecificEncodeCapabilities<'a>,
+    ) -> Self::CodecSpecificEncodeCapabilities<'static> {
+        vk::VideoEncodeH264CapabilitiesKHR {
+            p_next: null_mut(),
+            _marker: Default::default(),
+            ..*codec_caps
+        }
+    }
+
+    fn static_codec_qlp<'a>(
+        codec_qlp: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
+    ) -> Self::CodecSpecificEncodeQualityLevelProperties<'static> {
+        vk::VideoEncodeH264QualityLevelPropertiesKHR {
+            p_next: null_mut(),
+            _marker: Default::default(),
+            ..*codec_qlp
+        }
+    }
+}
+
+impl<'a> CodecSpecificEncodeCapabilities for vk::VideoEncodeH264CapabilitiesKHR<'a> {}
+impl<'a> CodecSpecificEncoderQualityLevelProperties
+    for vk::VideoEncodeH264QualityLevelPropertiesKHR<'a>
+{
+    fn zeroed(&self) -> bool {
+        self.preferred_rate_control_flags.as_raw() == 0
+            && self.preferred_gop_frame_count == 0
+            && self.preferred_idr_period == 0
+            && self.preferred_consecutive_b_frame_count == 0
+            && self.preferred_temporal_layer_count == 0
+            && self.preferred_constant_qp.qp_i == 0
+            && self.preferred_constant_qp.qp_p == 0
+            && self.preferred_constant_qp.qp_b == 0
+            && self.preferred_max_l0_reference_count == 0
+            && self.preferred_max_l1_reference_count == 0
+            && self.preferred_std_entropy_coding_mode_flag == 0
     }
 }

@@ -1,9 +1,13 @@
 use std::ffi::c_void;
+use std::ptr::null_mut;
 
 use ash::vk;
 
 use crate::VulkanDecoderError;
 use crate::VulkanInitError;
+use crate::codec::Codec;
+use crate::codec::CodecSpecificEncoderQualityLevelProperties as _;
+use crate::codec::h264::H264Codec;
 use crate::parameters::H264Profile;
 use crate::wrappers::*;
 
@@ -89,12 +93,49 @@ pub struct EncodeH264ProfileCapabilities {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeEncodeCapabilities {
-    pub(crate) baseline: Option<NativeEncodeProfileCapabilities>,
-    pub(crate) main: Option<NativeEncodeProfileCapabilities>,
-    pub(crate) high: Option<NativeEncodeProfileCapabilities>,
+    pub(crate) h264: Option<NativeEncodeH264Capabilities>,
 }
 
 impl NativeEncodeCapabilities {
+    pub(crate) fn query(
+        instance: &Instance,
+        device: vk::PhysicalDevice,
+        supported_operations: vk::VideoCodecOperationFlagsKHR,
+    ) -> Self {
+        let h264 = match supported_operations.contains(vk::VideoCodecOperationFlagsKHR::ENCODE_H264)
+        {
+            true => Some(NativeEncodeH264Capabilities::query(instance, device)),
+            false => None,
+        };
+
+        Self { h264 }
+    }
+
+    pub(crate) fn user_facing(&self) -> EncodeCapabilities {
+        EncodeCapabilities {
+            h264: self
+                .h264
+                .as_ref()
+                .map(NativeEncodeH264Capabilities::user_facing),
+        }
+    }
+}
+
+// #[derive(Debug, Clone)]
+// pub(crate) struct NativeEncodeH265Capabilities {
+//     pub(crate) main: Option<NativeEncodeH264ProfileCapabilities>,
+// }
+//
+// pub(crate) struct NativeEncodeH265ProfileCapabilities {}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NativeEncodeH264Capabilities {
+    pub(crate) baseline: Option<NativeEncodeProfileCapabilities<H264Codec>>,
+    pub(crate) main: Option<NativeEncodeProfileCapabilities<H264Codec>>,
+    pub(crate) high: Option<NativeEncodeProfileCapabilities<H264Codec>>,
+}
+
+impl NativeEncodeH264Capabilities {
     pub(crate) fn user_facing(&self) -> EncodeH264Capabilities {
         EncodeH264Capabilities {
             baseline_profile: self
@@ -113,24 +154,28 @@ impl NativeEncodeCapabilities {
     }
 
     pub(crate) fn query(instance: &Instance, device: vk::PhysicalDevice) -> Self {
-        let baseline = NativeEncodeProfileCapabilities::query(
-            instance,
-            device,
+        let profile = vk::VideoProfileInfoKHR::default()
+            .video_codec_operation(vk::VideoCodecOperationFlagsKHR::ENCODE_H264)
+            .chroma_subsampling(vk::VideoChromaSubsamplingFlagsKHR::TYPE_420)
+            .luma_bit_depth(vk::VideoComponentBitDepthFlagsKHR::TYPE_8)
+            .chroma_bit_depth(vk::VideoComponentBitDepthFlagsKHR::TYPE_8);
+
+        let mut baseline = vk::VideoEncodeH264ProfileInfoKHR::default().std_profile_idc(
             vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE,
-        )
-        .ok();
-        let main = NativeEncodeProfileCapabilities::query(
-            instance,
-            device,
-            vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN,
-        )
-        .ok();
-        let high = NativeEncodeProfileCapabilities::query(
-            instance,
-            device,
-            vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH,
-        )
-        .ok();
+        );
+        let profile_baseline = profile.push_next(&mut baseline);
+        let baseline =
+            NativeEncodeProfileCapabilities::query(instance, device, &profile_baseline).ok();
+
+        let mut main = vk::VideoEncodeH264ProfileInfoKHR::default()
+            .std_profile_idc(vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN);
+        let profile_main = profile.push_next(&mut main);
+        let main = NativeEncodeProfileCapabilities::query(instance, device, &profile_main).ok();
+
+        let mut high = vk::VideoEncodeH264ProfileInfoKHR::default()
+            .std_profile_idc(vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH);
+        let profile_high = profile.push_next(&mut high);
+        let high = NativeEncodeProfileCapabilities::query(instance, device, &profile_high).ok();
 
         Self {
             baseline,
@@ -139,7 +184,10 @@ impl NativeEncodeCapabilities {
         }
     }
 
-    pub(crate) fn profile(&self, profile: H264Profile) -> Option<&NativeEncodeProfileCapabilities> {
+    pub(crate) fn profile(
+        &self,
+        profile: H264Profile,
+    ) -> Option<&NativeEncodeProfileCapabilities<H264Codec>> {
         match profile {
             H264Profile::Baseline => self.baseline.as_ref(),
             H264Profile::Main => self.main.as_ref(),
@@ -160,121 +208,68 @@ impl NativeEncodeCapabilities {
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub(crate) struct NativeEncodeProfileCapabilities {
+pub(crate) struct NativeEncodeProfileCapabilities<C: Codec> {
     pub(crate) video_capabilities: vk::VideoCapabilitiesKHR<'static>,
     pub(crate) encode_capabilities: vk::VideoEncodeCapabilitiesKHR<'static>,
-    pub(crate) h264_encode_capabilities: vk::VideoEncodeH264CapabilitiesKHR<'static>,
     pub(crate) encode_dpb_properties: Vec<vk::VideoFormatPropertiesKHR<'static>>,
     pub(crate) encode_src_properties: Vec<vk::VideoFormatPropertiesKHR<'static>>,
-    pub(crate) quality_level_properties: Vec<NativeEncodeQualityLevelProperties>,
+    pub(crate) quality_level_properties: Vec<NativeEncodeQualityLevelProperties<C>>,
+    pub(crate) codec_encode_capabilities: C::CodecSpecificEncodeCapabilities<'static>,
 }
 
-impl NativeEncodeProfileCapabilities {
-    fn user_facing(&self) -> EncodeH264ProfileCapabilities {
-        EncodeH264ProfileCapabilities {
-            min_width: self.video_capabilities.min_coded_extent.width,
-            max_width: self.video_capabilities.max_coded_extent.width,
-            min_height: self.video_capabilities.min_coded_extent.height,
-            max_height: self.video_capabilities.max_coded_extent.height,
-            supported_rate_control: self.encode_capabilities.rate_control_modes,
-            max_references: self
-                .h264_encode_capabilities
-                .max_p_picture_l0_reference_count,
-            quality_levels: self.encode_capabilities.max_quality_levels,
-        }
-    }
-
+impl<C: Codec> NativeEncodeProfileCapabilities<C> {
     fn query(
         instance: &Instance,
         device: vk::PhysicalDevice,
-        profile: vk::native::StdVideoH264ProfileIdc,
+        profile: &vk::VideoProfileInfoKHR,
     ) -> Result<Self, VulkanInitError> {
-        let mut h264_encode_profile_info =
-            vk::VideoEncodeH264ProfileInfoKHR::default().std_profile_idc(profile);
-
-        let encode_profile_info = vk::VideoProfileInfoKHR::default()
-            .video_codec_operation(vk::VideoCodecOperationFlagsKHR::ENCODE_H264)
-            .chroma_subsampling(vk::VideoChromaSubsamplingFlagsKHR::TYPE_420)
-            .luma_bit_depth(vk::VideoComponentBitDepthFlagsKHR::TYPE_8)
-            .chroma_bit_depth(vk::VideoComponentBitDepthFlagsKHR::TYPE_8)
-            .push_next(&mut h264_encode_profile_info);
-
         let encode_dpb_properties = query_video_format_properties(
             device,
             &instance.video_queue_instance_ext,
-            &encode_profile_info,
+            profile,
             vk::ImageUsageFlags::VIDEO_ENCODE_DPB_KHR,
         )?;
 
         let encode_src_properties = query_video_format_properties(
             device,
             &instance.video_queue_instance_ext,
-            &encode_profile_info,
+            profile,
             vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR,
         )?;
 
-        let mut h264_encode_caps = vk::VideoEncodeH264CapabilitiesKHR::default();
-        let mut encode_caps = vk::VideoEncodeCapabilitiesKHR {
-            p_next: (&mut h264_encode_caps as *mut _) as *mut c_void,
-            ..Default::default()
-        };
-        let mut caps = vk::VideoCapabilitiesKHR::default().push_next(&mut encode_caps);
+        let mut codec_encode_caps = C::CodecSpecificEncodeCapabilities::default();
+        let mut encode_caps = vk::VideoEncodeCapabilitiesKHR::default();
+        let mut caps = vk::VideoCapabilitiesKHR::default()
+            .push_next(&mut encode_caps)
+            .push_next(&mut codec_encode_caps);
 
         unsafe {
             (instance
                 .video_queue_instance_ext
                 .fp()
-                .get_physical_device_video_capabilities_khr)(
-                device,
-                &encode_profile_info,
-                &mut caps,
-            )
+                .get_physical_device_video_capabilities_khr)(device, profile, &mut caps)
             .result()?;
         }
 
-        let video_capabilities = vk::VideoCapabilitiesKHR::default()
-            .flags(caps.flags)
-            .min_bitstream_buffer_offset_alignment(caps.min_bitstream_buffer_offset_alignment)
-            .min_bitstream_buffer_size_alignment(caps.min_bitstream_buffer_size_alignment)
-            .picture_access_granularity(caps.picture_access_granularity)
-            .min_coded_extent(caps.min_coded_extent)
-            .max_coded_extent(caps.max_coded_extent)
-            .max_dpb_slots(caps.max_dpb_slots)
-            .max_active_reference_pictures(caps.max_active_reference_pictures)
-            .std_header_version(caps.std_header_version);
+        let video_capabilities = vk::VideoCapabilitiesKHR {
+            p_next: null_mut(),
+            _marker: Default::default(),
+            ..caps
+        };
 
-        let encode_capabilities = vk::VideoEncodeCapabilitiesKHR::default()
-            .flags(encode_caps.flags)
-            .rate_control_modes(encode_caps.rate_control_modes)
-            .max_rate_control_layers(encode_caps.max_rate_control_layers)
-            .max_bitrate(encode_caps.max_bitrate)
-            .max_quality_levels(encode_caps.max_quality_levels)
-            .encode_input_picture_granularity(encode_caps.encode_input_picture_granularity)
-            .supported_encode_feedback_flags(encode_caps.supported_encode_feedback_flags);
+        let encode_capabilities = vk::VideoEncodeCapabilitiesKHR {
+            p_next: null_mut(),
+            _marker: Default::default(),
+            ..encode_caps
+        };
 
-        let h264_encode_capabilities = vk::VideoEncodeH264CapabilitiesKHR::default()
-            .flags(h264_encode_caps.flags)
-            .max_level_idc(h264_encode_caps.max_level_idc)
-            .max_slice_count(h264_encode_caps.max_slice_count)
-            .max_p_picture_l0_reference_count(h264_encode_caps.max_p_picture_l0_reference_count)
-            .max_b_picture_l0_reference_count(h264_encode_caps.max_b_picture_l0_reference_count)
-            .max_l1_reference_count(h264_encode_caps.max_l1_reference_count)
-            .max_temporal_layer_count(h264_encode_caps.max_temporal_layer_count)
-            .expect_dyadic_temporal_layer_pattern(
-                h264_encode_caps.expect_dyadic_temporal_layer_pattern != 0,
-            )
-            .min_qp(h264_encode_caps.min_qp)
-            .max_qp(h264_encode_caps.max_qp)
-            .prefers_gop_remaining_frames(h264_encode_caps.prefers_gop_remaining_frames != 0)
-            .requires_gop_remaining_frames(h264_encode_caps.requires_gop_remaining_frames != 0)
-            .std_syntax_flags(h264_encode_caps.std_syntax_flags);
+        let codec_encode_capabilities = C::static_codec_capabilities(&codec_encode_caps);
 
         let mut quality_level_properties =
             Vec::with_capacity(encode_capabilities.max_quality_levels as usize);
 
         for i in 0..encode_capabilities.max_quality_levels {
-            if let Ok(qlp) =
-                NativeEncodeQualityLevelProperties::query(instance, device, &encode_profile_info, i)
+            if let Ok(qlp) = NativeEncodeQualityLevelProperties::query(instance, device, profile, i)
             {
                 quality_level_properties.push(qlp);
             }
@@ -283,7 +278,7 @@ impl NativeEncodeProfileCapabilities {
         Ok(Self {
             video_capabilities,
             encode_capabilities,
-            h264_encode_capabilities,
+            codec_encode_capabilities,
             encode_dpb_properties,
             encode_src_properties,
             quality_level_properties,
@@ -291,13 +286,30 @@ impl NativeEncodeProfileCapabilities {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct NativeEncodeQualityLevelProperties {
-    pub(crate) quality_level_properties: vk::VideoEncodeQualityLevelPropertiesKHR<'static>,
-    pub(crate) h264_quality_level_properties: vk::VideoEncodeH264QualityLevelPropertiesKHR<'static>,
+impl NativeEncodeProfileCapabilities<H264Codec> {
+    fn user_facing(&self) -> EncodeH264ProfileCapabilities {
+        EncodeH264ProfileCapabilities {
+            min_width: self.video_capabilities.min_coded_extent.width,
+            max_width: self.video_capabilities.max_coded_extent.width,
+            min_height: self.video_capabilities.min_coded_extent.height,
+            max_height: self.video_capabilities.max_coded_extent.height,
+            supported_rate_control: self.encode_capabilities.rate_control_modes,
+            max_references: self
+                .codec_encode_capabilities
+                .max_p_picture_l0_reference_count,
+            quality_levels: self.encode_capabilities.max_quality_levels,
+        }
+    }
 }
 
-impl NativeEncodeQualityLevelProperties {
+#[derive(Debug, Clone)]
+pub(crate) struct NativeEncodeQualityLevelProperties<C: Codec> {
+    pub(crate) quality_level_properties: vk::VideoEncodeQualityLevelPropertiesKHR<'static>,
+    pub(crate) codec_quality_level_properties:
+        C::CodecSpecificEncodeQualityLevelProperties<'static>,
+}
+
+impl<C: Codec> NativeEncodeQualityLevelProperties<C> {
     fn query(
         instance: &Instance,
         device: vk::PhysicalDevice,
@@ -308,8 +320,8 @@ impl NativeEncodeQualityLevelProperties {
             .video_profile(profile_info)
             .quality_level(quality_level);
 
-        let mut h264_qlp = vk::VideoEncodeH264QualityLevelPropertiesKHR::default();
-        let mut qlp = vk::VideoEncodeQualityLevelPropertiesKHR::default().push_next(&mut h264_qlp);
+        let mut codec_qlp = C::CodecSpecificEncodeQualityLevelProperties::default();
+        let mut qlp = vk::VideoEncodeQualityLevelPropertiesKHR::default().push_next(&mut codec_qlp);
 
         unsafe {
             (instance
@@ -327,22 +339,11 @@ impl NativeEncodeQualityLevelProperties {
             .preferred_rate_control_mode(qlp.preferred_rate_control_mode)
             .preferred_rate_control_layer_count(qlp.preferred_rate_control_layer_count);
 
-        let h264_quality_level_properties = vk::VideoEncodeH264QualityLevelPropertiesKHR::default()
-            .preferred_rate_control_flags(h264_qlp.preferred_rate_control_flags)
-            .preferred_gop_frame_count(h264_qlp.preferred_gop_frame_count)
-            .preferred_idr_period(h264_qlp.preferred_idr_period)
-            .preferred_consecutive_b_frame_count(h264_qlp.preferred_consecutive_b_frame_count)
-            .preferred_temporal_layer_count(h264_qlp.preferred_temporal_layer_count)
-            .preferred_constant_qp(h264_qlp.preferred_constant_qp)
-            .preferred_max_l0_reference_count(h264_qlp.preferred_max_l0_reference_count)
-            .preferred_max_l1_reference_count(h264_qlp.preferred_max_l1_reference_count)
-            .preferred_std_entropy_coding_mode_flag(
-                h264_qlp.preferred_std_entropy_coding_mode_flag != 0,
-            );
+        let codec_specific_encode_quality_level_properties = C::static_codec_qlp(&codec_qlp);
 
         Ok(Self {
             quality_level_properties,
-            h264_quality_level_properties,
+            codec_quality_level_properties: codec_specific_encode_quality_level_properties,
         })
     }
 
@@ -356,48 +357,7 @@ impl NativeEncodeQualityLevelProperties {
                 .quality_level_properties
                 .preferred_rate_control_layer_count
                 == 0
-            && self
-                .h264_quality_level_properties
-                .preferred_rate_control_flags
-                .as_raw()
-                == 0
-            && self.h264_quality_level_properties.preferred_gop_frame_count == 0
-            && self.h264_quality_level_properties.preferred_idr_period == 0
-            && self
-                .h264_quality_level_properties
-                .preferred_consecutive_b_frame_count
-                == 0
-            && self
-                .h264_quality_level_properties
-                .preferred_temporal_layer_count
-                == 0
-            && self
-                .h264_quality_level_properties
-                .preferred_constant_qp
-                .qp_i
-                == 0
-            && self
-                .h264_quality_level_properties
-                .preferred_constant_qp
-                .qp_p
-                == 0
-            && self
-                .h264_quality_level_properties
-                .preferred_constant_qp
-                .qp_b
-                == 0
-            && self
-                .h264_quality_level_properties
-                .preferred_max_l0_reference_count
-                == 0
-            && self
-                .h264_quality_level_properties
-                .preferred_max_l1_reference_count
-                == 0
-            && self
-                .h264_quality_level_properties
-                .preferred_std_entropy_coding_mode_flag
-                == 0
+            && self.codec_quality_level_properties.zeroed()
     }
 }
 

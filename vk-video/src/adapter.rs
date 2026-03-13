@@ -13,7 +13,8 @@ use crate::{
     VulkanDevice, VulkanInitError, VulkanInstance,
     capabilities::EncodeCapabilities,
     device::{
-        DECODE_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS, VulkanDeviceDescriptor,
+        DECODE_EXTENSIONS, ENCODE_CODEC_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS,
+        VulkanDeviceDescriptor,
         caps::{DecodeCapabilities, NativeDecodeCapabilities, NativeEncodeCapabilities},
         queues::{QueueIndex, QueueIndices},
     },
@@ -72,7 +73,12 @@ impl<'a> VulkanAdapter<'a> {
 
         let has_decode_extensions = check_extensions(DECODE_EXTENSIONS, &extensions).is_ok();
         let has_encode_extensions = check_extensions(ENCODE_EXTENSIONS, &extensions).is_ok();
-        if !has_decode_extensions && !has_encode_extensions {
+        let supported_codec_extensions = supported_extensions(ENCODE_CODEC_EXTENSIONS, &extensions);
+        let supports_any_encoding = has_encode_extensions && !supported_codec_extensions.is_empty();
+        let supported_encode_operations =
+            extensions_to_encode_codec_operations(&supported_codec_extensions);
+
+        if !has_decode_extensions && !supports_any_encoding {
             debug!("device does not support encoding or decoding extensions");
             return None;
         }
@@ -101,10 +107,8 @@ impl<'a> VulkanAdapter<'a> {
             false => None,
         };
 
-        let encode_capabilities = match has_encode_extensions {
-            true => Some(NativeEncodeCapabilities::query(instance, device)),
-            false => None,
-        };
+        let encode_capabilities =
+            NativeEncodeCapabilities::query(instance, device, supported_encode_operations);
 
         let queue_counts = queues
             .iter()
@@ -157,11 +161,12 @@ impl<'a> VulkanAdapter<'a> {
             ),
             false => None,
         };
-        let encode_queue_idx = match has_encode_extensions {
+        let encode_queue_idx = match supports_any_encoding {
             true => find_video_queue_idx(
                 &queues,
                 vk::QueueFlags::VIDEO_ENCODE_KHR,
-                vk::VideoCodecOperationFlagsKHR::ENCODE_H264,
+                // TODO: for now, we only look for a single queue that supports all encoding
+                supported_encode_operations,
             ),
             false => None,
         };
@@ -211,11 +216,7 @@ impl<'a> VulkanAdapter<'a> {
                     .as_ref()
                     .map(NativeDecodeCapabilities::user_facing),
             },
-            encode_capabilities: EncodeCapabilities {
-                h264: encode_capabilities
-                    .as_ref()
-                    .map(NativeEncodeCapabilities::user_facing),
-            },
+            encode_capabilities: encode_capabilities.user_facing(),
         };
 
         Some(Self {
@@ -260,7 +261,11 @@ impl<'a> VulkanAdapter<'a> {
                 },
             },
             decode_capabilities,
-            encode_capabilities,
+            encode_capabilities: if supports_any_encoding {
+                Some(encode_capabilities)
+            } else {
+                None
+            },
             info,
         })
     }
@@ -433,6 +438,42 @@ fn check_extensions<'a>(
     }
 
     Ok(())
+}
+
+fn supported_extensions<'a>(
+    required_extensions: &'a [&'a CStr],
+    available_extensions: &'a [vk::ExtensionProperties],
+) -> Vec<&'a CStr> {
+    required_extensions
+        .iter()
+        .copied()
+        .filter(|&required_name| {
+            available_extensions.iter().any(|ext| {
+                let Ok(name) = ext.extension_name_as_c_str() else {
+                    return false;
+                };
+
+                name == required_name
+            })
+        })
+        .collect()
+}
+
+fn extensions_to_encode_codec_operations(extensions: &[&CStr]) -> vk::VideoCodecOperationFlagsKHR {
+    extensions
+        .iter()
+        .copied()
+        .fold(vk::VideoCodecOperationFlagsKHR::empty(), |acc, ext| {
+            acc | match ext {
+                name if name == vk::KHR_VIDEO_ENCODE_H264_NAME => {
+                    vk::VideoCodecOperationFlagsKHR::ENCODE_H264
+                }
+                name if name == vk::KHR_VIDEO_ENCODE_H265_NAME => {
+                    vk::VideoCodecOperationFlagsKHR::ENCODE_H265
+                }
+                _ => vk::VideoCodecOperationFlagsKHR::empty(),
+            }
+        })
 }
 
 fn find_video_queue_idx(

@@ -110,6 +110,9 @@ impl VideoSessionResources<'_> {
     ) -> Result<Self, VulkanEncoderError> {
         let encode_capabilities = encoding_device
             .native_encode_capabilities
+            .h264
+            .as_ref()
+            .unwrap()
             .profile(parameters.profile)
             .ok_or(VulkanEncoderError::ProfileUnsupported(parameters.profile))?;
 
@@ -134,6 +137,9 @@ impl VideoSessionResources<'_> {
 
         let use_separate_images = encoding_device
             .native_encode_capabilities
+            .h264
+            .as_ref()
+            .unwrap()
             .profile(parameters.profile)
             .unwrap()
             .video_capabilities
@@ -231,6 +237,9 @@ impl EncodingQueryPool {
     ) -> Result<Self, VulkanEncoderError> {
         let encode_capabilities = encoding_device
             .native_encode_capabilities
+            .h264
+            .as_ref()
+            .unwrap()
             .profile(profile)
             .ok_or(VulkanEncoderError::ProfileUnsupported(profile))?;
 
@@ -1030,6 +1039,9 @@ impl<'a> VulkanEncoder<'a> {
             if let Some(caps) = self
                 .encoding_device
                 .native_encode_capabilities
+                .h264
+                .as_ref()
+                .unwrap()
                 .profile(self.profile)
             {
                 let quality_properties =
@@ -1037,7 +1049,7 @@ impl<'a> VulkanEncoder<'a> {
 
                 if !quality_properties.zeroed() {
                     let qp = quality_properties
-                        .h264_quality_level_properties
+                        .codec_quality_level_properties
                         .preferred_constant_qp;
 
                     if is_idr {
