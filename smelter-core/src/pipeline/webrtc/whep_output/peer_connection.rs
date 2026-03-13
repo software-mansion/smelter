@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use rand::Rng;
 use tokio::{sync::watch, time::timeout};
@@ -36,7 +39,7 @@ use crate::prelude::*;
 
 use super::pc_state_change::ConnectionStateChangeHdlr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct PeerConnection {
     pc: Arc<RTCPeerConnection>,
 }
@@ -238,10 +241,6 @@ impl PeerConnection {
         Ok(self.pc.add_ice_candidate(candidate).await?)
     }
 
-    pub async fn close(&self) -> Result<(), WhipWhepServerError> {
-        Ok(self.pc.close().await?)
-    }
-
     pub fn on_connection_state_change(&self, handler: ConnectionStateChangeHdlr) {
         let pc = self.pc.clone();
         self.pc
@@ -249,6 +248,34 @@ impl PeerConnection {
                 handler.on_state_change(&pc, state);
                 Box::pin(async {})
             }));
+    }
+
+    pub fn downgrade(&self) -> WeakPeerConnection {
+        WeakPeerConnection {
+            pc: Arc::downgrade(&self.pc),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WeakPeerConnection {
+    pc: Weak<RTCPeerConnection>,
+}
+
+impl WeakPeerConnection {
+    pub fn upgrade(&self) -> Option<PeerConnection> {
+        self.pc.upgrade().map(|pc| PeerConnection { pc })
+    }
+}
+
+impl Drop for PeerConnection {
+    fn drop(&mut self) {
+        if let Ok(handle) = tokio::runtime::Handle::try_current()
+            && Arc::strong_count(&self.pc) == 1
+        {
+            let pc = self.pc.clone();
+            handle.spawn(async move { pc.close().await });
+        }
     }
 }
 

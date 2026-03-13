@@ -75,6 +75,6 @@ impl WhipInput {
 
 impl Drop for WhipInput {
     fn drop(&mut self) {
-        self.whip_inputs_state.ensure_input_closed(&self.input_ref);
+        self.whip_inputs_state.remove_input(&self.input_ref);
     }
 }

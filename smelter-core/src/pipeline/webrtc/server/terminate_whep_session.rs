@@ -16,11 +16,7 @@ pub async fn handle_terminate_whep_session(
     let session_id = Arc::from(session_id);
 
     state.outputs.validate_token(&output_ref, &headers).await?;
-
-    state
-        .outputs
-        .remove_session(&output_ref, &session_id)
-        .await?;
+    state.outputs.remove_session(&output_ref, &session_id)?;
 
     info!(?session_id, output_id=?output_ref.id(), "WHEP session terminated");
     Ok(StatusCode::OK)

@@ -22,14 +22,12 @@ pub async fn handle_terminate_whip_session(
         .get_mut_with(&input_ref, |input| Ok(input.session.take()))?;
 
     match session {
-        Some(session) => session.peer_connection.close().await?,
-        None => {
-            return Err(WhipWhepServerError::InternalError(format!(
-                "None peer connection for {session_id:?}"
-            )));
+        Some(_) => {
+            info!("WHIP session {session_id:?} terminated");
+            Ok(StatusCode::OK)
         }
+        None => Err(WhipWhepServerError::InternalError(format!(
+            "None peer connection for {session_id:?}"
+        ))),
     }
-
-    info!("WHIP session {session_id:?} terminated");
-    Ok(StatusCode::OK)
 }

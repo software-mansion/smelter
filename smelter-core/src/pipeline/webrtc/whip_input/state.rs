@@ -6,7 +6,7 @@ use std::{
 use axum::http::HeaderMap;
 use crossbeam_channel::Sender;
 use smelter_render::Frame;
-use tracing::{Instrument, error, warn};
+use tracing::error;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
 use crate::{
@@ -91,24 +91,8 @@ impl WhipInputsState {
         Ok(())
     }
 
-    // called on drop (when input is unregistered)
-    pub fn ensure_input_closed(&self, input_ref: &Ref<InputId>) {
-        let mut guard = self.0.lock().unwrap();
-        let Some(session) = guard.remove(input_ref).and_then(|input| input.session) else {
-            return;
-        };
-
-        let Some(handle) = tokio::runtime::Handle::try_current().ok() else {
-            // No Tokio runtime available (e.g. during pipeline reset).
-            // Peer connection will be cleaned up when dropped.
-            return;
-        };
-        let input_ref = input_ref.clone();
-        handle.spawn(async move {
-            if let Err(err) = session.peer_connection.close().await {
-                error!("Cannot close peer_connection for input {input_ref}: {err:?}");
-            };
-        });
+    pub fn remove_input(&self, input_ref: &Ref<InputId>) {
+        self.0.lock().unwrap().remove(input_ref);
     }
 
     pub fn validate_session_id(
@@ -158,7 +142,7 @@ pub(crate) struct WhipInputStateOptions {
     pub jitter_buffer_options: RtpJitterBufferOptions,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct WhipInputState {
     pub bearer_token: Arc<str>,
     pub endpoint_id: Arc<str>,
@@ -169,7 +153,7 @@ pub(crate) struct WhipInputState {
     pub jitter_buffer_options: RtpJitterBufferOptions,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct WhipInputSession {
     pub peer_connection: RecvonlyPeerConnection,
     pub session_id: Arc<str>,
@@ -193,22 +177,11 @@ impl WhipInputState {
         session: WhipInputSession,
     ) -> Result<(), WhipWhepServerError> {
         // Deleting previous peer_connection on this input which was not in Connected state
-        if let Some(session) = &self.session {
-            if session.peer_connection.connection_state() == RTCPeerConnectionState::Connected {
-                return Err(WhipWhepServerError::InternalError("Another stream is currently connected to this endpoint \
+        if let Some(session) = &self.session
+            && session.peer_connection.connection_state() == RTCPeerConnectionState::Connected
+        {
+            return Err(WhipWhepServerError::InternalError("Another stream is currently connected to this endpoint \
                       Disconnect the existing stream before starting a new one, or check if the session_id is correct.".to_string()));
-            }
-            if let Some(session) = self.session.take() {
-                tokio::spawn(
-                    async move {
-                        let session_id = session.session_id;
-                        if let Err(err) = session.peer_connection.close().await {
-                            warn!("Error while closing {session_id} peer connection: {err:?}")
-                        }
-                    }
-                    .instrument(tracing::Span::current()),
-                );
-            }
         };
         self.session = Some(session);
         Ok(())

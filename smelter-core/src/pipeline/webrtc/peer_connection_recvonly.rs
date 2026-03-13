@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use tokio::{sync::watch, time::timeout};
 use tracing::{debug, warn};
@@ -37,7 +40,7 @@ pub(crate) struct OnTrackHdlrContext {
     pub rtc_receiver: Arc<RTCRtpReceiver>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct RecvonlyPeerConnection {
     pc: Arc<RTCPeerConnection>,
 }
@@ -80,10 +83,6 @@ impl RecvonlyPeerConnection {
 
     pub fn connection_state(&self) -> RTCPeerConnectionState {
         self.pc.connection_state()
-    }
-
-    pub async fn close(&self) -> Result<(), webrtc::Error> {
-        self.pc.close().await
     }
 
     pub async fn new_video_track(
@@ -204,6 +203,23 @@ impl RecvonlyPeerConnection {
     ) -> Result<(), webrtc::Error> {
         self.pc.add_ice_candidate(candidate).await
     }
+
+    pub fn downgrade(&self) -> WeakRecvonlyPeerConnection {
+        WeakRecvonlyPeerConnection {
+            pc: Arc::downgrade(&self.pc),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WeakRecvonlyPeerConnection {
+    pc: Weak<RTCPeerConnection>,
+}
+
+impl WeakRecvonlyPeerConnection {
+    pub fn upgrade(&self) -> Option<RecvonlyPeerConnection> {
+        self.pc.upgrade().map(|pc| RecvonlyPeerConnection { pc })
+    }
 }
 
 fn media_engine_with_codecs(
@@ -221,4 +237,15 @@ fn media_engine_with_codecs(
     }
 
     Ok(media_engine)
+}
+
+impl Drop for RecvonlyPeerConnection {
+    fn drop(&mut self) {
+        if let Ok(handle) = tokio::runtime::Handle::try_current()
+            && Arc::strong_count(&self.pc) == 1
+        {
+            let pc = self.pc.clone();
+            handle.spawn(async move { pc.close().await });
+        }
+    }
 }

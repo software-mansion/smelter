@@ -26,7 +26,7 @@ use crate::pipeline::webrtc::whip_output::codec_preferences::CodecParameters;
 
 use crate::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) struct PeerConnection {
     pc: Arc<RTCPeerConnection>,
 }
