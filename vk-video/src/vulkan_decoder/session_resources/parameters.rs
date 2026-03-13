@@ -5,6 +5,7 @@ use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 
 use crate::{
     VulkanDecoderError, VulkanDevice,
+    codec::h264::{H264Codec, H264Parameters},
     vulkan_decoder::{
         Device, VideoSessionParameters, VkPictureParameterSet, VkSequenceParameterSet,
     },
@@ -30,11 +31,10 @@ impl VideoSessionParametersManager {
         session: vk::VideoSessionKHR,
     ) -> Result<Self, VulkanDecoderError> {
         Ok(Self {
-            parameters: Arc::new(VideoSessionParameters::new(
+            parameters: Arc::new(VideoSessionParameters::new::<H264Codec>(
                 vulkan_ctx.device.clone(),
                 session,
-                &[],
-                &[],
+                H264Parameters { sps: &[], pps: &[] },
                 None,
                 None,
             )?),
@@ -62,11 +62,13 @@ impl VideoSessionParametersManager {
         let sps = self.sps.values().map(|sps| sps.sps).collect::<Vec<_>>();
         let pps = self.pps.values().map(|pps| pps.pps).collect::<Vec<_>>();
 
-        self.parameters = Arc::new(VideoSessionParameters::new(
+        self.parameters = Arc::new(VideoSessionParameters::new::<H264Codec>(
             self.device.clone(),
             session,
-            &sps,
-            &pps,
+            H264Parameters {
+                sps: &sps,
+                pps: &pps,
+            },
             None,
             None,
         )?);
@@ -121,11 +123,13 @@ impl VideoSessionParametersManager {
         initial_pps: &[vk::native::StdVideoH264PictureParameterSet],
     ) -> Result<(), VulkanDecoderError> {
         self.update_sequence_count = 0;
-        self.parameters = Arc::new(VideoSessionParameters::new(
+        self.parameters = Arc::new(VideoSessionParameters::new::<H264Codec>(
             self.device.clone(),
             self.session,
-            initial_sps,
-            initial_pps,
+            H264Parameters {
+                sps: initial_sps,
+                pps: initial_pps,
+            },
             Some(&self.parameters),
             None,
         )?);
