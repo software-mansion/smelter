@@ -24,6 +24,7 @@ pub struct RtpJitterBufferState {
     pub input_buffer_10_secs: SlidingWindowValue<Duration>,
 
     pub bitrate_1_sec: SlidingWindowValue<u64>,
+    pub bitrate_1_min: SlidingWindowValue<u64>,
 }
 
 impl RtpJitterBufferState {
@@ -36,6 +37,7 @@ impl RtpJitterBufferState {
             effective_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             input_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
+            bitrate_1_min: SlidingWindowValue::new(Duration::from_mins(1)),
         }
     }
 
@@ -58,6 +60,7 @@ impl RtpJitterBufferState {
             RtpJitterBufferStatsEvent::BytesReceived(chunk_size_bytes) => {
                 let chunk_size_bits = 8 * chunk_size_bytes as u64;
                 self.bitrate_1_sec.push(chunk_size_bits);
+                self.bitrate_1_min.push(chunk_size_bits);
             }
         }
     }
@@ -66,17 +69,20 @@ impl RtpJitterBufferState {
         RtpJitterBufferStatsReport {
             packets_lost: self.packets_lost,
             packets_received: self.packets_received,
-            bitrate_avg_1_second: self.bitrate_1_sec.sum()
-                / self.bitrate_1_sec.window_size().as_secs(),
-            last_10_secs: RtpJitterBufferSlidingWindowStatsReport {
+
+            bitrate_1_second: self.bitrate_1_sec.sum() / self.bitrate_1_sec.window_size().as_secs(),
+
+            bitrate_1_minute: self.bitrate_1_min.sum() / self.bitrate_1_min.window_size().as_secs(),
+
+            last_10_seconds: RtpJitterBufferSlidingWindowStatsReport {
                 packets_lost: self.packets_lost_10_secs.sum(),
                 packets_received: self.packets_received_10_secs.sum(),
-                effective_buffer_avg_secs: self.effective_buffer_10_secs.avg().as_secs_f64(),
-                effective_buffer_max_secs: self.effective_buffer_10_secs.max().as_secs_f64(),
-                effective_buffer_min_secs: self.effective_buffer_10_secs.min().as_secs_f64(),
-                input_buffer_avg_secs: self.input_buffer_10_secs.avg().as_secs_f64(),
-                input_buffer_max_secs: self.input_buffer_10_secs.max().as_secs_f64(),
-                input_buffer_min_secs: self.input_buffer_10_secs.min().as_secs_f64(),
+                effective_buffer_avg_seconds: self.effective_buffer_10_secs.avg().as_secs_f64(),
+                effective_buffer_max_seconds: self.effective_buffer_10_secs.max().as_secs_f64(),
+                effective_buffer_min_seconds: self.effective_buffer_10_secs.min().as_secs_f64(),
+                input_buffer_avg_seconds: self.input_buffer_10_secs.avg().as_secs_f64(),
+                input_buffer_max_seconds: self.input_buffer_10_secs.max().as_secs_f64(),
+                input_buffer_min_seconds: self.input_buffer_10_secs.min().as_secs_f64(),
             },
         }
     }

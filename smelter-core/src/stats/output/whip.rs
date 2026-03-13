@@ -59,6 +59,7 @@ pub struct WhipOutputState {
 #[derive(Debug)]
 pub struct WhipOutputTrackState {
     pub bitrate_1_sec: SlidingWindowValue<u64>,
+    pub bitrate_1_min: SlidingWindowValue<u64>,
 }
 
 impl WhipOutputState {
@@ -91,13 +92,15 @@ impl WhipOutputTrackState {
     pub fn new() -> Self {
         Self {
             bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
+            bitrate_1_min: SlidingWindowValue::new(Duration::from_mins(1)),
         }
     }
 
     pub fn report(&mut self) -> WhipOutputTrackStatsReport {
         WhipOutputTrackStatsReport {
-            bitrate_avg_1_second: self.bitrate_1_sec.sum()
-                / self.bitrate_1_sec.window_size().as_secs(),
+            bitrate_1_second: self.bitrate_1_sec.sum() / self.bitrate_1_sec.window_size().as_secs(),
+
+            bitrate_1_minute: self.bitrate_1_min.sum() / self.bitrate_1_min.window_size().as_secs(),
         }
     }
 
@@ -106,6 +109,7 @@ impl WhipOutputTrackState {
             WhipOutputTrackStatsEvent::BytesSent(chunk_size_bytes) => {
                 let chunk_size_bits = 8 * chunk_size_bytes as u64;
                 self.bitrate_1_sec.push(chunk_size_bits);
+                self.bitrate_1_min.push(chunk_size_bits);
             }
         }
     }

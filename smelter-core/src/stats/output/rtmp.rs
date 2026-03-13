@@ -56,6 +56,7 @@ pub struct RtmpOutputState {
 #[derive(Debug)]
 pub struct RtmpOutputTrackState {
     pub bitrate_1_sec: SlidingWindowValue<u64>,
+    pub bitrate_1_min: SlidingWindowValue<u64>,
 }
 
 impl RtmpOutputState {
@@ -85,13 +86,15 @@ impl RtmpOutputTrackState {
     pub fn new() -> Self {
         Self {
             bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
+            bitrate_1_min: SlidingWindowValue::new(Duration::from_mins(1)),
         }
     }
 
     pub fn report(&mut self) -> RtmpOutputTrackStatsReport {
         RtmpOutputTrackStatsReport {
-            bitrate_avg_1_second: self.bitrate_1_sec.sum()
-                / self.bitrate_1_sec.window_size().as_secs(),
+            bitrate_1_second: self.bitrate_1_sec.sum() / self.bitrate_1_sec.window_size().as_secs(),
+
+            bitrate_1_minute: self.bitrate_1_min.sum() / self.bitrate_1_min.window_size().as_secs(),
         }
     }
 
@@ -100,6 +103,7 @@ impl RtmpOutputTrackState {
             RtmpOutputTrackStatsEvent::BytesSent(chunk_size_bytes) => {
                 let chunk_size_bits = 8 * chunk_size_bytes as u64;
                 self.bitrate_1_sec.push(chunk_size_bits);
+                self.bitrate_1_min.push(chunk_size_bits);
             }
         }
     }
