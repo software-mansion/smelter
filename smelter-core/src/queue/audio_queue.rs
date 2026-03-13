@@ -88,10 +88,10 @@ impl AudioQueue {
         }
     }
 
-    pub fn unpause_input(&mut self, input_id: &InputId, pts: Duration) {
+    pub fn resume_input(&mut self, input_id: &InputId, pts: Duration) {
         if let Some(input) = self.inputs.get_mut(input_id) {
             let first_pts_received = input.shared_state.first_pts().is_some();
-            input.pause_state.unpause(pts, first_pts_received);
+            input.pause_state.resume(pts, first_pts_received);
             input.queue.clear();
         }
     }

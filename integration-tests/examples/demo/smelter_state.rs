@@ -243,7 +243,7 @@ impl SmelterState {
         }
         let selected = Select::new("Select input:", input_names).prompt()?;
 
-        let actions = vec!["Pause", "Unpause"];
+        let actions = vec!["Pause", "Resume"];
         let action = Select::new("Select action:", actions).prompt()?;
         let pause = action == "Pause";
 

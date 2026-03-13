@@ -33,7 +33,7 @@ pub struct PauseState {
     paused: bool,
     /// Internal PTS (relative to sync_point) when input was paused.
     pause_started_at_pts: Option<Duration>,
-    /// Accumulated pause duration to add to frame/sample PTS after unpause.
+    /// Accumulated pause duration to add to frame/sample PTS after resume.
     pts_offset: Duration,
 }
 
@@ -51,7 +51,7 @@ impl PauseState {
         self.pause_started_at_pts = Some(pts);
     }
 
-    pub fn unpause(&mut self, pts: Duration, first_pts_received: bool) {
+    pub fn resume(&mut self, pts: Duration, first_pts_received: bool) {
         self.paused = false;
         if let Some(pause_start) = self.pause_started_at_pts.take()
             && first_pts_received
