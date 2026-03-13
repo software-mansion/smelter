@@ -7,6 +7,7 @@ use std::{
 use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
 use serde::Serialize;
 use tracing::warn;
+use utoipa::ToSchema;
 
 use crate::stats::{
     input_reports::InputStatsReport, output_reports::OutputStatsReport, state::StatsState,
@@ -23,7 +24,7 @@ pub(crate) use input::*;
 pub(crate) use output::*;
 pub(crate) use state::StatsEvent;
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct StatsReport {
     pub inputs: HashMap<String, InputStatsReport>,
     pub outputs: HashMap<String, OutputStatsReport>,
