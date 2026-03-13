@@ -1,10 +1,9 @@
 use crate::{
-    RtmpEvent, RtmpMessageParseError, ScriptData,
+    RtmpMessageParseError,
+    amf0::decode_amf_values,
     message::{
-        RtmpMessage,
-        command::CommandMessage,
-        event::{audio_event_from_raw, video_event_from_raw},
-        user_control::UserControlMessage,
+        DataMessage, RtmpMessage, audio::AudioMessage, command::CommandMessage,
+        user_control::UserControlMessage, video::VideoMessage,
     },
     protocol::{MessageType, RawMessage},
 };
@@ -14,11 +13,17 @@ impl RtmpMessage {
         let p = &msg.payload;
         let msg_type = MessageType::try_from_raw(msg.msg_type)?;
         let result = match msg_type {
-            MessageType::Audio => audio_event_from_raw(msg)?,
-            MessageType::Video => video_event_from_raw(msg)?,
+            MessageType::Audio => RtmpMessage::Audio {
+                stream_id: msg.stream_id,
+                audio: AudioMessage::from_raw(msg)?,
+            },
+            MessageType::Video => RtmpMessage::Video {
+                stream_id: msg.stream_id,
+                video: VideoMessage::from_raw(msg)?,
+            },
 
-            MessageType::DataMessageAmf0 => RtmpMessage::Event {
-                event: RtmpEvent::Metadata(ScriptData::parse(msg.payload)?),
+            MessageType::DataMessageAmf0 => RtmpMessage::DataMessage {
+                data: DataMessage::from_amf_values(decode_amf_values(msg.payload)?),
                 stream_id: msg.stream_id,
             },
 

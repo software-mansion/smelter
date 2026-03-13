@@ -104,11 +104,9 @@ impl RtmpMessageReader {
             match self.try_parse_msg(stream.get_read_buffer_mut()) {
                 Ok(Some(msg)) => {
                     let msg = RtmpMessage::from_raw(msg)?;
-                    match &msg {
-                        RtmpMessage::Event { event, .. } if event.is_media_packet() => {
-                            trace!(?msg, "Received RTMP message")
-                        }
-                        msg => debug!(?msg, "Received RTMP message"),
+                    match msg.is_media_packet() {
+                        true => trace!(?msg, "Received RTMP message"),
+                        false => debug!(?msg, "Received RTMP message"),
                     }
                     return Ok(msg);
                 }
@@ -260,11 +258,9 @@ impl RtmpMessageWriter {
         stream: &mut RtmpByteStream,
         msg: RtmpMessage,
     ) -> Result<(), RtmpStreamError> {
-        match &msg {
-            RtmpMessage::Event { event, .. } if event.is_media_packet() => {
-                trace!(?msg, "Sending RTMP message")
-            }
-            msg => debug!(?msg, "Sending RTMP message"),
+        match msg.is_media_packet() {
+            true => trace!(?msg, "Sending RTMP message"),
+            false => debug!(?msg, "Sending RTMP message"),
         }
 
         let msg = msg.into_raw()?;
