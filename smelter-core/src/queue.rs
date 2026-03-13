@@ -243,14 +243,8 @@ impl Queue {
 
     pub fn resume_input(&self, input_id: &InputId) {
         let pts = Instant::now().duration_since(self.sync_point);
-        self.video_queue
-            .lock()
-            .unwrap()
-            .resume_input(input_id, pts);
-        self.audio_queue
-            .lock()
-            .unwrap()
-            .resume_input(input_id, pts);
+        self.video_queue.lock().unwrap().resume_input(input_id, pts);
+        self.audio_queue.lock().unwrap().resume_input(input_id, pts);
     }
 
     pub(super) fn start(
