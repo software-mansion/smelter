@@ -133,13 +133,13 @@ impl HlsInputTrackState {
                 packets_received: self.packets_received_10_secs.sum(),
                 discontinuities_detected: self.discontinuities_detected_10_secs.sum(),
 
-                effective_buffer_avg_secs: self.effective_buffer_10_secs.avg().as_secs_f64(),
-                effective_buffer_max_secs: self.effective_buffer_10_secs.max().as_secs_f64(),
-                effective_buffer_min_secs: self.effective_buffer_10_secs.min().as_secs_f64(),
+                effective_buffer_avg_seconds: self.effective_buffer_10_secs.avg().as_secs_f64(),
+                effective_buffer_max_seconds: self.effective_buffer_10_secs.max().as_secs_f64(),
+                effective_buffer_min_seconds: self.effective_buffer_10_secs.min().as_secs_f64(),
 
-                input_buffer_avg_secs: self.input_buffer_10_secs.avg().as_secs_f64(),
-                input_buffer_max_secs: self.input_buffer_10_secs.max().as_secs_f64(),
-                input_buffer_min_secs: self.input_buffer_10_secs.min().as_secs_f64(),
+                input_buffer_avg_seconds: self.input_buffer_10_secs.avg().as_secs_f64(),
+                input_buffer_max_seconds: self.input_buffer_10_secs.max().as_secs_f64(),
+                input_buffer_min_seconds: self.input_buffer_10_secs.min().as_secs_f64(),
             },
         }
     }

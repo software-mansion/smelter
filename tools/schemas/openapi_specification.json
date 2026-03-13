@@ -1497,12 +1497,12 @@
         "required": [
           "packets_received",
           "discontinuities_detected",
-          "effective_buffer_avg_secs",
-          "effective_buffer_max_secs",
-          "effective_buffer_min_secs",
-          "input_buffer_avg_secs",
-          "input_buffer_max_secs",
-          "input_buffer_min_secs"
+          "effective_buffer_avg_seconds",
+          "effective_buffer_max_seconds",
+          "effective_buffer_min_seconds",
+          "input_buffer_avg_seconds",
+          "input_buffer_max_seconds",
+          "input_buffer_min_seconds"
         ],
         "properties": {
           "packets_received": {
@@ -1515,29 +1515,29 @@
             "format": "int32",
             "minimum": 0
           },
-          "effective_buffer_avg_secs": {
+          "effective_buffer_avg_seconds": {
             "type": "number",
             "format": "double",
             "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
           },
-          "effective_buffer_max_secs": {
+          "effective_buffer_max_seconds": {
             "type": "number",
             "format": "double"
           },
-          "effective_buffer_min_secs": {
+          "effective_buffer_min_seconds": {
             "type": "number",
             "format": "double"
           },
-          "input_buffer_avg_secs": {
+          "input_buffer_avg_seconds": {
             "type": "number",
             "format": "double",
             "description": "Size of the InputBuffer"
           },
-          "input_buffer_max_secs": {
+          "input_buffer_max_seconds": {
             "type": "number",
             "format": "double"
           },
-          "input_buffer_min_secs": {
+          "input_buffer_min_seconds": {
             "type": "number",
             "format": "double"
           }
@@ -1548,7 +1548,8 @@
         "required": [
           "packets_received",
           "discontinuities_detected",
-          "bitrate_avg_1_second",
+          "bitrate_1_second",
+          "bitrate_1_minute",
           "last_10_seconds"
         ],
         "properties": {
@@ -1562,7 +1563,12 @@
             "format": "int32",
             "minimum": 0
           },
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
@@ -1633,10 +1639,16 @@
       "HlsOutputTrackStatsReport": {
         "type": "object",
         "required": [
-          "bitrate_avg_1_second"
+          "bitrate_1_second",
+          "bitrate_1_minute"
         ],
         "properties": {
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
@@ -2341,10 +2353,16 @@
       "Mp4InputTrackStatsReport": {
         "type": "object",
         "required": [
-          "bitrate_avg_1_second"
+          "bitrate_1_second",
+          "bitrate_1_minute"
         ],
         "properties": {
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
@@ -2417,10 +2435,16 @@
       "Mp4OutputTrackStatsReport": {
         "type": "object",
         "required": [
-          "bitrate_avg_1_second"
+          "bitrate_1_second",
+          "bitrate_1_minute"
         ],
         "properties": {
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
@@ -3967,10 +3991,16 @@
       "RtmpInputTrackStatsReport": {
         "type": "object",
         "required": [
-          "bitrate_avg_1_second"
+          "bitrate_1_second",
+          "bitrate_1_minute"
         ],
         "properties": {
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
@@ -4030,10 +4060,16 @@
       "RtmpOutputTrackStatsReport": {
         "type": "object",
         "required": [
-          "bitrate_avg_1_second"
+          "bitrate_1_second",
+          "bitrate_1_minute"
         ],
         "properties": {
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
@@ -4168,12 +4204,12 @@
         "required": [
           "packets_lost",
           "packets_received",
-          "effective_buffer_avg_secs",
-          "effective_buffer_max_secs",
-          "effective_buffer_min_secs",
-          "input_buffer_avg_secs",
-          "input_buffer_max_secs",
-          "input_buffer_min_secs"
+          "effective_buffer_avg_seconds",
+          "effective_buffer_max_seconds",
+          "effective_buffer_min_seconds",
+          "input_buffer_avg_seconds",
+          "input_buffer_max_seconds",
+          "input_buffer_min_seconds"
         ],
         "properties": {
           "packets_lost": {
@@ -4186,29 +4222,29 @@
             "format": "int64",
             "minimum": 0
           },
-          "effective_buffer_avg_secs": {
+          "effective_buffer_avg_seconds": {
             "type": "number",
             "format": "double",
             "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
           },
-          "effective_buffer_max_secs": {
+          "effective_buffer_max_seconds": {
             "type": "number",
             "format": "double"
           },
-          "effective_buffer_min_secs": {
+          "effective_buffer_min_seconds": {
             "type": "number",
             "format": "double"
           },
-          "input_buffer_avg_secs": {
+          "input_buffer_avg_seconds": {
             "type": "number",
             "format": "double",
             "description": "Size of the InputBuffer"
           },
-          "input_buffer_max_secs": {
+          "input_buffer_max_seconds": {
             "type": "number",
             "format": "double"
           },
-          "input_buffer_min_secs": {
+          "input_buffer_min_seconds": {
             "type": "number",
             "format": "double"
           }
@@ -4219,8 +4255,9 @@
         "required": [
           "packets_lost",
           "packets_received",
-          "bitrate_avg_1_second",
-          "last_10_secs"
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "last_10_seconds"
         ],
         "properties": {
           "packets_lost": {
@@ -4233,12 +4270,17 @@
             "format": "int64",
             "minimum": 0
           },
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
           },
-          "last_10_secs": {
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "last_10_seconds": {
             "$ref": "#/components/schemas/RtpJitterBufferSlidingWindowStatsReport"
           }
         }
@@ -4314,10 +4356,16 @@
       "RtpOutputTrackStatsReport": {
         "type": "object",
         "required": [
-          "bitrate_avg_1_second"
+          "bitrate_1_second",
+          "bitrate_1_minute"
         ],
         "properties": {
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
@@ -5730,10 +5778,16 @@
       "WhepOutputTrackStatsReport": {
         "type": "object",
         "required": [
-          "bitrate_avg_1_second"
+          "bitrate_1_second",
+          "bitrate_1_minute"
         ],
         "properties": {
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
@@ -6142,10 +6196,16 @@
       "WhipOutputTrackStatsReport": {
         "type": "object",
         "required": [
-          "bitrate_avg_1_second"
+          "bitrate_1_second",
+          "bitrate_1_minute"
         ],
         "properties": {
-          "bitrate_avg_1_second": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
             "minimum": 0

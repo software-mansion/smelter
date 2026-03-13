@@ -30,7 +30,7 @@ pub struct RtpJitterBufferStatsReport {
     pub bitrate_1_second: u64,
     pub bitrate_1_minute: u64,
 
-    pub last_10_secs: RtpJitterBufferSlidingWindowStatsReport,
+    pub last_10_seconds: RtpJitterBufferSlidingWindowStatsReport,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
@@ -40,14 +40,14 @@ pub struct RtpJitterBufferSlidingWindowStatsReport {
 
     /// Measured when packet leaves jitter buffer. This value represents
     /// how much time packet has to reach the queue to be processed.
-    pub effective_buffer_avg_secs: f64,
-    pub effective_buffer_max_secs: f64,
-    pub effective_buffer_min_secs: f64,
+    pub effective_buffer_avg_seconds: f64,
+    pub effective_buffer_max_seconds: f64,
+    pub effective_buffer_min_seconds: f64,
 
     /// Size of the InputBuffer
-    pub input_buffer_avg_secs: f64,
-    pub input_buffer_max_secs: f64,
-    pub input_buffer_min_secs: f64,
+    pub input_buffer_avg_seconds: f64,
+    pub input_buffer_max_seconds: f64,
+    pub input_buffer_min_seconds: f64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
@@ -99,12 +99,12 @@ pub struct HlsInputTrackSlidingWindowStatsReport {
 
     /// Measured when packet leaves jitter buffer. This value represents
     /// how much time packet has to reach the queue to be processed.
-    pub effective_buffer_avg_secs: f64,
-    pub effective_buffer_max_secs: f64,
-    pub effective_buffer_min_secs: f64,
+    pub effective_buffer_avg_seconds: f64,
+    pub effective_buffer_max_seconds: f64,
+    pub effective_buffer_min_seconds: f64,
 
     /// Size of the InputBuffer
-    pub input_buffer_avg_secs: f64,
-    pub input_buffer_max_secs: f64,
-    pub input_buffer_min_secs: f64,
+    pub input_buffer_avg_seconds: f64,
+    pub input_buffer_max_seconds: f64,
+    pub input_buffer_min_seconds: f64,
 }
