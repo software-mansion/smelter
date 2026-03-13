@@ -33,13 +33,25 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             .map(|decoder| match decoder {
                 RtmpVideoDecoderOptions::FfmpegH264 => Ok(core::VideoDecoderOptions::FfmpegH264),
                 RtmpVideoDecoderOptions::VulkanH264 => Ok(core::VideoDecoderOptions::VulkanH264),
+                RtmpVideoDecoderOptions::FfmpegVp9 => {
+                    Err(TypeError::new("Cannot use VP9 decoder for H264 codec."))
+                }
+            })
+            .transpose()?;
+
+        let vp9 = decoder_map
+            .as_ref()
+            .and_then(|decoders| decoders.get(&InputRtmpCodec::Vp9))
+            .map(|decoder| match decoder {
+                RtmpVideoDecoderOptions::FfmpegVp9 => Ok(core::VideoDecoderOptions::FfmpegVp9),
+                _ => Err(TypeError::new("Cannot use H264 decoder for VP9 codec.")),
             })
             .transpose()?;
 
         let input_options = core::RtmpServerInputOptions {
             app,
             stream_key,
-            decoders: core::RtmpServerInputDecoders { h264 },
+            decoders: core::RtmpServerInputDecoders { h264, vp9 },
             buffer,
         };
 

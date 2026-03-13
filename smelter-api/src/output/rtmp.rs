@@ -59,6 +59,21 @@ pub enum RtmpClientVideoEncoderOptions {
         /// (**default=`5000`**) Interval between keyframes, in milliseconds.
         keyframe_interval_ms: Option<f64>,
     },
+    /// VP9 encoder based on FFmpeg. Requires Enhanced RTMP support on the receiving end.
+    #[serde(rename = "ffmpeg_vp9")]
+    FfmpegVp9 {
+        /// Encoding bitrate. Default value depends on chosen encoder.
+        bitrate: Option<VideoEncoderBitrate>,
+
+        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        keyframe_interval_ms: Option<f64>,
+
+        /// (**default=`"yuv420p"`**) Encoder pixel format
+        pixel_format: Option<PixelFormat>,
+
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
@@ -81,6 +96,13 @@ pub struct OutputRtmpClientAudioOptions {
 pub enum RtmpClientAudioEncoderOptions {
     Aac {
         /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+        sample_rate: Option<u32>,
+    },
+    /// Opus encoder. Requires Enhanced RTMP support on the receiving end.
+    Opus {
+        /// (**default=`"voip"`**) Encoder preset.
+        preset: Option<OpusEncoderPreset>,
+        /// (**default=`48000`**) Sample rate.
         sample_rate: Option<u32>,
     },
 }
