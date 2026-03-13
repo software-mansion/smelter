@@ -98,11 +98,10 @@ impl WhipOutputTrackState {
 
     pub fn report(&mut self) -> WhipOutputTrackStatsReport {
         WhipOutputTrackStatsReport {
-            bitrate_avg_1_second: self.bitrate_1_sec.sum()
-                / self.bitrate_1_sec.window_size().as_secs(),
+            bitrate_1_second: self.bitrate_1_sec.sum() / self.bitrate_1_sec.window_size().as_secs(),
 
-            bitrate_avg_1_minute: self.bitrate_1_min.sum()
-                / self.bitrate_1_min.window_size().as_secs(),
+            bitrate_1_minute: self.bitrate_1_min.sum()
+                / self.bitrate_1_min.actual_window_size().as_secs(),
         }
     }
 

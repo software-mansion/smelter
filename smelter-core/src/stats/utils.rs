@@ -29,6 +29,20 @@ impl<Value: Copy> SlidingWindowValue<Value> {
         self.window_size
     }
 
+    pub fn actual_window_size(&self) -> Duration {
+        let start = match self.buffer.front() {
+            Some((i, _)) => *i,
+            None => return Duration::ZERO,
+        };
+
+        let end = match self.buffer.back() {
+            Some((i, _)) => *i,
+            None => return Duration::ZERO,
+        };
+
+        end.duration_since(start)
+    }
+
     fn drop_older(&mut self, instant: Instant) {
         while let Some((first, _)) = self.buffer.front()
             && *first + self.window_size < instant

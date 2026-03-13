@@ -70,11 +70,10 @@ impl RtpJitterBufferState {
             packets_lost: self.packets_lost,
             packets_received: self.packets_received,
 
-            bitrate_avg_1_second: self.bitrate_1_sec.sum()
-                / self.bitrate_1_sec.window_size().as_secs(),
+            bitrate_1_second: self.bitrate_1_sec.sum() / self.bitrate_1_sec.window_size().as_secs(),
 
-            bitrate_avg_1_minute: self.bitrate_1_min.sum()
-                / self.bitrate_1_min.window_size().as_secs(),
+            bitrate_1_minute: self.bitrate_1_min.sum()
+                / self.bitrate_1_min.actual_window_size().as_secs(),
 
             last_10_secs: RtpJitterBufferSlidingWindowStatsReport {
                 packets_lost: self.packets_lost_10_secs.sum(),
