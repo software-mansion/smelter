@@ -9,6 +9,7 @@
 ### ✨ New features
 - One-to-many transcoders via `VulkanDevice::create_transcoder`
 - Made `wgpu` dependency optional via `wgpu` feature (enabled by default)
+- Added helpers for NV12 <-> RGBA wgpu texture conversion
 
 ### 🐛 Bug fixes
 - Fix graphical bugs when the decoded bitstream switches to a lower resolution mid-stream
