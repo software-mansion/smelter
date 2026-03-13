@@ -113,6 +113,22 @@ impl RtmpClientVideoEncoderOptions {
                 keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
                 preset: core::VulkanH264EncoderPreset::HighQuality,
             }),
+            RtmpClientVideoEncoderOptions::FfmpegVp9 {
+                bitrate,
+                keyframe_interval_ms,
+                pixel_format,
+                ffmpeg_options,
+            } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                resolution: resolution.into(),
+                pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+                raw_options: ffmpeg_options
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            }),
         };
         Ok(encoder_options)
     }
@@ -127,6 +143,16 @@ impl RtmpClientAudioEncoderOptions {
                     sample_rate: sample_rate.unwrap_or(44100),
                 })
             }
+            RtmpClientAudioEncoderOptions::Opus {
+                preset,
+                sample_rate,
+            } => core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
+                channels: channels.into(),
+                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
+                sample_rate: sample_rate.unwrap_or(48000),
+                forward_error_correction: true,
+                packet_loss: 0,
+            }),
         }
     }
 }

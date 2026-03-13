@@ -1,7 +1,10 @@
 use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
 use crossbeam_channel::Sender;
-use rtmp::{AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent};
+use rtmp::{
+    AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, OpusAudioData, RtmpEvent,
+    Vp9VideoConfig, Vp9VideoData,
+};
 use smelter_render::{Frame, InputId, error::ErrorStack};
 use tracing::{Level, info, span, warn};
 
@@ -13,7 +16,10 @@ use crate::{
     },
     error::DecoderInitError,
     pipeline::{
-        decoder::{DecoderThreadHandle, fdk_aac::FdkAacDecoder, ffmpeg_h264, vulkan_h264},
+        decoder::{
+            DecoderThreadHandle, fdk_aac::FdkAacDecoder, ffmpeg_h264, ffmpeg_vp9, libopus,
+            vulkan_h264,
+        },
         rtmp::rtmp_input::{
             decoder_thread::{
                 AudioDecoderThread, AudioDecoderThreadOptions, VideoDecoderThread,
@@ -104,8 +110,17 @@ enum RtmpConnectionError {
     #[error("Invalid video decoder provided, expected H264 decoder")]
     InvalidVideoDecoder,
 
+    #[error("Failed to initialize VP9 decoder")]
+    InitVp9Decoder(#[source] DecoderInitError),
+
+    #[error("Invalid video decoder provided, expected VP9 decoder")]
+    InvalidVp9Decoder,
+
     #[error("Failed to initialize AAC decoder")]
     InitAacDecoder(#[source] DecoderInitError),
+
+    #[error("Failed to initialize Opus decoder")]
+    InitOpusDecoder(#[source] DecoderInitError),
 
     #[error("Decoder channel closed")]
     DecoderChannelClosed,
@@ -134,17 +149,23 @@ struct RtmpConnectionState {
 impl RtmpConnectionState {
     fn handle_rtmp_event(&mut self, rtmp_event: RtmpEvent) -> Result<(), RtmpConnectionError> {
         match rtmp_event {
-            RtmpEvent::H264Config(config) => self.process_video_config(config)?,
-            RtmpEvent::AacConfig(config) => self.process_audio_config(config)?,
-            RtmpEvent::H264Data(data) => self.process_video(data)?,
-            RtmpEvent::AacData(data) => self.process_audio(data)?,
+            RtmpEvent::H264Config(config) => self.process_h264_config(config)?,
+            RtmpEvent::H264Data(data) => self.process_h264_data(data)?,
+            RtmpEvent::Vp9Config(config) => self.process_vp9_config(config)?,
+            RtmpEvent::Vp9Data(data) => self.process_vp9_data(data)?,
+            RtmpEvent::AacConfig(config) => self.process_aac_config(config)?,
+            RtmpEvent::AacData(data) => self.process_aac_data(data)?,
+            RtmpEvent::OpusConfig(_config) => {
+                self.process_opus_config()?;
+            }
+            RtmpEvent::OpusData(data) => self.process_opus_data(data)?,
             RtmpEvent::Metadata(metadata) => info!(?metadata, "Received metadata"),
             _ => warn!(?rtmp_event, "Unsupported message"),
         }
         Ok(())
     }
 
-    fn process_video_config(&mut self, config: H264VideoConfig) -> Result<(), RtmpConnectionError> {
+    fn process_h264_config(&mut self, config: H264VideoConfig) -> Result<(), RtmpConnectionError> {
         let h264_config = H264AvcDecoderConfig::parse(config.data)?;
 
         let options = VideoDecoderThreadOptions {
@@ -180,7 +201,7 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_audio_config(&mut self, config: AacAudioConfig) -> Result<(), RtmpConnectionError> {
+    fn process_aac_config(&mut self, config: AacAudioConfig) -> Result<(), RtmpConnectionError> {
         let options = AudioDecoderThreadOptions {
             ctx: self.ctx.clone(),
             decoder_options: FdkAacDecoderOptions {
@@ -196,7 +217,7 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_video(&mut self, video: H264VideoData) -> Result<(), RtmpConnectionError> {
+    fn process_h264_data(&mut self, video: H264VideoData) -> Result<(), RtmpConnectionError> {
         let sender = self
             .video_track_state
             .chunk_sender()
@@ -220,7 +241,7 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_audio(&mut self, audio: AacAudioData) -> Result<(), RtmpConnectionError> {
+    fn process_aac_data(&mut self, audio: AacAudioData) -> Result<(), RtmpConnectionError> {
         let sender = self
             .audio_track_state
             .chunk_sender()
@@ -232,6 +253,93 @@ impl RtmpConnectionState {
             pts,
             dts: None,
             kind: MediaKind::Audio(AudioCodec::Aac),
+        };
+
+        self.ctx.stats_sender.send(
+            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
+                .into_event(&self.input_ref, StatsTrackKind::Audio),
+        );
+        sender
+            .send(PipelineEvent::Data(chunk))
+            .map_err(|_| RtmpConnectionError::DecoderChannelClosed)?;
+        Ok(())
+    }
+
+    fn process_vp9_config(&mut self, _config: Vp9VideoConfig) -> Result<(), RtmpConnectionError> {
+        let options: VideoDecoderThreadOptions<H264AvccToAnnexB> = VideoDecoderThreadOptions {
+            ctx: self.ctx.clone(),
+            transformer: None,
+            frame_sender: self.frame_sender.clone(),
+            input_buffer_size: 1000,
+        };
+
+        let vp9_decoder = self.decoders.vp9.unwrap_or(VideoDecoderOptions::FfmpegVp9);
+
+        let input_ref = self.input_ref.clone();
+        let handle = match vp9_decoder {
+            VideoDecoderOptions::FfmpegVp9 => {
+                VideoDecoderThread::<ffmpeg_vp9::FfmpegVp9Decoder, _>::spawn(input_ref, options)
+                    .map_err(RtmpConnectionError::InitVp9Decoder)?
+            }
+            _ => {
+                return Err(RtmpConnectionError::InvalidVp9Decoder);
+            }
+        };
+
+        self.video_track_state = TrackState::Ready(handle);
+        Ok(())
+    }
+
+    fn process_vp9_data(&mut self, video: Vp9VideoData) -> Result<(), RtmpConnectionError> {
+        let sender = self
+            .video_track_state
+            .chunk_sender()
+            .ok_or(RtmpConnectionError::VideoDecoderNotInitialized)?;
+
+        let pts = self.shift_pts_to_queue_offset(video.pts);
+        let chunk = EncodedInputChunk {
+            data: video.data,
+            pts,
+            dts: Some(video.dts),
+            kind: MediaKind::Video(VideoCodec::Vp9),
+        };
+
+        self.ctx.stats_sender.send(
+            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
+                .into_event(&self.input_ref, StatsTrackKind::Video),
+        );
+        sender
+            .send(PipelineEvent::Data(chunk))
+            .map_err(|_| RtmpConnectionError::DecoderChannelClosed)?;
+        Ok(())
+    }
+
+    fn process_opus_config(&mut self) -> Result<(), RtmpConnectionError> {
+        let options = AudioDecoderThreadOptions {
+            ctx: self.ctx.clone(),
+            decoder_options: (),
+            samples_sender: self.samples_sender.clone(),
+            input_buffer_size: 1000,
+        };
+        let input_ref = self.input_ref.clone();
+        let handle = AudioDecoderThread::<libopus::OpusDecoder>::spawn(input_ref, options)
+            .map_err(RtmpConnectionError::InitOpusDecoder)?;
+        self.audio_track_state = TrackState::Ready(handle);
+        Ok(())
+    }
+
+    fn process_opus_data(&mut self, audio: OpusAudioData) -> Result<(), RtmpConnectionError> {
+        let sender = self
+            .audio_track_state
+            .chunk_sender()
+            .ok_or(RtmpConnectionError::AudioDecoderNotInitialized)?;
+
+        let pts = self.shift_pts_to_queue_offset(audio.pts);
+        let chunk = EncodedInputChunk {
+            data: audio.data,
+            pts,
+            dts: None,
+            kind: MediaKind::Audio(AudioCodec::Opus),
         };
 
         self.ctx.stats_sender.send(

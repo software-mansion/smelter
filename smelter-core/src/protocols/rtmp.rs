@@ -72,6 +72,7 @@ pub struct RtmpServerInputOptions {
 #[derive(Debug, Clone)]
 pub struct RtmpServerInputDecoders {
     pub h264: Option<VideoDecoderOptions>,
+    pub vp9: Option<VideoDecoderOptions>,
 }
 
 #[derive(Debug, thiserror::Error)]

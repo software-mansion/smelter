@@ -30,6 +30,7 @@ pub struct RtmpInput {
 #[serde(rename_all = "snake_case")]
 pub enum InputRtmpCodec {
     H264,
+    Vp9,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
@@ -41,4 +42,7 @@ pub enum RtmpVideoDecoderOptions {
     /// Hardware decoder. Requires GPU that supports Vulkan Video decoding.
     /// Requires vk-video feature.
     VulkanH264,
+
+    /// Software VP9 decoder based on FFmpeg.
+    FfmpegVp9,
 }
