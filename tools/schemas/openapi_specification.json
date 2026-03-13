@@ -1471,7 +1471,7 @@
           "video",
           "audio",
           "corrupted_packets_received",
-          "corrputed_packets_received_last_10_seconds"
+          "corrupted_packets_received_last_10_seconds"
         ],
         "properties": {
           "video": {
@@ -1485,7 +1485,7 @@
             "format": "int64",
             "minimum": 0
           },
-          "corrputed_packets_received_last_10_seconds": {
+          "corrupted_packets_received_last_10_seconds": {
             "type": "integer",
             "format": "int64",
             "minimum": 0

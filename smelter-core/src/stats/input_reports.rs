@@ -75,7 +75,7 @@ pub struct HlsInputStatsReport {
     pub video: HlsInputTrackStatsReport,
     pub audio: HlsInputTrackStatsReport,
     pub corrupted_packets_received: u64,
-    pub corrputed_packets_received_last_10_seconds: u64,
+    pub corrupted_packets_received_last_10_seconds: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
