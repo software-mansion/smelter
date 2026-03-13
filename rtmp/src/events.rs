@@ -1,10 +1,10 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
 
 use crate::{
-    AudioChannels, AudioCodec, AudioTagSampleSize, AudioTagSoundRate, ScriptData, VideoCodec,
-    VideoTagFrameType,
+    AudioChannels, AudioCodec, AudioTagSampleSize, AudioTagSoundRate, VideoCodec,
+    VideoTagFrameType, amf0::AmfValue,
 };
 
 mod aac;
@@ -13,24 +13,18 @@ pub use aac::AacAudioConfig;
 #[derive(Debug, Clone)]
 pub enum RtmpEvent {
     H264Data(H264VideoData),
+    /// H264 decoder config
     H264Config(H264VideoConfig),
-    // H264EndOfSequence
-    AacData(AacAudioData),
-    AacConfig(AacAudioConfig),
-    // Raw RTMP message for codecs that we do not explicitly support.
-    GenericAudioData(GenericAudioData),
-    // Raw RTMP message for codecs that we do not explicitly support.
-    GenericVideoData(GenericVideoData),
-    Metadata(ScriptData),
-}
+    /// Raw RTMP message for codecs that we do not explicitly support.
+    UnknownVideoData(GenericVideoData),
 
-impl RtmpEvent {
-    pub fn is_media_packet(&self) -> bool {
-        !matches!(
-            self,
-            RtmpEvent::H264Config(_) | RtmpEvent::AacConfig(_) | RtmpEvent::Metadata(_)
-        )
-    }
+    AacData(AacAudioData),
+    /// AAC decoder config
+    AacConfig(AacAudioConfig),
+    /// Raw RTMP message for codecs that we do not explicitly support.
+    UnknownAudioData(GenericAudioData),
+
+    Metadata(HashMap<String, AmfValue>),
 }
 
 #[derive(Clone)]
