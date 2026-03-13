@@ -14,7 +14,7 @@
   ],
   "main": "dist/index.js",
   "scripts": {
-    "lint": "eslint src",
+    "lint": "eslint ./src",
     "typecheck": "tsc --noEmit",
     "watch": "tsc --watch --preserveWatchOutput",
     "build": "tsc",

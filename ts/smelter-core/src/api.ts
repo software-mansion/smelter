@@ -21,10 +21,15 @@ export type MultipartRequest = {
 };
 
 export type RegisterInputResponse = {
-  endpoint_route?: string;
-  bearer_token?: string;
+  // Common options (but MP4 only for now)
+
   video_duration_ms?: number;
   audio_duration_ms?: number;
+
+  // WHIP specific
+
+  endpoint_route?: string;
+  bearer_token?: string;
 };
 
 export type RegisterOutputResponse = {
@@ -75,6 +80,17 @@ export class ApiClient {
     return this.serverManager.sendRequest({
       method: 'POST',
       route: `/api/input/${encodeURIComponent(inputRefIntoRawId(inputId))}/register`,
+      body: request,
+    });
+  }
+
+  public async updateInput(
+    inputId: InputRef,
+    request: Api.UpdateInputRequest
+  ): Promise<RegisterInputResponse> {
+    return this.serverManager.sendRequest({
+      method: 'POST',
+      route: `/api/input/${encodeURIComponent(inputRefIntoRawId(inputId))}/update`,
       body: request,
     });
   }

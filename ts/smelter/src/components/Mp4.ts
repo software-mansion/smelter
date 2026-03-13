@@ -17,6 +17,14 @@ export type Mp4Props = Omit<ComponentBaseProps, 'children'> & {
    * Mute audio.
    */
   muted?: boolean;
+  /**
+   *  Start playing from a specific position.
+   */
+  seekMs?: number;
+  /**
+   * Play the file in a loop
+   */
+  loop?: boolean;
 
   /**
    *  Url, path to the mp4 file or `Blob` of the mp4 file. File path refers to the filesystem where Smelter server is deployed.
@@ -55,6 +63,8 @@ function Mp4(props: Mp4Props) {
       try {
         registerPromise = ctx.registerMp4Input(newInputId, {
           ...sourceObject,
+          loop: props.loop,
+          seekMs: props.seekMs,
           required: ctx.timeContext instanceof OfflineTimeContext,
           // offsetMs will be overridden by registerMp4Input implementation
         });
@@ -70,7 +80,7 @@ function Mp4(props: Mp4Props) {
         await ctx.unregisterMp4Input(newInputId);
       })();
     };
-  }, [props.source]);
+  }, [props.source, props.seekMs, props.loop]);
 
   useInternalAudioInput(inputId, muted ? 0 : (volume ?? 1));
   useTimeLimitedMp4(inputId);
@@ -117,8 +127,10 @@ function useTimeLimitedMp4(inputId: number) {
     ctx.internalInputStreamStore.getSnapshot
   );
   const input = internalStreams[String(inputId)];
-  useTimeLimitedComponent((input?.offsetMs ?? startTime) + (input?.videoDurationMs ?? 0));
-  useTimeLimitedComponent((input?.offsetMs ?? startTime) + (input?.audioDurationMs ?? 0));
+  const videoDurationMs = Math.max(0, (input?.videoDurationMs ?? 0) - (input?.seekMs ?? 0));
+  const audioDurationMs = Math.max(0, (input?.audioDurationMs ?? 0) - (input?.seekMs ?? 0));
+  useTimeLimitedComponent((input?.offsetMs ?? startTime) + videoDurationMs);
+  useTimeLimitedComponent((input?.offsetMs ?? startTime) + audioDurationMs);
 }
 
 export default Mp4;

@@ -1,6 +1,6 @@
 import type { Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
-import type { RegisterInputResponse, RegisterOutputResponse } from '../api';
+import type { RegisterOutputResponse } from '../api';
 import { ApiClient } from '../api';
 import Output from './output';
 import type { SmelterManager } from '../smelterManager';
@@ -14,12 +14,18 @@ import { handleEvent } from './event';
 import type { ReactElement } from 'react';
 import type { Logger } from 'pino';
 import type { ImageRef } from '../api/image';
+import type { InputHandle } from '../inputHandle';
+import { newInputHandle } from '../inputHandle';
 
 export class Smelter {
   public readonly manager: SmelterManager;
   private api: ApiClient;
   private store: _smelterInternals.LiveInputStreamStore<string>;
   private outputs: Record<string, Output> = {};
+  /*
+   * Only global inputs
+   */
+  private inputs: Record<string, InputHandle> = {};
   private startTime?: number;
   private logger: Logger;
 
@@ -72,17 +78,17 @@ export class Smelter {
     return this.api.unregisterOutput(outputId, {});
   }
 
-  public async registerInput(
-    inputId: string,
-    request: RegisterInput
-  ): Promise<RegisterInputResponse> {
+  public getInputById(inputId: string): InputHandle | undefined {
+    return this.inputs[inputId];
+  }
+
+  public async registerInput(inputId: string, request: RegisterInput): Promise<InputHandle> {
     this.logger.info({ inputId, type: request.type }, 'Register new input');
     return this.store.runBlocking(async updateStore => {
       const inputRef = { type: 'global', id: inputId } as const;
       const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
-      if (request.type === 'whip_server') {
-        result.endpoint_route = `/whip/${encodeURIComponent(inputId)}`;
-      }
+      const handle = newInputHandle(inputRef, this.api, result, request.type);
+      this.inputs[inputId] = handle;
 
       updateStore({
         type: 'add_input',
@@ -93,7 +99,7 @@ export class Smelter {
         },
       });
 
-      return result;
+      return handle;
     });
   }
 
@@ -102,6 +108,7 @@ export class Smelter {
     return this.store.runBlocking(async updateStore => {
       const inputRef = { type: 'global', id: inputId } as const;
       const result = this.api.unregisterInput(inputRef, {});
+      delete this.inputs[inputId];
       updateStore({ type: 'remove_input', inputId });
       return result;
     });

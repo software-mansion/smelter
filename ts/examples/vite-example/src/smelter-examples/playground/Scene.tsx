@@ -48,8 +48,8 @@ function volumeForId(store: OutputStore, id: string): number {
 
 type InputTileProps = {
   inputId: string;
-  videoState?: 'ready' | 'playing' | 'finished';
-  audioState?: 'ready' | 'playing' | 'finished';
+  videoState?: 'ready' | 'playing' | 'paused' | 'finished';
+  audioState?: 'ready' | 'playing' | 'paused' | 'finished';
   offsetMs?: number | null;
   videoDurationMs?: number;
   audioDurationMs?: number;

@@ -60,7 +60,10 @@ function MultipleOutputs() {
   );
 }
 
-function SceneTile(props: { state?: 'ready' | 'playing' | 'finished'; inputId: string }) {
+function SceneTile(props: {
+  state?: 'ready' | 'playing' | 'paused' | 'finished';
+  inputId: string;
+}) {
   if (props.state === 'playing') {
     return (
       <View>

@@ -105,20 +105,22 @@ export class OfflineSmelter {
         audioDurationMs: Infinity,
       });
     } else {
+      const seekMs = request.type === 'mp4' ? (request.seekMs ?? 0) : 0;
       this.store.addInput({
         inputId,
         offsetMs: offsetMs ?? 0,
         videoDurationMs: result.video_duration_ms,
         audioDurationMs: result.audio_duration_ms,
+        seekMs,
       });
       if (offsetMs) {
         this.inputTimestamps.push(offsetMs);
       }
       if (result.video_duration_ms) {
-        this.inputTimestamps.push((offsetMs ?? 0) + result.video_duration_ms);
+        this.inputTimestamps.push((offsetMs ?? 0) + Math.max(0, result.video_duration_ms - seekMs));
       }
       if (result.audio_duration_ms) {
-        this.inputTimestamps.push((offsetMs ?? 0) + result.audio_duration_ms);
+        this.inputTimestamps.push((offsetMs ?? 0) + Math.max(0, result.audio_duration_ms - seekMs));
       }
     }
 

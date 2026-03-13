@@ -34,6 +34,18 @@ export function handleEvent(
         input: { inputId: event.inputRef.id, videoState: 'playing' },
       });
     }
+  } else if (event.type === SmelterEventType.VIDEO_INPUT_PAUSED) {
+    if (event.inputRef.type === 'global') {
+      store.dispatchUpdate({
+        type: 'update_input',
+        input: { inputId: event.inputRef.id, videoState: 'paused' },
+      });
+    } else if (event.inputRef.type === 'output-specific-input') {
+      outputs[event.inputRef.outputId]?.inputStreamStore().dispatchUpdate({
+        type: 'update_input',
+        input: { inputId: event.inputRef.id, videoState: 'paused' },
+      });
+    }
   } else if (event.type === SmelterEventType.VIDEO_INPUT_EOS) {
     if (event.inputRef.type === 'global') {
       store.dispatchUpdate({
@@ -68,6 +80,18 @@ export function handleEvent(
       outputs[event.inputRef.outputId]?.inputStreamStore().dispatchUpdate({
         type: 'update_input',
         input: { inputId: event.inputRef.id, audioState: 'playing' },
+      });
+    }
+  } else if (event.type === SmelterEventType.AUDIO_INPUT_PAUSED) {
+    if (event.inputRef.type === 'global') {
+      store.dispatchUpdate({
+        type: 'update_input',
+        input: { inputId: event.inputRef.id, audioState: 'paused' },
+      });
+    } else if (event.inputRef.type === 'output-specific-input') {
+      outputs[event.inputRef.outputId]?.inputStreamStore().dispatchUpdate({
+        type: 'update_input',
+        input: { inputId: event.inputRef.id, audioState: 'paused' },
       });
     }
   } else if (event.type === SmelterEventType.AUDIO_INPUT_EOS) {

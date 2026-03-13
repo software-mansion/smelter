@@ -51,8 +51,10 @@ function useTimeLimitedInputStream(inputId: string) {
 
   const inputs = useInputStreams();
   const input = inputs[inputId];
-  useTimeLimitedComponent((input?.offsetMs ?? startTime) + (input?.videoDurationMs ?? 0));
-  useTimeLimitedComponent((input?.offsetMs ?? startTime) + (input?.audioDurationMs ?? 0));
+  const videoDurationMs = Math.max(0, (input?.videoDurationMs ?? 0) - (input?.seekMs ?? 0));
+  const audioDurationMs = Math.max(0, (input?.audioDurationMs ?? 0) - (input?.seekMs ?? 0));
+  useTimeLimitedComponent((input?.offsetMs ?? startTime) + videoDurationMs);
+  useTimeLimitedComponent((input?.offsetMs ?? startTime) + audioDurationMs);
 }
 
 function sceneBuilder(props: InputStreamProps, _children: SceneComponent[]): Api.Component {

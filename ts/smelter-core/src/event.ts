@@ -15,6 +15,8 @@ export function parseEvent(event: any, logger: Logger): SmelterEvent | null {
       SmelterEventType.AUDIO_INPUT_DELIVERED,
       SmelterEventType.VIDEO_INPUT_PLAYING,
       SmelterEventType.AUDIO_INPUT_PLAYING,
+      SmelterEventType.VIDEO_INPUT_PAUSED,
+      SmelterEventType.AUDIO_INPUT_PAUSED,
       SmelterEventType.VIDEO_INPUT_EOS,
       SmelterEventType.AUDIO_INPUT_EOS,
     ].includes(event.type)

@@ -147,7 +147,13 @@ class OutputContext implements SmelterOutputContext {
       const { video_duration_ms: videoDurationMs, audio_duration_ms: audioDurationMs } =
         await this.output.api.registerInput(inputRef, {
           type: 'mp4',
-          ...registerRequest,
+          offset_ms: registerRequest.offsetMs,
+          path: registerRequest.serverPath,
+          url: registerRequest.url,
+          required: registerRequest.required,
+          decoder_map: registerRequest.decoderMap,
+          loop: registerRequest.loop,
+          seek_ms: registerRequest.seekMs,
         });
       updateStore({
         type: 'add_input',
@@ -156,6 +162,7 @@ class OutputContext implements SmelterOutputContext {
           offsetMs: registerRequest.offsetMs,
           audioDurationMs,
           videoDurationMs,
+          seekMs: registerRequest.seekMs ?? 0,
         },
       });
       return {

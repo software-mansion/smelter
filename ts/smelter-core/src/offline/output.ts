@@ -164,24 +164,28 @@ class OutputContext implements SmelterOutputContext {
         url: registerRequest.url,
         required: registerRequest.required,
         decoder_map: registerRequest.decoderMap,
+        loop: registerRequest.loop,
+        seek_ms: registerRequest.seekMs,
       });
     this.output.internalInputStreamStore.addInput({
       inputId,
       offsetMs,
       videoDurationMs,
       audioDurationMs,
+      seekMs: registerRequest.seekMs ?? 0,
     });
     if (registerRequest.offsetMs) {
       this.timeContext.addTimestamp({ timestamp: offsetMs });
     }
+    const seekMs = registerRequest.seekMs ?? 0;
     if (videoDurationMs) {
       this.timeContext.addTimestamp({
-        timestamp: (registerRequest.offsetMs ?? 0) + videoDurationMs,
+        timestamp: (registerRequest.offsetMs ?? 0) + Math.max(0, videoDurationMs - seekMs),
       });
     }
     if (audioDurationMs) {
       this.timeContext.addTimestamp({
-        timestamp: (registerRequest.offsetMs ?? 0) + audioDurationMs,
+        timestamp: (registerRequest.offsetMs ?? 0) + Math.max(0, audioDurationMs - seekMs),
       });
     }
     return {

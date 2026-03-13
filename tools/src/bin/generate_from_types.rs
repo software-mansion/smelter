@@ -30,6 +30,7 @@ enum ApiTypes {
     RegisterWebRenderer(smelter_api::WebRendererSpec),
     RegisterShader(smelter_api::ShaderSpec),
     UpdateOutput(Box<routes::update_output::UpdateOutputRequest>),
+    UpdateInput(routes::update_input::UpdateInputRequest),
 }
 
 pub fn generate_json_schema(check_flag: bool) {

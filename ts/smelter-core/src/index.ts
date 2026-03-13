@@ -8,3 +8,4 @@ export { OfflineSmelter } from './offline/compositor';
 export { SmelterManager, SetupInstanceOptions } from './smelterManager';
 export { Logger, LoggerLevel } from './logger';
 export { StateGuard } from './utils';
+export { InputHandle, WhipInputHandle, Mp4InputHandle } from './inputHandle';
