@@ -774,6 +774,67 @@
         }
       }
     },
+    "/api/input/{input_id}/update": {
+      "post": {
+        "tags": [
+          "update_request"
+        ],
+        "operationId": "update_input",
+        "parameters": [
+          {
+            "name": "input_id",
+            "in": "path",
+            "description": "Input ID.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Input updated successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/output/{output_id}/update": {
       "post": {
         "tags": [
@@ -5165,6 +5226,18 @@
             "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request."
           }
         }
+      },
+      "UpdateInputRequest": {
+        "type": "object",
+        "properties": {
+          "pause": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "UpdateOutputRequest": {
         "type": "object",

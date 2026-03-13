@@ -9,20 +9,23 @@ Run the API change workflow. All steps must pass before the change is considered
 
 ## Steps
 
-1. **Generate JSON schemas from Rust types**
+1. **Register new routes in OpenAPI spec**
+   If a new route was added, ensure it is listed in the `#[openapi(paths(...))]` macro in `tools/src/bin/generate_from_types.rs`. Each route handler function must be referenced there for it to appear in the generated OpenAPI specification.
+
+2. **Generate JSON schemas from Rust types**
    Run: `cargo run -p tools --bin generate_from_types`
    This generates `tools/schemas/scene.schema.json` and `tools/schemas/api_types.schema.json`.
 
-2. **Generate TypeScript types from schemas**
+3. **Generate TypeScript types from schemas**
    Run in `./ts`: `pnpm run generate-types`
    This generates `ts/smelter/src/api.generated.ts`.
 
-3. **Build the TypeScript SDK to verify compatibility**
+4. **Build the TypeScript SDK to verify compatibility**
    Run in `./ts`: `pnpm build:all`
 
-4. **Show a summary of all generated/changed files** so the user can review what was affected.
+5. **Show a summary of all generated/changed files** so the user can review what was affected.
 
-5. **Try to update SDK**:
+6. **Try to update SDK**:
    Update TypeScript SDK code if the generated types require manual adaptation.
    In most cases you will need to:
    - add/modify type in `ts/smelter` package e.g. `ts/smelter/src/types/input.ts`

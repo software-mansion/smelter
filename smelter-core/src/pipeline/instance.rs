@@ -103,6 +103,15 @@ impl Pipeline {
         })
     }
 
+    pub fn update_input(&self, input_id: &InputId, pause: Option<bool>) {
+        if let Some(pause) = pause {
+            match pause {
+                true => self.queue.pause_input(input_id),
+                false => self.queue.resume_input(input_id),
+            }
+        }
+    }
+
     pub fn unregister_input(&mut self, input_id: &InputId) -> Result<(), UnregisterInputError> {
         if !self.inputs.contains_key(input_id) {
             return Err(UnregisterInputError::NotFound(input_id.clone()));
