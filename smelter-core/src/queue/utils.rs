@@ -47,6 +47,11 @@ impl PauseState {
     }
 
     pub fn pause(&mut self, pts: Duration) {
+        // Make pause idempotent: if we're already paused, do not update the
+        // original pause start timestamp to avoid distorting pts_offset.
+        if self.paused {
+            return;
+        }
         self.paused = true;
         self.pause_started_at_pts = Some(pts);
     }
