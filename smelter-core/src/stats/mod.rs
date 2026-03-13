@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     sync::{Arc, Mutex, Weak},
     thread,
 };
@@ -26,8 +26,8 @@ pub(crate) use state::StatsEvent;
 
 #[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct StatsReport {
-    pub inputs: HashMap<String, InputStatsReport>,
-    pub outputs: HashMap<String, OutputStatsReport>,
+    pub inputs: BTreeMap<String, InputStatsReport>,
+    pub outputs: BTreeMap<String, OutputStatsReport>,
 }
 
 pub(crate) struct StatsMonitor(Arc<Mutex<StatsState>>);
