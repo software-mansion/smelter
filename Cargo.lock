@@ -4935,6 +4935,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "urlencoding",
+ "utoipa",
  "uuid",
  "v4l",
  "vk-video",

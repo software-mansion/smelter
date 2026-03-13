@@ -83,7 +83,7 @@ impl HlsInputState {
             video: video_report,
             audio: audio_report,
             corrupted_packets_received: self.corrupted_packets_received,
-            corrputed_packets_received_last_10_seconds: self
+            corrupted_packets_received_last_10_seconds: self
                 .corrupted_packets_received_10_secs
                 .sum(),
         }

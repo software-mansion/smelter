@@ -1,6 +1,7 @@
 use serde::Serialize;
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OutputStatsReport {
     Whep(WhepOutputStatsReport),
@@ -11,70 +12,70 @@ pub enum OutputStatsReport {
     Rtp(RtpOutputStatsReport),
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct WhepOutputStatsReport {
     pub video: WhepOutputTrackStatsReport,
     pub audio: WhepOutputTrackStatsReport,
     pub connected_peers: u64,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct WhepOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct WhipOutputStatsReport {
     pub video: WhipOutputTrackStatsReport,
     pub audio: WhipOutputTrackStatsReport,
     pub is_connected: bool,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct WhipOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct HlsOutputStatsReport {
     pub video: HlsOutputTrackStatsReport,
     pub audio: HlsOutputTrackStatsReport,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct HlsOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct Mp4OutputStatsReport {
     pub video: Mp4OutputTrackStatsReport,
     pub audio: Mp4OutputTrackStatsReport,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct Mp4OutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct RtmpOutputStatsReport {
     pub video: RtmpOutputTrackStatsReport,
     pub audio: RtmpOutputTrackStatsReport,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct RtmpOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct RtpOutputStatsReport {
     pub video: RtpOutputTrackStatsReport,
     pub audio: RtpOutputTrackStatsReport,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct RtpOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
 }

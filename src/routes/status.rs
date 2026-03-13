@@ -2,7 +2,7 @@ use std::{path::Path, sync::Arc};
 
 use axum::{extract::State, response::IntoResponse};
 use serde::Serialize;
-use smelter_core::{InputProtocolKind, OutputProtocolKind};
+use smelter_core::{InputProtocolKind, OutputProtocolKind, stats::StatsReport};
 use smelter_render::RenderingMode;
 use utoipa::ToSchema;
 
@@ -62,7 +62,7 @@ struct InstanceStatus {
         (status = 200, description = "Instance status fetched successfully.", body = InstanceStatus),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
-    tags = ["status_request"],
+    tags = ["metadata_request"],
 )]
 pub async fn status_handler(
     State(state): State<Arc<ApiState>>,
@@ -141,7 +141,17 @@ pub async fn status_handler(
     .into_response())
 }
 
-pub(super) async fn stats_handler(
+#[utoipa::path(
+    get,
+    path = "/stats",
+    operation_id = "get_stats",
+    responses(
+        (status = 200, description = "Statistics for inputs and outputs fetched successfully.", body = StatsReport),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["metadata_request"],
+)]
+pub async fn stats_handler(
     State(state): State<Arc<ApiState>>,
 ) -> Result<impl IntoResponse, ApiError> {
     let pipeline = state.pipeline()?;
