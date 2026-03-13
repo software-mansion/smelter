@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub const WINDOW_ACK_SIZE: u32 = 2_500_000;
-pub const PEER_BANDWIDTH: u32 = 2_400_000;
+pub const PEER_BANDWIDTH: u32 = 2_500_000;
 
 pub(super) struct NegotiationResult {
     pub app: Arc<str>,

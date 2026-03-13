@@ -1,24 +1,28 @@
-use crate::RtmpEvent;
-
+mod audio;
 mod command;
-mod event;
+mod data;
 mod parse;
 mod serialize;
 mod user_control;
+mod video;
 
+pub(crate) use audio::AudioMessage;
 pub(crate) use command::{
     CommandMessage, CommandMessageConnectSuccess, CommandMessageCreateStreamSuccess,
     CommandMessageOk, CommandMessageResultExt,
 };
+pub(crate) use data::DataMessage;
 pub(crate) use user_control::UserControlMessage;
+pub(crate) use video::VideoMessage;
 
 //
 // Chunk stream ids
 //
 
 /// Low-level protocol control messages and commands
-const RESERVED_CHUNK_STREAM_ID: u32 = 2;
+const PROTOCOL_CHUNK_STREAM_ID: u32 = 2;
 /// Main chunk stream for everything that is not actual media
+/// e.g. command or data messages
 const MAIN_CHUNK_STREAM_ID: u32 = 3;
 const VIDEO_CHUNK_STREAM_ID: u32 = 6;
 const AUDIO_CHUNK_STREAM_ID: u32 = 4;
@@ -29,7 +33,7 @@ const AUDIO_CHUNK_STREAM_ID: u32 = 4;
 
 pub(crate) const CONTROL_MESSAGE_STREAM_ID: u32 = 0;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum RtmpMessage {
     /// Protocol control messages
     /// - message stream id 0
@@ -55,8 +59,34 @@ pub(crate) enum RtmpMessage {
         stream_id: u32,
     },
 
-    Event {
-        event: RtmpEvent,
+    Video {
+        video: VideoMessage,
         stream_id: u32,
     },
+
+    Audio {
+        audio: AudioMessage,
+        stream_id: u32,
+    },
+
+    DataMessage {
+        data: DataMessage,
+        stream_id: u32,
+    },
+}
+
+impl RtmpMessage {
+    pub fn is_media_packet(&self) -> bool {
+        match self {
+            Self::Video { video, .. } => match video {
+                VideoMessage::H264Config(_) => false,
+                _ => true,
+            },
+            Self::Audio { audio, .. } => match audio {
+                AudioMessage::AacConfig(_) => false,
+                _ => true,
+            },
+            _ => false,
+        }
+    }
 }
