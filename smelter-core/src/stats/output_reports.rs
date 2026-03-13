@@ -27,6 +27,7 @@ pub struct WhepOutputTrackStatsReport {
 pub struct WhipOutputStatsReport {
     pub video: WhipOutputTrackStatsReport,
     pub audio: WhipOutputTrackStatsReport,
+    pub is_connected: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]

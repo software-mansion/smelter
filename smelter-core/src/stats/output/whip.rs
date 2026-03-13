@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use smelter_render::OutputId;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
 use crate::{
     Ref,
@@ -18,6 +19,7 @@ use super::OutputStatsEvent;
 pub(crate) enum WhipOutputStatsEvent {
     Video(WhipOutputTrackStatsEvent),
     Audio(WhipOutputTrackStatsEvent),
+    PeerStateChanged(RTCPeerConnectionState),
 }
 
 impl WhipOutputStatsEvent {
@@ -51,6 +53,7 @@ impl WhipOutputTrackStatsEvent {
 pub struct WhipOutputState {
     pub video: WhipOutputTrackState,
     pub audio: WhipOutputTrackState,
+    pub peer_state: RTCPeerConnectionState,
 }
 
 #[derive(Debug)]
@@ -63,6 +66,7 @@ impl WhipOutputState {
         Self {
             video: WhipOutputTrackState::new(),
             audio: WhipOutputTrackState::new(),
+            peer_state: RTCPeerConnectionState::New,
         }
     }
 
@@ -70,6 +74,7 @@ impl WhipOutputState {
         WhipOutputStatsReport {
             video: self.video.report(),
             audio: self.audio.report(),
+            is_connected: self.peer_state == RTCPeerConnectionState::Connected,
         }
     }
 
@@ -77,6 +82,7 @@ impl WhipOutputState {
         match event {
             WhipOutputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
             WhipOutputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+            WhipOutputStatsEvent::PeerStateChanged(state) => self.peer_state = state,
         }
     }
 }

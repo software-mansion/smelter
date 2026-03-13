@@ -19,7 +19,7 @@ use crate::{
         webrtc::{
             handle_keyframe_requests::handle_keyframe_requests,
             whip_output::{
-                PeerConnection,
+                peer_connection::WeakPeerConnection,
                 track_task_audio::{WhipAudioTrackThread, WhipAudioTrackThreadOptions},
                 track_task_video::{WhipVideoTrackThread, WhipVideoTrackThreadOptions},
             },
@@ -184,7 +184,7 @@ pub async fn setup_audio_track(
     ctx: &Arc<PipelineCtx>,
     output_id: &Ref<OutputId>,
     rtc_sender: Arc<RTCRtpSender>,
-    pc: PeerConnection,
+    pc: WeakPeerConnection,
     encoder_preferences: Vec<AudioEncoderOptions>,
 ) -> Result<(WhipAudioTrackThreadHandle, WhipClientTrack), WebrtcClientError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
@@ -263,7 +263,7 @@ const RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM: &str = "RTCRemoteInboundRTPAudioStrea
 
 fn handle_packet_loss_requests(
     ctx: &Arc<PipelineCtx>,
-    pc: PeerConnection,
+    pc: WeakPeerConnection,
     rtc_sender: Arc<RTCRtpSender>,
     packet_loss_sender: watch::Sender<i32>,
     ssrc: u32,
@@ -289,6 +289,8 @@ fn handle_packet_loss_requests(
         async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(10)).await;
+                let Some(pc) = pc.upgrade() else { return };
+
                 let stats = pc.get_stats().await.reports;
                 let outbound_id = String::from(RTC_OUTBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
                 let remote_inbound_id =

@@ -98,6 +98,9 @@ struct WhipClientTask {
     output_ref: Ref<OutputId>,
     video_track: Option<WhipClientTrack>,
     audio_track: Option<WhipClientTrack>,
+
+    #[allow(dead_code)]
+    pc: PeerConnection,
 }
 
 impl WhipClientTask {
@@ -113,6 +116,15 @@ impl WhipClientTask {
 
         let client = WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
         let pc = PeerConnection::new(&ctx, codec_params).await?;
+
+        {
+            let stats_sender = ctx.stats_sender.clone();
+            let output_ref = output_ref.clone();
+            pc.on_connection_state_change(move |state| {
+                stats_sender
+                    .send(WhipOutputStatsEvent::PeerStateChanged(state).into_event(&output_ref));
+            });
+        }
 
         let video_rtc_sender = pc.new_video_track().await?;
         let audio_rtc_sender = pc.new_audio_track().await?;
@@ -143,7 +155,7 @@ impl WhipClientTask {
                     &ctx,
                     &output_ref,
                     audio_rtc_sender,
-                    pc.clone(),
+                    pc.downgrade(),
                     encoder_preferences,
                 )
                 .await?;
@@ -160,6 +172,7 @@ impl WhipClientTask {
                 output_ref,
                 video_track,
                 audio_track,
+                pc,
             },
             WhipOutput {
                 video: video_thread_handle,
