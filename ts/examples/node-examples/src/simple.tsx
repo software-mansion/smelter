@@ -1,15 +1,8 @@
+import path from 'path';
 import { useEffect, useState } from 'react';
 import Smelter from '@swmansion/smelter-node';
-import { View, Text } from '@swmansion/smelter';
-import { ffplayStartRtmpServerAsync } from './utils';
-
-type PartialTextProps = {
-  text: string;
-};
-
-function SimpleComponent(props: PartialTextProps) {
-  return <Text style={{ fontSize: 40 }}>{props.text}</Text>;
-}
+import { InputStream, Tiles } from '@swmansion/smelter';
+import { ffplayStartRtmpServerAsync, sleep } from './utils';
 
 function ExampleApp() {
   const [count, setCount] = useState(0);
@@ -27,16 +20,10 @@ function ExampleApp() {
   });
 
   return (
-    <View style={{ direction: 'column' }}>
-      {[...Array(count)].map((_value, index) => (
-        <SimpleComponent key={index} text="Example text" />
-      ))}
-      <View />
-      <Text style={{ fontSize: 30 }}>Text component example (fontSize={30})</Text>
-      Raw text example (default fontSize={50})
-      <View />
-      Counter: {count}
-    </View>
+    <Tiles>
+      <InputStream inputId="input_1" />
+      <InputStream inputId="input_2" />
+    </Tiles>
   );
 }
 
@@ -45,6 +32,20 @@ async function run() {
   await smelter.init();
 
   await ffplayStartRtmpServerAsync(9002);
+
+  const input1 = await smelter.registerInput('input_1', {
+    type: 'mp4',
+    serverPath: path.join(__dirname, '../.assets/BigBuckBunny.mp4'),
+    offsetMs: 0,
+    required: true,
+  });
+
+  const input2 = await smelter.registerInput('input_2', {
+    type: 'mp4',
+    serverPath: path.join(__dirname, '../.assets/ElephantsDream.mp4'),
+    offsetMs: 0,
+    required: true,
+  });
 
   await smelter.registerOutput('output_1', <ExampleApp />, {
     type: 'rtmp_client',
@@ -61,5 +62,13 @@ async function run() {
     },
   });
   await smelter.start();
+
+  await input1.pause();
+  await sleep(2000);
+  await input2.pause();
+  await sleep(2000);
+  await input1.resume();
+  await sleep(2000);
+  await input2.resume();
 }
 void run();

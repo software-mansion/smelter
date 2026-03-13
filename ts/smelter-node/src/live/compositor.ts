@@ -2,18 +2,12 @@ import type { ReactElement } from 'react';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import type { Renderers } from '@swmansion/smelter';
-import type { SmelterManager } from '@swmansion/smelter-core';
+import type { InputHandle, SmelterManager, WhipInputHandle } from '@swmansion/smelter-core';
 import { StateGuard, Smelter as CoreSmelter } from '@swmansion/smelter-core';
 
 import LocallySpawnedInstance from '../manager/locallySpawnedInstance';
 import { createLogger } from '../logger';
-import type {
-  RegisterInput,
-  RegisterMp4InputResponse,
-  RegisterOutput,
-  RegisterWhepServerOutputResponse,
-  RegisterWhipServerInputResponse,
-} from '../api';
+import type { RegisterInput, RegisterOutput, RegisterWhepServerOutputResponse } from '../api';
 
 export default class Smelter {
   private coreSmelter: CoreSmelter;
@@ -70,31 +64,12 @@ export default class Smelter {
   public async registerInput(
     inputId: string,
     request: Extract<RegisterInput, { type: 'whip_server' }>
-  ): Promise<RegisterWhipServerInputResponse>;
-
-  public async registerInput(
-    inputId: string,
-    request: Extract<RegisterInput, { type: 'mp4' }>
-  ): Promise<RegisterMp4InputResponse>;
-
-  public async registerInput(inputId: string, request: RegisterInput): Promise<object>;
+  ): Promise<WhipInputHandle>;
+  public async registerInput(inputId: string, request: RegisterInput): Promise<InputHandle>;
 
   public async registerInput(inputId: string, request: RegisterInput): Promise<object> {
     return await this.scheduler.run(async () => {
-      let result = await this.coreSmelter.registerInput(inputId, request);
-      if (request.type === 'mp4') {
-        return {
-          videoDurationMs: result.video_duration_ms,
-          audioDurationMs: result.audio_duration_ms,
-        };
-      } else if (request.type === 'whip_server') {
-        return {
-          bearerToken: result.bearer_token,
-          endpointRoute: result.endpoint_route,
-        };
-      } else {
-        return result;
-      }
+      return await this.coreSmelter.registerInput(inputId, request);
     });
   }
 

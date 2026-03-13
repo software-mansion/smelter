@@ -8,7 +8,14 @@
 /**
  * This enum is used to generate JSON schema for all API types. This prevents repeating types in generated schema.
  */
-export type ApiTypes = RegisterInput | RegisterOutput | ImageSpec | WebRendererSpec | ShaderSpec | UpdateOutputRequest;
+export type ApiTypes =
+  | RegisterInput
+  | RegisterOutput
+  | ImageSpec
+  | WebRendererSpec
+  | ShaderSpec
+  | UpdateOutputRequest
+  | UpdateInputRequest;
 export type RegisterInput =
   | {
       type: "rtp_stream";
@@ -1619,4 +1626,7 @@ export interface UpdateOutputRequest {
   video?: VideoScene | null;
   audio?: AudioScene | null;
   schedule_time_ms?: number | null;
+}
+export interface UpdateInputRequest {
+  pause?: boolean | null;
 }

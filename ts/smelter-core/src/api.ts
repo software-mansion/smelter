@@ -79,6 +79,17 @@ export class ApiClient {
     });
   }
 
+  public async updateInput(
+    inputId: InputRef,
+    request: Api.UpdateInputRequest
+  ): Promise<RegisterInputResponse> {
+    return this.serverManager.sendRequest({
+      method: 'POST',
+      route: `/api/input/${encodeURIComponent(inputRefIntoRawId(inputId))}/update`,
+      body: request,
+    });
+  }
+
   public async unregisterInput(
     inputId: InputRef,
     body: { schedule_time_ms?: number }
