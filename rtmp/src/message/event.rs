@@ -1,12 +1,16 @@
 use std::time::Duration;
 
+use bytes::Bytes;
+
 use crate::{
-    AacAudioData, AudioCodec, AudioFourCc, AudioTag, AudioTagAacPacketType, AudioTagSampleSize,
-    AudioTagSoundRate, EnhancedAudioConfig, EnhancedAudioData, EnhancedAudioTag,
-    EnhancedVideoConfig, EnhancedVideoData, EnhancedVideoTag, ExAudioPacketType, ExVideoPacketType,
-    GenericAudioData, GenericVideoData, H264VideoConfig, H264VideoData, LegacyAudioTag,
-    LegacyVideoTag, RtmpEvent, RtmpMessageParseError, RtmpMessageSerializeError, VideoCodec,
-    VideoFourCc, VideoTag, VideoTagFrameType, VideoTagH264PacketType,
+    AacAudioData, Ac3AudioConfig, Ac3AudioData, AudioCodec, AudioFourCc, AudioTag,
+    AudioTagAacPacketType, AudioTagSampleSize, AudioTagSoundRate, Av1VideoConfig, Av1VideoData,
+    Eac3AudioConfig, Eac3AudioData, EnhancedAudioTag, EnhancedVideoTag, ExAudioPacketType,
+    ExVideoPacketType, FlacAudioConfig, FlacAudioData, GenericAudioData, GenericVideoData,
+    H264VideoConfig, H264VideoData, HevcVideoConfig, HevcVideoData, LegacyAudioTag, LegacyVideoTag,
+    Mp3AudioConfig, Mp3AudioData, OpusAudioConfig, OpusAudioData, RtmpEvent, RtmpMessageParseError,
+    RtmpMessageSerializeError, VideoCodec, VideoFourCc, VideoTag, VideoTagFrameType,
+    VideoTagH264PacketType, Vp9VideoConfig, Vp9VideoData,
     error::FlvVideoTagParseError,
     message::{AUDIO_CHUNK_STREAM_ID, MAIN_CHUNK_STREAM_ID, RtmpMessage, VIDEO_CHUNK_STREAM_ID},
     protocol::{MessageType, RawMessage},
@@ -53,37 +57,52 @@ fn enhanced_audio_event(
     tag: EnhancedAudioTag,
     msg: &RawMessage,
 ) -> Result<RtmpEvent, RtmpMessageParseError> {
-    // AAC via enhanced path -> emit legacy AAC events for backwards compat
+    // AAC already exists in legacy RTMP (sound format 10). Enhanced RTMP added a second way
+    // to signal it via FourCC (mp4a). Map to the same AacData/AacConfig events as the legacy path.
     if tag.fourcc == AudioFourCc::Aac {
         return enhanced_aac_event(tag, msg);
     }
 
-    let event = match tag.packet_type {
-        ExAudioPacketType::SequenceStart => RtmpEvent::EnhancedAudioConfig(EnhancedAudioConfig {
-            fourcc: tag.fourcc,
+    let pts = Duration::from_millis(msg.timestamp.into());
+
+    let event = match (tag.fourcc, tag.packet_type) {
+        (AudioFourCc::Opus, ExAudioPacketType::SequenceStart) => {
+            RtmpEvent::OpusConfig(OpusAudioConfig { data: tag.data })
+        }
+        (AudioFourCc::Opus, _) => RtmpEvent::OpusData(OpusAudioData {
+            pts,
             data: tag.data,
         }),
-        ExAudioPacketType::CodedFrames => RtmpEvent::EnhancedAudioData(EnhancedAudioData {
-            fourcc: tag.fourcc,
-            pts: Duration::from_millis(msg.timestamp.into()),
+        (AudioFourCc::Flac, ExAudioPacketType::SequenceStart) => {
+            RtmpEvent::FlacConfig(FlacAudioConfig { data: tag.data })
+        }
+        (AudioFourCc::Flac, _) => RtmpEvent::FlacData(FlacAudioData {
+            pts,
             data: tag.data,
         }),
-        ExAudioPacketType::SequenceEnd => {
-            // End of sequence - no meaningful event to emit, treat as metadata
-            RtmpEvent::EnhancedAudioData(EnhancedAudioData {
-                fourcc: tag.fourcc,
-                pts: Duration::from_millis(msg.timestamp.into()),
-                data: tag.data,
-            })
+        (AudioFourCc::Mp3, ExAudioPacketType::SequenceStart) => {
+            RtmpEvent::Mp3Config(Mp3AudioConfig { data: tag.data })
         }
-        ExAudioPacketType::MultichannelConfig | ExAudioPacketType::Multitrack => {
-            // Multichannel and multitrack not yet supported, pass through as data
-            RtmpEvent::EnhancedAudioData(EnhancedAudioData {
-                fourcc: tag.fourcc,
-                pts: Duration::from_millis(msg.timestamp.into()),
-                data: tag.data,
-            })
+        (AudioFourCc::Mp3, _) => RtmpEvent::Mp3Data(Mp3AudioData {
+            pts,
+            data: tag.data,
+        }),
+        (AudioFourCc::Ac3, ExAudioPacketType::SequenceStart) => {
+            RtmpEvent::Ac3Config(Ac3AudioConfig { data: tag.data })
         }
+        (AudioFourCc::Ac3, _) => RtmpEvent::Ac3Data(Ac3AudioData {
+            pts,
+            data: tag.data,
+        }),
+        (AudioFourCc::Eac3, ExAudioPacketType::SequenceStart) => {
+            RtmpEvent::Eac3Config(Eac3AudioConfig { data: tag.data })
+        }
+        (AudioFourCc::Eac3, _) => RtmpEvent::Eac3Data(Eac3AudioData {
+            pts,
+            data: tag.data,
+        }),
+        // AAC is handled above, this arm is unreachable but needed for exhaustiveness
+        (AudioFourCc::Aac, _) => unreachable!(),
     };
     Ok(event)
 }
@@ -101,9 +120,9 @@ fn enhanced_aac_event(
             channels: crate::AudioChannels::Stereo,
             data: tag.data,
         }),
-        _ => RtmpEvent::EnhancedAudioData(EnhancedAudioData {
-            fourcc: tag.fourcc,
+        _ => RtmpEvent::AacData(AacAudioData {
             pts: Duration::from_millis(msg.timestamp.into()),
+            channels: crate::AudioChannels::Stereo,
             data: tag.data,
         }),
     };
@@ -166,50 +185,47 @@ fn enhanced_video_event(
     tag: EnhancedVideoTag,
     msg: &RawMessage,
 ) -> Result<RtmpEvent, RtmpMessageParseError> {
-    // AVC via enhanced path → emit legacy H264 events for backwards compat
+    // AVC/H.264 already exists in legacy RTMP (codec ID 7). Enhanced RTMP added a second way
+    // to signal it via FourCC (avc1). Map to the same H264Data/H264Config events as the legacy path.
     if tag.fourcc == VideoFourCc::Avc1 {
         return enhanced_avc_event(tag, msg);
     }
 
-    let event = match tag.packet_type {
-        ExVideoPacketType::SequenceStart => RtmpEvent::EnhancedVideoConfig(EnhancedVideoConfig {
-            fourcc: tag.fourcc,
-            data: tag.data,
-        }),
-        ExVideoPacketType::CodedFrames | ExVideoPacketType::CodedFramesX => {
-            let composition_time = tag.composition_time.unwrap_or(0) as i64;
-            let dts = Duration::from_millis(msg.timestamp.into());
-            let pts = Duration::from_millis((msg.timestamp as i64 + composition_time) as u64);
-            let is_keyframe = tag.frame_type == VideoTagFrameType::Keyframe;
+    let composition_time = tag.composition_time.unwrap_or(0) as i64;
+    let dts = Duration::from_millis(msg.timestamp.into());
+    let pts = Duration::from_millis((msg.timestamp as i64 + composition_time) as u64);
+    let is_keyframe = tag.frame_type == VideoTagFrameType::Keyframe;
 
-            RtmpEvent::EnhancedVideoData(EnhancedVideoData {
-                fourcc: tag.fourcc,
-                pts,
-                dts,
-                data: tag.data,
-                is_keyframe,
-            })
+    let event = match (tag.fourcc, tag.packet_type) {
+        (VideoFourCc::Hvc1, ExVideoPacketType::SequenceStart) => {
+            RtmpEvent::HevcConfig(HevcVideoConfig { data: tag.data })
         }
-        ExVideoPacketType::SequenceEnd => {
-            // End of sequence marker - emit with empty data
-            RtmpEvent::EnhancedVideoData(EnhancedVideoData {
-                fourcc: tag.fourcc,
-                pts: Duration::from_millis(msg.timestamp.into()),
-                dts: Duration::from_millis(msg.timestamp.into()),
-                data: tag.data,
-                is_keyframe: false,
-            })
+        (VideoFourCc::Hvc1, _) => RtmpEvent::HevcData(HevcVideoData {
+            pts,
+            dts,
+            data: tag.data,
+            is_keyframe,
+        }),
+        (VideoFourCc::Av01, ExVideoPacketType::SequenceStart) => {
+            RtmpEvent::Av1Config(Av1VideoConfig { data: tag.data })
         }
-        ExVideoPacketType::Metadata => {
-            // Enhanced video metadata (e.g., HDR colorInfo) - pass through as data
-            RtmpEvent::EnhancedVideoData(EnhancedVideoData {
-                fourcc: tag.fourcc,
-                pts: Duration::from_millis(msg.timestamp.into()),
-                dts: Duration::from_millis(msg.timestamp.into()),
-                data: tag.data,
-                is_keyframe: false,
-            })
+        (VideoFourCc::Av01, _) => RtmpEvent::Av1Data(Av1VideoData {
+            pts,
+            dts,
+            data: tag.data,
+            is_keyframe,
+        }),
+        (VideoFourCc::Vp09, ExVideoPacketType::SequenceStart) => {
+            RtmpEvent::Vp9Config(Vp9VideoConfig { data: tag.data })
         }
+        (VideoFourCc::Vp09, _) => RtmpEvent::Vp9Data(Vp9VideoData {
+            pts,
+            dts,
+            data: tag.data,
+            is_keyframe,
+        }),
+        // AVC is handled above, this arm is unreachable but needed for exhaustiveness
+        (VideoFourCc::Avc1, _) => unreachable!(),
     };
     Ok(event)
 }
@@ -242,8 +258,7 @@ fn enhanced_avc_event(
                 is_keyframe,
             })
         }
-        _ => RtmpEvent::EnhancedVideoData(EnhancedVideoData {
-            fourcc: tag.fourcc,
+        _ => RtmpEvent::H264Data(H264VideoData {
             pts: Duration::from_millis(msg.timestamp.into()),
             dts: Duration::from_millis(msg.timestamp.into()),
             data: tag.data,
@@ -350,70 +365,74 @@ pub(super) fn event_into_raw(
             })
             .serialize()?,
         },
-        RtmpEvent::EnhancedVideoData(data) => RawMessage {
-            msg_type: MessageType::Video.into_raw(),
+
+        // Enhanced video codecs
+        RtmpEvent::HevcData(data) => enhanced_video_data_to_raw(
+            VideoFourCc::Hvc1,
+            data.pts,
+            data.dts,
+            data.data,
+            data.is_keyframe,
             stream_id,
-            chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
-            timestamp: data.dts.as_millis() as u32,
-            payload: VideoTag::Enhanced(EnhancedVideoTag {
-                frame_type: if data.is_keyframe {
-                    VideoTagFrameType::Keyframe
-                } else {
-                    VideoTagFrameType::Interframe
-                },
-                fourcc: data.fourcc,
-                packet_type: if data.pts != data.dts {
-                    ExVideoPacketType::CodedFrames
-                } else {
-                    ExVideoPacketType::CodedFramesX
-                },
-                composition_time: if data.pts != data.dts {
-                    Some((data.pts.as_millis() as i64 - data.dts.as_millis() as i64) as i32)
-                } else {
-                    None
-                },
-                data: data.data,
-            })
-            .serialize()?,
-        },
-        RtmpEvent::EnhancedVideoConfig(config) => RawMessage {
-            msg_type: MessageType::Video.into_raw(),
+        )?,
+        RtmpEvent::HevcConfig(config) => {
+            enhanced_video_config_to_raw(VideoFourCc::Hvc1, config.data, stream_id)?
+        }
+        RtmpEvent::Av1Data(data) => enhanced_video_data_to_raw(
+            VideoFourCc::Av01,
+            data.pts,
+            data.dts,
+            data.data,
+            data.is_keyframe,
             stream_id,
-            chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
-            timestamp: 0,
-            payload: VideoTag::Enhanced(EnhancedVideoTag {
-                frame_type: VideoTagFrameType::Keyframe,
-                fourcc: config.fourcc,
-                packet_type: ExVideoPacketType::SequenceStart,
-                composition_time: None,
-                data: config.data,
-            })
-            .serialize()?,
-        },
-        RtmpEvent::EnhancedAudioData(data) => RawMessage {
-            msg_type: MessageType::Audio.into_raw(),
+        )?,
+        RtmpEvent::Av1Config(config) => {
+            enhanced_video_config_to_raw(VideoFourCc::Av01, config.data, stream_id)?
+        }
+        RtmpEvent::Vp9Data(data) => enhanced_video_data_to_raw(
+            VideoFourCc::Vp09,
+            data.pts,
+            data.dts,
+            data.data,
+            data.is_keyframe,
             stream_id,
-            chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
-            timestamp: data.pts.as_millis() as u32,
-            payload: AudioTag::Enhanced(EnhancedAudioTag {
-                fourcc: data.fourcc,
-                packet_type: ExAudioPacketType::CodedFrames,
-                data: data.data,
-            })
-            .serialize()?,
-        },
-        RtmpEvent::EnhancedAudioConfig(config) => RawMessage {
-            msg_type: MessageType::Audio.into_raw(),
-            stream_id,
-            chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
-            timestamp: 0,
-            payload: AudioTag::Enhanced(EnhancedAudioTag {
-                fourcc: config.fourcc,
-                packet_type: ExAudioPacketType::SequenceStart,
-                data: config.data,
-            })
-            .serialize()?,
-        },
+        )?,
+        RtmpEvent::Vp9Config(config) => {
+            enhanced_video_config_to_raw(VideoFourCc::Vp09, config.data, stream_id)?
+        }
+
+        // Enhanced audio codecs
+        RtmpEvent::OpusData(data) => {
+            enhanced_audio_data_to_raw(AudioFourCc::Opus, data.pts, data.data, stream_id)?
+        }
+        RtmpEvent::OpusConfig(config) => {
+            enhanced_audio_config_to_raw(AudioFourCc::Opus, config.data, stream_id)?
+        }
+        RtmpEvent::FlacData(data) => {
+            enhanced_audio_data_to_raw(AudioFourCc::Flac, data.pts, data.data, stream_id)?
+        }
+        RtmpEvent::FlacConfig(config) => {
+            enhanced_audio_config_to_raw(AudioFourCc::Flac, config.data, stream_id)?
+        }
+        RtmpEvent::Mp3Data(data) => {
+            enhanced_audio_data_to_raw(AudioFourCc::Mp3, data.pts, data.data, stream_id)?
+        }
+        RtmpEvent::Mp3Config(config) => {
+            enhanced_audio_config_to_raw(AudioFourCc::Mp3, config.data, stream_id)?
+        }
+        RtmpEvent::Ac3Data(data) => {
+            enhanced_audio_data_to_raw(AudioFourCc::Ac3, data.pts, data.data, stream_id)?
+        }
+        RtmpEvent::Ac3Config(config) => {
+            enhanced_audio_config_to_raw(AudioFourCc::Ac3, config.data, stream_id)?
+        }
+        RtmpEvent::Eac3Data(data) => {
+            enhanced_audio_data_to_raw(AudioFourCc::Eac3, data.pts, data.data, stream_id)?
+        }
+        RtmpEvent::Eac3Config(config) => {
+            enhanced_audio_config_to_raw(AudioFourCc::Eac3, config.data, stream_id)?
+        }
+
         RtmpEvent::Metadata(script_data) => RawMessage {
             msg_type: MessageType::DataMessageAmf0.into_raw(),
             stream_id,
@@ -423,4 +442,100 @@ pub(super) fn event_into_raw(
         },
     };
     Ok(result)
+}
+
+fn enhanced_video_data_to_raw(
+    fourcc: VideoFourCc,
+    pts: Duration,
+    dts: Duration,
+    data: Bytes,
+    is_keyframe: bool,
+    stream_id: u32,
+) -> Result<RawMessage, RtmpMessageSerializeError> {
+    Ok(RawMessage {
+        msg_type: MessageType::Video.into_raw(),
+        stream_id,
+        chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
+        timestamp: dts.as_millis() as u32,
+        payload: VideoTag::Enhanced(EnhancedVideoTag {
+            frame_type: if is_keyframe {
+                VideoTagFrameType::Keyframe
+            } else {
+                VideoTagFrameType::Interframe
+            },
+            fourcc,
+            packet_type: if pts != dts {
+                ExVideoPacketType::CodedFrames
+            } else {
+                ExVideoPacketType::CodedFramesX
+            },
+            composition_time: if pts != dts {
+                Some((pts.as_millis() as i64 - dts.as_millis() as i64) as i32)
+            } else {
+                None
+            },
+            data,
+        })
+        .serialize()?,
+    })
+}
+
+fn enhanced_video_config_to_raw(
+    fourcc: VideoFourCc,
+    data: Bytes,
+    stream_id: u32,
+) -> Result<RawMessage, RtmpMessageSerializeError> {
+    Ok(RawMessage {
+        msg_type: MessageType::Video.into_raw(),
+        stream_id,
+        chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
+        timestamp: 0,
+        payload: VideoTag::Enhanced(EnhancedVideoTag {
+            frame_type: VideoTagFrameType::Keyframe,
+            fourcc,
+            packet_type: ExVideoPacketType::SequenceStart,
+            composition_time: None,
+            data,
+        })
+        .serialize()?,
+    })
+}
+
+fn enhanced_audio_data_to_raw(
+    fourcc: AudioFourCc,
+    pts: Duration,
+    data: Bytes,
+    stream_id: u32,
+) -> Result<RawMessage, RtmpMessageSerializeError> {
+    Ok(RawMessage {
+        msg_type: MessageType::Audio.into_raw(),
+        stream_id,
+        chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
+        timestamp: pts.as_millis() as u32,
+        payload: AudioTag::Enhanced(EnhancedAudioTag {
+            fourcc,
+            packet_type: ExAudioPacketType::CodedFrames,
+            data,
+        })
+        .serialize()?,
+    })
+}
+
+fn enhanced_audio_config_to_raw(
+    fourcc: AudioFourCc,
+    data: Bytes,
+    stream_id: u32,
+) -> Result<RawMessage, RtmpMessageSerializeError> {
+    Ok(RawMessage {
+        msg_type: MessageType::Audio.into_raw(),
+        stream_id,
+        chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
+        timestamp: 0,
+        payload: AudioTag::Enhanced(EnhancedAudioTag {
+            fourcc,
+            packet_type: ExAudioPacketType::SequenceStart,
+            data,
+        })
+        .serialize()?,
+    })
 }

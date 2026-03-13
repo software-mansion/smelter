@@ -3,8 +3,8 @@ use std::time::Duration;
 use bytes::Bytes;
 
 use crate::{
-    AudioChannels, AudioCodec, AudioFourCc, AudioTagSampleSize, AudioTagSoundRate, ScriptData,
-    VideoCodec, VideoFourCc, VideoTagFrameType,
+    AudioChannels, AudioCodec, AudioTagSampleSize, AudioTagSoundRate, ScriptData, VideoCodec,
+    VideoTagFrameType,
 };
 
 mod aac;
@@ -12,26 +12,36 @@ pub use aac::AacAudioConfig;
 
 #[derive(Debug, Clone)]
 pub enum RtmpEvent {
+    // Video
     H264Data(H264VideoData),
     H264Config(H264VideoConfig),
-    // H264EndOfSequence
+    HevcData(HevcVideoData),
+    HevcConfig(HevcVideoConfig),
+    Av1Data(Av1VideoData),
+    Av1Config(Av1VideoConfig),
+    Vp9Data(Vp9VideoData),
+    Vp9Config(Vp9VideoConfig),
+
+    // Audio
     AacData(AacAudioData),
     AacConfig(AacAudioConfig),
+    OpusData(OpusAudioData),
+    OpusConfig(OpusAudioConfig),
+    FlacData(FlacAudioData),
+    FlacConfig(FlacAudioConfig),
+    Mp3Data(Mp3AudioData),
+    Mp3Config(Mp3AudioConfig),
+    Ac3Data(Ac3AudioData),
+    Ac3Config(Ac3AudioConfig),
+    Eac3Data(Eac3AudioData),
+    Eac3Config(Eac3AudioConfig),
+
     // Raw RTMP message for codecs that we do not explicitly support.
     GenericAudioData(GenericAudioData),
     // Raw RTMP message for codecs that we do not explicitly support.
     GenericVideoData(GenericVideoData),
-    Metadata(ScriptData),
 
-    // Enhanced RTMP events
-    /// Video frame data received via Enhanced RTMP (HEVC, AV1, VP9, or AVC via FourCC path).
-    EnhancedVideoData(EnhancedVideoData),
-    /// Video decoder configuration received via Enhanced RTMP (SequenceStart).
-    EnhancedVideoConfig(EnhancedVideoConfig),
-    /// Audio frame data received via Enhanced RTMP (Opus, FLAC, AC-3, or AAC via FourCC path).
-    EnhancedAudioData(EnhancedAudioData),
-    /// Audio decoder configuration received via Enhanced RTMP (SequenceStart).
-    EnhancedAudioConfig(EnhancedAudioConfig),
+    Metadata(ScriptData),
 }
 
 impl RtmpEvent {
@@ -39,33 +49,18 @@ impl RtmpEvent {
         !matches!(
             self,
             RtmpEvent::H264Config(_)
+                | RtmpEvent::HevcConfig(_)
+                | RtmpEvent::Av1Config(_)
+                | RtmpEvent::Vp9Config(_)
                 | RtmpEvent::AacConfig(_)
-                | RtmpEvent::EnhancedVideoConfig(_)
-                | RtmpEvent::EnhancedAudioConfig(_)
+                | RtmpEvent::OpusConfig(_)
+                | RtmpEvent::FlacConfig(_)
+                | RtmpEvent::Mp3Config(_)
+                | RtmpEvent::Ac3Config(_)
+                | RtmpEvent::Eac3Config(_)
                 | RtmpEvent::Metadata(_)
         )
     }
-}
-
-#[derive(Clone)]
-pub struct AacAudioData {
-    pub pts: Duration,
-    pub data: Bytes,
-    pub channels: AudioChannels,
-}
-
-// Raw RTMP message for codecs that we do not explicitly support.
-#[derive(Clone)]
-pub struct GenericAudioData {
-    pub timestamp: u32,
-
-    /// This value might not represent real sample rate for some codecs
-    pub sound_rate: AudioTagSoundRate,
-    // Only applies to PCM formats
-    pub sample_size: Option<AudioTagSampleSize>,
-    pub codec: AudioCodec,
-    pub channels: AudioChannels,
-    pub data: Bytes,
 }
 
 #[derive(Clone)]
@@ -81,6 +76,45 @@ pub struct H264VideoConfig {
     pub data: Bytes,
 }
 
+#[derive(Clone)]
+pub struct HevcVideoData {
+    pub pts: Duration,
+    pub dts: Duration,
+    pub data: Bytes,
+    pub is_keyframe: bool,
+}
+
+#[derive(Clone)]
+pub struct HevcVideoConfig {
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct Av1VideoData {
+    pub pts: Duration,
+    pub dts: Duration,
+    pub data: Bytes,
+    pub is_keyframe: bool,
+}
+
+#[derive(Clone)]
+pub struct Av1VideoConfig {
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct Vp9VideoData {
+    pub pts: Duration,
+    pub dts: Duration,
+    pub data: Bytes,
+    pub is_keyframe: bool,
+}
+
+#[derive(Clone)]
+pub struct Vp9VideoConfig {
+    pub data: Bytes,
+}
+
 // Raw RTMP message for codecs that we do not explicitly support.
 #[derive(Clone)]
 pub struct GenericVideoData {
@@ -92,35 +126,79 @@ pub struct GenericVideoData {
     pub data: Bytes,
 }
 
-/// Video frame data received via Enhanced RTMP.
 #[derive(Clone)]
-pub struct EnhancedVideoData {
-    pub fourcc: VideoFourCc,
+pub struct AacAudioData {
     pub pts: Duration,
-    pub dts: Duration,
     pub data: Bytes,
-    pub is_keyframe: bool,
+    pub channels: AudioChannels,
 }
 
-/// Video decoder configuration received via Enhanced RTMP (SequenceStart).
 #[derive(Clone)]
-pub struct EnhancedVideoConfig {
-    pub fourcc: VideoFourCc,
-    pub data: Bytes,
-}
-
-/// Audio frame data received via Enhanced RTMP.
-#[derive(Clone)]
-pub struct EnhancedAudioData {
-    pub fourcc: AudioFourCc,
+pub struct OpusAudioData {
     pub pts: Duration,
     pub data: Bytes,
 }
 
-/// Audio decoder configuration received via Enhanced RTMP (SequenceStart).
 #[derive(Clone)]
-pub struct EnhancedAudioConfig {
-    pub fourcc: AudioFourCc,
+pub struct OpusAudioConfig {
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct FlacAudioData {
+    pub pts: Duration,
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct FlacAudioConfig {
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct Mp3AudioData {
+    pub pts: Duration,
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct Mp3AudioConfig {
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct Ac3AudioData {
+    pub pts: Duration,
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct Ac3AudioConfig {
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct Eac3AudioData {
+    pub pts: Duration,
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
+pub struct Eac3AudioConfig {
+    pub data: Bytes,
+}
+
+// Raw RTMP message for codecs that we do not explicitly support.
+#[derive(Clone)]
+pub struct GenericAudioData {
+    pub timestamp: u32,
+
+    /// This value might not represent real sample rate for some codecs
+    pub sound_rate: AudioTagSoundRate,
+    // Only applies to PCM formats
+    pub sample_size: Option<AudioTagSampleSize>,
+    pub codec: AudioCodec,
+    pub channels: AudioChannels,
     pub data: Bytes,
 }
 
@@ -148,27 +226,99 @@ impl From<H264VideoData> for RtmpEvent {
     }
 }
 
-impl From<EnhancedVideoData> for RtmpEvent {
-    fn from(value: EnhancedVideoData) -> Self {
-        RtmpEvent::EnhancedVideoData(value)
+impl From<HevcVideoData> for RtmpEvent {
+    fn from(value: HevcVideoData) -> Self {
+        RtmpEvent::HevcData(value)
     }
 }
 
-impl From<EnhancedVideoConfig> for RtmpEvent {
-    fn from(value: EnhancedVideoConfig) -> Self {
-        RtmpEvent::EnhancedVideoConfig(value)
+impl From<HevcVideoConfig> for RtmpEvent {
+    fn from(value: HevcVideoConfig) -> Self {
+        RtmpEvent::HevcConfig(value)
     }
 }
 
-impl From<EnhancedAudioData> for RtmpEvent {
-    fn from(value: EnhancedAudioData) -> Self {
-        RtmpEvent::EnhancedAudioData(value)
+impl From<Av1VideoData> for RtmpEvent {
+    fn from(value: Av1VideoData) -> Self {
+        RtmpEvent::Av1Data(value)
     }
 }
 
-impl From<EnhancedAudioConfig> for RtmpEvent {
-    fn from(value: EnhancedAudioConfig) -> Self {
-        RtmpEvent::EnhancedAudioConfig(value)
+impl From<Av1VideoConfig> for RtmpEvent {
+    fn from(value: Av1VideoConfig) -> Self {
+        RtmpEvent::Av1Config(value)
+    }
+}
+
+impl From<Vp9VideoData> for RtmpEvent {
+    fn from(value: Vp9VideoData) -> Self {
+        RtmpEvent::Vp9Data(value)
+    }
+}
+
+impl From<Vp9VideoConfig> for RtmpEvent {
+    fn from(value: Vp9VideoConfig) -> Self {
+        RtmpEvent::Vp9Config(value)
+    }
+}
+
+impl From<OpusAudioData> for RtmpEvent {
+    fn from(value: OpusAudioData) -> Self {
+        RtmpEvent::OpusData(value)
+    }
+}
+
+impl From<OpusAudioConfig> for RtmpEvent {
+    fn from(value: OpusAudioConfig) -> Self {
+        RtmpEvent::OpusConfig(value)
+    }
+}
+
+impl From<FlacAudioData> for RtmpEvent {
+    fn from(value: FlacAudioData) -> Self {
+        RtmpEvent::FlacData(value)
+    }
+}
+
+impl From<FlacAudioConfig> for RtmpEvent {
+    fn from(value: FlacAudioConfig) -> Self {
+        RtmpEvent::FlacConfig(value)
+    }
+}
+
+impl From<Mp3AudioData> for RtmpEvent {
+    fn from(value: Mp3AudioData) -> Self {
+        RtmpEvent::Mp3Data(value)
+    }
+}
+
+impl From<Mp3AudioConfig> for RtmpEvent {
+    fn from(value: Mp3AudioConfig) -> Self {
+        RtmpEvent::Mp3Config(value)
+    }
+}
+
+impl From<Ac3AudioData> for RtmpEvent {
+    fn from(value: Ac3AudioData) -> Self {
+        RtmpEvent::Ac3Data(value)
+    }
+}
+
+impl From<Ac3AudioConfig> for RtmpEvent {
+    fn from(value: Ac3AudioConfig) -> Self {
+        RtmpEvent::Ac3Config(value)
+    }
+}
+
+impl From<Eac3AudioData> for RtmpEvent {
+    fn from(value: Eac3AudioData) -> Self {
+        RtmpEvent::Eac3Data(value)
+    }
+}
+
+impl From<Eac3AudioConfig> for RtmpEvent {
+    fn from(value: Eac3AudioConfig) -> Self {
+        RtmpEvent::Eac3Config(value)
     }
 }
 
@@ -191,12 +341,154 @@ impl std::fmt::Debug for H264VideoConfig {
     }
 }
 
+impl std::fmt::Debug for HevcVideoData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HevcVideoData")
+            .field("pts", &self.pts)
+            .field("dts", &self.dts)
+            .field("data", &bytes_debug(&self.data))
+            .field("is_keyframe", &self.is_keyframe)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for HevcVideoConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HevcVideoConfig")
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Av1VideoData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Av1VideoData")
+            .field("pts", &self.pts)
+            .field("dts", &self.dts)
+            .field("data", &bytes_debug(&self.data))
+            .field("is_keyframe", &self.is_keyframe)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Av1VideoConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Av1VideoConfig")
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Vp9VideoData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Vp9VideoData")
+            .field("pts", &self.pts)
+            .field("dts", &self.dts)
+            .field("data", &bytes_debug(&self.data))
+            .field("is_keyframe", &self.is_keyframe)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Vp9VideoConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Vp9VideoConfig")
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
 impl std::fmt::Debug for AacAudioData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AacAudioData")
             .field("pts", &self.pts)
             .field("data", &bytes_debug(&self.data))
             .field("channels", &self.channels)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for OpusAudioData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpusAudioData")
+            .field("pts", &self.pts)
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for OpusAudioConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpusAudioConfig")
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for FlacAudioData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FlacAudioData")
+            .field("pts", &self.pts)
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for FlacAudioConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FlacAudioConfig")
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Mp3AudioData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Mp3AudioData")
+            .field("pts", &self.pts)
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Mp3AudioConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Mp3AudioConfig")
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Ac3AudioData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Ac3AudioData")
+            .field("pts", &self.pts)
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Ac3AudioConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Ac3AudioConfig")
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Eac3AudioData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Eac3AudioData")
+            .field("pts", &self.pts)
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Eac3AudioConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Eac3AudioConfig")
+            .field("data", &bytes_debug(&self.data))
             .finish()
     }
 }
@@ -220,46 +512,6 @@ impl std::fmt::Debug for GenericVideoData {
             .field("timestamp", &self.timestamp)
             .field("codec", &self.codec)
             .field("frame_type", &self.frame_type)
-            .field("data", &bytes_debug(&self.data))
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for EnhancedVideoData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EnhancedVideoData")
-            .field("fourcc", &self.fourcc)
-            .field("pts", &self.pts)
-            .field("dts", &self.dts)
-            .field("data", &bytes_debug(&self.data))
-            .field("is_keyframe", &self.is_keyframe)
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for EnhancedVideoConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EnhancedVideoConfig")
-            .field("fourcc", &self.fourcc)
-            .field("data", &bytes_debug(&self.data))
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for EnhancedAudioData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EnhancedAudioData")
-            .field("fourcc", &self.fourcc)
-            .field("pts", &self.pts)
-            .field("data", &bytes_debug(&self.data))
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for EnhancedAudioConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EnhancedAudioConfig")
-            .field("fourcc", &self.fourcc)
             .field("data", &bytes_debug(&self.data))
             .finish()
     }
