@@ -9,6 +9,7 @@ use encode_parameter_sets::{pps, sps};
 
 use crate::{
     EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
+    codec::h264::{H264Codec, H264Parameters},
     device::{EncodingDevice, Rational},
     parameters::H264Profile,
     wrappers::{
@@ -161,11 +162,13 @@ impl VideoSessionResources<'_> {
         )?;
         let pps = pps();
 
-        let session_parameters = VideoSessionParameters::new(
+        let session_parameters = VideoSessionParameters::new::<H264Codec>(
             encoding_device.vulkan_device.device.clone(),
             video_session.session,
-            &[sps],
-            &[pps],
+            H264Parameters {
+                sps: &[sps],
+                pps: &[pps],
+            },
             None,
             Some(parameters.quality_level),
         )?;

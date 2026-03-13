@@ -3,6 +3,8 @@
 #[cfg(vulkan)]
 mod adapter;
 #[cfg(vulkan)]
+pub(crate) mod codec;
+#[cfg(vulkan)]
 mod device;
 #[cfg(vulkan)]
 mod instance;
