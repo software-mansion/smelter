@@ -22,6 +22,7 @@ pub struct WhepOutputStatsReport {
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct WhepOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
+    pub bitrate_avg_1_minute: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
@@ -34,6 +35,7 @@ pub struct WhipOutputStatsReport {
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct WhipOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
+    pub bitrate_avg_1_minute: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
@@ -45,6 +47,7 @@ pub struct HlsOutputStatsReport {
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct HlsOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
+    pub bitrate_avg_1_minute: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
@@ -56,6 +59,7 @@ pub struct Mp4OutputStatsReport {
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct Mp4OutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
+    pub bitrate_avg_1_minute: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
@@ -67,6 +71,7 @@ pub struct RtmpOutputStatsReport {
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct RtmpOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
+    pub bitrate_avg_1_minute: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
@@ -78,4 +83,5 @@ pub struct RtpOutputStatsReport {
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 pub struct RtpOutputTrackStatsReport {
     pub bitrate_avg_1_second: u64,
+    pub bitrate_avg_1_minute: u64,
 }

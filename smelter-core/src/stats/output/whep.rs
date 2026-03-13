@@ -62,6 +62,7 @@ pub struct WhepOutputState {
 #[derive(Debug)]
 pub struct WhepOutputTrackState {
     pub bitrate_1_sec: SlidingWindowValue<u64>,
+    pub bitrate_1_min: SlidingWindowValue<u64>,
 }
 
 impl WhepOutputState {
@@ -107,6 +108,7 @@ impl WhepOutputTrackState {
     pub fn new() -> Self {
         Self {
             bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
+            bitrate_1_min: SlidingWindowValue::new(Duration::from_mins(1)),
         }
     }
 
@@ -114,6 +116,9 @@ impl WhepOutputTrackState {
         WhepOutputTrackStatsReport {
             bitrate_avg_1_second: self.bitrate_1_sec.sum()
                 / self.bitrate_1_sec.window_size().as_secs(),
+
+            bitrate_avg_1_minute: self.bitrate_1_min.sum()
+                / self.bitrate_1_min.window_size().as_secs(),
         }
     }
 
@@ -122,6 +127,7 @@ impl WhepOutputTrackState {
             WhepOutputTrackStatsEvent::BytesSent(chunk_size_bytes) => {
                 let chunk_size_bits = 8 * chunk_size_bytes as u64;
                 self.bitrate_1_sec.push(chunk_size_bits);
+                self.bitrate_1_min.push(chunk_size_bits);
             }
         }
     }
