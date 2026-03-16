@@ -72,6 +72,11 @@ export type RegisterMp4Input = {
    */
   offsetMs?: number | null;
   /**
+   * Start playing from a specific timestamp in milliseconds. If loop is enabled after
+   * first iteration is done it will start from the beginning.
+   */
+  seekMs?: number | null;
+  /**
    * Assigns which decoder should be used for media encoded with a specific codec.
    */
   decoderMap?: InputMp4DecoderMap | null;

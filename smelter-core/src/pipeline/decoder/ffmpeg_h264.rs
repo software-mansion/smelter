@@ -24,6 +24,7 @@ pub struct FfmpegH264Decoder {
     keyframe_request_sender: Option<KeyframeRequestSender>,
     av_frame: ffmpeg_next::frame::Video,
     au_splitter: H264AuSplitter,
+    drop_frames: bool,
 }
 
 impl VideoDecoder for FfmpegH264Decoder {
@@ -54,6 +55,7 @@ impl VideoDecoder for FfmpegH264Decoder {
             keyframe_request_sender,
             av_frame: ffmpeg_next::frame::Video::empty(),
             au_splitter: H264AuSplitter::default(),
+            drop_frames: false,
         })
     }
 }
@@ -62,16 +64,19 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
     fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
         trace!(?event, "FFmpeg H264 decoder received an event.");
         let au_chunks = match event {
-            EncodedInputEvent::Chunk(chunk) => match self.au_splitter.put_chunk(chunk) {
-                Ok(chunks) => chunks,
-                Err(err) => {
-                    if let Some(s) = self.keyframe_request_sender.as_ref() {
-                        s.send()
+            EncodedInputEvent::Chunk(chunk) => {
+                self.drop_frames = !chunk.present;
+                match self.au_splitter.put_chunk(chunk) {
+                    Ok(chunks) => chunks,
+                    Err(err) => {
+                        if let Some(s) = self.keyframe_request_sender.as_ref() {
+                            s.send()
+                        }
+                        debug!("H264 AU splitter could not process the chunks: {err}");
+                        return Vec::new();
                     }
-                    debug!("H264 AU splitter could not process the chunks: {err}");
-                    return Vec::new();
                 }
-            },
+            }
             EncodedInputEvent::LostData => {
                 self.au_splitter.mark_missing_data();
                 return vec![];
@@ -122,8 +127,11 @@ impl FfmpegH264Decoder {
             match self.decoder.receive_frame(&mut self.av_frame) {
                 Ok(_) => match from_av_frame(&mut self.av_frame, TIME_BASE) {
                     Ok(frame) => {
-                        trace!(pts=?frame.pts, "H264 decoder produced a frame.");
-                        Some(frame)
+                        trace!(pts=?frame.pts, drop_frames=?self.drop_frames, "H264 decoder produced a frame.");
+                        match self.drop_frames {
+                            true => None,
+                            false => Some(frame),
+                        }
                     }
                     Err(err) => {
                         warn!("Dropping frame: {}", err);

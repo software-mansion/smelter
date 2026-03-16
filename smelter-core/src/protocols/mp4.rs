@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use crate::{
     InputBufferOptions,
@@ -11,6 +11,7 @@ pub struct Mp4InputOptions {
     pub should_loop: bool,
     pub video_decoders: Mp4InputVideoDecoders,
     pub buffer: InputBufferOptions,
+    pub seek: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]

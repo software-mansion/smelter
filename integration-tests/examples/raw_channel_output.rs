@@ -98,6 +98,7 @@ fn main() {
                 h264: Some(VideoDecoderOptions::FfmpegH264),
             },
             buffer: InputBufferOptions::Const(None),
+            seek: None,
         }),
         queue_options: QueueInputOptions {
             required: true,

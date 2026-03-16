@@ -24,6 +24,9 @@ pub struct Mp4Input {
     /// Offset in milliseconds relative to the pipeline start (start request). If offset is
     /// not defined then stream is synchronized based on the first frames delivery time.
     pub offset_ms: Option<f64>,
+    /// Start playing from a specific timestamp in milliseconds. If loop is enabled after first
+    /// iteration is done it will start from the beginning.
+    pub seek_ms: Option<f64>,
     /// Assigns which decoder should be used for media encoded with a specific codec.
     pub decoder_map: Option<HashMap<InputMp4Codec, Mp4VideoDecoderOptions>>,
 }

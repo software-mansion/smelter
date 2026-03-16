@@ -12,6 +12,7 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
             path,
             required,
             offset_ms,
+            seek_ms,
             should_loop,
             decoder_map,
         } = value;
@@ -56,6 +57,7 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
                 should_loop: should_loop.unwrap_or(false),
                 video_decoders,
                 buffer,
+                seek: seek_ms.map(|ms| Duration::from_secs_f64(ms / 1000.0)),
             }),
             queue_options,
         })
