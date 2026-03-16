@@ -7,9 +7,9 @@ use crate::{
     amf0::AmfValue,
     error::RtmpStreamError,
     message::{
-        CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageConnectSuccess,
-        CommandMessageCreateStreamSuccess, CommandMessageResultExt, RtmpMessage,
-        UserControlMessage,
+        AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageConnectSuccess,
+        CommandMessageCreateStreamSuccess, CommandMessageResultExt, DataMessage, RtmpMessage,
+        UserControlMessage, VideoMessage,
     },
     protocol::{
         byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
@@ -78,11 +78,37 @@ impl RtmpClient {
     where
         RtmpEvent: From<T>,
     {
-        let event = RtmpEvent::from(event);
-        self.state.stream.write_msg(RtmpMessage::Event {
-            event,
-            stream_id: self.stream_id,
-        })?;
+        let event = match RtmpEvent::from(event) {
+            RtmpEvent::H264Data(data) => RtmpMessage::Video {
+                video: VideoMessage::H264Data(data),
+                stream_id: self.stream_id,
+            },
+            RtmpEvent::H264Config(config) => RtmpMessage::Video {
+                video: VideoMessage::H264Config(config),
+                stream_id: self.stream_id,
+            },
+            RtmpEvent::AacData(data) => RtmpMessage::Audio {
+                audio: AudioMessage::AacData(data),
+                stream_id: self.stream_id,
+            },
+            RtmpEvent::AacConfig(config) => RtmpMessage::Audio {
+                audio: AudioMessage::AacConfig(config),
+                stream_id: self.stream_id,
+            },
+            RtmpEvent::UnknownAudioData(audio) => RtmpMessage::Audio {
+                audio: AudioMessage::Unknown(audio),
+                stream_id: self.stream_id,
+            },
+            RtmpEvent::UnknownVideoData(video) => RtmpMessage::Video {
+                video: VideoMessage::Unknown(video),
+                stream_id: self.stream_id,
+            },
+            RtmpEvent::Metadata(metadata) => RtmpMessage::DataMessage {
+                data: DataMessage::OnMetaData(metadata),
+                stream_id: self.stream_id,
+            },
+        };
+        self.state.stream.write_msg(event)?;
 
         // try read any pending messages
         while let Some(msg) = self.state.stream.try_read_msg()? {
@@ -94,6 +120,13 @@ impl RtmpClient {
 
 impl Drop for RtmpClient {
     fn drop(&mut self) {
+        let _ = self.state.stream.write_msg(RtmpMessage::CommandMessage {
+            msg: CommandMessage::DeleteStream {
+                transaction_id: 0,
+                stream_id: self.stream_id,
+            },
+            stream_id: CONTROL_MESSAGE_STREAM_ID,
+        });
         self.shutdown_condition.mark_for_shutdown();
     }
 }

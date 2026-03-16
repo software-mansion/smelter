@@ -59,7 +59,7 @@ pub(crate) fn start_connection_thread(
             for event in &conn {
                 if let Err(err) = state.handle_rtmp_event(event) {
                     match err {
-                        RtmpConnectionError::DecoderChannelClosed => {
+                        RtmpConnectionError::ChannelClosed => {
                             break;
                         }
                         _ => warn!("{}", ErrorStack::new(&err).into_string()),
@@ -108,7 +108,7 @@ enum RtmpConnectionError {
     InitAacDecoder(#[source] DecoderInitError),
 
     #[error("Decoder channel closed")]
-    DecoderChannelClosed,
+    ChannelClosed,
 
     #[error("Video decoder not initialized yet")]
     VideoDecoderNotInitialized,
@@ -216,7 +216,7 @@ impl RtmpConnectionState {
         );
         sender
             .send(PipelineEvent::Data(chunk))
-            .map_err(|_| RtmpConnectionError::DecoderChannelClosed)?;
+            .map_err(|_| RtmpConnectionError::ChannelClosed)?;
         Ok(())
     }
 
@@ -240,7 +240,7 @@ impl RtmpConnectionState {
         );
         sender
             .send(PipelineEvent::Data(chunk))
-            .map_err(|_| RtmpConnectionError::DecoderChannelClosed)?;
+            .map_err(|_| RtmpConnectionError::ChannelClosed)?;
         Ok(())
     }
 

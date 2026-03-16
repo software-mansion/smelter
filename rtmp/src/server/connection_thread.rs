@@ -7,11 +7,11 @@ use crossbeam_channel::bounded;
 use tracing::{debug, warn};
 
 use crate::{
-    RtmpServerConnectionError, RtmpStreamError,
+    RtmpEvent, RtmpServerConnectionError, RtmpStreamError,
     amf0::AmfValue,
     message::{
-        CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageOk, RtmpMessage,
-        UserControlMessage,
+        AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageOk, DataMessage,
+        RtmpMessage, UserControlMessage, VideoMessage,
     },
     protocol::{
         byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
@@ -55,14 +55,37 @@ pub(super) fn run_connection_thread(
     loop {
         let msg = state.next_msg()?;
 
-        match msg {
-            RtmpMessage::Event { event, .. } => {
-                if sender.send(event).is_err() {
-                    return Ok(());
-                }
+        let event = match msg {
+            RtmpMessage::Audio { audio, .. } => match audio {
+                AudioMessage::AacData(data) => RtmpEvent::AacData(data),
+                AudioMessage::AacConfig(config) => RtmpEvent::AacConfig(config),
+                AudioMessage::Unknown(data) => RtmpEvent::UnknownAudioData(data),
+            },
+            RtmpMessage::Video { video, .. } => match video {
+                VideoMessage::H264Data(data) => RtmpEvent::H264Data(data),
+                VideoMessage::H264Config(config) => RtmpEvent::H264Config(config),
+                VideoMessage::Unknown(data) => RtmpEvent::UnknownVideoData(data),
+            },
+            RtmpMessage::DataMessage {
+                data: DataMessage::OnMetaData(metadata),
+                ..
+            } => RtmpEvent::Metadata(metadata),
+            RtmpMessage::CommandMessage {
+                msg: CommandMessage::DeleteStream { .. },
+                ..
+            } => {
+                return Ok(());
             }
-            msg => state.default_msg_handler(msg)?,
+            msg => {
+                state.default_msg_handler(msg)?;
+                continue;
+            }
         };
+
+        if sender.send(event).is_err() {
+            debug!("Channel closed. Stopping connection.");
+            return Ok(());
+        }
     }
 }
 
