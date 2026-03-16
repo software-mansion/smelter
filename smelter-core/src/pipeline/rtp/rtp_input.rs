@@ -60,6 +60,11 @@ impl RtpInput {
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
+        ctx.stats_sender.send(StatsEvent::NewInput {
+            input_ref: input_ref.clone(),
+            kind: InputProtocolKind::Rtp,
+        });
+
         let (port, raw_packets_receiver) = match opts.transport_protocol {
             RtpInputTransportProtocol::Udp => {
                 start_udp_reader_thread(&input_ref, &opts, should_close.clone())?
