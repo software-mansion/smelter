@@ -1,4 +1,3 @@
-#![allow(unused)]
 use std::time::Duration;
 
 use smelter_render::OutputId;

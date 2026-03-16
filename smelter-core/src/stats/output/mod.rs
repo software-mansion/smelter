@@ -45,8 +45,6 @@ pub(crate) enum OutputStatsEvent {
     Hls(HlsOutputStatsEvent),
     Mp4(Mp4OutputStatsEvent),
     Rtmp(RtmpOutputStatsEvent),
-
-    #[allow(unused)]
     Rtp(RtpOutputStatsEvent),
 }
 
