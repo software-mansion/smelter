@@ -298,7 +298,7 @@ pub fn download_all_assets() -> Result<()> {
 fn map_asset_to_path(asset: &TestSample) -> Option<PathBuf> {
     match asset {
         TestSample::BigBuckBunnyH264Opus | TestSample::BigBuckBunnyH264AAC => {
-            Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps597s.mp4"))
+            Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps490s.mp4"))
         }
         TestSample::BigBuckBunnyVP8Opus => {
             Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps60s.vp8.webm"))
@@ -307,7 +307,7 @@ fn map_asset_to_path(asset: &TestSample) -> Option<PathBuf> {
             Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps60s.vp9.webm"))
         }
         TestSample::ElephantsDreamH264Opus => {
-            Some(integration_tests_root().join("examples/assets/ElephantsDream720p24fps654s.mp4"))
+            Some(integration_tests_root().join("examples/assets/ElephantsDream720p24fps60s.mp4"))
         }
         TestSample::ElephantsDreamVP8Opus => Some(
             integration_tests_root().join("examples/assets/ElephantsDream720p24fps60s.vp8.webm"),
