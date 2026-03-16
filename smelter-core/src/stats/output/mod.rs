@@ -19,7 +19,7 @@ pub(super) mod whip;
 pub(crate) use hls::{HlsOutputStatsEvent, HlsOutputTrackStatsEvent};
 pub(crate) use mp4::{Mp4OutputStatsEvent, Mp4OutputTrackStatsEvent};
 pub(crate) use rtmp::{RtmpOutputStatsEvent, RtmpOutputTrackStatsEvent};
-pub(crate) use rtp::RtpOutputStatsEvent;
+pub(crate) use rtp::{RtpOutputStatsEvent, RtpOutputTrackStatsEvent};
 pub(crate) use whep::{WhepOutputStatsEvent, WhepOutputTrackStatsEvent};
 pub(crate) use whip::{WhipOutputStatsEvent, WhipOutputTrackStatsEvent};
 

@@ -25,6 +25,7 @@ pub(crate) struct RtpVideoTrackThreadHandle {
 
 pub(super) struct RtpVideoTrackThreadOptions<Encoder: VideoEncoder> {
     pub ctx: Arc<PipelineCtx>,
+    pub output_ref: Ref<OutputId>,
     pub encoder_options: Encoder::Options,
     pub payloader_options: PayloaderOptions,
     pub chunks_sender: Sender<RtpOutputEvent>,
@@ -48,11 +49,13 @@ where
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let RtpVideoTrackThreadOptions {
             ctx,
+            output_ref,
             encoder_options,
             payloader_options,
             chunks_sender,
         } = options;
 
+        let stats_sender = ctx.stats_sender.clone();
         let ssrc = payloader_options.ssrc;
         let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
 
@@ -62,7 +65,16 @@ where
             frame_receiver.into_iter(),
         )?;
 
-        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
+        let encoded_with_stats = encoded_stream.flatten().inspect(move |event| {
+            if let PipelineEvent::Data(chunk) = &event {
+                stats_sender.send(
+                    RtpOutputTrackStatsEvent::BytesSent(chunk.data.len())
+                        .into_event(&output_ref, StatsTrackKind::Video),
+                );
+            }
+        });
+
+        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_with_stats);
 
         let stream = payloaded_stream.flatten().map(move |event| match event {
             Ok(PipelineEvent::Data(packet)) => RtpOutputEvent::Data(packet),
