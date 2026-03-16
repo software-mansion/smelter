@@ -9,6 +9,7 @@ use ash::vk;
 use crate::{
     EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
     device::{ColorRange, ColorSpace, EncodingDevice, Rational},
+    codec::h264::{H264Codec, H264Parameters},
     parameters::H264Profile,
     wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
@@ -164,11 +165,13 @@ impl VideoSessionResources<'_> {
         )?;
         let pps = VkPictureParameterSet::new_encode();
 
-        let session_parameters = VideoSessionParameters::new(
+        let session_parameters = VideoSessionParameters::new::<H264Codec>(
             encoding_device.vulkan_device.device.clone(),
             video_session.session,
-            &[sps.sps],
-            &[pps.pps],
+            H264Parameters {
+                sps: &[sps.sps],
+                pps: &[pps.pps],
+            },
             None,
             Some(parameters.quality_level),
         )?;
