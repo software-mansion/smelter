@@ -9,33 +9,27 @@ pub(crate) enum DataMessage {
 }
 
 impl DataMessage {
-    pub fn from_amf_values(mut values: Vec<AmfValue>) -> Self {
+    pub fn from_amf_values(values: Vec<AmfValue>) -> Self {
         // onMetaData can appear as:
         //   ["@setDataFrame", "onMetaData", {properties}]
         //   ["onMetaData", {properties}]
-        let start = match values.first() {
-            Some(AmfValue::String(s)) if s == "@setDataFrame" => 1,
-            _ => 0,
-        };
-
-        let is_on_metadata =
-            matches!(values.get(start), Some(AmfValue::String(s)) if s == "onMetaData");
-        if !is_on_metadata {
-            return DataMessage::Unknown(values);
-        }
-
-        let metadata_idx = start + 1;
-        let metadata = match values.get(metadata_idx) {
-            Some(AmfValue::Object(_) | AmfValue::EcmaArray(_)) => {
-                match values.swap_remove(metadata_idx) {
-                    AmfValue::Object(map) | AmfValue::EcmaArray(map) => map,
-                    _ => unreachable!(),
-                }
+        let mut iter = values.into_iter();
+        match (iter.next(), iter.next(), iter.next()) {
+            (
+                Some(AmfValue::String(s1)),
+                Some(AmfValue::String(s2)),
+                Some(AmfValue::Object(map) | AmfValue::EcmaArray(map)),
+            ) if s1 == "@setDataFrame" && s2 == "onMetadata" => Self::OnMetaData(map),
+            (
+                Some(AmfValue::String(s1)),
+                Some(AmfValue::Object(map) | AmfValue::EcmaArray(map)),
+                _,
+            ) if s1 == "onMetadata" => Self::OnMetaData(map),
+            (v1, v2, v3) => {
+                let first_3_values = [v1, v2, v3].into_iter().flatten();
+                Self::Unknown(first_3_values.chain(iter).collect())
             }
-            _ => HashMap::new(),
-        };
-
-        DataMessage::OnMetaData(metadata)
+        }
     }
 
     pub fn into_amf_values(self) -> Vec<AmfValue> {
@@ -44,7 +38,7 @@ impl DataMessage {
                 vec![
                     AmfValue::String("@setDataFrame".to_string()),
                     AmfValue::String("onMetaData".to_string()),
-                    AmfValue::EcmaArray(metadata),
+                    AmfValue::Object(metadata),
                 ]
             }
             DataMessage::Unknown(values) => values,
