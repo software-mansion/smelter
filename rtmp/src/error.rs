@@ -151,6 +151,9 @@ pub enum FlvVideoTagParseError {
     #[error("Unsupported video packet type: {0}")]
     UnsupportedPacketType(u8),
 
+    #[error("Unknown VideoCommand value: {0}")]
+    UnknownVideoCommand(u8),
+
     #[error("Invalid video tag, packet too short.")]
     TooShort,
 }
