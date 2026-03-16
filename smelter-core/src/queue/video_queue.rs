@@ -9,7 +9,10 @@ use std::{
 
 use crate::{
     event::{Event, EventEmitter},
-    queue::{QueueVideoOutput, SharedState, utils::EmitEventOnce},
+    queue::{
+        QueueVideoOutput, SharedState,
+        utils::{EmitEventOnce, PauseState},
+    },
 };
 
 use crate::prelude::*;
@@ -55,6 +58,9 @@ impl VideoQueue {
 
                 offset_from_start: opts.offset,
 
+                pause_state: PauseState::new(),
+                paused_last_frame: None,
+
                 emit_once_delivered_event: EmitEventOnce::new(
                     Event::VideoInputStreamDelivered(input_id.clone()),
                     &self.event_emitter,
@@ -73,6 +79,22 @@ impl VideoQueue {
 
     pub fn remove_input(&mut self, input_id: &InputId) {
         self.inputs.remove(input_id);
+    }
+
+    pub fn pause_input(&mut self, input_id: &InputId, pts: Duration) {
+        if let Some(input) = self.inputs.get_mut(input_id) {
+            input.paused_last_frame = input.queue.front().cloned();
+            input.pause_state.pause(pts);
+        }
+    }
+
+    pub fn resume_input(&mut self, input_id: &InputId, pts: Duration) {
+        if let Some(input) = self.inputs.get_mut(input_id) {
+            let first_pts_received = input.shared_state.first_pts().is_some();
+            input.pause_state.resume(pts, first_pts_received);
+            input.paused_last_frame = None;
+            input.queue.clear();
+        }
     }
 
     /// Gets frames closest to buffer pts. It does not check whether input is ready
@@ -165,6 +187,11 @@ pub struct VideoQueueInput {
     sync_point: Instant,
     shared_state: SharedState,
 
+    pause_state: PauseState,
+    /// Last frame captured at the moment of pause. Returned with updated PTS
+    /// on every `get_frame` call while paused.
+    paused_last_frame: Option<Frame>,
+
     emit_once_delivered_event: EmitEventOnce,
     emit_once_playing_event: EmitEventOnce,
     emit_once_eos_event: EmitEventOnce,
@@ -174,6 +201,16 @@ impl VideoQueueInput {
     /// Return frame for PTS and drop all the older frames. This function does not check
     /// whether stream is required or not.
     fn get_frame(&mut self, buffer_pts: Duration, queue_start_pts: Duration) -> Option<FrameEvent> {
+        if self.pause_state.is_paused() {
+            return self.paused_last_frame.clone().map(|mut frame| {
+                frame.pts = buffer_pts;
+                FrameEvent {
+                    required: self.required,
+                    event: PipelineEvent::Data(frame),
+                }
+            });
+        }
+
         // ignore result, we only need to ensure frames are enqueued
         self.try_enqueue_until_ready_for_pts(buffer_pts, queue_start_pts);
         self.drop_old_frames(buffer_pts, queue_start_pts);
@@ -239,7 +276,7 @@ impl VideoQueueInput {
         next_buffer_pts: Duration,
         queue_start_pts: Duration,
     ) -> bool {
-        if self.eos_received {
+        if self.pause_state.is_paused() || self.eos_received {
             return true;
         }
 
@@ -321,8 +358,9 @@ impl VideoQueueInput {
 
         if self.offset_from_start.is_none() {
             match self.receiver.try_recv()? {
-                PipelineEvent::Data(frame) => {
+                PipelineEvent::Data(mut frame) => {
                     let _ = self.shared_state.get_or_init_first_pts(frame.pts);
+                    frame.pts += self.pause_state.pts_offset();
                     self.queue.push_back(frame);
                 }
                 PipelineEvent::EOS => self.eos_received = true,
@@ -336,7 +374,7 @@ impl VideoQueueInput {
                 // pts start from sync point
                 PipelineEvent::Data(mut frame) => {
                     let first_pts = self.shared_state.get_or_init_first_pts(frame.pts);
-                    frame.pts = offset_pts + frame.pts - first_pts;
+                    frame.pts = offset_pts + frame.pts - first_pts + self.pause_state.pts_offset();
                     self.queue.push_back(frame);
                 }
                 PipelineEvent::EOS => self.eos_received = true,

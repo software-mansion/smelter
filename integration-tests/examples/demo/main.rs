@@ -34,6 +34,9 @@ pub enum Action {
     #[strum(to_string = "Add output")]
     AddOutput,
 
+    #[strum(to_string = "Update input")]
+    UpdateInput,
+
     #[strum(to_string = "Remove input")]
     RemoveInput,
 
@@ -86,6 +89,7 @@ fn run_demo() {
         let action_result = match action {
             Action::AddInput => state.register_input(),
             Action::AddOutput => state.register_output(),
+            Action::UpdateInput => state.update_input(),
             Action::RemoveInput => state.unregister_input(),
             Action::RemoveOutput => state.unregister_output(),
             Action::ReorderInputs => state.reorder_inputs(),
