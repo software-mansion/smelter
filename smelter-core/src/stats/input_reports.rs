@@ -4,11 +4,18 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum InputStatsReport {
+    Rtp(RtpInputStatsReport),
     Whip(WhipInputStatsReport),
     Whep(WhepInputStatsReport),
     Hls(HlsInputStatsReport),
     Rtmp(RtmpInputStatsReport),
     Mp4(Mp4InputStatsReport),
+}
+
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+pub struct RtpInputStatsReport {
+    pub video_rtp: RtpJitterBufferStatsReport,
+    pub audio_rtp: RtpJitterBufferStatsReport,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]

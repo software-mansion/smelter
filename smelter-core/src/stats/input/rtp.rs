@@ -1,9 +1,64 @@
 use std::time::Duration;
 
-use crate::stats::{
-    input_reports::{RtpJitterBufferSlidingWindowStatsReport, RtpJitterBufferStatsReport},
-    utils::SlidingWindowValue,
+use smelter_render::InputId;
+
+use crate::{
+    Ref,
+    stats::{
+        input_reports::{
+            RtpInputStatsReport, RtpJitterBufferSlidingWindowStatsReport,
+            RtpJitterBufferStatsReport,
+        },
+        state::StatsEvent,
+        utils::SlidingWindowValue,
+    },
 };
+
+use super::InputStatsEvent;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RtpInputStatsEvent {
+    VideoRtp(RtpJitterBufferStatsEvent),
+    AudioRtp(RtpJitterBufferStatsEvent),
+}
+
+impl RtpInputStatsEvent {
+    pub fn into_event(self, input_ref: &Ref<InputId>) -> StatsEvent {
+        StatsEvent::Input {
+            input_ref: input_ref.clone(),
+            event: InputStatsEvent::Rtp(self),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct RtpInputState {
+    pub video: RtpJitterBufferState,
+    pub audio: RtpJitterBufferState,
+}
+
+impl RtpInputState {
+    pub fn new() -> Self {
+        Self {
+            video: RtpJitterBufferState::new(),
+            audio: RtpJitterBufferState::new(),
+        }
+    }
+
+    pub fn handle_event(&mut self, event: RtpInputStatsEvent) {
+        match event {
+            RtpInputStatsEvent::VideoRtp(event) => self.video.handle_event(event),
+            RtpInputStatsEvent::AudioRtp(event) => self.audio.handle_event(event),
+        }
+    }
+
+    pub fn report(&mut self) -> RtpInputStatsReport {
+        RtpInputStatsReport {
+            video_rtp: self.video.report(),
+            audio_rtp: self.audio.report(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RtpJitterBufferStatsEvent {

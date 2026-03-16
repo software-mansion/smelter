@@ -11,19 +11,21 @@ use crate::{
     InputProtocolKind,
     stats::{
         input::hls::HlsInputState, input::mp4::Mp4InputState, input::rtmp::RtmpInputState,
-        input::whep::WhepInputState, input::whip::WhipInputState, input_reports::InputStatsReport,
+        input::rtp::RtpInputState, input::whep::WhepInputState, input::whip::WhipInputState,
+        input_reports::InputStatsReport,
     },
 };
 
 pub(crate) use hls::{HlsInputStatsEvent, HlsInputTrackStatsEvent};
 pub(crate) use mp4::{Mp4InputStatsEvent, Mp4InputTrackStatsEvent};
 pub(crate) use rtmp::{RtmpInputStatsEvent, RtmpInputTrackStatsEvent};
-pub(crate) use rtp::RtpJitterBufferStatsEvent;
+pub(crate) use rtp::{RtpInputStatsEvent, RtpJitterBufferStatsEvent};
 pub(crate) use whep::WhepInputStatsEvent;
 pub(crate) use whip::WhipInputStatsEvent;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum InputStatsEvent {
+    Rtp(RtpInputStatsEvent),
     Whip(WhipInputStatsEvent),
     Whep(WhepInputStatsEvent),
     Hls(HlsInputStatsEvent),
@@ -34,6 +36,7 @@ pub(crate) enum InputStatsEvent {
 impl From<&InputStatsEvent> for InputProtocolKind {
     fn from(value: &InputStatsEvent) -> Self {
         match value {
+            InputStatsEvent::Rtp(_) => InputProtocolKind::Rtp,
             InputStatsEvent::Whip(_) => InputProtocolKind::Whip,
             InputStatsEvent::Whep(_) => InputProtocolKind::Whep,
             InputStatsEvent::Hls(_) => InputProtocolKind::Hls,
@@ -45,6 +48,7 @@ impl From<&InputStatsEvent> for InputProtocolKind {
 
 #[derive(Debug)]
 pub enum InputStatsState {
+    Rtp(RtpInputState),
     Whip(WhipInputState),
     Whep(WhepInputState),
     Hls(HlsInputState),
@@ -57,7 +61,7 @@ impl InputStatsState {
         match kind {
             InputProtocolKind::Whip => InputStatsState::Whip(WhipInputState::new()),
             InputProtocolKind::Whep => InputStatsState::Whep(WhepInputState::new()),
-            InputProtocolKind::Rtp => unimplemented!(),
+            InputProtocolKind::Rtp => InputStatsState::Rtp(RtpInputState::new()),
             InputProtocolKind::Rtmp => InputStatsState::Rtmp(RtmpInputState::new()),
             InputProtocolKind::Mp4 => InputStatsState::Mp4(Mp4InputState::new()),
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
@@ -69,6 +73,7 @@ impl InputStatsState {
 
     pub fn handle_event(&mut self, event: InputStatsEvent) {
         match (self, event) {
+            (InputStatsState::Rtp(state), InputStatsEvent::Rtp(event)) => state.handle_event(event),
             (InputStatsState::Whip(state), InputStatsEvent::Whip(event)) => {
                 state.handle_event(event)
             }
@@ -92,6 +97,7 @@ impl InputStatsState {
 
     pub fn report(&mut self) -> InputStatsReport {
         match self {
+            InputStatsState::Rtp(state) => InputStatsReport::Rtp(state.report()),
             InputStatsState::Whip(state) => InputStatsReport::Whip(state.report()),
             InputStatsState::Whep(state) => InputStatsReport::Whep(state.report()),
             InputStatsState::Hls(state) => InputStatsReport::Hls(state.report()),
