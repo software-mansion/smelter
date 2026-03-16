@@ -2043,6 +2043,17 @@
           {
             "type": "object",
             "required": [
+              "rtp"
+            ],
+            "properties": {
+              "rtp": {
+                "$ref": "#/components/schemas/RtpInputStatsReport"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
               "whip"
             ],
             "properties": {
@@ -4198,6 +4209,21 @@
           }
         },
         "additionalProperties": false
+      },
+      "RtpInputStatsReport": {
+        "type": "object",
+        "required": [
+          "video_rtp",
+          "audio_rtp"
+        ],
+        "properties": {
+          "video_rtp": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+          },
+          "audio_rtp": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+          }
+        }
       },
       "RtpJitterBufferSlidingWindowStatsReport": {
         "type": "object",
