@@ -32,7 +32,7 @@ impl EmitEventOnce {
 pub struct PauseState {
     paused: bool,
     /// Internal PTS (relative to sync_point) when input was paused.
-    pause_started_at_pts: Option<Duration>,
+    paused_at_pts: Option<Duration>,
     /// Accumulated pause duration to add to frame/sample PTS after resume.
     pts_offset: Duration,
 }
@@ -41,7 +41,7 @@ impl PauseState {
     pub fn new() -> Self {
         Self {
             paused: false,
-            pause_started_at_pts: None,
+            paused_at_pts: None,
             pts_offset: Duration::ZERO,
         }
     }
@@ -53,12 +53,12 @@ impl PauseState {
             return;
         }
         self.paused = true;
-        self.pause_started_at_pts = Some(pts);
+        self.paused_at_pts = Some(pts);
     }
 
     pub fn resume(&mut self, pts: Duration, first_pts_received: bool) {
         self.paused = false;
-        if let Some(pause_start) = self.pause_started_at_pts.take()
+        if let Some(pause_start) = self.paused_at_pts.take()
             && first_pts_received
         {
             self.pts_offset += pts.saturating_sub(pause_start);
