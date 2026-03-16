@@ -111,7 +111,7 @@ impl RtpInput {
             .spawn(move || {
                 let _span =
                     span!(Level::INFO, "RTP demuxer", input_id = input_ref.to_string()).entered();
-                run_rtp_demuxer_thread(ctx, jitter_buffer_init, receiver, video, audio)
+                run_rtp_demuxer_thread(ctx, &input_ref, jitter_buffer_init, receiver, video, audio)
             })
             .unwrap();
     }
@@ -215,6 +215,7 @@ impl Drop for RtpInput {
 
 fn run_rtp_demuxer_thread(
     ctx: Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
     jitter_buffer_init: RtpJitterBufferInitOptions,
     receiver: Receiver<bytes::Bytes>,
     video_handle: Option<RtpVideoTrackThreadHandle>,
@@ -226,22 +227,33 @@ fn run_rtp_demuxer_thread(
         eos_received: bool,
     }
 
+    let audio_stats_sender = ctx.stats_sender.clone();
+    let audio_input_ref = input_ref.clone();
     let mut audio = audio_handle.map(|handle| TrackState {
         jitter_buffer: RtpJitterBuffer::new(
             &ctx,
             jitter_buffer_init.clone(),
             handle.sample_rate,
-            Box::new(|_event| {}),
+            Box::new(move |event| {
+                audio_stats_sender
+                    .send(RtpInputStatsEvent::AudioRtp(event).into_event(&audio_input_ref));
+            }),
         ),
         handle,
         eos_received: false,
     });
+
+    let video_stats_sender = ctx.stats_sender.clone();
+    let video_input_ref = input_ref.clone();
     let mut video = video_handle.map(|handle| TrackState {
         jitter_buffer: RtpJitterBuffer::new(
             &ctx,
             jitter_buffer_init,
             90_000,
-            Box::new(|_event| {}),
+            Box::new(move |event| {
+                video_stats_sender
+                    .send(RtpInputStatsEvent::VideoRtp(event).into_event(&video_input_ref));
+            }),
         ),
         handle,
         eos_received: false,
