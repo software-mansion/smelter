@@ -14,23 +14,67 @@ const EX_HEADER_BIT: u8 = 0b10000000;
 pub enum FlvVideoData {
     Legacy(VideoTag),
     Enhanced(EnhancedVideoTag),
+    /// Enhanced RTMP command frame (e.g. seek start/end).
+    /// Sent when `VideoFrameType == Command` and packet type is not Metadata.
+    /// Per the spec, the payload is a single UI8 command byte with no video body.
+    EnhancedCommand {
+        command: VideoCommand,
+        timestamp_nano_offset: Option<u32>,
+    },
 }
 
-/// Struct representing Enhanced RTMP video data (ExVideoHeader).
+/// Video command signals for Enhanced RTMP.
+/// Sent when `VideoFrameType == Command`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum VideoCommand {
+    StartSeek = 0,
+    EndSeek = 1,
+}
+
+impl VideoCommand {
+    fn from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
+        match value {
+            0 => Ok(Self::StartSeek),
+            1 => Ok(Self::EndSeek),
+            _ => Err(FlvVideoTagParseError::UnknownVideoCommand(value)),
+        }
+    }
+
+    #[allow(unused)]
+    fn into_raw(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Parsed Enhanced RTMP video tag.
 #[derive(Debug, Clone)]
 pub struct EnhancedVideoTag {
-    /// FrameType from lower 4 bits of the first byte.
     pub frame_type: VideoTagFrameType,
-    /// The resolved VideoPacketType (after processing any ModEx prefixes).
-    pub packet_type: VideoPacketType,
-    /// FourCC codec identifier (4 bytes after the first byte).
     pub four_cc: VideoFourCc,
-    /// CompositionTime SI24, present only for CodedFrames packet type.
-    pub composition_time: Option<i32>,
-    /// Nanosecond timestamp offset from ModEx, if present.
     pub timestamp_nano_offset: Option<u32>,
+    pub packet_type: VideoPacketType,
+}
 
-    pub data: Bytes,
+/// Semantic video packet type after parsing.
+///
+/// This represents the resolved body content. Wire-only signals (`ModEx`, `Multitrack`)
+/// are handled during parsing and do not appear here. `CodedFrames` and `CodedFramesX`
+/// from the wire are unified — `CodedFramesX` sets `composition_time = 0`.
+#[derive(Debug, Clone)]
+pub enum VideoPacketType {
+    /// Decoder configuration record (SPS/PPS, VPS, etc.)
+    SequenceStart(Bytes),
+    /// Video frame data with composition time offset.
+    /// For codecs without composition time (VP8, VP9, AV1), `composition_time` is 0.
+    /// Encompasses both wire types `CodedFrames` (explicit SI24) and `CodedFramesX` (implicit 0).
+    CodedFrames { composition_time: i32, data: Bytes },
+    /// End of sequence marker. No payload.
+    SequenceEnd,
+    /// AMF-encoded metadata (e.g. HDR colorInfo).
+    Metadata(Bytes),
+    /// Carriage of bitstream in MPEG-2 TS format.
+    /// Mutually exclusive with SequenceStart.
+    Mpeg2TsSequenceStart(Bytes),
 }
 
 /// FourCC video codec identifiers for Enhanced RTMP.
@@ -101,30 +145,20 @@ impl VideoPacketModExType {
     }
 }
 
-/// Enhanced RTMP video packet types.
+/// Raw wire video packet type values (0-7). Used only during parsing.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum VideoPacketType {
-    /// Decoder configuration record (SPS/PPS, VPS, etc.)
+enum RawVideoPacketType {
     SequenceStart,
-    /// Video frame data with SI24 composition time offset.
     CodedFrames,
-    /// End of sequence marker.
     SequenceEnd,
-    /// Video frame data without composition time (implied 0).
     CodedFramesX,
-    /// AMF-encoded metadata (e.g. HDR colorInfo).
     Metadata,
-    /// Carriage of bitstream in MPEG-2 TS format.
-    /// Mutually exclusive with SequenceStart.
     Mpeg2TsSequenceStart,
-    /// Turns on video multitrack mode.
     Multitrack,
-    /// Modifier/extension signal. Carries additional modifiers (e.g. nanosecond
-    /// timestamp precision) before the actual packet type.
     ModEx,
 }
 
-impl VideoPacketType {
+impl RawVideoPacketType {
     fn from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
         match value {
             0 => Ok(Self::SequenceStart),
@@ -162,7 +196,7 @@ impl FlvVideoData {
         }
 
         if data[0] & EX_HEADER_BIT != 0 {
-            EnhancedVideoTag::parse(data).map(FlvVideoData::Enhanced)
+            EnhancedVideoTag::parse(data)
         } else {
             VideoTag::parse(data).map(FlvVideoData::Legacy)
         }
@@ -172,119 +206,119 @@ impl FlvVideoData {
         match self {
             FlvVideoData::Legacy(tag) => tag.serialize(),
             FlvVideoData::Enhanced(tag) => tag.serialize(),
+            FlvVideoData::EnhancedCommand { .. } => {
+                unimplemented!()
+            }
         }
     }
 }
 
 impl EnhancedVideoTag {
     /// Parses Enhanced RTMP video tag.
-    /// First byte: `[isExHeader(1) | VideoFrameType(3 bits) | VideoPacketType(4 bits)]`
-    /// Dispatches to packet-type-specific parsers.
-    fn parse(data: Bytes) -> Result<Self, FlvVideoTagParseError> {
+    /// First byte: `[isExHeader(1) | VideoFrameType(3 bits) | RawVideoPacketType(4 bits)]`
+    fn parse(data: Bytes) -> Result<FlvVideoData, FlvVideoTagParseError> {
         if data.is_empty() {
             return Err(FlvVideoTagParseError::TooShort);
         }
 
         let frame_type = VideoTagFrameType::from_raw((data[0] & 0b01110000) >> 4)?;
-        let packet_type = VideoPacketType::from_raw(data[0] & 0b00001111)?;
+        let raw_packet_type = RawVideoPacketType::from_raw(data[0] & 0b00001111)?;
 
-        match packet_type {
-            VideoPacketType::CodedFrames => {
-                Self::parse_coded_frames(data.slice(1..), frame_type, None)
-            }
-            VideoPacketType::CodedFramesX
-            | VideoPacketType::SequenceStart
-            | VideoPacketType::SequenceEnd
-            | VideoPacketType::Mpeg2TsSequenceStart
-            | VideoPacketType::Metadata => {
-                Self::parse_fourcc_and_data(data.slice(1..), frame_type, packet_type, None)
-            }
-            VideoPacketType::ModEx => Self::parse_mod_ex(data.slice(1..), frame_type),
-            VideoPacketType::Multitrack => {
-                // TODO: implement multitrack parsing (AvMultitrackType + per-track FourCC/data)
-                Err(FlvVideoTagParseError::UnsupportedPacketType(
-                    packet_type.into_raw(),
-                ))
-            }
-        }
-    }
+        // Process ModEx to resolve the final packet type and collect modifiers.
+        let (raw_packet_type, rest, timestamp_nano_offset) =
+            if raw_packet_type == RawVideoPacketType::ModEx {
+                Self::resolve_mod_ex(data.slice(1..))?
+            } else {
+                (raw_packet_type, data.slice(1..), None)
+            };
 
-    /// Parses CodedFrames: FourCC (4 bytes) + optional SI24 composition time (3 bytes) + payload.
-    /// Composition time is only present for AVC and HEVC codecs.
-    fn parse_coded_frames(
-        data: Bytes,
-        frame_type: VideoTagFrameType,
-        timestamp_nano_offset: Option<u32>,
-    ) -> Result<Self, FlvVideoTagParseError> {
-        if data.len() < 4 {
-            return Err(FlvVideoTagParseError::TooShort);
-        }
-
-        let four_cc = VideoFourCc::from_bytes([data[0], data[1], data[2], data[3]])?;
-
-        if four_cc.has_composition_time() {
-            if data.len() < 7 {
+        // Per spec: if frame_type is Command and packet_type is not Metadata,
+        // the payload is a single UI8 VideoCommand with no video body.
+        if frame_type == VideoTagFrameType::VideoInfoOrCommandFrame
+            && raw_packet_type != RawVideoPacketType::Metadata
+        {
+            if rest.is_empty() {
                 return Err(FlvVideoTagParseError::TooShort);
             }
-            let composition_time = parse_composition_time(&data[4..7]);
-            Ok(Self {
-                frame_type,
-                packet_type: VideoPacketType::CodedFrames,
-                four_cc,
-                composition_time: Some(composition_time),
+            let command = VideoCommand::from_raw(rest[0])?;
+            return Ok(FlvVideoData::EnhancedCommand {
+                command,
                 timestamp_nano_offset,
-                data: data.slice(7..),
-            })
-        } else {
-            Ok(Self {
-                frame_type,
-                packet_type: VideoPacketType::CodedFrames,
-                four_cc,
-                composition_time: None,
-                timestamp_nano_offset,
-                data: data.slice(4..),
-            })
+            });
         }
-    }
 
-    /// Parses packet types that have FourCC (4 bytes) followed by raw data
-    /// (no composition time): SequenceStart, SequenceEnd, CodedFramesX,
-    /// Mpeg2TsSequenceStart, Metadata.
-    fn parse_fourcc_and_data(
-        data: Bytes,
-        frame_type: VideoTagFrameType,
-        packet_type: VideoPacketType,
-        timestamp_nano_offset: Option<u32>,
-    ) -> Result<Self, FlvVideoTagParseError> {
-        // 4 bytes FourCC
-        if data.len() < 4 {
+        // Read FourCC (4 bytes), present for all non-command packet types.
+        if rest.len() < 4 {
             return Err(FlvVideoTagParseError::TooShort);
         }
+        let four_cc = VideoFourCc::from_bytes([rest[0], rest[1], rest[2], rest[3]])?;
+        let body_data = rest.slice(4..);
 
-        let four_cc = VideoFourCc::from_bytes([data[0], data[1], data[2], data[3]])?;
+        let packet_type = match raw_packet_type {
+            RawVideoPacketType::SequenceStart => VideoPacketType::SequenceStart(body_data),
+            RawVideoPacketType::CodedFrames => Self::parse_coded_frames(body_data, four_cc)?,
+            RawVideoPacketType::CodedFramesX => VideoPacketType::CodedFrames {
+                composition_time: 0,
+                data: body_data,
+            },
+            RawVideoPacketType::SequenceEnd => VideoPacketType::SequenceEnd,
+            RawVideoPacketType::Metadata => VideoPacketType::Metadata(body_data),
+            RawVideoPacketType::Mpeg2TsSequenceStart => {
+                VideoPacketType::Mpeg2TsSequenceStart(body_data)
+            }
+            RawVideoPacketType::Multitrack => {
+                // TODO: implement multitrack parsing (AvMultitrackType + per-track FourCC/data)
+                return Err(FlvVideoTagParseError::UnsupportedPacketType(
+                    raw_packet_type.into_raw(),
+                ));
+            }
+            RawVideoPacketType::ModEx => {
+                unreachable!("ModEx should have been resolved above")
+            }
+        };
 
-        Ok(Self {
+        Ok(FlvVideoData::Enhanced(EnhancedVideoTag {
             frame_type,
-            packet_type,
             four_cc,
-            composition_time: None,
             timestamp_nano_offset,
-            data: data.slice(4..),
-        })
+            packet_type,
+        }))
     }
 
-    /// Parses ModEx prefix loop: processes modifier data packets, then
-    /// delegates to the resolved packet type's parser.
+    /// Parses CodedFrames body: optional SI24 composition time (3 bytes) + payload.
+    /// Composition time is only present for AVC and HEVC codecs; others get 0.
+    fn parse_coded_frames(
+        data: Bytes,
+        four_cc: VideoFourCc,
+    ) -> Result<VideoPacketType, FlvVideoTagParseError> {
+        if four_cc.has_composition_time() {
+            if data.len() < 3 {
+                return Err(FlvVideoTagParseError::TooShort);
+            }
+            let composition_time = parse_composition_time(&data[0..3]);
+            Ok(VideoPacketType::CodedFrames {
+                composition_time,
+                data: data.slice(3..),
+            })
+        } else {
+            Ok(VideoPacketType::CodedFrames {
+                composition_time: 0,
+                data,
+            })
+        }
+    }
+
+    /// Processes the ModEx prefix loop, returning the resolved raw packet type,
+    /// remaining data, and any collected modifiers (e.g. nanosecond timestamp offset).
     ///
     /// Each ModEx iteration:
     /// 1. UI8 + 1 data size (if 256, use UI16 + 1)
     /// 2. ModEx data payload
-    /// 3. `[VideoPacketModExType(4 bits) | VideoPacketType(4 bits)]`
+    /// 3. `[VideoPacketModExType(4 bits) | RawVideoPacketType(4 bits)]`
     /// 4. Interpret data based on ModExType, then check if PacketType is another ModEx.
-    fn parse_mod_ex(
+    fn resolve_mod_ex(
         data: Bytes,
-        frame_type: VideoTagFrameType,
-    ) -> Result<Self, FlvVideoTagParseError> {
+    ) -> Result<(RawVideoPacketType, Bytes, Option<u32>), FlvVideoTagParseError> {
         let mut offset: usize = 0;
         let mut timestamp_nano_offset: Option<u32> = None;
 
@@ -312,12 +346,12 @@ impl EnhancedVideoTag {
             let mod_ex_data_start = offset;
             offset += mod_ex_data_size;
 
-            // Next byte: [VideoPacketModExType(4 bits) | VideoPacketType(4 bits)]
+            // Next byte: [VideoPacketModExType(4 bits) | RawVideoPacketType(4 bits)]
             if data.len() < offset + 1 {
                 return Err(FlvVideoTagParseError::TooShort);
             }
             let mod_ex_type = VideoPacketModExType::from_raw((data[offset] & 0xF0) >> 4)?;
-            let next_packet_type = VideoPacketType::from_raw(data[offset] & 0x0F)?;
+            let next_packet_type = RawVideoPacketType::from_raw(data[offset] & 0x0F)?;
             offset += 1;
 
             match mod_ex_type {
@@ -335,23 +369,13 @@ impl EnhancedVideoTag {
                 }
             }
 
-            // If another ModEx, continue the loop; otherwise delegate to the resolved type.
-            if next_packet_type != VideoPacketType::ModEx {
-                let rest = data.slice(offset..);
-                return match next_packet_type {
-                    VideoPacketType::CodedFrames => {
-                        Self::parse_coded_frames(rest, frame_type, timestamp_nano_offset)
-                    }
-                    VideoPacketType::Multitrack => Err(
-                        FlvVideoTagParseError::UnsupportedPacketType(next_packet_type.into_raw()),
-                    ),
-                    _ => Self::parse_fourcc_and_data(
-                        rest,
-                        frame_type,
-                        next_packet_type,
-                        timestamp_nano_offset,
-                    ),
-                };
+            // If another ModEx, continue the loop; otherwise return resolved state.
+            if next_packet_type != RawVideoPacketType::ModEx {
+                return Ok((
+                    next_packet_type,
+                    data.slice(offset..),
+                    timestamp_nano_offset,
+                ));
             }
         }
     }
