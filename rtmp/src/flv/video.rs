@@ -2,7 +2,8 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
 
-/// Struct representing flv VIDEODATA.
+/// Struct representing legacy flv VIDEODATA.
+/// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
 #[derive(Debug, Clone)]
 pub struct VideoTag {
     /// FrameType 4bits
@@ -136,7 +137,7 @@ impl VideoTag {
             return Err(FlvVideoTagParseError::TooShort);
         }
 
-        let frame_type = (data[0] & 0b11110000) >> 4;
+        let frame_type = (data[0] & 0b01110000) >> 4;
         let codec_id = data[0] & 0b00001111;
 
         let frame_type = VideoTagFrameType::from_raw(frame_type)?;
