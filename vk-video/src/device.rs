@@ -7,6 +7,7 @@ use ash::vk;
 
 use crate::adapter::VulkanAdapter;
 use crate::capabilities::AdapterInfo;
+use crate::codec::h264::H264Codec;
 use crate::device::caps::{
     DecodeCapabilities, EncodeCapabilities, NativeDecodeCapabilities,
     NativeDecodeProfileCapabilities, NativeEncodeCapabilities,
@@ -36,14 +37,18 @@ pub(crate) use wgpu_api::*;
 pub(crate) const REQUIRED_EXTENSIONS: &[&CStr] =
     &[vk::KHR_VIDEO_QUEUE_NAME, vk::KHR_VIDEO_MAINTENANCE1_NAME];
 
-pub(crate) const DECODE_EXTENSIONS: &[&CStr] = &[
-    vk::KHR_VIDEO_DECODE_QUEUE_NAME,
+pub(crate) const DECODE_EXTENSIONS: &[&CStr] = &[vk::KHR_VIDEO_DECODE_QUEUE_NAME];
+
+pub(crate) const DECODE_CODEC_EXTENSIONS: &[&CStr] = &[
     vk::KHR_VIDEO_DECODE_H264_NAME,
+    vk::KHR_VIDEO_DECODE_H265_NAME,
 ];
 
-pub(crate) const ENCODE_EXTENSIONS: &[&CStr] = &[
-    vk::KHR_VIDEO_ENCODE_QUEUE_NAME,
+pub(crate) const ENCODE_EXTENSIONS: &[&CStr] = &[vk::KHR_VIDEO_ENCODE_QUEUE_NAME];
+
+pub(crate) const ENCODE_CODEC_EXTENSIONS: &[&CStr] = &[
     vk::KHR_VIDEO_ENCODE_H264_NAME,
+    vk::KHR_VIDEO_ENCODE_H265_NAME,
 ];
 
 /// Describes a [`VulkanDevice`].
@@ -408,7 +413,11 @@ impl VulkanDevice {
         let decode_caps = self
             .native_decode_capabilities
             .as_ref()
+            .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?
+            .h264
+            .as_ref()
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
+
         let max_profile = decode_caps.max_profile();
 
         Ok(DecodingDevice {
@@ -510,6 +519,11 @@ impl VulkanDevice {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
 
+        let caps = caps
+            .h264
+            .as_ref()
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+
         Ok(EncoderOutputParameters {
             profile: caps.max_profile(),
             idr_period: None,
@@ -533,6 +547,11 @@ impl VulkanDevice {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
 
+        let caps = caps
+            .h264
+            .as_ref()
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+
         Ok(EncoderOutputParameters {
             profile: caps.max_profile(),
             idr_period: None,
@@ -540,7 +559,7 @@ impl VulkanDevice {
             rate_control,
             quality_level: caps
                 .profile(caps.max_profile())
-                .unwrap()
+                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
                 .encode_capabilities
                 .max_quality_levels
                 - 1,
@@ -563,15 +582,18 @@ impl VulkanDevice {
         let Some(caps) = self.native_encode_capabilities.as_ref() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
-        let native_profile_caps = caps.profile(encoder_parameters.profile).ok_or(
-            VulkanEncoderError::ParametersError {
+        let native_profile_caps = caps
+            .h264
+            .as_ref()
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
+            .profile(encoder_parameters.profile)
+            .ok_or(VulkanEncoderError::ParametersError {
                 field: "profile",
                 problem: format!(
                     "Profile {:?} is not supported by this device.",
                     encoder_parameters.profile
                 ),
-            },
-        )?;
+            })?;
 
         let native_quality_level_properties = native_profile_caps
             .quality_level_properties
@@ -587,13 +609,13 @@ impl VulkanDevice {
 
         let idr_period = encoder_parameters.idr_period.unwrap_or(
             if native_quality_level_properties
-                .h264_quality_level_properties
+                .codec_quality_level_properties
                 .preferred_idr_period
                 > 0
             {
                 NonZeroU32::new(
                     native_quality_level_properties
-                        .h264_quality_level_properties
+                        .codec_quality_level_properties
                         .preferred_idr_period,
                 )
                 .unwrap()
@@ -643,20 +665,20 @@ impl VulkanDevice {
 
         let max_references = encoder_parameters.max_references.unwrap_or(
             if native_quality_level_properties
-                .h264_quality_level_properties
+                .codec_quality_level_properties
                 .preferred_max_l0_reference_count
                 > 0
             {
                 NonZeroU32::new(
                     native_quality_level_properties
-                        .h264_quality_level_properties
+                        .codec_quality_level_properties
                         .preferred_max_l0_reference_count,
                 )
                 .unwrap()
             } else {
                 NonZeroU32::new(
                     native_profile_caps
-                        .h264_encode_capabilities
+                        .codec_encode_capabilities
                         .max_p_picture_l0_reference_count,
                 )
                 .unwrap()
@@ -665,7 +687,7 @@ impl VulkanDevice {
 
         if max_references.get()
             > native_profile_caps
-                .h264_encode_capabilities
+                .codec_encode_capabilities
                 .max_p_picture_l0_reference_count
         {
             return Err(VulkanEncoderError::ParametersError {
@@ -674,7 +696,7 @@ impl VulkanDevice {
                     "Max references is {}, should be != 0 and <= {}",
                     max_references,
                     native_profile_caps
-                        .h264_encode_capabilities
+                        .codec_encode_capabilities
                         .max_p_picture_l0_reference_count
                 ),
             });
@@ -736,7 +758,7 @@ impl std::fmt::Debug for VulkanDevice {
 pub(crate) struct DecodingDevice {
     pub(crate) vulkan_device: Arc<VulkanDevice>,
     pub(crate) h264_decode_queues: Arc<VideoQueues>,
-    pub(crate) profile_capabilities: NativeDecodeProfileCapabilities,
+    pub(crate) profile_capabilities: NativeDecodeProfileCapabilities<H264Codec>,
 }
 
 impl Deref for DecodingDevice {
