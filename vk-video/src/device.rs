@@ -14,12 +14,10 @@ use crate::device::caps::{
 use crate::device::queues::{Queue, QueueIndex, Queues, VideoQueues};
 use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, RateControl,
-    TranscoderOutputConfig,
 };
 use crate::parser::{h264::H264Parser, reference_manager::ReferenceContext};
 use crate::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
-use crate::vulkan_transcoder::{Transcoder, TranscoderError};
 use crate::{
     BytesDecoder, BytesEncoder, DecoderError, RawFrameData, VulkanDecoderError, VulkanEncoderError,
     VulkanInitError, VulkanInstance, wrappers::*,
@@ -386,11 +384,13 @@ impl VulkanDevice {
 
     /// Create a single-input multiple-output transcoder.
     /// Each item in `outputs` corresponds to one output.
+    #[cfg(feature = "transcoder")]
     pub fn create_transcoder(
         self: &Arc<Self>,
-        outputs: &[TranscoderOutputConfig],
-    ) -> Result<Transcoder, TranscoderError> {
-        Transcoder::new(self.clone(), outputs.into())
+        outputs: &[crate::parameters::TranscoderOutputConfig],
+    ) -> Result<crate::vulkan_transcoder::Transcoder, crate::vulkan_transcoder::TranscoderError>
+    {
+        crate::vulkan_transcoder::Transcoder::new(self.clone(), outputs.into())
     }
 
     pub(crate) fn encoding_device(self: &Arc<Self>) -> Result<EncodingDevice, VulkanEncoderError> {

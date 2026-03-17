@@ -64,6 +64,7 @@ impl Queue {
 
 pub(crate) struct Queues {
     pub(crate) transfer: Queue,
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     pub(crate) compute: Queue,
     pub(crate) h264_decode: Option<Arc<VideoQueues>>,
     pub(crate) h264_encode: Option<Arc<VideoQueues>>,

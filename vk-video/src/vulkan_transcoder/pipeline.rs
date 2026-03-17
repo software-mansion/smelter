@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{io::Cursor, sync::Arc};
 
 use ash::vk;
 
@@ -310,33 +310,14 @@ impl ResizingPipeline {
             vec![layout_input.clone(), layout_output.clone()],
         )?);
 
-        let mut front = naga::front::wgsl::Frontend::new();
-        let parsed = front.parse(include_str!("shader.wgsl")).unwrap();
-        let mut validator = naga::valid::Validator::new(
-            naga::valid::ValidationFlags::all(),
-            naga::valid::Capabilities::all(),
-        );
-        validator
-            .subgroup_stages(naga::valid::ShaderStages::COMPUTE)
-            .subgroup_operations(naga::valid::SubgroupOperationSet::all());
-        let module_info = validator.validate(&parsed).unwrap();
-        let compiled = naga::back::spv::write_vec(
-            &parsed,
-            &module_info,
-            &naga::back::spv::Options {
-                lang_version: (1, 6),
-                ..Default::default()
-            },
-            Some(&naga::back::spv::PipelineOptions {
-                shader_stage: naga::ShaderStage::Compute,
-                entry_point: "main".into(),
-            }),
-        )
-        .unwrap();
+        const SHADER_SPV: &[u8] =
+            include_bytes!(concat!(env!("OUT_DIR"), "/transcoding_shader.spv"));
+        let mut shader_bytes_cursor = Cursor::new(SHADER_SPV);
+        let compiled_shader = ash::util::read_spv(&mut shader_bytes_cursor).unwrap();
 
         let shader_module = Arc::new(ShaderModule::new(
             device.device.clone(),
-            &vk::ShaderModuleCreateInfo::default().code(&compiled),
+            &vk::ShaderModuleCreateInfo::default().code(&compiled_shader),
         )?);
 
         let shader = vk::PipelineShaderStageCreateInfo::default()

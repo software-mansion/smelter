@@ -519,6 +519,7 @@ impl Image {
         ImageKey(self.image.as_raw())
     }
 
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     pub(crate) fn create_plane_view(
         self: &Arc<Self>,
         layer: u32,

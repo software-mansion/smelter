@@ -6,6 +6,7 @@ mod command;
 mod debug;
 mod mem;
 mod parameter_sets;
+#[cfg(feature = "transcoder")]
 mod pipeline;
 mod sync;
 mod video;
@@ -15,6 +16,7 @@ pub(crate) use command::*;
 pub(crate) use debug::*;
 pub(crate) use mem::*;
 pub(crate) use parameter_sets::*;
+#[cfg(feature = "transcoder")]
 pub(crate) use pipeline::*;
 pub(crate) use sync::*;
 pub(crate) use video::*;

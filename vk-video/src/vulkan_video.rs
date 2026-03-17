@@ -15,6 +15,8 @@ pub mod parameters {
         VulkanDeviceDescriptor,
     };
     pub use crate::vulkan_encoder::RateControl;
+    #[cfg(feature = "transcoder")]
+    pub use crate::vulkan_transcoder::TranscoderOutputConfig;
 
     pub use ash::vk::VideoDecodeUsageFlagsKHR as DecoderUsageFlags;
 
@@ -30,22 +32,6 @@ pub mod parameters {
         #[default]
         Bilinear,
         Lanczos3,
-    }
-
-    /// Configuration for a single transcoder output.
-    #[derive(Debug, Clone, Copy)]
-    pub struct TranscoderOutputConfig {
-        pub encoder_parameters: EncoderParameters,
-        pub scaling_algorithm: ScalingAlgorithm,
-    }
-
-    impl From<EncoderParameters> for TranscoderOutputConfig {
-        fn from(encoder_parameters: EncoderParameters) -> Self {
-            Self {
-                encoder_parameters,
-                scaling_algorithm: ScalingAlgorithm::default(),
-            }
-        }
     }
 
     /// A profile in H264 is a set of codec features used while encoding a specific video.
@@ -89,6 +75,8 @@ pub use crate::instance::VulkanInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 pub use crate::vulkan_decoder::VulkanDecoderError;
 pub use crate::vulkan_encoder::VulkanEncoderError;
+#[cfg(feature = "transcoder")]
+pub use crate::vulkan_transcoder::TranscoderError;
 
 use crate::parser::{
     decoder_instructions::compile_to_decoder_instructions, h264::H264Parser,

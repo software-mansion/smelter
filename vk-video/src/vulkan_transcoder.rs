@@ -5,7 +5,8 @@ use ash::vk;
 use crate::{
     DecoderError, EncodedInputChunk, EncodedOutputChunk, Frame, VulkanCommonError, VulkanDevice,
     VulkanEncoderError,
-    parameters::TranscoderOutputConfig,
+    device::EncoderParameters,
+    parameters::ScalingAlgorithm,
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
         h264::H264Parser,
@@ -37,6 +38,22 @@ pub enum TranscoderError {
 
     #[error("Wrong output number: expected a value between 0 and {expected_max}, found {actual}")]
     WrongOutputNumber { expected_max: usize, actual: usize },
+}
+
+/// Configuration for a single transcoder output.
+#[derive(Debug, Clone, Copy)]
+pub struct TranscoderOutputConfig {
+    pub encoder_parameters: EncoderParameters,
+    pub scaling_algorithm: ScalingAlgorithm,
+}
+
+impl From<EncoderParameters> for TranscoderOutputConfig {
+    fn from(encoder_parameters: EncoderParameters) -> Self {
+        Self {
+            encoder_parameters,
+            scaling_algorithm: ScalingAlgorithm::default(),
+        }
+    }
 }
 
 pub(crate) struct ResizedImages {

@@ -41,6 +41,7 @@ pub(crate) enum DecoderTrackerWaitState {
     NewDecodingImagesLayoutTransition,
     Decode,
     DownloadImageToBuffer,
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     ExternalProcessing,
 }
 
@@ -94,10 +95,12 @@ pub(crate) struct InFlightDecodeResources {
 
 pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
     pub(crate) decode_result: DecodeResult<DecodeSubmissionImageInfo>,
-    pub(crate) semaphore_wait_value: SemaphoreWaitValue,
     pub(crate) decoder: &'borrow mut VulkanDecoder<'decoder>,
     pub(crate) input_buffer: DecodeInputBuffer,
     pub(crate) decode_query_pool: Option<Arc<DecodingQueryPool>>,
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
+    pub(crate) semaphore_wait_value: SemaphoreWaitValue,
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     pub(crate) in_flight_resources: InFlightDecodeResources,
 }
 
