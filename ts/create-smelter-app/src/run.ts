@@ -7,7 +7,7 @@ import { spawn } from './utils/spawn';
 const SMELTER_SKILL_REPO = 'smelter-labs/skills';
 const SMELTER_SKILL_NAME = 'live-composing-smelter';
 
-export default async function () {
+export default async function() {
   const options = await resolveOptions();
   if (options.runtime.type === 'node') {
     console.log('Generating Node.js Smelter project');
@@ -29,7 +29,7 @@ export default async function () {
     try {
       await spawn(
         'npx',
-        ['skills', 'add', SMELTER_SKILL_REPO, '--skill', SMELTER_SKILL_NAME],
+        ['-y', 'skills', 'add', SMELTER_SKILL_REPO, '--skill', SMELTER_SKILL_NAME],
         { cwd: options.directory }
       );
       console.log(chalk.green('Smelter skill installed successfully.'));
