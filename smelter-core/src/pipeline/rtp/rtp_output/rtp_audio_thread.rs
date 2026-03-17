@@ -68,19 +68,17 @@ where
         let (encoded_stream, _encoder_ctx) =
             AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
 
-        let encoded_with_stats = encoded_stream.flatten().inspect(move |event| {
-            if let PipelineEvent::Data(chunk) = &event {
-                stats_sender.send(
-                    RtpOutputTrackStatsEvent::BytesSent(chunk.data.len())
-                        .into_event(&output_ref, StatsTrackKind::Audio),
-                );
-            }
-        });
-
-        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_with_stats);
+        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
         let stream = payloaded_stream.flatten().map(move |event| match event {
-            Ok(PipelineEvent::Data(packet)) => RtpOutputEvent::Data(packet),
+            // Ok(PipelineEvent::Data(packet)) => RtpOutputEvent::Data(packet),
+            Ok(PipelineEvent::Data(packet)) => {
+                stats_sender.send(
+                    RtpOutputTrackStatsEvent::BytesSent(packet.len())
+                        .into_event(&output_ref, StatsTrackKind::Audio),
+                );
+                RtpOutputEvent::Data(packet)
+            }
             Ok(PipelineEvent::EOS) => RtpOutputEvent::AudioEos(rtcp::goodbye::Goodbye {
                 sources: vec![ssrc],
                 reason: bytes::Bytes::from("Unregister output stream"),

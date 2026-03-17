@@ -65,19 +65,16 @@ where
             frame_receiver.into_iter(),
         )?;
 
-        let encoded_with_stats = encoded_stream.flatten().inspect(move |event| {
-            if let PipelineEvent::Data(chunk) = &event {
-                stats_sender.send(
-                    RtpOutputTrackStatsEvent::BytesSent(chunk.data.len())
-                        .into_event(&output_ref, StatsTrackKind::Video),
-                );
-            }
-        });
-
-        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_with_stats);
+        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
         let stream = payloaded_stream.flatten().map(move |event| match event {
-            Ok(PipelineEvent::Data(packet)) => RtpOutputEvent::Data(packet),
+            Ok(PipelineEvent::Data(packet)) => {
+                stats_sender.send(
+                    RtpOutputTrackStatsEvent::BytesSent(packet.len())
+                        .into_event(&output_ref, StatsTrackKind::Video),
+                );
+                RtpOutputEvent::Data(packet)
+            }
             Ok(PipelineEvent::EOS) => RtpOutputEvent::VideoEos(rtcp::goodbye::Goodbye {
                 sources: vec![ssrc],
                 reason: bytes::Bytes::from("Unregister output stream"),
