@@ -7,7 +7,7 @@ const SMELTER_SKILL_NAME = 'live-composing-smelter';
 
 export async function promptInstallSkill(directory: string): Promise<void> {
   const installSkill = await confirmPrompt(
-    'Would you like to install the Smelter TypeScript SDK skill for your AI coding assistant?'
+    'Would you like to install the Smelter TypeScript SDK skill for your AI coding assistant with the `npx skills` tool?'
   );
 
   if (installSkill) {
