@@ -5269,6 +5269,14 @@
               "boolean",
               "null"
             ]
+          },
+          "seek_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Seek to a specific position in milliseconds. Only supported for MP4 inputs."
           }
         },
         "additionalProperties": false

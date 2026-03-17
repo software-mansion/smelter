@@ -1,16 +1,13 @@
 use std::{
     fs::File,
     path::Path,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
-    },
-    thread::JoinHandle,
+    sync::Arc,
+    thread::{self, JoinHandle, ThreadId},
     time::Duration,
 };
 
-use crossbeam_channel::bounded;
-use tracing::{Level, Span, debug, error, span, trace};
+use crossbeam_channel::{Receiver, Sender, unbounded};
+use tracing::{debug, error, trace};
 
 use crate::{
     pipeline::{
@@ -25,18 +22,21 @@ use crate::{
         utils::{H264AvccToAnnexB, input_buffer::InputBuffer},
     },
     queue::QueueDataReceiver,
-    utils::InitializableThread,
+    utils::{InitializableThread, ShutdownCondition},
 };
 
 use crate::prelude::*;
 
 pub struct Mp4Input {
-    should_close: Arc<AtomicBool>,
+    events_sender: Sender<StateEvent>,
 }
 
-enum TrackType {
-    Video,
-    Audio,
+impl Mp4Input {
+    pub fn seek(&self, position: Duration) {
+        if self.events_sender.send(StateEvent::Seek(position)).is_err() {
+            debug!("Failed to handle seek event. Channel closed.")
+        }
+    }
 }
 
 impl Mp4Input {
@@ -45,23 +45,22 @@ impl Mp4Input {
         input_ref: Ref<InputId>,
         options: Mp4InputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
-        let source = match options.source {
+        let source_file = match options.source.clone() {
             Mp4InputSource::Url(url) => Self::download_remote_file(&ctx, &url)?,
             Mp4InputSource::File(path) => Arc::new(SourceFile {
                 path,
                 remove_on_drop: false,
             }),
         };
-        let buffer = InputBuffer::new(&ctx, options.buffer);
 
         ctx.stats_sender.send(StatsEvent::NewInput {
             input_ref: input_ref.clone(),
             kind: InputProtocolKind::Mp4,
         });
 
-        let video = Mp4FileReader::from_path(&source.path)?.try_new_h264_track();
+        let video = Mp4FileReader::from_path(&source_file.path)?.try_new_h264_track();
         let video_duration = video.as_ref().and_then(|track| track.duration());
-        let audio = Mp4FileReader::from_path(&source.path)?.try_new_aac_track();
+        let audio = Mp4FileReader::from_path(&source_file.path)?.try_new_aac_track();
         let audio_duration = audio.as_ref().and_then(|track| track.duration());
 
         if video.is_none() && audio.is_none() {
@@ -147,43 +146,23 @@ impl Mp4Input {
             None => (None, None, None),
         };
 
-        let video_span = span!(Level::INFO, "MP4 video", input_id = input_ref.to_string());
-        let audio_span = span!(Level::INFO, "MP4 audio", input_id = input_ref.to_string());
-        let should_close = Arc::new(AtomicBool::new(false));
-        if options.should_loop {
-            start_thread_with_loop(
-                ctx.clone(),
-                input_ref.clone(),
-                buffer,
-                video_handle,
-                video_track,
-                video_span,
-                audio_handle,
-                audio_track,
-                audio_span,
-                should_close.clone(),
-                source,
-                options.seek,
-            );
-        } else {
-            start_thread_single_run(
-                ctx.clone(),
-                input_ref.clone(),
-                buffer,
-                video_handle,
-                video_track,
-                video_span,
-                audio_handle,
-                audio_track,
-                audio_span,
-                should_close.clone(),
-                source,
-                options.seek,
-            );
-        }
+        let (reader, events_sender) = TrackMangerThread::new(
+            &ctx,
+            &input_ref,
+            options,
+            source_file,
+            video_handle,
+            audio_handle,
+        );
+        std::thread::Builder::new()
+            .name("mp4 reader".to_string())
+            .spawn(move || {
+                reader.run(video_track, audio_track);
+            })
+            .unwrap();
 
         Ok((
-            Input::Mp4(Self { should_close }),
+            Input::Mp4(Self { events_sender }),
             InputInitInfo::Mp4 {
                 video_duration,
                 audio_duration,
@@ -217,280 +196,294 @@ impl Mp4Input {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn start_thread_with_loop(
-    ctx: Arc<PipelineCtx>,
+impl Drop for Mp4Input {
+    fn drop(&mut self) {
+        if self.events_sender.send(StateEvent::InputShutdown).is_err() {
+            error!("Failed to send InputShutdown event. Channel closed")
+        }
+    }
+}
+
+enum StateEvent {
+    Seek(Duration),
+    ThreadFinished(ThreadId),
+    InputShutdown,
+}
+
+#[derive(Clone)]
+struct TrackContext {
     input_ref: Ref<InputId>,
     buffer: InputBuffer,
-    video_handle: Option<DecoderThreadHandle>,
-    video_track: Option<Track<File>>,
-    video_span: Span,
-    audio_sender: Option<DecoderThreadHandle>,
-    audio_track: Option<Track<File>>,
-    audio_span: Span,
-    should_close_input: Arc<AtomicBool>,
-    source_file: Arc<SourceFile>,
-    seek: Option<Duration>,
-) {
-    std::thread::Builder::new()
-        .name("mp4 reader".to_string())
-        .spawn(move || {
-            enum TrackProvider {
-                Value(Box<Track<File>>),
-                Handle(JoinHandle<Box<Track<File>>>),
-            }
-            let _source_file = source_file;
-            let mut audio_seek = seek;
-            let mut video_seek = seek;
-            let mut offset = ctx.queue_sync_point.elapsed();
-            let has_audio = audio_track.is_some();
-            let last_audio_sample_pts = Arc::new(AtomicU64::new(0));
-            let last_video_sample_pts = Arc::new(AtomicU64::new(0));
-            let mut video_track = video_track.map(|t| TrackProvider::Value(t.into()));
-            let mut audio_track = audio_track.map(|t| TrackProvider::Value(t.into()));
 
-            loop {
-                // seek only on the first loop
-                let audio_seek = audio_seek.take();
-                let video_seek = video_seek.take();
+    event_sender: Sender<StateEvent>,
+    stats_sender: StatsSender,
+    decoder_handle: DecoderThreadHandle,
 
-                let (finished_track_sender, finished_track_receiver) = bounded(1);
-                let should_close = Arc::new(AtomicBool::new(false));
-                let video_thread = video_handle
-                    .as_ref()
-                    .map(|handle| handle.chunk_sender.clone())
-                    .and_then(|sender| video_track.take().map(|track| (track, sender)))
-                    .map(|(track, sender)| {
-                        let span = video_span.clone();
-                        let finished_track_sender = finished_track_sender.clone();
-                        let last_sample_pts = last_video_sample_pts.clone();
-                        let should_close = should_close.clone();
-                        let should_close_input = should_close_input.clone();
-                        let buffer = buffer.clone();
-                        let stats_sender = ctx.stats_sender.clone();
-                        let input_ref = input_ref.clone();
-                        std::thread::Builder::new()
-                            .name("mp4 reader - video".to_string())
-                            .spawn(move || {
-                                let _span = span.enter();
-                                let mut track = match track {
-                                    TrackProvider::Value(track) => track,
-                                    TrackProvider::Handle(handle) => handle.join().unwrap(),
-                                };
-                                for (mut chunk, duration) in track.chunks(video_seek) {
-                                    chunk.pts += offset;
-                                    chunk.dts = chunk.dts.map(|dts| dts + offset);
-                                    last_sample_pts.fetch_max(
-                                        (chunk.pts + duration).as_nanos() as u64,
-                                        Ordering::Relaxed,
-                                    );
-                                    stats_sender.send(
-                                        Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
-                                            .into_event(&input_ref, StatsTrackKind::Video),
-                                    );
+    _source_file: Arc<SourceFile>,
+}
 
-                                    // add buffer after recording last sample
-                                    buffer.recalculate_buffer(chunk.pts);
-                                    chunk.pts += buffer.size();
+struct TrackMangerThread {
+    ctx: Arc<PipelineCtx>,
+    options: Mp4InputOptions,
+    events_receiver: Receiver<StateEvent>,
+    input_shutdown_condition: ShutdownCondition,
+    video_ctx: Option<TrackContext>,
+    audio_ctx: Option<TrackContext>,
+    video_thread: Option<(JoinHandle<TrackThreadResult>, ShutdownCondition)>,
+    audio_thread: Option<(JoinHandle<TrackThreadResult>, ShutdownCondition)>,
+}
 
-                                    trace!(pts=?chunk.pts, "MP4 reader produced a video chunk.");
-                                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
-                                        debug!("Failed to send a video chunk. Channel closed.")
-                                    }
-                                    if should_close.load(Ordering::Relaxed)
-                                        || should_close_input.load(Ordering::Relaxed)
-                                    {
-                                        break;
-                                    }
-                                    // TODO: send flush
-                                }
-                                let _ = finished_track_sender.send(TrackType::Video);
-                                track
-                            })
-                            .unwrap()
-                    });
+impl TrackMangerThread {
+    fn new(
+        ctx: &Arc<PipelineCtx>,
+        input_ref: &Ref<InputId>,
+        options: Mp4InputOptions,
+        source_file: Arc<SourceFile>,
+        video_handle: Option<DecoderThreadHandle>,
+        audio_handle: Option<DecoderThreadHandle>,
+    ) -> (Self, Sender<StateEvent>) {
+        let (events_sender, events_receiver) = unbounded();
+        let buffer = InputBuffer::new(ctx, options.buffer);
 
-                let audio_thread = audio_sender
-                    .as_ref()
-                    .map(|handle| handle.chunk_sender.clone())
-                    .and_then(|sender| audio_track.take().map(|track| (track, sender)))
-                    .map(|(track, sender)| {
-                        let span = audio_span.clone();
-                        let finished_track_sender = finished_track_sender.clone();
-                        let last_sample_pts = last_audio_sample_pts.clone();
-                        let should_close = should_close.clone();
-                        let should_close_input = should_close_input.clone();
-                        let buffer = buffer.clone();
-                        let stats_sender = ctx.stats_sender.clone();
-                        let input_ref = input_ref.clone();
-                        std::thread::Builder::new()
-                            .name("mp4 reader - audio".to_string())
-                            .spawn(move || {
-                                let _span = span.enter();
-                                let mut track = match track {
-                                    TrackProvider::Value(track) => track,
-                                    TrackProvider::Handle(handle) => handle.join().unwrap(),
-                                };
-                                for (mut chunk, duration) in track.chunks(audio_seek) {
-                                    chunk.pts += offset;
-                                    chunk.dts = chunk.dts.map(|dts| dts + offset);
+        let video_ctx = video_handle.map(|handle| TrackContext {
+            input_ref: input_ref.clone(),
+            buffer: buffer.clone(),
+            event_sender: events_sender.clone(),
+            stats_sender: ctx.stats_sender.clone(),
+            decoder_handle: handle,
+            _source_file: source_file.clone(),
+        });
 
-                                    last_sample_pts.fetch_max(
-                                        (chunk.pts + duration).as_nanos() as u64,
-                                        Ordering::Relaxed,
-                                    );
-                                    stats_sender.send(
-                                        Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
-                                            .into_event(&input_ref, StatsTrackKind::Audio),
-                                    );
+        let audio_ctx = audio_handle.map(|handle| TrackContext {
+            input_ref: input_ref.clone(),
+            buffer: buffer.clone(),
+            event_sender: events_sender.clone(),
+            stats_sender: ctx.stats_sender.clone(),
+            decoder_handle: handle,
+            _source_file: source_file.clone(),
+        });
 
-                                    // add buffer after recording last sample
-                                    buffer.recalculate_buffer(chunk.pts);
-                                    chunk.pts += buffer.size();
+        (
+            Self {
+                ctx: ctx.clone(),
+                options,
+                events_receiver,
+                input_shutdown_condition: ShutdownCondition::default(),
+                video_ctx,
+                audio_ctx,
+                video_thread: None,
+                audio_thread: None,
+            },
+            events_sender,
+        )
+    }
 
-                                    trace!(pts=?chunk.pts, "MP4 reader produced an audio chunk.");
-                                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
-                                        debug!("Failed to send a audio chunk. Channel closed.")
-                                    }
-                                    if should_close.load(Ordering::Relaxed)
-                                        || should_close_input.load(Ordering::Relaxed)
-                                    {
-                                        break;
-                                    }
-                                    // TODO: send flush
-                                }
-                                let _ = finished_track_sender.send(TrackType::Audio);
-                                track
-                            })
-                            .unwrap()
-                    });
+    fn run(mut self, video_track: Option<Track<File>>, audio_track: Option<Track<File>>) {
+        let offset = self.ctx.queue_sync_point.elapsed();
+        if let (Some(track), Some(ctx)) = (video_track, &self.video_ctx) {
+            self.video_thread = Some(self.spawn_video(ctx, track, offset, self.options.seek));
+        }
+        if let (Some(track), Some(ctx)) = (audio_track, &self.audio_ctx) {
+            self.audio_thread = Some(self.spawn_audio(ctx, track, offset, self.options.seek));
+        }
 
-                match finished_track_receiver.recv().unwrap() {
-                    TrackType::Video => {
-                        video_track =
-                            Some(TrackProvider::Value(video_thread.unwrap().join().unwrap()));
-                        should_close.store(true, Ordering::Relaxed);
-                        if let Some(audio_thread) = audio_thread {
-                            audio_track = Some(TrackProvider::Handle(audio_thread));
-                        }
+        while let Ok(event) = self.events_receiver.recv() {
+            match event {
+                StateEvent::Seek(seek) => {
+                    self.restart_threads(Some(seek));
+                }
+                StateEvent::ThreadFinished(thread_id) => {
+                    if !self.options.should_loop {
+                        continue;
                     }
-                    TrackType::Audio => {
-                        audio_track =
-                            Some(TrackProvider::Value(audio_thread.unwrap().join().unwrap()));
-                        should_close.store(true, Ordering::Relaxed);
-                        if let Some(video_thread) = video_thread {
-                            video_track = Some(TrackProvider::Handle(video_thread));
-                        }
+
+                    if let Some((video, _)) = &self.video_thread
+                        && video.thread().id() == thread_id
+                    {
+                        self.restart_threads(None);
+                    }
+
+                    if let Some((audio, _)) = &self.audio_thread
+                        && audio.thread().id() == thread_id
+                    {
+                        self.restart_threads(None);
                     }
                 }
-                if has_audio {
-                    offset = Duration::from_nanos(last_audio_sample_pts.load(Ordering::Relaxed));
-                } else {
-                    offset = Duration::from_nanos(last_video_sample_pts.load(Ordering::Relaxed));
-                }
-
-                if should_close_input.load(Ordering::Relaxed) {
+                StateEvent::InputShutdown => {
+                    self.input_shutdown_condition.mark_for_shutdown();
                     return;
                 }
             }
-        })
-        .unwrap();
-}
-
-#[allow(clippy::too_many_arguments)]
-fn start_thread_single_run(
-    ctx: Arc<PipelineCtx>,
-    input_ref: Ref<InputId>,
-    buffer: InputBuffer,
-    video_handle: Option<DecoderThreadHandle>,
-    video_track: Option<Track<File>>,
-    video_span: Span,
-    audio_handle: Option<DecoderThreadHandle>,
-    audio_track: Option<Track<File>>,
-    audio_span: Span,
-    should_close: Arc<AtomicBool>,
-    _source_file: Arc<SourceFile>,
-    seek: Option<Duration>,
-) {
-    let offset = ctx.queue_sync_point.elapsed();
-    if let (Some(handle), Some(mut track)) = (video_handle, video_track) {
-        let should_close = should_close.clone();
-        let buffer = buffer.clone();
-        let stats_sender = ctx.stats_sender.clone();
-        let input_ref = input_ref.clone();
-        std::thread::Builder::new()
-            .name("mp4 reader - video".to_string())
-            .spawn(move || {
-                let _span = video_span.enter();
-                for (mut chunk, _duration) in track.chunks(seek) {
-                    buffer.recalculate_buffer(chunk.pts + offset);
-                    chunk.pts = chunk.pts + offset + buffer.size();
-                    chunk.dts = chunk.dts.map(|dts| dts + offset);
-
-                    stats_sender.send(
-                        Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
-                            .into_event(&input_ref, StatsTrackKind::Video),
-                    );
-                    trace!(?chunk, "Sending video chunk");
-                    if handle
-                        .chunk_sender
-                        .send(PipelineEvent::Data(chunk))
-                        .is_err()
-                    {
-                        debug!("Failed to send a video chunk. Channel closed.")
-                    }
-                    if should_close.load(Ordering::Relaxed) {
-                        break;
-                    }
-                }
-                if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
-                    debug!("Failed to send EOS from MP4 video reader. Channel closed.");
-                }
-            })
-            .unwrap();
+        }
     }
 
-    if let (Some(handle), Some(mut track)) = (audio_handle, audio_track) {
-        let should_close = should_close.clone();
-        let buffer = buffer.clone();
-        let stats_sender = ctx.stats_sender.clone();
-        let input_ref = input_ref.clone();
-        std::thread::Builder::new()
-            .name("mp4 reader - audio".to_string())
-            .spawn(move || {
-                let _span = audio_span.enter();
-                for (mut chunk, _duration) in track.chunks(seek) {
-                    buffer.recalculate_buffer(chunk.pts + offset);
-                    chunk.pts = chunk.pts + offset + buffer.size();
-                    chunk.dts = chunk.dts.map(|dts| dts + offset);
+    fn restart_threads(&mut self, seek: Option<Duration>) {
+        if let Some((_, cond)) = self.video_thread.as_ref() {
+            cond.mark_for_shutdown()
+        }
+        if let Some((_, cond)) = self.audio_thread.as_ref() {
+            cond.mark_for_shutdown()
+        }
 
-                    stats_sender.send(
-                        Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
-                            .into_event(&input_ref, StatsTrackKind::Audio),
-                    );
-                    trace!(?chunk, "Sending audio chunk");
-                    if handle
-                        .chunk_sender
-                        .send(PipelineEvent::Data(chunk))
-                        .is_err()
-                    {
-                        debug!("Failed to send a audio chunk. Channel closed.")
-                    }
-                    if should_close.load(Ordering::Relaxed) {
-                        break;
-                    }
-                }
-                if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
-                    debug!("Failed to send EOS from MP4 audio reader. Channel closed.");
-                }
+        let video = self
+            .video_thread
+            .take()
+            .map(|(handle, _)| handle.join().unwrap());
+        let audio = self
+            .audio_thread
+            .take()
+            .map(|(handle, _)| handle.join().unwrap());
+
+        let offset = match (&video, &audio) {
+            (None, None) => Duration::ZERO,
+            (None, Some(audio)) => audio.last_pts,
+            (Some(video), None) => video.last_pts,
+            (Some(video), Some(audio)) => Duration::max(video.last_pts, audio.last_pts),
+        };
+
+        if let (Some(result), Some(ctx)) = (video, &self.video_ctx) {
+            self.video_thread = Some(self.spawn_video(ctx, result.track, offset, seek));
+        }
+        if let (Some(result), Some(ctx)) = (audio, &self.audio_ctx) {
+            self.audio_thread = Some(self.spawn_audio(ctx, result.track, offset, seek));
+        }
+    }
+
+    fn spawn_video(
+        &self,
+        ctx: &TrackContext,
+        track: Track<File>,
+        offset: Duration,
+        seek: Option<Duration>,
+    ) -> (JoinHandle<TrackThreadResult>, ShutdownCondition) {
+        let shutdown_condition = self.input_shutdown_condition.child_condition();
+        let track_thread = TrackThread {
+            ctx: ctx.clone(),
+            shutdown_condition: shutdown_condition.clone(),
+            track,
+            offset,
+            seek,
+        };
+        let handle = std::thread::Builder::new()
+            .name("mp4 reader - video".to_string())
+            .spawn(move || {
+                //let _span = span.enter();
+                track_thread.run_video_thread()
             })
             .unwrap();
-    };
+        (handle, shutdown_condition)
+    }
+
+    fn spawn_audio(
+        &self,
+        ctx: &TrackContext,
+        track: Track<File>,
+        offset: Duration,
+        seek: Option<Duration>,
+    ) -> (JoinHandle<TrackThreadResult>, ShutdownCondition) {
+        let shutdown_condition = self.input_shutdown_condition.child_condition();
+        let track_thread = TrackThread {
+            ctx: ctx.clone(),
+            shutdown_condition: shutdown_condition.clone(),
+            track,
+            offset,
+            seek,
+        };
+        let handle = std::thread::Builder::new()
+            .name("mp4 reader - audio".to_string())
+            .spawn(move || {
+                //let _span = span.enter();
+                track_thread.run_audio_thread()
+            })
+            .unwrap();
+        (handle, shutdown_condition)
+    }
 }
 
-impl Drop for Mp4Input {
-    fn drop(&mut self) {
-        self.should_close.store(true, Ordering::Relaxed);
+struct TrackThread {
+    ctx: TrackContext,
+    shutdown_condition: ShutdownCondition,
+    track: Track<File>,
+    offset: Duration,
+    seek: Option<Duration>,
+}
+
+struct TrackThreadResult {
+    last_pts: Duration,
+    track: Track<File>,
+}
+
+impl TrackThread {
+    fn run_video_thread(mut self) -> TrackThreadResult {
+        let mut last_pts = self.offset;
+        for (mut chunk, duration) in self.track.chunks(self.seek) {
+            chunk.pts += self.offset;
+            chunk.dts = chunk.dts.map(|dts| dts + self.offset);
+            last_pts = Duration::max(last_pts, chunk.pts + duration);
+
+            self.ctx.stats_sender.send(
+                Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
+                    .into_event(&self.ctx.input_ref, StatsTrackKind::Video),
+            );
+
+            // add buffer after recording last sample
+            self.ctx.buffer.recalculate_buffer(chunk.pts);
+            chunk.pts += self.ctx.buffer.size();
+
+            trace!(pts=?chunk.pts, "MP4 reader produced a video chunk.");
+            let chunk_sender = &self.ctx.decoder_handle.chunk_sender;
+            if chunk_sender.send(PipelineEvent::Data(chunk)).is_err() {
+                debug!("Failed to send a video chunk. Channel closed.")
+            }
+
+            if self.shutdown_condition.should_close() {
+                break;
+            }
+        }
+        let _ = self
+            .ctx
+            .event_sender
+            .send(StateEvent::ThreadFinished(thread::current().id()));
+        TrackThreadResult {
+            last_pts,
+            track: self.track,
+        }
+    }
+
+    fn run_audio_thread(mut self) -> TrackThreadResult {
+        let mut last_pts = self.offset;
+        for (mut chunk, duration) in self.track.chunks(self.seek) {
+            chunk.pts += self.offset;
+            chunk.dts = chunk.dts.map(|dts| dts + self.offset);
+            last_pts = Duration::max(last_pts, chunk.pts + duration);
+
+            self.ctx.stats_sender.send(
+                Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
+                    .into_event(&self.ctx.input_ref, StatsTrackKind::Audio),
+            );
+
+            // add buffer after recording last sample
+            self.ctx.buffer.recalculate_buffer(chunk.pts);
+            chunk.pts += self.ctx.buffer.size();
+
+            trace!(pts=?chunk.pts, "MP4 reader produced a audio chunk.");
+            let chunk_sender = &self.ctx.decoder_handle.chunk_sender;
+            if chunk_sender.send(PipelineEvent::Data(chunk)).is_err() {
+                debug!("Failed to send a audio chunk. Channel closed.")
+            }
+
+            if self.shutdown_condition.should_close() {
+                break;
+            }
+        }
+        let _ = self
+            .ctx
+            .event_sender
+            .send(StateEvent::ThreadFinished(thread::current().id()));
+        TrackThreadResult {
+            last_pts,
+            track: self.track,
+        }
     }
 }
 

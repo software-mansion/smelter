@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 use crate::prelude::*;
 
@@ -60,6 +60,22 @@ pub enum InputProtocolKind {
     V4l2,
     DeckLink,
     RawDataChannel,
+}
+
+impl fmt::Display for InputProtocolKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InputProtocolKind::Rtp => write!(f, "rtp"),
+            InputProtocolKind::Rtmp => write!(f, "rtmp"),
+            InputProtocolKind::Mp4 => write!(f, "mp4"),
+            InputProtocolKind::Hls => write!(f, "hls"),
+            InputProtocolKind::Whip => write!(f, "whip"),
+            InputProtocolKind::Whep => write!(f, "whep"),
+            InputProtocolKind::V4l2 => write!(f, "v4l2"),
+            InputProtocolKind::DeckLink => write!(f, "decklink"),
+            InputProtocolKind::RawDataChannel => write!(f, "raw_data_channel"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
