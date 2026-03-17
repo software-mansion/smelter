@@ -14,13 +14,6 @@ const EX_HEADER_BIT: u8 = 0b10000000;
 pub enum FlvVideoData {
     Legacy(VideoTag),
     Enhanced(EnhancedVideoTag),
-    /// Enhanced RTMP command frame (e.g. seek start/end).
-    /// Sent when `VideoFrameType == Command` and packet type is not Metadata.
-    /// Per the spec, the payload is a single UI8 command byte with no video body.
-    EnhancedCommand {
-        command: VideoCommand,
-        timestamp_nano_offset: Option<u32>,
-    },
 }
 
 /// Video command signals for Enhanced RTMP.
@@ -50,9 +43,21 @@ impl VideoCommand {
 #[derive(Debug, Clone)]
 pub struct EnhancedVideoTag {
     pub frame_type: VideoTagFrameType,
-    pub four_cc: VideoFourCc,
     pub timestamp_nano_offset: Option<u32>,
-    pub packet_type: VideoPacketType,
+    pub body: EnhancedVideoBody,
+}
+
+/// The body of an Enhanced RTMP video tag.
+///
+/// Command frames (gated by `VideoFrameType == Command`) have no FourCC or
+/// video body. All other cases carry a FourCC and a `VideoPacketType`.
+#[derive(Debug, Clone)]
+pub enum EnhancedVideoBody {
+    Command(VideoCommand),
+    Packet {
+        four_cc: VideoFourCc,
+        packet_type: VideoPacketType,
+    },
 }
 
 /// Semantic video packet type after parsing.
@@ -196,7 +201,7 @@ impl FlvVideoData {
         }
 
         if data[0] & EX_HEADER_BIT != 0 {
-            EnhancedVideoTag::parse(data)
+            EnhancedVideoTag::parse(data).map(FlvVideoData::Enhanced)
         } else {
             VideoTag::parse(data).map(FlvVideoData::Legacy)
         }
@@ -206,9 +211,6 @@ impl FlvVideoData {
         match self {
             FlvVideoData::Legacy(tag) => tag.serialize(),
             FlvVideoData::Enhanced(tag) => tag.serialize(),
-            FlvVideoData::EnhancedCommand { .. } => {
-                unimplemented!()
-            }
         }
     }
 }
@@ -216,7 +218,7 @@ impl FlvVideoData {
 impl EnhancedVideoTag {
     /// Parses Enhanced RTMP video tag.
     /// First byte: `[isExHeader(1) | VideoFrameType(3 bits) | RawVideoPacketType(4 bits)]`
-    fn parse(data: Bytes) -> Result<FlvVideoData, FlvVideoTagParseError> {
+    fn parse(data: Bytes) -> Result<Self, FlvVideoTagParseError> {
         if data.is_empty() {
             return Err(FlvVideoTagParseError::TooShort);
         }
@@ -233,7 +235,7 @@ impl EnhancedVideoTag {
             };
 
         // Per spec: if frame_type is Command and packet_type is not Metadata,
-        // the payload is a single UI8 VideoCommand with no video body.
+        // the payload is a single UI8 VideoCommand with no FourCC or video body.
         if frame_type == VideoTagFrameType::VideoInfoOrCommandFrame
             && raw_packet_type != RawVideoPacketType::Metadata
         {
@@ -241,9 +243,10 @@ impl EnhancedVideoTag {
                 return Err(FlvVideoTagParseError::TooShort);
             }
             let command = VideoCommand::from_raw(rest[0])?;
-            return Ok(FlvVideoData::EnhancedCommand {
-                command,
+            return Ok(EnhancedVideoTag {
+                frame_type,
                 timestamp_nano_offset,
+                body: EnhancedVideoBody::Command(command),
             });
         }
 
@@ -277,12 +280,14 @@ impl EnhancedVideoTag {
             }
         };
 
-        Ok(FlvVideoData::Enhanced(EnhancedVideoTag {
+        Ok(EnhancedVideoTag {
             frame_type,
-            four_cc,
             timestamp_nano_offset,
-            packet_type,
-        }))
+            body: EnhancedVideoBody::Packet {
+                four_cc,
+                packet_type,
+            },
+        })
     }
 
     /// Parses CodedFrames body: optional SI24 composition time (3 bytes) + payload.
@@ -330,7 +335,6 @@ impl EnhancedVideoTag {
             let mut mod_ex_data_size = data[offset] as usize + 1;
             offset += 1;
 
-            // If size == 256, use UI16 + 1 instead
             if mod_ex_data_size == 256 {
                 if data.len() < offset + 2 {
                     return Err(FlvVideoTagParseError::TooShort);
@@ -369,7 +373,6 @@ impl EnhancedVideoTag {
                 }
             }
 
-            // If another ModEx, continue the loop; otherwise return resolved state.
             if next_packet_type != RawVideoPacketType::ModEx {
                 return Ok((
                     next_packet_type,
