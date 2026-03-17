@@ -59,9 +59,9 @@ impl Mp4Input {
             kind: InputProtocolKind::Mp4,
         });
 
-        let video = Mp4FileReader::from_path(&source.path)?.find_h264_track();
+        let video = Mp4FileReader::from_path(&source.path)?.try_new_h264_track();
         let video_duration = video.as_ref().and_then(|track| track.duration());
-        let audio = Mp4FileReader::from_path(&source.path)?.find_aac_track();
+        let audio = Mp4FileReader::from_path(&source.path)?.try_new_aac_track();
         let audio_duration = audio.as_ref().and_then(|track| track.duration());
 
         if video.is_none() && audio.is_none() {
@@ -163,6 +163,7 @@ impl Mp4Input {
                 audio_span,
                 should_close.clone(),
                 source,
+                options.seek,
             );
         } else {
             start_thread_single_run(
@@ -177,6 +178,7 @@ impl Mp4Input {
                 audio_span,
                 should_close.clone(),
                 source,
+                options.seek,
             );
         }
 
@@ -228,6 +230,7 @@ fn start_thread_with_loop(
     audio_span: Span,
     should_close_input: Arc<AtomicBool>,
     source_file: Arc<SourceFile>,
+    seek: Option<Duration>,
 ) {
     std::thread::Builder::new()
         .name("mp4 reader".to_string())
@@ -237,6 +240,8 @@ fn start_thread_with_loop(
                 Handle(JoinHandle<Box<Track<File>>>),
             }
             let _source_file = source_file;
+            let mut audio_seek = seek;
+            let mut video_seek = seek;
             let mut offset = ctx.queue_sync_point.elapsed();
             let has_audio = audio_track.is_some();
             let last_audio_sample_pts = Arc::new(AtomicU64::new(0));
@@ -245,6 +250,10 @@ fn start_thread_with_loop(
             let mut audio_track = audio_track.map(|t| TrackProvider::Value(t.into()));
 
             loop {
+                // seek only on the first loop
+                let audio_seek = audio_seek.take();
+                let video_seek = video_seek.take();
+
                 let (finished_track_sender, finished_track_receiver) = bounded(1);
                 let should_close = Arc::new(AtomicBool::new(false));
                 let video_thread = video_handle
@@ -268,7 +277,7 @@ fn start_thread_with_loop(
                                     TrackProvider::Value(track) => track,
                                     TrackProvider::Handle(handle) => handle.join().unwrap(),
                                 };
-                                for (mut chunk, duration) in track.chunks() {
+                                for (mut chunk, duration) in track.chunks(video_seek) {
                                     chunk.pts += offset;
                                     chunk.dts = chunk.dts.map(|dts| dts + offset);
                                     last_sample_pts.fetch_max(
@@ -322,7 +331,7 @@ fn start_thread_with_loop(
                                     TrackProvider::Value(track) => track,
                                     TrackProvider::Handle(handle) => handle.join().unwrap(),
                                 };
-                                for (mut chunk, duration) in track.chunks() {
+                                for (mut chunk, duration) in track.chunks(audio_seek) {
                                     chunk.pts += offset;
                                     chunk.dts = chunk.dts.map(|dts| dts + offset);
 
@@ -379,6 +388,7 @@ fn start_thread_with_loop(
                 } else {
                     offset = Duration::from_nanos(last_video_sample_pts.load(Ordering::Relaxed));
                 }
+
                 if should_close_input.load(Ordering::Relaxed) {
                     return;
                 }
@@ -400,6 +410,7 @@ fn start_thread_single_run(
     audio_span: Span,
     should_close: Arc<AtomicBool>,
     _source_file: Arc<SourceFile>,
+    seek: Option<Duration>,
 ) {
     let offset = ctx.queue_sync_point.elapsed();
     if let (Some(handle), Some(mut track)) = (video_handle, video_track) {
@@ -411,7 +422,7 @@ fn start_thread_single_run(
             .name("mp4 reader - video".to_string())
             .spawn(move || {
                 let _span = video_span.enter();
-                for (mut chunk, _duration) in track.chunks() {
+                for (mut chunk, _duration) in track.chunks(seek) {
                     buffer.recalculate_buffer(chunk.pts + offset);
                     chunk.pts = chunk.pts + offset + buffer.size();
                     chunk.dts = chunk.dts.map(|dts| dts + offset);
@@ -448,7 +459,7 @@ fn start_thread_single_run(
             .name("mp4 reader - audio".to_string())
             .spawn(move || {
                 let _span = audio_span.enter();
-                for (mut chunk, _duration) in track.chunks() {
+                for (mut chunk, _duration) in track.chunks(seek) {
                     buffer.recalculate_buffer(chunk.pts + offset);
                     chunk.pts = chunk.pts + offset + buffer.size();
                     chunk.dts = chunk.dts.map(|dts| dts + offset);

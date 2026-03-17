@@ -15,6 +15,7 @@ use crate::prelude::*;
 pub struct VulkanH264Decoder {
     decoder: WgpuTexturesDecoder,
     keyframe_request_sender: Option<KeyframeRequestSender>,
+    drop_frames: bool,
 }
 
 impl VideoDecoder for VulkanH264Decoder {
@@ -35,6 +36,7 @@ impl VideoDecoder for VulkanH264Decoder {
                 Ok(Self {
                     decoder,
                     keyframe_request_sender,
+                    drop_frames: false,
                 })
             }
             None => Err(DecoderInitError::VulkanContextRequiredForVulkanDecoder),
@@ -47,10 +49,13 @@ impl VideoDecoderInstance for VulkanH264Decoder {
         trace!(?event, "Vulkan H264 decoder received an event.");
 
         let chunk = match &event {
-            EncodedInputEvent::Chunk(chunk) => vk_video::EncodedInputChunk {
-                data: chunk.data.as_ref(),
-                pts: Some(chunk.pts.as_micros() as u64),
-            },
+            EncodedInputEvent::Chunk(chunk) => {
+                self.drop_frames = !chunk.present;
+                vk_video::EncodedInputChunk {
+                    data: chunk.data.as_ref(),
+                    pts: Some(chunk.pts.as_micros() as u64),
+                }
+            }
             EncodedInputEvent::LostData => {
                 self.decoder.mark_missing_data();
                 return vec![];
@@ -75,10 +80,16 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             }
         };
 
-        frames.into_iter().map(from_vk_frame).collect()
+        match self.drop_frames {
+            true => Vec::new(),
+            false => frames.into_iter().map(from_vk_frame).collect(),
+        }
     }
 
     fn flush(&mut self) -> Vec<Frame> {
+        if self.drop_frames {
+            return Vec::new();
+        }
         match self.decoder.flush() {
             Ok(frames) => frames.into_iter().map(from_vk_frame).collect(),
             Err(err) => {

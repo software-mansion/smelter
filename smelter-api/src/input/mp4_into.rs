@@ -12,6 +12,7 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
             path,
             required,
             offset_ms,
+            seek_ms,
             should_loop,
             decoder_map,
         } = value;
@@ -47,12 +48,18 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
 
         let video_decoders = core::Mp4InputVideoDecoders { h264 };
 
+        let seek = seek_ms
+            .map(|ms| Duration::try_from_secs_f64(ms / 1000.0))
+            .transpose()
+            .map_err(|err| TypeError::new(format!("Invalid duration. {err}")))?;
+
         Ok(core::RegisterInputOptions {
             input_options: core::ProtocolInputOptions::Mp4(core::Mp4InputOptions {
                 source,
                 should_loop: should_loop.unwrap_or(false),
                 video_decoders,
                 buffer,
+                seek,
             }),
             queue_options,
         })

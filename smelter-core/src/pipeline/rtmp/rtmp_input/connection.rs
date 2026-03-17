@@ -208,6 +208,7 @@ impl RtmpConnectionState {
             pts,
             dts: Some(video.dts),
             kind: MediaKind::Video(VideoCodec::H264),
+            present: true,
         };
 
         self.ctx.stats_sender.send(
@@ -232,6 +233,7 @@ impl RtmpConnectionState {
             pts,
             dts: None,
             kind: MediaKind::Audio(AudioCodec::Aac),
+            present: true,
         };
 
         self.ctx.stats_sender.send(

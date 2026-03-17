@@ -2388,6 +2388,14 @@
             "format": "double",
             "description": "Offset in milliseconds relative to the pipeline start (start request). If offset is\nnot defined then stream is synchronized based on the first frames delivery time."
           },
+          "seek_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Start playing from a specific timestamp in milliseconds. If loop is enabled after first\niteration is done it will start from the beginning."
+          },
           "decoder_map": {
             "type": [
               "object",

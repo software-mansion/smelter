@@ -30,6 +30,8 @@ pub struct Mp4InputOptions {
 
     #[serde(rename = "loop")]
     input_loop: bool,
+
+    seek_ms: Option<f64>,
 }
 
 impl From<Mp4InputOptions> for Mp4Input {
@@ -55,12 +57,14 @@ impl Mp4Input {
             ref source,
             input_loop,
             decoder,
+            seek_ms,
         } = self.options;
         let (source_key, source_val) = source.serialize();
         json!({
             "type": "mp4",
             source_key: source_val,
             "loop": input_loop,
+            "seek_ms": seek_ms,
             "decoder_map": {
                 "h264": decoder.to_string(),
             },
@@ -110,6 +114,7 @@ pub struct Mp4InputBuilder {
     source: Mp4InputSource,
     decoder: VideoDecoder,
     input_loop: bool,
+    seek_ms: Option<f64>,
 }
 
 impl Mp4InputBuilder {
@@ -122,11 +127,15 @@ impl Mp4InputBuilder {
             source,
             decoder: VideoDecoder::FfmpegH264,
             input_loop: false,
+            seek_ms: None,
         }
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_source()?.prompt_decoder()?.prompt_loop()
+        self.prompt_source()?
+            .prompt_decoder()?
+            .prompt_loop()?
+            .prompt_seek()
     }
 
     fn prompt_source(self) -> Result<Self> {
@@ -187,6 +196,17 @@ impl Mp4InputBuilder {
         }
     }
 
+    fn prompt_seek(self) -> Result<Self> {
+        let seek_input = Text::new("Seek position in ms (ESC for none):").prompt_skippable()?;
+        match seek_input {
+            Some(s) if !s.trim().is_empty() => {
+                let ms: f64 = s.trim().parse()?;
+                Ok(self.with_seek_ms(Some(ms)))
+            }
+            Some(_) | None => Ok(self),
+        }
+    }
+
     pub fn with_source(mut self, source: Mp4InputSource) -> Self {
         self.source = source;
         self
@@ -202,11 +222,17 @@ impl Mp4InputBuilder {
         self
     }
 
+    pub fn with_seek_ms(mut self, seek_ms: Option<f64>) -> Self {
+        self.seek_ms = seek_ms;
+        self
+    }
+
     pub fn build(self) -> Mp4Input {
         let options = Mp4InputOptions {
             source: self.source,
             decoder: self.decoder,
             input_loop: self.input_loop,
+            seek_ms: self.seek_ms,
         };
         Mp4Input {
             name: self.name,

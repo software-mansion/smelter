@@ -265,6 +265,7 @@ impl HlsInput {
                     pts,
                     dts,
                     kind: MediaKind::Video(VideoCodec::H264),
+                    present: true,
                 };
 
                 let sender = &track.handle.chunk_sender;
@@ -292,6 +293,7 @@ impl HlsInput {
                     pts,
                     dts,
                     kind: MediaKind::Audio(AudioCodec::Aac),
+                    present: true,
                 };
 
                 let sender = &track.handle.chunk_sender;

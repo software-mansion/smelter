@@ -39,7 +39,7 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
         Ok(Mp4FileReader { reader })
     }
 
-    pub fn find_aac_track(self) -> Option<Track<Reader>> {
+    pub fn try_new_aac_track(self) -> Option<Track<Reader>> {
         let (&track_id, track, aac) = self.reader.tracks().iter().find_map(|(id, track)| {
             let track_type = track.track_type().ok()?;
             let media_type = track.media_type().ok()?;
@@ -76,7 +76,7 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
         })
     }
 
-    pub fn find_h264_track(self) -> Option<Track<Reader>> {
+    pub fn try_new_h264_track(self) -> Option<Track<Reader>> {
         let (&track_id, track, avc) = self.reader.tracks().iter().find_map(|(id, track)| {
             let track_type = track.track_type().ok()?;
             let media_type = track.media_type().ok()?;
@@ -154,10 +154,23 @@ pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
 }
 
 impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
-    pub(crate) fn chunks(&mut self) -> TrackChunks<'_, Reader> {
-        TrackChunks {
-            track: self,
-            last_sample_index: 1,
+    pub(crate) fn chunks(&mut self, seek: Option<Duration>) -> TrackChunks<'_, Reader> {
+        if let Some(seek) = seek
+            && let Some((start_index, present_index)) = self.find_seek_start_sample(seek)
+        {
+            TrackChunks {
+                track: self,
+                seek,
+                next_sample_index: start_index,
+                present_from_index: present_index,
+            }
+        } else {
+            TrackChunks {
+                track: self,
+                seek: Duration::ZERO,
+                next_sample_index: 1,
+                present_from_index: 1,
+            }
         }
     }
 
@@ -172,25 +185,54 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
             Some(self.duration)
         }
     }
+
+    /// Returns `(start_index, present_from_index)` for the given seek position.
+    /// `start_index` is the last sync sample before seek (for decoder warmup).
+    /// `present_from_index` is the first sample at or after seek.
+    /// Returns `None` if seek is past the end.
+    fn find_seek_start_sample(&mut self, seek: Duration) -> Option<(u32, u32)> {
+        let seek_timescale = ((seek + self.offset).as_secs_f64() * self.timescale as f64) as u64;
+        let mut best_sync_index = 1u32;
+        // TODO: improve performance
+        for i in 1..=self.sample_count {
+            match self.reader.read_sample(self.track_id, i) {
+                Ok(Some(sample)) => {
+                    if sample.is_sync {
+                        best_sync_index = i
+                    }
+                    if sample.start_time >= seek_timescale {
+                        return Some((best_sync_index, i));
+                    }
+                }
+                _ => return None,
+            }
+        }
+        None
+    }
 }
 
 pub(crate) struct TrackChunks<'a, Reader: Read + Seek + Send + 'static> {
     track: &'a mut Track<Reader>,
-    last_sample_index: u32,
+    seek: Duration,
+    next_sample_index: u32,
+    present_from_index: u32,
 }
 
 impl<Reader: Read + Seek + Send + 'static> Iterator for TrackChunks<'_, Reader> {
     type Item = (EncodedInputChunk, Duration);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.last_sample_index < self.track.sample_count {
+        while self.next_sample_index <= self.track.sample_count {
+            let sample_index = self.next_sample_index;
             let sample = self
                 .track
                 .reader
-                .read_sample(self.track.track_id, self.last_sample_index);
-            self.last_sample_index += 1;
+                .read_sample(self.track.track_id, sample_index);
+            self.next_sample_index += 1;
             match sample {
-                Ok(Some(sample)) => return Some(self.sample_into_chunk(sample)),
+                Ok(Some(sample)) => {
+                    return Some(self.sample_into_chunk(sample, sample_index));
+                }
                 Ok(None) => {}
                 Err(err) => {
                     warn!("Error while reading MP4 sample: {:?}", err);
@@ -202,17 +244,29 @@ impl<Reader: Read + Seek + Send + 'static> Iterator for TrackChunks<'_, Reader> 
 }
 
 impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
-    fn sample_into_chunk(&mut self, sample: Mp4Sample) -> (EncodedInputChunk, Duration) {
+    fn sample_into_chunk(
+        &mut self,
+        sample: Mp4Sample,
+        sample_index: u32,
+    ) -> (EncodedInputChunk, Duration) {
         let rendering_offset = sample.rendering_offset;
         let start_time = sample.start_time;
         let sample_duration =
             Duration::from_secs_f64(sample.duration as f64 / self.track.timescale as f64);
 
-        let dts = Duration::from_secs_f64(start_time as f64 / self.track.timescale as f64);
+        let dts = Duration::from_secs_f64(start_time as f64 / self.track.timescale as f64)
+            .saturating_sub(self.seek);
         let pts = Duration::from_secs_f64(
             (start_time as f64 + rendering_offset as f64) / self.track.timescale as f64,
         )
-        .saturating_sub(self.track.offset);
+        .saturating_sub(self.track.offset)
+        .saturating_sub(self.seek);
+
+        // When seeking in video, we start reading from the nearest sync (keyframe)
+        // sample before the seek point so the decoder can build up its reference
+        // frames. Samples before `present_from_sample` are only needed for decoding
+        // and should not be presented.
+        let present = sample_index >= self.present_from_index;
 
         let chunk = EncodedInputChunk {
             data: sample.bytes,
@@ -222,6 +276,7 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
                 DecoderOptions::H264(_) => MediaKind::Video(VideoCodec::H264),
                 DecoderOptions::Aac(_) => MediaKind::Audio(AudioCodec::Aac),
             },
+            present,
         };
         (chunk, sample_duration)
     }
