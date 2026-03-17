@@ -1,4 +1,9 @@
-use crate::wgpu_helpers::WgpuSampler;
+use crate::{
+    WgpuConverterInitError,
+    device::{ColorRange, ColorSpace},
+    parameters::WgpuConverterParameters,
+    wgpu_helpers::WgpuSampler,
+};
 
 /// Helper that lets you convert RGBA [`wgpu::Texture`] into NV12 [`wgpu::Texture`].
 /// Use [`WgpuRgbaToNv12Converter::create_input_bind_group`] to create [`wgpu::BindGroup`] which represents
@@ -14,7 +19,15 @@ pub struct WgpuRgbaToNv12Converter {
 }
 
 impl WgpuRgbaToNv12Converter {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        params: WgpuConverterParameters,
+    ) -> Result<Self, WgpuConverterInitError> {
+        match (params.color_space, params.color_range) {
+            (ColorSpace::BT709, ColorRange::Limited) => {}
+            _ => return Err(WgpuConverterInitError::OnlyLimitedBT709Supported),
+        }
+
         let rgba_view_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -51,13 +64,13 @@ impl WgpuRgbaToNv12Converter {
             wgpu::TextureAspect::Plane1,
         );
 
-        Self {
+        Ok(Self {
             y_plane_renderer,
             uv_plane_renderer,
             rgba_view_bgl,
             sampler,
             device: device.clone(),
-        }
+        })
     }
 
     /// Creates [`wgpu::BindGroup`] for RGBA [`wgpu::Texture`].

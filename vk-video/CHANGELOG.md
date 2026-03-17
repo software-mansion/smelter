@@ -3,7 +3,9 @@
 ## Unreleased
 
 ### 💥 Breaking changes
-- `EncoderParameters` has an extra field, which determines whether stream parameters are inlined in the output stream.
+- `EncoderParameters` has extra fields:
+  - Field which determines whether stream parameters are inlined in the output stream.
+  - Color space and color range.
 - Changed adapter and device creation API
 
 ### ✨ New features

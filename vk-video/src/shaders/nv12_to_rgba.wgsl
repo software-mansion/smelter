@@ -31,7 +31,9 @@ fn vs_main(@builtin(vertex_index) idx: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let conversion_bias = vec3<f32>(0.0, 0.5, 0.5);
+    // BT709 limited range
+    let conversion_bias = vec3<f32>(16.0 / 255.0, 0.5, 0.5);
+    let conversion_scale = vec3<f32>(255.0 / 219.0, 255.0 / 224.0, 255.0 / 224.0);
     let conversion_weights = mat3x3<f32>(
         1.0, 0.0, 1.5748,
         1.0, -0.1873, -0.4681,
@@ -42,6 +44,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         textureSample(y_texture, sampler_, input.tex_coords).r,
         textureSample(uv_texture, sampler_, input.tex_coords).rg,
     );
-    let rgb = (yuv - conversion_bias) * conversion_weights;
+    let rgb = (yuv - conversion_bias) * conversion_scale * conversion_weights;
     return vec4<f32>(rgb, 1.0);
 }
