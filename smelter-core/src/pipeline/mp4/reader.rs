@@ -193,14 +193,15 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     fn find_seek_start_sample(&mut self, seek: Duration) -> Option<(u32, u32)> {
         let seek_timescale = ((seek + self.offset).as_secs_f64() * self.timescale as f64) as u64;
         let mut best_sync_index = 1u32;
-        for i in 1..self.sample_count {
+        // TODO: improve performance
+        for i in 1..=self.sample_count {
             match self.reader.read_sample(self.track_id, i) {
                 Ok(Some(sample)) => {
-                    if sample.start_time >= seek_timescale {
-                        return Some((best_sync_index, i));
-                    }
                     if sample.is_sync {
                         best_sync_index = i
+                    }
+                    if sample.start_time >= seek_timescale {
+                        return Some((best_sync_index, i));
                     }
                 }
                 _ => return None,
@@ -221,7 +222,7 @@ impl<Reader: Read + Seek + Send + 'static> Iterator for TrackChunks<'_, Reader> 
     type Item = (EncodedInputChunk, Duration);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.next_sample_index < self.track.sample_count {
+        while self.next_sample_index <= self.track.sample_count {
             let sample_index = self.next_sample_index;
             let sample = self
                 .track
