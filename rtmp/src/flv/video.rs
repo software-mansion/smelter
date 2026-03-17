@@ -114,9 +114,12 @@ impl VideoTagH264PacketType {
     }
 }
 
-/// Parses SI24 composition time from 3 bytes.
+/// Parses SI24 (signed 24-bit integer) composition time from 3 bytes.
+/// Negative values occur with B-frames where PTS < DTS.
 pub(super) fn parse_composition_time(bytes: &[u8]) -> i32 {
-    i32::from_be_bytes([0, bytes[0], bytes[1], bytes[2]])
+    // bytes are placed at the top of i32 so that the SI24 sign bit aligns
+    // with the i32 sign bit, arithmetic right-shift then propagates it
+    i32::from_be_bytes([bytes[0], bytes[1], bytes[2], 0]) >> 8
 }
 
 /// Serializes SI24 composition time to 3 bytes.
