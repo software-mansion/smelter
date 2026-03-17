@@ -15,6 +15,8 @@ mod whep_into;
 mod whip;
 mod whip_into;
 
+mod queue_options;
+
 pub use decklink::*;
 pub use hls::*;
 pub use mp4::*;

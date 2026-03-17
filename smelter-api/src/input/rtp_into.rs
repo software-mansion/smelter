@@ -7,6 +7,8 @@ use bytes::Bytes;
 use crate::common_core::prelude as core;
 use crate::*;
 
+use super::queue_options::new_queue_options;
+
 impl TryFrom<RtpInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
@@ -20,10 +22,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             transport_protocol,
         } = value;
 
-        let queue_options = smelter_core::QueueInputOptions {
-            required: required.unwrap_or(false),
-            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
-        };
+        let queue_options = new_queue_options(required, offset_ms)?;
 
         let transport_protocol = transport_protocol.unwrap_or(TransportProtocol::Udp).into();
 

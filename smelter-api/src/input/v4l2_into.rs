@@ -6,10 +6,8 @@ impl TryFrom<V4l2Input> for core::RegisterInputOptions {
 
     #[cfg(target_os = "linux")]
     fn try_from(value: V4l2Input) -> Result<Self, Self::Error> {
-        let queue_options = smelter_core::QueueInputOptions {
-            required: value.required.unwrap_or(false),
-            offset: None,
-        };
+        use super::queue_options::new_queue_options;
+        let queue_options = new_queue_options(value.required, None)?;
 
         Ok(core::RegisterInputOptions {
             input_options: core::ProtocolInputOptions::V4l2(core::V4l2InputOptions {
