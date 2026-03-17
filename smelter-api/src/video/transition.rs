@@ -60,8 +60,11 @@ impl TryFrom<Transition> for scene::Transition {
             }
         };
 
+        let duration = Duration::try_from_secs_f64(transition.duration_ms / 1000.0)
+            .map_err(|err| TypeError::new(format!("Invalid duration. {err}")))?;
+
         Ok(Self {
-            duration: Duration::from_secs_f64(transition.duration_ms / 1000.0),
+            duration,
             interpolation_kind,
             should_interrupt: transition.should_interrupt.unwrap_or(false),
         })

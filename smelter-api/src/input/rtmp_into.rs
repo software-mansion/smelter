@@ -1,6 +1,7 @@
 use crate::common_core::prelude as core;
 use crate::*;
-use std::time::Duration;
+
+use super::queue_options::new_queue_options;
 
 impl TryFrom<RtmpInput> for core::RegisterInputOptions {
     type Error = TypeError;
@@ -14,10 +15,7 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             decoder_map,
         } = value;
 
-        let queue_options = smelter_core::QueueInputOptions {
-            required: required.unwrap_or(false),
-            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
-        };
+        let queue_options = new_queue_options(required, offset_ms)?;
 
         let buffer = match &queue_options {
             core::QueueInputOptions {

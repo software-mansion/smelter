@@ -1,7 +1,7 @@
-use std::time::Duration;
-
 use crate::common_core::prelude as core;
 use crate::*;
+
+use super::queue_options::new_queue_options;
 
 impl TryFrom<Mp4Input> for core::RegisterInputOptions {
     type Error = TypeError;
@@ -18,10 +18,7 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
 
         const BAD_URL_PATH_SPEC: &str = "Exactly one of `url` or `path` has to be specified in a register request for an mp4 input.";
 
-        let queue_options = smelter_core::QueueInputOptions {
-            required: required.unwrap_or(false),
-            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
-        };
+        let queue_options = new_queue_options(required, offset_ms)?;
 
         let buffer = match &queue_options {
             core::QueueInputOptions {

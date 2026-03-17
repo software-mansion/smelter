@@ -3,6 +3,8 @@ use std::time::Duration;
 use crate::common_core::prelude as core;
 use crate::*;
 
+use super::queue_options::new_queue_options;
+
 impl TryFrom<WhepInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
@@ -15,10 +17,7 @@ impl TryFrom<WhepInput> for core::RegisterInputOptions {
             offset_ms,
         } = value;
 
-        let queue_options = smelter_core::QueueInputOptions {
-            required: required.unwrap_or(false),
-            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
-        };
+        let queue_options = new_queue_options(required, offset_ms)?;
 
         let jitter_buffer = match &queue_options {
             core::QueueInputOptions {
