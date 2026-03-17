@@ -164,6 +164,7 @@ impl RtpOutput {
                     output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         payloader_options: payloader_options(PayloadedCodec::H264, mtu),
                         chunks_sender: sender,
@@ -180,6 +181,7 @@ impl RtpOutput {
                     output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         payloader_options: payloader_options(PayloadedCodec::H264, mtu),
                         chunks_sender: sender,
@@ -191,6 +193,7 @@ impl RtpOutput {
                     output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         payloader_options: payloader_options(PayloadedCodec::Vp8, mtu),
                         chunks_sender: sender,
@@ -202,6 +205,7 @@ impl RtpOutput {
                     output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         payloader_options: payloader_options(PayloadedCodec::Vp9, mtu),
                         chunks_sender: sender,
@@ -238,6 +242,7 @@ impl RtpOutput {
                 output_ref.clone(),
                 RtpAudioTrackThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_ref.clone(),
                     encoder_options: options.clone(),
                     payloader_options: payloader_options(PayloadedCodec::Opus, 48_000, mtu),
                     chunks_sender: sender,

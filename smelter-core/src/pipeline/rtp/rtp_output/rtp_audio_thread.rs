@@ -23,6 +23,7 @@ pub(crate) struct RtpAudioTrackThreadHandle {
 
 pub(super) struct RtpAudioTrackThreadOptions<Encoder: AudioEncoder> {
     pub ctx: Arc<PipelineCtx>,
+    pub output_ref: Ref<OutputId>,
     pub encoder_options: Encoder::Options,
     pub payloader_options: PayloaderOptions,
     pub chunks_sender: Sender<RtpOutputEvent>,
@@ -46,11 +47,13 @@ where
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let RtpAudioTrackThreadOptions {
             ctx,
+            output_ref,
             encoder_options,
             payloader_options,
             chunks_sender,
         } = options;
 
+        let stats_sender = ctx.stats_sender.clone();
         let ssrc = payloader_options.ssrc;
         let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
 
@@ -68,7 +71,14 @@ where
         let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
         let stream = payloaded_stream.flatten().map(move |event| match event {
-            Ok(PipelineEvent::Data(packet)) => RtpOutputEvent::Data(packet),
+            // Ok(PipelineEvent::Data(packet)) => RtpOutputEvent::Data(packet),
+            Ok(PipelineEvent::Data(packet)) => {
+                stats_sender.send(
+                    RtpOutputTrackStatsEvent::BytesSent(packet.len())
+                        .into_event(&output_ref, StatsTrackKind::Audio),
+                );
+                RtpOutputEvent::Data(packet)
+            }
             Ok(PipelineEvent::EOS) => RtpOutputEvent::AudioEos(rtcp::goodbye::Goodbye {
                 sources: vec![ssrc],
                 reason: bytes::Bytes::from("Unregister output stream"),
