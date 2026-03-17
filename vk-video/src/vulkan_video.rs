@@ -2,7 +2,8 @@ pub mod capabilities {
     pub use crate::adapter::AdapterInfo;
     pub use crate::device::caps::{
         DecodeCapabilities, DecodeH264Capabilities, DecodeH264ProfileCapabilities,
-        EncodeCapabilities, EncodeH264Capabilities, EncodeH264ProfileCapabilities,
+        DecodeH265Capabilities, DecodeH265ProfileCapabilities, EncodeCapabilities,
+        EncodeH264Capabilities, EncodeH265Capabilities, EncodeProfileCapabilities,
     };
 
     pub use ash::vk::PhysicalDeviceType as VulkanDeviceType;
