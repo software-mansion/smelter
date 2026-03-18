@@ -7,7 +7,7 @@ use std::{
 };
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use tracing::{debug, error, trace};
+use tracing::{Level, debug, error, span, trace};
 
 use crate::{
     pipeline::{
@@ -146,7 +146,7 @@ impl Mp4Input {
             None => (None, None, None),
         };
 
-        let (reader, events_sender) = TrackMangerThread::new(
+        let (reader, events_sender) = TrackManagerThread::new(
             &ctx,
             &input_ref,
             options,
@@ -222,8 +222,9 @@ struct TrackContext {
     _source_file: Arc<SourceFile>,
 }
 
-struct TrackMangerThread {
+struct TrackManagerThread {
     ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
     options: Mp4InputOptions,
     events_receiver: Receiver<StateEvent>,
     input_shutdown_condition: ShutdownCondition,
@@ -233,7 +234,7 @@ struct TrackMangerThread {
     audio_thread: Option<(JoinHandle<TrackThreadResult>, ShutdownCondition)>,
 }
 
-impl TrackMangerThread {
+impl TrackManagerThread {
     fn new(
         ctx: &Arc<PipelineCtx>,
         input_ref: &Ref<InputId>,
@@ -266,6 +267,7 @@ impl TrackMangerThread {
         (
             Self {
                 ctx: ctx.clone(),
+                input_ref: input_ref.clone(),
                 options,
                 events_receiver,
                 input_shutdown_condition: ShutdownCondition::default(),
@@ -294,6 +296,8 @@ impl TrackMangerThread {
                 }
                 StateEvent::ThreadFinished(thread_id) => {
                     if !self.options.should_loop {
+                        // do not break because user can still
+                        // send seek request
                         continue;
                     }
 
@@ -364,10 +368,11 @@ impl TrackMangerThread {
             offset,
             seek,
         };
+        let input_id = self.input_ref.to_string();
         let handle = std::thread::Builder::new()
             .name("mp4 reader - video".to_string())
             .spawn(move || {
-                //let _span = span.enter();
+                let _span = span!(Level::INFO, "MP4 video", input_id = input_id).entered();
                 track_thread.run_video_thread()
             })
             .unwrap();
@@ -389,10 +394,11 @@ impl TrackMangerThread {
             offset,
             seek,
         };
+        let input_id = self.input_ref.to_string();
         let handle = std::thread::Builder::new()
             .name("mp4 reader - audio".to_string())
             .spawn(move || {
-                //let _span = span.enter();
+                let _span = span!(Level::INFO, "MP4 audio", input_id = input_id).entered();
                 track_thread.run_audio_thread()
             })
             .unwrap();
@@ -433,7 +439,8 @@ impl TrackThread {
             trace!(pts=?chunk.pts, "MP4 reader produced a video chunk.");
             let chunk_sender = &self.ctx.decoder_handle.chunk_sender;
             if chunk_sender.send(PipelineEvent::Data(chunk)).is_err() {
-                debug!("Failed to send a video chunk. Channel closed.")
+                debug!("Failed to send a video chunk. Channel closed.");
+                break;
             }
 
             if self.shutdown_condition.should_close() {
@@ -469,7 +476,8 @@ impl TrackThread {
             trace!(pts=?chunk.pts, "MP4 reader produced a audio chunk.");
             let chunk_sender = &self.ctx.decoder_handle.chunk_sender;
             if chunk_sender.send(PipelineEvent::Data(chunk)).is_err() {
-                debug!("Failed to send a audio chunk. Channel closed.")
+                debug!("Failed to send a audio chunk. Channel closed.");
+                break;
             }
 
             if self.shutdown_condition.should_close() {

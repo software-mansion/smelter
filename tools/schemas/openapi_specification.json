@@ -822,6 +822,16 @@
               }
             }
           },
+          "404": {
+            "description": "Input not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error.",
             "content": {

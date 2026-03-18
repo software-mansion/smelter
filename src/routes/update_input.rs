@@ -30,6 +30,7 @@ pub struct UpdateInputRequest {
     responses(
         (status = 200, description = "Input updated successfully.", body = Response),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Input not found.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["update_request"],
