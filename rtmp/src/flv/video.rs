@@ -137,7 +137,7 @@ impl VideoTag {
             return Err(FlvVideoTagParseError::TooShort);
         }
 
-        let frame_type = (data[0] & 0b01110000) >> 4;
+        let frame_type = (data[0] & 0b11110000) >> 4;
         let codec_id = data[0] & 0b00001111;
 
         let frame_type = VideoTagFrameType::from_raw(frame_type)?;

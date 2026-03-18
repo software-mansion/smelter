@@ -2,7 +2,6 @@ mod audio;
 mod ex_video;
 mod mod_ex;
 mod video;
-mod video_enhanced;
 
 pub use audio::*;
 use bytes::Bytes;
