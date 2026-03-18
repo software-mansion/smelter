@@ -115,7 +115,7 @@ fn encode_video(
         let encoded_frame = unsafe {
             encoder
                 .encode(
-                    vk_video::Frame {
+                    vk_video::InputFrame {
                         data: frame,
                         pts: None,
                     },

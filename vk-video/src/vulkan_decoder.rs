@@ -8,7 +8,7 @@ use session_resources::VideoSessionResources;
 
 use crate::{
     RawFrameData,
-    device::DecodingDevice,
+    device::{ColorRange, ColorSpace, DecodingDevice},
     parser::{
         decoder_instructions::DecoderInstruction,
         reference_manager::{DecodeInformation, ReferenceId},
@@ -78,6 +78,8 @@ pub(crate) struct DecodeResultMetadata {
     pub(crate) pic_order_cnt: i32,
     pub(crate) max_num_reorder_frames: u64,
     pub(crate) is_idr: bool,
+    pub(crate) color_space: ColorSpace,
+    pub(crate) color_range: ColorRange,
 }
 
 pub(crate) struct DecodeResult<T> {
@@ -334,11 +336,17 @@ impl<'a> VulkanDecoder<'a> {
             .as_mut()
             .ok_or(VulkanDecoderError::NoSession)?;
 
-        let cropped_extent = video_session_resources
+        let sps = video_session_resources
             .sps
             .get(&decode_information.sps_id)
-            .ok_or(VulkanDecoderError::NoSession)?
-            .size()?;
+            .ok_or(VulkanDecoderError::InvalidInputData(format!(
+                "Unknown SPS id {}",
+                decode_information.sps_id
+            )))?;
+
+        let cropped_extent = sps.size()?;
+        let color_space = ColorSpace::from(sps);
+        let color_range = ColorRange::from(sps);
 
         if is_idr {
             video_session_resources.ensure_session(
@@ -637,6 +645,8 @@ impl<'a> VulkanDecoder<'a> {
                         .max_num_reorder_frames,
                     is_idr,
                     pts: decode_information.pts,
+                    color_space,
+                    color_range,
                 },
             },
             semaphore_wait_value,

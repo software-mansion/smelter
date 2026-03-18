@@ -119,6 +119,31 @@ pub enum ColorSpace {
     BT601Pal,
 }
 
+impl From<&h264_reader::nal::sps::SeqParameterSet> for ColorSpace {
+    fn from(sps: &h264_reader::nal::sps::SeqParameterSet) -> Self {
+        let Some(vui) = &sps.vui_parameters else {
+            return ColorSpace::Unspecified;
+        };
+        let Some(vst) = &vui.video_signal_type else {
+            return ColorSpace::Unspecified;
+        };
+        let Some(cd) = &vst.colour_description else {
+            return ColorSpace::Unspecified;
+        };
+
+        match (
+            cd.colour_primaries,
+            cd.transfer_characteristics,
+            cd.matrix_coefficients,
+        ) {
+            (1, 1, 1) => ColorSpace::BT709,
+            (6, 6, 6) => ColorSpace::BT601Ntsc,
+            (5, 6, 5) => ColorSpace::BT601Pal,
+            _ => ColorSpace::Unspecified,
+        }
+    }
+}
+
 /// Whether the video signal uses the full or limited range of sample values.
 #[derive(Debug, Clone, Copy)]
 pub enum ColorRange {
@@ -126,6 +151,22 @@ pub enum ColorRange {
     Full,
     /// Luma is restricted to [16, 235] and chroma to [16, 240].
     Limited,
+}
+
+impl From<&h264_reader::nal::sps::SeqParameterSet> for ColorRange {
+    fn from(sps: &h264_reader::nal::sps::SeqParameterSet) -> Self {
+        sps.vui_parameters
+            .as_ref()
+            .and_then(|v| v.video_signal_type.as_ref())
+            .map(|vst| {
+                if vst.video_full_range_flag {
+                    ColorRange::Full
+                } else {
+                    ColorRange::Limited
+                }
+            })
+            .unwrap_or(ColorRange::Limited)
+    }
 }
 
 /// Parameters for encoder creation

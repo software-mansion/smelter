@@ -3,8 +3,8 @@ use std::sync::Arc;
 use ash::vk;
 
 use crate::{
-    DecoderError, EncodedInputChunk, EncodedOutputChunk, Frame, VulkanCommonError, VulkanDevice,
-    VulkanEncoderError,
+    DecoderError, EncodedInputChunk, EncodedOutputChunk, OutputFrame, VulkanCommonError,
+    VulkanDevice, VulkanEncoderError,
     device::EncoderParameters,
     parameters::ScalingAlgorithm,
     parser::{
@@ -230,7 +230,7 @@ impl Transcoder {
 
     fn encode_resized_images(
         &mut self,
-        resized_images: Frame<ResizedImages>,
+        resized_images: OutputFrame<ResizedImages>,
     ) -> Result<Vec<EncodedOutputChunk<Vec<u8>>>, TranscoderError> {
         let mut submits = Vec::new();
         for (encoder, frame) in self
@@ -238,7 +238,7 @@ impl Transcoder {
             .iter_mut()
             .zip(resized_images.data.images.outputs.iter())
         {
-            let submit = encoder.encode(frame.image.clone(), false, resized_images.pts)?;
+            let submit = encoder.encode(frame.image.clone(), false, resized_images.metadata.pts)?;
             submits.push(submit);
         }
 

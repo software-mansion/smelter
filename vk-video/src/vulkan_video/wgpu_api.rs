@@ -1,5 +1,6 @@
 use crate::{
-    DecoderError, EncodedInputChunk, EncodedOutputChunk, Frame, VulkanEncoderError,
+    DecoderError, EncodedInputChunk, EncodedOutputChunk, InputFrame, OutputFrame,
+    VulkanEncoderError,
     parser::{
         decoder_instructions::compile_to_decoder_instructions,
         h264::{AccessUnit, H264Parser},
@@ -22,7 +23,7 @@ impl WgpuTexturesDecoder {
     pub fn decode(
         &mut self,
         frame: EncodedInputChunk<&[u8]>,
-    ) -> Result<Vec<Frame<wgpu::Texture>>, DecoderError> {
+    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
         let nalus = self.parser.parse(frame.data, frame.pts)?;
         self.decode_nalus(nalus)
     }
@@ -31,7 +32,7 @@ impl WgpuTexturesDecoder {
     ///
     /// Make sure that this is done when you have the knowledge that no more frames will be coming
     /// that need to be presented before the already decoded frames.
-    pub fn flush(&mut self) -> Result<Vec<Frame<wgpu::Texture>>, DecoderError> {
+    pub fn flush(&mut self) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
         let nalus = self.parser.flush()?;
         let mut frames = self.decode_nalus(nalus)?;
         frames.append(&mut self.frame_sorter.flush());
@@ -48,7 +49,7 @@ impl WgpuTexturesDecoder {
     fn decode_nalus(
         &mut self,
         nalus: Vec<AccessUnit>,
-    ) -> Result<Vec<Frame<wgpu::Texture>>, DecoderError> {
+    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
         let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, nalus)?;
         let unsorted_frames = self.vulkan_decoder.decode_to_wgpu_textures(&instructions)?;
         let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
@@ -106,7 +107,7 @@ impl WgpuTexturesEncoder {
     ///   ```
     pub unsafe fn encode(
         &mut self,
-        frame: Frame<wgpu::Texture>,
+        frame: InputFrame<wgpu::Texture>,
         force_keyframe: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         unsafe { self.vulkan_encoder.encode_texture(frame, force_keyframe) }

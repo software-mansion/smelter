@@ -7,7 +7,7 @@ use std::{
 use ash::vk;
 
 use crate::{
-    EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
+    EncodedOutputChunk, InputFrame, RawFrameData, VulkanCommonError,
     device::{ColorRange, ColorSpace, EncodingDevice, Rational},
     parameters::H264Profile,
     wrappers::{
@@ -625,7 +625,7 @@ impl<'a> VulkanEncoder<'a> {
     // TODO: Maybe we should reuse `input_image` here, instead of creating a new image
     fn transfer_buffer_to_image(
         &mut self,
-        frame: &Frame<RawFrameData>,
+        frame: &InputFrame<RawFrameData>,
     ) -> Result<(Image, Buffer), VulkanEncoderError> {
         let extent = vk::Extent3D {
             width: frame.data.width,
@@ -749,7 +749,7 @@ impl<'a> VulkanEncoder<'a> {
     #[cfg(feature = "wgpu")]
     fn copy_wgpu_texture_to_image(
         &mut self,
-        frame: &Frame<wgpu::Texture>,
+        frame: &InputFrame<wgpu::Texture>,
     ) -> Result<wgpu::hal::vulkan::CommandEncoder, WgpuTextureEncoderError> {
         use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
@@ -1299,7 +1299,7 @@ impl<'a> VulkanEncoder<'a> {
 
     pub fn encode_bytes(
         &mut self,
-        frame: &Frame<RawFrameData>,
+        frame: &InputFrame<RawFrameData>,
         force_idr: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
@@ -1318,7 +1318,7 @@ impl<'a> VulkanEncoder<'a> {
     #[cfg(feature = "wgpu")]
     pub unsafe fn encode_texture(
         &mut self,
-        frame: Frame<wgpu::Texture>,
+        frame: InputFrame<wgpu::Texture>,
         force_idr: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let _cmd_encoder = self.copy_wgpu_texture_to_image(&frame)?;

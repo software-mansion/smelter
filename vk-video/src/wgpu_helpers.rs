@@ -13,7 +13,7 @@ pub enum WgpuConverterInitError {
     OnlyLimitedBT709Supported,
 }
 
-/// Parameters for NV12 ↔ RGBA texture conversion.
+/// Parameters for NV12 <-> RGBA texture conversion.
 ///
 /// Used by [`WgpuNv12ToRgbaConverter`] and [`WgpuRgbaToNv12Converter`] to describe
 /// the color properties of the NV12 textures.

@@ -68,6 +68,7 @@ mod wgpu_api;
 #[cfg(feature = "wgpu")]
 pub use wgpu_api::*;
 
+use crate::device::{ColorRange, ColorSpace};
 use crate::parser::h264::AccessUnit;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use ash::vk;
@@ -184,10 +185,23 @@ pub struct EncodedOutputChunk<T> {
     pub is_keyframe: bool,
 }
 
-/// Represents a single decoded frame.
-pub struct Frame<T> {
+/// Represents a frame to be encoded.
+pub struct InputFrame<T> {
     pub data: T,
     pub pts: Option<u64>,
+}
+
+/// Additional information about the decoded frame.
+pub struct FrameMetadata {
+    pub pts: Option<u64>,
+    pub color_space: ColorSpace,
+    pub color_range: ColorRange,
+}
+
+/// Represents a single decoded frame.
+pub struct OutputFrame<T> {
+    pub data: T,
+    pub metadata: FrameMetadata,
 }
 
 pub struct RawFrameData {
@@ -205,12 +219,12 @@ pub struct BytesDecoder {
 }
 
 impl BytesDecoder {
-    /// The result is a sequence of frames. The payload of each [`Frame`] struct is a [`Vec<u8>`]. Each [`Vec<u8>`] contains a single
+    /// The result is a sequence of frames. The payload of each [`OutputFrame`] struct is a [`Vec<u8>`]. Each [`Vec<u8>`] contains a single
     /// decoded frame in the [NV12 format](https://en.wikipedia.org/wiki/YCbCr#4:2:0).
     pub fn decode(
         &mut self,
         frame: EncodedInputChunk<&[u8]>,
-    ) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
+    ) -> Result<Vec<OutputFrame<RawFrameData>>, DecoderError> {
         let nalus = self.parser.parse(frame.data, frame.pts)?;
         self.decode_nalus(nalus)
     }
@@ -219,7 +233,7 @@ impl BytesDecoder {
     ///
     /// Make sure that this is done when you have the knowledge that no more frames will be coming
     /// that need to be presented before the already decoded frames.
-    pub fn flush(&mut self) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
+    pub fn flush(&mut self) -> Result<Vec<OutputFrame<RawFrameData>>, DecoderError> {
         let nalus = self.parser.flush()?;
         let mut frames = self.decode_nalus(nalus)?;
         frames.append(&mut self.frame_sorter.flush());
@@ -236,7 +250,7 @@ impl BytesDecoder {
     fn decode_nalus(
         &mut self,
         nalus: Vec<AccessUnit>,
-    ) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
+    ) -> Result<Vec<OutputFrame<RawFrameData>>, DecoderError> {
         let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, nalus)?;
         let unsorted_frames = self.vulkan_decoder.decode_to_bytes(&instructions)?;
         let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
@@ -257,7 +271,7 @@ impl BytesEncoder {
     /// Otherwise, the encoder will decide which frames should be coded this way.
     pub fn encode(
         &mut self,
-        frame: &Frame<RawFrameData>,
+        frame: &InputFrame<RawFrameData>,
         force_keyframe: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.vulkan_encoder.encode_bytes(frame, force_keyframe)
