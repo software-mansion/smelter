@@ -1,8 +1,10 @@
 import { Api } from '@swmansion/smelter';
+import type { StatsReport } from '@swmansion/smelter';
 import type { SmelterManager } from './smelterManager';
 import type { RegisterOutputRequest } from './api/output';
 import { inputRefIntoRawId, type InputRef, type RegisterInputRequest } from './api/input';
 import { imageRefIntoRawId, type ImageRef } from './api/image';
+import { fromApiStatsReport } from './api/stats';
 
 export { Api };
 
@@ -163,5 +165,13 @@ export class ApiClient {
       route: `/api/start`,
       body: {},
     });
+  }
+
+  public async stats(): Promise<StatsReport> {
+    const response = (await this.serverManager.sendRequest({
+      method: 'GET',
+      route: `/stats`,
+    })) as Api.StatsReport;
+    return fromApiStatsReport(response);
   }
 }

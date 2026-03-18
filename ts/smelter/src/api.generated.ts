@@ -15,7 +15,8 @@ export type ApiTypes =
   | WebRendererSpec
   | ShaderSpec
   | UpdateOutputRequest
-  | UpdateInputRequest;
+  | UpdateInputRequest
+  | StatsReport;
 export type RegisterInput =
   | {
       type: "rtp_stream";
@@ -1292,6 +1293,44 @@ export type WebEmbeddingMethod =
   | "chromium_embedding"
   | "native_embedding_over_content"
   | "native_embedding_under_content";
+export type InputStatsReport =
+  | {
+      rtp: RtpInputStatsReport;
+    }
+  | {
+      whip: WhipInputStatsReport;
+    }
+  | {
+      whep: WhepInputStatsReport;
+    }
+  | {
+      hls: HlsInputStatsReport;
+    }
+  | {
+      rtmp: RtmpInputStatsReport;
+    }
+  | {
+      mp4: Mp4InputStatsReport;
+    };
+export type OutputStatsReport =
+  | {
+      whep: WhepOutputStatsReport;
+    }
+  | {
+      whip: WhipOutputStatsReport;
+    }
+  | {
+      hls: HlsOutputStatsReport;
+    }
+  | {
+      mp4: Mp4OutputStatsReport;
+    }
+  | {
+      rtmp: RtmpOutputStatsReport;
+    }
+  | {
+      rtp: RtpOutputStatsReport;
+    };
 
 export interface InputRtpVideoOptions {
   decoder: RtpVideoDecoderOptions;
@@ -1637,4 +1676,142 @@ export interface UpdateInputRequest {
    * Seek to a specific position in milliseconds. Only supported for MP4 inputs.
    */
   seek_ms?: number | null;
+}
+export interface StatsReport {
+  inputs: {
+    [k: string]: InputStatsReport;
+  };
+  outputs: {
+    [k: string]: OutputStatsReport;
+  };
+}
+export interface RtpInputStatsReport {
+  video_rtp: RtpJitterBufferStatsReport;
+  audio_rtp: RtpJitterBufferStatsReport;
+}
+export interface RtpJitterBufferStatsReport {
+  packets_lost: number;
+  packets_received: number;
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
+  last_10_seconds: RtpJitterBufferSlidingWindowStatsReport;
+}
+export interface RtpJitterBufferSlidingWindowStatsReport {
+  packets_lost: number;
+  packets_received: number;
+  /**
+   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
+   */
+  effective_buffer_avg_seconds: number;
+  effective_buffer_max_seconds: number;
+  effective_buffer_min_seconds: number;
+  /**
+   * Size of the InputBuffer
+   */
+  input_buffer_avg_seconds: number;
+  input_buffer_max_seconds: number;
+  input_buffer_min_seconds: number;
+}
+export interface WhipInputStatsReport {
+  video_rtp: RtpJitterBufferStatsReport;
+  audio_rtp: RtpJitterBufferStatsReport;
+}
+export interface WhepInputStatsReport {
+  video_rtp: RtpJitterBufferStatsReport;
+  audio_rtp: RtpJitterBufferStatsReport;
+}
+export interface HlsInputStatsReport {
+  video: HlsInputTrackStatsReport;
+  audio: HlsInputTrackStatsReport;
+  corrupted_packets_received: number;
+  corrupted_packets_received_last_10_seconds: number;
+}
+export interface HlsInputTrackStatsReport {
+  packets_received: number;
+  discontinuities_detected: number;
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
+  last_10_seconds: HlsInputTrackSlidingWindowStatsReport;
+}
+export interface HlsInputTrackSlidingWindowStatsReport {
+  packets_received: number;
+  discontinuities_detected: number;
+  /**
+   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
+   */
+  effective_buffer_avg_seconds: number;
+  effective_buffer_max_seconds: number;
+  effective_buffer_min_seconds: number;
+  /**
+   * Size of the InputBuffer
+   */
+  input_buffer_avg_seconds: number;
+  input_buffer_max_seconds: number;
+  input_buffer_min_seconds: number;
+}
+export interface RtmpInputStatsReport {
+  video: RtmpInputTrackStatsReport;
+  audio: RtmpInputTrackStatsReport;
+}
+export interface RtmpInputTrackStatsReport {
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
+}
+export interface Mp4InputStatsReport {
+  video: Mp4InputTrackStatsReport;
+  audio: Mp4InputTrackStatsReport;
+}
+export interface Mp4InputTrackStatsReport {
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
+}
+export interface WhepOutputStatsReport {
+  video: WhepOutputTrackStatsReport;
+  audio: WhepOutputTrackStatsReport;
+  connected_peers: number;
+}
+export interface WhepOutputTrackStatsReport {
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
+}
+export interface WhipOutputStatsReport {
+  video: WhipOutputTrackStatsReport;
+  audio: WhipOutputTrackStatsReport;
+  is_connected: boolean;
+}
+export interface WhipOutputTrackStatsReport {
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
+}
+export interface HlsOutputStatsReport {
+  video: HlsOutputTrackStatsReport;
+  audio: HlsOutputTrackStatsReport;
+}
+export interface HlsOutputTrackStatsReport {
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
+}
+export interface Mp4OutputStatsReport {
+  video: Mp4OutputTrackStatsReport;
+  audio: Mp4OutputTrackStatsReport;
+}
+export interface Mp4OutputTrackStatsReport {
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
+}
+export interface RtmpOutputStatsReport {
+  video: RtmpOutputTrackStatsReport;
+  audio: RtmpOutputTrackStatsReport;
+}
+export interface RtmpOutputTrackStatsReport {
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
+}
+export interface RtpOutputStatsReport {
+  video: RtpOutputTrackStatsReport;
+  audio: RtpOutputTrackStatsReport;
+}
+export interface RtpOutputTrackStatsReport {
+  bitrate_1_second: number;
+  bitrate_1_minute: number;
 }

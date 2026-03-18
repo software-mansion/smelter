@@ -17,6 +17,35 @@ import {
 import Show, { ShowProps } from './components/Show.js';
 import { SlideShow, Slide, SlideProps, SlideShowProps } from './components/SlideShow.js';
 import Mp4, { Mp4Props } from './components/Mp4.js';
+import { StatsReport, InputStatsReport, OutputStatsReport } from './types/stats.js';
+import {
+  RtpInputStatsReport,
+  RtpJitterBufferStatsReport,
+  RtpJitterBufferSlidingWindowStatsReport,
+  WhipInputStatsReport,
+  WhepInputStatsReport,
+  HlsInputStatsReport,
+  HlsInputTrackStatsReport,
+  HlsInputTrackSlidingWindowStatsReport,
+  RtmpInputStatsReport,
+  RtmpInputTrackStatsReport,
+  Mp4InputStatsReport,
+  Mp4InputTrackStatsReport,
+} from './types/stats/input.js';
+import {
+  WhepOutputStatsReport,
+  WhepOutputTrackStatsReport,
+  WhipOutputStatsReport,
+  WhipOutputTrackStatsReport,
+  HlsOutputStatsReport,
+  HlsOutputTrackStatsReport,
+  Mp4OutputStatsReport,
+  Mp4OutputTrackStatsReport,
+  RtmpOutputStatsReport,
+  RtmpOutputTrackStatsReport,
+  RtpOutputStatsReport,
+  RtpOutputTrackStatsReport,
+} from './types/stats/output.js';
 
 export {
   RegisterRtpInput,
@@ -72,3 +101,33 @@ export {
 export { useInputStreams, useAudioInput, useBlockingTask, useAfterTimestamp, useCurrentTimestamp };
 
 export { ShaderParam, ShaderParamStructField, EasingFunction, Transition };
+
+export {
+  StatsReport,
+  InputStatsReport,
+  OutputStatsReport,
+  RtpInputStatsReport,
+  RtpJitterBufferStatsReport,
+  RtpJitterBufferSlidingWindowStatsReport,
+  WhipInputStatsReport,
+  WhepInputStatsReport,
+  HlsInputStatsReport,
+  HlsInputTrackStatsReport,
+  HlsInputTrackSlidingWindowStatsReport,
+  RtmpInputStatsReport,
+  RtmpInputTrackStatsReport,
+  Mp4InputStatsReport,
+  Mp4InputTrackStatsReport,
+  WhepOutputStatsReport,
+  WhepOutputTrackStatsReport,
+  WhipOutputStatsReport,
+  WhipOutputTrackStatsReport,
+  HlsOutputStatsReport,
+  HlsOutputTrackStatsReport,
+  Mp4OutputStatsReport,
+  Mp4OutputTrackStatsReport,
+  RtmpOutputStatsReport,
+  RtmpOutputTrackStatsReport,
+  RtpOutputStatsReport,
+  RtpOutputTrackStatsReport,
+};

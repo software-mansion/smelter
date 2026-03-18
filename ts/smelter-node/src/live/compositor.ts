@@ -1,13 +1,13 @@
 import type { ReactElement } from 'react';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
-import type { Renderers } from '@swmansion/smelter';
 import type {
   InputHandle,
   Mp4InputHandle,
   SmelterManager,
   WhipInputHandle,
 } from '@swmansion/smelter-core';
+import type { Renderers, StatsReport } from '@swmansion/smelter';
 import { StateGuard, Smelter as CoreSmelter } from '@swmansion/smelter-core';
 
 import LocallySpawnedInstance from '../manager/locallySpawnedInstance';
@@ -163,6 +163,12 @@ export default class Smelter {
   public async terminate(): Promise<void> {
     await this.scheduler.runBlocking(async () => {
       await this.coreSmelter.terminate();
+    });
+  }
+
+  public async stats(): Promise<StatsReport> {
+    return await this.scheduler.run(async () => {
+      return this.coreSmelter.stats();
     });
   }
 }

@@ -36,6 +36,7 @@ glyphon = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
+schemars = { workspace = true }
 utoipa = { workspace = true }
 axum = { version = "0.7.7", features = ["macros"] }
 tower-http = { workspace = true }

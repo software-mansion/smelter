@@ -21,7 +21,7 @@ Run the API change workflow. All steps must pass before the change is considered
    This generates `ts/smelter/src/api.generated.ts`.
 
 4. **Build the TypeScript SDK to verify compatibility**
-   Run in `./ts`: `pnpm build:all`
+   Run in `./ts`: `pnpm i && pnpm build:all`
 
 5. **Show a summary of all generated/changed files** so the user can review what was affected.
 

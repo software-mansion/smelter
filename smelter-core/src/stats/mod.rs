@@ -5,7 +5,8 @@ use std::{
 };
 
 use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
-use serde::Serialize;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 use utoipa::ToSchema;
 
@@ -24,7 +25,7 @@ pub(crate) use input::*;
 pub(crate) use output::*;
 pub(crate) use state::StatsEvent;
 
-#[derive(Debug, Serialize, Clone, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 pub struct StatsReport {
     pub inputs: BTreeMap<String, InputStatsReport>,
     pub outputs: BTreeMap<String, OutputStatsReport>,

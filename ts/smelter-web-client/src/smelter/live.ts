@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { pino } from 'pino';
-import type { Renderers } from '@swmansion/smelter';
 import type { InputHandle, Mp4InputHandle, WhipInputHandle } from '@swmansion/smelter-core';
+import type { Renderers, StatsReport } from '@swmansion/smelter';
 import { Smelter as CoreSmelter, StateGuard } from '@swmansion/smelter-core';
 import type { RegisterInput, RegisterOutput, RegisterWhepServerOutputResponse } from '../api';
 import type { SmelterOptions } from '../manager';
@@ -161,6 +161,12 @@ export default class Smelter {
   public async terminate(): Promise<void> {
     await this.scheduler.runBlocking(async () => {
       await this.coreSmelter.terminate();
+    });
+  }
+
+  public async stats(): Promise<StatsReport> {
+    return await this.scheduler.run(async () => {
+      return this.coreSmelter.stats();
     });
   }
 }

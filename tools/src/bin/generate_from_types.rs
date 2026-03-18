@@ -31,6 +31,8 @@ enum ApiTypes {
     RegisterShader(smelter_api::ShaderSpec),
     UpdateOutput(Box<routes::update_output::UpdateOutputRequest>),
     UpdateInput(routes::update_input::UpdateInputRequest),
+
+    StatsReport(smelter_core::stats::StatsReport),
 }
 
 pub fn generate_json_schema(check_flag: bool) {
