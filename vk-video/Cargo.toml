@@ -9,11 +9,11 @@ repository = "https://github.com/software-mansion/smelter"
 rust-version = "1.85"
 description = "A library for hardware video coding using Vulkan Video, with wgpu integration."
 categories = [
-    "multimedia::video",
-    "multimedia::encoding",
-    "hardware-support",
-    "encoding",
-    "graphics",
+  "multimedia::video",
+  "multimedia::encoding",
+  "hardware-support",
+  "encoding",
+  "graphics",
 ]
 keywords = ["vulkan", "video", "wgpu", "decoding", "encoding"]
 
@@ -24,6 +24,7 @@ expose_parsers = []
 vk_api_dump = []
 vk_validation = []
 wgpu = ["dep:wgpu"]
+transcoder = ["dep:naga"]
 default = ["wgpu"]
 
 [dependencies]
@@ -35,7 +36,6 @@ memchr = "2.7.4"
 rustc-hash = "2.1.1"
 thiserror = "1.0.59"
 tracing = "0.1.40"
-naga = { version = "28.0.0", features = ["spv-out", "wgsl-in"]}
 wgpu = { version = "28.0.0", optional = true }
 
 # Platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
@@ -51,6 +51,10 @@ winit = "0.29"
 
 [build-dependencies]
 cfg_aliases = "0.2.1"
+naga = { version = "28.0.0", features = [
+  "spv-out",
+  "wgsl-in",
+], optional = true }
 
 [lints]
 workspace = true
@@ -66,3 +70,7 @@ required-features = ["wgpu"]
 [[example]]
 name = "player"
 required-features = ["wgpu"]
+
+[[example]]
+name = "transcode"
+required-features = ["transcoder"]

@@ -9,7 +9,7 @@
 - Changed adapter and device creation API
 
 ### ✨ New features
-- One-to-many transcoders via `VulkanDevice::create_transcoder`
+- One-to-many transcoders via `VulkanDevice::create_transcoder` (needs `transcoder` feature enabled)
 - Made `wgpu` dependency optional via `wgpu` feature (enabled by default)
 - Added helpers for NV12 <-> RGBA wgpu texture conversion
 

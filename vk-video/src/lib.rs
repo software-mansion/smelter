@@ -10,7 +10,7 @@ mod instance;
 mod vulkan_decoder;
 #[cfg(vulkan)]
 mod vulkan_encoder;
-#[cfg(vulkan)]
+#[cfg(all(vulkan, feature = "transcoder"))]
 mod vulkan_transcoder;
 #[cfg(all(vulkan, feature = "wgpu"))]
 pub(crate) mod wgpu_helpers;

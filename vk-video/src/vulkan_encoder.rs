@@ -25,7 +25,7 @@ pub enum VulkanEncoderError {
     #[error("Vulkan error: {0}")]
     VkError(#[from] ash::vk::Result),
 
-    #[error("Cannot find enough memory of the right type on the deivce")]
+    #[error("Cannot find enough memory of the right type on the device")]
     NoMemory,
 
     #[error(transparent)]
@@ -290,9 +290,10 @@ struct EncodeFeedback {
 
 pub(crate) enum EncoderTrackerWaitState {
     InitializeEncoder,
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     ResizeInput,
     CopyBufferToImage,
-    #[allow(dead_code)]
+    #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
     CopyImageToImage,
     Encode,
 }
@@ -347,6 +348,7 @@ impl<'a, 'b> EncodeSubmission<'a, 'b> {
         self.encoder.download_output(self.is_idr, self.pts)
     }
 
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     pub(crate) fn mark_waited(&mut self) {
         self.encoder.tracker.mark_waited(self.wait_value);
     }
@@ -360,6 +362,7 @@ impl<'a, 'b> EncodeSubmission<'a, 'b> {
 pub(crate) struct UnwaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
 
 impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     pub(crate) fn mark_waited(mut self) -> WaitedEncodeSubmission<'a, 'b> {
         self.0.mark_waited();
         WaitedEncodeSubmission(self.0)
