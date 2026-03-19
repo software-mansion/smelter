@@ -13,18 +13,17 @@ use crate::{
     },
     error::DecoderInitError,
     pipeline::{
-        decoder::{DecoderThreadHandle, fdk_aac::FdkAacDecoder, ffmpeg_h264, vulkan_h264},
-        rtmp::rtmp_input::{
-            decoder_thread::{
-                AudioDecoderThread, AudioDecoderThreadOptions, VideoDecoderThread,
-                VideoDecoderThreadOptions,
-            },
-            state::RtmpInputState,
+        decoder::{
+            DecoderThreadHandle,
+            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
+            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
+            fdk_aac::FdkAacDecoder,
+            ffmpeg_h264, vulkan_h264,
         },
-        utils::{
-            H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread, input_buffer::InputBuffer,
-        },
+        rtmp::rtmp_input::state::RtmpInputState,
+        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, input_buffer::InputBuffer},
     },
+    utils::InitializableThread,
 };
 
 use crate::prelude::*;

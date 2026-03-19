@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use axum::extract::{Path, State};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smelter_api::TypeError;
 use utoipa::ToSchema;
@@ -14,7 +15,7 @@ use smelter_api::InputId;
 
 use super::Json;
 
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateInputRequest {
     pub pause: Option<bool>,
