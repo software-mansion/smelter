@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
+use smelter_api::TypeError;
 use utoipa::ToSchema;
 
 use crate::{
@@ -17,6 +18,8 @@ use super::Json;
 #[serde(deny_unknown_fields)]
 pub struct UpdateInputRequest {
     pub pause: Option<bool>,
+    /// Seek to a specific position in milliseconds. Only supported for MP4 inputs.
+    pub seek_ms: Option<f64>,
 }
 
 #[utoipa::path(
@@ -27,6 +30,7 @@ pub struct UpdateInputRequest {
     responses(
         (status = 200, description = "Input updated successfully.", body = Response),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Input not found.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["update_request"],
@@ -36,9 +40,15 @@ pub async fn handle_input_update(
     Path(input_id): Path<InputId>,
     Json(request): Json<UpdateInputRequest>,
 ) -> Result<Response, ApiError> {
+    let seek = request
+        .seek_ms
+        .map(|ms| Duration::try_from_secs_f64(ms / 1000.0))
+        .transpose()
+        .map_err(|err| TypeError::new(format!("Invalid seek duration. {err}")))?;
+
     api.pipeline()?
         .lock()
         .unwrap()
-        .update_input(&input_id.into(), request.pause);
+        .update_input(&input_id.into(), request.pause, seek)?;
     Ok(Response::Ok {})
 }

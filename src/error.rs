@@ -5,7 +5,7 @@ use serde::Serialize;
 use smelter_api::TypeError;
 use smelter_core::error::{
     ErrorType, InitPipelineError, PipelineErrorInfo, RegisterInputError, RegisterOutputError,
-    UnregisterInputError, UnregisterOutputError,
+    UnregisterInputError, UnregisterOutputError, UpdateInputError,
 };
 use smelter_render::error::{
     ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
@@ -76,6 +76,7 @@ impl_api_err!(RegisterOutputError);
 impl_api_err!(RegisterRendererError);
 impl_api_err!(RequestKeyframeError);
 impl_api_err!(UnregisterInputError);
+impl_api_err!(UpdateInputError);
 impl_api_err!(UnregisterOutputError);
 impl_api_err!(UnregisterRendererError);
 impl_api_err!(UpdateSceneError);

@@ -2,7 +2,7 @@ use std::env::VarError;
 use std::{env, fs, mem};
 
 use anyhow::{Context, Result};
-use inquire::Select;
+use inquire::{CustomType, Select};
 use integration_tests::examples;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -243,13 +243,21 @@ impl SmelterState {
         }
         let selected = Select::new("Select input:", input_names).prompt()?;
 
-        let actions = vec!["Pause", "Resume"];
+        let actions = vec!["Pause", "Resume", "Seek"];
         let action = Select::new("Select action:", actions).prompt()?;
-        let pause = action == "Pause";
 
         let update_route = format!("input/{}/update", selected.name);
-        examples::post(&update_route, &json!({ "pause": pause }))
-            .with_context(|| "Input update failed".to_string())?;
+        let body = match action {
+            "Pause" => json!({ "pause": true }),
+            "Resume" => json!({ "pause": false }),
+            "Seek" => {
+                let seek_ms: f64 = CustomType::new("Seek position (ms):").prompt()?;
+                json!({ "seek_ms": seek_ms })
+            }
+            _ => unreachable!(),
+        };
+
+        examples::post(&update_route, &body).with_context(|| "Input update failed".to_string())?;
 
         Ok(())
     }

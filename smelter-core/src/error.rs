@@ -92,6 +92,15 @@ pub enum RegisterOutputError {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum UpdateInputError {
+    #[error("Input \"{0}\" not found.")]
+    NotFound(InputId),
+
+    #[error("Seek is not supported for {0} input. Only MP4 inputs support seeking.")]
+    SeekNotSupported(InputProtocolKind),
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum UnregisterInputError {
     #[error("Failed to unregister input stream. Stream \"{0}\" does not exist.")]
     NotFound(InputId),
@@ -333,6 +342,22 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
             }
             RegisterOutputError::UnknownError(_) => {
                 PipelineErrorInfo::new(UNKNOWN_REGISTER_OUTPUT_ERROR, ErrorType::ServerError)
+            }
+        }
+    }
+}
+
+const UPDATE_INPUT_NOT_FOUND: &str = "INPUT_STREAM_NOT_FOUND";
+const UPDATE_INPUT_SEEK_NOT_SUPPORTED: &str = "INPUT_SEEK_NOT_SUPPORTED";
+
+impl From<&UpdateInputError> for PipelineErrorInfo {
+    fn from(err: &UpdateInputError) -> Self {
+        match err {
+            UpdateInputError::NotFound(_) => {
+                PipelineErrorInfo::new(UPDATE_INPUT_NOT_FOUND, ErrorType::EntityNotFound)
+            }
+            UpdateInputError::SeekNotSupported(_) => {
+                PipelineErrorInfo::new(UPDATE_INPUT_SEEK_NOT_SUPPORTED, ErrorType::UserError)
             }
         }
     }

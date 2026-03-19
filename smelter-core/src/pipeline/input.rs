@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use crate::{
     pipeline::{
@@ -52,6 +55,16 @@ impl Input {
             #[cfg(feature = "decklink")]
             Input::DeckLink(_input) => InputProtocolKind::DeckLink,
             Input::RawDataChannel => InputProtocolKind::RawDataChannel,
+        }
+    }
+
+    pub fn seek(&self, position: Duration) -> Result<(), UpdateInputError> {
+        match self {
+            Input::Mp4(input) => {
+                input.seek(position);
+                Ok(())
+            }
+            _ => Err(UpdateInputError::SeekNotSupported(self.kind())),
         }
     }
 }

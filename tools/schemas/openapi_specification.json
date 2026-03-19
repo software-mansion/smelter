@@ -822,6 +822,16 @@
               }
             }
           },
+          "404": {
+            "description": "Input not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error.",
             "content": {
@@ -5269,6 +5279,14 @@
               "boolean",
               "null"
             ]
+          },
+          "seek_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Seek to a specific position in milliseconds. Only supported for MP4 inputs."
           }
         },
         "additionalProperties": false

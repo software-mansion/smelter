@@ -103,13 +103,28 @@ impl Pipeline {
         })
     }
 
-    pub fn update_input(&self, input_id: &InputId, pause: Option<bool>) {
+    pub fn update_input(
+        &self,
+        input_id: &InputId,
+        pause: Option<bool>,
+        seek: Option<Duration>,
+    ) -> Result<(), UpdateInputError> {
+        let input = self
+            .inputs
+            .get(input_id)
+            .ok_or_else(|| UpdateInputError::NotFound(input_id.clone()))?;
+
         if let Some(pause) = pause {
             match pause {
                 true => self.queue.pause_input(input_id),
                 false => self.queue.resume_input(input_id),
             }
         }
+
+        if let Some(seek) = seek {
+            input.input.seek(seek)?;
+        }
+        Ok(())
     }
 
     pub fn unregister_input(&mut self, input_id: &InputId) -> Result<(), UnregisterInputError> {

@@ -28,7 +28,7 @@ pub enum Mp4InputSource {
     File(Arc<Path>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Mp4InputVideoDecoders {
     pub h264: Option<VideoDecoderOptions>,
 }
