@@ -8,7 +8,9 @@
 
 **[Documentation](https://smelter.dev/docs)** | **[Discord](https://discord.gg/Cxj3rzTTag)**
 
-<br>
+[![Ad](https://revive-adserver.swmansion.com/www/images/zone-gh-smelter-1?n=1)](https://revive-adserver.swmansion.com/www/delivery/ck.php?zoneid=zone-gh-smelter-1&n=1)
+[![Ad](https://revive-adserver.swmansion.com/www/images/zone-gh-smelter-2?n=1)](https://revive-adserver.swmansion.com/www/delivery/ck.php?zoneid=zone-gh-smelter-2&n=1)
+[![Ad](https://revive-adserver.swmansion.com/www/images/zone-gh-smelter-3?n=1)](https://revive-adserver.swmansion.com/www/delivery/ck.php?zoneid=zone-gh-smelter-3&n=1)
 
 Smelter is a toolkit for real-time, low-latency, programmable video and audio composition.
 
