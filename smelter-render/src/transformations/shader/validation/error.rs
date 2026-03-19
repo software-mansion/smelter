@@ -230,6 +230,8 @@ impl ShaderGlobalVariableExt for naga::GlobalVariable {
             naga::AddressSpace::Handle => "".to_string(),
             naga::AddressSpace::Immediate => "<immediate>".to_string(),
             naga::AddressSpace::TaskPayload => "<task_payload>".to_string(),
+            naga::AddressSpace::RayPayload => "<ray_payload>".to_string(),
+            naga::AddressSpace::IncomingRayPayload => "<incoming_ray_payload>".to_string(),
         };
         let name = self.name.clone().unwrap_or("value".to_string());
         format!("{group_and_binding}var{space} {name}")

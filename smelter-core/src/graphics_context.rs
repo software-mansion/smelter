@@ -1,4 +1,4 @@
-use crate::graphics_context::wgpu_context::create_wgpu_graphics_ctx;
+use crate::graphics_context::wgpu_context::{BoxableHasDisplayHandle, create_wgpu_graphics_ctx};
 use std::sync::Arc;
 
 #[cfg(feature = "vk-video")]
@@ -31,6 +31,7 @@ pub struct GraphicsContextOptions<'a> {
     pub features: wgpu::Features,
     pub limits: wgpu::Limits,
     pub compatible_surface: Option<&'a wgpu::Surface<'a>>,
+    pub display_handle: Option<&'a dyn BoxableHasDisplayHandle>,
     pub libvulkan_path: Option<&'a std::ffi::OsStr>,
 }
 

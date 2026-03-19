@@ -91,6 +91,7 @@ impl WgpuContext {
                 })),
                 &required_extensions,
                 wgpu_features,
+                &wgpu_limits,
                 &wgpu::MemoryHints::default(),
                 wgpu_queue_family_index,
                 0,

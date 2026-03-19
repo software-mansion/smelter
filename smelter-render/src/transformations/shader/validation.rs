@@ -137,6 +137,7 @@ fn validate_type_equivalent(
         naga::TypeInner::Scalar { .. }
         | naga::TypeInner::Vector { .. }
         | naga::TypeInner::Matrix { .. }
+        | naga::TypeInner::CooperativeMatrix { .. }
         | naga::TypeInner::Atomic { .. }
         | naga::TypeInner::Image { .. }
         | naga::TypeInner::Sampler { .. }
@@ -150,7 +151,6 @@ fn validate_type_equivalent(
                 });
             }
         }
-
         naga::TypeInner::Array {
             base: expected_base,
             size: expected_size,
@@ -183,7 +183,6 @@ fn validate_type_equivalent(
                 provided_module,
             );
         }
-
         naga::TypeInner::BindingArray {
             base: expected_base,
             size: expected_size,
@@ -207,7 +206,6 @@ fn validate_type_equivalent(
                 provided_module,
             );
         }
-
         naga::TypeInner::Struct {
             members: ref expected_members,
             ..
@@ -280,7 +278,6 @@ fn validate_type_equivalent(
                 }
             }
         }
-
         naga::TypeInner::Pointer { .. } => {
             panic!("this should never happen bc of canonicalization")
         }
@@ -351,6 +348,7 @@ pub(super) fn validate_params(
         | naga::TypeInner::Sampler { .. }
         | naga::TypeInner::AccelerationStructure { .. }
         | naga::TypeInner::RayQuery { .. }
+        | naga::TypeInner::CooperativeMatrix { .. }
         | naga::TypeInner::BindingArray { .. } => Err(ParametersValidationError::ForbiddenType(
             ty.inner.type_name(),
         )),
@@ -589,8 +587,10 @@ impl TypeInnerExt for naga::TypeInner {
             naga::TypeInner::AccelerationStructure { .. } => "acceleration structure",
             naga::TypeInner::RayQuery { .. } => "ray query",
             naga::TypeInner::BindingArray { .. } => "binding array",
+            naga::TypeInner::CooperativeMatrix { .. } => "cooperative matrix",
         }
     }
+
     fn to_string(&self, module: &naga::Module) -> String {
         match self {
             naga::TypeInner::Scalar(scalar) => scalar.to_string(),
@@ -598,6 +598,7 @@ impl TypeInnerExt for naga::TypeInner {
                 format!("vec{}<{}>", *size as u8, scalar.to_string())
             }
             naga::TypeInner::Matrix { .. } => "matrix".to_string(),
+            naga::TypeInner::CooperativeMatrix { .. } => "cooperative matrix".to_string(),
             naga::TypeInner::Atomic { .. } => "atomic".to_string(),
             naga::TypeInner::Pointer { .. } => "pointer".to_string(),
             naga::TypeInner::ValuePointer { .. } => "value pointer".to_string(),

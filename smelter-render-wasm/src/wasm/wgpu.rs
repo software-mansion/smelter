@@ -4,8 +4,17 @@ use wasm_bindgen::JsValue;
 
 use super::types::to_js_error;
 
+#[derive(Debug)]
+struct WebDisplayHandle;
+
+impl wgpu::rwh::HasDisplayHandle for WebDisplayHandle {
+    fn display_handle(&self) -> Result<wgpu::rwh::DisplayHandle<'_>, wgpu::rwh::HandleError> {
+        Ok(wgpu::rwh::DisplayHandle::web())
+    }
+}
+
 pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue>), JsValue> {
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::GL,
         backend_options: wgpu::BackendOptions {
             gl: wgpu::GlBackendOptions {
@@ -13,11 +22,14 @@ pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue
                 // `AutoFinish` makes the web behavior consistent with native at the cost of `Queue::on_completed_work_done` not working correctly.
                 // https://github.com/gfx-rs/wgpu/blob/a95c69eb910c78306c4f19212183177f51f99aea/wgpu-types/src/instance.rs#L548-L560
                 fence_behavior: wgpu::GlFenceBehavior::AutoFinish,
-                ..Default::default()
+                gles_minor_version: wgpu::Gles3MinorVersion::default(),
+                debug_fns: wgpu::GlDebugFns::default(),
             },
             ..Default::default()
         },
-        ..Default::default()
+        display: Some(Box::new(WebDisplayHandle)),
+        flags: wgpu::InstanceFlags::default(),
+        memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
     });
 
     let canvas = web_sys::OffscreenCanvas::new(0, 0)?;

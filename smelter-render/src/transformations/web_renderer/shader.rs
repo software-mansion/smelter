@@ -31,8 +31,8 @@ impl WebRendererShader {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Web renderer pipeline layout"),
                     bind_group_layouts: &[
-                        &wgpu_ctx.format.single_texture_layout,
-                        &sampler.bind_group_layout,
+                        Some(&wgpu_ctx.format.single_texture_layout),
+                        Some(&sampler.bind_group_layout),
                     ],
                     immediate_size: RenderInfo::size(),
                 });

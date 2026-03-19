@@ -54,9 +54,9 @@ impl ShaderPipeline {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("shader transformation pipeline layout"),
                     bind_group_layouts: &[
-                        &textures_bgl,
-                        &wgpu_ctx.uniform_bgl,
-                        &sampler.bind_group_layout,
+                        Some(&textures_bgl),
+                        Some(&wgpu_ctx.uniform_bgl),
+                        Some(&sampler.bind_group_layout),
                     ],
                     immediate_size: BaseShaderParameters::push_constant_size(),
                 });

@@ -467,7 +467,7 @@ fn wgpu_features_from_str(s: &str) -> Result<WgpuFeatures, String> {
             "EXPERIMENTAL_RAY_QUERY" => WgpuFeatures::EXPERIMENTAL_RAY_QUERY,
             "SHADER_F64" => WgpuFeatures::SHADER_F64,
             "SHADER_I16" => WgpuFeatures::SHADER_I16,
-            "SHADER_PRIMITIVE_INDEX" => WgpuFeatures::SHADER_PRIMITIVE_INDEX,
+            "PRIMITIVE_INDEX" => WgpuFeatures::PRIMITIVE_INDEX,
             "SHADER_EARLY_DEPTH_TEST" => WgpuFeatures::SHADER_EARLY_DEPTH_TEST,
             "SHADER_INT64" => WgpuFeatures::SHADER_INT64,
             "SUBGROUP" => WgpuFeatures::SUBGROUP,
@@ -490,7 +490,7 @@ fn wgpu_features_from_str(s: &str) -> Result<WgpuFeatures, String> {
             "EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS" => {
                 WgpuFeatures::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS
             }
-            "EXPERIMENTAL_PASSTHROUGH_SHADERS" => WgpuFeatures::EXPERIMENTAL_PASSTHROUGH_SHADERS,
+            "PASSTHROUGH_SHADERS" => WgpuFeatures::PASSTHROUGH_SHADERS,
             "SHADER_BARYCENTRICS" => WgpuFeatures::SHADER_BARYCENTRICS,
             "SELECTIVE_MULTIVIEW" => WgpuFeatures::SELECTIVE_MULTIVIEW,
             "EXPERIMENTAL_MESH_SHADER_POINTS" => WgpuFeatures::EXPERIMENTAL_MESH_SHADER_POINTS,

@@ -59,7 +59,7 @@ impl WgpuNv12ToRgbaConverter {
             device.create_shader_module(wgpu::include_wgsl!("../shaders/nv12_to_rgba.wgsl"));
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("vk-video nv12 to rgba converter pipeline layout"),
-            bind_group_layouts: &[&nv12_planes_bgl, &sampler.bgl],
+            bind_group_layouts: &[Some(&nv12_planes_bgl), Some(&sampler.bgl)],
             immediate_size: 0,
         });
 

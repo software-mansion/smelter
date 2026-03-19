@@ -25,6 +25,8 @@ web-sys = { version = "0.3.77", features = [
     "ImageData",
     "VideoFrame",
     "VideoFrameCopyToOptions",
+    "VideoPixelFormat",
+    "PlaneLayout",
     "Navigator",
     "DomRectReadOnly",
 ] }
