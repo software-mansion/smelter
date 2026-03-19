@@ -2,8 +2,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
 
-/// Struct representing legacy flv VIDEODATA.
-/// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
+/// Struct representing flv VIDEODATA.
 #[derive(Debug, Clone)]
 pub struct VideoTag {
     /// FrameType 4bits
@@ -127,14 +126,17 @@ pub(super) fn serialize_composition_time(buf: &mut BytesMut, ct: i32) {
     buf.put(&ct.to_be_bytes()[1..4]);
 }
 
+// Currently only AVC video codec is supported
 impl VideoTag {
-    /// Parses legacy flv `VIDEODATA`.
-    pub fn parse(data: Bytes) -> Result<Self, FlvVideoTagParseError> {
+    /// Parses flv `VIDEODATA`. The `data` must be the entire content of the `Data` field of
+    /// the flv tag with video `TagType`.  
+    /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
+    pub(super) fn parse(data: Bytes) -> Result<Self, FlvVideoTagParseError> {
         if data.is_empty() {
             return Err(FlvVideoTagParseError::TooShort);
         }
 
-        let frame_type = (data[0] & 0b01110000) >> 4;
+        let frame_type = (data[0] & 0b11110000) >> 4;
         let codec_id = data[0] & 0b00001111;
 
         let frame_type = VideoTagFrameType::from_raw(frame_type)?;

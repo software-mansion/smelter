@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    GenericVideoData, H264VideoConfig, H264VideoData, RtmpMessageParseError,
+    FlvVideoData, GenericVideoData, H264VideoConfig, H264VideoData, RtmpMessageParseError,
     RtmpMessageSerializeError, VideoCodec, VideoTag, VideoTagFrameType, VideoTagH264PacketType,
     error::FlvVideoTagParseError,
     message::VIDEO_CHUNK_STREAM_ID,
@@ -17,8 +17,11 @@ pub(crate) enum VideoMessage {
 
 impl VideoMessage {
     pub(super) fn from_raw(msg: RawMessage) -> Result<Self, RtmpMessageParseError> {
-        let tag = VideoTag::parse(msg.payload)?;
-        let event = match (tag.codec, tag.h264_packet_type) {
+        let tag = match FlvVideoData::parse(msg.payload)? {
+            FlvVideoData::Legacy(tag) => tag,
+            FlvVideoData::Enhanced(_) => unimplemented!(),
+        };
+        let event: VideoMessage = match (tag.codec, tag.h264_packet_type) {
             (VideoCodec::H264, Some(VideoTagH264PacketType::Data)) => {
                 Self::H264Data(H264VideoData {
                     pts: Duration::from_millis(
