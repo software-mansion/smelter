@@ -159,6 +159,6 @@ impl PipelineInput {
         self.audio_eos_received = self.audio_eos_received.map(|_| true);
     }
     pub(super) fn on_video_eos(&mut self) {
-        self.audio_eos_received = self.audio_eos_received.map(|_| true);
+        self.video_eos_received = self.video_eos_received.map(|_| true);
     }
 }

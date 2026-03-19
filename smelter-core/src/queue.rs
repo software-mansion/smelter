@@ -236,13 +236,13 @@ impl Queue {
     }
 
     pub fn pause_input(&self, input_id: &InputId) {
-        let pts = Instant::now().duration_since(self.sync_point);
+        let pts = self.sync_point.elapsed();
         self.video_queue.lock().unwrap().pause_input(input_id, pts);
         self.audio_queue.lock().unwrap().pause_input(input_id, pts);
     }
 
     pub fn resume_input(&self, input_id: &InputId) {
-        let pts = Instant::now().duration_since(self.sync_point);
+        let pts = self.sync_point.elapsed();
         self.video_queue.lock().unwrap().resume_input(input_id, pts);
         self.audio_queue.lock().unwrap().resume_input(input_id, pts);
     }

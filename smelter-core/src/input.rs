@@ -40,6 +40,7 @@ pub enum InputInitInfo {
     },
     Whip {
         bearer_token: Arc<str>,
+        endpoint_route: Arc<str>,
     },
     Other,
 }

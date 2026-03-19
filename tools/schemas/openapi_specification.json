@@ -3872,10 +3872,14 @@
           {
             "type": "object",
             "required": [
-              "bearer_token"
+              "bearer_token",
+              "endpoint_route"
             ],
             "properties": {
               "bearer_token": {
+                "type": "string"
+              },
+              "endpoint_route": {
                 "type": "string"
               }
             }

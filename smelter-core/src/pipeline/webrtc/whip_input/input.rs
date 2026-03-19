@@ -40,6 +40,7 @@ impl WhipInput {
         let endpoint_id = options
             .endpoint_override
             .unwrap_or(input_ref.id().0.clone());
+        let endpoint_route = Arc::from(format!("/whip/{}", urlencoding::encode(&endpoint_id)));
         let (frame_sender, frame_receiver) = bounded(5);
         let (input_samples_sender, input_samples_receiver) = bounded(5);
 
@@ -64,7 +65,10 @@ impl WhipInput {
                 whip_inputs_state: state.inputs.clone(),
                 input_ref,
             }),
-            InputInitInfo::Whip { bearer_token },
+            InputInitInfo::Whip {
+                bearer_token,
+                endpoint_route,
+            },
             QueueDataReceiver {
                 video: Some(frame_receiver),
                 audio: Some(input_samples_receiver),
