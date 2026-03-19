@@ -212,7 +212,7 @@ impl<'a> Renderer<'a> {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -279,9 +279,16 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    fn render(&mut self, frame: &wgpu::Texture, window: &Window) -> Result<(), wgpu::SurfaceError> {
+    fn render(
+        &mut self,
+        frame: &wgpu::Texture,
+        window: &Window,
+    ) -> Result<(), wgpu::CurrentSurfaceTexture> {
         let device = &self.device;
-        let surface = self.surface.get_current_texture()?;
+        let surface = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(surface) => surface,
+            other => return Err(other),
+        };
         let surface_view = surface.texture.create_view(&wgpu::TextureViewDescriptor {
             format: Some(surface.texture.format().remove_srgb_suffix()),
             ..Default::default()
