@@ -2,20 +2,36 @@ use std::ptr::null_mut;
 
 use ash::vk;
 
-use crate::codec::{
-    Codec, CodecCapabilities, CodecSpecificDecodeCapabilities, CodecSpecificEncodeCapabilities,
-    CodecSpecificEncoderQualityLevelProperties,
+use crate::{
+    codec::{
+        Codec, CodecCapabilities, CodecSpecificDecodeCapabilities, CodecSpecificEncodeCapabilities,
+        CodecSpecificEncoderQualityLevelProperties,
+    },
+    device::caps::NativeEncodeH264Capabilities,
+    parameters::H264Profile,
+    wrappers::{VkPictureParameterSet, VkSequenceParameterSet},
 };
 
-#[derive(Debug, Clone)]
+pub(crate) mod encode;
+
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct H264Codec;
-pub(crate) struct H264Parameters<'a> {
-    pub(crate) sps: &'a [vk::native::StdVideoH264SequenceParameterSet],
-    pub(crate) pps: &'a [vk::native::StdVideoH264PictureParameterSet],
+
+pub(crate) struct H264CodecParameters {
+    pub(crate) sps: Vec<VkSequenceParameterSet>,
+    pub(crate) pps: Vec<VkPictureParameterSet>,
+}
+
+pub(crate) struct H264VkParameters {
+    pub(crate) sps: Vec<vk::native::StdVideoH264SequenceParameterSet>,
+    pub(crate) pps: Vec<vk::native::StdVideoH264PictureParameterSet>,
 }
 
 impl Codec for H264Codec {
-    type InitialParameters<'a> = H264Parameters<'a>;
+    type Profile = H264Profile;
+
+    type OwnedParameters = H264CodecParameters;
+    type VkParameters<'a> = H264VkParameters;
 
     type VideoDecodeSessionParametersAddInfo<'a> =
         vk::VideoDecodeH264SessionParametersAddInfoKHR<'a>;
@@ -28,11 +44,11 @@ impl Codec for H264Codec {
         vk::VideoEncodeH264SessionParametersCreateInfoKHR<'a>;
 
     fn decode_parameters_add_info<'a: 'b, 'b>(
-        parameters: &Self::InitialParameters<'a>,
+        parameters: &'b Self::VkParameters<'a>,
     ) -> Self::VideoDecodeSessionParametersAddInfo<'b> {
         vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
-            .std_sp_ss(parameters.sps)
-            .std_pp_ss(parameters.pps)
+            .std_sp_ss(&parameters.sps)
+            .std_pp_ss(&parameters.pps)
     }
 
     fn decode_parameters_create_info<'a: 'b, 'b>(
@@ -45,11 +61,11 @@ impl Codec for H264Codec {
     }
 
     fn encode_parameters_add_info<'a: 'b, 'b>(
-        parameters: &Self::InitialParameters<'a>,
+        parameters: &'b Self::VkParameters<'a>,
     ) -> Self::VideoEncodeSessionParametersAddInfo<'b> {
         vk::VideoEncodeH264SessionParametersAddInfoKHR::default()
-            .std_sp_ss(parameters.sps)
-            .std_pp_ss(parameters.pps)
+            .std_sp_ss(&parameters.sps)
+            .std_pp_ss(&parameters.pps)
     }
 
     fn encode_parameters_create_info<'a: 'b, 'b>(
@@ -67,6 +83,7 @@ impl CodecCapabilities for H264Codec {
     type CodecSpecificEncodeCapabilities<'a> = vk::VideoEncodeH264CapabilitiesKHR<'a>;
     type CodecSpecificEncodeQualityLevelProperties<'a> =
         vk::VideoEncodeH264QualityLevelPropertiesKHR<'a>;
+    type NativeEncodeCodecCapabilities = NativeEncodeH264Capabilities;
 
     fn static_decode_capabilities<'a>(
         codec_caps: &Self::CodecSpecificDecodeCapabilities<'a>,
@@ -96,6 +113,12 @@ impl CodecCapabilities for H264Codec {
             _marker: Default::default(),
             ..*codec_qlp
         }
+    }
+
+    fn encode_codec_capabilities(
+        capabilities: &crate::device::caps::NativeEncodeCapabilities,
+    ) -> Option<&Self::NativeEncodeCodecCapabilities> {
+        capabilities.h264.as_ref()
     }
 }
 

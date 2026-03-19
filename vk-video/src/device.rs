@@ -531,7 +531,7 @@ impl VulkanDevice {
     pub(crate) fn validate_and_fill_encoder_parameters(
         &self,
         encoder_parameters: EncoderParameters,
-    ) -> Result<FullEncoderParameters, VulkanEncoderError> {
+    ) -> Result<FullEncoderParameters<H264Codec>, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities.as_ref() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };

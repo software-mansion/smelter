@@ -6,11 +6,11 @@ use crate::{
     VulkanDevice,
     parameters::ScalingAlgorithm,
     vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
-    vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState, H264EncodeProfileInfo},
+    vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     vulkan_transcoder::TranscoderError,
     wrappers::{
         CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
-        Image, ImageView, PipelineLayout, SemaphoreWaitValue, ShaderModule,
+        Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
     },
 };
 
@@ -155,7 +155,7 @@ impl ImageHeap {
 pub(crate) struct OutputConfig {
     pub(crate) width: u32,
     pub(crate) height: u32,
-    pub(crate) profile: H264EncodeProfileInfo<'static>,
+    pub(crate) profile: ProfileInfo<'static>,
     pub(crate) scaling_algorithm: ScalingAlgorithm,
 }
 
