@@ -6,7 +6,8 @@
 - `EncoderParameters` has extra fields:
   - Field which determines whether stream parameters are inlined in the output stream.
   - Color space and color range.
-- Changed adapter and device creation API
+- Changed adapter and device creation API.
+- `Frame<T>` has been split into `InputFrame<T>` (for encoding) and `OutputFrame<T>` (for decoding). Decoded frames now include color space and color range information.
 
 ### ✨ New features
 - One-to-many transcoders via `VulkanDevice::create_transcoder` (needs `transcoder` feature enabled)

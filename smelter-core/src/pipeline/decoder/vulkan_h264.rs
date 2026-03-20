@@ -100,8 +100,8 @@ impl VideoDecoderInstance for VulkanH264Decoder {
     }
 }
 
-fn from_vk_frame(frame: vk_video::Frame<wgpu::Texture>) -> Frame {
-    let vk_video::Frame { data, pts } = frame;
+fn from_vk_frame(frame: vk_video::OutputFrame<wgpu::Texture>) -> Frame {
+    let vk_video::OutputFrame { data, metadata } = frame;
     let resolution = Resolution {
         width: data.width() as usize,
         height: data.height() as usize,
@@ -109,7 +109,7 @@ fn from_vk_frame(frame: vk_video::Frame<wgpu::Texture>) -> Frame {
 
     Frame {
         data: FrameData::Nv12WgpuTexture(data.into()),
-        pts: Duration::from_micros(pts.unwrap()),
+        pts: Duration::from_micros(metadata.pts.unwrap()),
         resolution,
     }
 }

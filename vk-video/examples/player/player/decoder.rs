@@ -5,7 +5,7 @@ use std::{
 };
 
 use bytes::BytesMut;
-use vk_video::{EncodedInputChunk, Frame, VulkanDevice, parameters::DecoderParameters};
+use vk_video::{EncodedInputChunk, OutputFrame, VulkanDevice, parameters::DecoderParameters};
 
 use super::FrameWithPts;
 
@@ -22,7 +22,7 @@ pub fn run_decoder(
     let mut frame_number = 0u64;
     let mut buffer = BytesMut::zeroed(4096);
 
-    let send_frame = move |frame: Frame<wgpu::Texture>, frame_number: &mut u64| {
+    let send_frame = move |frame: OutputFrame<wgpu::Texture>, frame_number: &mut u64| {
         let result = FrameWithPts {
             frame: frame.data,
             pts: Duration::from_secs_f64(*frame_number as f64 * frame_interval),

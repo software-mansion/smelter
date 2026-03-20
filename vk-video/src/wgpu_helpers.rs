@@ -11,9 +11,17 @@ pub enum WgpuConverterInitError {
     // TODO: Remove once we add more converters
     #[error("Only limited range BT709 is supported")]
     OnlyLimitedBT709Supported,
+
+    #[error(
+        "Provided frame does not match the converter's parameters. Expected {expected:?}, actual {actual:?}"
+    )]
+    IncompatibleFrame {
+        expected: (ColorSpace, ColorRange),
+        actual: (ColorSpace, ColorRange),
+    },
 }
 
-/// Parameters for NV12 ↔ RGBA texture conversion.
+/// Parameters for NV12 <-> RGBA texture conversion.
 ///
 /// Used by [`WgpuNv12ToRgbaConverter`] and [`WgpuRgbaToNv12Converter`] to describe
 /// the color properties of the NV12 textures.

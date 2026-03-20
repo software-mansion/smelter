@@ -6,7 +6,7 @@ fn main() {
     };
 
     use vk_video::{
-        Frame, RawFrameData, VulkanInstance,
+        InputFrame, RawFrameData, VulkanInstance,
         parameters::{
             RateControl, VideoParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
         },
@@ -58,7 +58,7 @@ fn main() {
 
     let mut output_file = std::fs::File::create("output.h264").unwrap();
 
-    let mut frame = Frame {
+    let mut frame = InputFrame {
         data: RawFrameData {
             frame: vec![0; width.get() as usize * height.get() as usize * 3 / 2],
             width: width.get(),

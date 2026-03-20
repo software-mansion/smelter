@@ -126,7 +126,7 @@ impl VideoEncoder for VulkanH264Encoder {
         transition_texture(&self.ctx, &texture);
         let result = unsafe {
             self.encoder.encode(
-                vk_video::Frame {
+                vk_video::InputFrame {
                     data: texture.deref().clone(),
                     pts: None,
                 },

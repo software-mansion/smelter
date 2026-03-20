@@ -3,7 +3,7 @@ fn main() {
     use std::io::Write;
 
     use vk_video::{
-        EncodedInputChunk, Frame, VulkanInstance,
+        EncodedInputChunk, OutputFrame, VulkanInstance,
         parameters::{DecoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor},
     };
 
@@ -52,14 +52,14 @@ fn main() {
 
         let frames = decoder.decode(chunk).unwrap();
 
-        for Frame { data, .. } in frames {
+        for OutputFrame { data, .. } in frames {
             let decoded_frame = download_wgpu_texture(&device, queue, data);
             output_file.write_all(&decoded_frame).unwrap();
         }
     }
 
     let remaining_frames = decoder.flush().unwrap();
-    for Frame { data, .. } in remaining_frames {
+    for OutputFrame { data, .. } in remaining_frames {
         let decoded_frame = download_wgpu_texture(&device, queue, data);
         output_file.write_all(&decoded_frame).unwrap();
     }

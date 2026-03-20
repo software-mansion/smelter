@@ -5,7 +5,7 @@ use vk_video::WgpuRgbaToNv12Converter;
 fn main() {
     use std::{io::Write, num::NonZeroU32};
     use vk_video::{
-        Frame, VulkanInstance,
+        InputFrame, VulkanInstance,
         parameters::{
             RateControl, VideoParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
         },
@@ -78,7 +78,7 @@ fn main() {
         let res = unsafe {
             encoder
                 .encode(
-                    Frame {
+                    InputFrame {
                         data: wgpu_state.nv12_texture.clone(),
                         pts: None,
                     },
