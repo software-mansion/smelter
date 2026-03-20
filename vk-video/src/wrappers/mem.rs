@@ -5,10 +5,11 @@ use vk_mem::Alloc;
 
 use crate::{
     VulkanCommonError, VulkanDecoderError, VulkanInitError,
+    codec::h264::parameters::H264DecodeProfileInfo,
     wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
 };
 
-use super::{Device, H264DecodeProfileInfo, Instance};
+use super::{Device, Instance};
 
 pub(crate) struct Allocator {
     allocator: vk_mem::Allocator,

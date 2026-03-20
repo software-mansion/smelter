@@ -6,20 +6,21 @@ use crate::{
     codec::{
         Codec, CodecCapabilities, CodecSpecificDecodeCapabilities, CodecSpecificEncodeCapabilities,
         CodecSpecificEncoderQualityLevelProperties,
+        h264::parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
     },
     device::caps::NativeEncodeH264Capabilities,
     parameters::H264Profile,
-    wrappers::{VkPictureParameterSet, VkSequenceParameterSet},
 };
 
 pub(crate) mod encode;
+pub(crate) mod parameters;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct H264Codec;
 
 pub(crate) struct H264CodecParameters {
-    pub(crate) sps: Vec<VkSequenceParameterSet>,
-    pub(crate) pps: Vec<VkPictureParameterSet>,
+    pub(crate) sps: Vec<VkH264SequenceParameterSet>,
+    pub(crate) pps: Vec<VkH264PictureParameterSet>,
 }
 
 pub(crate) struct H264VkParameters {
