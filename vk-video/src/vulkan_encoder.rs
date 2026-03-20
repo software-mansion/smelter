@@ -8,14 +8,13 @@ use ash::vk;
 
 use crate::{
     EncodedOutputChunk, InputFrame, RawFrameData, VulkanCommonError,
+    codec::EncodeCodec,
     device::{ColorRange, ColorSpace, EncodingDevice, Rational},
-    codec::h264::{H264Codec, H264Parameters},
-    parameters::H264Profile,
     wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
         ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
         SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
-        VideoSessionParameters, VkPictureParameterSet, VkSequenceParameterSet,
+        VideoSessionParameters,
     },
 };
 
@@ -43,8 +42,8 @@ pub enum VulkanEncoderError {
         size_from_resolution: usize,
     },
 
-    #[error("The profile '{0:?}' is not supported by this device")]
-    ProfileUnsupported(H264Profile),
+    #[error("The profile '{0}' is not supported by this device")]
+    ProfileUnsupported(String),
 
     #[error("This device does not support the required capabilities: {0}")]
     UnsupportedDeviceCapabilities(&'static str),
@@ -101,20 +100,17 @@ struct VideoSessionResources<'a> {
 }
 
 impl VideoSessionResources<'_> {
-    fn new(
+    fn new<C: EncodeCodec>(
         encoding_device: &EncodingDevice,
         command_buffer: &mut OpenCommandBuffer,
         image_tracker: Arc<Mutex<ImageLayoutTracker>>,
-        parameters: FullEncoderParameters,
+        parameters: &FullEncoderParameters<C>,
         profile_info: &vk::VideoProfileInfoKHR,
     ) -> Result<Self, VulkanEncoderError> {
-        let encode_capabilities = encoding_device
-            .native_encode_capabilities
-            .h264
-            .as_ref()
-            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
-            .profile(parameters.profile)
-            .ok_or(VulkanEncoderError::ProfileUnsupported(parameters.profile))?;
+        let encode_capabilities = C::encode_codec_profile_capabilities(
+            &encoding_device.native_encode_capabilities,
+            parameters.profile,
+        )?;
 
         let extent = vk::Extent2D {
             width: parameters.width.get(),
@@ -154,24 +150,12 @@ impl VideoSessionResources<'_> {
             vk::ImageLayout::VIDEO_ENCODE_DPB_KHR,
         )?;
 
-        let sps = VkSequenceParameterSet::new_encode(
-            parameters.profile,
-            extent.width,
-            extent.height,
-            max_references,
-            parameters.color_space,
-            parameters.color_range,
-            parameters.framerate,
-        )?;
-        let pps = VkPictureParameterSet::new_encode();
+        let codec_parameters = C::codec_parameters(parameters)?;
 
-        let session_parameters = VideoSessionParameters::new::<H264Codec>(
+        let session_parameters = VideoSessionParameters::new::<C>(
             encoding_device.vulkan_device.device.clone(),
             video_session.session,
-            H264Parameters {
-                sps: &[sps.sps],
-                pps: &[pps.pps],
-            },
+            C::vk_parameters(&codec_parameters),
             None,
             Some(parameters.quality_level),
         )?;
@@ -188,32 +172,6 @@ impl VideoSessionResources<'_> {
     }
 }
 
-pub(crate) type H264EncodeProfileInfo<'a> = ProfileInfo<'a>;
-
-impl H264EncodeProfileInfo<'_> {
-    pub(crate) fn new_encode(parameters: &FullEncoderParameters) -> Self {
-        let h264_profile = vk::VideoEncodeH264ProfileInfoKHR::default()
-            .std_profile_idc(parameters.profile.to_profile_idc());
-
-        let profile = vk::VideoProfileInfoKHR::default()
-            .video_codec_operation(vk::VideoCodecOperationFlagsKHR::ENCODE_H264)
-            .chroma_subsampling(vk::VideoChromaSubsamplingFlagsKHR::TYPE_420)
-            .luma_bit_depth(vk::VideoComponentBitDepthFlagsKHR::TYPE_8)
-            .chroma_bit_depth(vk::VideoComponentBitDepthFlagsKHR::TYPE_8);
-
-        let h264_profile = Box::new(h264_profile);
-
-        let usage_info = vk::VideoEncodeUsageInfoKHR::default()
-            .video_usage_hints(parameters.usage_flags)
-            .tuning_mode(parameters.tuning_mode)
-            .video_content_hints(parameters.content_flags);
-
-        let usage_info = Box::new(usage_info);
-
-        ProfileInfo::new(profile, vec![h264_profile, usage_info])
-    }
-}
-
 struct EncodingQueryPool {
     pool: QueryPool,
 }
@@ -227,18 +185,15 @@ impl std::ops::Deref for EncodingQueryPool {
 }
 
 impl EncodingQueryPool {
-    pub(crate) fn new(
+    pub(crate) fn new<C: EncodeCodec>(
         encoding_device: &EncodingDevice,
-        profile: H264Profile,
+        profile: C::Profile,
         profile_info: vk::VideoProfileInfoKHR,
     ) -> Result<Self, VulkanEncoderError> {
-        let encode_capabilities = encoding_device
-            .native_encode_capabilities
-            .h264
-            .as_ref()
-            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
-            .profile(profile)
-            .ok_or(VulkanEncoderError::ProfileUnsupported(profile))?;
+        let encode_capabilities = C::encode_codec_profile_capabilities(
+            &encoding_device.native_encode_capabilities,
+            profile,
+        )?;
 
         if !encode_capabilities
             .encode_capabilities
@@ -341,15 +296,15 @@ impl TrackerKind for EncoderTrackerKind {
 
 pub(crate) type EncoderTracker = Tracker<EncoderTrackerKind>;
 
-pub(crate) struct EncodeSubmission<'borrow, 'encoder> {
+pub(crate) struct EncodeSubmission<'borrow, 'encoder, C: EncodeCodec> {
     pub(crate) is_idr: bool,
     pub(crate) wait_value: SemaphoreWaitValue,
-    pub(crate) encoder: &'borrow mut VulkanEncoder<'encoder>,
+    pub(crate) encoder: &'borrow mut VulkanEncoder<'encoder, C>,
     pub(crate) pts: Option<u64>,
     _image: Arc<Image>,
 }
 
-impl<'a, 'b> EncodeSubmission<'a, 'b> {
+impl<'a, 'b, C: EncodeCodec> EncodeSubmission<'a, 'b, C> {
     pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.encoder.download_output(self.is_idr, self.pts)
     }
@@ -365,11 +320,13 @@ impl<'a, 'b> EncodeSubmission<'a, 'b> {
     }
 }
 
-pub(crate) struct UnwaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
+pub(crate) struct UnwaitedEncodeSubmission<'a, 'b, C: EncodeCodec>(
+    pub(crate) EncodeSubmission<'a, 'b, C>,
+);
 
-impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
+impl<'a, 'b, C: EncodeCodec> UnwaitedEncodeSubmission<'a, 'b, C> {
     #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
-    pub(crate) fn mark_waited(mut self) -> WaitedEncodeSubmission<'a, 'b> {
+    pub(crate) fn mark_waited(mut self) -> WaitedEncodeSubmission<'a, 'b, C> {
         self.0.mark_waited();
         WaitedEncodeSubmission(self.0)
     }
@@ -377,7 +334,7 @@ impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
     pub(crate) fn wait(
         mut self,
         timeout: u64,
-    ) -> Result<WaitedEncodeSubmission<'a, 'b>, VulkanEncoderError> {
+    ) -> Result<WaitedEncodeSubmission<'a, 'b, C>, VulkanEncoderError> {
         self.0.wait(timeout)?;
         Ok(WaitedEncodeSubmission(self.0))
     }
@@ -391,42 +348,40 @@ impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
     }
 }
 
-pub struct WaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
+pub struct WaitedEncodeSubmission<'a, 'b, C: EncodeCodec>(pub(crate) EncodeSubmission<'a, 'b, C>);
 
-impl<'a, 'b> WaitedEncodeSubmission<'a, 'b> {
+impl<'a, 'b, C: EncodeCodec> WaitedEncodeSubmission<'a, 'b, C> {
     pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.0.download()
     }
 }
 
-pub struct VulkanEncoder<'a> {
+pub struct VulkanEncoder<'a, C: EncodeCodec> {
     pub(crate) tracker: EncoderTracker,
     query_pool: EncodingQueryPool,
-    profile: H264Profile,
-    pub(crate) profile_info: H264EncodeProfileInfo<'a>,
+    profile: C::Profile,
+    pub(crate) profile_info: ProfileInfo<'a>,
     session_resources: VideoSessionResources<'a>,
     idr_period_counter: u32,
     idr_period: u32,
     #[allow(dead_code)]
     input_image: Arc<Image>,
     output_buffer: Buffer,
-    idr_pic_id: u16,
-    frame_num: u32,
-    pic_order_cnt: u8,
-    active_reference_slots: VecDeque<(usize, vk::native::StdVideoEncodeH264ReferenceInfo)>,
+    counters: C::EncodingCounters,
+    active_reference_slots: VecDeque<(usize, C::ReferenceInfo)>,
     rate_control: RateControl,
     inline_stream_params: bool,
     encoding_device: Arc<EncodingDevice>,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FullEncoderParameters {
+pub struct FullEncoderParameters<C: EncodeCodec> {
     pub(crate) idr_period: NonZeroU32,
     pub(crate) width: NonZeroU32,
     pub(crate) height: NonZeroU32,
     pub(crate) rate_control: RateControl,
     pub(crate) max_references: NonZeroU32,
-    pub(crate) profile: H264Profile,
+    pub(crate) profile: C::Profile,
     pub(crate) quality_level: u32,
     pub(crate) framerate: Rational,
     pub(crate) usage_flags: vk::VideoEncodeUsageFlagsKHR,
@@ -437,14 +392,14 @@ pub struct FullEncoderParameters {
     pub(crate) color_range: ColorRange,
 }
 
-impl<'a> VulkanEncoder<'a> {
+impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
     const OUTPUT_BUFFER_LEN: u64 = 4 * MB;
 
     pub(crate) fn new(
         encoding_device: Arc<EncodingDevice>,
-        parameters: FullEncoderParameters,
+        parameters: FullEncoderParameters<C>,
     ) -> Result<Self, VulkanEncoderError> {
-        let profile_info = H264EncodeProfileInfo::new_encode(&parameters);
+        let profile_info = C::profile_info(&parameters);
 
         let command_buffer_pools = EncoderCommandBufferPools::new(&encoding_device)?;
         let mut tracker = EncoderTracker::new(
@@ -453,7 +408,7 @@ impl<'a> VulkanEncoder<'a> {
             Some("encoder"),
         )?;
 
-        let query_pool = EncodingQueryPool::new(
+        let query_pool = EncodingQueryPool::new::<C>(
             &encoding_device,
             parameters.profile,
             profile_info.profile_info,
@@ -472,7 +427,7 @@ impl<'a> VulkanEncoder<'a> {
             &encoding_device,
             &mut buffer,
             tracker.image_layout_tracker.clone(),
-            parameters,
+            &parameters,
             &profile_info.profile_info,
         )?;
 
@@ -494,9 +449,7 @@ impl<'a> VulkanEncoder<'a> {
 
         Ok(Self {
             idr_period_counter: 0,
-            idr_pic_id: 0,
-            frame_num: 0,
-            pic_order_cnt: 0,
+            counters: C::EncodingCounters::default(),
             active_reference_slots: VecDeque::with_capacity(session_resources.dpb.len as usize),
             profile: parameters.profile,
             profile_info,
@@ -876,16 +829,12 @@ impl<'a> VulkanEncoder<'a> {
         image: Arc<Image>,
         force_idr: bool,
         pts: Option<u64>,
-    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VulkanEncoderError> {
+    ) -> Result<UnwaitedEncodeSubmission<'b, 'a, C>, VulkanEncoderError> {
         let is_idr = force_idr || self.idr_period_counter == 0;
-        let mut idr_pic_id = 0;
 
         if is_idr {
             self.idr_period_counter = 0;
-            idr_pic_id = self.idr_pic_id;
-            self.idr_pic_id = self.idr_pic_id.wrapping_add(1);
-            self.frame_num = 0;
-            self.pic_order_cnt = 0;
+            C::counters_idr(&mut self.counters);
             self.active_reference_slots.clear();
             self.session_resources.dpb.reset_all_allocations();
         } else if self.active_reference_slots.len() == self.session_resources.max_dpb_slots as usize
@@ -940,12 +889,6 @@ impl<'a> VulkanEncoder<'a> {
             self.issue_coding_control_reset_for(cmd_buffer.buffer(), self.rate_control);
         }
 
-        let frame_num = self.frame_num;
-        self.frame_num = self.frame_num.wrapping_add(1);
-
-        let pic_order_cnt = self.pic_order_cnt;
-        self.pic_order_cnt = self.pic_order_cnt.wrapping_add(2);
-
         // bugs in nvidia driver I encountered on this journey:
         //
         // bug1: if primary pic type is set to I instead of IDR, the encode command will submit
@@ -972,117 +915,25 @@ impl<'a> VulkanEncoder<'a> {
         // colleague that we should just try reversing the order we have. It ended up working.
         // I don't know how anyone is supposed to find this.
 
-        let primary_pic_type = if is_idr {
-            vk::native::StdVideoH264PictureType_STD_VIDEO_H264_PICTURE_TYPE_IDR
-        } else {
-            vk::native::StdVideoH264PictureType_STD_VIDEO_H264_PICTURE_TYPE_P
-        };
+        let bitstream_unit_data = C::bitstream_unit_data(is_idr);
+        let bitstream_unit_info = C::bitstream_unit_info(
+            &bitstream_unit_data,
+            self.rate_control,
+            &C::encode_codec_profile_capabilities(
+                &self.encoding_device.native_encode_capabilities,
+                self.profile,
+            )?
+            .quality_level_properties[self.session_resources.quality_level as usize],
+            is_idr,
+        );
 
-        let slice_header = vk::native::StdVideoEncodeH264SliceHeader {
-            flags: vk::native::StdVideoEncodeH264SliceHeaderFlags {
-                _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH264SliceHeaderFlags::new_bitfield_1(
-                    1, // TODO: b-frames
-                    1, // TODO: don't override always
-                    0,
-                ),
-            },
-            first_mb_in_slice: 0,
-            slice_type: if is_idr {
-                vk::native::StdVideoH264SliceType_STD_VIDEO_H264_SLICE_TYPE_I
-            } else {
-                vk::native::StdVideoH264SliceType_STD_VIDEO_H264_SLICE_TYPE_P
-            }, // TODO: b-frames
-            slice_alpha_c0_offset_div2: 0,
-            slice_beta_offset_div2: 0,
-            slice_qp_delta: 0, // TODO: check whether this will be overwritten in the bitstream
-            reserved1: 0,
-            cabac_init_idc: vk::native::StdVideoH264CabacInitIdc_STD_VIDEO_H264_CABAC_INIT_IDC_0, // TODO: check whether this will be overwritten in the bitstream
-            disable_deblocking_filter_idc: 0, // TODO: enable for fast decoding?
-            pWeightTable: std::ptr::null(),
-        };
+        let bitstream_unit_infos = [bitstream_unit_info];
 
-        let mut nalu_slice_entries =
-            [vk::VideoEncodeH264NaluSliceInfoKHR::default().std_slice_header(&slice_header)];
+        let reference_list_info = C::reference_list_info(&self.active_reference_slots);
 
-        if let RateControl::Disabled = self.rate_control {
-            if let Some(caps) = self
-                .encoding_device
-                .native_encode_capabilities
-                .h264
-                .as_ref()
-                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
-                .profile(self.profile)
-            {
-                let quality_properties =
-                    &caps.quality_level_properties[self.session_resources.quality_level as usize];
+        let picture_info_data = C::picture_info_data(&self.counters, is_idr, &reference_list_info);
 
-                if !quality_properties.zeroed() {
-                    let qp = quality_properties
-                        .codec_quality_level_properties
-                        .preferred_constant_qp;
-
-                    if is_idr {
-                        nalu_slice_entries[0].constant_qp = qp.qp_i;
-                    } else {
-                        nalu_slice_entries[0].constant_qp = qp.qp_p;
-                    }
-                }
-            }
-        }
-
-        let mut ref_list0 = [0xff; 32];
-        for (i, (slot, _)) in self.active_reference_slots.iter().rev().enumerate() {
-            ref_list0[i] = *slot as u8;
-        }
-
-        let ref_lists = vk::native::StdVideoEncodeH264ReferenceListsInfo {
-            flags: vk::native::StdVideoEncodeH264ReferenceListsInfoFlags {
-                _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH264ReferenceListsInfoFlags::new_bitfield_1(
-                    0, 0, 0,
-                ),
-            },
-            num_ref_idx_l0_active_minus1: self.active_reference_slots.len().saturating_sub(1) as u8,
-            num_ref_idx_l1_active_minus1: 0,
-            RefPicList0: ref_list0,
-            RefPicList1: [0xff; 32],
-            refList0ModOpCount: 0,
-            refList1ModOpCount: 0,
-            refPicMarkingOpCount: 0,
-            reserved1: [0; 7],
-            pRefList0ModOperations: std::ptr::null(),
-            pRefList1ModOperations: std::ptr::null(),
-            pRefPicMarkingOperations: std::ptr::null(),
-        };
-
-        let std_h264_encode_info = vk::native::StdVideoEncodeH264PictureInfo {
-            flags: vk::native::StdVideoEncodeH264PictureInfoFlags {
-                _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH264PictureInfoFlags::new_bitfield_1(
-                    is_idr as u32,
-                    1, // TODO
-                    is_idr as u32,
-                    0, // long term refs
-                    0, // adaptive reference control
-                    0,
-                ),
-            },
-            seq_parameter_set_id: 0,
-            pic_parameter_set_id: 0,
-            idr_pic_id,
-            primary_pic_type,
-            frame_num,
-            PicOrderCnt: pic_order_cnt as i32,
-            temporal_id: 0,
-            reserved1: [0; 3],
-            pRefLists: &ref_lists,
-        };
-
-        let mut h264_encode_info = vk::VideoEncodeH264PictureInfoKHR::default()
-            .nalu_slice_entries(&nalu_slice_entries)
-            .generate_prefix_nalu(false)
-            .std_picture_info(&std_h264_encode_info);
+        let mut picture_info = C::picture_info(&picture_info_data, &bitstream_unit_infos);
 
         let setup_reference_slot_idx = self.session_resources.dpb.allocate_reference_picture()?;
 
@@ -1098,12 +949,7 @@ impl<'a> VulkanEncoder<'a> {
             .active_reference_slots
             .iter()
             .rev()
-            .map(|(i, info)| {
-                (
-                    *i,
-                    vk::VideoEncodeH264DpbSlotInfoKHR::default().std_reference_info(info),
-                )
-            })
+            .map(|(i, info)| (*i, C::dpb_slot_info(info)))
             .collect::<Vec<_>>();
 
         std_reference_info.iter_mut().for_each(|(i, std_info)| {
@@ -1114,21 +960,8 @@ impl<'a> VulkanEncoder<'a> {
             *slot = slot.push_next(std_info);
         });
 
-        let std_new_slot_reference_info = vk::native::StdVideoEncodeH264ReferenceInfo {
-            flags: vk::native::StdVideoEncodeH264ReferenceInfoFlags {
-                _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH264ReferenceInfoFlags::new_bitfield_1(0, 0),
-            },
-            primary_pic_type,
-            FrameNum: frame_num,
-            PicOrderCnt: pic_order_cnt as i32,
-            long_term_pic_num: 0,
-            long_term_frame_idx: 0,
-            temporal_id: 0,
-        };
-
-        let mut new_slot_reference_info = vk::VideoEncodeH264DpbSlotInfoKHR::default()
-            .std_reference_info(&std_new_slot_reference_info);
+        let new_slot_reference_info = C::new_slot_reference_info(&self.counters, is_idr);
+        let mut new_slot_dpb_info = C::new_slot_dpb_slot_info(&new_slot_reference_info);
 
         let setup_reference_slot_video_resource_info = self
             .session_resources
@@ -1139,7 +972,7 @@ impl<'a> VulkanEncoder<'a> {
         let setup_reference_slot = vk::VideoReferenceSlotInfoKHR::default()
             .slot_index(setup_reference_slot_idx as i32)
             .picture_resource(setup_reference_slot_video_resource_info)
-            .push_next(&mut new_slot_reference_info);
+            .push_next(&mut new_slot_dpb_info);
 
         let extent = image.extent;
 
@@ -1158,7 +991,7 @@ impl<'a> VulkanEncoder<'a> {
             .dst_buffer_offset(0)
             .src_picture_resource(src_picture_resource)
             .setup_reference_slot(&setup_reference_slot)
-            .push_next(&mut h264_encode_info);
+            .push_next(&mut picture_info);
 
         if !reference_slots.is_empty() {
             encode_info = encode_info.reference_slots(&reference_slots);
@@ -1198,8 +1031,11 @@ impl<'a> VulkanEncoder<'a> {
                 EncoderTrackerWaitState::Encode,
             )?;
 
+        C::advance_counters(&mut self.counters, is_idr);
+        drop(std_reference_info);
+
         self.active_reference_slots
-            .push_back((setup_reference_slot_idx, std_new_slot_reference_info));
+            .push_back((setup_reference_slot_idx, new_slot_reference_info));
 
         self.idr_period_counter += 1;
         self.idr_period_counter %= self.idr_period;

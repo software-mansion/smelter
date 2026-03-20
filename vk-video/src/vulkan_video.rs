@@ -69,6 +69,7 @@ mod wgpu_api;
 #[cfg(feature = "wgpu")]
 pub use wgpu_api::*;
 
+use crate::codec::h264::H264Codec;
 use crate::device::{ColorRange, ColorSpace};
 use crate::parser::h264::AccessUnit;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
@@ -307,7 +308,7 @@ impl BytesDecoder {
 
 /// An encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
 pub struct BytesEncoder {
-    pub(crate) vulkan_encoder: VulkanEncoder<'static>,
+    pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
 }
 
 impl BytesEncoder {

@@ -578,7 +578,7 @@ impl VulkanDevice {
         width: NonZeroU32,
         height: NonZeroU32,
         framerate: Rational,
-    ) -> Result<FullEncoderParameters, VulkanEncoderError> {
+    ) -> Result<FullEncoderParameters<H264Codec>, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities.as_ref() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };

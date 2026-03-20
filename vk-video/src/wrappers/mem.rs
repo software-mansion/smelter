@@ -6,8 +6,7 @@ use vk_mem::Alloc;
 use crate::{
     VulkanCommonError, VulkanDecoderError, VulkanInitError,
     device::EncodingDevice,
-    vulkan_encoder::H264EncodeProfileInfo,
-    wrappers::{ImageLayoutTracker, OpenCommandBuffer},
+    wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
 };
 
 use super::{Device, H264DecodeProfileInfo, Instance};
@@ -202,7 +201,7 @@ impl Buffer {
     pub(crate) fn new_encode(
         allocator: Arc<Allocator>,
         size: u64,
-        profile: &H264EncodeProfileInfo,
+        profile: &ProfileInfo,
     ) -> Result<Self, VulkanCommonError> {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
             .profiles(std::slice::from_ref(&profile.profile_info));
@@ -371,7 +370,7 @@ impl Image {
     pub(crate) fn new_encode(
         device: &EncodingDevice,
         extent: vk::Extent3D,
-        profile: &H264EncodeProfileInfo,
+        profile: &ProfileInfo,
         additional_queue_index: u32,
         tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, VulkanCommonError> {
