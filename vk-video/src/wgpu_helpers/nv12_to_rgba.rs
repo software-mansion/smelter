@@ -1,15 +1,16 @@
 use crate::{
-    WgpuConverterInitError,
+    OutputFrame, WgpuConverterInitError,
     device::{ColorRange, ColorSpace},
     parameters::WgpuConverterParameters,
     wgpu_helpers::WgpuSampler,
 };
 
-/// Helper that lets you convert NV12 [`wgpu::Texture`] into RGBA [`wgpu::Texture`].
+/// Helper that lets you convert [`OutputFrame<wgpu::Texture>`] into RGBA [`wgpu::Texture`].
 /// Use [`WgpuNv12ToRgbaConverter::create_input_bind_group`] to create [`wgpu::BindGroup`] which represents
 /// NV12 bind group acceptable by the converter.
 pub struct WgpuNv12ToRgbaConverter {
     pipeline: wgpu::RenderPipeline,
+    params: WgpuConverterParameters,
 
     nv12_planes_bgl: wgpu::BindGroupLayout,
     sampler: WgpuSampler,
@@ -86,29 +87,43 @@ impl WgpuNv12ToRgbaConverter {
 
         Ok(Self {
             pipeline,
+            params,
             nv12_planes_bgl,
             sampler,
             device: device.clone(),
         })
     }
 
-    /// Creates [`wgpu::BindGroup`] for NV12 [`wgpu::Texture`].
-    /// The texture's usage must contain [`wgpu::TextureUsages::TEXTURE_BINDING`].
-    pub fn create_input_bind_group(&self, nv12_texture: &wgpu::Texture) -> wgpu::BindGroup {
-        let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+    /// Creates [`wgpu::BindGroup`] for [`OutputFrame<wgpu::Texture>`].
+    pub fn create_input_bind_group(
+        &self,
+        decoded_frame: &OutputFrame<wgpu::Texture>,
+    ) -> Result<wgpu::BindGroup, WgpuConverterInitError> {
+        let OutputFrame { data, metadata } = decoded_frame;
+        if (metadata.color_space != ColorSpace::Unspecified
+            && metadata.color_space != self.params.color_space)
+            || metadata.color_range != self.params.color_range
+        {
+            return Err(WgpuConverterInitError::IncompatibleFrame {
+                expected: (self.params.color_space, self.params.color_range),
+                actual: (metadata.color_space, metadata.color_range),
+            });
+        }
+
+        let y_plane_view = data.create_view(&wgpu::TextureViewDescriptor {
             label: Some("vk-video nv12 to rgba converter y plane view"),
             format: Some(wgpu::TextureFormat::R8Unorm),
             aspect: wgpu::TextureAspect::Plane0,
             ..Default::default()
         });
-        let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+        let uv_plane_view = data.create_view(&wgpu::TextureViewDescriptor {
             label: Some("vk-video nv12 to rgba converter uv plane view"),
             format: Some(wgpu::TextureFormat::Rg8Unorm),
             aspect: wgpu::TextureAspect::Plane1,
             ..Default::default()
         });
 
-        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        Ok(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.nv12_planes_bgl,
             entries: &[
@@ -121,7 +136,7 @@ impl WgpuNv12ToRgbaConverter {
                     resource: wgpu::BindingResource::TextureView(&uv_plane_view),
                 },
             ],
-        })
+        }))
     }
 
     /// Converts NV12 texture into RGBA texture.

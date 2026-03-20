@@ -110,7 +110,7 @@ pub struct VideoParameters {
     pub target_framerate: Rational,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ColorSpace {
     #[default]
     Unspecified,
@@ -145,7 +145,7 @@ impl From<&h264_reader::nal::sps::SeqParameterSet> for ColorSpace {
 }
 
 /// Whether the video signal uses the full or limited range of sample values.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorRange {
     /// Luma and chroma use the full [0, 255] range.
     Full,
