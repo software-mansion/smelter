@@ -10,6 +10,8 @@ use crate::{
     device::caps::NativeEncodeH265Capabilities,
 };
 
+pub(crate) mod parameters;
+
 #[derive(Debug, Clone)]
 pub(crate) struct H265Codec;
 

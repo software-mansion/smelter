@@ -4,10 +4,16 @@ use ash::vk;
 
 use crate::{
     VulkanEncoderError,
-    codec::{EncodeCodec, h264::H264Codec},
+    codec::{
+        EncodeCodec,
+        h264::{
+            H264Codec,
+            parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
+        },
+    },
     device::caps::{NativeEncodeProfileCapabilities, NativeEncodeQualityLevelProperties},
     parameters::RateControl,
-    wrappers::{ProfileInfo, VkPictureParameterSet, VkSequenceParameterSet},
+    wrappers::ProfileInfo,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -52,7 +58,7 @@ impl EncodeCodec for H264Codec {
     fn codec_parameters(
         parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
     ) -> Result<Self::OwnedParameters, VulkanEncoderError> {
-        let sps = VkSequenceParameterSet::new_encode(
+        let sps = VkH264SequenceParameterSet::new_encode(
             parameters.profile,
             parameters.width.get(),
             parameters.height.get(),
@@ -61,7 +67,7 @@ impl EncodeCodec for H264Codec {
             parameters.color_range,
             parameters.framerate,
         )?;
-        let pps = VkPictureParameterSet::new_encode();
+        let pps = VkH264PictureParameterSet::new_encode();
 
         Ok(Self::OwnedParameters {
             sps: vec![sps],

@@ -7,6 +7,7 @@ use crate::{
     VulkanDecoderError, VulkanEncoderError,
     device::{ColorRange, ColorSpace, Rational},
     parameters::H264Profile,
+    wrappers::ProfileInfo,
 };
 
 const MACROBLOCK_SIZE: u32 = 16;
@@ -69,7 +70,7 @@ impl SeqParameterSetExt for SeqParameterSet {
     }
 }
 
-pub(crate) struct VkSequenceParameterSet {
+pub(crate) struct VkH264SequenceParameterSet {
     pub(crate) sps: vk::native::StdVideoH264SequenceParameterSet,
 
     /// # Safety
@@ -85,9 +86,9 @@ pub(crate) struct VkSequenceParameterSet {
     vui_ptr: Option<NonNull<vk::native::StdVideoH264SequenceParameterSetVui>>,
 }
 
-impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
+impl From<&'_ SeqParameterSet> for VkH264SequenceParameterSet {
     #[allow(non_snake_case)]
-    fn from(sps: &SeqParameterSet) -> VkSequenceParameterSet {
+    fn from(sps: &SeqParameterSet) -> VkH264SequenceParameterSet {
         let flags = vk::native::StdVideoH264SpsFlags {
             _bitfield_1: vk::native::StdVideoH264SpsFlags::new_bitfield_1(
                 sps.constraint_flags.flag0().into(),
@@ -250,7 +251,7 @@ impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
     }
 }
 
-impl Drop for VkSequenceParameterSet {
+impl Drop for VkH264SequenceParameterSet {
     fn drop(&mut self) {
         self.scaling_lists_ptr
             .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
@@ -262,7 +263,7 @@ impl Drop for VkSequenceParameterSet {
     }
 }
 
-impl VkSequenceParameterSet {
+impl VkH264SequenceParameterSet {
     #[allow(non_snake_case)]
     pub(crate) fn new_encode(
         profile: H264Profile,
@@ -272,7 +273,7 @@ impl VkSequenceParameterSet {
         color_space: ColorSpace,
         color_range: ColorRange,
         framerate: Rational,
-    ) -> Result<VkSequenceParameterSet, VulkanEncoderError> {
+    ) -> Result<VkH264SequenceParameterSet, VulkanEncoderError> {
         // separate_colour_plane_flag is 0 so the crop units are based on SubWidthC and SubHeightC for YUV420
         // with enabled frame_mbs_only_flag
         let (CropUnitX, CropUnitY) = (2, 2);
@@ -382,8 +383,8 @@ impl VkSequenceParameterSet {
     }
 }
 
-unsafe impl Send for VkSequenceParameterSet {}
-unsafe impl Sync for VkSequenceParameterSet {}
+unsafe impl Send for VkH264SequenceParameterSet {}
+unsafe impl Sync for VkH264SequenceParameterSet {}
 
 pub(crate) struct H264ScalingLists {
     pub(crate) list: vk::native::StdVideoH264ScalingLists,
@@ -474,29 +475,6 @@ impl ChromaFormatExt for h264_reader::nal::sps::ChromaFormat {
             h264_reader::nal::sps::ChromaFormat::YUV444 => 3,
             h264_reader::nal::sps::ChromaFormat::Invalid(v) => *v,
         }
-    }
-}
-
-pub(crate) fn vk_to_h265_level_idc(
-    level_idc: vk::native::StdVideoH265LevelIdc,
-) -> Result<u8, VulkanDecoderError> {
-    match level_idc {
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_1_0 => Ok(30),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_2_0 => Ok(60),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_2_1 => Ok(63),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_3_0 => Ok(90),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_3_1 => Ok(93),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_4_0 => Ok(120),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_4_1 => Ok(123),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_5_0 => Ok(150),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_5_1 => Ok(153),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_5_2 => Ok(156),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_6_0 => Ok(180),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_6_1 => Ok(183),
-        vk::native::StdVideoH265LevelIdc_STD_VIDEO_H265_LEVEL_IDC_6_2 => Ok(186),
-        _ => Err(VulkanDecoderError::InvalidInputData(format!(
-            "unknown StdVideoH265LevelIdc: {level_idc}"
-        ))),
     }
 }
 
@@ -615,45 +593,152 @@ fn h264_profile_idc_to_vk(
     }
 }
 
-unsafe impl<'a> Send for ProfileInfo<'a> {}
-unsafe impl<'a> Sync for ProfileInfo<'a> {}
-
-pub(crate) struct ProfileInfo<'a> {
-    pub(crate) profile_info: vk::VideoProfileInfoKHR<'a>,
-    additional_infos_ptr: Vec<NonNull<dyn vk::ExtendsVideoProfileInfoKHR + 'a>>,
+pub(crate) struct VkH264PictureParameterSet {
+    pub(crate) pps: vk::native::StdVideoH264PictureParameterSet,
+    scaling_list_ptr: Option<NonNull<H264ScalingLists>>,
 }
 
-impl<'a> ProfileInfo<'a> {
-    pub(crate) fn new(
-        mut profile_info: vk::VideoProfileInfoKHR<'a>,
-        additional_info: Vec<Box<dyn vk::ExtendsVideoProfileInfoKHR + 'a>>,
-    ) -> Self {
-        let (refs, ptrs) = additional_info
-            .into_iter()
-            .map(|i| {
-                let r = Box::leak(i);
-                let p = NonNull::from(&mut *r);
-                (r, p)
-            })
-            .unzip::<_, _, Vec<_>, Vec<_>>();
+impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkH264PictureParameterSet {
+    #[allow(non_snake_case)]
+    fn from(pps: &h264_reader::nal::pps::PicParameterSet) -> Self {
+        let flags = vk::native::StdVideoH264PpsFlags {
+            _bitfield_align_1: [],
+            __bindgen_padding_0: [0; 3],
+            _bitfield_1: vk::native::StdVideoH264PpsFlags::new_bitfield_1(
+                pps.extension
+                    .as_ref()
+                    .map(|ext| ext.transform_8x8_mode_flag.into())
+                    .unwrap_or(0),
+                pps.redundant_pic_cnt_present_flag.into(),
+                pps.constrained_intra_pred_flag.into(),
+                pps.deblocking_filter_control_present_flag.into(),
+                pps.weighted_pred_flag.into(),
+                pps.bottom_field_pic_order_in_frame_present_flag.into(),
+                pps.entropy_coding_mode_flag.into(),
+                pps.extension
+                    .as_ref()
+                    .map(|ext| ext.pic_scaling_matrix.is_some().into())
+                    .unwrap_or(0),
+            ),
+        };
 
-        for r in refs {
-            profile_info = profile_info.push_next(r);
-        }
+        let chroma_qp_index_offset = pps.chroma_qp_index_offset as i8;
+
+        let second_chroma_qp_index_offset = pps
+            .extension
+            .as_ref()
+            .map(|ext| ext.second_chroma_qp_index_offset as i8)
+            .unwrap_or(chroma_qp_index_offset);
+
+        let scaling_list: Option<&mut H264ScalingLists> = pps
+            .extension
+            .as_ref()
+            .and_then(|e| e.pic_scaling_matrix.as_ref())
+            .map(|matrix| Box::leak(Box::new(matrix.into())));
+
+        let pScalingLists = match scaling_list.as_ref() {
+            Some(l) => &l.list,
+            None => std::ptr::null(),
+        };
+
+        let scaling_list_ptr = scaling_list.map(NonNull::from);
 
         Self {
-            profile_info,
-            additional_infos_ptr: ptrs,
+            pps: vk::native::StdVideoH264PictureParameterSet {
+                flags,
+                seq_parameter_set_id: pps.seq_parameter_set_id.id(),
+                pic_parameter_set_id: pps.pic_parameter_set_id.id(),
+                num_ref_idx_l0_default_active_minus1: pps.num_ref_idx_l0_default_active_minus1
+                    as u8,
+                num_ref_idx_l1_default_active_minus1: pps.num_ref_idx_l1_default_active_minus1
+                    as u8,
+                weighted_bipred_idc: pps.weighted_bipred_idc.into(),
+                pic_init_qp_minus26: pps.pic_init_qp_minus26 as i8,
+                pic_init_qs_minus26: pps.pic_init_qs_minus26 as i8,
+                chroma_qp_index_offset,
+                second_chroma_qp_index_offset,
+                pScalingLists,
+            },
+            scaling_list_ptr,
         }
     }
 }
 
-impl Drop for ProfileInfo<'_> {
+unsafe impl Send for VkH264PictureParameterSet {}
+unsafe impl Sync for VkH264PictureParameterSet {}
+
+impl Drop for VkH264PictureParameterSet {
     fn drop(&mut self) {
-        unsafe {
-            for ptr in self.additional_infos_ptr.drain(..) {
-                let _ = Box::from_raw(ptr.as_ptr());
-            }
+        self.scaling_list_ptr
+            .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
+    }
+}
+
+impl VkH264PictureParameterSet {
+    pub(crate) fn new_encode() -> Self {
+        let pps = vk::native::StdVideoH264PictureParameterSet {
+            flags: vk::native::StdVideoH264PpsFlags {
+                __bindgen_padding_0: [0; 3],
+                _bitfield_align_1: [],
+                _bitfield_1: vk::native::StdVideoH264PpsFlags::new_bitfield_1(
+                    0, 0, 0, 1, // maybe turn off to enable superfast decoding
+                    0, // think about this -- think really hard, it seems this
+                    // means you need to supply the weights yourself
+                    0, 1, 0,
+                ),
+            },
+            seq_parameter_set_id: 0,
+            pic_parameter_set_id: 0,
+            num_ref_idx_l0_default_active_minus1: 0,
+            num_ref_idx_l1_default_active_minus1: 0,
+            weighted_bipred_idc:
+                vk::native::StdVideoH264WeightedBipredIdc_STD_VIDEO_H264_WEIGHTED_BIPRED_IDC_DEFAULT, // for b frames
+            pic_init_qp_minus26: 0, // no idea what this is, ffmpeg sets this to -4, BBB has 0
+            pic_init_qs_minus26: 0, // no idea what this is, ffmpeg sets this to 0, BBB has 0
+            chroma_qp_index_offset: 0, // no idea what this is, ffmpeg sets this to 0, BBB has 0
+            second_chroma_qp_index_offset: 0, // no idea what this is, ffmpeg sets this to 0, BBB has 0
+            pScalingLists: std::ptr::null(),
+        };
+
+        Self {
+            pps,
+            scaling_list_ptr: None,
+        }
+    }
+}
+
+/// Color description for H.264 VUI parameters.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct H264ColorDescription {
+    pub colour_primaries: u8,
+    pub transfer_characteristics: u8,
+    pub matrix_coefficients: u8,
+}
+
+impl From<ColorSpace> for H264ColorDescription {
+    fn from(color_space: ColorSpace) -> Self {
+        // Values correspond to ITU-T H.264 Tables E-3, E-4, E-5.
+        match color_space {
+            ColorSpace::Unspecified => Self {
+                colour_primaries: 2,
+                transfer_characteristics: 2,
+                matrix_coefficients: 2,
+            },
+            ColorSpace::BT709 => Self {
+                colour_primaries: 1,
+                transfer_characteristics: 1,
+                matrix_coefficients: 1,
+            },
+            ColorSpace::BT601Ntsc => Self {
+                colour_primaries: 6,
+                transfer_characteristics: 6,
+                matrix_coefficients: 6,
+            },
+            ColorSpace::BT601Pal => Self {
+                colour_primaries: 5,
+                transfer_characteristics: 6,
+                matrix_coefficients: 5,
+            },
         }
     }
 }
@@ -750,155 +835,5 @@ impl<'a> H264DecodeProfileInfo<'a> {
             profile_idc,
             picture_layout,
         })
-    }
-}
-
-pub(crate) struct VkPictureParameterSet {
-    pub(crate) pps: vk::native::StdVideoH264PictureParameterSet,
-    scaling_list_ptr: Option<NonNull<H264ScalingLists>>,
-}
-
-impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkPictureParameterSet {
-    #[allow(non_snake_case)]
-    fn from(pps: &h264_reader::nal::pps::PicParameterSet) -> Self {
-        let flags = vk::native::StdVideoH264PpsFlags {
-            _bitfield_align_1: [],
-            __bindgen_padding_0: [0; 3],
-            _bitfield_1: vk::native::StdVideoH264PpsFlags::new_bitfield_1(
-                pps.extension
-                    .as_ref()
-                    .map(|ext| ext.transform_8x8_mode_flag.into())
-                    .unwrap_or(0),
-                pps.redundant_pic_cnt_present_flag.into(),
-                pps.constrained_intra_pred_flag.into(),
-                pps.deblocking_filter_control_present_flag.into(),
-                pps.weighted_pred_flag.into(),
-                pps.bottom_field_pic_order_in_frame_present_flag.into(),
-                pps.entropy_coding_mode_flag.into(),
-                pps.extension
-                    .as_ref()
-                    .map(|ext| ext.pic_scaling_matrix.is_some().into())
-                    .unwrap_or(0),
-            ),
-        };
-
-        let chroma_qp_index_offset = pps.chroma_qp_index_offset as i8;
-
-        let second_chroma_qp_index_offset = pps
-            .extension
-            .as_ref()
-            .map(|ext| ext.second_chroma_qp_index_offset as i8)
-            .unwrap_or(chroma_qp_index_offset);
-
-        let scaling_list: Option<&mut H264ScalingLists> = pps
-            .extension
-            .as_ref()
-            .and_then(|e| e.pic_scaling_matrix.as_ref())
-            .map(|matrix| Box::leak(Box::new(matrix.into())));
-
-        let pScalingLists = match scaling_list.as_ref() {
-            Some(l) => &l.list,
-            None => std::ptr::null(),
-        };
-
-        let scaling_list_ptr = scaling_list.map(NonNull::from);
-
-        Self {
-            pps: vk::native::StdVideoH264PictureParameterSet {
-                flags,
-                seq_parameter_set_id: pps.seq_parameter_set_id.id(),
-                pic_parameter_set_id: pps.pic_parameter_set_id.id(),
-                num_ref_idx_l0_default_active_minus1: pps.num_ref_idx_l0_default_active_minus1
-                    as u8,
-                num_ref_idx_l1_default_active_minus1: pps.num_ref_idx_l1_default_active_minus1
-                    as u8,
-                weighted_bipred_idc: pps.weighted_bipred_idc.into(),
-                pic_init_qp_minus26: pps.pic_init_qp_minus26 as i8,
-                pic_init_qs_minus26: pps.pic_init_qs_minus26 as i8,
-                chroma_qp_index_offset,
-                second_chroma_qp_index_offset,
-                pScalingLists,
-            },
-            scaling_list_ptr,
-        }
-    }
-}
-
-unsafe impl Send for VkPictureParameterSet {}
-unsafe impl Sync for VkPictureParameterSet {}
-
-impl Drop for VkPictureParameterSet {
-    fn drop(&mut self) {
-        self.scaling_list_ptr
-            .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
-    }
-}
-
-impl VkPictureParameterSet {
-    pub(crate) fn new_encode() -> Self {
-        let pps = vk::native::StdVideoH264PictureParameterSet {
-            flags: vk::native::StdVideoH264PpsFlags {
-                __bindgen_padding_0: [0; 3],
-                _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoH264PpsFlags::new_bitfield_1(
-                    0, 0, 0, 1, // maybe turn off to enable superfast decoding
-                    0, // think about this -- think really hard, it seems this
-                    // means you need to supply the weights yourself
-                    0, 1, 0,
-                ),
-            },
-            seq_parameter_set_id: 0,
-            pic_parameter_set_id: 0,
-            num_ref_idx_l0_default_active_minus1: 0,
-            num_ref_idx_l1_default_active_minus1: 0,
-            weighted_bipred_idc:
-                vk::native::StdVideoH264WeightedBipredIdc_STD_VIDEO_H264_WEIGHTED_BIPRED_IDC_DEFAULT, // for b frames
-            pic_init_qp_minus26: 0, // no idea what this is, ffmpeg sets this to -4, BBB has 0
-            pic_init_qs_minus26: 0, // no idea what this is, ffmpeg sets this to 0, BBB has 0
-            chroma_qp_index_offset: 0, // no idea what this is, ffmpeg sets this to 0, BBB has 0
-            second_chroma_qp_index_offset: 0, // no idea what this is, ffmpeg sets this to 0, BBB has 0
-            pScalingLists: std::ptr::null(),
-        };
-
-        Self {
-            pps,
-            scaling_list_ptr: None,
-        }
-    }
-}
-
-/// Color description for H.264 VUI parameters.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct H264ColorDescription {
-    pub colour_primaries: u8,
-    pub transfer_characteristics: u8,
-    pub matrix_coefficients: u8,
-}
-
-impl From<ColorSpace> for H264ColorDescription {
-    fn from(color_space: ColorSpace) -> Self {
-        // Values correspond to ITU-T H.264 Tables E-3, E-4, E-5.
-        match color_space {
-            ColorSpace::Unspecified => Self {
-                colour_primaries: 2,
-                transfer_characteristics: 2,
-                matrix_coefficients: 2,
-            },
-            ColorSpace::BT709 => Self {
-                colour_primaries: 1,
-                transfer_characteristics: 1,
-                matrix_coefficients: 1,
-            },
-            ColorSpace::BT601Ntsc => Self {
-                colour_primaries: 6,
-                transfer_characteristics: 6,
-                matrix_coefficients: 6,
-            },
-            ColorSpace::BT601Pal => Self {
-                colour_primaries: 5,
-                transfer_characteristics: 6,
-                matrix_coefficients: 5,
-            },
-        }
     }
 }
