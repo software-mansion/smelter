@@ -79,6 +79,17 @@ pub(crate) trait EncodeCodec: Codec {
     type EncodingCounters: Default + Clone + Copy;
     fn advance_counters(counters: &mut Self::EncodingCounters, is_idr: bool);
     fn counters_idr(counters: &mut Self::EncodingCounters);
+
+    type CodecRateControlLayerInfo<'a>: vk::ExtendsVideoEncodeRateControlLayerInfoKHR;
+    type CodecRateControlInfo<'a>: vk::ExtendsVideoBeginCodingInfoKHR
+        + vk::ExtendsVideoCodingControlInfoKHR;
+    fn codec_rate_control_layer_info<'a>(
+        rate_control: RateControl,
+    ) -> Option<Vec<Self::CodecRateControlLayerInfo<'a>>>;
+    fn codec_rate_control_info<'a>(
+        layers: Option<&'a [vk::VideoEncodeRateControlLayerInfoKHR<'a>]>,
+        idr_period: u32,
+    ) -> Option<Self::CodecRateControlInfo<'a>>;
 }
 
 pub(crate) trait Codec: CodecCapabilities + std::fmt::Debug + Clone {
