@@ -5,6 +5,7 @@ use ash::vk;
 use crate::{
     DecoderError, EncodedInputChunk, EncodedOutputChunk, Frame, VulkanCommonError, VulkanDevice,
     VulkanEncoderError,
+    codec::{EncodeCodec, h264::H264Codec},
     device::EncoderParameters,
     parameters::ScalingAlgorithm,
     parser::{
@@ -15,7 +16,7 @@ use crate::{
     vulkan_decoder::{
         DecodeResult, FrameSorter, ImageModifiers, InFlightDecodeResources, VulkanDecoder,
     },
-    vulkan_encoder::{FullEncoderParameters, H264EncodeProfileInfo, VulkanEncoder},
+    vulkan_encoder::{FullEncoderParameters, VulkanEncoder},
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
     wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
 };
@@ -71,7 +72,7 @@ pub struct Transcoder {
     reference_ctx: ReferenceContext,
     sorter: FrameSorter<ResizedImages>,
     resizing_pipeline: ResizingPipeline,
-    encoders: Vec<VulkanEncoder<'static>>,
+    encoders: Vec<VulkanEncoder<'static, H264Codec>>,
 }
 
 impl Transcoder {
@@ -290,7 +291,7 @@ impl Transcoder {
 }
 
 fn make_pipeline_output_configs(
-    parameters: &[FullEncoderParameters],
+    parameters: &[FullEncoderParameters<H264Codec>],
     scaling_algorithms: &[crate::parameters::ScalingAlgorithm],
 ) -> Vec<OutputConfig> {
     parameters
@@ -299,7 +300,7 @@ fn make_pipeline_output_configs(
         .map(|(p, &scaling)| OutputConfig {
             width: p.width.get(),
             height: p.height.get(),
-            profile: H264EncodeProfileInfo::new_encode(p),
+            profile: H264Codec::profile_info(p),
             scaling_algorithm: scaling,
         })
         .collect()

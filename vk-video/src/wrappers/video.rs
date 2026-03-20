@@ -21,7 +21,7 @@ impl VideoSessionParameters {
     pub(crate) fn new<C: Codec>(
         device: Arc<Device>,
         session: vk::VideoSessionKHR,
-        initial_parameters: C::InitialParameters<'_>,
+        initial_parameters: C::VkParameters<'_>,
         template: Option<&Self>,
         encode_quality_level: Option<u32>,
     ) -> Result<Self, VulkanCommonError> {

@@ -2,9 +2,12 @@ use std::ptr::null_mut;
 
 use ash::vk;
 
-use crate::codec::{
-    CodecCapabilities, CodecSpecificDecodeCapabilities, CodecSpecificEncodeCapabilities,
-    CodecSpecificEncoderQualityLevelProperties,
+use crate::{
+    codec::{
+        CodecCapabilities, CodecSpecificDecodeCapabilities, CodecSpecificEncodeCapabilities,
+        CodecSpecificEncoderQualityLevelProperties,
+    },
+    device::caps::NativeEncodeH265Capabilities,
 };
 
 #[derive(Debug, Clone)]
@@ -15,6 +18,7 @@ impl CodecCapabilities for H265Codec {
     type CodecSpecificEncodeCapabilities<'a> = vk::VideoEncodeH265CapabilitiesKHR<'a>;
     type CodecSpecificEncodeQualityLevelProperties<'a> =
         vk::VideoEncodeH265QualityLevelPropertiesKHR<'a>;
+    type NativeEncodeCodecCapabilities = NativeEncodeH265Capabilities;
 
     fn static_decode_capabilities<'a>(
         codec_caps: &Self::CodecSpecificDecodeCapabilities<'a>,
@@ -44,6 +48,12 @@ impl CodecCapabilities for H265Codec {
             _marker: Default::default(),
             ..*codec_qlp
         }
+    }
+
+    fn encode_codec_capabilities(
+        capabilities: &crate::device::caps::NativeEncodeCapabilities,
+    ) -> Option<&Self::NativeEncodeCodecCapabilities> {
+        capabilities.h265.as_ref()
     }
 }
 

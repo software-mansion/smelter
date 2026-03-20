@@ -1,11 +1,92 @@
+use std::collections::VecDeque;
+
 use ash::vk;
+
+use crate::{
+    VulkanEncoderError,
+    device::caps::{
+        NativeEncodeCapabilities, NativeEncodeProfileCapabilities,
+        NativeEncodeQualityLevelProperties,
+    },
+    parameters::RateControl,
+    vulkan_encoder::FullEncoderParameters,
+    wrappers::ProfileInfo,
+};
 
 pub(crate) mod h264;
 pub(crate) mod h265;
 
+pub(crate) trait EncodeCodec: Codec {
+    fn profile_info<'a>(params: &FullEncoderParameters<Self>) -> ProfileInfo<'a>;
+    fn encode_profile_capabilities(
+        caps: &Self::NativeEncodeCodecCapabilities,
+        profile: Self::Profile,
+    ) -> Option<&NativeEncodeProfileCapabilities<Self>>;
+    fn encode_codec_profile_capabilities(
+        caps: &NativeEncodeCapabilities,
+        profile: Self::Profile,
+    ) -> Result<&NativeEncodeProfileCapabilities<Self>, VulkanEncoderError> {
+        let codec_caps = Self::encode_codec_capabilities(caps)
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+        Self::encode_profile_capabilities(codec_caps, profile)
+            .ok_or_else(|| VulkanEncoderError::ProfileUnsupported(format!("{profile:?}")))
+    }
+    fn codec_parameters(
+        parameters: &FullEncoderParameters<Self>,
+    ) -> Result<Self::OwnedParameters, VulkanEncoderError>;
+    fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters) -> Self::VkParameters<'a>;
+
+    type BitstreamUnitData;
+    fn bitstream_unit_data(is_idr: bool) -> Self::BitstreamUnitData;
+    type BitstreamUnitInfo<'a>;
+    fn bitstream_unit_info<'a>(
+        data: &'a Self::BitstreamUnitData,
+        rate_control: RateControl,
+        capabilities: &NativeEncodeQualityLevelProperties<Self>,
+        is_idr: bool,
+    ) -> Self::BitstreamUnitInfo<'a>;
+
+    type ReferenceInfo: Copy + 'static;
+    type ReferenceListInfo;
+    fn reference_list_info(
+        active_reference_slots: &VecDeque<(usize, Self::ReferenceInfo)>,
+    ) -> Self::ReferenceListInfo;
+    fn new_slot_reference_info(
+        counters: &Self::EncodingCounters,
+        is_idr: bool,
+    ) -> Self::ReferenceInfo;
+
+    type PictureInfoData;
+    fn picture_info_data(
+        counters: &Self::EncodingCounters,
+        is_idr: bool,
+        ref_lists: &Self::ReferenceListInfo,
+    ) -> Self::PictureInfoData;
+    type PictureInfo<'a>: vk::ExtendsVideoEncodeInfoKHR;
+    fn picture_info<'a, 'b: 'a>(
+        data: &'a Self::PictureInfoData,
+        bitstream_unit_infos: &'a [Self::BitstreamUnitInfo<'b>],
+    ) -> Self::PictureInfo<'a>;
+
+    type DpbSlotInfo<'a>: vk::ExtendsVideoReferenceSlotInfoKHR;
+    fn dpb_slot_info<'a>(reference_info: &'a Self::ReferenceInfo) -> Self::DpbSlotInfo<'a>;
+    fn new_slot_dpb_slot_info<'a>(
+        reference_info: &'a Self::ReferenceInfo,
+    ) -> Self::DpbSlotInfo<'a> {
+        Self::dpb_slot_info(reference_info)
+    }
+
+    type EncodingCounters: Default + Clone + Copy;
+    fn advance_counters(counters: &mut Self::EncodingCounters, is_idr: bool);
+    fn counters_idr(counters: &mut Self::EncodingCounters);
+}
+
 pub(crate) trait Codec: CodecCapabilities + std::fmt::Debug + Clone {
+    type Profile: Copy + std::fmt::Debug;
+
     // Parameters
-    type InitialParameters<'a>;
+    type OwnedParameters;
+    type VkParameters<'a>;
 
     type VideoDecodeSessionParametersAddInfo<'a>;
     type VideoDecodeSessionParametersCreateInfo<'a>: vk::ExtendsVideoSessionParametersCreateInfoKHR;
@@ -14,14 +95,14 @@ pub(crate) trait Codec: CodecCapabilities + std::fmt::Debug + Clone {
     type VideoEncodeSessionParametersCreateInfo<'a>: vk::ExtendsVideoSessionParametersCreateInfoKHR;
 
     fn decode_parameters_add_info<'a: 'b, 'b>(
-        parameters: &Self::InitialParameters<'a>,
+        parameters: &'b Self::VkParameters<'a>,
     ) -> Self::VideoDecodeSessionParametersAddInfo<'b>;
     fn decode_parameters_create_info<'a: 'b, 'b>(
         add_info: &'b Self::VideoDecodeSessionParametersAddInfo<'a>,
     ) -> Self::VideoDecodeSessionParametersCreateInfo<'b>;
 
     fn encode_parameters_add_info<'a: 'b, 'b>(
-        parameters: &Self::InitialParameters<'a>,
+        parameters: &'b Self::VkParameters<'a>,
     ) -> Self::VideoEncodeSessionParametersAddInfo<'b>;
     fn encode_parameters_create_info<'a: 'b, 'b>(
         add_info: &'b Self::VideoEncodeSessionParametersAddInfo<'a>,
@@ -32,6 +113,7 @@ pub(crate) trait CodecCapabilities: std::fmt::Debug + Clone {
     type CodecSpecificDecodeCapabilities<'a>: CodecSpecificDecodeCapabilities;
     type CodecSpecificEncodeCapabilities<'a>: CodecSpecificEncodeCapabilities;
     type CodecSpecificEncodeQualityLevelProperties<'a>: CodecSpecificEncoderQualityLevelProperties;
+    type NativeEncodeCodecCapabilities;
 
     fn static_decode_capabilities<'a>(
         codec_caps: &Self::CodecSpecificDecodeCapabilities<'a>,
@@ -42,6 +124,9 @@ pub(crate) trait CodecCapabilities: std::fmt::Debug + Clone {
     fn static_encode_qlp<'a>(
         codec_qlp: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
     ) -> Self::CodecSpecificEncodeQualityLevelProperties<'static>;
+    fn encode_codec_capabilities(
+        capabilities: &NativeEncodeCapabilities,
+    ) -> Option<&Self::NativeEncodeCodecCapabilities>;
 }
 
 pub(crate) trait CodecSpecificDecodeCapabilities:

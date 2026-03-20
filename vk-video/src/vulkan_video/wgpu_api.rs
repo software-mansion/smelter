@@ -1,5 +1,6 @@
 use crate::{
     DecoderError, EncodedInputChunk, EncodedOutputChunk, Frame, VulkanEncoderError,
+    codec::h264::H264Codec,
     parser::{
         decoder_instructions::compile_to_decoder_instructions,
         h264::{AccessUnit, H264Parser},
@@ -58,7 +59,7 @@ impl WgpuTexturesDecoder {
 
 /// An encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
 pub struct WgpuTexturesEncoder {
-    pub(crate) vulkan_encoder: VulkanEncoder<'static>,
+    pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
 }
 
 impl WgpuTexturesEncoder {
