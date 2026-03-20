@@ -31,7 +31,7 @@ utoipa = { workspace = true }
 tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 tokio = { workspace = true }
 regex = { workspace = true }
-tar = "0.4.44"
+tar = "0.4.45"
 flate2 = "1.1.4"
 
 [lints]
