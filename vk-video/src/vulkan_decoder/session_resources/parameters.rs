@@ -5,10 +5,11 @@ use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 
 use crate::{
     VulkanDecoderError, VulkanDevice,
-    codec::h264::{H264Codec, H264VkParameters},
-    vulkan_decoder::{
-        Device, VideoSessionParameters, VkPictureParameterSet, VkSequenceParameterSet,
+    codec::h264::{
+        H264Codec, H264VkParameters,
+        parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
     },
+    vulkan_decoder::{Device, VideoSessionParameters},
 };
 
 use super::H264DecodeProfileInfo;
@@ -18,8 +19,8 @@ use super::H264DecodeProfileInfo;
 /// existing sps or pps.
 pub(crate) struct VideoSessionParametersManager {
     pub(crate) parameters: Arc<VideoSessionParameters>,
-    sps: HashMap<u8, VkSequenceParameterSet>,
-    pps: HashMap<(u8, u8), VkPictureParameterSet>,
+    sps: HashMap<u8, VkH264SequenceParameterSet>,
+    pps: HashMap<(u8, u8), VkH264PictureParameterSet>,
     device: Arc<Device>,
     session: vk::VideoSessionKHR,
     update_sequence_count: u32,

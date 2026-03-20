@@ -8,6 +8,7 @@ use session_resources::VideoSessionResources;
 
 use crate::{
     RawFrameData,
+    codec::h264::parameters::SeqParameterSetExt as _,
     device::{ColorRange, ColorSpace, DecodingDevice},
     parser::{
         decoder_instructions::DecoderInstruction,
