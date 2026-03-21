@@ -33,5 +33,9 @@ export default [
       format: 'es',
     },
     plugins: [dts()],
+    external: [
+      'react',
+      '@swmansion/smelter',
+    ],
   },
 ];

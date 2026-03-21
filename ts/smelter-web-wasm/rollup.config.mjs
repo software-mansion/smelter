@@ -83,5 +83,10 @@ export default [
       format: 'es',
     },
     plugins: [dts()],
+    external: [
+      '@swmansion/smelter',
+      '@swmansion/smelter-core',
+      '@swmansion/smelter-browser-render',
+    ],
   },
 ];

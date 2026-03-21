@@ -35,6 +35,9 @@ export default [
       format: 'es',
     },
     plugins: [dts()],
+    external: [
+      '@swmansion/smelter',
+    ],
   },
 ];
 
