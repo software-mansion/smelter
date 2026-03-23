@@ -23,6 +23,12 @@ pub(crate) struct H264EncodingCounters {
     idr_pic_id: u16,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct H264WriteParametersInfo {
+    pub(crate) write_sps: bool,
+    pub(crate) write_pps: bool,
+}
+
 impl EncodeCodec for H264Codec {
     fn encode_profile_capabilities(
         caps: &Self::NativeEncodeCodecCapabilities,
@@ -278,6 +284,25 @@ impl EncodeCodec for H264Codec {
                 .gop_frame_count(idr_period)
                 .idr_period(idr_period),
         )
+    }
+
+    type CodecWriteParametersInfo = H264WriteParametersInfo;
+    type CodecEncodeSessionParametersGetInfo<'a> =
+        vk::VideoEncodeH264SessionParametersGetInfoKHR<'a>;
+    fn codec_session_parameters_get_info<'a>(
+        info: Self::CodecWriteParametersInfo,
+    ) -> Self::CodecEncodeSessionParametersGetInfo<'a> {
+        vk::VideoEncodeH264SessionParametersGetInfoKHR::default()
+            .write_std_sps(info.write_sps)
+            .write_std_pps(info.write_pps)
+            .std_sps_id(0)
+            .std_pps_id(0)
+    }
+    fn codec_write_parameters_info_all() -> Self::CodecWriteParametersInfo {
+        H264WriteParametersInfo {
+            write_sps: true,
+            write_pps: true,
+        }
     }
 }
 
