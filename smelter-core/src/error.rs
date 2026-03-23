@@ -320,23 +320,43 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
 
 const OUTPUT_STREAM_ALREADY_REGISTERED: &str = "OUTPUT_STREAM_ALREADY_REGISTERED";
 const OUTPUT_ERROR: &str = "OUTPUT_STREAM_OUTPUT_ERROR";
-const RTMP_CONNECTION_FAILED: &str = "RTMP_CONNECTION_FAILED";
 const UNSUPPORTED_RESOLUTION: &str = "UNSUPPORTED_RESOLUTION";
 const NO_VIDEO_OR_AUDIO_FOR_OUTPUT: &str = "NO_VIDEO_OR_AUDIO_FOR_OUTPUT";
 const UNKNOWN_REGISTER_OUTPUT_ERROR: &str = "UNKNOWN_REGISTER_OUTPUT_ERROR";
 
+const RTMP_CONNECTION_FAILED: &str = "RTMP_CONNECTION_FAILED";
+const WHIP_INVALID_SERVER_URL: &str = "WHIP_INVALID_SERVER_URL";
+const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
+
 impl From<&RegisterOutputError> for PipelineErrorInfo {
     fn from(err: &RegisterOutputError) -> Self {
+        tracing::error!("{err:#?}"); // XXX: Remove before merge
         match err {
             RegisterOutputError::AlreadyRegistered(_) => {
                 PipelineErrorInfo::new(OUTPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
             }
+
+            // RTMP output
             RegisterOutputError::OutputError(
                 _,
                 OutputInitError::RtmpError(RtmpClientError::RtmpStreamError(
                     rtmp::RtmpStreamError::TcpError(_),
                 )),
             ) => PipelineErrorInfo::new(RTMP_CONNECTION_FAILED, ErrorType::UserError),
+
+            // WHIP output
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
+                if matches!(err.as_ref(), WebrtcClientError::InvalidEndpointUrl(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHIP_INVALID_SERVER_URL, ErrorType::UserError)
+            }
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
+                if matches!(err.as_ref(), WebrtcClientError::RequestFailed(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHIP_REQUEST_FAILED, ErrorType::UserError)
+            }
+
+            // Generic
             RegisterOutputError::OutputError(_, _) => {
                 PipelineErrorInfo::new(OUTPUT_ERROR, ErrorType::ServerError)
             }
