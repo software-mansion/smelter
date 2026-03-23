@@ -8,7 +8,7 @@ fn main() {
                 windows,
                 all(
                     unix,
-                    not(any(target_os = "macos", target_os = "ios", target_os = "emscripten"))
+                    not(any(target_os = "ios", target_os = "emscripten"))
                 )
             )
         },
