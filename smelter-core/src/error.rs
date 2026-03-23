@@ -1,4 +1,3 @@
-use reqwest::StatusCode;
 use smelter_render::{
     InputId, OutputId,
     error::{
@@ -307,6 +306,8 @@ const INPUT_ERROR: &str = "INPUT_STREAM_INPUT_ERROR";
 
 const RESOURCE_DOES_NOT_EXIST: &str = "RESOURCE_DOES_NOT_EXIST";
 const INVALID_MP4_SOURCE: &str = "INVALID_MP4_SOURCE";
+const WHEP_INVALID_SERVER_URL: &str = "WHEP_INVALID_SERVER_URL";
+const WHEP_REQUEST_FAILED: &str = "WHEP_REQUEST_FAILED";
 
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
@@ -314,6 +315,18 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
         match err {
             RegisterInputError::AlreadyRegistered(_) => {
                 PipelineErrorInfo::new(INPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
+            }
+
+            // WHEP
+            RegisterInputError::InputError(_, InputInitError::Whep(err))
+                if matches!(err.as_ref(), WebrtcClientError::InvalidEndpointUrl(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHEP_INVALID_SERVER_URL, ErrorType::UserError)
+            }
+            RegisterInputError::InputError(_, InputInitError::Whep(err))
+                if matches!(err.as_ref(), WebrtcClientError::RequestFailed(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHEP_REQUEST_FAILED, ErrorType::UserError)
             }
 
             // MP4
