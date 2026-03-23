@@ -80,7 +80,7 @@ pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManag
 pub use crate::vulkan_decoder::VulkanDecoderError;
 pub use crate::vulkan_encoder::VulkanEncoderError;
 #[cfg(feature = "transcoder")]
-pub use crate::vulkan_transcoder::TranscoderError;
+pub use crate::vulkan_transcoder::{Transcoder, TranscoderError};
 
 #[cfg(feature = "wgpu")]
 pub use crate::wgpu_helpers::{
