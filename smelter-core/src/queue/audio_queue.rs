@@ -8,7 +8,7 @@ use crate::{
     event::{Event, EventEmitter},
     queue::{
         SharedState,
-        utils::{EmitEventOnce, PauseState},
+        utils::{EmitOnceGuard, PauseState, QueueState},
     },
 };
 
@@ -54,23 +54,23 @@ impl AudioQueue {
                 receiver,
                 required: opts.required,
 
-                eos_received: false,
                 sync_point: self.sync_point,
                 shared_state,
 
                 offset_from_start: opts.offset,
 
                 pause_state: PauseState::new(),
+                state: QueueState::New,
 
-                emit_once_delivered_event: EmitEventOnce::new(
+                event_delivered_guard: EmitOnceGuard::new(
                     Event::AudioInputStreamDelivered(input_id.clone()),
                     &self.event_emitter,
                 ),
-                emit_once_playing_event: EmitEventOnce::new(
+                event_playing_guard: EmitOnceGuard::new(
                     Event::AudioInputStreamPlaying(input_id.clone()),
                     &self.event_emitter,
                 ),
-                emit_once_eos_event: EmitEventOnce::new(
+                event_eos_guard: EmitOnceGuard::new(
                     Event::AudioInputStreamEos(input_id.clone()),
                     &self.event_emitter,
                 ),
@@ -83,15 +83,27 @@ impl AudioQueue {
     }
 
     pub fn pause_input(&mut self, input_id: &InputId, pts: Duration) {
-        if let Some(input) = self.inputs.get_mut(input_id) {
-            input.pause_state.pause(pts);
+        let Some(input) = self.inputs.get_mut(input_id) else {
+            return;
+        };
+        if input.pause_state.pause(pts) {
+            self.event_emitter
+                .emit(Event::AudioInputStreamPaused(input_id.clone()));
         }
     }
 
     pub fn resume_input(&mut self, input_id: &InputId, pts: Duration) {
-        if let Some(input) = self.inputs.get_mut(input_id) {
-            let first_pts_received = input.shared_state.first_pts().is_some();
-            input.pause_state.resume(pts, first_pts_received);
+        let Some(input) = self.inputs.get_mut(input_id) else {
+            return;
+        };
+        if input.pause_state.resume(pts, input.state) {
+            // TS SDK tracks state based on those values, so if we pause in
+            // non running state it will be stuck at paused until state does
+            // not change
+            if input.state == QueueState::Running {
+                self.event_emitter
+                    .emit(Event::AudioInputStreamPlaying(input_id.clone()));
+            }
             input.queue.clear();
         }
     }
@@ -177,16 +189,15 @@ struct AudioQueueInput {
     /// offset will be resolved automatically on the stream start.
     offset_from_start: Option<Duration>,
 
-    eos_received: bool,
-
     sync_point: Instant,
     shared_state: SharedState,
 
     pause_state: PauseState,
+    state: QueueState,
 
-    emit_once_delivered_event: EmitEventOnce,
-    emit_once_playing_event: EmitEventOnce,
-    emit_once_eos_event: EmitEventOnce,
+    event_delivered_guard: EmitOnceGuard,
+    event_playing_guard: EmitOnceGuard,
+    event_eos_guard: EmitOnceGuard,
 }
 
 impl AudioQueueInput {
@@ -218,20 +229,20 @@ impl AudioQueueInput {
             popped_samples.push(self.queue.pop_front().unwrap());
         }
 
-        if self.eos_received
-            && popped_samples.is_empty()
-            && self.queue.is_empty()
-            && !self.emit_once_eos_event.already_sent()
-        {
-            self.emit_once_eos_event.emit();
-            return AudioEvent {
-                event: PipelineEvent::EOS,
-                required: true,
-            };
-        }
-        if !popped_samples.is_empty() {
-            self.emit_once_playing_event.emit();
-        }
+        match self.state {
+            QueueState::New | QueueState::Restarted if !popped_samples.is_empty() => {
+                self.event_playing_guard.emit();
+                self.state = QueueState::Running;
+            }
+            QueueState::Draining if self.queue.is_empty() && popped_samples.is_empty() => {
+                self.reset_after_eos();
+                return AudioEvent {
+                    event: PipelineEvent::EOS,
+                    required: true,
+                };
+            }
+            _ => (),
+        };
         AudioEvent {
             required: self.required,
             event: PipelineEvent::Data(popped_samples),
@@ -243,7 +254,11 @@ impl AudioQueueInput {
         pts_range: (Duration, Duration),
         queue_start_pts: Duration,
     ) -> bool {
-        if self.pause_state.is_paused() || self.eos_received {
+        if self.pause_state.is_paused() {
+            return true;
+        }
+
+        if let QueueState::Draining = self.state {
             return true;
         }
 
@@ -262,7 +277,7 @@ impl AudioQueueInput {
 
         while !has_all_samples_for_pts_range(&self.queue, end_pts) {
             if self.try_enqueue_samples(Some(queue_start_pts)).is_err() {
-                return false;
+                return matches!(self.state, QueueState::Restarted);
             }
         }
         true
@@ -272,6 +287,9 @@ impl AudioQueueInput {
     /// queue start.
     fn drop_old_samples_before_start(&mut self) {
         loop {
+            if let QueueState::Draining = self.state {
+                self.reset_after_eos();
+            }
             // if offset is defined try_enqueue_frame will always return err
             if self.queue.is_empty() && self.try_enqueue_samples(None).is_err() {
                 return;
@@ -294,7 +312,7 @@ impl AudioQueueInput {
         if !self.receiver.is_empty() {
             // if offset is defined the events are not dequeued before start
             // so we need to handle it here
-            self.emit_once_delivered_event.emit();
+            self.event_delivered_guard.emit();
         }
 
         if self.offset_from_start.is_none() {
@@ -304,7 +322,7 @@ impl AudioQueueInput {
                     batch.start_pts += self.pause_state.pts_offset();
                     self.queue.push_back(batch);
                 }
-                PipelineEvent::EOS => self.eos_received = true,
+                PipelineEvent::EOS => self.state = QueueState::Draining,
             };
         } else {
             let Some(offset_pts) = queue_start_pts.and_then(|start| self.offset_pts(start)) else {
@@ -316,14 +334,28 @@ impl AudioQueueInput {
                 PipelineEvent::Data(mut batch) => {
                     let first_pts = self.shared_state.get_or_init_first_pts(batch.start_pts);
                     batch.start_pts =
-                        offset_pts + batch.start_pts - first_pts + self.pause_state.pts_offset();
+                        (offset_pts + batch.start_pts + self.pause_state.pts_offset())
+                            .saturating_sub(first_pts);
                     self.queue.push_back(batch);
                 }
-                PipelineEvent::EOS => self.eos_received = true,
+                PipelineEvent::EOS => self.state = QueueState::Draining,
             };
         }
 
         Ok(())
+    }
+
+    fn reset_after_eos(&mut self) {
+        self.event_eos_guard.emit();
+
+        self.event_playing_guard.reset();
+        self.event_eos_guard.reset();
+
+        // Reconnect after EOS will lose any relation to original offset
+        // so we can behave as regular input here
+        self.offset_from_start.take();
+        self.queue.clear();
+        self.state = QueueState::Restarted
     }
 
     /// Offset value calculated in form of PTS(relative to sync point)

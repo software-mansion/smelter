@@ -25,8 +25,9 @@ pub enum Response {
         video_duration_ms: Option<u64>,
         audio_duration_ms: Option<u64>,
     },
-    BearerToken {
+    RegisteredWhipInput {
         bearer_token: Arc<str>,
+        endpoint_route: Arc<str>,
     },
 }
 

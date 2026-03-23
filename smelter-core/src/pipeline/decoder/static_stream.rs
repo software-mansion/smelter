@@ -42,6 +42,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
             Some(PipelineEvent::Data(event)) => {
+                self.eos_sent = false;
                 let chunks = self.decoder.decode(event);
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
             }
@@ -98,6 +99,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
             Some(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk))) => {
+                self.eos_sent = false;
                 let result = self.decoder.decode(chunk);
                 let chunks = match result {
                     Ok(chunks) => chunks,

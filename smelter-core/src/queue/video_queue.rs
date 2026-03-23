@@ -11,7 +11,7 @@ use crate::{
     event::{Event, EventEmitter},
     queue::{
         QueueVideoOutput, SharedState,
-        utils::{EmitEventOnce, PauseState},
+        utils::{EmitOnceGuard, PauseState, QueueState},
     },
 };
 
@@ -52,24 +52,24 @@ impl VideoQueue {
                 receiver,
                 required: opts.required,
 
-                eos_received: false,
                 sync_point: self.sync_point,
                 shared_state,
 
                 offset_from_start: opts.offset,
 
-                pause_state: PauseState::new(),
-                paused_last_frame: None,
+                pause_state: VideoPauseState::new(),
 
-                emit_once_delivered_event: EmitEventOnce::new(
+                state: QueueState::New,
+
+                event_delivered_guard: EmitOnceGuard::new(
                     Event::VideoInputStreamDelivered(input_id.clone()),
                     &self.event_emitter,
                 ),
-                emit_once_playing_event: EmitEventOnce::new(
+                event_playing_guard: EmitOnceGuard::new(
                     Event::VideoInputStreamPlaying(input_id.clone()),
                     &self.event_emitter,
                 ),
-                emit_once_eos_event: EmitEventOnce::new(
+                event_eos_guard: EmitOnceGuard::new(
                     Event::VideoInputStreamEos(input_id.clone()),
                     &self.event_emitter,
                 ),
@@ -82,17 +82,27 @@ impl VideoQueue {
     }
 
     pub fn pause_input(&mut self, input_id: &InputId, pts: Duration) {
-        if let Some(input) = self.inputs.get_mut(input_id) {
-            input.paused_last_frame = input.queue.front().cloned();
-            input.pause_state.pause(pts);
+        let Some(input) = self.inputs.get_mut(input_id) else {
+            return;
+        };
+        if input.pause_state.pause(pts, input.queue.front().cloned()) {
+            self.event_emitter
+                .emit(Event::VideoInputStreamPaused(input_id.clone()));
         }
     }
 
     pub fn resume_input(&mut self, input_id: &InputId, pts: Duration) {
-        if let Some(input) = self.inputs.get_mut(input_id) {
-            let first_pts_received = input.shared_state.first_pts().is_some();
-            input.pause_state.resume(pts, first_pts_received);
-            input.paused_last_frame = None;
+        let Some(input) = self.inputs.get_mut(input_id) else {
+            return;
+        };
+        if input.pause_state.resume(pts, input.state) {
+            // TS SDK tracks state based on those values, so if we pause in
+            // non running state it will be stuck at paused until state does
+            // not change
+            if input.state == QueueState::Running {
+                self.event_emitter
+                    .emit(Event::VideoInputStreamPlaying(input_id.clone()));
+            }
             input.queue.clear();
         }
     }
@@ -169,6 +179,51 @@ struct FrameEvent {
     event: PipelineEvent<Frame>,
 }
 
+struct VideoPauseState {
+    inner: PauseState,
+    paused_frame: Option<Frame>,
+}
+
+impl VideoPauseState {
+    fn new() -> Self {
+        Self {
+            inner: PauseState::new(),
+            paused_frame: None,
+        }
+    }
+
+    fn pause(&mut self, pts: Duration, frame: Option<Frame>) -> bool {
+        if !self.inner.pause(pts) {
+            return false; // already paused
+        }
+        self.paused_frame = frame;
+        true
+    }
+
+    fn resume(&mut self, pts: Duration, state: QueueState) -> bool {
+        self.paused_frame = None;
+        self.inner.resume(pts, state)
+    }
+
+    /// Returns the paused frame as a PipelineEvent with PTS shifted by time elapsed since pause.
+    fn paused_frame(&self, buffer_pts: Duration) -> Option<PipelineEvent<Frame>> {
+        self.paused_frame.clone().map(|mut frame| {
+            if let Some(paused_at) = self.inner.paused_at_pts() {
+                frame.pts += buffer_pts.saturating_sub(paused_at);
+            }
+            PipelineEvent::Data(frame)
+        })
+    }
+
+    fn is_paused(&self) -> bool {
+        self.inner.is_paused()
+    }
+
+    fn pts_offset(&self) -> Duration {
+        self.inner.pts_offset()
+    }
+}
+
 pub struct VideoQueueInput {
     /// Frames are PTS ordered where PTS=0 represents beginning of the stream.
     queue: VecDeque<Frame>,
@@ -182,19 +237,16 @@ pub struct VideoQueueInput {
     /// offset will be resolved automatically on the stream start.
     offset_from_start: Option<Duration>,
 
-    eos_received: bool,
-
     sync_point: Instant,
     shared_state: SharedState,
 
-    pause_state: PauseState,
-    /// Last frame captured at the moment of pause. Returned with updated PTS
-    /// on every `get_frame` call while paused.
-    paused_last_frame: Option<Frame>,
+    pause_state: VideoPauseState,
 
-    emit_once_delivered_event: EmitEventOnce,
-    emit_once_playing_event: EmitEventOnce,
-    emit_once_eos_event: EmitEventOnce,
+    state: QueueState,
+
+    event_delivered_guard: EmitOnceGuard,
+    event_playing_guard: EmitOnceGuard,
+    event_eos_guard: EmitOnceGuard,
 }
 
 impl VideoQueueInput {
@@ -202,13 +254,13 @@ impl VideoQueueInput {
     /// whether stream is required or not.
     fn get_frame(&mut self, buffer_pts: Duration, queue_start_pts: Duration) -> Option<FrameEvent> {
         if self.pause_state.is_paused() {
-            return self.paused_last_frame.clone().map(|mut frame| {
-                frame.pts = buffer_pts;
-                FrameEvent {
+            return self
+                .pause_state
+                .paused_frame(buffer_pts)
+                .map(|event| FrameEvent {
                     required: self.required,
-                    event: PipelineEvent::Data(frame),
-                }
-            });
+                    event,
+                });
         }
 
         // ignore result, we only need to ensure frames are enqueued
@@ -236,31 +288,31 @@ impl VideoQueueInput {
             }
         };
 
-        // Handle a case where we have last frame and received EOS.
-        // "drop_old_frames" is ensuring that there will only be one frame at
-        // the end.
-        if self.eos_received && self.queue.len() == 1 {
-            self.queue.pop_front();
-        }
-
-        if self.eos_received && frame.is_none() && !self.emit_once_eos_event.already_sent() {
-            self.emit_once_eos_event.emit();
-            return Some(FrameEvent {
-                required: true,
-                event: PipelineEvent::EOS,
-            });
-        }
-
-        match frame {
-            Some(frame) => {
-                self.emit_once_playing_event.emit();
-                Some(FrameEvent {
-                    required: self.required,
-                    event: PipelineEvent::Data(frame),
-                })
+        match self.state {
+            QueueState::New | QueueState::Restarted if frame.is_some() => {
+                self.event_playing_guard.emit();
+                self.state = QueueState::Running;
             }
-            None => None,
+            QueueState::Draining if frame.is_some() && self.queue.len() == 1 => {
+                // Handle a case where we have last frame and received EOS.
+                // "drop_old_frames" is ensuring that there will only be one frame at
+                // the end.
+                self.queue.clear();
+            }
+            QueueState::Draining if frame.is_none() => {
+                self.reset_after_eos();
+                return Some(FrameEvent {
+                    required: true,
+                    event: PipelineEvent::EOS,
+                });
+            }
+            _ => (),
         }
+
+        frame.map(|frame| FrameEvent {
+            required: self.required,
+            event: PipelineEvent::Data(frame),
+        })
     }
 
     /// Check if the input has enough data in the queue to produce frames for `next_buffer_pts`.
@@ -276,7 +328,11 @@ impl VideoQueueInput {
         next_buffer_pts: Duration,
         queue_start_pts: Duration,
     ) -> bool {
-        if self.pause_state.is_paused() || self.eos_received {
+        if self.pause_state.is_paused() {
+            return true;
+        }
+
+        if let QueueState::Draining = self.state {
             return true;
         }
 
@@ -289,7 +345,7 @@ impl VideoQueueInput {
 
         while !has_frame_for_pts(&self.queue, next_buffer_pts) {
             if self.try_enqueue_frame(Some(queue_start_pts)).is_err() {
-                return false;
+                return matches!(self.state, QueueState::Restarted);
             }
         }
         true
@@ -334,6 +390,9 @@ impl VideoQueueInput {
     /// queue start.
     fn drop_old_frames_before_start(&mut self) {
         loop {
+            if let QueueState::Draining = self.state {
+                self.reset_after_eos();
+            }
             // if offset is defined try_enqueue_frame will always return err
             if self.queue.is_empty() && self.try_enqueue_frame(None).is_err() {
                 return;
@@ -353,7 +412,7 @@ impl VideoQueueInput {
         if !self.receiver.is_empty() {
             // if offset is defined the events are not dequeued before start
             // so we need to handle it here
-            self.emit_once_delivered_event.emit();
+            self.event_delivered_guard.emit();
         }
 
         if self.offset_from_start.is_none() {
@@ -363,7 +422,7 @@ impl VideoQueueInput {
                     frame.pts += self.pause_state.pts_offset();
                     self.queue.push_back(frame);
                 }
-                PipelineEvent::EOS => self.eos_received = true,
+                PipelineEvent::EOS => self.state = QueueState::Draining,
             };
         } else {
             let Some(offset_pts) = queue_start_pts.and_then(|start| self.offset_pts(start)) else {
@@ -374,13 +433,28 @@ impl VideoQueueInput {
                 // pts start from sync point
                 PipelineEvent::Data(mut frame) => {
                     let first_pts = self.shared_state.get_or_init_first_pts(frame.pts);
-                    frame.pts = offset_pts + frame.pts - first_pts + self.pause_state.pts_offset();
+                    frame.pts = (offset_pts + frame.pts + self.pause_state.pts_offset())
+                        .saturating_sub(first_pts);
                     self.queue.push_back(frame);
                 }
-                PipelineEvent::EOS => self.eos_received = true,
+                PipelineEvent::EOS => self.state = QueueState::Draining,
             };
         }
         Ok(())
+    }
+
+    fn reset_after_eos(&mut self) {
+        self.event_eos_guard.emit();
+
+        self.event_playing_guard.reset();
+        self.event_eos_guard.reset();
+
+        // Reconnect after EOS will lose any relation to original offset
+        // so we can behave as regular input here
+        self.offset_from_start.take();
+
+        self.queue.clear();
+        self.state = QueueState::Restarted;
     }
 
     /// Offset value calculated in form of PTS(relative to sync point)

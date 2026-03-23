@@ -75,7 +75,7 @@ impl WebrtcRtpReader {
 
     pub async fn read_packet(&mut self) -> Option<RtpInputEvent> {
         loop {
-            if let Some(packet) = self.jitter_buffer.pop_packet() {
+            if let Some(packet) = self.jitter_buffer.pop_packet(false) {
                 if let (RtpInputEvent::LostPacket, Some(sender)) =
                     (&packet, &self.keyframe_request_sender)
                 {

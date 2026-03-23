@@ -101,7 +101,13 @@ pub async fn handle_input(
                 video_duration_ms: video_duration.map(|v| v.as_millis() as u64),
                 audio_duration_ms: audio_duration.map(|a| a.as_millis() as u64),
             }),
-            InputInitInfo::Whip { bearer_token } => Ok(Response::BearerToken { bearer_token }),
+            InputInitInfo::Whip {
+                bearer_token,
+                endpoint_route,
+            } => Ok(Response::RegisteredWhipInput {
+                bearer_token,
+                endpoint_route,
+            }),
             InputInitInfo::Other => Ok(Response::Ok {}),
         }
     })

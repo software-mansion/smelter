@@ -117,7 +117,7 @@ impl RtpJitterBuffer {
         );
     }
 
-    pub fn pop_packet(&mut self) -> Option<RtpInputEvent> {
+    pub fn pop_packet(&mut self, force: bool) -> Option<RtpInputEvent> {
         let (first_seq_num, first_packet) = self.packets.first_key_value()?;
 
         if self.next_seq_num == Some(*first_seq_num) {
@@ -128,7 +128,7 @@ impl RtpJitterBuffer {
             RtpJitterBufferMode::Fixed(duration) => {
                 // if input is required or offset is set, we can assume that we can wait
                 // a while, but it should not depend on queue clock
-                first_packet.received_at.elapsed() < duration
+                first_packet.received_at.elapsed() < duration && !force
             }
             RtpJitterBufferMode::QueueBased => {
                 let lowest_pts = self.packets.values().map(|packet| packet.pts).min()?;

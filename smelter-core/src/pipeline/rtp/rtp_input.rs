@@ -295,7 +295,7 @@ fn run_rtp_demuxer_thread(
             Err(RecvTimeoutError::Timeout) => {
                 if let Some(video) = &mut video {
                     let sender = &video.handle.rtp_packet_sender;
-                    while let Some(packet) = video.jitter_buffer.pop_packet() {
+                    while let Some(packet) = video.jitter_buffer.pop_packet(false) {
                         trace!(?packet, "Received video RTP packet");
                         if sender.send(PipelineEvent::Data(packet)).is_err() {
                             debug!("Channel closed");
@@ -304,7 +304,7 @@ fn run_rtp_demuxer_thread(
                 };
                 if let Some(audio) = &mut audio {
                     let sender = &audio.handle.rtp_packet_sender;
-                    while let Some(packet) = audio.jitter_buffer.pop_packet() {
+                    while let Some(packet) = audio.jitter_buffer.pop_packet(false) {
                         trace!(?packet, "Received audio RTP packet");
                         if sender.send(PipelineEvent::Data(packet)).is_err() {
                             debug!("Channel closed");
@@ -332,7 +332,7 @@ fn run_rtp_demuxer_thread(
                     if let Some(video) = &mut video {
                         video.jitter_buffer.write_packet(packet);
                         let sender = &video.handle.rtp_packet_sender;
-                        while let Some(packet) = video.jitter_buffer.pop_packet() {
+                        while let Some(packet) = video.jitter_buffer.pop_packet(false) {
                             trace!(?packet, "Received video RTP packet");
                             if sender.send(PipelineEvent::Data(packet)).is_err() {
                                 debug!("Channel closed");
@@ -344,7 +344,7 @@ fn run_rtp_demuxer_thread(
                     if let Some(audio) = &mut audio {
                         audio.jitter_buffer.write_packet(packet);
                         let sender = &audio.handle.rtp_packet_sender;
-                        while let Some(packet) = audio.jitter_buffer.pop_packet() {
+                        while let Some(packet) = audio.jitter_buffer.pop_packet(false) {
                             trace!(?packet, "Received audio RTP packet");
                             if sender.send(PipelineEvent::Data(packet)).is_err() {
                                 debug!("Channel closed");
@@ -384,6 +384,28 @@ fn run_rtp_demuxer_thread(
                                     }
                                 }
                                 PacketType::Goodbye => {
+                                    if let Some(video) = &mut video {
+                                        let sender = &video.handle.rtp_packet_sender;
+                                        while let Some(packet) =
+                                            video.jitter_buffer.pop_packet(true)
+                                        {
+                                            trace!(?packet, "(force) Received video RTP packet");
+                                            if sender.send(PipelineEvent::Data(packet)).is_err() {
+                                                debug!("Channel closed");
+                                            }
+                                        }
+                                    };
+                                    if let Some(audio) = &mut audio {
+                                        let sender = &audio.handle.rtp_packet_sender;
+                                        while let Some(packet) =
+                                            audio.jitter_buffer.pop_packet(true)
+                                        {
+                                            trace!(?packet, "(force) Received audio RTP packet");
+                                            if sender.send(PipelineEvent::Data(packet)).is_err() {
+                                                debug!("Channel closed");
+                                            }
+                                        }
+                                    }
                                     for ssrc in rtcp_packet.destination_ssrc() {
                                         if Some(ssrc) == audio_ssrc {
                                             maybe_send_audio_eos(&mut audio)
