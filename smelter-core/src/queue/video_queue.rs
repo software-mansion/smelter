@@ -1,5 +1,5 @@
 use crossbeam_channel::{Receiver, TryRecvError};
-use tracing::debug;
+use tracing::{debug, info};
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -222,6 +222,10 @@ impl VideoPauseState {
     fn pts_offset(&self) -> Duration {
         self.inner.pts_offset()
     }
+
+    fn reset(&mut self) {
+        self.inner.reset()
+    }
 }
 
 pub struct VideoQueueInput {
@@ -414,9 +418,12 @@ impl VideoQueueInput {
             // so we need to handle it here
             self.event_delivered_guard.emit();
         }
+        let el = queue_start_pts.map(|i| self.sync_point.elapsed());
 
         if self.offset_from_start.is_none() {
-            match self.receiver.try_recv()? {
+            let rec = self.receiver.try_recv()?;
+            info!(?rec, ?el);
+            match rec {
                 PipelineEvent::Data(mut frame) => {
                     let _ = self.shared_state.get_or_init_first_pts(frame.pts);
                     frame.pts += self.pause_state.pts_offset();
@@ -429,7 +436,9 @@ impl VideoQueueInput {
                 // if there is offset, do not enqueue before start
                 return Err(TryRecvError::Empty);
             };
-            match self.receiver.try_recv()? {
+            let rec = self.receiver.try_recv()?;
+            info!(?rec, ?el);
+            match rec {
                 // pts start from sync point
                 PipelineEvent::Data(mut frame) => {
                     let first_pts = self.shared_state.get_or_init_first_pts(frame.pts);
@@ -455,6 +464,8 @@ impl VideoQueueInput {
 
         self.queue.clear();
         self.state = QueueState::Restarted;
+        self.pause_state.reset();
+        tracing::warn!("reset")
     }
 
     /// Offset value calculated in form of PTS(relative to sync point)

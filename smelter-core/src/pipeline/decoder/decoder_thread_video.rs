@@ -59,7 +59,11 @@ where
                 }
             });
 
-        let decoder_stream = VideoDecoderStream::<Decoder, _>::new(ctx, transformed_bytestream)?;
+        let decoder_stream = VideoDecoderStream::<Decoder, _>::new(
+            ctx,
+            transformed_bytestream.inspect(|e| warn!(?e)),
+        )?
+        .inspect(|e2| warn!(?e2));
 
         let state = Self {
             stream: Box::new(decoder_stream.flatten()),
@@ -73,6 +77,7 @@ where
 
     fn run(self) {
         for event in self.stream {
+            tracing::warn!(?event);
             if self.frame_sender.send(event).is_err() {
                 warn!("Failed to send decoded video frame from decoder. Channel closed.");
                 return;

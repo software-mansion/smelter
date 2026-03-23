@@ -7,7 +7,7 @@ use std::{
 };
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use tracing::{Level, debug, error, span, trace};
+use tracing::{Level, debug, error, span, trace, warn};
 
 use crate::{
     pipeline::{
@@ -343,7 +343,8 @@ impl TrackManagerThread {
     }
 
     fn restart_threads(&mut self, seek: Option<Duration>, queue_sync: bool) {
-        if let Some((_, cond)) = self.video_thread.as_ref() {
+        warn!("start restarting");
+        if let Some((handle, cond)) = self.video_thread.as_ref() {
             cond.mark_for_shutdown()
         }
         if let Some((_, cond)) = self.audio_thread.as_ref() {
@@ -360,7 +361,16 @@ impl TrackManagerThread {
             .map(|(handle, _)| handle.join().unwrap());
 
         let offset = match queue_sync {
-            true => self.ctx.queue_sync_point.elapsed(),
+            true => {
+                // ensure queue resets
+                if let Some(ctx) = &self.video_ctx {
+                    let _ = ctx.decoder_handle.chunk_sender.send(PipelineEvent::EOS);
+                }
+                if let Some(ctx) = &self.audio_ctx {
+                    let _ = ctx.decoder_handle.chunk_sender.send(PipelineEvent::EOS);
+                }
+                self.ctx.queue_sync_point.elapsed()
+            }
             false => match (&video, &audio) {
                 (None, None) => Duration::ZERO,
                 (None, Some(audio)) => audio.last_pts,
@@ -375,6 +385,8 @@ impl TrackManagerThread {
         if let (Some(result), Some(ctx)) = (audio, &self.audio_ctx) {
             self.audio_thread = Some(self.spawn_audio(ctx, result.track, offset, seek));
         }
+
+        warn!("end restarting");
     }
 
     fn spawn_video(

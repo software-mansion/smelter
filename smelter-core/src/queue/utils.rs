@@ -110,4 +110,8 @@ impl PauseState {
     pub fn paused_at_pts(&self) -> Option<Duration> {
         self.paused_at_pts
     }
+
+    pub fn reset(&mut self) {
+        self.pts_offset = Duration::ZERO
+    }
 }
