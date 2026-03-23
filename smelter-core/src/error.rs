@@ -304,13 +304,24 @@ impl From<&InitPipelineError> for PipelineErrorInfo {
 const INPUT_STREAM_ALREADY_REGISTERED: &str = "INPUT_STREAM_ALREADY_REGISTERED";
 const INPUT_ERROR: &str = "INPUT_STREAM_INPUT_ERROR";
 
+const RESOURCE_DOES_NOT_EXIST: &str = "RESOURCE_DOES_NOT_EXIST";
+
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
+        tracing::error!("{err:#?}"); // XXX: Remove before merge
         match err {
             RegisterInputError::AlreadyRegistered(_) => {
                 PipelineErrorInfo::new(INPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
             }
 
+            RegisterInputError::InputError(
+                _,
+                InputInitError::FfmpegError(ffmpeg_next::Error::Other {
+                    errno: ffmpeg_next::error::ENOENT,
+                }),
+            ) => PipelineErrorInfo::new(RESOURCE_DOES_NOT_EXIST, ErrorType::UserError),
+
+            // Generic
             RegisterInputError::InputError(_, _) => {
                 PipelineErrorInfo::new(INPUT_ERROR, ErrorType::ServerError)
             }
@@ -336,7 +347,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
                 PipelineErrorInfo::new(OUTPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
             }
 
-            // RTMP output
+            // RTMP
             RegisterOutputError::OutputError(
                 _,
                 OutputInitError::RtmpError(RtmpClientError::RtmpStreamError(
@@ -344,7 +355,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
                 )),
             ) => PipelineErrorInfo::new(RTMP_CONNECTION_FAILED, ErrorType::UserError),
 
-            // WHIP output
+            // WHIP
             RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
                 if matches!(err.as_ref(), WebrtcClientError::InvalidEndpointUrl(_, _)) =>
             {
