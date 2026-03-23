@@ -369,6 +369,7 @@ const UNKNOWN_REGISTER_OUTPUT_ERROR: &str = "UNKNOWN_REGISTER_OUTPUT_ERROR";
 const RTMP_CONNECTION_FAILED: &str = "RTMP_CONNECTION_FAILED";
 const WHIP_INVALID_SERVER_URL: &str = "WHIP_INVALID_SERVER_URL";
 const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
+const SERVER_PATH_RESOLUTION_FALED: &str = "SERVER_PATH_RESOLUTION_FALED";
 
 impl From<&RegisterOutputError> for PipelineErrorInfo {
     fn from(err: &RegisterOutputError) -> Self {
@@ -396,6 +397,20 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
                 if matches!(err.as_ref(), WebrtcClientError::RequestFailed(_, _)) =>
             {
                 PipelineErrorInfo::new(WHIP_REQUEST_FAILED, ErrorType::UserError)
+            }
+
+            // FFmpeg (used in MP4/HLS output)
+            RegisterOutputError::OutputError(
+                _,
+                OutputInitError::FfmpegError(ffmpeg_next::Error::Other { errno }),
+            ) if matches!(
+                *errno,
+                ffmpeg_next::error::ENOENT
+                    | ffmpeg_next::error::EACCES
+                    | ffmpeg_next::error::ENOTSUP
+            ) =>
+            {
+                PipelineErrorInfo::new(SERVER_PATH_RESOLUTION_FALED, ErrorType::UserError)
             }
 
             // Generic
