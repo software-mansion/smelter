@@ -6,8 +6,8 @@
 ## Checklist
 
 - Check if examples work on NVIDIA and AMD
-  - Remember to use `--features vk_validation` flag
-- Check if `vk-video` compiles on macOS with `--features expose_parsers`
+  - Remember to use `--features vk-validation` flag
+- Check if `vk-video` compiles on macOS with `--features expose-parsers`
 - Check `README.md`
 - Check docs
   - Also run: `cargo test --doc`

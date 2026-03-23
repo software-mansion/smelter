@@ -242,13 +242,13 @@ By default, snapshot tests generate new output and compare it with the old versi
 to repo. If version in repo is different or missing, then tests will fail.
 
 To generate snapshots for new tests, or update those that should change, you need to enable
-`update_snapshots` feature when running tests. It is recommended to only run that command
+`update-snapshots` feature when running tests. It is recommended to only run that command
 for specific tests, especially **`./integration-tests/src/pipeline_tests`**
 
 e.g.
 
 ```
-cargo nextest run --workspace --features update_snapshots audio_mixing_with_offset
+cargo nextest run --workspace --features update-snapshots audio_mixing_with_offset
 ```
 
 will run a test from **./integration-tests/src/pipeline_tests/audio_only.rs** and if output changed the update the snapshot.

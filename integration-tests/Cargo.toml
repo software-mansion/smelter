@@ -8,7 +8,7 @@ license-file = "../LICENSE"
 
 [features]
 default = ["web-renderer"]
-update_snapshots = []
+update-snapshots = []
 decklink = ["smelter/decklink"]
 web-renderer = [
     "dep:libcef",

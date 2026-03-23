@@ -40,11 +40,11 @@ impl VulkanInstance {
 
         let mut requested_layers = Vec::new();
 
-        if cfg!(feature = "vk_validation") {
+        if cfg!(feature = "vk-validation") {
             requested_layers.push(c"VK_LAYER_KHRONOS_validation");
         }
 
-        if cfg!(feature = "vk_api_dump") {
+        if cfg!(feature = "vk-api-dump") {
             requested_layers.push(c"VK_LAYER_LUNARG_api_dump");
         }
 

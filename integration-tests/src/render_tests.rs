@@ -126,7 +126,7 @@ fn check_unused_snapshots(tests: &[TestCase], snapshot_dir: &Path) {
     }
 
     if !unused_snapshots.is_empty() {
-        if cfg!(feature = "update_snapshots") {
+        if cfg!(feature = "update-snapshots") {
             for snapshot_path in unused_snapshots {
                 println!("DELETE: Unused snapshot {snapshot_path:?}");
                 fs::remove_file(snapshot_path).unwrap();

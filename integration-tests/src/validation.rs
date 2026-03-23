@@ -69,7 +69,7 @@ fn handle_error<P: AsRef<Path> + fmt::Debug>(
     snapshot_filename: P,
     actual: &Bytes,
 ) -> Result<()> {
-    if cfg!(feature = "update_snapshots") {
+    if cfg!(feature = "update-snapshots") {
         info!("Updating output dump: {snapshot_filename:?}");
         update_dump_on_disk(&snapshot_filename, actual).unwrap();
         return Ok(());

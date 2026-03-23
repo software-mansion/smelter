@@ -23,7 +23,7 @@ Smelter is a toolkit for real-time, low-latency, programmable video and audio co
 - **`integration-tests`** — Snapshot tests for rendering and full pipeline. Create includes examples used for manual testing.
 - **`tools`** — Internal utilities: `generate_from_types`, `package_for_release`, doc generation.
 
-**Feature flags:** `web-renderer` (default, enables Chromium), `decklink`, `update_snapshots`.
+**Feature flags:** `web-renderer` (default, enables Chromium), `decklink`, `update-snapshots`.
 
 **TypeScript SDK** - See `ts/CLAUDE.md` for details
 

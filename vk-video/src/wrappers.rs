@@ -51,13 +51,13 @@ pub(crate) struct Device {
     pub(crate) video_queue_ext: ash::khr::video_queue::Device,
     pub(crate) video_decode_queue_ext: ash::khr::video_decode_queue::Device,
     pub(crate) video_encode_queue_ext: ash::khr::video_encode_queue::Device,
-    #[cfg(feature = "vk_validation")]
+    #[cfg(feature = "vk-validation")]
     pub(crate) debug_utils_ext: ash::ext::debug_utils::Device,
     pub(crate) _instance: Arc<Instance>,
 }
 
 impl Device {
-    #[cfg(feature = "vk_validation")]
+    #[cfg(feature = "vk-validation")]
     pub(crate) fn set_label<T: vk::Handle>(
         &self,
         object: T,
@@ -90,7 +90,7 @@ impl Device {
         Ok(())
     }
 
-    #[cfg(not(feature = "vk_validation"))]
+    #[cfg(not(feature = "vk-validation"))]
     pub(crate) fn set_label<T: vk::Handle>(
         &self,
         _object: T,
