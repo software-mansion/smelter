@@ -311,7 +311,6 @@ const WHEP_REQUEST_FAILED: &str = "WHEP_REQUEST_FAILED";
 
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
-        tracing::error!("{err:#?}"); // XXX: Remove before merge
         match err {
             RegisterInputError::AlreadyRegistered(_) => {
                 PipelineErrorInfo::new(INPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
@@ -373,7 +372,6 @@ const SERVER_PATH_RESOLUTION_FALED: &str = "SERVER_PATH_RESOLUTION_FALED";
 
 impl From<&RegisterOutputError> for PipelineErrorInfo {
     fn from(err: &RegisterOutputError) -> Self {
-        tracing::error!("{err:#?}"); // XXX: Remove before merge
         match err {
             RegisterOutputError::AlreadyRegistered(_) => {
                 PipelineErrorInfo::new(OUTPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
