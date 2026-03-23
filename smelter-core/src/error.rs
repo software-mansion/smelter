@@ -374,7 +374,7 @@ const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
 
 const SERVER_PATH_RESOLUTION_FAILED: &str = "SERVER_PATH_RESOLUTION_FAILED";
 #[cfg(feature = "vk-video")]
-const INVALID_VULKAN_PARAMETERS: &str = "INVALID_VULKAN_PARAMETERS";
+const INVALID_VULKAN_VIDEO_PARAMETERS: &str = "INVALID_VULKAN_VIDEO_PARAMETERS";
 
 impl From<&RegisterOutputError> for PipelineErrorInfo {
     fn from(err: &RegisterOutputError) -> Self {
@@ -424,7 +424,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
                 OutputInitError::EncoderError(EncoderInitError::VulkanEncoderError(
                     VulkanEncoderError::ParametersError { .. },
                 )),
-            ) => PipelineErrorInfo::new(INVALID_VULKAN_PARAMETERS, ErrorType::UserError),
+            ) => PipelineErrorInfo::new(INVALID_VULKAN_VIDEO_PARAMETERS, ErrorType::UserError),
 
             // Generic
             RegisterOutputError::OutputError(_, _) => {
