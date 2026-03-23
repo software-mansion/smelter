@@ -90,6 +90,13 @@ pub(crate) trait EncodeCodec: Codec {
         layers: Option<&'a [vk::VideoEncodeRateControlLayerInfoKHR<'a>]>,
         idr_period: u32,
     ) -> Option<Self::CodecRateControlInfo<'a>>;
+
+    type CodecWriteParametersInfo: Copy;
+    type CodecEncodeSessionParametersGetInfo<'a>: vk::ExtendsVideoEncodeSessionParametersGetInfoKHR;
+    fn codec_session_parameters_get_info<'a>(
+        info: Self::CodecWriteParametersInfo,
+    ) -> Self::CodecEncodeSessionParametersGetInfo<'a>;
+    fn codec_write_parameters_info_all() -> Self::CodecWriteParametersInfo;
 }
 
 pub(crate) trait Codec: CodecCapabilities + std::fmt::Debug + Clone {

@@ -1093,7 +1093,7 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
         }
 
         let mut output = if is_idr && self.inline_stream_params {
-            self.stream_parameters(true, true)?
+            self.stream_parameters(C::codec_write_parameters_info_all())?
         } else {
             Vec::new()
         };
@@ -1114,22 +1114,13 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
 
     pub fn stream_parameters(
         &self,
-        write_sps: bool,
-        write_pps: bool,
+        info: C::CodecWriteParametersInfo,
     ) -> Result<Vec<u8>, VulkanEncoderError> {
-        if !write_sps && !write_pps {
-            return Ok(Vec::new());
-        }
-
-        let mut h264_get_info = vk::VideoEncodeH264SessionParametersGetInfoKHR::default()
-            .write_std_sps(write_sps)
-            .write_std_pps(write_pps)
-            .std_sps_id(0)
-            .std_pps_id(0);
+        let mut codec_get_info = C::codec_session_parameters_get_info(info);
 
         let get_info = vk::VideoEncodeSessionParametersGetInfoKHR::default()
             .video_session_parameters(self.session_resources.parameters.parameters)
-            .push_next(&mut h264_get_info);
+            .push_next(&mut codec_get_info);
 
         let data = unsafe {
             self.encoding_device

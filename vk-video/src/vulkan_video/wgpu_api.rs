@@ -1,6 +1,6 @@
 use crate::{
     DecoderError, EncodedInputChunk, EncodedOutputChunk, Frame, VulkanEncoderError,
-    codec::h264::H264Codec,
+    codec::h264::{H264Codec, encode::H264WriteParametersInfo},
     parser::{
         decoder_instructions::compile_to_decoder_instructions,
         h264::{AccessUnit, H264Parser},
@@ -118,7 +118,11 @@ impl WgpuTexturesEncoder {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        self.vulkan_encoder.stream_parameters(true, false)
+        self.vulkan_encoder
+            .stream_parameters(H264WriteParametersInfo {
+                write_sps: true,
+                write_pps: false,
+            })
     }
 
     /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
@@ -126,7 +130,11 @@ impl WgpuTexturesEncoder {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        self.vulkan_encoder.stream_parameters(false, true)
+        self.vulkan_encoder
+            .stream_parameters(H264WriteParametersInfo {
+                write_sps: false,
+                write_pps: true,
+            })
     }
 }
 
