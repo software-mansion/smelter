@@ -5,6 +5,8 @@ use smelter_render::{
         UnregisterRendererError, UpdateSceneError, WgpuError,
     },
 };
+
+#[cfg(feature = "vk-video")]
 use vk_video::VulkanEncoderError;
 
 use crate::{graphics_context::CreateGraphicsContextError, prelude::*};
@@ -371,6 +373,7 @@ const WHIP_INVALID_SERVER_URL: &str = "WHIP_INVALID_SERVER_URL";
 const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
 
 const SERVER_PATH_RESOLUTION_FAILED: &str = "SERVER_PATH_RESOLUTION_FAILED";
+#[cfg(feature = "vk-video")]
 const INVALID_VULKAN_PARAMETERS: &str = "INVALID_VULKAN_PARAMETERS";
 
 impl From<&RegisterOutputError> for PipelineErrorInfo {
@@ -415,6 +418,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
             }
 
             // Vulkan
+            #[cfg(feature = "vk-video")]
             RegisterOutputError::OutputError(
                 _,
                 OutputInitError::EncoderError(EncoderInitError::VulkanEncoderError(
