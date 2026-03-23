@@ -5,6 +5,7 @@ use std::{
 };
 
 use ash::vk;
+use tracing::warn;
 
 use crate::{
     EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
@@ -483,13 +484,14 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
     }
 
     fn begin_video_coding(&self, buffer: vk::CommandBuffer) {
-        let mut h264_layers =
-            self.h264_rate_control_layers_for(self.session_resources.rate_control);
+        let mut codec_layers =
+            C::codec_rate_control_layer_info(self.session_resources.rate_control);
         let layers = self.rate_control_layers_for(
             self.session_resources.rate_control,
-            h264_layers.as_mut().map(|o| &mut o[..]),
+            codec_layers.as_mut().map(|o| &mut o[..]),
         );
-        let mut h264_rate_control = self.h264_rate_control(layers.as_ref().map(|o| &o[..]));
+        let mut codec_rate_control =
+            C::codec_rate_control_info(layers.as_ref().map(|o| &o[..]), self.idr_period);
         let mut encode_rate_control = self.encoder_rate_control_for(
             self.session_resources.rate_control,
             layers.as_ref().map(|o| &o[..]),
@@ -519,12 +521,12 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
             .video_session_parameters(self.session_resources.parameters.parameters)
             .reference_slots(&reference_slot_info);
 
-        if let (Some(encode_rate_control), Some(h264_rate_control)) =
-            (encode_rate_control.as_mut(), h264_rate_control.as_mut())
+        if let (Some(encode_rate_control), Some(codec_rate_control)) =
+            (encode_rate_control.as_mut(), codec_rate_control.as_mut())
         {
             begin_info = begin_info
                 .push_next(encode_rate_control)
-                .push_next(h264_rate_control);
+                .push_next(codec_rate_control);
         }
 
         unsafe {
@@ -544,29 +546,27 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
         let mut quality_level = vk::VideoEncodeQualityLevelInfoKHR::default()
             .quality_level(self.session_resources.quality_level);
 
-        let mut h264_layers = self.h264_rate_control_layers_for(rate_control);
+        let mut codec_layers = C::codec_rate_control_layer_info(rate_control);
         let layers =
-            self.rate_control_layers_for(rate_control, h264_layers.as_mut().map(|o| &mut o[..]));
-        let mut h264_rate_control = self.h264_rate_control(layers.as_ref().map(|o| &o[..]));
+            self.rate_control_layers_for(rate_control, codec_layers.as_mut().map(|o| &mut o[..]));
+        let mut codec_rate_control =
+            C::codec_rate_control_info(layers.as_ref().map(|o| &o[..]), self.idr_period);
         let mut encode_rate_control =
             self.encoder_rate_control_for(rate_control, layers.as_ref().map(|o| &o[..]));
 
-        let mut flags = vk::VideoCodingControlFlagsKHR::RESET
+        let flags = vk::VideoCodingControlFlagsKHR::RESET
             | vk::VideoCodingControlFlagsKHR::ENCODE_QUALITY_LEVEL;
-
-        if encode_rate_control.is_some() {
-            flags |= vk::VideoCodingControlFlagsKHR::ENCODE_RATE_CONTROL;
-        }
 
         let mut control_info = vk::VideoCodingControlInfoKHR::default()
             .flags(flags)
             .push_next(&mut quality_level);
 
-        if let (Some(encode_rate_control), Some(h264_rate_control)) =
-            (encode_rate_control.as_mut(), h264_rate_control.as_mut())
+        if let (Some(encode_rate_control), Some(codec_rate_control)) =
+            (encode_rate_control.as_mut(), codec_rate_control.as_mut())
         {
             control_info = control_info
-                .push_next(h264_rate_control)
+                .flags(control_info.flags | vk::VideoCodingControlFlagsKHR::ENCODE_RATE_CONTROL)
+                .push_next(codec_rate_control)
                 .push_next(encode_rate_control);
         }
 
@@ -1218,78 +1218,56 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
         }
     }
 
-    fn h264_rate_control_layers_for(
+    fn rate_control_layers_for<'b, 'c: 'b>(
         &self,
         rate_control: RateControl,
-    ) -> Option<Vec<vk::VideoEncodeH264RateControlLayerInfoKHR<'_>>> {
-        let layer_info = vk::VideoEncodeH264RateControlLayerInfoKHR::default()
-            .use_min_qp(false)
-            .use_max_qp(false)
-            .use_max_frame_size(false);
-
-        match rate_control {
-            RateControl::EncoderDefault => return None,
-            RateControl::VariableBitrate { .. } => {}
-            RateControl::ConstantBitrate { .. } => {}
-            RateControl::Disabled => {}
-        }
-
-        Some(vec![layer_info])
-    }
-
-    fn rate_control_layers_for<'b>(
-        &self,
-        rate_control: RateControl,
-        h264_layer_info: Option<&'b mut [vk::VideoEncodeH264RateControlLayerInfoKHR<'b>]>,
+        codec_layer_info: Option<&'b mut [C::CodecRateControlLayerInfo<'c>]>,
     ) -> Option<Vec<vk::VideoEncodeRateControlLayerInfoKHR<'b>>> {
-        let h264_layer_info = h264_layer_info?;
-        let mut layer_info = vk::VideoEncodeRateControlLayerInfoKHR::default()
-            .frame_rate_numerator(self.session_resources.framerate.numerator)
-            .frame_rate_denominator(self.session_resources.framerate.denominator.get());
-
-        match rate_control {
-            RateControl::EncoderDefault => return None,
-            RateControl::VariableBitrate {
-                average_bitrate,
-                max_bitrate,
-                ..
-            } => {
-                layer_info = layer_info
-                    .average_bitrate(average_bitrate)
-                    .max_bitrate(max_bitrate)
-                    .push_next(&mut h264_layer_info[0])
-            }
-
-            RateControl::ConstantBitrate { bitrate, .. } => {
-                layer_info = layer_info
-                    .average_bitrate(bitrate)
-                    .max_bitrate(bitrate)
-                    .push_next(&mut h264_layer_info[0])
-            }
-
-            RateControl::Disabled => layer_info = layer_info.push_next(&mut h264_layer_info[0]),
+        let codec_layer_info = codec_layer_info?;
+        if let RateControl::EncoderDefault = rate_control {
+            return None;
         }
 
-        Some(vec![layer_info])
-    }
+        if codec_layer_info.is_empty() {
+            warn!("No layers set for rate control.");
+            return None;
+        }
 
-    fn h264_rate_control(
-        &self,
-        layers: Option<&[vk::VideoEncodeRateControlLayerInfoKHR]>,
-    ) -> Option<vk::VideoEncodeH264RateControlInfoKHR<'_>> {
-        let layers = layers?;
+        let result = codec_layer_info
+            .iter_mut()
+            .map(|codec_layer_info| {
+                let mut layer_info = vk::VideoEncodeRateControlLayerInfoKHR::default()
+                    .frame_rate_numerator(self.session_resources.framerate.numerator)
+                    .frame_rate_denominator(self.session_resources.framerate.denominator.get());
 
-        Some(
-            vk::VideoEncodeH264RateControlInfoKHR::default()
-                .temporal_layer_count(layers.len() as u32)
-                .flags(
-                    vk::VideoEncodeH264RateControlFlagsKHR::REGULAR_GOP
-                        | vk::VideoEncodeH264RateControlFlagsKHR::REFERENCE_PATTERN_FLAT,
-                )
-                .consecutive_b_frame_count(0)
-                .gop_frame_count(self.idr_period)
-                .idr_period(self.idr_period),
-        )
+                match rate_control {
+                    RateControl::EncoderDefault => unreachable!(),
+                    RateControl::VariableBitrate {
+                        average_bitrate,
+                        max_bitrate,
+                        ..
+                    } => {
+                        layer_info = layer_info
+                            .average_bitrate(average_bitrate)
+                            .max_bitrate(max_bitrate)
+                            .push_next(codec_layer_info)
+                    }
+
+                    RateControl::ConstantBitrate { bitrate, .. } => {
+                        layer_info = layer_info
+                            .average_bitrate(bitrate)
+                            .max_bitrate(bitrate)
+                            .push_next(codec_layer_info)
+                    }
+
+                    RateControl::Disabled => layer_info = layer_info.push_next(codec_layer_info),
+                }
+
+                layer_info
+            })
+            .collect();
+
+        Some(result)
     }
 }
 

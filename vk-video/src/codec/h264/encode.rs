@@ -237,10 +237,47 @@ impl EncodeCodec for H264Codec {
             counters.idr_pic_id = counters.idr_pic_id.wrapping_add(1);
         }
     }
-
     fn counters_idr(counters: &mut Self::EncodingCounters) {
         counters.frame_num = 0;
         counters.pic_order_cnt = 0;
+    }
+
+    type CodecRateControlLayerInfo<'a> = vk::VideoEncodeH264RateControlLayerInfoKHR<'a>;
+    type CodecRateControlInfo<'a> = vk::VideoEncodeH264RateControlInfoKHR<'a>;
+    fn codec_rate_control_layer_info<'a>(
+        rate_control: RateControl,
+    ) -> Option<Vec<Self::CodecRateControlLayerInfo<'a>>> {
+        let layer_info = vk::VideoEncodeH264RateControlLayerInfoKHR::default()
+            .use_min_qp(false)
+            .use_max_qp(false)
+            .use_max_frame_size(false);
+
+        match rate_control {
+            RateControl::EncoderDefault => return None,
+            RateControl::VariableBitrate { .. } => {}
+            RateControl::ConstantBitrate { .. } => {}
+            RateControl::Disabled => {}
+        }
+
+        Some(vec![layer_info])
+    }
+    fn codec_rate_control_info<'a>(
+        layers: Option<&'a [vk::VideoEncodeRateControlLayerInfoKHR<'a>]>,
+        idr_period: u32,
+    ) -> Option<Self::CodecRateControlInfo<'a>> {
+        let layers = layers?;
+
+        Some(
+            vk::VideoEncodeH264RateControlInfoKHR::default()
+                .temporal_layer_count(layers.len() as u32)
+                .flags(
+                    vk::VideoEncodeH264RateControlFlagsKHR::REGULAR_GOP
+                        | vk::VideoEncodeH264RateControlFlagsKHR::REFERENCE_PATTERN_FLAT,
+                )
+                .consecutive_b_frame_count(0)
+                .gop_frame_count(idr_period)
+                .idr_period(idr_period),
+        )
     }
 }
 
