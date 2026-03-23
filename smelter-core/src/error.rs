@@ -368,7 +368,7 @@ const UNKNOWN_REGISTER_OUTPUT_ERROR: &str = "UNKNOWN_REGISTER_OUTPUT_ERROR";
 const RTMP_CONNECTION_FAILED: &str = "RTMP_CONNECTION_FAILED";
 const WHIP_INVALID_SERVER_URL: &str = "WHIP_INVALID_SERVER_URL";
 const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
-const SERVER_PATH_RESOLUTION_FALED: &str = "SERVER_PATH_RESOLUTION_FALED";
+const SERVER_PATH_RESOLUTION_FAILED: &str = "SERVER_PATH_RESOLUTION_FAILED";
 
 impl From<&RegisterOutputError> for PipelineErrorInfo {
     fn from(err: &RegisterOutputError) -> Self {
@@ -408,7 +408,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
                     | ffmpeg_next::error::ENOTSUP
             ) =>
             {
-                PipelineErrorInfo::new(SERVER_PATH_RESOLUTION_FALED, ErrorType::UserError)
+                PipelineErrorInfo::new(SERVER_PATH_RESOLUTION_FAILED, ErrorType::UserError)
             }
 
             // Generic
