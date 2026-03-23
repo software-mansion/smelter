@@ -84,10 +84,7 @@ export class ApiClient {
     });
   }
 
-  public async updateInput(
-    inputId: InputRef,
-    request: Api.UpdateInputRequest
-  ): Promise<RegisterInputResponse> {
+  public async updateInput(inputId: InputRef, request: Api.UpdateInputRequest): Promise<object> {
     return this.serverManager.sendRequest({
       method: 'POST',
       route: `/api/input/${encodeURIComponent(inputRefIntoRawId(inputId))}/update`,

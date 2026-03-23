@@ -7,9 +7,9 @@ export function newInputHandle(
   response: RegisterInputResponse,
   kind: RegisterInput['type']
 ) {
-  if (kind == 'whip_server') {
+  if (kind === 'whip_server') {
     return new WhipInputHandle(inputRef, api, response);
-  } else if (kind == 'mp4') {
+  } else if (kind === 'mp4') {
     return new Mp4InputHandle(inputRef, api, response);
   } else {
     return new InputHandle(inputRef, api, response);
