@@ -75,17 +75,15 @@ fn main() {
         let time = 1.0 / 30.0 * i as f32;
         wgpu_state.render(time);
 
-        let res = unsafe {
-            encoder
-                .encode(
-                    InputFrame {
-                        data: wgpu_state.nv12_texture.clone(),
-                        pts: None,
-                    },
-                    false,
-                )
-                .unwrap()
-        };
+        let res = encoder
+            .encode(
+                InputFrame {
+                    data: wgpu_state.nv12_texture.clone(),
+                    pts: None,
+                },
+                false,
+            )
+            .unwrap();
 
         output_file.write_all(&res.data).unwrap();
     }
@@ -260,15 +258,6 @@ impl WgpuState {
             &self.rgba_bg,
             &self.y_plane_view,
             &self.uv_plane_view,
-        );
-        encoder.transition_resources(
-            [].into_iter(),
-            [wgpu::TextureTransition {
-                texture: &self.nv12_texture,
-                state: wgpu::TextureUses::COPY_SRC,
-                selector: None,
-            }]
-            .into_iter(),
         );
 
         let buffer = encoder.finish();

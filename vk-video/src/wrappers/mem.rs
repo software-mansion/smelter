@@ -5,6 +5,7 @@ use vk_mem::Alloc;
 
 use crate::{
     VulkanCommonError, VulkanDecoderError, VulkanInitError,
+    device::EncodingDevice,
     vulkan_encoder::H264EncodeProfileInfo,
     wrappers::{ImageLayoutTracker, OpenCommandBuffer},
 };
@@ -365,6 +366,36 @@ impl Image {
             tracker,
             extent,
         })
+    }
+
+    pub(crate) fn new_encode(
+        device: &EncodingDevice,
+        extent: vk::Extent3D,
+        profile: &H264EncodeProfileInfo,
+        additional_queue_index: u32,
+        tracker: Arc<Mutex<ImageLayoutTracker>>,
+    ) -> Result<Self, VulkanCommonError> {
+        let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
+            .profiles(std::slice::from_ref(&profile.profile_info));
+        let queue_indices = [
+            device.h264_encode_queues.family_index as u32,
+            additional_queue_index,
+        ];
+        let encode_image_info = vk::ImageCreateInfo::default()
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
+            .extent(extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
+            .sharing_mode(vk::SharingMode::CONCURRENT)
+            .queue_family_indices(&queue_indices)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .push_next(&mut profile_list_info);
+
+        Self::new(device.allocator.clone(), &encode_image_info, tracker)
     }
 
     pub(crate) fn transition_layout_raw(

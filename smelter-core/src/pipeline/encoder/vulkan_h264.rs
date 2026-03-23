@@ -8,7 +8,6 @@ use vk_video::{
 };
 
 use crate::{
-    graphics_context::GraphicsContext,
     pipeline::encoder::utils::{bitrate_from_resolution_framerate, gop_size_from_ms_framerate},
     pipeline::utils::{annexb_to_avcc, build_avc_decoder_config},
     prelude::*,
@@ -18,7 +17,6 @@ use super::{VideoEncoder, VideoEncoderConfig};
 
 pub struct VulkanH264Encoder {
     encoder: WgpuTexturesEncoder,
-    ctx: GraphicsContext,
     bitstream_format: H264BitstreamFormat,
 }
 
@@ -104,7 +102,6 @@ impl VideoEncoder for VulkanH264Encoder {
         Ok((
             Self {
                 encoder,
-                ctx: ctx.graphics_context.clone(),
                 bitstream_format: options.bitstream_format,
             },
             VideoEncoderConfig {
@@ -121,18 +118,14 @@ impl VideoEncoder for VulkanH264Encoder {
             return Vec::new();
         };
 
-        // TODO: It would be better if we'd "transition texture" as part of the previous submit call (rgba to nv12 conversion, etc.)
-        // to reduce number of submits
-        transition_texture(&self.ctx, &texture);
-        let result = unsafe {
-            self.encoder.encode(
-                vk_video::InputFrame {
-                    data: texture.deref().clone(),
-                    pts: None,
-                },
-                force_keyframe,
-            )
-        };
+        let result = self.encoder.encode(
+            vk_video::InputFrame {
+                data: texture.deref().clone(),
+                pts: None,
+            },
+            force_keyframe,
+        );
+
         match result {
             Ok(chunk) => {
                 let data = if self.bitstream_format == H264BitstreamFormat::Avcc {
@@ -159,22 +152,4 @@ impl VideoEncoder for VulkanH264Encoder {
         // Encoder does not store frames (this will change with B-frame support)
         Vec::new()
     }
-}
-
-fn transition_texture(ctx: &GraphicsContext, texture: &wgpu::Texture) {
-    let mut command_encoder = ctx
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-    command_encoder.transition_resources(
-        [].into_iter(),
-        [wgpu::TextureTransition {
-            texture,
-            state: wgpu::TextureUses::COPY_SRC,
-            selector: None,
-        }]
-        .into_iter(),
-    );
-
-    ctx.queue.submit([command_encoder.finish()]);
 }
