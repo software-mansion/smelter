@@ -1,3 +1,4 @@
+use reqwest::StatusCode;
 use smelter_render::{
     InputId, OutputId,
     error::{
@@ -305,6 +306,7 @@ const INPUT_STREAM_ALREADY_REGISTERED: &str = "INPUT_STREAM_ALREADY_REGISTERED";
 const INPUT_ERROR: &str = "INPUT_STREAM_INPUT_ERROR";
 
 const RESOURCE_DOES_NOT_EXIST: &str = "RESOURCE_DOES_NOT_EXIST";
+const INVALID_MP4_SOURCE: &str = "INVALID_MP4_SOURCE";
 
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
@@ -314,6 +316,22 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
                 PipelineErrorInfo::new(INPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
             }
 
+            // MP4
+            RegisterInputError::InputError(
+                _,
+                InputInitError::Mp4(Mp4InputError::Mp4ReaderError(_)),
+            ) => PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError),
+            RegisterInputError::InputError(
+                _,
+                InputInitError::Mp4(Mp4InputError::HttpError(err)),
+            ) if err.is_request() || err.is_status() => {
+                PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError)
+            }
+            RegisterInputError::InputError(_, InputInitError::Mp4(Mp4InputError::IoError(_))) => {
+                PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError)
+            }
+
+            // FFmpeg (used in HLS input)
             RegisterInputError::InputError(
                 _,
                 InputInitError::FfmpegError(ffmpeg_next::Error::Other {
