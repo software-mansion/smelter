@@ -222,6 +222,10 @@ impl VideoPauseState {
     fn pts_offset(&self) -> Duration {
         self.inner.pts_offset()
     }
+
+    pub fn reset(&mut self) {
+        self.inner.reset();
+    }
 }
 
 pub struct VideoQueueInput {
@@ -455,6 +459,7 @@ impl VideoQueueInput {
 
         self.queue.clear();
         self.state = QueueState::Restarted;
+        self.pause_state.reset();
     }
 
     /// Offset value calculated in form of PTS(relative to sync point)

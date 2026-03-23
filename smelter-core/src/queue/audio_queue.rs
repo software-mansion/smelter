@@ -355,7 +355,8 @@ impl AudioQueueInput {
         // so we can behave as regular input here
         self.offset_from_start.take();
         self.queue.clear();
-        self.state = QueueState::Restarted
+        self.state = QueueState::Restarted;
+        self.pause_state.reset();
     }
 
     /// Offset value calculated in form of PTS(relative to sync point)
