@@ -6,6 +6,9 @@ use smelter_render::{
     },
 };
 
+#[cfg(feature = "vk-video")]
+use vk_video::VulkanEncoderError;
+
 use crate::{graphics_context::CreateGraphicsContextError, prelude::*};
 
 #[derive(Debug, Clone, Copy)]
@@ -368,7 +371,10 @@ const UNKNOWN_REGISTER_OUTPUT_ERROR: &str = "UNKNOWN_REGISTER_OUTPUT_ERROR";
 const RTMP_CONNECTION_FAILED: &str = "RTMP_CONNECTION_FAILED";
 const WHIP_INVALID_SERVER_URL: &str = "WHIP_INVALID_SERVER_URL";
 const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
+
 const SERVER_PATH_RESOLUTION_FAILED: &str = "SERVER_PATH_RESOLUTION_FAILED";
+#[cfg(feature = "vk-video")]
+const INVALID_VULKAN_VIDEO_PARAMETERS: &str = "INVALID_VULKAN_VIDEO_PARAMETERS";
 
 impl From<&RegisterOutputError> for PipelineErrorInfo {
     fn from(err: &RegisterOutputError) -> Self {
@@ -410,6 +416,15 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
             {
                 PipelineErrorInfo::new(SERVER_PATH_RESOLUTION_FAILED, ErrorType::UserError)
             }
+
+            // Vulkan
+            #[cfg(feature = "vk-video")]
+            RegisterOutputError::OutputError(
+                _,
+                OutputInitError::EncoderError(EncoderInitError::VulkanEncoderError(
+                    VulkanEncoderError::ParametersError { .. },
+                )),
+            ) => PipelineErrorInfo::new(INVALID_VULKAN_VIDEO_PARAMETERS, ErrorType::UserError),
 
             // Generic
             RegisterOutputError::OutputError(_, _) => {
