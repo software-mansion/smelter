@@ -320,7 +320,7 @@ impl VulkanDevice {
         let video_encode_queue_ext =
             ash::khr::video_encode_queue::Device::new(&instance.instance, &device);
 
-        #[cfg(feature = "vk_validation")]
+        #[cfg(feature = "vk-validation")]
         let debug_utils_ext = ash::ext::debug_utils::Device::new(&instance.instance, &device);
 
         let device = Arc::new(Device {
@@ -328,7 +328,7 @@ impl VulkanDevice {
             video_queue_ext,
             video_decode_queue_ext,
             video_encode_queue_ext,
-            #[cfg(feature = "vk_validation")]
+            #[cfg(feature = "vk-validation")]
             debug_utils_ext,
             _instance: instance.instance.clone(),
         });

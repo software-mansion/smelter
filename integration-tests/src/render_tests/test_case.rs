@@ -132,7 +132,7 @@ impl TestCase {
                 );
             }
             if snapshots_diff > self.allowed_error {
-                if cfg!(feature = "update_snapshots") {
+                if cfg!(feature = "update-snapshots") {
                     println!(
                         "UPDATE: \"{}\" (pts: {}ms)",
                         self.name,

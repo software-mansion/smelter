@@ -20,9 +20,9 @@ keywords = ["vulkan", "video", "wgpu", "decoding", "encoding"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-expose_parsers = []
-vk_api_dump = []
-vk_validation = []
+expose-parsers = []
+vk-api-dump = []
+vk-validation = []
 wgpu = ["dep:wgpu"]
 transcoder = ["dep:naga"]
 default = ["wgpu"]
