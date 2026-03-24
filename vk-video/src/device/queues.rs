@@ -67,7 +67,7 @@ pub(crate) struct Queues {
     #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     pub(crate) compute: Queue,
     pub(crate) h264_decode: Option<Arc<VideoQueues>>,
-    pub(crate) h264_encode: Option<Arc<VideoQueues>>,
+    pub(crate) encode: Option<Arc<VideoQueues>>,
     pub(crate) wgpu: Queue,
 }
 
@@ -82,7 +82,7 @@ pub(crate) struct QueueIndices<'a> {
     pub(crate) transfer: QueueIndex<'a>,
     pub(crate) compute: QueueIndex<'a>,
     pub(crate) h264_decode: Option<QueueIndex<'a>>,
-    pub(crate) h264_encode: Option<QueueIndex<'a>>,
+    pub(crate) encode: Option<QueueIndex<'a>>,
     pub(crate) graphics_transfer_compute: QueueIndex<'a>,
 }
 
@@ -92,7 +92,7 @@ impl QueueIndices<'_> {
             self.h264_decode
                 .as_ref()
                 .map(|q| (q.family_index, q.queue_count)),
-            self.h264_encode
+            self.encode
                 .as_ref()
                 .map(|q| (q.family_index, q.queue_count)),
             Some((self.transfer.family_index, self.transfer.queue_count)),

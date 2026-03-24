@@ -12,9 +12,12 @@ pub mod capabilities {
 pub mod parameters {
     pub use crate::adapter::VulkanAdapterDescriptor;
     pub use crate::device::{
-        ColorRange, ColorSpace, DecoderParameters, EncoderParameters, MissedFrameHandling,
-        Rational, VideoParameters, VulkanDeviceDescriptor,
+        ColorRange, ColorSpace, DecoderParameters, MissedFrameHandling, Rational, VideoParameters,
+        VulkanDeviceDescriptor,
     };
+
+    pub type EncoderParametersH264 = crate::device::EncoderParameters<H264Profile>;
+
     pub use crate::vulkan_encoder::RateControl;
     #[cfg(feature = "transcoder")]
     pub use crate::vulkan_transcoder::TranscoderOutputConfig;
@@ -248,11 +251,11 @@ impl BytesDecoder {
 }
 
 /// An encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
-pub struct BytesEncoder {
+pub struct BytesEncoderH264 {
     pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
 }
 
-impl BytesEncoder {
+impl BytesEncoderH264 {
     /// The result is a chunk of H264 bytecode.
     ///
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a

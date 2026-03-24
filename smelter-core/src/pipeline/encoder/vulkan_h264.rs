@@ -3,7 +3,7 @@ use std::{num::NonZero, ops::Deref, sync::Arc};
 use smelter_render::{FrameData, OutputFrameFormat};
 use tracing::{error, info};
 use vk_video::{
-    WgpuTexturesEncoder,
+    WgpuTexturesEncoderH264,
     parameters::{RateControl, Rational, VideoParameters},
 };
 
@@ -17,7 +17,7 @@ use crate::{
 use super::{VideoEncoder, VideoEncoderConfig};
 
 pub struct VulkanH264Encoder {
-    encoder: WgpuTexturesEncoder,
+    encoder: WgpuTexturesEncoderH264,
     ctx: GraphicsContext,
     bitstream_format: H264BitstreamFormat,
 }
@@ -75,10 +75,10 @@ impl VideoEncoder for VulkanH264Encoder {
 
         let mut encoder_params = match options.preset {
             VulkanH264EncoderPreset::HighQuality => {
-                device.encoder_parameters_high_quality(video_params, rate_control)?
+                device.encoder_parameters_h264_high_quality(video_params, rate_control)?
             }
             VulkanH264EncoderPreset::LowLatency => {
-                device.encoder_parameters_low_latency(video_params, rate_control)?
+                device.encoder_parameters_h264_low_latency(video_params, rate_control)?
             }
         };
 
@@ -93,7 +93,7 @@ impl VideoEncoder for VulkanH264Encoder {
             encoder_params.inline_stream_params = Some(false);
         }
 
-        let encoder = device.create_wgpu_textures_encoder(encoder_params)?;
+        let encoder = device.create_wgpu_textures_encoder_h264(encoder_params)?;
 
         let extradata = if options.bitstream_format == H264BitstreamFormat::Avcc {
             build_avc_decoder_config(&[encoder.sps()?, encoder.pps()?].concat())

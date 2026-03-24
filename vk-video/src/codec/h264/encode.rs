@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, num::NonZeroU32};
 
 use ash::vk;
 
@@ -302,6 +302,38 @@ impl EncodeCodec for H264Codec {
         H264WriteParametersInfo {
             write_sps: true,
             write_pps: true,
+        }
+    }
+
+    fn resolve_idr_period<'a>(
+        quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
+        user_provided: Option<NonZeroU32>,
+    ) -> NonZeroU32 {
+        if let Some(user_provided) = user_provided {
+            return user_provided;
+        }
+
+        if quality_level_properties.preferred_idr_period > 0 {
+            NonZeroU32::new(quality_level_properties.preferred_idr_period).unwrap()
+        } else {
+            NonZeroU32::new(30).unwrap()
+        }
+    }
+
+    fn resolve_max_references<'a>(
+        quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'a>,
+        user_provided: Option<NonZeroU32>,
+    ) -> NonZeroU32 {
+        let max = NonZeroU32::new(codec_capabilities.max_p_picture_l0_reference_count).unwrap();
+        if let Some(user_provided) = user_provided {
+            return user_provided.min(max);
+        }
+
+        if quality_level_properties.preferred_max_l0_reference_count > 0 {
+            NonZeroU32::new(quality_level_properties.preferred_max_l0_reference_count).unwrap()
+        } else {
+            max
         }
     }
 }

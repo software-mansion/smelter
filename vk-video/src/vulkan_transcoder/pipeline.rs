@@ -108,12 +108,7 @@ impl ImageHeap {
             let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
                 .profiles(std::slice::from_ref(&config.profile.profile_info));
             let queue_indices = [
-                self.device
-                    .queues
-                    .h264_encode
-                    .as_ref()
-                    .unwrap()
-                    .family_index as u32,
+                self.device.queues.encode.as_ref().unwrap().family_index as u32,
                 self.device.queues.compute.family_index as u32,
             ];
             let create_info = vk::ImageCreateInfo::default()

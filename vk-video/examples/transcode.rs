@@ -54,7 +54,7 @@ fn main() {
         .unwrap();
 
     let params = device
-        .encoder_parameters_high_quality(
+        .encoder_parameters_h264_high_quality(
             VideoParameters {
                 width: output_width,
                 height: output_height,

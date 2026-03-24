@@ -38,9 +38,9 @@ fn main() {
         .unwrap();
 
     let mut encoder = vulkan_device
-        .create_bytes_encoder(
+        .create_bytes_encoder_h264(
             vulkan_device
-                .encoder_parameters_high_quality(
+                .encoder_parameters_h264_high_quality(
                     VideoParameters {
                         width,
                         height,

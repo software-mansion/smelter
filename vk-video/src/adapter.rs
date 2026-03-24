@@ -250,7 +250,7 @@ impl<'a> VulkanAdapter<'a> {
                     video_properties: video_properties[idx],
                     query_result_status_properties: query_result_status_properties[idx],
                 }),
-                h264_encode: encode_queue_idx.map(|idx| QueueIndex {
+                encode: encode_queue_idx.map(|idx| QueueIndex {
                     family_index: idx,
                     queue_count: queue_counts[idx] as usize,
                     video_properties: video_properties[idx],
