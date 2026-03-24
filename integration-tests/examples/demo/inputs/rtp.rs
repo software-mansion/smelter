@@ -647,8 +647,8 @@ fn build_gst_send_tcp_cmd(
     }
 
     let demuxer = match video_codec {
-        Some(VideoDecoder::FfmpegVp8) | Some(VideoDecoder::FfmpegVp9) => "matroskademux",
-        Some(VideoDecoder::FfmpegH264) => "qtdemux",
+        Some(VideoDecoder::FfmpegVp8 | VideoDecoder::FfmpegVp9) => "matroskademux",
+        Some(VideoDecoder::FfmpegH264 | VideoDecoder::VulkanH264) => "qtdemux",
         _ => unreachable!(),
     };
 
@@ -658,7 +658,7 @@ fn build_gst_send_tcp_cmd(
     );
 
     let video_cmd = match video_codec {
-        Some(VideoDecoder::FfmpegH264) => format!(
+        Some(VideoDecoder::FfmpegH264 | VideoDecoder::VulkanH264) => format!(
             "demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={port} "
         ),
         Some(VideoDecoder::FfmpegVp8) => format!(
@@ -694,7 +694,7 @@ fn build_gst_send_udp_cmd(
 
     let demuxer = match video_codec {
         Some(VideoDecoder::FfmpegVp8) | Some(VideoDecoder::FfmpegVp9) => "matroskademux",
-        Some(VideoDecoder::FfmpegH264) => "qtdemux",
+        Some(VideoDecoder::FfmpegH264 | VideoDecoder::VulkanH264) => "qtdemux",
         _ => unreachable!(),
     };
 
@@ -704,7 +704,7 @@ fn build_gst_send_udp_cmd(
     );
 
     let video_cmd = match video_codec {
-        Some(VideoDecoder::FfmpegH264) => format!(
+        Some(VideoDecoder::FfmpegH264 | VideoDecoder::VulkanH264) => format!(
             "demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host='127.0.0.1' port={port} "
         ),
         Some(VideoDecoder::FfmpegVp8) => format!(
