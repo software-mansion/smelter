@@ -17,7 +17,7 @@ export function useInternalStreamId(): string {
   return `output-specific-input:${streamNumber}:${ctx.outputId}`;
 }
 
-export type StreamState = 'ready' | 'playing' | 'finished';
+export type StreamState = 'ready' | 'playing' | 'paused' | 'finished';
 
 export type InputStreamInfo<Id> = {
   inputId: Id;
@@ -26,6 +26,7 @@ export type InputStreamInfo<Id> = {
   offsetMs?: number | null;
   videoDurationMs?: number;
   audioDurationMs?: number;
+  seekMs?: number;
 };
 
 type InstanceContext<Id = string> = Record<string, InputStreamInfo<Id>>;
@@ -150,6 +151,7 @@ type OfflineAddInput<Id> = {
   offsetMs: number;
   videoDurationMs?: number;
   audioDurationMs?: number;
+  seekMs?: number;
 };
 
 export class OfflineInputStreamStore<Id> {
@@ -175,12 +177,19 @@ export class OfflineInputStreamStore<Id> {
           const inputState = {
             inputId: input.inputId,
             videoState:
-              input.offsetMs + (input.videoDurationMs ?? 0) <= timestampMs ? 'finished' : 'playing',
+              input.offsetMs + Math.max(0, (input.videoDurationMs ?? 0) - (input.seekMs ?? 0)) <=
+              timestampMs
+                ? 'finished'
+                : 'playing',
             audioState:
-              input.offsetMs + (input.audioDurationMs ?? 0) <= timestampMs ? 'finished' : 'playing',
+              input.offsetMs + Math.max(0, (input.audioDurationMs ?? 0) - (input.seekMs ?? 0)) <=
+              timestampMs
+                ? 'finished'
+                : 'playing',
             videoDurationMs: input.videoDurationMs,
             audioDurationMs: input.audioDurationMs,
             offsetMs: input.offsetMs,
+            seekMs: input.seekMs,
           } as const;
           return [input.inputId, inputState];
         })

@@ -297,7 +297,7 @@ impl TrackManagerThread {
         while let Ok(event) = self.events_receiver.recv() {
             match event {
                 StateEvent::Seek(seek) => {
-                    self.restart_threads(Some(seek), true);
+                    self.restart_threads(Some(seek));
                 }
                 StateEvent::ThreadFinished(thread_id) => {
                     match self.options.should_loop {
@@ -323,13 +323,13 @@ impl TrackManagerThread {
                             if let Some((video, _)) = &self.video_thread
                                 && video.thread().id() == thread_id
                             {
-                                self.restart_threads(None, false);
+                                self.restart_threads(None);
                             }
 
                             if let Some((audio, _)) = &self.audio_thread
                                 && audio.thread().id() == thread_id
                             {
-                                self.restart_threads(None, false);
+                                self.restart_threads(None);
                             }
                         }
                     }
@@ -342,7 +342,19 @@ impl TrackManagerThread {
         }
     }
 
-    fn restart_threads(&mut self, seek: Option<Duration>, queue_sync: bool) {
+    fn restart_threads(&mut self, seek: Option<Duration>) {
+        let video_thread_finished = self
+            .video_thread
+            .as_ref()
+            .map(|thread| thread.0.is_finished())
+            .unwrap_or(true);
+        let audio_thread_finished = self
+            .audio_thread
+            .as_ref()
+            .map(|thread| thread.0.is_finished())
+            .unwrap_or(true);
+        let threads_finished = video_thread_finished && audio_thread_finished;
+
         if let Some((_, cond)) = self.video_thread.as_ref() {
             cond.mark_for_shutdown()
         }
@@ -359,7 +371,7 @@ impl TrackManagerThread {
             .take()
             .map(|(handle, _)| handle.join().unwrap());
 
-        let offset = match queue_sync {
+        let offset = match threads_finished {
             true => self.ctx.queue_sync_point.elapsed(),
             false => match (&video, &audio) {
                 (None, None) => Duration::ZERO,

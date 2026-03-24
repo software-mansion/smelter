@@ -136,7 +136,7 @@ export class LiveTimeContext {
       for (const cb of this.onChangeCallbacks) {
         cb();
       }
-    }, timeLeft + 100);
+    }, timeLeft + 300);
   }
 
   // callback for useSyncExternalStore

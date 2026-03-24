@@ -1,14 +1,9 @@
 import type { ReactElement } from 'react';
 import { pino } from 'pino';
 import type { Renderers } from '@swmansion/smelter';
+import type { InputHandle, Mp4InputHandle, WhipInputHandle } from '@swmansion/smelter-core';
 import { Smelter as CoreSmelter, StateGuard } from '@swmansion/smelter-core';
-import type {
-  RegisterInput,
-  RegisterMp4InputResponse,
-  RegisterOutput,
-  RegisterWhepServerOutputResponse,
-  RegisterWhipServerInputResponse,
-} from '../api';
+import type { RegisterInput, RegisterOutput, RegisterWhepServerOutputResponse } from '../api';
 import type { SmelterOptions } from '../manager';
 import RemoteInstanceManager from '../manager';
 
@@ -74,31 +69,16 @@ export default class Smelter {
   public async registerInput(
     inputId: string,
     request: Extract<RegisterInput, { type: 'whip_server' }>
-  ): Promise<RegisterWhipServerInputResponse>;
-
+  ): Promise<WhipInputHandle>;
   public async registerInput(
     inputId: string,
     request: Extract<RegisterInput, { type: 'mp4' }>
-  ): Promise<RegisterMp4InputResponse>;
-
+  ): Promise<Mp4InputHandle>;
   public async registerInput(inputId: string, request: RegisterInput): Promise<object>;
 
-  public async registerInput(inputId: string, request: RegisterInput): Promise<object> {
+  public async registerInput(inputId: string, request: RegisterInput): Promise<InputHandle> {
     return await this.scheduler.run(async () => {
-      let result = await this.coreSmelter.registerInput(inputId, request);
-      if (request.type === 'mp4') {
-        return {
-          videoDurationMs: result.video_duration_ms,
-          audioDurationMs: result.audio_duration_ms,
-        };
-      } else if (request.type === 'whip_server') {
-        return {
-          bearerToken: result.bearer_token,
-          endpointRoute: result.endpoint_route,
-        };
-      } else {
-        return result;
-      }
+      return await this.coreSmelter.registerInput(inputId, request);
     });
   }
 
