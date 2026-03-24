@@ -144,6 +144,9 @@ pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
             "8.0" => {
                 format!("n8.0/ffmpeg_n8.0_{os_arch}.tar.gz")
             }
+            "8.1" => {
+                format!("n8.1/ffmpeg_n8.1_{os_arch}.tar.gz")
+            }
             _ => bail!("Unsupported FFmpeg version"),
         }
     } else {
