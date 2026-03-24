@@ -1295,41 +1295,69 @@ export type WebEmbeddingMethod =
   | "native_embedding_under_content";
 export type InputStatsReport =
   | {
-      rtp: RtpInputStatsReport;
+      type: "rtp";
+      video_rtp: RtpJitterBufferStatsReport;
+      audio_rtp: RtpJitterBufferStatsReport;
     }
   | {
-      whip: WhipInputStatsReport;
+      type: "whip";
+      video_rtp: RtpJitterBufferStatsReport;
+      audio_rtp: RtpJitterBufferStatsReport;
     }
   | {
-      whep: WhepInputStatsReport;
+      type: "whep";
+      video_rtp: RtpJitterBufferStatsReport;
+      audio_rtp: RtpJitterBufferStatsReport;
     }
   | {
-      hls: HlsInputStatsReport;
+      type: "hls";
+      video: HlsInputTrackStatsReport;
+      audio: HlsInputTrackStatsReport;
+      corrupted_packets_received: number;
+      corrupted_packets_received_last_10_seconds: number;
     }
   | {
-      rtmp: RtmpInputStatsReport;
+      type: "rtmp";
+      video: RtmpInputTrackStatsReport;
+      audio: RtmpInputTrackStatsReport;
     }
   | {
-      mp4: Mp4InputStatsReport;
+      type: "mp4";
+      video: Mp4InputTrackStatsReport;
+      audio: Mp4InputTrackStatsReport;
     };
 export type OutputStatsReport =
   | {
-      whep: WhepOutputStatsReport;
+      type: "whep";
+      video: WhepOutputTrackStatsReport;
+      audio: WhepOutputTrackStatsReport;
+      connected_peers: number;
     }
   | {
-      whip: WhipOutputStatsReport;
+      type: "whip";
+      video: WhipOutputTrackStatsReport;
+      audio: WhipOutputTrackStatsReport;
+      is_connected: boolean;
     }
   | {
-      hls: HlsOutputStatsReport;
+      type: "hls";
+      video: HlsOutputTrackStatsReport;
+      audio: HlsOutputTrackStatsReport;
     }
   | {
-      mp4: Mp4OutputStatsReport;
+      type: "mp4";
+      video: Mp4OutputTrackStatsReport;
+      audio: Mp4OutputTrackStatsReport;
     }
   | {
-      rtmp: RtmpOutputStatsReport;
+      type: "rtmp";
+      video: RtmpOutputTrackStatsReport;
+      audio: RtmpOutputTrackStatsReport;
     }
   | {
-      rtp: RtpOutputStatsReport;
+      type: "rtp";
+      video: RtpOutputTrackStatsReport;
+      audio: RtpOutputTrackStatsReport;
     };
 
 export interface InputRtpVideoOptions {
@@ -1685,10 +1713,6 @@ export interface StatsReport {
     [k: string]: OutputStatsReport;
   };
 }
-export interface RtpInputStatsReport {
-  video_rtp: RtpJitterBufferStatsReport;
-  audio_rtp: RtpJitterBufferStatsReport;
-}
 export interface RtpJitterBufferStatsReport {
   packets_lost: number;
   packets_received: number;
@@ -1711,20 +1735,6 @@ export interface RtpJitterBufferSlidingWindowStatsReport {
   input_buffer_avg_seconds: number;
   input_buffer_max_seconds: number;
   input_buffer_min_seconds: number;
-}
-export interface WhipInputStatsReport {
-  video_rtp: RtpJitterBufferStatsReport;
-  audio_rtp: RtpJitterBufferStatsReport;
-}
-export interface WhepInputStatsReport {
-  video_rtp: RtpJitterBufferStatsReport;
-  audio_rtp: RtpJitterBufferStatsReport;
-}
-export interface HlsInputStatsReport {
-  video: HlsInputTrackStatsReport;
-  audio: HlsInputTrackStatsReport;
-  corrupted_packets_received: number;
-  corrupted_packets_received_last_10_seconds: number;
 }
 export interface HlsInputTrackStatsReport {
   packets_received: number;
@@ -1749,67 +1759,33 @@ export interface HlsInputTrackSlidingWindowStatsReport {
   input_buffer_max_seconds: number;
   input_buffer_min_seconds: number;
 }
-export interface RtmpInputStatsReport {
-  video: RtmpInputTrackStatsReport;
-  audio: RtmpInputTrackStatsReport;
-}
 export interface RtmpInputTrackStatsReport {
   bitrate_1_second: number;
   bitrate_1_minute: number;
-}
-export interface Mp4InputStatsReport {
-  video: Mp4InputTrackStatsReport;
-  audio: Mp4InputTrackStatsReport;
 }
 export interface Mp4InputTrackStatsReport {
   bitrate_1_second: number;
   bitrate_1_minute: number;
 }
-export interface WhepOutputStatsReport {
-  video: WhepOutputTrackStatsReport;
-  audio: WhepOutputTrackStatsReport;
-  connected_peers: number;
-}
 export interface WhepOutputTrackStatsReport {
   bitrate_1_second: number;
   bitrate_1_minute: number;
-}
-export interface WhipOutputStatsReport {
-  video: WhipOutputTrackStatsReport;
-  audio: WhipOutputTrackStatsReport;
-  is_connected: boolean;
 }
 export interface WhipOutputTrackStatsReport {
   bitrate_1_second: number;
   bitrate_1_minute: number;
 }
-export interface HlsOutputStatsReport {
-  video: HlsOutputTrackStatsReport;
-  audio: HlsOutputTrackStatsReport;
-}
 export interface HlsOutputTrackStatsReport {
   bitrate_1_second: number;
   bitrate_1_minute: number;
-}
-export interface Mp4OutputStatsReport {
-  video: Mp4OutputTrackStatsReport;
-  audio: Mp4OutputTrackStatsReport;
 }
 export interface Mp4OutputTrackStatsReport {
   bitrate_1_second: number;
   bitrate_1_minute: number;
 }
-export interface RtmpOutputStatsReport {
-  video: RtmpOutputTrackStatsReport;
-  audio: RtmpOutputTrackStatsReport;
-}
 export interface RtmpOutputTrackStatsReport {
   bitrate_1_second: number;
   bitrate_1_minute: number;
-}
-export interface RtpOutputStatsReport {
-  video: RtpOutputTrackStatsReport;
-  audio: RtpOutputTrackStatsReport;
 }
 export interface RtpOutputTrackStatsReport {
   bitrate_1_second: number;
