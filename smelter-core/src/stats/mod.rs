@@ -26,7 +26,6 @@ pub(crate) use output::*;
 pub(crate) use state::StatsEvent;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
-#[serde(tag = "type", rename_all = "snake_case")]
 pub struct StatsReport {
     pub inputs: BTreeMap<String, InputStatsReport>,
     pub outputs: BTreeMap<String, OutputStatsReport>,
