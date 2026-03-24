@@ -304,6 +304,11 @@ impl From<&InitPipelineError> for PipelineErrorInfo {
 const INPUT_STREAM_ALREADY_REGISTERED: &str = "INPUT_STREAM_ALREADY_REGISTERED";
 const INPUT_ERROR: &str = "INPUT_STREAM_INPUT_ERROR";
 
+const RESOURCE_DOES_NOT_EXIST: &str = "RESOURCE_DOES_NOT_EXIST";
+const INVALID_MP4_SOURCE: &str = "INVALID_MP4_SOURCE";
+const WHEP_INVALID_SERVER_URL: &str = "WHEP_INVALID_SERVER_URL";
+const WHEP_REQUEST_FAILED: &str = "WHEP_REQUEST_FAILED";
+
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
         match err {
@@ -311,6 +316,42 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
                 PipelineErrorInfo::new(INPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
             }
 
+            // WHEP
+            RegisterInputError::InputError(_, InputInitError::Whep(err))
+                if matches!(err.as_ref(), WebrtcClientError::InvalidEndpointUrl(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHEP_INVALID_SERVER_URL, ErrorType::UserError)
+            }
+            RegisterInputError::InputError(_, InputInitError::Whep(err))
+                if matches!(err.as_ref(), WebrtcClientError::RequestFailed(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHEP_REQUEST_FAILED, ErrorType::UserError)
+            }
+
+            // MP4
+            RegisterInputError::InputError(
+                _,
+                InputInitError::Mp4(Mp4InputError::Mp4ReaderError(_)),
+            ) => PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError),
+            RegisterInputError::InputError(
+                _,
+                InputInitError::Mp4(Mp4InputError::HttpError(err)),
+            ) if err.is_request() || err.is_status() => {
+                PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError)
+            }
+            RegisterInputError::InputError(_, InputInitError::Mp4(Mp4InputError::IoError(_))) => {
+                PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError)
+            }
+
+            // FFmpeg (used in HLS input)
+            RegisterInputError::InputError(
+                _,
+                InputInitError::FfmpegError(ffmpeg_next::Error::Other {
+                    errno: ffmpeg_next::error::ENOENT,
+                }),
+            ) => PipelineErrorInfo::new(RESOURCE_DOES_NOT_EXIST, ErrorType::UserError),
+
+            // Generic
             RegisterInputError::InputError(_, _) => {
                 PipelineErrorInfo::new(INPUT_ERROR, ErrorType::ServerError)
             }
@@ -324,12 +365,53 @@ const UNSUPPORTED_RESOLUTION: &str = "UNSUPPORTED_RESOLUTION";
 const NO_VIDEO_OR_AUDIO_FOR_OUTPUT: &str = "NO_VIDEO_OR_AUDIO_FOR_OUTPUT";
 const UNKNOWN_REGISTER_OUTPUT_ERROR: &str = "UNKNOWN_REGISTER_OUTPUT_ERROR";
 
+const RTMP_CONNECTION_FAILED: &str = "RTMP_CONNECTION_FAILED";
+const WHIP_INVALID_SERVER_URL: &str = "WHIP_INVALID_SERVER_URL";
+const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
+const SERVER_PATH_RESOLUTION_FAILED: &str = "SERVER_PATH_RESOLUTION_FAILED";
+
 impl From<&RegisterOutputError> for PipelineErrorInfo {
     fn from(err: &RegisterOutputError) -> Self {
         match err {
             RegisterOutputError::AlreadyRegistered(_) => {
                 PipelineErrorInfo::new(OUTPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
             }
+
+            // RTMP
+            RegisterOutputError::OutputError(
+                _,
+                OutputInitError::RtmpError(RtmpClientError::RtmpStreamError(
+                    rtmp::RtmpStreamError::TcpError(_),
+                )),
+            ) => PipelineErrorInfo::new(RTMP_CONNECTION_FAILED, ErrorType::UserError),
+
+            // WHIP
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
+                if matches!(err.as_ref(), WebrtcClientError::InvalidEndpointUrl(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHIP_INVALID_SERVER_URL, ErrorType::UserError)
+            }
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
+                if matches!(err.as_ref(), WebrtcClientError::RequestFailed(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHIP_REQUEST_FAILED, ErrorType::UserError)
+            }
+
+            // FFmpeg (used in MP4/HLS output)
+            RegisterOutputError::OutputError(
+                _,
+                OutputInitError::FfmpegError(ffmpeg_next::Error::Other { errno }),
+            ) if matches!(
+                *errno,
+                ffmpeg_next::error::ENOENT
+                    | ffmpeg_next::error::EACCES
+                    | ffmpeg_next::error::ENOTSUP
+            ) =>
+            {
+                PipelineErrorInfo::new(SERVER_PATH_RESOLUTION_FAILED, ErrorType::UserError)
+            }
+
+            // Generic
             RegisterOutputError::OutputError(_, _) => {
                 PipelineErrorInfo::new(OUTPUT_ERROR, ErrorType::ServerError)
             }
