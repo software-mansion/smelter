@@ -1,9 +1,12 @@
 import fetch from 'node-fetch';
 import FormData from 'form-data';
 import type { ReactElement } from 'react';
-import type { SmelterManager } from '@swmansion/smelter-core';
-import { OfflineSmelter as CoreSmelter, StateGuard } from '@swmansion/smelter-core';
-import type { Renderers } from '@swmansion/smelter';
+import {
+  type SmelterManager,
+  OfflineSmelter as CoreSmelter,
+  StateGuard,
+} from '@swmansion/smelter-core';
+import type { Renderers, Api } from '@swmansion/smelter';
 
 import type {
   RegisterInput,
@@ -103,6 +106,12 @@ export default class OfflineSmelter {
         route: `/api/font/register`,
         body: formData,
       });
+    });
+  }
+
+  public async stats(): Promise<Api.StatsReport> {
+    return await this.scheduler.run(async () => {
+      return this.coreSmelter.stats();
     });
   }
 }

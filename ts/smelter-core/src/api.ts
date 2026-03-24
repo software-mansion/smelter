@@ -164,4 +164,11 @@ export class ApiClient {
       body: {},
     });
   }
+
+  public async stats(): Promise<Api.StatsReport> {
+    return (await this.serverManager.sendRequest({
+      method: 'GET',
+      route: `/stats`,
+    })) as Api.StatsReport;
+  }
 }

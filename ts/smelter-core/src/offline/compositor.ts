@@ -1,4 +1,4 @@
-import type { Renderers } from '@swmansion/smelter';
+import type { Api, Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
 import type { RegisterInputResponse } from '../api';
 import { ApiClient } from '../api';
@@ -148,5 +148,9 @@ export class OfflineSmelter {
     if (this.renderStarted) {
       throw new Error('Render was already started.');
     }
+  }
+
+  public async stats(): Promise<Api.StatsReport> {
+    return this.api.stats();
   }
 }

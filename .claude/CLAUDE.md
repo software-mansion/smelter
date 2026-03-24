@@ -33,4 +33,4 @@ HTTP API `smelter` crate → `smelter-api` (parse) → `smelter-core` (pipeline:
 
 ## API Changes
 
-After modifying types in `smelter-api`, use `/api-change` to run the full generation and validation workflow.
+After modifying types in `smelter-api` or types in `smelter-core::stats`, use `/api-change` to run the full generation and validation workflow.

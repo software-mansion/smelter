@@ -4924,6 +4924,7 @@ dependencies = [
  "reqwest",
  "rtmp",
  "rubato",
+ "schemars",
  "serde",
  "serde_json",
  "smelter-render",

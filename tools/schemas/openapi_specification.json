@@ -2112,70 +2112,130 @@
       "InputStatsReport": {
         "oneOf": [
           {
-            "type": "object",
-            "required": [
-              "rtp"
-            ],
-            "properties": {
-              "rtp": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/RtpInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "rtp"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "whip"
-            ],
-            "properties": {
-              "whip": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/WhipInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "whip"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "whep"
-            ],
-            "properties": {
-              "whep": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/WhepInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "whep"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "hls"
-            ],
-            "properties": {
-              "hls": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/HlsInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "hls"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "rtmp"
-            ],
-            "properties": {
-              "rtmp": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/RtmpInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "rtmp"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "mp4"
-            ],
-            "properties": {
-              "mp4": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/Mp4InputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "mp4"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           }
         ]
       },
@@ -3060,70 +3120,130 @@
       "OutputStatsReport": {
         "oneOf": [
           {
-            "type": "object",
-            "required": [
-              "whep"
-            ],
-            "properties": {
-              "whep": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/WhepOutputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "whep"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "whip"
-            ],
-            "properties": {
-              "whip": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/WhipOutputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "whip"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "hls"
-            ],
-            "properties": {
-              "hls": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/HlsOutputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "hls"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "mp4"
-            ],
-            "properties": {
-              "mp4": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/Mp4OutputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "mp4"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "rtmp"
-            ],
-            "properties": {
-              "rtmp": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/RtmpOutputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "rtmp"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           },
           {
-            "type": "object",
-            "required": [
-              "rtp"
-            ],
-            "properties": {
-              "rtp": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/RtpOutputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "rtp"
+                    ]
+                  }
+                }
               }
-            }
+            ]
           }
         ]
       },
