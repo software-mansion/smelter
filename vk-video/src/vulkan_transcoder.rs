@@ -132,7 +132,7 @@ impl Transcoder {
     /// output frame. Each frame is a [`Vec`] where each element corresponds to one output.
     pub fn transcode(
         &mut self,
-        input: EncodedInputChunk<&[u8]>,
+        input: EncodedInputChunk<'_>,
     ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, TranscoderError> {
         let instructions = self.parse_input(input)?;
         self.transcode_instructions(instructions)
@@ -170,7 +170,7 @@ impl Transcoder {
 
     fn parse_input(
         &mut self,
-        input: EncodedInputChunk<&[u8]>,
+        input: EncodedInputChunk<'_>,
     ) -> Result<Vec<DecoderInstruction>, TranscoderError> {
         let access_units = self
             .parser
