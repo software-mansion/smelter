@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { OfflineSmelter as CoreSmelter, StateGuard } from '@swmansion/smelter-core';
-import type { Renderers, StatsReport } from '@swmansion/smelter';
+import type { Renderers, Api } from '@swmansion/smelter';
 import { pino } from 'pino';
 import type {
   RegisterInput,
@@ -110,7 +110,7 @@ export default class OfflineSmelter {
     });
   }
 
-  public async stats(): Promise<StatsReport> {
+  public async stats(): Promise<Api.StatsReport> {
     return await this.scheduler.run(async () => {
       return this.coreSmelter.stats();
     });

@@ -7,7 +7,7 @@ import type {
   SmelterManager,
   WhipInputHandle,
 } from '@swmansion/smelter-core';
-import type { Renderers, StatsReport } from '@swmansion/smelter';
+import type { Renderers, Api } from '@swmansion/smelter';
 import { StateGuard, Smelter as CoreSmelter } from '@swmansion/smelter-core';
 
 import LocallySpawnedInstance from '../manager/locallySpawnedInstance';
@@ -166,7 +166,7 @@ export default class Smelter {
     });
   }
 
-  public async stats(): Promise<StatsReport> {
+  public async stats(): Promise<Api.StatsReport> {
     return await this.scheduler.run(async () => {
       return this.coreSmelter.stats();
     });

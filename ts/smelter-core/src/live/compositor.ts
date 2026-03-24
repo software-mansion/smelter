@@ -1,4 +1,4 @@
-import type { Renderers, StatsReport } from '@swmansion/smelter';
+import type { Api, Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputResponse } from '../api';
 import { ApiClient } from '../api';
@@ -180,7 +180,7 @@ export class Smelter {
     handleEvent(this.store, this.outputs, event);
   }
 
-  public async stats(): Promise<StatsReport> {
+  public async stats(): Promise<Api.StatsReport> {
     return this.api.stats();
   }
 }

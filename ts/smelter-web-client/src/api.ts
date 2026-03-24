@@ -44,5 +44,3 @@ export type RegisterWhipServerInputResponse = {
   bearerToken: string;
   endpointRoute: string;
 };
-
-export type { StatsReport } from '@swmansion/smelter';
