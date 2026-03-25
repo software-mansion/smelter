@@ -17,7 +17,7 @@
   - `SMELTER_WEBRTC_1_TO_1_NAT_IPS`
 - Add pause support for inputs ([#1798](https://github.com/software-mansion/smelter/pull/1798), [#1843](https://github.com/software-mansion/smelter/pull/1843) by [@wkozyra95](https://github.com/wkozyra95))
 - Add seek support for MP4 input ([#1817](https://github.com/software-mansion/smelter/pull/1817), [#1830](https://github.com/software-mansion/smelter/pull/1830) by [@wkozyra95](https://github.com/wkozyra95))
-- RTMPS support for RTMP inputs ([#1777](https://github.com/software-mansion/smelter/pull/1777), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
+- RTMPS support for RTMP input ([#1777](https://github.com/software-mansion/smelter/pull/1777), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### 🐛 Bug fixes
 
