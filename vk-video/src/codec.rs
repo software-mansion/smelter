@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, num::NonZeroU32};
 
 use ash::vk;
 
@@ -97,6 +97,17 @@ pub(crate) trait EncodeCodec: Codec {
         info: Self::CodecWriteParametersInfo,
     ) -> Self::CodecEncodeSessionParametersGetInfo<'a>;
     fn codec_write_parameters_info_all() -> Self::CodecWriteParametersInfo;
+
+    fn resolve_idr_period<'a>(
+        quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
+        user_provided: Option<NonZeroU32>,
+    ) -> NonZeroU32;
+
+    fn resolve_max_references<'a>(
+        quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'a>,
+        user_provided: Option<NonZeroU32>,
+    ) -> NonZeroU32;
 }
 
 pub(crate) trait Codec: CodecCapabilities + std::fmt::Debug + Clone {

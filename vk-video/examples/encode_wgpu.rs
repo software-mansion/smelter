@@ -51,9 +51,9 @@ fn main() {
     );
 
     let mut encoder = vulkan_device
-        .create_wgpu_textures_encoder(
+        .create_wgpu_textures_encoder_h264(
             vulkan_device
-                .encoder_parameters_high_quality(
+                .encoder_parameters_h264_high_quality(
                     VideoParameters {
                         width,
                         height,

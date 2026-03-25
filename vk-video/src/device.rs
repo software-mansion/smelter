@@ -7,6 +7,7 @@ use ash::vk;
 
 use crate::adapter::VulkanAdapter;
 use crate::capabilities::AdapterInfo;
+use crate::codec::EncodeCodec;
 use crate::codec::h264::H264Codec;
 use crate::device::caps::{
     DecodeCapabilities, EncodeCapabilities, NativeDecodeCapabilities,
@@ -14,14 +15,14 @@ use crate::device::caps::{
 };
 use crate::device::queues::{Queue, QueueIndex, Queues, VideoQueues};
 use crate::parameters::{
-    EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, RateControl,
+    EncoderContentFlags, EncoderParametersH264, EncoderTuningMode, EncoderUsageFlags, RateControl,
 };
 use crate::parser::{h264::H264Parser, reference_manager::ReferenceContext};
 use crate::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{
-    BytesDecoder, BytesEncoder, DecoderError, RawFrameData, VulkanDecoderError, VulkanEncoderError,
-    VulkanInitError, VulkanInstance, wrappers::*,
+    BytesDecoder, BytesEncoderH264, DecoderError, RawFrameData, VulkanDecoderError,
+    VulkanEncoderError, VulkanInitError, VulkanInstance, wrappers::*,
 };
 
 pub(crate) mod caps;
@@ -135,7 +136,7 @@ pub enum ColorRange {
 
 /// Parameters for encoder creation
 #[derive(Debug, Clone, Copy)]
-pub struct EncoderParameters {
+pub struct EncoderParameters<P> {
     /// Number of frames between IDRs. If [`None`], this will be set to an encoder preferred value,
     /// or, if the encoder doesn't provide a preferred value, to 30.
     pub idr_period: Option<NonZeroU32>,
@@ -146,9 +147,9 @@ pub struct EncoderParameters {
     /// to the max value supported by the device.
     pub max_references: Option<NonZeroU32>,
     /// The profile must be supported by the device
-    pub profile: H264Profile,
+    pub profile: P,
     /// The value must be less than
-    /// [`EncodeH264ProfileCapabilities::quality_levels`](crate::capabilities::EncodeH264ProfileCapabilities::quality_levels)
+    /// [`EncodeProfileCapabilities::quality_levels`](crate::capabilities::EncodeProfileCapabilities::quality_levels)
     pub quality_level: u32,
     pub video_parameters: VideoParameters,
 
@@ -308,7 +309,7 @@ impl VulkanDevice {
                 });
         let h264_encode_queues =
             queue_indices
-                .h264_encode
+                .encode
                 .as_ref()
                 .map_or(Vec::new(), |queue_family_index| {
                     (0..queue_family_index.queue_count)
@@ -333,7 +334,7 @@ impl VulkanDevice {
             transfer: transfer_queue,
             compute: compute_queue,
             h264_decode: VideoQueues::new(h264_decode_queues.into_boxed_slice()).map(Arc::new),
-            h264_encode: VideoQueues::new(h264_encode_queues.into_boxed_slice()).map(Arc::new),
+            encode: VideoQueues::new(h264_encode_queues.into_boxed_slice()).map(Arc::new),
             wgpu: wgpu_queue,
         };
 
@@ -431,9 +432,9 @@ impl VulkanDevice {
     pub(crate) fn encoding_device(self: &Arc<Self>) -> Result<EncodingDevice, VulkanEncoderError> {
         Ok(EncodingDevice {
             vulkan_device: self.clone(),
-            h264_encode_queues: self
+            encode_queues: self
                 .queues
-                .h264_encode
+                .encode
                 .clone()
                 .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             native_encode_capabilities: self
@@ -443,14 +444,14 @@ impl VulkanDevice {
         })
     }
 
-    pub fn create_bytes_encoder(
+    pub fn create_bytes_encoder_h264(
         self: &Arc<Self>,
-        parameters: EncoderParameters,
-    ) -> Result<BytesEncoder, VulkanEncoderError> {
+        parameters: EncoderParametersH264,
+    ) -> Result<BytesEncoderH264, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(parameters)?;
         let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
 
-        Ok(BytesEncoder {
+        Ok(BytesEncoderH264 {
             vulkan_encoder: encoder,
         })
     }
@@ -463,11 +464,11 @@ impl VulkanDevice {
         self.adapter_info.encode_capabilities
     }
 
-    pub fn encoder_parameters_low_latency(
+    pub fn encoder_parameters_h264_low_latency(
         &self,
         video_parameters: VideoParameters,
         rate_control: RateControl,
-    ) -> Result<EncoderParameters, VulkanEncoderError> {
+    ) -> Result<EncoderParametersH264, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities.as_ref() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
@@ -493,11 +494,11 @@ impl VulkanDevice {
         })
     }
 
-    pub fn encoder_parameters_high_quality(
+    pub fn encoder_parameters_h264_high_quality(
         &self,
         video_parameters: VideoParameters,
         rate_control: RateControl,
-    ) -> Result<EncoderParameters, VulkanEncoderError> {
+    ) -> Result<EncoderParametersH264, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities.as_ref() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
@@ -528,25 +529,15 @@ impl VulkanDevice {
         })
     }
 
-    pub(crate) fn validate_and_fill_encoder_parameters(
+    pub(crate) fn validate_and_fill_encoder_parameters<C: EncodeCodec>(
         &self,
-        encoder_parameters: EncoderParameters,
-    ) -> Result<FullEncoderParameters<H264Codec>, VulkanEncoderError> {
+        encoder_parameters: EncoderParameters<C::Profile>,
+    ) -> Result<FullEncoderParameters<C>, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities.as_ref() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
-        let native_profile_caps = caps
-            .h264
-            .as_ref()
-            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
-            .profile(encoder_parameters.profile)
-            .ok_or(VulkanEncoderError::ParametersError {
-                field: "profile",
-                problem: format!(
-                    "Profile {:?} is not supported by this device.",
-                    encoder_parameters.profile
-                ),
-            })?;
+        let native_profile_caps =
+            C::encode_codec_profile_capabilities(caps, encoder_parameters.profile)?;
 
         let native_quality_level_properties = native_profile_caps
             .quality_level_properties
@@ -560,21 +551,9 @@ impl VulkanDevice {
                 ),
             })?;
 
-        let idr_period = encoder_parameters.idr_period.unwrap_or(
-            if native_quality_level_properties
-                .codec_quality_level_properties
-                .preferred_idr_period
-                > 0
-            {
-                NonZeroU32::new(
-                    native_quality_level_properties
-                        .codec_quality_level_properties
-                        .preferred_idr_period,
-                )
-                .unwrap()
-            } else {
-                NonZeroU32::new(30).unwrap()
-            },
+        let idr_period = C::resolve_idr_period(
+            &native_quality_level_properties.codec_quality_level_properties,
+            encoder_parameters.idr_period,
         );
 
         let min_extent = native_profile_caps.video_capabilities.min_coded_extent;
@@ -618,44 +597,11 @@ impl VulkanDevice {
             });
         }
 
-        let max_references = encoder_parameters.max_references.unwrap_or(
-            if native_quality_level_properties
-                .codec_quality_level_properties
-                .preferred_max_l0_reference_count
-                > 0
-            {
-                NonZeroU32::new(
-                    native_quality_level_properties
-                        .codec_quality_level_properties
-                        .preferred_max_l0_reference_count,
-                )
-                .unwrap()
-            } else {
-                NonZeroU32::new(
-                    native_profile_caps
-                        .codec_encode_capabilities
-                        .max_p_picture_l0_reference_count,
-                )
-                .unwrap()
-            },
+        let max_references = C::resolve_max_references(
+            &native_quality_level_properties.codec_quality_level_properties,
+            &native_profile_caps.codec_encode_capabilities,
+            encoder_parameters.max_references,
         );
-
-        if max_references.get()
-            > native_profile_caps
-                .codec_encode_capabilities
-                .max_p_picture_l0_reference_count
-        {
-            return Err(VulkanEncoderError::ParametersError {
-                field: "max_references",
-                problem: format!(
-                    "Max references is {}, should be != 0 and <= {}",
-                    max_references,
-                    native_profile_caps
-                        .codec_encode_capabilities
-                        .max_p_picture_l0_reference_count
-                ),
-            });
-        }
 
         let framerate = encoder_parameters.video_parameters.target_framerate;
         if framerate.numerator == 0 {
@@ -727,7 +673,7 @@ impl Deref for DecodingDevice {
 
 pub(crate) struct EncodingDevice {
     pub(crate) vulkan_device: Arc<VulkanDevice>,
-    pub(crate) h264_encode_queues: Arc<VideoQueues>,
+    pub(crate) encode_queues: Arc<VideoQueues>,
     pub(crate) native_encode_capabilities: NativeEncodeCapabilities,
 }
 

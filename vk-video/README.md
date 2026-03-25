@@ -92,9 +92,9 @@ fn encode_video(
         .unwrap();
 
     let mut encoder = device
-        .create_wgpu_textures_encoder(
+        .create_wgpu_textures_encoder_h264(
             device
-                .encoder_parameters_high_quality(
+                .encoder_parameters_h264_high_quality(
                     vk_video::parameters::VideoParameters {
                         width: NonZeroU32::new(1920).unwrap(),
                         height: NonZeroU32::new(1080).unwrap(),

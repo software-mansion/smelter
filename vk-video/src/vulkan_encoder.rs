@@ -123,7 +123,7 @@ impl VideoSessionResources<'_> {
 
         let video_session = VideoSession::new(
             &encoding_device.vulkan_device,
-            &encoding_device.h264_encode_queues,
+            &encoding_device.encode_queues,
             profile_info,
             extent,
             max_dpb_slots,
@@ -273,7 +273,7 @@ impl EncoderCommandBufferPools {
         )?;
         let encode = CommandBufferPool::new(
             device.vulkan_device.clone(),
-            device.h264_encode_queues.family_index,
+            device.encode_queues.family_index,
         )?;
 
         Ok(Self { transfer, encode })
@@ -432,7 +432,7 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
             &profile_info.profile_info,
         )?;
 
-        encoding_device.h264_encode_queues.submit_chain_semaphore(
+        encoding_device.encode_queues.submit_chain_semaphore(
             buffer.end()?,
             &mut tracker,
             vk::PipelineStageFlags2::ALL_COMMANDS,
@@ -443,7 +443,7 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
             .profiles(std::slice::from_ref(&profile_info.profile_info));
         let queue_indices = [
-            encoding_device.h264_encode_queues.family_index as u32,
+            encoding_device.encode_queues.family_index as u32,
             encoding_device.queues.wgpu.family_index as u32,
         ];
         let encode_image_info = vk::ImageCreateInfo::default()
@@ -606,7 +606,7 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
 
         let queue_family_indices = [
             self.encoding_device.queues.transfer.family_index as u32,
-            self.encoding_device.h264_encode_queues.family_index as u32,
+            self.encoding_device.encode_queues.family_index as u32,
         ];
 
         let image_create_info = vk::ImageCreateInfo::default()
@@ -1052,16 +1052,13 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
                 );
         }
 
-        let wait_value = self
-            .encoding_device
-            .h264_encode_queues
-            .submit_chain_semaphore(
-                cmd_buffer.end()?,
-                &mut self.tracker,
-                vk::PipelineStageFlags2::ALL_COMMANDS,
-                vk::PipelineStageFlags2::ALL_COMMANDS,
-                EncoderTrackerWaitState::Encode,
-            )?;
+        let wait_value = self.encoding_device.encode_queues.submit_chain_semaphore(
+            cmd_buffer.end()?,
+            &mut self.tracker,
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            EncoderTrackerWaitState::Encode,
+        )?;
 
         C::advance_counters(&mut self.counters, is_idr);
         drop(std_reference_info);
