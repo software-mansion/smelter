@@ -7,7 +7,7 @@ use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
 pub struct VideoTag {
     /// FrameType 4bits
     pub frame_type: VideoTagFrameType,
-    /// CodecIS 4bits
+    /// CodecID 4bits
     pub codec: VideoCodec,
 
     /// AVCPacketType 8bits IF CodecID == 7
@@ -30,7 +30,7 @@ pub enum VideoTagFrameType {
 }
 
 impl VideoTagFrameType {
-    fn from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
+    pub(crate) fn from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
         match value {
             1 => Ok(Self::Keyframe),
             2 => Ok(Self::Interframe),
@@ -41,7 +41,7 @@ impl VideoTagFrameType {
         }
     }
 
-    fn into_raw(self) -> u8 {
+    pub(crate) fn into_raw(self) -> u8 {
         match self {
             VideoTagFrameType::Keyframe => 1,
             VideoTagFrameType::Interframe => 2,
@@ -113,12 +113,25 @@ impl VideoTagH264PacketType {
     }
 }
 
+/// Parses SI24 (signed 24-bit integer) composition time from 3 bytes.
+/// Negative values occur with B-frames where PTS < DTS.
+pub(super) fn parse_composition_time(bytes: &[u8]) -> i32 {
+    // bytes are placed at the top of i32 so that the SI24 sign bit aligns
+    // with the i32 sign bit, arithmetic right-shift then propagates it
+    i32::from_be_bytes([bytes[0], bytes[1], bytes[2], 0]) >> 8
+}
+
+/// Serializes SI24 composition time to 3 bytes.
+pub(super) fn serialize_composition_time(buf: &mut BytesMut, ct: i32) {
+    buf.put(&ct.to_be_bytes()[1..4]);
+}
+
 // Currently only AVC video codec is supported
 impl VideoTag {
     /// Parses flv `VIDEODATA`. The `data` must be the entire content of the `Data` field of
     /// the flv tag with video `TagType`.  
     /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
-    pub fn parse(data: Bytes) -> Result<Self, FlvVideoTagParseError> {
+    pub(super) fn parse(data: Bytes) -> Result<Self, FlvVideoTagParseError> {
         if data.is_empty() {
             return Err(FlvVideoTagParseError::TooShort);
         }
@@ -148,7 +161,7 @@ impl VideoTag {
             return Err(FlvVideoTagParseError::TooShort);
         }
         let avc_packet_type = VideoTagH264PacketType::from_raw(data[1])?;
-        let composition_time = i32::from_be_bytes([0, data[2], data[3], data[4]]);
+        let composition_time = parse_composition_time(&data[2..5]);
 
         Ok(Self {
             frame_type,
@@ -165,7 +178,7 @@ impl VideoTag {
 
         let first_byte = (frame_type << 4) | codec_id;
         match self.codec {
-            VideoCodec::H264 => Ok(self.serialize_h264(first_byte)?),
+            VideoCodec::H264 => self.serialize_h264(first_byte),
             _ => {
                 let mut data = BytesMut::with_capacity(self.data.len() + 1);
                 data.put_u8(first_byte);
@@ -185,7 +198,7 @@ impl VideoTag {
         };
         data.put_u8(packet_type.into_raw());
         // composition_time is 0 when packet type is config
-        data.put(&self.composition_time.unwrap_or(0).to_be_bytes()[1..4]);
+        serialize_composition_time(&mut data, self.composition_time.unwrap_or(0));
         data.put(&self.data[..]);
         Ok(data.freeze())
     }

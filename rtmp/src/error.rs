@@ -139,6 +139,21 @@ pub enum FlvVideoTagParseError {
     #[error("Invalid frame type for H264 packet: {0:?}")]
     InvalidFrameTypeForH264(VideoTagFrameType),
 
+    #[error("Unknown VideoFourCc: {0:?}")]
+    UnknownVideoFourCc([u8; 4]),
+
+    #[error("Unknown ExVideoPacketType header value: {0}")]
+    UnknownExVideoPacketType(u8),
+
+    #[error("Unknown VideoPacketModExType header value: {0}")]
+    UnknownVideoPacketModExType(u8),
+
+    #[error("Unsupported video packet type: {0}")]
+    UnsupportedPacketType(u8),
+
+    #[error("Unknown VideoCommand value: {0}")]
+    UnknownVideoCommand(u8),
+
     #[error("Invalid video tag, packet too short.")]
     TooShort,
 }
