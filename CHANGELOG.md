@@ -4,34 +4,29 @@
 
 ### 💥 Breaking changes
 - Rename `var<push_constant>` to `var<immediate>` in user-provided shaders ([#1624](https://github.com/software-mansion/smelter/pull/1624) by [@noituri](https://github.com/noituri))
-- Replace FFmpeg-based RTMP server implementation ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Replace `url` field with `app` and `stream_key` in RTMP input, port is now defined globally via `SMELTER_RTMP_SERVER_PORT` ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### ✨ New features
 - Add `bitrate` option to software encoders ([#1567](https://github.com/software-mansion/smelter/pull/1567) by [@JBRS307](https://github.com/JBRS307))
 - Add `keyframe_interval_ms` option to all encoders ([#1591](https://github.com/software-mansion/smelter/pull/1591) by [@JBRS307](https://github.com/JBRS307))
-- Refine the V4L2 API ([#1587](https://github.com/software-mansion/smelter/pull/1587) by [@jerzywilczek](https://github.com/jerzywilczek))
+- Make `framerate` and `resolution` optional for  V4L2 input ([#1587](https://github.com/software-mansion/smelter/pull/1587) by [@jerzywilczek](https://github.com/jerzywilczek))
 - Support BGRA and ARGB textures in DeckLink input ([#1607](https://github.com/software-mansion/smelter/pull/1607), [#1608](https://github.com/software-mansion/smelter/pull/1608), [#1614](https://github.com/software-mansion/smelter/pull/1614) by [@wkozyra95](https://github.com/wkozyra95))
-- Add options to expose WebRTC endpoints from container ([#1727](https://github.com/software-mansion/smelter/pull/1727) by [@wkozyra95](https://github.com/wkozyra95))
-- Add option to mux WebRTC connections on single port ([#1734](https://github.com/software-mansion/smelter/pull/1734) by [@wkozyra95](https://github.com/wkozyra95))
-- Emit error events when output/input fails after initialization ([#1753](https://github.com/software-mansion/smelter/pull/1753) by [@wkozyra95](https://github.com/wkozyra95))
-- Add "No space left on device" error for MP4 output ([#1757](https://github.com/software-mansion/smelter/pull/1757) by [@wkozyra95](https://github.com/wkozyra95))
-- Add bitrate stats for inputs and outputs ([#1779](https://github.com/software-mansion/smelter/pull/1779), [#1786](https://github.com/software-mansion/smelter/pull/1786) by [@JBRS307](https://github.com/JBRS307))
-- Add WHEP output peer count stat ([#1799](https://github.com/software-mansion/smelter/pull/1799) by [@wkozyra95](https://github.com/wkozyra95))
-- Add WHIP output connection state to stats ([#1801](https://github.com/software-mansion/smelter/pull/1801) by [@wkozyra95](https://github.com/wkozyra95))
-- Add RTP input stats ([#1812](https://github.com/software-mansion/smelter/pull/1812) by [@JBRS307](https://github.com/JBRS307))
-- Add bitrate stats for RTP output ([#1813](https://github.com/software-mansion/smelter/pull/1813) by [@JBRS307](https://github.com/JBRS307))
-- Add average bitrate from one minute to stats ([#1804](https://github.com/software-mansion/smelter/pull/1804) by [@JBRS307](https://github.com/JBRS307))
-- Add `/stats` to OpenAPI specs ([#1805](https://github.com/software-mansion/smelter/pull/1805) by [@JBRS307](https://github.com/JBRS307))
-- Support pausing inputs ([#1798](https://github.com/software-mansion/smelter/pull/1798) by [@wkozyra95](https://github.com/wkozyra95))
-- Add paused event and allow multiple EOS per stream ([#1843](https://github.com/software-mansion/smelter/pull/1843) by [@wkozyra95](https://github.com/wkozyra95))
+- Add options to all WebRTC inputs/outputs to manage ICE candidates ([#1727](https://github.com/software-mansion/smelter/pull/1727), [#1734](https://github.com/software-mansion/smelter/pull/1734) by [@wkozyra95](https://github.com/wkozyra95))
+  - `SMELTER_WEBRTC_UDP_PORT_RANGE`
+  - `SMELTER_WEBRTC_UDP_MUX_PORT`
+  - `SMELTER_WEBRTC_1_TO_1_NAT_IPS`
+- Add pause support for inputs ([#1798](https://github.com/software-mansion/smelter/pull/1798), [#1843](https://github.com/software-mansion/smelter/pull/1843) by [@wkozyra95](https://github.com/wkozyra95))
 - Add seek support for MP4 input ([#1817](https://github.com/software-mansion/smelter/pull/1817), [#1830](https://github.com/software-mansion/smelter/pull/1830) by [@wkozyra95](https://github.com/wkozyra95))
-- Support AVCC in `vulkan_h264` encoder ([#1802](https://github.com/software-mansion/smelter/pull/1802) by [@wkozyra95](https://github.com/wkozyra95))
+- RTMPS support for RTMP inputs ([#1777](https://github.com/software-mansion/smelter/pull/1777), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### 🐛 Bug fixes
+
+- Fix audio artifacts on WebRTC jitter-buffer changes ([#1639](https://github.com/software-mansion/smelter/pull/1639) by [@wkozyra95](https://github.com/wkozyra95))
 
 ### 🔧 Others
 
 - Support FFmpeg 8.1 ([#1833](https://github.com/software-mansion/smelter/pull/1833) by [@JBRS307](https://github.com/JBRS307))
+- Replace FFmpeg-based RTMP server implementation. ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ## [v0.5.0](https://github.com/software-mansion/smelter/releases/tag/v0.5.0)
 
