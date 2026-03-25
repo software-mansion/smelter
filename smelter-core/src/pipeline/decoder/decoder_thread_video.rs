@@ -19,13 +19,13 @@ use super::VideoDecoder;
 pub(crate) struct VideoDecoderThreadOptions<Transformer: BytestreamTransformer> {
     pub ctx: Arc<PipelineCtx>,
     pub transformer: Option<Transformer>,
-    pub frame_sender: Sender<PipelineEvent<Frame>>,
+    pub frame_sender: Sender<Frame>,
     pub input_buffer_size: usize,
 }
 
 pub(crate) struct VideoDecoderThread<Decoder: VideoDecoder, Transformer: BytestreamTransformer> {
-    stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
+    stream: Box<dyn Iterator<Item = Frame>>,
+    frame_sender: Sender<Frame>,
     _decoder: PhantomData<Decoder>,
     _transformer: PhantomData<Transformer>,
 }

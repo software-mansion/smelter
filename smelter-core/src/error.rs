@@ -101,6 +101,9 @@ pub enum UpdateInputError {
 
     #[error("Seek is not supported for {0} input. Only MP4 inputs support seeking.")]
     SeekNotSupported(InputProtocolKind),
+
+    #[error("Pausing is not supported for {0} input. Only MP4 inputs support pausing.")]
+    PausingNotSupported(InputProtocolKind),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -253,8 +256,8 @@ pub enum InputInitError {
     #[error("Invalid video decoder provided. Expected {expected:?} decoder")]
     InvalidVideoDecoderProvided { expected: VideoCodec },
 
-    #[error("Internal Server Error")]
-    InternalServerError,
+    #[error("Internal Server Error: {0}")]
+    InternalServerError(&'static str),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -447,7 +450,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
 }
 
 const UPDATE_INPUT_NOT_FOUND: &str = "INPUT_STREAM_NOT_FOUND";
-const UPDATE_INPUT_SEEK_NOT_SUPPORTED: &str = "INPUT_SEEK_NOT_SUPPORTED";
+const UPDATE_INPUT_ACTION_NOT_SUPPORTED: &str = "INPUT_ACTION_NOT_SUPPORTED";
 
 impl From<&UpdateInputError> for PipelineErrorInfo {
     fn from(err: &UpdateInputError) -> Self {
@@ -455,8 +458,8 @@ impl From<&UpdateInputError> for PipelineErrorInfo {
             UpdateInputError::NotFound(_) => {
                 PipelineErrorInfo::new(UPDATE_INPUT_NOT_FOUND, ErrorType::EntityNotFound)
             }
-            UpdateInputError::SeekNotSupported(_) => {
-                PipelineErrorInfo::new(UPDATE_INPUT_SEEK_NOT_SUPPORTED, ErrorType::UserError)
+            UpdateInputError::SeekNotSupported(_) | UpdateInputError::PausingNotSupported(_) => {
+                PipelineErrorInfo::new(UPDATE_INPUT_ACTION_NOT_SUPPORTED, ErrorType::UserError)
             }
         }
     }

@@ -246,7 +246,7 @@ impl InputResampler {
                 };
                 self.resampler_input_buffer.push_front(samples);
                 self.set_resample_ratio_relative(1.0);
-                trace!(
+                debug!(
                     zero_samples,
                     ?gap_duration,
                     "Input buffer behind, writing zeroes samples"
@@ -276,7 +276,7 @@ impl InputResampler {
                     (duration_to_drop.as_secs_f64() * self.input_sample_rate as f64) as usize;
                 self.resampler_input_buffer.drain_samples(samples_to_drop);
                 self.set_resample_ratio_relative(1.0);
-                trace!(
+                debug!(
                     samples_to_drop,
                     ?duration_to_drop,
                     "Input buffer ahead, dropping samples"
@@ -330,13 +330,15 @@ impl InputResampler {
 
     fn resample(&mut self) {
         self.before_first_resample = false;
-        let is_partial_read =
-            self.resampler.input_frames_next() > self.resampler_input_buffer.frames();
+        let missing_input_samples = self
+            .resampler
+            .input_frames_next()
+            .saturating_sub(self.resampler_input_buffer.frames());
 
-        let indexing = match is_partial_read {
+        let indexing = match missing_input_samples > 0 {
             true => {
                 let partial_len = self.resampler_input_buffer.frames();
-                trace!(partial_len, "Input buffer to small, partial resampling");
+                debug!(partial_len, "Input buffer to small, partial resampling");
                 Some(Indexing {
                     input_offset: 0,
                     output_offset: 0,
@@ -371,7 +373,7 @@ impl InputResampler {
             .push_back(self.resampler_output_buffer.get_samples());
 
         // set that for the next iteration
-        if is_partial_read {
+        if missing_input_samples > 0 {
             self.resampler_output_buffer.samples_to_drop = self.resampler.output_delay();
         }
     }

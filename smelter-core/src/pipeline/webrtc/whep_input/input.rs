@@ -4,7 +4,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::bounded;
 use tokio::sync::oneshot;
 use tracing::{Instrument, Level, debug, span};
 use url::Url;
@@ -13,7 +12,7 @@ use crate::{
     AudioChannels,
     pipeline::{
         input::Input,
-        rtp::RtpJitterBufferInitOptions,
+        rtp::{RtpJitterBufferMode, RtpJitterBufferSharedContext},
         webrtc::{
             http_client::{SdpAnswer, WhipWhepHttpClient},
             peer_connection_recvonly::RecvonlyPeerConnection,
@@ -24,13 +23,34 @@ use crate::{
             },
         },
     },
-    queue::QueueDataReceiver,
+    queue::{QueueInput, QueueTrackOffset, QueueTrackOptions},
 };
 
 use crate::prelude::*;
 
 const WHEP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// WHEP input - connects to a remote WebRTC endpoint via WHEP HTTP client,
+/// decodes, and feeds frames/samples into the queue.
+///
+/// ## Timestamps
+///
+/// - Connection is established during input registration (with a 60s timeout).
+/// - PTS of first frame will be synced to `queue_sync_point` Instant
+/// - Register track with `QueueTrackOffset::Pts(Duration::ZERO)`
+/// - Jitter buffer: `RtpJitterBufferMode::RealTime` produces timestamps already in the correct
+///   time frame
+/// - No way to reconnect
+///
+/// ### Unsupported scenarios
+/// - If ahead of time processing is enabled, initial registration will happen on pts already
+///   processed by the queue, but queue will wait and eventually stream will show up, with
+///   the portion at the start cut off.
+/// - If other input is required and delays queue by X relative to `queue_sync_point.elapsed()`:
+///   - If X is smaller than channel sizes then, this input latency will
+///     be artificially increased by X.
+///   - If X is larger than channel size then, this input will be intermittently
+///     blank and streaming until the other inputs (and queue processing) catch up.
 #[derive(Debug)]
 pub(crate) struct WhepInput {
     ctx: Arc<PipelineCtx>,
@@ -44,7 +64,7 @@ impl WhepInput {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         options: WhepInputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
 
         ctx.stats_sender.send(StatsEvent::NewInput {
@@ -98,7 +118,9 @@ fn wait_with_deadline<T>(
             },
             Err(err) => match err {
                 oneshot::error::TryRecvError::Closed => {
-                    return Err(InputInitError::InternalServerError);
+                    return Err(InputInitError::InternalServerError(
+                        "WHEP input thread failed to initialize. Result channel closed",
+                    ));
                 }
                 oneshot::error::TryRecvError::Empty => {}
             },
@@ -112,10 +134,7 @@ async fn init_whep_client(
     input_ref: Ref<InputId>,
     ctx: Arc<PipelineCtx>,
     options: WhepInputOptions,
-) -> Result<(Input, InputInitInfo, QueueDataReceiver), WebrtcClientError> {
-    let (frame_sender, frame_receiver) = bounded(5);
-    let (input_samples_sender, input_samples_receiver) = bounded(5);
-
+) -> Result<(Input, InputInitInfo, QueueInput), WebrtcClientError> {
     let client = WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
     let (video_preferences, video_codecs_params) =
         resolve_video_preferences(&ctx, options.video_preferences)?;
@@ -143,18 +162,30 @@ async fn init_whep_client(
 
     pc.set_remote_description(answer).await?;
 
+    let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
     {
         let input_ref = input_ref.clone();
         let ctx = ctx.clone();
-        let buffer = RtpJitterBufferInitOptions::new(&ctx, options.jitter_buffer);
+        let buffer = RtpJitterBufferSharedContext::new(
+            &ctx,
+            RtpJitterBufferMode::RealTime,
+            ctx.queue_ctx.sync_point,
+        );
+
+        let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+            video: true,
+            audio: true,
+            offset: QueueTrackOffset::Pts(Duration::ZERO),
+        });
+
         pc.on_track(move |track_ctx| {
             let ctx = WhepTrackContext::new(track_ctx, &ctx, &buffer);
             handle_on_track(
                 ctx,
                 input_ref.clone(),
-                input_samples_sender.clone(),
-                frame_sender.clone(),
                 video_preferences.clone(),
+                &mut video_sender,
+                &mut audio_sender,
             );
         });
     }
@@ -167,9 +198,6 @@ async fn init_whep_client(
             _peer_connection: pc,
         }),
         InputInitInfo::Other,
-        QueueDataReceiver {
-            video: Some(frame_receiver),
-            audio: Some(input_samples_receiver),
-        },
+        queue_input,
     ))
 }

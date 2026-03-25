@@ -1,18 +1,40 @@
 use std::sync::Arc;
 
-use crossbeam_channel::bounded;
-
 use crate::{
     pipeline::{
         input::Input,
         rtmp::rtmp_input::state::{RtmpInputStateOptions, RtmpInputsState},
-        utils::input_buffer::InputBuffer,
     },
-    queue::QueueDataReceiver,
+    queue::QueueInput,
 };
 
 use crate::prelude::*;
 
+/// RTMP server input - waits for an incoming RTMP connection matching a registered
+/// app/stream_key pair, demuxes H.264/AAC, decodes, and feeds frames/samples into
+/// the queue.
+///
+/// ## Timestamps
+///
+/// - On connection:
+///   - A new track is created with `QueueTrackOffset::Pts(effective_last_pts + buffer)`.
+///     The buffer gives time for data to arrive and be decoded before the queue
+///     needs it.
+///   - PTS values are normalized to zero (subtracts first observed PTS, shared across
+///     video and audio).
+/// - On reconnect:
+///   - Only one active connection per input is allowed (`ensure_no_active_connection`).
+///   - Once a previous connection finishes, a new one can connect and creates a fresh
+///     track.
+/// - After 5s without receiving both tracks (e.g. audio-only stream), unused track
+///   senders are dropped.
+///
+/// ### Unsupported scenarios
+/// - Timestamps are synchronized based on the connection end. If first packet is delivered
+///   few seconds after connection the frames will not reach queue on time.
+/// - If ahead of time processing is enabled, initial registration will happen on pts already
+///   processed by the queue, but queue will wait and eventually stream will show up, with
+///   the portion at the start cut off.
 pub struct RtmpServerInput {
     rtmp_inputs_state: RtmpInputsState,
     input_ref: Ref<InputId>,
@@ -23,7 +45,7 @@ impl RtmpServerInput {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         options: RtmpServerInputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let Some(state) = &ctx.rtmp_state else {
             return Err(RtmpServerError::ServerNotRunning.into());
         };
@@ -32,19 +54,16 @@ impl RtmpServerInput {
             input_ref: input_ref.clone(),
             kind: InputProtocolKind::Rtmp,
         });
-        let (frame_sender, frame_receiver) = bounded(5);
-        let (input_samples_sender, input_samples_receiver) = bounded(5);
-        let buffer = InputBuffer::new(&ctx, options.buffer);
+
+        let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
 
         state.inputs.add_input(
             &input_ref,
             RtmpInputStateOptions {
                 app: options.app,
                 stream_key: options.stream_key,
-                frame_sender,
-                input_samples_sender,
+                queue_input: queue_input.downgrade(),
                 decoders: options.decoders,
-                buffer,
             },
         )?;
 
@@ -54,10 +73,7 @@ impl RtmpServerInput {
                 input_ref,
             }),
             InputInitInfo::Other,
-            QueueDataReceiver {
-                video: Some(frame_receiver),
-                audio: Some(input_samples_receiver),
-            },
+            queue_input,
         ))
     }
 }

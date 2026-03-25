@@ -44,6 +44,7 @@ pub fn benchmark_pipeline_options(
         webrtc_nat_1to1_ips: Arc::new(vec![]),
         rtmp_server: PipelineRtmpServerOptions::Disable,
         wgpu_options: PipelineWgpuOptions::Context(graphics_context),
+        side_channel_delay: Duration::ZERO,
     }
 }
 

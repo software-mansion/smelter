@@ -1,243 +1,61 @@
-use std::{
-    fmt,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+use std::{collections::VecDeque, time::Duration};
 
-use tracing::{debug, info, trace};
+use smelter_render::Frame;
 
-use crate::{InputBufferOptions, PipelineCtx};
-
-#[derive(Clone)]
-pub(crate) enum InputBuffer {
-    // If input is required or has an offset do not add any buffer.
-    //
-    // - If input is required, buffering is not necessary.
-    // - If offset is in the future then extra buffering is not necessary
-    // - If offset in in the past, it already causing drops
-    None,
-    Const { buffer: Duration },
-    LatencyOptimized(Arc<Mutex<LatencyOptimizedBuffer>>),
-    Adaptive(Arc<Mutex<AdaptiveBuffer>>),
+// Trait used to estimate duration the item
+pub(crate) trait TimedValue {
+    fn timestamp_range(&self) -> (Duration, Duration);
 }
 
-impl fmt::Debug for InputBuffer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::None => write!(f, "None"),
-            Self::Const { buffer } => f.debug_struct("Const").field("buffer", buffer).finish(),
-            Self::LatencyOptimized(_) => f.debug_struct("LatencyOptimized").finish(),
-            Self::Adaptive(_) => f.debug_struct("Adaptive").finish(),
-        }
+impl TimedValue for Frame {
+    fn timestamp_range(&self) -> (Duration, Duration) {
+        (
+            self.pts.saturating_sub(Duration::from_millis(10)),
+            self.pts + Duration::from_millis(10),
+        )
     }
 }
 
-impl InputBuffer {
-    pub fn new(ctx: &PipelineCtx, opts: InputBufferOptions) -> Self {
-        match opts {
-            InputBufferOptions::None => InputBuffer::None,
-            InputBufferOptions::Const(buffer) => InputBuffer::Const {
-                buffer: buffer.unwrap_or(ctx.default_buffer_duration),
-            },
-            InputBufferOptions::LatencyOptimized => InputBuffer::LatencyOptimized(Arc::new(
-                Mutex::new(LatencyOptimizedBuffer::new(ctx)),
-            )),
-            InputBufferOptions::Adaptive => {
-                InputBuffer::Adaptive(Arc::new(Mutex::new(AdaptiveBuffer::new(ctx))))
-            }
-        }
-    }
-
-    pub fn recalculate_buffer(&self, pts: Duration) {
-        match self {
-            InputBuffer::LatencyOptimized(buffer) => buffer.lock().unwrap().recalculate_buffer(pts),
-            InputBuffer::Adaptive(buffer) => buffer.lock().unwrap().recalculate_buffer(pts),
-            _ => (),
-        }
-    }
-
-    pub fn size(&self) -> Duration {
-        match self {
-            InputBuffer::None => Duration::ZERO,
-            InputBuffer::Const { buffer } => *buffer,
-            InputBuffer::LatencyOptimized(buffer) => buffer.lock().unwrap().dynamic_buffer,
-            InputBuffer::Adaptive(buffer) => buffer.lock().unwrap().dynamic_buffer,
-        }
-    }
+/// Buffer specific duration of data before returning first timestamp
+pub(crate) struct InputDelayBuffer<T: TimedValue> {
+    buffer: VecDeque<T>,
+    size: Duration,
+    ready: bool,
+    end: bool,
 }
 
-/// Buffer intended for low latency inputs, if input stream is not delivered on time,
-/// it quickly increases. However, when buffer is stable for some time it starts to shrink to
-/// minimize the latency.
-pub(crate) struct LatencyOptimizedBuffer {
-    sync_point: Instant,
-    state: LatencyOptimizedBufferState,
-    dynamic_buffer: Duration,
-
-    /// effective_buffer = next_pts - queue_sync_point.elapsed()
-    /// Estimates how much time packet has to reach the queue.
-
-    /// If effective_buffer is above this threshold for a period of time, aggressively shrink
-    /// the buffer.
-    shrink_threshold_1: Duration,
-    /// If effective_buffer is above this threshold for a period of time, shrink the buffer
-    /// quickly
-    shrink_threshold_2: Duration,
-    /// If effective_buffer is above this threshold for a period of time, slowly shrink the buffer.
-    max_desired_buffer: Duration,
-    /// If effective_buffer is below this value, slowly increase the buffer with every packet.
-    min_desired_buffer: Duration,
-    /// If effective_buffer is below this threshold, aggressively and immediately increase the buffer.
-    grow_threshold: Duration,
-}
-
-impl LatencyOptimizedBuffer {
-    fn new(ctx: &PipelineCtx) -> Self {
-        // As a result for default numbers if effective_buffer is between 80ms and 240ms, no
-        // adjustment/optimization will be triggered
-        let grow_threshold = ctx.default_buffer_duration;
-        let min_desired_buffer = grow_threshold + ctx.default_buffer_duration;
-        let max_desired_buffer = min_desired_buffer + ctx.default_buffer_duration;
-        let shrink_threshold_2 = max_desired_buffer + Duration::from_millis(400);
-        let shrink_threshold_1 = shrink_threshold_2 + Duration::from_millis(400);
+impl<T: TimedValue> InputDelayBuffer<T> {
+    pub fn new(size: Duration) -> Self {
         Self {
-            sync_point: ctx.queue_sync_point,
-            dynamic_buffer: ctx.default_buffer_duration,
-            state: LatencyOptimizedBufferState::Ok,
-
-            grow_threshold,
-            min_desired_buffer,
-            max_desired_buffer,
-            shrink_threshold_1,
-            shrink_threshold_2,
+            buffer: VecDeque::new(),
+            size,
+            ready: false,
+            end: false,
         }
     }
 
-    fn recalculate_buffer(&mut self, pts: Duration) {
-        // Increment duration is larger than decrement, because when buffer is too small
-        // we don't have much time to adjust to a difference.
-        const INCREMENT_DURATION: Duration = Duration::from_micros(500);
-        const SMALL_DECREMENT_DURATION: Duration = Duration::from_micros(200);
-        const LARGE_DECREMENT_DURATION: Duration = Duration::from_micros(500);
-
-        // Duration that defines at what point we can consider state stable enough
-        // to consider shrinking the buffer
-        const STABLE_STATE_DURATION: Duration = Duration::from_secs(10);
-
-        let next_pts = pts + self.dynamic_buffer;
-        trace!(
-            effective_buffer=?next_pts.saturating_sub(self.sync_point.elapsed()),
-            dynamic_buffer=?self.dynamic_buffer,
-            ?pts
-        );
-
-        if next_pts > self.sync_point.elapsed() + self.shrink_threshold_1 {
-            let first_pts = self.state.set_too_large(next_pts);
-            if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
-                self.dynamic_buffer = self
-                    .dynamic_buffer
-                    .saturating_sub(self.dynamic_buffer / 1000);
-            }
-        } else if next_pts > self.sync_point.elapsed() + self.shrink_threshold_2 {
-            let first_pts = self.state.set_too_large(next_pts);
-            if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
-                self.dynamic_buffer = self.dynamic_buffer.saturating_sub(LARGE_DECREMENT_DURATION);
-            }
-        } else if next_pts > self.sync_point.elapsed() + self.max_desired_buffer {
-            let first_pts = self.state.set_too_large(next_pts);
-            if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
-                self.dynamic_buffer = self.dynamic_buffer.saturating_sub(SMALL_DECREMENT_DURATION);
-            }
-        } else if next_pts > self.sync_point.elapsed() + self.min_desired_buffer {
-            self.state.set_ok();
-        } else if next_pts > self.sync_point.elapsed() + self.grow_threshold {
-            trace!(
-                old=?self.dynamic_buffer,
-                new=?self.dynamic_buffer + INCREMENT_DURATION,
-                "Increase latency optimized buffer"
-            );
-            self.state.set_too_small();
-            self.dynamic_buffer += INCREMENT_DURATION;
-        } else {
-            let new_buffer =
-                (self.sync_point.elapsed() + self.max_desired_buffer).saturating_sub(pts);
-            debug!(
-                old=?self.dynamic_buffer,
-                new=?new_buffer,
-                "Increase latency optimized buffer (force)"
-            );
-            self.state.set_too_small();
-            // adjust buffer so:
-            // pts + self.dynamic_buffer == self.sync_point.elapsed() + self.max_desired_buffer
-            self.dynamic_buffer = new_buffer
-        }
-    }
-}
-
-enum LatencyOptimizedBufferState {
-    Ok,
-    TooSmall,
-    TooLarge { first_pts: Duration },
-}
-
-impl LatencyOptimizedBufferState {
-    fn set_too_large(&mut self, pts: Duration) -> Duration {
-        match &self {
-            LatencyOptimizedBufferState::TooLarge { first_pts } => *first_pts,
-            _ => {
-                *self = LatencyOptimizedBufferState::TooLarge { first_pts: pts };
-                pts
-            }
+    pub fn write(&mut self, item: T) {
+        self.buffer.push_back(item);
+        if !self.ready
+            && let (Some(first), Some(last)) = (self.buffer.front(), self.buffer.back())
+        {
+            self.ready = last.timestamp_range().1.abs_diff(first.timestamp_range().0) > self.size
         }
     }
 
-    fn set_too_small(&mut self) {
-        *self = LatencyOptimizedBufferState::TooSmall
-    }
-
-    fn set_ok(&mut self) {
-        *self = LatencyOptimizedBufferState::Ok
-    }
-}
-
-pub(crate) struct AdaptiveBuffer {
-    sync_point: Instant,
-    desired_buffer: Duration,
-    dynamic_buffer: Duration,
-    min_buffer: Duration,
-}
-
-impl AdaptiveBuffer {
-    fn new(ctx: &PipelineCtx) -> Self {
-        Self {
-            sync_point: ctx.queue_sync_point,
-            desired_buffer: ctx.default_buffer_duration,
-            min_buffer: Duration::min(Duration::from_millis(20), ctx.default_buffer_duration),
-            dynamic_buffer: ctx.default_buffer_duration,
+    pub fn read(&mut self) -> Option<T> {
+        match self.ready {
+            true => self.buffer.pop_front(),
+            false => None,
         }
     }
 
-    fn recalculate_buffer(&mut self, pts: Duration) {
-        const INCREMENT_DURATION: Duration = Duration::from_micros(100);
+    pub fn mark_end(&mut self) {
+        self.ready = true;
+        self.end = true;
+    }
 
-        let next_pts = pts + self.dynamic_buffer;
-        if next_pts > self.sync_point.elapsed() + self.desired_buffer {
-            // ok
-        } else if next_pts > self.sync_point.elapsed() + self.min_buffer {
-            debug!(
-                old=?self.dynamic_buffer,
-                new=?self.dynamic_buffer + INCREMENT_DURATION,
-                "Increase adaptive buffer"
-            );
-            self.dynamic_buffer += INCREMENT_DURATION;
-        } else {
-            let new_buffer = (self.sync_point.elapsed() + self.desired_buffer).saturating_sub(pts);
-            info!(
-                old=?self.dynamic_buffer,
-                new=?new_buffer,
-                "Increase adaptive buffer (force)"
-            );
-            self.dynamic_buffer = new_buffer
-        }
+    pub fn is_done(&self) -> bool {
+        self.end && self.buffer.is_empty()
     }
 }

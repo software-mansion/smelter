@@ -3,7 +3,7 @@ use webrtc::{rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote:
 use crate::{
     PipelineCtx,
     pipeline::{
-        rtp::RtpJitterBufferInitOptions, webrtc::peer_connection_recvonly::OnTrackHdlrContext,
+        rtp::RtpJitterBufferSharedContext, webrtc::peer_connection_recvonly::OnTrackHdlrContext,
     },
 };
 
@@ -21,14 +21,14 @@ struct WhepTrackContext {
     track: Arc<TrackRemote>,
     rtc_receiver: Arc<RTCRtpReceiver>,
     pipeline_ctx: Arc<PipelineCtx>,
-    buffer: RtpJitterBufferInitOptions,
+    buffer: RtpJitterBufferSharedContext,
 }
 
 impl WhepTrackContext {
     fn new(
         track_ctx: OnTrackHdlrContext,
         pipeline_ctx: &Arc<PipelineCtx>,
-        buffer: &RtpJitterBufferInitOptions,
+        buffer: &RtpJitterBufferSharedContext,
     ) -> Self {
         Self {
             track: track_ctx.track,

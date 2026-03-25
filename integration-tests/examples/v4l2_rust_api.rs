@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 #[cfg(not(target_os = "linux"))]
 fn main() {
     panic!("Your OS does not support Video for Linux 2.");
@@ -63,18 +65,13 @@ mod main_module {
             .find(|d| d.formats.iter().any(|f| f.format == V4l2Format::Yuyv))
             .expect("no device supports the required format");
 
-        RegisterInputOptions {
-            input_options: ProtocolInputOptions::V4l2(V4l2InputOptions {
-                path: device.path,
-                resolution: Some(VIDEO_RESOLUTION),
-                format: V4l2Format::Yuyv,
-                framerate: Some(Framerate { num: 30, den: 1 }),
-            }),
-            queue_options: QueueInputOptions {
-                required: false,
-                offset: None,
-            },
-        }
+        RegisterInputOptions::V4l2(V4l2InputOptions {
+            path: device.path,
+            resolution: Some(VIDEO_RESOLUTION),
+            format: V4l2Format::Yuyv,
+            framerate: Some(Framerate { num: 30, den: 1 }),
+            required: false,
+        })
     }
 
     #[cfg(target_os = "linux")]

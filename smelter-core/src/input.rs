@@ -3,13 +3,7 @@ use std::{fmt, sync::Arc, time::Duration};
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct RegisterInputOptions {
-    pub input_options: ProtocolInputOptions,
-    pub queue_options: QueueInputOptions,
-}
-
-#[derive(Debug, Clone)]
-pub enum ProtocolInputOptions {
+pub enum RegisterInputOptions {
     Rtp(RtpInputOptions),
     RtmpServer(RtmpServerInputOptions),
     Mp4(Mp4InputOptions),
@@ -20,14 +14,6 @@ pub enum ProtocolInputOptions {
     V4l2(V4l2InputOptions),
     #[cfg(feature = "decklink")]
     DeckLink(DeckLinkInputOptions),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct QueueInputOptions {
-    pub required: bool,
-    /// Relative offset this input stream should have to the clock that
-    /// starts when pipeline is started.
-    pub offset: Option<Duration>,
 }
 
 pub enum InputInitInfo {
@@ -85,10 +71,7 @@ pub enum InputBufferOptions {
     /// guarantees a enough time to deliver media to the queue.
     None,
     /// Fixed buffer, default to pipeline default (80ms).
-    Const(Option<Duration>),
-    /// Buffer that can increase and decrease to minimize latency.
-    /// Desired buffer size is set based on pipeline default (80ms).
-    LatencyOptimized,
+    Const { size: Duration },
     /// Buffer that can increase if packets are not delivered on time.
     /// It will never decrease even network conditions improve.
     Adaptive,

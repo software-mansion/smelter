@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex, Weak},
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use crossbeam_channel::{Receiver, bounded};
@@ -83,22 +83,17 @@ impl Pipeline {
         input_id: InputId,
         options: RegisterInputOptions,
     ) -> Result<InputInitInfo, RegisterInputError> {
-        let input_options = options.input_options;
-        register_pipeline_input(
-            pipeline,
-            input_id,
-            options.queue_options,
-            |ctx, input_id| new_external_input(ctx, input_id, input_options),
-        )
+        register_pipeline_input(pipeline, input_id, |ctx, input_id| {
+            new_external_input(ctx, input_id, options)
+        })
     }
 
     pub fn register_raw_data_input(
         pipeline: &Arc<Mutex<Self>>,
         input_id: InputId,
         raw_input_options: RawDataInputOptions,
-        queue_options: QueueInputOptions,
     ) -> Result<RawDataInputSender, RegisterInputError> {
-        register_pipeline_input(pipeline, input_id, queue_options, |ctx, input_id| {
+        register_pipeline_input(pipeline, input_id, |ctx, input_id| {
             RawDataInput::new_input(ctx, input_id, raw_input_options)
         })
     }
@@ -116,8 +111,8 @@ impl Pipeline {
 
         if let Some(pause) = pause {
             match pause {
-                true => self.queue.pause_input(input_id),
-                false => self.queue.resume_input(input_id),
+                true => input.input.pause()?,
+                false => input.input.resume()?,
             }
         }
 
@@ -586,8 +581,9 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         &tokio_rt,
     )?;
 
+    let queue = Queue::new(queue_options);
     let ctx = Arc::new(PipelineCtx {
-        queue_sync_point: Instant::now(),
+        queue_ctx: queue.ctx(),
         default_buffer_duration: opts.default_buffer_duration,
 
         mixing_sample_rate: opts.mixing_sample_rate,
@@ -622,7 +618,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     let pipeline = Pipeline {
         outputs: HashMap::new(),
         inputs: HashMap::new(),
-        queue: Queue::new(queue_options, &ctx),
+        queue,
         renderer,
         stats_monitor,
         audio_mixer: AudioMixer::new(opts.mixing_sample_rate),

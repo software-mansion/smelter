@@ -18,10 +18,6 @@ pub struct RtmpInput {
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,
-    /// Offset in milliseconds relative to the pipeline start (start request). If the offset is
-    /// not defined then the stream will be synchronized based on the delivery time of the initial
-    /// frames.
-    pub offset_ms: Option<f64>,
     /// Assigns which decoder should be used for media encoded with a specific codec.
     pub decoder_map: Option<HashMap<InputRtmpCodec, RtmpVideoDecoderOptions>>,
 }

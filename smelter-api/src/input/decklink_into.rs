@@ -6,7 +6,6 @@ impl TryFrom<DeckLink> for core::RegisterInputOptions {
 
     #[cfg(feature = "decklink")]
     fn try_from(value: DeckLink) -> Result<Self, Self::Error> {
-        use super::queue_options::new_queue_options;
         const ID_PARSE_ERROR_MESSAGE: &str =
             "\"persistent_id\" has to be a valid 32-bit hexadecimal number";
 
@@ -20,16 +19,16 @@ impl TryFrom<DeckLink> for core::RegisterInputOptions {
             None => None,
         };
 
-        Ok(core::RegisterInputOptions {
-            input_options: core::ProtocolInputOptions::DeckLink(core::DeckLinkInputOptions {
+        Ok(core::RegisterInputOptions::DeckLink(
+            core::DeckLinkInputOptions {
                 subdevice_index: value.subdevice_index,
                 display_name: value.display_name,
                 persistent_id,
                 enable_audio: value.enable_audio.unwrap_or(true),
                 pixel_format: Some(core::DeckLinkPixelFormat::Format8BitYUV),
-            }),
-            queue_options: new_queue_options(value.required, None)?,
-        })
+                required: value.required.unwrap_or(false),
+            },
+        ))
     }
 
     #[cfg(not(feature = "decklink"))]

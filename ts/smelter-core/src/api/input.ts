@@ -136,7 +136,6 @@ function intoWhipRegisterInput(
     bearer_token: input.bearerToken,
     endpoint_override: inputId,
     required: input.required,
-    offset_ms: input.offsetMs,
   };
 }
 
@@ -147,7 +146,6 @@ function intoWhepRegisterInput(input: Inputs.RegisterWhepClientInput): RegisterI
     bearer_token: input.bearerToken,
     video: input.video && intoInputWhepVideoOptions(input.video),
     required: input.required,
-    offset_ms: input.offsetMs,
   };
 }
 
@@ -157,7 +155,6 @@ function intoRtmpRegisterInput(input: Inputs.RegisterRtmpServerInput): RegisterI
     app: input.app,
     stream_key: input.streamKey,
     required: input.required,
-    offset_ms: input.offsetMs,
     decoder_map: input.decoderMap,
   };
 }

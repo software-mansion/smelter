@@ -1,4 +1,4 @@
-use std::{iter, sync::Arc};
+use std::sync::Arc;
 
 use smelter_render::{Frame, error::ErrorStack};
 use tracing::error;
@@ -49,7 +49,6 @@ where
     decoder: Option<Box<dyn VideoDecoderInstance>>,
     last_chunk_kind: Option<MediaKind>,
     source: Source,
-    eos_sent: bool,
     decoders_info: VideoDecoderMapping,
     keyframe_request_sender: KeyframeRequestSender,
 }
@@ -69,7 +68,6 @@ where
             decoder: None,
             last_chunk_kind: None,
             source,
-            eos_sent: false,
             decoders_info,
             keyframe_request_sender,
         }
@@ -136,7 +134,7 @@ impl<Source> Iterator for DynamicVideoDecoderStream<Source>
 where
     Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
-    type Item = Vec<PipelineEvent<Frame>>;
+    type Item = Vec<Frame>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
@@ -146,23 +144,19 @@ where
                     self.ensure_decoder(chunk.kind);
                 }
                 let decoder = self.decoder.as_mut()?;
-                let chunks = decoder.decode(event);
-                Some(chunks.into_iter().map(PipelineEvent::Data).collect())
+                Some(decoder.decode(event))
             }
-            Some(PipelineEvent::EOS) | None => match self.eos_sent {
-                true => None,
-                false => {
-                    let chunks = self
-                        .decoder
-                        .as_mut()
-                        .map(|decoder| decoder.flush())
-                        .unwrap_or_default();
-                    let events = chunks.into_iter().map(PipelineEvent::Data);
-                    let eos = iter::once(PipelineEvent::EOS);
-                    self.eos_sent = true;
-                    Some(events.chain(eos).collect())
+            Some(PipelineEvent::EOS) | None => {
+                let chunks = self
+                    .decoder
+                    .as_mut()
+                    .map(|decoder| decoder.flush())
+                    .unwrap_or_default();
+                match chunks.is_empty() {
+                    false => Some(chunks),
+                    true => None,
                 }
-            },
+            }
         }
     }
 }

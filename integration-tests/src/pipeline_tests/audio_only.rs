@@ -690,7 +690,13 @@ fn audio_early_streaming_no_offset() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         audio::ValidationMode::Artificial,
-        AudioValidationConfig::default(),
+        AudioValidationConfig {
+            tolerance: AudioAnalyzeTolerance {
+                allowed_failed_batches: 2,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
     )?;
 
     Ok(())

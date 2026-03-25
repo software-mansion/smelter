@@ -1,9 +1,5 @@
-use std::time::Duration;
-
 use crate::common_core::prelude as core;
 use crate::*;
-
-use super::queue_options::new_queue_options;
 
 impl TryFrom<WhepInput> for core::RegisterInputOptions {
     type Error = TypeError;
@@ -14,24 +10,8 @@ impl TryFrom<WhepInput> for core::RegisterInputOptions {
             bearer_token,
             video,
             required,
-            offset_ms,
         } = value;
 
-        let queue_options = new_queue_options(required, offset_ms)?;
-
-        let jitter_buffer = match &queue_options {
-            core::QueueInputOptions {
-                required: false,
-                offset: None,
-            } => core::RtpJitterBufferOptions {
-                mode: core::RtpJitterBufferMode::QueueBased,
-                buffer: core::InputBufferOptions::LatencyOptimized,
-            },
-            _ => core::RtpJitterBufferOptions {
-                mode: core::RtpJitterBufferMode::Fixed(Duration::from_millis(200)),
-                buffer: core::InputBufferOptions::None,
-            },
-        };
         let video_preferences = match video {
             Some(options) => match options.decoder_preferences.as_deref() {
                 Some([]) | None => vec![core::WebrtcVideoDecoderOptions::Any],
@@ -44,15 +24,10 @@ impl TryFrom<WhepInput> for core::RegisterInputOptions {
             video_preferences,
             endpoint_url,
             bearer_token,
-            jitter_buffer,
+            required: required.unwrap_or(false),
         };
 
-        let input_options = core::ProtocolInputOptions::Whep(whep_options);
-
-        Ok(core::RegisterInputOptions {
-            input_options,
-            queue_options,
-        })
+        Ok(core::RegisterInputOptions::Whep(whep_options))
     }
 }
 

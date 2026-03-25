@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use core::panic;
 use std::{
     sync::{Arc, Mutex},
@@ -91,8 +93,6 @@ fn main() {
             video: true,
             audio: false,
             buffer_duration: None,
-        },
-        QueueInputOptions {
             required: true,
             offset: Some(Duration::ZERO),
         },

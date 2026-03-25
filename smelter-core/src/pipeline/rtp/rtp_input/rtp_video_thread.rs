@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use crossbeam_channel::Sender;
-use smelter_render::Frame;
 use tracing::warn;
 
 use crate::{
@@ -22,17 +21,13 @@ pub(crate) struct RtpVideoTrackThreadHandle {
 }
 
 pub(super) struct RtpVideoThread<Decoder: VideoDecoder + 'static> {
-    stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
+    stream: Box<dyn Iterator<Item = Frame>>,
+    frame_sender: Sender<Frame>,
     _decoder: PhantomData<Decoder>,
 }
 
 impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
-    type InitOptions = (
-        Arc<PipelineCtx>,
-        DepayloaderOptions,
-        Sender<PipelineEvent<Frame>>,
-    );
+    type InitOptions = (Arc<PipelineCtx>, DepayloaderOptions, Sender<Frame>);
 
     type SpawnOutput = RtpVideoTrackThreadHandle;
     type SpawnError = DecoderInitError;

@@ -9,7 +9,7 @@ mod util;
 
 pub(crate) use rtp_input::{
     RtpInput,
-    jitter_buffer::{RtpJitterBuffer, RtpJitterBufferInitOptions},
+    jitter_buffer::{RtpJitterBuffer, RtpJitterBufferMode, RtpJitterBufferSharedContext},
 };
 pub(crate) use rtp_output::RtpOutput;
 

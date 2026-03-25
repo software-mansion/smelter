@@ -135,12 +135,6 @@ pub struct HlsInputStatsReport {
 
     /// Stats for the audio track.
     pub audio: HlsInputTrackStatsReport,
-
-    /// Total count of corrupted packets received.
-    pub corrupted_packets_received: u64,
-
-    /// Count of corrupted packets received in the last 10 seconds.
-    pub corrupted_packets_received_last_10_seconds: u64,
 }
 
 /// Stats report for a track in the `HLS` input.

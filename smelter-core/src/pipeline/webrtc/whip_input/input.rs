@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use crossbeam_channel::bounded;
-
 use crate::{
     pipeline::{
         input::Input,
@@ -13,11 +11,31 @@ use crate::{
             },
         },
     },
-    queue::QueueDataReceiver,
+    queue::QueueInput,
 };
 
 use crate::prelude::*;
 
+/// WHIP input - receives WebRTC ingest via WHIP HTTP endpoint, decodes, and feeds
+/// frames/samples into the queue.
+///
+/// ## Timestamps
+///
+/// - On connection
+///   - PTS of first frame will be synced to `queue_sync_point` Instant
+///   - Register track with `QueueTrackOffset::Pts(Duration::ZERO)`
+///   - Jitter buffer: `RtpJitterBufferMode::RealTime` produces timestamps already in the correct
+///     time frame
+///
+/// ### Unsupported scenarios
+/// - If ahead of time processing is enabled, initial registration will happen on pts already
+///   processed by the queue, but queue will wait and eventually stream will show up, with
+///   the portion at the start cut off.
+/// - If other input is required and delays queue by X relative to `queue_sync_point.elapsed()`:
+///   - If X is smaller than channel sizes then, this input latency will
+///     be artificially increased by X.
+///   - If X is larger than channel size then, this input will be intermittently
+///     blank and streaming until the other inputs (and queue processing) catch up.
 pub(crate) struct WhipInput {
     whip_inputs_state: WhipInputsState,
     input_ref: Ref<InputId>,
@@ -28,7 +46,7 @@ impl WhipInput {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         options: WhipInputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let Some(state) = &ctx.whip_whep_state else {
             return Err(WebrtcServerError::ServerNotRunning.into());
         };
@@ -37,12 +55,12 @@ impl WhipInput {
             kind: InputProtocolKind::Whip,
         });
 
+        let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
+
         let endpoint_id = options
             .endpoint_override
             .unwrap_or(input_ref.id().0.clone());
         let endpoint_route = Arc::from(format!("/whip/{}", urlencoding::encode(&endpoint_id)));
-        let (frame_sender, frame_receiver) = bounded(5);
-        let (input_samples_sender, input_samples_receiver) = bounded(5);
 
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
 
@@ -54,9 +72,7 @@ impl WhipInput {
                 bearer_token: bearer_token.clone(),
                 endpoint_id,
                 video_preferences,
-                frame_sender,
-                input_samples_sender,
-                jitter_buffer_options: options.jitter_buffer,
+                queue_input: queue_input.downgrade(),
             },
         )?;
 
@@ -69,10 +85,7 @@ impl WhipInput {
                 bearer_token,
                 endpoint_route,
             },
-            QueueDataReceiver {
-                video: Some(frame_receiver),
-                audio: Some(input_samples_receiver),
-            },
+            queue_input,
         ))
     }
 }

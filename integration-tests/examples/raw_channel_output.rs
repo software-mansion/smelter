@@ -90,21 +90,16 @@ fn main() {
         }),
     };
 
-    let input_options = RegisterInputOptions {
-        input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
-            source: Mp4InputSource::File(integration_tests_root().join(BUNNY_FILE_PATH).into()),
-            should_loop: false,
-            video_decoders: Mp4InputVideoDecoders {
-                h264: Some(VideoDecoderOptions::FfmpegH264),
-            },
-            buffer: InputBufferOptions::Const(None),
-            seek: None,
-        }),
-        queue_options: QueueInputOptions {
-            required: true,
-            offset: Some(Duration::ZERO),
+    let input_options = RegisterInputOptions::Mp4(Mp4InputOptions {
+        source: Mp4InputSource::File(integration_tests_root().join(BUNNY_FILE_PATH).into()),
+        should_loop: false,
+        video_decoders: Mp4InputVideoDecoders {
+            h264: Some(VideoDecoderOptions::FfmpegH264),
         },
-    };
+        seek: None,
+        required: true,
+        offset: Some(Duration::ZERO),
+    });
 
     Pipeline::register_input(&pipeline, input_id.clone(), input_options).unwrap();
 
