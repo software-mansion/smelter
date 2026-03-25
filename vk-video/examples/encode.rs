@@ -39,14 +39,14 @@ fn main() {
         .unwrap();
 
     let mut encoder = vulkan_device
-        .create_bytes_encoder(EncoderParameters {
+        .create_bytes_encoder_h264(EncoderParameters {
             input_parameters: VideoParameters {
                 width,
                 height,
                 target_framerate: 24.into(),
             },
             output_parameters: vulkan_device
-                .encoder_output_parameters_high_quality(RateControl::VariableBitrate {
+                .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
                     average_bitrate: 1_000_000,
                     max_bitrate: 2_000_000,
                     virtual_buffer_size: std::time::Duration::from_secs(2),

@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use crate::{
     DecoderError, VulkanAdapter, VulkanDevice, VulkanEncoderError, VulkanInstance, WgpuInitError,
-    WgpuTexturesDecoder, WgpuTexturesEncoder,
-    device::{DecoderParameters, EncoderParameters, VulkanDeviceDescriptor},
+    WgpuTexturesDecoder, WgpuTexturesEncoderH264,
+    device::EncoderParameters,
+    device::{DecoderParameters, VulkanDeviceDescriptor},
     parser::{h264::H264Parser, reference_manager::ReferenceContext},
     vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder},
     vulkan_encoder::VulkanEncoder,
@@ -37,10 +38,10 @@ impl VulkanDevice {
         })
     }
 
-    pub fn create_wgpu_textures_encoder(
+    pub fn create_wgpu_textures_encoder_h264(
         self: &Arc<Self>,
         parameters: EncoderParameters,
-    ) -> Result<WgpuTexturesEncoder, VulkanEncoderError> {
+    ) -> Result<WgpuTexturesEncoderH264, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
             parameters.output_parameters,
             parameters.input_parameters.width,
@@ -48,7 +49,7 @@ impl VulkanDevice {
             parameters.input_parameters.target_framerate,
         )?;
         let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
-        Ok(WgpuTexturesEncoder {
+        Ok(WgpuTexturesEncoderH264 {
             vulkan_encoder: encoder,
         })
     }

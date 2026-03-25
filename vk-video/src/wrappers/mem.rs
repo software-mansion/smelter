@@ -378,7 +378,7 @@ impl Image {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
             .profiles(std::slice::from_ref(&profile.profile_info));
         let queue_indices = [
-            device.h264_encode_queues.family_index as u32,
+            device.encode_queues.family_index as u32,
             additional_queue_index,
         ];
         let encode_image_info = vk::ImageCreateInfo::default()

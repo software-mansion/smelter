@@ -94,10 +94,10 @@ fn encode_video(
         .unwrap();
 
     let mut encoder = device
-        .create_wgpu_textures_encoder(
+        .create_wgpu_textures_encoder_h264(
             vk_video::parameters::EncoderParameters {
                 output_parameters: device
-                    .encoder_output_parameters_high_quality(
+                    .encoder_output_parameters_h264_high_quality(
                         vk_video::parameters::RateControl::VariableBitrate {
                             average_bitrate: 500_000,
                             max_bitrate: 2_000_000,

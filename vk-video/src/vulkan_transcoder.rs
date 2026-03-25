@@ -7,7 +7,7 @@ use crate::{
     VulkanDevice, VulkanEncoderError,
     codec::{EncodeCodec, h264::H264Codec},
     device::{EncoderOutputParameters, Rational},
-    parameters::ScalingAlgorithm,
+    parameters::{H264Profile, ScalingAlgorithm},
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
         h264::H264Parser,
@@ -51,7 +51,7 @@ pub struct TranscoderParameters {
 /// Configuration for a single transcoder output.
 #[derive(Debug, Clone, Copy)]
 pub struct TranscoderOutputParameters {
-    pub encoder_parameters: EncoderOutputParameters,
+    pub encoder_parameters: EncoderOutputParameters<H264Profile>,
     pub output_width: NonZeroU32,
     pub output_height: NonZeroU32,
     pub scaling_algorithm: ScalingAlgorithm,

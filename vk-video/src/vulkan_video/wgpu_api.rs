@@ -77,11 +77,11 @@ impl WgpuTexturesDecoder {
 }
 
 /// An encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
-pub struct WgpuTexturesEncoder {
+pub struct WgpuTexturesEncoderH264 {
     pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
 }
 
-impl WgpuTexturesEncoder {
+impl WgpuTexturesEncoderH264 {
     /// The result is a chunk of H264 bytecode.
     ///
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
