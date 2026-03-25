@@ -9,7 +9,7 @@
 ### ✨ New features
 - Add `bitrate` option to software encoders ([#1567](https://github.com/software-mansion/smelter/pull/1567) by [@JBRS307](https://github.com/JBRS307))
 - Add `keyframe_interval_ms` option to all encoders ([#1591](https://github.com/software-mansion/smelter/pull/1591) by [@JBRS307](https://github.com/JBRS307))
-- Make `framerate` and `resolution` optional for  V4L2 input ([#1587](https://github.com/software-mansion/smelter/pull/1587) by [@jerzywilczek](https://github.com/jerzywilczek))
+- Make `framerate` and `resolution` optional for V4L2 input ([#1587](https://github.com/software-mansion/smelter/pull/1587) by [@jerzywilczek](https://github.com/jerzywilczek))
 - Support BGRA and ARGB textures in DeckLink input ([#1607](https://github.com/software-mansion/smelter/pull/1607), [#1608](https://github.com/software-mansion/smelter/pull/1608), [#1614](https://github.com/software-mansion/smelter/pull/1614) by [@wkozyra95](https://github.com/wkozyra95))
 - Add options to all WebRTC inputs/outputs to manage ICE candidates ([#1727](https://github.com/software-mansion/smelter/pull/1727), [#1734](https://github.com/software-mansion/smelter/pull/1734) by [@wkozyra95](https://github.com/wkozyra95))
   - `SMELTER_WEBRTC_UDP_PORT_RANGE`
