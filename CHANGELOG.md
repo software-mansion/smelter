@@ -4,12 +4,29 @@
 
 ### 💥 Breaking changes
 - Rename `var<push_constant>` to `var<immediate>` in user-provided shaders ([#1624](https://github.com/software-mansion/smelter/pull/1624) by [@noituri](https://github.com/noituri))
+- Replace `url` field with `app` and `stream_key` in RTMP input, port is now defined globally via `SMELTER_RTMP_SERVER_PORT` ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### ✨ New features
 - Add `bitrate` option to software encoders ([#1567](https://github.com/software-mansion/smelter/pull/1567) by [@JBRS307](https://github.com/JBRS307))
 - Add `keyframe_interval_ms` option to all encoders ([#1591](https://github.com/software-mansion/smelter/pull/1591) by [@JBRS307](https://github.com/JBRS307))
+- Make `framerate` and `resolution` optional for V4L2 input ([#1587](https://github.com/software-mansion/smelter/pull/1587) by [@jerzywilczek](https://github.com/jerzywilczek))
+- Support BGRA and ARGB textures in DeckLink input ([#1607](https://github.com/software-mansion/smelter/pull/1607), [#1608](https://github.com/software-mansion/smelter/pull/1608), [#1614](https://github.com/software-mansion/smelter/pull/1614) by [@wkozyra95](https://github.com/wkozyra95))
+- Add options to all WebRTC inputs/outputs to manage ICE candidates ([#1727](https://github.com/software-mansion/smelter/pull/1727), [#1734](https://github.com/software-mansion/smelter/pull/1734) by [@wkozyra95](https://github.com/wkozyra95))
+  - `SMELTER_WEBRTC_UDP_PORT_RANGE`
+  - `SMELTER_WEBRTC_UDP_MUX_PORT`
+  - `SMELTER_WEBRTC_1_TO_1_NAT_IPS`
+- Add pause support for inputs ([#1798](https://github.com/software-mansion/smelter/pull/1798), [#1843](https://github.com/software-mansion/smelter/pull/1843) by [@wkozyra95](https://github.com/wkozyra95))
+- Add seek support for MP4 input ([#1817](https://github.com/software-mansion/smelter/pull/1817), [#1830](https://github.com/software-mansion/smelter/pull/1830) by [@wkozyra95](https://github.com/wkozyra95))
+- RTMPS support for RTMP input ([#1777](https://github.com/software-mansion/smelter/pull/1777), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### 🐛 Bug fixes
+
+- Fix audio artifacts on WebRTC jitter-buffer changes ([#1639](https://github.com/software-mansion/smelter/pull/1639) by [@wkozyra95](https://github.com/wkozyra95))
+
+### 🔧 Others
+
+- Support FFmpeg 8.1 ([#1833](https://github.com/software-mansion/smelter/pull/1833) by [@JBRS307](https://github.com/JBRS307))
+- Replace FFmpeg-based RTMP server implementation. ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ## [v0.5.0](https://github.com/software-mansion/smelter/releases/tag/v0.5.0)
 
