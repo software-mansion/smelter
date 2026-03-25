@@ -1,0 +1,70 @@
+name: Rust - gpu tests
+on:
+    # TODO: run only if vk-video code changed
+    workflow_dispatch: {}
+    push:
+        branches: [master]
+    pull_request:
+        types: [opened, synchronize]
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+    run_gpu_tests:
+        runs-on: self-hosted
+        steps:
+            - name: 🛠 Install system dependencies
+              run: |
+                  set -e
+                  sudo apt-get update -y -qq
+                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+                  sudo apt-get clean
+                  sudo rm -rf /var/lib/apt/lists/*
+
+            - name: "Increase disk space"
+              run: |
+                  df -h && docker system prune -a -f && sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup && df -h
+
+              # TODO: emoji
+            - name: 🪢 GPU info
+              run: vulkaninfo --summary
+              
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.94
+
+            - name: 🔬 Install nextest
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-nextest
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v4
+
+            - name: 🧩 Git submodules update
+              run: |
+                  cat > .gitmodules << EOF
+                  [submodule "snapshots"]
+                          path = integration-tests/snapshots
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
+                  EOF
+                  git submodule update --init
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "linux-build"
+
+            - name: 📦 Upload failed snapshot test artifacts
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: failed_snapshot_tests
+                  path: integration-tests/failed_snapshot_tests
+                  retention-days: 2
+                  
+
+              
