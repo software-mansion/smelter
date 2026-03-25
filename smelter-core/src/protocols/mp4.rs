@@ -12,6 +12,8 @@ pub struct Mp4InputOptions {
     pub video_decoders: Mp4InputVideoDecoders,
     pub buffer: InputBufferOptions,
     pub seek: Option<Duration>,
+    pub required: bool,
+    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]

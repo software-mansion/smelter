@@ -11,6 +11,7 @@ use crate::{
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
     },
+    queue::WeakQueueInput,
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -25,13 +26,13 @@ pub(super) struct RtpAudioThreadOptions<Decoder: AudioDecoder> {
     pub ctx: Arc<PipelineCtx>,
     pub decoder_options: Decoder::Options,
     pub depayloader_options: DepayloaderOptions,
-    pub decoded_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub queue_input: WeakQueueInput,
     pub sample_rate: u32,
 }
 
 pub(super) struct RtpAudioThread<Decoder: AudioDecoder + 'static> {
     stream: Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
-    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    queue_input: WeakQueueInput,
     _decoder: PhantomData<Decoder>,
 }
 
@@ -46,7 +47,7 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
             ctx,
             decoder_options,
             depayloader_options,
-            decoded_samples_sender,
+            queue_input,
             sample_rate,
         } = options;
 
@@ -63,7 +64,7 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
 
         let state = Self {
             stream: Box::new(decoder_stream.flatten()),
-            samples_sender: decoded_samples_sender,
+            queue_input,
             _decoder: PhantomData,
         };
         let output = RtpAudioTrackThreadHandle {
@@ -75,7 +76,7 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
 
     fn run(self) {
         for event in self.stream {
-            if self.samples_sender.send(event).is_err() {
+            if self.queue_input.send_audio(event).is_err() {
                 warn!("Failed to send decoded audio samples from decoder. Channel closed.");
                 return;
             }

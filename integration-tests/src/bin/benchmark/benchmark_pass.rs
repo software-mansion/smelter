@@ -285,21 +285,17 @@ impl SingleBenchmarkPass {
         Pipeline::register_input(
             pipeline,
             input_id.clone(),
-            RegisterInputOptions {
-                input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
-                    should_loop: true,
-                    video_decoders: Mp4InputVideoDecoders {
-                        h264: Some(self.decoder),
-                    },
-                    source: Mp4InputSource::File(path.to_path_buf().into()),
-                    buffer: InputBufferOptions::Const(None),
-                    seek: None,
-                }),
-                queue_options: QueueInputOptions {
-                    offset: None,
-                    required: true,
+            RegisterInputOptions::Mp4(Mp4InputOptions {
+                should_loop: true,
+                video_decoders: Mp4InputVideoDecoders {
+                    h264: Some(self.decoder),
                 },
-            },
+                source: Mp4InputSource::File(path.to_path_buf().into()),
+                buffer: InputBufferOptions::Const(None),
+                seek: None,
+                required: true,
+                offset: None,
+            }),
         )
     }
 
@@ -315,10 +311,8 @@ impl SingleBenchmarkPass {
                 video: true,
                 audio: false,
                 buffer_duration: None,
-            },
-            QueueInputOptions {
-                offset: None,
                 required: true,
+                offset: None,
             },
         )?;
 

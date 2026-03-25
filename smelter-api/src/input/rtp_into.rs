@@ -22,31 +22,29 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             transport_protocol,
         } = value;
 
-        let queue_options = new_queue_options(required, offset_ms)?;
+        let (required, offset) = new_queue_options(required, offset_ms)?;
 
         let transport_protocol = transport_protocol.unwrap_or(TransportProtocol::Udp).into();
 
-        let input_buffer = match &queue_options {
-            core::QueueInputOptions {
-                required: false,
-                offset: None,
-            } => core::InputBufferOptions::Const(None),
-            _ => core::InputBufferOptions::None,
+        let input_buffer = if !required && offset.is_none() {
+            core::InputBufferOptions::Const(None)
+        } else {
+            core::InputBufferOptions::None
         };
         let jitter_buffer = match transport_protocol {
-            RtpInputTransportProtocol::Udp => match &queue_options {
-                core::QueueInputOptions {
-                    required: false,
-                    offset: None,
-                } => core::RtpJitterBufferOptions {
-                    mode: core::RtpJitterBufferMode::QueueBased,
-                    buffer: input_buffer,
-                },
-                _ => core::RtpJitterBufferOptions {
-                    mode: core::RtpJitterBufferMode::Fixed(Duration::from_millis(200)),
-                    buffer: input_buffer,
-                },
-            },
+            RtpInputTransportProtocol::Udp => {
+                if !required && offset.is_none() {
+                    core::RtpJitterBufferOptions {
+                        mode: core::RtpJitterBufferMode::QueueBased,
+                        buffer: input_buffer,
+                    }
+                } else {
+                    core::RtpJitterBufferOptions {
+                        mode: core::RtpJitterBufferMode::Fixed(Duration::from_millis(200)),
+                        buffer: input_buffer,
+                    }
+                }
+            }
             RtpInputTransportProtocol::TcpServer => core::RtpJitterBufferOptions {
                 mode: core::RtpJitterBufferMode::Disabled,
                 buffer: input_buffer,
@@ -60,7 +58,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             return Err(TypeError::new(NO_VIDEO_AUDIO_SPEC));
         }
 
-        let input_options = core::ProtocolInputOptions::Rtp(core::RtpInputOptions {
+        Ok(core::RegisterInputOptions::Rtp(core::RtpInputOptions {
             port: port.try_into()?,
             video: video
                 .as_ref()
@@ -77,12 +75,9 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             audio: audio.map(TryFrom::try_from).transpose()?,
             transport_protocol,
             jitter_buffer,
-        });
-
-        Ok(core::RegisterInputOptions {
-            input_options,
-            queue_options,
-        })
+            required,
+            offset,
+        }))
     }
 }
 

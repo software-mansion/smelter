@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use crossbeam_channel::Sender;
-use smelter_render::Frame;
 use tracing::{trace, warn};
 
 use crate::{
@@ -19,6 +17,7 @@ use crate::{
         },
         webrtc::AsyncReceiverIter,
     },
+    queue::WeakQueueInput,
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -30,7 +29,7 @@ pub(super) struct VideoTrackThreadHandle {
 
 pub(super) struct VideoTrackThread {
     stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
+    queue_input: WeakQueueInput,
 }
 
 impl InitializableThread for VideoTrackThread {
@@ -38,7 +37,7 @@ impl InitializableThread for VideoTrackThread {
         Arc<PipelineCtx>,
         VideoDecoderMapping,
         VideoPayloadTypeMapping,
-        Sender<PipelineEvent<Frame>>,
+        WeakQueueInput,
         KeyframeRequestSender,
     );
 
@@ -46,7 +45,7 @@ impl InitializableThread for VideoTrackThread {
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, decoder_mapping, payload_type_mapping, frame_sender, keyframe_request_sender) =
+        let (ctx, decoder_mapping, payload_type_mapping, queue_input, keyframe_request_sender) =
             options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
@@ -76,7 +75,7 @@ impl InitializableThread for VideoTrackThread {
 
         let state = Self {
             stream: Box::new(result_stream),
-            frame_sender,
+            queue_input,
         };
         let output = VideoTrackThreadHandle { rtp_packet_sender };
         Ok((state, output))
@@ -84,7 +83,7 @@ impl InitializableThread for VideoTrackThread {
 
     fn run(self) {
         for event in self.stream {
-            if self.frame_sender.send(event).is_err() {
+            if self.queue_input.send_video(event).is_err() {
                 warn!("Failed to send decoded video frame from decoder. Channel closed.");
                 return;
             }
@@ -105,17 +104,17 @@ pub(super) struct AudioTrackThreadHandle {
 
 pub(super) struct AudioTrackThread {
     stream: Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
-    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    queue_input: WeakQueueInput,
 }
 
 impl InitializableThread for AudioTrackThread {
-    type InitOptions = (Arc<PipelineCtx>, Sender<PipelineEvent<InputAudioSamples>>);
+    type InitOptions = (Arc<PipelineCtx>, WeakQueueInput);
 
     type SpawnOutput = AudioTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, samples_sender) = options;
+        let (ctx, queue_input) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
@@ -140,7 +139,7 @@ impl InitializableThread for AudioTrackThread {
 
         let state = Self {
             stream: Box::new(result_stream),
-            samples_sender,
+            queue_input,
         };
         let output = AudioTrackThreadHandle { rtp_packet_sender };
         Ok((state, output))
@@ -148,7 +147,7 @@ impl InitializableThread for AudioTrackThread {
 
     fn run(self) {
         for event in self.stream {
-            if self.samples_sender.send(event).is_err() {
+            if self.queue_input.send_audio(event).is_err() {
                 warn!("Failed to send decoded audio samples from decoder. Channel closed.");
                 return;
             }

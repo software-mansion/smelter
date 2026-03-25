@@ -17,9 +17,11 @@ use crate::{
 
 use crate::prelude::*;
 
+use super::queue_input::WeakQueueInput;
+
 pub struct VideoQueue {
     sync_point: Instant,
-    inputs: HashMap<InputId, VideoQueueInput>,
+    inputs: HashMap<InputId, WeakQueueInput>,
     event_emitter: Arc<EventEmitter>,
     ahead_of_time_processing: bool,
 }
@@ -38,43 +40,8 @@ impl VideoQueue {
         }
     }
 
-    pub fn add_input(
-        &mut self,
-        input_id: &InputId,
-        receiver: Receiver<PipelineEvent<Frame>>,
-        opts: QueueInputOptions,
-        shared_state: SharedState,
-    ) {
-        self.inputs.insert(
-            input_id.clone(),
-            VideoQueueInput {
-                queue: VecDeque::new(),
-                receiver,
-                required: opts.required,
-
-                sync_point: self.sync_point,
-                shared_state,
-
-                offset_from_start: opts.offset,
-
-                pause_state: VideoPauseState::new(),
-
-                state: QueueState::New,
-
-                event_delivered_guard: EmitOnceGuard::new(
-                    Event::VideoInputStreamDelivered(input_id.clone()),
-                    &self.event_emitter,
-                ),
-                event_playing_guard: EmitOnceGuard::new(
-                    Event::VideoInputStreamPlaying(input_id.clone()),
-                    &self.event_emitter,
-                ),
-                event_eos_guard: EmitOnceGuard::new(
-                    Event::VideoInputStreamEos(input_id.clone()),
-                    &self.event_emitter,
-                ),
-            },
-        );
+    pub fn add_input(&mut self, input_id: &InputId, weak: WeakQueueInput) {
+        self.inputs.insert(input_id.clone(), weak);
     }
 
     pub fn remove_input(&mut self, input_id: &InputId) {
@@ -82,28 +49,34 @@ impl VideoQueue {
     }
 
     pub fn pause_input(&mut self, input_id: &InputId, pts: Duration) {
-        let Some(input) = self.inputs.get_mut(input_id) else {
+        let Some(weak) = self.inputs.get(input_id) else {
             return;
         };
-        if input.pause_state.pause(pts, input.queue.front().cloned()) {
+        let paused = weak.video(|input| input.pause_state.pause(pts, input.queue.front().cloned()));
+        if paused == Some(true) {
             self.event_emitter
                 .emit(Event::VideoInputStreamPaused(input_id.clone()));
         }
     }
 
     pub fn resume_input(&mut self, input_id: &InputId, pts: Duration) {
-        let Some(input) = self.inputs.get_mut(input_id) else {
+        let Some(weak) = self.inputs.get(input_id) else {
             return;
         };
-        if input.pause_state.resume(pts, input.state) {
+        let resumed = weak.video(|input| {
+            if input.pause_state.resume(pts, input.state) {
+                input.queue.clear();
+                Some(input.state)
+            } else {
+                None
+            }
+        });
+        if let Some(Some(QueueState::Running)) = resumed {
             // TS SDK tracks state based on those values, so if we pause in
             // non running state it will be stuck at paused until state does
             // not change
-            if input.state == QueueState::Running {
-                self.event_emitter
-                    .emit(Event::VideoInputStreamPlaying(input_id.clone()));
-            }
-            input.queue.clear();
+            self.event_emitter
+                .emit(Event::VideoInputStreamPlaying(input_id.clone()));
         }
     }
 
@@ -117,16 +90,13 @@ impl VideoQueue {
         let mut required = false;
         let frames = self
             .inputs
-            .iter_mut()
-            .filter_map(
-                |(input_id, input)| match input.get_frame(buffer_pts, queue_start_pts) {
-                    Some(frame_event) => {
-                        required = required || frame_event.required;
-                        Some((input_id.clone(), frame_event.event))
-                    }
-                    None => None,
-                },
-            )
+            .iter()
+            .filter_map(|(input_id, weak)| {
+                let frame_event =
+                    weak.video(|input| input.get_frame(buffer_pts, queue_start_pts))??;
+                required = required || frame_event.required;
+                Some((input_id.clone(), frame_event.event))
+            })
             .collect();
 
         QueueVideoOutput {
@@ -145,16 +115,20 @@ impl VideoQueue {
             return false;
         }
 
-        let all_inputs_ready = self
-            .inputs
-            .values_mut()
-            .all(|input| input.try_enqueue_until_ready_for_pts(next_pts, queue_start_pts));
+        let all_inputs_ready = self.inputs.values().all(|weak| {
+            weak.video(|input| input.try_enqueue_until_ready_for_pts(next_pts, queue_start_pts))
+                .unwrap_or(true)
+        });
         if all_inputs_ready {
             return true;
         }
 
-        let all_required_inputs_ready = self.inputs.values_mut().all(|input| {
-            (!input.required) || input.try_enqueue_until_ready_for_pts(next_pts, queue_start_pts)
+        let all_required_inputs_ready = self.inputs.values().all(|weak| {
+            weak.video(|input| {
+                (!input.required)
+                    || input.try_enqueue_until_ready_for_pts(next_pts, queue_start_pts)
+            })
+            .unwrap_or(true)
         });
         if !all_required_inputs_ready {
             return false;
@@ -168,8 +142,8 @@ impl VideoQueue {
     }
 
     pub(super) fn drop_old_frames_before_start(&mut self) {
-        for input in self.inputs.values_mut() {
-            input.drop_old_frames_before_start()
+        for weak in self.inputs.values() {
+            weak.video(|input| input.drop_old_frames_before_start());
         }
     }
 }
@@ -228,7 +202,7 @@ impl VideoPauseState {
     }
 }
 
-pub struct VideoQueueInput {
+pub(crate) struct VideoQueueInput {
     /// Frames are PTS ordered where PTS=0 represents beginning of the stream.
     queue: VecDeque<Frame>,
     /// Frames from the channel might have any PTS, they need to be processed
@@ -254,6 +228,39 @@ pub struct VideoQueueInput {
 }
 
 impl VideoQueueInput {
+    pub(super) fn new(
+        receiver: Receiver<PipelineEvent<Frame>>,
+        required: bool,
+        offset: Option<Duration>,
+        sync_point: Instant,
+        shared_state: SharedState,
+        input_id: &InputId,
+        event_emitter: &Arc<EventEmitter>,
+    ) -> Self {
+        Self {
+            queue: VecDeque::new(),
+            receiver,
+            required,
+            sync_point,
+            shared_state,
+            offset_from_start: offset,
+            pause_state: VideoPauseState::new(),
+            state: QueueState::New,
+            event_delivered_guard: EmitOnceGuard::new(
+                Event::VideoInputStreamDelivered(input_id.clone()),
+                event_emitter,
+            ),
+            event_playing_guard: EmitOnceGuard::new(
+                Event::VideoInputStreamPlaying(input_id.clone()),
+                event_emitter,
+            ),
+            event_eos_guard: EmitOnceGuard::new(
+                Event::VideoInputStreamEos(input_id.clone()),
+                event_emitter,
+            ),
+        }
+    }
+
     /// Return frame for PTS and drop all the older frames. This function does not check
     /// whether stream is required or not.
     fn get_frame(&mut self, buffer_pts: Duration, queue_start_pts: Duration) -> Option<FrameEvent> {

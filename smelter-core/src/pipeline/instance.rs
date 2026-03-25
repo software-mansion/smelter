@@ -83,22 +83,17 @@ impl Pipeline {
         input_id: InputId,
         options: RegisterInputOptions,
     ) -> Result<InputInitInfo, RegisterInputError> {
-        let input_options = options.input_options;
-        register_pipeline_input(
-            pipeline,
-            input_id,
-            options.queue_options,
-            |ctx, input_id| new_external_input(ctx, input_id, input_options),
-        )
+        register_pipeline_input(pipeline, input_id, |ctx, input_id| {
+            new_external_input(ctx, input_id, options)
+        })
     }
 
     pub fn register_raw_data_input(
         pipeline: &Arc<Mutex<Self>>,
         input_id: InputId,
         raw_input_options: RawDataInputOptions,
-        queue_options: QueueInputOptions,
     ) -> Result<RawDataInputSender, RegisterInputError> {
-        register_pipeline_input(pipeline, input_id, queue_options, |ctx, input_id| {
+        register_pipeline_input(pipeline, input_id, |ctx, input_id| {
             RawDataInput::new_input(ctx, input_id, raw_input_options)
         })
     }

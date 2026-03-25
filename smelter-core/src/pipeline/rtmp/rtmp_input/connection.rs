@@ -2,7 +2,7 @@ use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
 use crossbeam_channel::Sender;
 use rtmp::{AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent};
-use smelter_render::{Frame, InputId, error::ErrorStack};
+use smelter_render::{InputId, error::ErrorStack};
 use tracing::{Level, info, span, warn};
 
 use crate::{
@@ -23,6 +23,7 @@ use crate::{
         rtmp::rtmp_input::state::RtmpInputState,
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB, input_buffer::InputBuffer},
     },
+    queue::WeakQueueInput,
     utils::InitializableThread,
 };
 
@@ -38,8 +39,7 @@ pub(crate) fn start_connection_thread(
     let mut state = RtmpConnectionState {
         ctx,
         input_ref: input_ref.clone(),
-        frame_sender: input.frame_sender.clone(),
-        samples_sender: input.input_samples_sender.clone(),
+        queue_input: input.queue_input.clone(),
         decoders: input.decoders.clone(),
         buffer: input.buffer.clone(),
         first_packet_offset: None,
@@ -119,8 +119,7 @@ enum RtmpConnectionError {
 struct RtmpConnectionState {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
-    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    queue_input: WeakQueueInput,
     decoders: RtmpServerInputDecoders,
     buffer: InputBuffer,
 
@@ -149,7 +148,7 @@ impl RtmpConnectionState {
         let options = VideoDecoderThreadOptions {
             ctx: self.ctx.clone(),
             transformer: Some(H264AvccToAnnexB::new(h264_config)),
-            frame_sender: self.frame_sender.clone(),
+            queue_input: self.queue_input.clone(),
             input_buffer_size: 1000,
         };
 
@@ -185,7 +184,7 @@ impl RtmpConnectionState {
             decoder_options: FdkAacDecoderOptions {
                 asc: Some(config.data().clone()),
             },
-            samples_sender: self.samples_sender.clone(),
+            queue_input: self.queue_input.clone(),
             input_buffer_size: 1000,
         };
         let input_ref = self.input_ref.clone();

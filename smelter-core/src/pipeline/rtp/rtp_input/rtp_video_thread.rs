@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use crossbeam_channel::Sender;
-use smelter_render::Frame;
 use tracing::warn;
 
 use crate::{
@@ -12,6 +11,7 @@ use crate::{
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
     },
+    queue::WeakQueueInput,
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -23,22 +23,18 @@ pub(crate) struct RtpVideoTrackThreadHandle {
 
 pub(super) struct RtpVideoThread<Decoder: VideoDecoder + 'static> {
     stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
+    queue_input: WeakQueueInput,
     _decoder: PhantomData<Decoder>,
 }
 
 impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
-    type InitOptions = (
-        Arc<PipelineCtx>,
-        DepayloaderOptions,
-        Sender<PipelineEvent<Frame>>,
-    );
+    type InitOptions = (Arc<PipelineCtx>, DepayloaderOptions, WeakQueueInput);
 
     type SpawnOutput = RtpVideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, depayloader_options, frame_sender) = options;
+        let (ctx, depayloader_options, queue_input) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = crossbeam_channel::bounded(5);
         let depayloader_stream =
@@ -48,7 +44,7 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
 
         let state = Self {
             stream: Box::new(decoder_stream.flatten()),
-            frame_sender,
+            queue_input,
             _decoder: PhantomData,
         };
         let output = RtpVideoTrackThreadHandle { rtp_packet_sender };
@@ -57,7 +53,7 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
 
     fn run(self) {
         for event in self.stream {
-            if self.frame_sender.send(event).is_err() {
+            if self.queue_input.send_video(event).is_err() {
                 warn!("Failed to send decoded video frame from decoder. Channel closed.");
                 return;
             }

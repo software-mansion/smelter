@@ -21,14 +21,12 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
 
         const BAD_URL_PATH_SPEC: &str = "Exactly one of `url` or `path` has to be specified in a register request for an mp4 input.";
 
-        let queue_options = new_queue_options(required, offset_ms)?;
+        let (required, offset) = new_queue_options(required, offset_ms)?;
 
-        let buffer = match &queue_options {
-            core::QueueInputOptions {
-                required: false,
-                offset: None,
-            } => core::InputBufferOptions::Const(None),
-            _ => core::InputBufferOptions::None,
+        let buffer = if !required && offset.is_none() {
+            core::InputBufferOptions::Const(None)
+        } else {
+            core::InputBufferOptions::None
         };
 
         let source = match (url, path) {
@@ -55,15 +53,14 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
             .transpose()
             .map_err(|err| TypeError::new(format!("Invalid duration. {err}")))?;
 
-        Ok(core::RegisterInputOptions {
-            input_options: core::ProtocolInputOptions::Mp4(core::Mp4InputOptions {
-                source,
-                should_loop: should_loop.unwrap_or(false),
-                video_decoders,
-                buffer,
-                seek,
-            }),
-            queue_options,
-        })
+        Ok(core::RegisterInputOptions::Mp4(core::Mp4InputOptions {
+            source,
+            should_loop: should_loop.unwrap_or(false),
+            video_decoders,
+            buffer,
+            seek,
+            required,
+            offset,
+        }))
     }
 }

@@ -4,10 +4,14 @@ use std::{
     time::Duration,
 };
 
-use smelter_render::{Frame, FrameData, Framerate, InputId, NvPlanes, Resolution};
+use smelter_render::{FrameData, Framerate, InputId, NvPlanes, Resolution};
 use tracing::{Level, debug, error, info, span, warn};
 
-use crate::{pipeline::input::Input, prelude::*, queue::QueueDataReceiver};
+use crate::{
+    pipeline::input::Input,
+    prelude::*,
+    queue::{QueueInput, WeakQueueInput},
+};
 
 use v4l::{
     Format, FourCC,
@@ -49,7 +53,7 @@ impl V4l2Input {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         opts: V4l2InputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let device_config = V4l2DeviceConfig::initialize(&opts)?;
 
         let mut stream =
@@ -58,13 +62,14 @@ impl V4l2Input {
         // the library recommends to skip the first frame
         stream.next().map_err(V4l2InputError::IoError)?;
 
-        let (frame_sender, frame_receiver) = crossbeam_channel::bounded(10);
+        let queue_input = QueueInput::new(true, false, opts.required, None, &ctx, &input_ref);
+
         let should_close = Arc::new(AtomicBool::new(false));
 
         let mut state = InputState {
             config: device_config,
             ctx,
-            sender: frame_sender,
+            queue_input: queue_input.downgrade(),
             should_close: should_close.clone(),
             stream,
         };
@@ -81,10 +86,7 @@ impl V4l2Input {
         Ok((
             Input::V4l2(Self { should_close }),
             InputInitInfo::Other,
-            QueueDataReceiver {
-                video: Some(frame_receiver),
-                audio: None,
-            },
+            queue_input,
         ))
     }
 }
@@ -248,7 +250,7 @@ struct InputState<'a> {
     config: V4l2DeviceConfig,
     ctx: Arc<PipelineCtx>,
     should_close: Arc<AtomicBool>,
-    sender: crossbeam_channel::Sender<PipelineEvent<Frame>>,
+    queue_input: WeakQueueInput,
     stream: v4l::io::mmap::Stream<'a>,
 }
 
@@ -316,14 +318,18 @@ impl InputState<'_> {
                 resolution: self.config.resolution,
             };
 
-            if self.sender.send(PipelineEvent::Data(frame)).is_err() {
+            if self
+                .queue_input
+                .send_video(PipelineEvent::Data(frame))
+                .is_err()
+            {
                 debug!("Failed to send video chunk. Channel closed.");
             }
         }
     }
 
     fn send_eos(&self) {
-        if self.sender.send(PipelineEvent::EOS).is_err() {
+        if self.queue_input.send_video(PipelineEvent::EOS).is_err() {
             debug!("Cannot send EOS. Channel closed.");
         }
     }

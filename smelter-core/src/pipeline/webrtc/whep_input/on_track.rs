@@ -1,5 +1,3 @@
-use crossbeam_channel::Sender;
-use smelter_render::Frame;
 use tracing::{Instrument, debug, info_span, trace, warn};
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
@@ -16,6 +14,7 @@ use crate::{
             whep_input::WhepTrackContext,
         },
     },
+    queue::WeakQueueInput,
     utils::InitializableThread,
 };
 
@@ -24,8 +23,7 @@ use crate::prelude::*;
 pub fn handle_on_track(
     ctx: WhepTrackContext,
     input_ref: Ref<InputId>,
-    input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
+    queue_input: WeakQueueInput,
     video_preferences: Vec<VideoDecoderOptions>,
 ) {
     let kind = ctx.track.kind();
@@ -35,11 +33,9 @@ pub fn handle_on_track(
         async move {
             debug!("on_track called");
             let result = match kind {
-                RTPCodecType::Audio => {
-                    process_audio_track(ctx, input_ref, input_samples_sender).await
-                }
+                RTPCodecType::Audio => process_audio_track(ctx, input_ref, queue_input).await,
                 RTPCodecType::Video => {
-                    process_video_track(ctx, input_ref, frame_sender, video_preferences).await
+                    process_video_track(ctx, input_ref, queue_input, video_preferences).await
                 }
                 RTPCodecType::Unspecified => {
                     warn!("Unknown track kind");
@@ -58,17 +54,15 @@ pub fn handle_on_track(
 async fn process_audio_track(
     ctx: WhepTrackContext,
     input_ref: Ref<InputId>,
-    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    queue_input: WeakQueueInput,
 ) -> Result<(), WebrtcClientError> {
     if !audio_codec_negotiated(&ctx.rtc_receiver).await {
         warn!("Skipping audio track, no valid codec negotiated");
         return Err(WebrtcClientError::NoAudioCodecNegotiated);
     };
 
-    let handle = AudioTrackThread::spawn(
-        "WHEP input audio",
-        (ctx.pipeline_ctx.clone(), samples_sender),
-    )?;
+    let handle =
+        AudioTrackThread::spawn("WHEP input audio", (ctx.pipeline_ctx.clone(), queue_input))?;
 
     let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
     let mut rtp_reader = WebrtcRtpReader::new(
@@ -104,7 +98,7 @@ async fn process_audio_track(
 async fn process_video_track(
     ctx: WhepTrackContext,
     input_ref: Ref<InputId>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
+    queue_input: WeakQueueInput,
     video_preferences: Vec<VideoDecoderOptions>,
 ) -> Result<(), WebrtcClientError> {
     let (Some(decoder_mapping), Some(payload_type_mapping)) = (
@@ -136,7 +130,7 @@ async fn process_video_track(
             ctx.pipeline_ctx.clone(),
             decoder_mapping,
             payload_type_mapping,
-            frame_sender,
+            queue_input,
             keyframe_request_sender,
         ),
     )?;

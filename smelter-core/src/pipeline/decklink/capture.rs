@@ -3,29 +3,23 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
 use decklink::{
     AudioInputPacket, DetectedVideoInputFormatFlags, DisplayMode, InputCallback,
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
     VideoInputFrame,
 };
-use smelter_render::{Frame, FrameData, Resolution, error::ErrorStack};
+use smelter_render::{FrameData, Resolution, error::ErrorStack};
 use tracing::{Span, debug, info, trace, warn};
 
 use crate::pipeline::decklink::format::{BitDepth, Colorspace, Format};
+use crate::queue::WeakQueueInput;
 
 use crate::prelude::*;
 
 use super::AUDIO_SAMPLE_RATE;
 
-pub(super) struct DataReceivers {
-    pub(super) video: Option<Receiver<PipelineEvent<Frame>>>,
-    pub(super) audio: Option<Receiver<PipelineEvent<InputAudioSamples>>>,
-}
-
 pub(super) struct ChannelCallbackAdapter {
-    video_sender: Option<Sender<PipelineEvent<Frame>>>,
-    audio_sender: Option<Sender<PipelineEvent<InputAudioSamples>>>,
+    queue_input: WeakQueueInput,
     span: Span,
 
     // I'm not sure, but I suspect that holding Arc here would create a circular
@@ -41,41 +35,25 @@ impl ChannelCallbackAdapter {
     pub(super) fn new(
         ctx: &Arc<PipelineCtx>,
         span: Span,
-        enable_audio: bool,
+        queue_input: WeakQueueInput,
         input: Weak<decklink::Input>,
         initial_format: Format,
-    ) -> (Self, DataReceivers) {
-        let (video_sender, video_receiver) = bounded(1000);
-        let (audio_sender, audio_receiver) = match enable_audio {
-            true => {
-                let (sender, receiver) = bounded(1000);
-                (Some(sender), Some(receiver))
-            }
-            false => (None, None),
-        };
-        (
-            Self {
-                video_sender: Some(video_sender),
-                audio_sender,
-                span,
-                input,
-                // 15 ms is a buffer that should be enough for frame to be delivered to queue
-                sync_point: ctx.queue_sync_point + Duration::from_millis(15),
-                audio_offset: Mutex::new(None),
-                video_offset: Mutex::new(None),
-                last_format: Mutex::new(initial_format),
-            },
-            DataReceivers {
-                video: Some(video_receiver),
-                audio: audio_receiver,
-            },
-        )
+    ) -> Self {
+        Self {
+            queue_input,
+            span,
+            input,
+            // 15 ms is a buffer that should be enough for frame to be delivered to queue
+            sync_point: ctx.queue_sync_point + Duration::from_millis(15),
+            audio_offset: Mutex::new(None),
+            video_offset: Mutex::new(None),
+            last_format: Mutex::new(initial_format),
+        }
     }
 
     fn handle_video_frame(
         &self,
         video_frame: &mut VideoInputFrame,
-        sender: &Sender<PipelineEvent<Frame>>,
     ) -> Result<(), decklink::DeckLinkError> {
         let stream_time = video_frame.stream_time()?;
         let offset = {
@@ -107,16 +85,12 @@ impl ChannelCallbackAdapter {
         };
 
         trace!(?frame, ?pixel_format, "Received frame from decklink");
-        match sender.try_send(PipelineEvent::Data(frame)) {
-            Ok(_) => (),
-            Err(TrySendError::Full(_)) => {
-                warn!(
-                    "Failed to send frame from DeckLink. Channel is full, dropping frame pts={pts:?}."
-                )
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                debug!("Failed to send frame from DeckLink. Channel closed.");
-            }
+        if self
+            .queue_input
+            .send_video(PipelineEvent::Data(frame))
+            .is_err()
+        {
+            debug!("Failed to send frame from DeckLink. Channel closed.");
         }
         Ok(())
     }
@@ -199,7 +173,6 @@ impl ChannelCallbackAdapter {
     fn handle_audio_packet(
         &self,
         audio_packet: &mut AudioInputPacket,
-        sender: &Sender<PipelineEvent<InputAudioSamples>>,
     ) -> Result<(), decklink::DeckLinkError> {
         let packet_time = audio_packet.packet_time()?;
         let offset = {
@@ -220,16 +193,12 @@ impl ChannelCallbackAdapter {
             sample_rate: AUDIO_SAMPLE_RATE,
         };
         trace!(?samples, "Received audio samples from decklink");
-        match sender.try_send(PipelineEvent::Data(samples)) {
-            Ok(_) => (),
-            Err(TrySendError::Full(_)) => {
-                warn!(
-                    "Failed to send samples from DeckLink. Channel is full, dropping samples pts={pts:?}."
-                )
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                debug!("Failed to send samples from DeckLink. Channel closed.")
-            }
+        if self
+            .queue_input
+            .send_audio(PipelineEvent::Data(samples))
+            .is_err()
+        {
+            debug!("Failed to send samples from DeckLink. Channel closed.");
         }
         Ok(())
     }
@@ -306,8 +275,8 @@ impl InputCallback for ChannelCallbackAdapter {
     ) -> InputCallbackResult {
         let _span = self.span.enter();
 
-        if let (Some(video_frame), Some(sender)) = (video_frame, &self.video_sender)
-            && let Err(err) = self.handle_video_frame(video_frame, sender)
+        if let Some(video_frame) = video_frame
+            && let Err(err) = self.handle_video_frame(video_frame)
         {
             warn!(
                 "Failed to handle video frame: {}",
@@ -315,11 +284,11 @@ impl InputCallback for ChannelCallbackAdapter {
             )
         }
 
-        if let (Some(audio_packet), Some(sender)) = (audio_packet, &self.audio_sender)
-            && let Err(err) = self.handle_audio_packet(audio_packet, sender)
+        if let Some(audio_packet) = audio_packet
+            && let Err(err) = self.handle_audio_packet(audio_packet)
         {
             warn!(
-                "Failed to handle video frame: {}",
+                "Failed to handle audio packet: {}",
                 ErrorStack::new(&err).into_string()
             )
         }

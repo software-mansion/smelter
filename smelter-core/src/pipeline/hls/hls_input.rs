@@ -8,8 +8,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::queue::WeakQueueInput;
 use bytes::Bytes;
-use crossbeam_channel::{Receiver, bounded};
 use ffmpeg_next::{
     Dictionary, Packet, Stream,
     ffi::{
@@ -35,7 +35,7 @@ use crate::{
             H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread, input_buffer::InputBuffer,
         },
     },
-    queue::QueueDataReceiver,
+    queue::QueueInput,
 };
 
 use crate::prelude::*;
@@ -55,7 +55,7 @@ impl HlsInput {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         opts: HlsInputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
         let buffer = InputBuffer::new(&ctx, opts.buffer);
 
@@ -65,31 +65,44 @@ impl HlsInput {
         });
 
         let input_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
-        let (audio, samples_receiver) = match input_ctx.audio_stream() {
+        let has_audio = input_ctx.audio_stream().is_some();
+        let has_video = input_ctx.video_stream().is_some();
+
+        let queue_input = QueueInput::new(
+            has_video,
+            has_audio,
+            opts.required,
+            opts.offset,
+            &ctx,
+            &input_ref,
+        );
+
+        let audio = match input_ctx.audio_stream() {
             Some(stream) => {
-                let (track, receiver) =
-                    Self::handle_audio_track(&ctx, &input_ref, &stream, buffer.clone())?;
-                (Some(track), Some(receiver))
+                let track = Self::handle_audio_track(
+                    &ctx,
+                    &input_ref,
+                    &stream,
+                    buffer.clone(),
+                    queue_input.downgrade(),
+                )?;
+                Some(track)
             }
-            None => (None, None),
+            None => None,
         };
-        let (video, frame_receiver) = match input_ctx.video_stream() {
+        let video = match input_ctx.video_stream() {
             Some(stream) => {
-                let (track, receiver) = Self::handle_video_track(
+                let track = Self::handle_video_track(
                     &ctx,
                     &input_ref,
                     &stream,
                     opts.video_decoders,
                     buffer,
+                    queue_input.downgrade(),
                 )?;
-                (Some(track), Some(receiver))
+                Some(track)
             }
-            None => (None, None),
-        };
-
-        let receivers = QueueDataReceiver {
-            video: frame_receiver,
-            audio: samples_receiver,
+            None => None,
         };
 
         Self::spawn_demuxer_thread(input_ref, input_ctx, audio, video, ctx.stats_sender.clone());
@@ -97,7 +110,7 @@ impl HlsInput {
         Ok((
             Input::Hls(Self { should_close }),
             InputInitInfo::Other,
-            receivers,
+            queue_input,
         ))
     }
 
@@ -106,30 +119,27 @@ impl HlsInput {
         input_ref: &Ref<InputId>,
         stream: &Stream<'_>,
         buffer: InputBuffer,
-    ) -> Result<(Track, Receiver<PipelineEvent<InputAudioSamples>>), InputInitError> {
+        queue_input: WeakQueueInput,
+    ) -> Result<Track, InputInitError> {
         // not tested it was always null, but audio is in ADTS, so config is not
         // necessary
         let asc = read_extra_data(stream);
-        let (samples_sender, samples_receiver) = bounded(5);
         let state = StreamState::new(ctx, input_ref, stream.time_base(), buffer, TrackKind::Audio);
         let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
             input_ref.clone(),
             AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
                 decoder_options: FdkAacDecoderOptions { asc },
-                samples_sender,
+                queue_input,
                 input_buffer_size: 2000,
             },
         )?;
 
-        Ok((
-            Track {
-                index: stream.index(),
-                handle,
-                state,
-            },
-            samples_receiver,
-        ))
+        Ok(Track {
+            index: stream.index(),
+            handle,
+            state,
+        })
     }
 
     fn handle_video_track(
@@ -138,8 +148,8 @@ impl HlsInput {
         stream: &Stream<'_>,
         video_decoders: HlsInputVideoDecoders,
         buffer: InputBuffer,
-    ) -> Result<(Track, Receiver<PipelineEvent<Frame>>), InputInitError> {
-        let (frame_sender, frame_receiver) = bounded(5);
+        queue_input: WeakQueueInput,
+    ) -> Result<Track, InputInitError> {
         let state = StreamState::new(ctx, input_ref, stream.time_base(), buffer, TrackKind::Video);
 
         let extra_data = read_extra_data(stream);
@@ -157,7 +167,7 @@ impl HlsInput {
         let decoder_thread_options = VideoDecoderThreadOptions {
             ctx: ctx.clone(),
             transformer: h264_config.map(H264AvccToAnnexB::new),
-            frame_sender,
+            queue_input,
             input_buffer_size: 2000,
         };
 
@@ -194,14 +204,11 @@ impl HlsInput {
             }
         };
 
-        Ok((
-            Track {
-                index: stream.index(),
-                handle,
-                state,
-            },
-            frame_receiver,
-        ))
+        Ok(Track {
+            index: stream.index(),
+            handle,
+            state,
+        })
     }
 
     fn spawn_demuxer_thread(

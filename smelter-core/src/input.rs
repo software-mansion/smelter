@@ -3,13 +3,7 @@ use std::{fmt, sync::Arc, time::Duration};
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct RegisterInputOptions {
-    pub input_options: ProtocolInputOptions,
-    pub queue_options: QueueInputOptions,
-}
-
-#[derive(Debug, Clone)]
-pub enum ProtocolInputOptions {
+pub enum RegisterInputOptions {
     Rtp(RtpInputOptions),
     RtmpServer(RtmpServerInputOptions),
     Mp4(Mp4InputOptions),
@@ -20,14 +14,6 @@ pub enum ProtocolInputOptions {
     V4l2(V4l2InputOptions),
     #[cfg(feature = "decklink")]
     DeckLink(DeckLinkInputOptions),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct QueueInputOptions {
-    pub required: bool,
-    /// Relative offset this input stream should have to the clock that
-    /// starts when pipeline is started.
-    pub offset: Option<Duration>,
 }
 
 pub enum InputInitInfo {

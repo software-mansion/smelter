@@ -14,14 +14,12 @@ impl TryFrom<HlsInput> for core::RegisterInputOptions {
             decoder_map,
         } = value;
 
-        let queue_options = new_queue_options(required, offset_ms)?;
+        let (required, offset) = new_queue_options(required, offset_ms)?;
 
-        let buffer = match &queue_options {
-            core::QueueInputOptions {
-                required: false,
-                offset: None,
-            } => core::InputBufferOptions::Adaptive,
-            _ => core::InputBufferOptions::None,
+        let buffer = if !required && offset.is_none() {
+            core::InputBufferOptions::Adaptive
+        } else {
+            core::InputBufferOptions::None
         };
 
         let h264 = decoder_map
@@ -39,11 +37,10 @@ impl TryFrom<HlsInput> for core::RegisterInputOptions {
             url,
             video_decoders,
             buffer,
+            required,
+            offset,
         };
 
-        Ok(core::RegisterInputOptions {
-            input_options: core::ProtocolInputOptions::Hls(input_options),
-            queue_options,
-        })
+        Ok(core::RegisterInputOptions::Hls(input_options))
     }
 }

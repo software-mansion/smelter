@@ -1,6 +1,6 @@
 use reqwest::{Method, StatusCode};
 use smelter_render::Resolution;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use url::{ParseError, Url};
 
 use crate::{
@@ -19,6 +19,8 @@ pub struct WhipInputOptions {
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
     pub jitter_buffer: RtpJitterBufferOptions,
+    pub required: bool,
+    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +29,8 @@ pub struct WhepInputOptions {
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_url: Arc<str>,
     pub jitter_buffer: RtpJitterBufferOptions,
+    pub required: bool,
+    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -4,10 +4,9 @@ use std::{
     thread::JoinHandle,
 };
 
-use crossbeam_channel::Sender;
 use tracing::error;
 
-use crate::pipeline::utils::input_buffer::InputBuffer;
+use crate::{pipeline::utils::input_buffer::InputBuffer, queue::WeakQueueInput};
 
 use crate::prelude::*;
 
@@ -18,8 +17,7 @@ pub(crate) struct RtmpInputsState(Arc<Mutex<HashMap<Ref<InputId>, RtmpInputState
 pub(crate) struct RtmpInputState {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
-    pub frame_sender: Sender<PipelineEvent<Frame>>,
-    pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub queue_input: WeakQueueInput,
     pub decoders: RtmpServerInputDecoders,
     pub buffer: InputBuffer,
     pub connection_handle: Option<JoinHandle<()>>,
@@ -28,8 +26,7 @@ pub(crate) struct RtmpInputState {
 pub(crate) struct RtmpInputStateOptions {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
-    pub frame_sender: Sender<PipelineEvent<Frame>>,
-    pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub queue_input: WeakQueueInput,
     pub decoders: RtmpServerInputDecoders,
     pub buffer: InputBuffer,
 }
@@ -39,8 +36,7 @@ impl RtmpInputState {
         Self {
             app: options.app,
             stream_key: options.stream_key,
-            frame_sender: options.frame_sender,
-            input_samples_sender: options.input_samples_sender,
+            queue_input: options.queue_input,
             decoders: options.decoders,
             buffer: options.buffer,
             connection_handle: None,

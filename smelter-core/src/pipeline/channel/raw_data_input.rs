@@ -1,9 +1,12 @@
 use std::{sync::Arc, thread, time::Duration};
 
-use crossbeam_channel::{Receiver, Sender, bounded};
+use crossbeam_channel::{Sender, bounded};
 use tracing::{debug, trace};
 
-use crate::{pipeline::input::Input, queue::QueueDataReceiver};
+use crate::{
+    pipeline::input::Input,
+    queue::{QueueInput, WeakQueueInput},
+};
 
 use crate::prelude::*;
 
@@ -14,25 +17,43 @@ impl RawDataInput {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         options: RawDataInputOptions,
-    ) -> Result<(Input, RawDataInputSender, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, RawDataInputSender, QueueInput), InputInitError> {
         let buffer_duration = options
             .buffer_duration
             .unwrap_or(ctx.default_buffer_duration);
-        let (video_sender, video_receiver) = match options.video {
+
+        let queue_input = QueueInput::new(
+            options.video,
+            options.audio,
+            options.required,
+            options.offset,
+            &ctx,
+            &input_ref,
+        );
+
+        let video_sender = match options.video {
             true => {
-                let (sender, receiver) =
-                    spawn_video_repacking_thread(ctx.clone(), &input_ref, buffer_duration);
-                (Some(sender), Some(receiver))
+                let sender = spawn_video_repacking_thread(
+                    ctx.clone(),
+                    &input_ref,
+                    buffer_duration,
+                    queue_input.downgrade(),
+                );
+                Some(sender)
             }
-            false => (None, None),
+            false => None,
         };
-        let (audio_sender, audio_receiver) = match options.audio {
+        let audio_sender = match options.audio {
             true => {
-                let (sender, receiver) =
-                    spawn_audio_repacking_thread(ctx.clone(), &input_ref, buffer_duration);
-                (Some(sender), Some(receiver))
+                let sender = spawn_audio_repacking_thread(
+                    ctx.clone(),
+                    &input_ref,
+                    buffer_duration,
+                    queue_input.downgrade(),
+                );
+                Some(sender)
             }
-            false => (None, None),
+            false => None,
         };
         Ok((
             Input::RawDataChannel,
@@ -40,10 +61,7 @@ impl RawDataInput {
                 video: video_sender,
                 audio: audio_sender,
             },
-            QueueDataReceiver {
-                video: video_receiver,
-                audio: audio_receiver,
-            },
+            queue_input,
         ))
     }
 }
@@ -52,8 +70,8 @@ fn spawn_video_repacking_thread(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     buffer_duration: Duration,
-) -> (Sender<PipelineEvent<Frame>>, Receiver<PipelineEvent<Frame>>) {
-    let (output_sender, output_receiver) = bounded(5);
+    queue_input: WeakQueueInput,
+) -> Sender<PipelineEvent<Frame>> {
     let (input_sender, input_receiver) = bounded::<PipelineEvent<Frame>>(1000);
 
     thread::Builder::new()
@@ -75,7 +93,7 @@ fn spawn_video_repacking_thread(
                     PipelineEvent::EOS => PipelineEvent::EOS,
                 };
                 trace!(?event, "Sending raw frame");
-                if output_sender.send(event).is_err() {
+                if queue_input.send_video(event).is_err() {
                     debug!("Failed to send packet. Channel closed.");
                     break;
                 }
@@ -83,18 +101,15 @@ fn spawn_video_repacking_thread(
         })
         .unwrap();
 
-    (input_sender, output_receiver)
+    input_sender
 }
 
 fn spawn_audio_repacking_thread(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     buffer_duration: Duration,
-) -> (
-    Sender<PipelineEvent<InputAudioSamples>>,
-    Receiver<PipelineEvent<InputAudioSamples>>,
-) {
-    let (output_sender, output_receiver) = bounded(5);
+    queue_input: WeakQueueInput,
+) -> Sender<PipelineEvent<InputAudioSamples>> {
     let (input_sender, input_receiver) = bounded::<PipelineEvent<InputAudioSamples>>(1000);
 
     thread::Builder::new()
@@ -117,7 +132,7 @@ fn spawn_audio_repacking_thread(
                     PipelineEvent::EOS => PipelineEvent::EOS,
                 };
                 trace!(?event, "Sending raw samples");
-                if output_sender.send(event).is_err() {
+                if queue_input.send_audio(event).is_err() {
                     debug!("Failed to send packet. Channel closed.");
                     break;
                 }
@@ -125,5 +140,5 @@ fn spawn_audio_repacking_thread(
         })
         .unwrap();
 
-    (input_sender, output_receiver)
+    input_sender
 }

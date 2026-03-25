@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use crossbeam_channel::bounded;
-
 use crate::{
     pipeline::{
         input::Input,
@@ -13,7 +11,7 @@ use crate::{
             },
         },
     },
-    queue::QueueDataReceiver,
+    queue::QueueInput,
 };
 
 use crate::prelude::*;
@@ -28,7 +26,7 @@ impl WhipInput {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         options: WhipInputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let Some(state) = &ctx.whip_whep_state else {
             return Err(WebrtcServerError::ServerNotRunning.into());
         };
@@ -37,12 +35,19 @@ impl WhipInput {
             kind: InputProtocolKind::Whip,
         });
 
+        let queue_input = QueueInput::new(
+            true,
+            true,
+            options.required,
+            options.offset,
+            &ctx,
+            &input_ref,
+        );
+
         let endpoint_id = options
             .endpoint_override
             .unwrap_or(input_ref.id().0.clone());
         let endpoint_route = Arc::from(format!("/whip/{}", urlencoding::encode(&endpoint_id)));
-        let (frame_sender, frame_receiver) = bounded(5);
-        let (input_samples_sender, input_samples_receiver) = bounded(5);
 
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
 
@@ -54,8 +59,7 @@ impl WhipInput {
                 bearer_token: bearer_token.clone(),
                 endpoint_id,
                 video_preferences,
-                frame_sender,
-                input_samples_sender,
+                queue_input: queue_input.downgrade(),
                 jitter_buffer_options: options.jitter_buffer,
             },
         )?;
@@ -69,10 +73,7 @@ impl WhipInput {
                 bearer_token,
                 endpoint_route,
             },
-            QueueDataReceiver {
-                video: Some(frame_receiver),
-                audio: Some(input_samples_receiver),
-            },
+            queue_input,
         ))
     }
 }

@@ -1,4 +1,4 @@
-use std::{io, sync::Arc};
+use std::{io, sync::Arc, time::Duration};
 
 use smelter_render::InputId;
 use url::Url;
@@ -67,6 +67,8 @@ pub struct RtmpServerInputOptions {
     pub stream_key: Arc<str>,
     pub decoders: RtmpServerInputDecoders,
     pub buffer: InputBufferOptions,
+    pub required: bool,
+    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]

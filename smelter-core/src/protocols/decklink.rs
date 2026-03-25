@@ -11,6 +11,7 @@ pub struct DeckLinkInputOptions {
     /// Force specified pixel format, value resolved in input format
     /// autodetection will be ignored.
     pub pixel_format: Option<DeckLinkPixelFormat>,
+    pub required: bool,
 }
 
 #[derive(Debug, thiserror::Error)]

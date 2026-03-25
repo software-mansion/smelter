@@ -15,13 +15,14 @@ use crate::{
 use crate::prelude::*;
 
 use super::QueueAudioOutput;
+use super::queue_input::WeakQueueInput;
 use crossbeam_channel::{Receiver, TryRecvError};
 use smelter_render::InputId;
 use tracing::debug;
 
 pub struct AudioQueue {
     sync_point: Instant,
-    inputs: HashMap<InputId, AudioQueueInput>,
+    inputs: HashMap<InputId, WeakQueueInput>,
     event_emitter: Arc<EventEmitter>,
     ahead_of_time_processing: bool,
 }
@@ -40,42 +41,8 @@ impl AudioQueue {
         }
     }
 
-    pub fn add_input(
-        &mut self,
-        input_id: &InputId,
-        receiver: Receiver<PipelineEvent<InputAudioSamples>>,
-        opts: QueueInputOptions,
-        shared_state: SharedState,
-    ) {
-        self.inputs.insert(
-            input_id.clone(),
-            AudioQueueInput {
-                queue: VecDeque::new(),
-                receiver,
-                required: opts.required,
-
-                sync_point: self.sync_point,
-                shared_state,
-
-                offset_from_start: opts.offset,
-
-                pause_state: PauseState::new(),
-                state: QueueState::New,
-
-                event_delivered_guard: EmitOnceGuard::new(
-                    Event::AudioInputStreamDelivered(input_id.clone()),
-                    &self.event_emitter,
-                ),
-                event_playing_guard: EmitOnceGuard::new(
-                    Event::AudioInputStreamPlaying(input_id.clone()),
-                    &self.event_emitter,
-                ),
-                event_eos_guard: EmitOnceGuard::new(
-                    Event::AudioInputStreamEos(input_id.clone()),
-                    &self.event_emitter,
-                ),
-            },
-        );
+    pub fn add_input(&mut self, input_id: &InputId, weak: WeakQueueInput) {
+        self.inputs.insert(input_id.clone(), weak);
     }
 
     pub fn remove_input(&mut self, input_id: &InputId) {
@@ -83,28 +50,34 @@ impl AudioQueue {
     }
 
     pub fn pause_input(&mut self, input_id: &InputId, pts: Duration) {
-        let Some(input) = self.inputs.get_mut(input_id) else {
+        let Some(weak) = self.inputs.get(input_id) else {
             return;
         };
-        if input.pause_state.pause(pts) {
+        let paused = weak.audio(|input| input.pause_state.pause(pts));
+        if paused == Some(true) {
             self.event_emitter
                 .emit(Event::AudioInputStreamPaused(input_id.clone()));
         }
     }
 
     pub fn resume_input(&mut self, input_id: &InputId, pts: Duration) {
-        let Some(input) = self.inputs.get_mut(input_id) else {
+        let Some(weak) = self.inputs.get(input_id) else {
             return;
         };
-        if input.pause_state.resume(pts, input.state) {
+        let resumed = weak.audio(|input| {
+            if input.pause_state.resume(pts, input.state) {
+                input.queue.clear();
+                Some(input.state)
+            } else {
+                None
+            }
+        });
+        if let Some(Some(QueueState::Running)) = resumed {
             // TS SDK tracks state based on those values, so if we pause in
             // non running state it will be stuck at paused until state does
             // not change
-            if input.state == QueueState::Running {
-                self.event_emitter
-                    .emit(Event::AudioInputStreamPlaying(input_id.clone()));
-            }
-            input.queue.clear();
+            self.event_emitter
+                .emit(Event::AudioInputStreamPlaying(input_id.clone()));
         }
     }
 
@@ -117,11 +90,11 @@ impl AudioQueue {
         let mut required = false;
         let samples = self
             .inputs
-            .iter_mut()
-            .map(|(input_id, input)| {
-                let audio_event = input.pop_samples(range, queue_start_pts);
+            .iter()
+            .filter_map(|(input_id, weak)| {
+                let audio_event = weak.audio(|input| input.pop_samples(range, queue_start_pts))?;
                 required = required || audio_event.required;
-                (input_id.clone(), audio_event.event)
+                Some((input_id.clone(), audio_event.event))
             })
             .collect();
 
@@ -142,16 +115,20 @@ impl AudioQueue {
             return false;
         }
 
-        let all_inputs_ready = self
-            .inputs
-            .values_mut()
-            .all(|input| input.try_enqueue_until_ready_for_pts(pts_range, queue_start_pts));
+        let all_inputs_ready = self.inputs.values().all(|weak| {
+            weak.audio(|input| input.try_enqueue_until_ready_for_pts(pts_range, queue_start_pts))
+                .unwrap_or(true)
+        });
         if all_inputs_ready {
             return true;
         };
 
-        let all_required_inputs_ready = self.inputs.values_mut().all(|input| {
-            (!input.required) || input.try_enqueue_until_ready_for_pts(pts_range, queue_start_pts)
+        let all_required_inputs_ready = self.inputs.values().all(|weak| {
+            weak.audio(|input| {
+                (!input.required)
+                    || input.try_enqueue_until_ready_for_pts(pts_range, queue_start_pts)
+            })
+            .unwrap_or(true)
         });
         if !all_required_inputs_ready {
             return false;
@@ -165,8 +142,8 @@ impl AudioQueue {
     }
 
     pub(super) fn drop_old_samples_before_start(&mut self) {
-        for input in self.inputs.values_mut() {
-            input.drop_old_samples_before_start()
+        for weak in self.inputs.values() {
+            weak.audio(|input| input.drop_old_samples_before_start());
         }
     }
 }
@@ -176,7 +153,7 @@ struct AudioEvent {
     event: PipelineEvent<Vec<InputAudioSamples>>,
 }
 
-struct AudioQueueInput {
+pub(crate) struct AudioQueueInput {
     /// Samples/batches are PTS ordered where PTS=0 represents beginning of the stream.
     queue: VecDeque<InputAudioSamples>,
     /// Samples from the channel might have any PTS, they need to be processed before
@@ -201,6 +178,39 @@ struct AudioQueueInput {
 }
 
 impl AudioQueueInput {
+    pub(super) fn new(
+        receiver: Receiver<PipelineEvent<InputAudioSamples>>,
+        required: bool,
+        offset: Option<Duration>,
+        sync_point: Instant,
+        shared_state: SharedState,
+        input_id: &InputId,
+        event_emitter: &Arc<EventEmitter>,
+    ) -> Self {
+        Self {
+            queue: VecDeque::new(),
+            receiver,
+            required,
+            sync_point,
+            shared_state,
+            offset_from_start: offset,
+            pause_state: PauseState::new(),
+            state: QueueState::New,
+            event_delivered_guard: EmitOnceGuard::new(
+                Event::AudioInputStreamDelivered(input_id.clone()),
+                event_emitter,
+            ),
+            event_playing_guard: EmitOnceGuard::new(
+                Event::AudioInputStreamPlaying(input_id.clone()),
+                event_emitter,
+            ),
+            event_eos_guard: EmitOnceGuard::new(
+                Event::AudioInputStreamEos(input_id.clone()),
+                event_emitter,
+            ),
+        }
+    }
+
     /// Get batches that have samples in range `range` and remove them from the queue.
     /// Batches that are partially in range will still be returned. Single batch can
     /// be returned only once, elements downstream (audio mixer) is responsible for

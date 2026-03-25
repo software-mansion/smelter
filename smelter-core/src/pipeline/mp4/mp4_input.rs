@@ -21,7 +21,7 @@ use crate::{
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
         utils::{H264AvccToAnnexB, input_buffer::InputBuffer},
     },
-    queue::QueueDataReceiver,
+    queue::QueueInput,
     utils::{InitializableThread, ShutdownCondition},
 };
 
@@ -29,8 +29,6 @@ use crate::prelude::*;
 
 /// Channel size between input and decoder
 const CHUNK_BUFFER_SIZE: usize = 1;
-/// Channel size between decoder and queue
-const FRAME_BUFFER_SIZE: usize = 5;
 
 pub struct Mp4Input {
     events_sender: Sender<StateEvent>,
@@ -49,7 +47,7 @@ impl Mp4Input {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         options: Mp4InputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let source_file = match options.source.clone() {
             Mp4InputSource::Url(url) => Self::download_remote_file(&ctx, &url)?,
             Mp4InputSource::File(path) => Arc::new(SourceFile {
@@ -81,9 +79,17 @@ impl Mp4Input {
             }
         });
 
-        let (video_handle, video_receiver, video_track) = match video {
+        let queue_input = QueueInput::new(
+            video.is_some(),
+            audio.is_some(),
+            options.required,
+            options.offset,
+            &ctx,
+            &input_ref,
+        );
+
+        let (video_handle, video_track) = match video {
             Some(track) => {
-                let (sender, receiver) = crossbeam_channel::bounded(FRAME_BUFFER_SIZE);
                 let handle = match (track.decoder_options(), h264_decoder) {
                     (DecoderOptions::H264(h264_config), VideoDecoderOptions::FfmpegH264) => {
                         VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
@@ -91,7 +97,7 @@ impl Mp4Input {
                             VideoDecoderThreadOptions {
                                 ctx: ctx.clone(),
                                 transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
-                                frame_sender: sender,
+                                queue_input: queue_input.downgrade(),
                                 input_buffer_size: CHUNK_BUFFER_SIZE,
                             },
                         )?
@@ -107,7 +113,7 @@ impl Mp4Input {
                             VideoDecoderThreadOptions {
                                 ctx: ctx.clone(),
                                 transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
-                                frame_sender: sender,
+                                queue_input: queue_input.downgrade(),
                                 input_buffer_size: CHUNK_BUFFER_SIZE,
                             },
                         )?
@@ -118,14 +124,13 @@ impl Mp4Input {
                         );
                     }
                 };
-                (Some(handle), Some(receiver), Some(track))
+                (Some(handle), Some(track))
             }
-            None => (None, None, None),
+            None => (None, None),
         };
 
-        let (audio_handle, audio_receiver, audio_track) = match audio {
+        let (audio_handle, audio_track) = match audio {
             Some(track) => {
-                let (sender, receiver) = crossbeam_channel::bounded(FRAME_BUFFER_SIZE);
                 let handle = match track.decoder_options() {
                     DecoderOptions::Aac(data) => {
                         AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
@@ -135,7 +140,7 @@ impl Mp4Input {
                                 decoder_options: FdkAacDecoderOptions {
                                     asc: Some(data.clone()),
                                 },
-                                samples_sender: sender,
+                                queue_input: queue_input.downgrade(),
                                 input_buffer_size: CHUNK_BUFFER_SIZE,
                             },
                         )?
@@ -146,9 +151,9 @@ impl Mp4Input {
                         );
                     }
                 };
-                (Some(handle), Some(receiver), Some(track))
+                (Some(handle), Some(track))
             }
-            None => (None, None, None),
+            None => (None, None),
         };
 
         let (reader, events_sender) = TrackManagerThread::new(
@@ -172,10 +177,7 @@ impl Mp4Input {
                 video_duration,
                 audio_duration,
             },
-            QueueDataReceiver {
-                video: video_receiver,
-                audio: audio_receiver,
-            },
+            queue_input,
         ))
     }
 

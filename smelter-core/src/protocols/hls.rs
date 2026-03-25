@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use crate::{
     InputBufferOptions,
@@ -10,6 +10,8 @@ pub struct HlsInputOptions {
     pub url: Arc<str>,
     pub video_decoders: HlsInputVideoDecoders,
     pub buffer: InputBufferOptions,
+    pub required: bool,
+    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]

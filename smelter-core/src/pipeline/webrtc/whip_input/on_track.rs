@@ -61,13 +61,13 @@ async fn process_audio_track(
         ));
     };
 
-    let samples_sender = ctx
+    let queue_input = ctx
         .inputs
-        .get_with(&input_ref, |input| Ok(input.input_samples_sender.clone()))?;
+        .get_with(&input_ref, |input| Ok(input.queue_input.clone()))?;
 
     let handle = AudioTrackThread::spawn(
         format!("WHIP input audio, input_id: {input_ref}"),
-        (ctx.pipeline_ctx.clone(), samples_sender),
+        (ctx.pipeline_ctx.clone(), queue_input),
     )?;
 
     let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
@@ -116,9 +116,9 @@ async fn process_video_track(
         ));
     };
 
-    let frame_sender = ctx
+    let queue_input = ctx
         .inputs
-        .get_with(&input_ref, |input| Ok(input.frame_sender.clone()))?;
+        .get_with(&input_ref, |input| Ok(input.queue_input.clone()))?;
 
     let on_stats_event = {
         let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
@@ -141,7 +141,7 @@ async fn process_video_track(
             ctx.pipeline_ctx.clone(),
             decoder_mapping,
             payload_type_mapping,
-            frame_sender,
+            queue_input,
             keyframe_request_sender,
         ),
     )?;

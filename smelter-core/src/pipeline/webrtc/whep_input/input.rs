@@ -4,7 +4,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::bounded;
 use tokio::sync::oneshot;
 use tracing::{Instrument, Level, debug, span};
 use url::Url;
@@ -22,7 +21,7 @@ use crate::{
             },
         },
     },
-    queue::QueueDataReceiver,
+    queue::QueueInput,
 };
 
 use crate::prelude::*;
@@ -42,7 +41,7 @@ impl WhepInput {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         options: WhepInputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
 
         ctx.stats_sender.send(StatsEvent::NewInput {
@@ -110,9 +109,15 @@ async fn init_whep_client(
     input_ref: Ref<InputId>,
     ctx: Arc<PipelineCtx>,
     options: WhepInputOptions,
-) -> Result<(Input, InputInitInfo, QueueDataReceiver), WebrtcClientError> {
-    let (frame_sender, frame_receiver) = bounded(5);
-    let (input_samples_sender, input_samples_receiver) = bounded(5);
+) -> Result<(Input, InputInitInfo, QueueInput), WebrtcClientError> {
+    let queue_input = QueueInput::new(
+        true,
+        true,
+        options.required,
+        options.offset,
+        &ctx,
+        &input_ref,
+    );
 
     let client = WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
     let (video_preferences, video_codecs_params) =
@@ -140,14 +145,14 @@ async fn init_whep_client(
     {
         let input_ref = input_ref.clone();
         let ctx = ctx.clone();
+        let queue_input = queue_input.downgrade();
         let buffer = RtpJitterBufferInitOptions::new(&ctx, options.jitter_buffer);
         pc.on_track(move |track_ctx| {
             let ctx = WhepTrackContext::new(track_ctx, &ctx, &buffer);
             handle_on_track(
                 ctx,
                 input_ref.clone(),
-                input_samples_sender.clone(),
-                frame_sender.clone(),
+                queue_input.clone(),
                 video_preferences.clone(),
             );
         });
@@ -161,9 +166,6 @@ async fn init_whep_client(
             _peer_connection: pc,
         }),
         InputInitInfo::Other,
-        QueueDataReceiver {
-            video: Some(frame_receiver),
-            audio: Some(input_samples_receiver),
-        },
+        queue_input,
     ))
 }

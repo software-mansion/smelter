@@ -8,6 +8,7 @@ pub struct V4l2InputOptions {
     pub resolution: Option<Resolution>,
     pub format: V4l2Format,
     pub framerate: Option<Framerate>,
+    pub required: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

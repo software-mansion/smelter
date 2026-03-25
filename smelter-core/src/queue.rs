@@ -1,4 +1,5 @@
 mod audio_queue;
+mod queue_input;
 mod queue_thread;
 mod utils;
 mod video_queue;
@@ -13,12 +14,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{Receiver, Sender, bounded};
-use smelter_render::{Frame, FrameSet, Framerate, InputId};
+use crossbeam_channel::{Sender, bounded};
+use smelter_render::{FrameSet, Framerate, InputId};
 
 use crate::audio_mixer::InputSamplesSet;
 
 use crate::prelude::*;
+
+pub(crate) use self::queue_input::{QueueInput, WeakQueueInput};
 
 use self::{
     audio_queue::AudioQueue,
@@ -27,12 +30,6 @@ use self::{
 };
 
 const DEFAULT_AUDIO_CHUNK_DURATION: Duration = Duration::from_millis(20); // typical audio packet size
-
-#[derive(Debug)]
-pub struct QueueDataReceiver {
-    pub video: Option<Receiver<PipelineEvent<Frame>>>,
-    pub audio: Option<Receiver<PipelineEvent<InputAudioSamples>>>,
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct QueueOptions {
@@ -71,6 +68,7 @@ impl From<&PipelineOptions> for QueueOptions {
 pub struct Queue {
     video_queue: Mutex<VideoQueue>,
     audio_queue: Mutex<AudioQueue>,
+    inputs: Mutex<HashMap<InputId, QueueInput>>,
 
     output_framerate: Framerate,
 
@@ -171,13 +169,14 @@ impl Queue {
                 ctx.event_emitter.clone(),
                 opts.ahead_of_time_processing,
             )),
-            output_framerate: opts.output_framerate,
-
             audio_queue: Mutex::new(AudioQueue::new(
                 sync_point,
                 ctx.event_emitter.clone(),
                 opts.ahead_of_time_processing,
             )),
+            inputs: Mutex::new(HashMap::new()),
+
+            output_framerate: opts.output_framerate,
             audio_chunk_duration: DEFAULT_AUDIO_CHUNK_DURATION,
 
             sync_point,
@@ -205,32 +204,27 @@ impl Queue {
         self.should_close.store(true, Ordering::Relaxed)
     }
 
-    pub fn add_input(
-        &self,
-        input_id: &InputId,
-        receiver: QueueDataReceiver,
-        opts: QueueInputOptions,
-    ) {
-        let shared_state = SharedState::default();
-        if let Some(receiver) = receiver.video {
-            self.video_queue.lock().unwrap().add_input(
-                input_id,
-                receiver,
-                opts,
-                shared_state.clone(),
-            );
-        };
-        if let Some(receiver) = receiver.audio {
-            self.audio_queue.lock().unwrap().add_input(
-                input_id,
-                receiver,
-                opts,
-                shared_state.clone(),
-            );
+    pub(crate) fn add_input(&self, input_id: &InputId, queue_input: QueueInput) {
+        let weak = queue_input.downgrade();
+
+        if queue_input.has_video() {
+            self.video_queue
+                .lock()
+                .unwrap()
+                .add_input(input_id, weak.clone());
         }
+        if queue_input.has_audio() {
+            self.audio_queue.lock().unwrap().add_input(input_id, weak);
+        }
+
+        self.inputs
+            .lock()
+            .unwrap()
+            .insert(input_id.clone(), queue_input);
     }
 
     pub fn remove_input(&self, input_id: &InputId) {
+        self.inputs.lock().unwrap().remove(input_id);
         self.video_queue.lock().unwrap().remove_input(input_id);
         self.audio_queue.lock().unwrap().remove_input(input_id);
     }

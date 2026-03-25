@@ -19,6 +19,8 @@ pub struct RtpInputOptions {
     pub video: Option<VideoDecoderOptions>,
     pub audio: Option<RtpAudioOptions>,
     pub jitter_buffer: RtpJitterBufferOptions,
+    pub required: bool,
+    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

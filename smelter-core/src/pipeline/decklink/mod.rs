@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tracing::{Level, error, span};
 
 use crate::pipeline::decklink::format::Format;
-use crate::{pipeline::input::Input, queue::QueueDataReceiver};
+use crate::{pipeline::input::Input, queue::QueueInput};
 
 use crate::prelude::*;
 
@@ -25,7 +25,7 @@ impl DeckLink {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         opts: DeckLinkInputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let span = span!(
             Level::INFO,
             "DeckLink input",
@@ -58,10 +58,19 @@ impl DeckLink {
             .enable_audio(AUDIO_SAMPLE_RATE, decklink::AudioSampleType::Sample32bit, 2)
             .map_err(DeckLinkInputError::DecklinkError)?;
 
-        let (callback, receivers) = ChannelCallbackAdapter::new(
+        let queue_input = QueueInput::new(
+            true,
+            opts.enable_audio,
+            opts.required,
+            None,
+            &ctx,
+            &input_ref,
+        );
+
+        let callback = ChannelCallbackAdapter::new(
             &ctx,
             span,
-            opts.enable_audio,
+            queue_input.downgrade(),
             Arc::<decklink::Input>::downgrade(&input),
             Format::new(initial_mode, initial_pixel_format),
         );
@@ -75,10 +84,7 @@ impl DeckLink {
         Ok((
             Input::DeckLink(Self { input }),
             InputInitInfo::Other,
-            QueueDataReceiver {
-                video: receivers.video,
-                audio: receivers.audio,
-            },
+            queue_input,
         ))
     }
 }

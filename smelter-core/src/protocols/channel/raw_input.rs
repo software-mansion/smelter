@@ -24,6 +24,8 @@ pub struct RawDataInputOptions {
     ///
     /// By default DEFAULT_BUFFER_DURATION will be used.
     pub buffer_duration: Option<Duration>,
+    pub required: bool,
+    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
