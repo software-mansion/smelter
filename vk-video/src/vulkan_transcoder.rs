@@ -15,7 +15,7 @@ use crate::{
     vulkan_decoder::{
         DecodeResult, FrameSorter, ImageModifiers, InFlightDecodeResources, VulkanDecoder,
     },
-    vulkan_encoder::{FullEncoderParameters, VulkanEncoder},
+    vulkan_encoder::{Encoder, FullEncoderParameters, VulkanEncoder},
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
     wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
 };
@@ -40,17 +40,27 @@ pub enum TranscoderError {
     WrongOutputNumber { expected_max: usize, actual: usize },
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum AnyEncoderParameters {
+    H264(EncoderParametersH264),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum AnyFullEncoderParameters {
+    H264(FullEncoderParameters<H264Codec>),
+}
+
 /// Configuration for a single transcoder output.
 #[derive(Debug, Clone, Copy)]
 pub struct TranscoderOutputConfig {
-    pub encoder_parameters: EncoderParametersH264,
+    pub encoder_parameters: AnyEncoderParameters,
     pub scaling_algorithm: ScalingAlgorithm,
 }
 
 impl From<EncoderParametersH264> for TranscoderOutputConfig {
     fn from(encoder_parameters: EncoderParametersH264) -> Self {
         Self {
-            encoder_parameters,
+            encoder_parameters: AnyEncoderParameters::H264(encoder_parameters),
             scaling_algorithm: ScalingAlgorithm::default(),
         }
     }
@@ -71,7 +81,7 @@ pub struct Transcoder {
     reference_ctx: ReferenceContext,
     sorter: FrameSorter<ResizedImages>,
     resizing_pipeline: ResizingPipeline,
-    encoders: Vec<VulkanEncoder<'static, H264Codec>>,
+    encoders: Vec<Box<dyn Encoder<'static>>>,
 }
 
 impl Transcoder {
@@ -104,13 +114,22 @@ impl Transcoder {
 
         let parameters = output_configs
             .iter()
-            .map(|c| device.validate_and_fill_encoder_parameters(c.encoder_parameters))
+            .map(|c| match c.encoder_parameters {
+                AnyEncoderParameters::H264(params) => device
+                    .validate_and_fill_encoder_parameters(params)
+                    .map(AnyFullEncoderParameters::H264),
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let encoders = parameters
             .iter()
             .copied()
-            .map(|p| VulkanEncoder::new(Arc::new(device.encoding_device()?), p))
+            .map(|p| match p {
+                AnyFullEncoderParameters::H264(p) => device
+                    .encoding_device()
+                    .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
+                    .map(|e| Box::new(e) as Box<dyn Encoder>),
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let pipeline_output_configs =
@@ -201,7 +220,7 @@ impl Transcoder {
             let mut trackers = self
                 .encoders
                 .iter_mut()
-                .map(|e| &mut e.tracker)
+                .map(|e| e.tracker())
                 .collect::<Vec<_>>();
             let cropped_extent = frame.decode_result.frame.cropped_extent;
             let output = self
@@ -244,12 +263,12 @@ impl Transcoder {
 
         let mut semaphores = Vec::new();
         let mut values = Vec::new();
-        for submit in submits.iter() {
+        for submit in submits.iter_mut() {
             semaphores.push(
                 submit
                     .0
                     .encoder
-                    .tracker
+                    .tracker()
                     .semaphore_tracker
                     .semaphore
                     .semaphore,
@@ -290,17 +309,19 @@ impl Transcoder {
 }
 
 fn make_pipeline_output_configs(
-    parameters: &[FullEncoderParameters<H264Codec>],
+    parameters: &[AnyFullEncoderParameters],
     scaling_algorithms: &[crate::parameters::ScalingAlgorithm],
 ) -> Vec<OutputConfig> {
     parameters
         .iter()
         .zip(scaling_algorithms.iter())
-        .map(|(p, &scaling)| OutputConfig {
-            width: p.width.get(),
-            height: p.height.get(),
-            profile: H264Codec::profile_info(p),
-            scaling_algorithm: scaling,
+        .map(|(p, &scaling)| match p {
+            AnyFullEncoderParameters::H264(p) => OutputConfig {
+                width: p.width.get(),
+                height: p.height.get(),
+                profile: H264Codec::profile_info(p),
+                scaling_algorithm: scaling,
+            },
         })
         .collect()
 }

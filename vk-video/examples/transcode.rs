@@ -10,8 +10,8 @@ fn main() {
     use vk_video::{
         EncodedInputChunk,
         parameters::{
-            RateControl, ScalingAlgorithm, TranscoderOutputConfig, VideoParameters,
-            VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+            AnyEncoderParameters, RateControl, ScalingAlgorithm, TranscoderOutputConfig,
+            VideoParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
         },
     };
 
@@ -70,7 +70,7 @@ fn main() {
 
     let mut transcoder = device
         .create_transcoder(&[TranscoderOutputConfig {
-            encoder_parameters: params,
+            encoder_parameters: AnyEncoderParameters::H264(params),
             scaling_algorithm,
         }])
         .unwrap();
