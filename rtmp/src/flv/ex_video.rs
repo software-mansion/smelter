@@ -2,9 +2,11 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
 
-use super::EX_HEADER_BIT;
-use super::mod_ex::{VideoPacketModExType, resolve_mod_ex, serialize_mod_ex};
-use super::video::{VideoTagFrameType, parse_composition_time, serialize_composition_time};
+use super::{
+    EX_HEADER_BIT,
+    mod_ex::{VideoPacketModExType, resolve_mod_ex, serialize_mod_ex},
+    video::{VideoTagFrameType, parse_composition_time, serialize_composition_time},
+};
 
 /// Parsed Enhanced RTMP video tag.
 #[derive(Debug, Clone)]
@@ -310,12 +312,19 @@ impl ExVideoTag {
                     ExVideoPacket::Mpeg2TsSequenceStart(data) => &data[..],
                 };
 
-                // Prepare ModEx data before allocation so we can compute exact capacity.
-                // TimestampOffsetNano payload is UI24 (3 bytes).
-                let mod_ex_data: Option<[u8; 3]> = timestamp_offset_nanos.map(|nanos| {
-                    let bytes = nanos.to_be_bytes();
-                    [bytes[1], bytes[2], bytes[3]]
-                });
+                // TimestampOffsetNano payload is UI24 (3 bytes), max 999,999 ns per spec.
+                let mod_ex_data: Option<[u8; 3]> = match timestamp_offset_nanos {
+                    Some(nanos) if *nanos > 999_999 => {
+                        return Err(RtmpMessageSerializeError::InternalError(format!(
+                            "timestamp_offset_nanos {nanos} exceeds max 999999"
+                        )));
+                    }
+                    Some(nanos) => {
+                        let bytes = nanos.to_be_bytes();
+                        Some([bytes[1], bytes[2], bytes[3]])
+                    }
+                    None => None,
+                };
                 // ModEx wire overhead: 1 (size) + payload + 1 (type byte)
                 let mod_ex_size = mod_ex_data.as_ref().map_or(0, |data| data.len() + 2);
                 let composition_time_size = if needs_composition_time { 3 } else { 0 };
@@ -330,7 +339,7 @@ impl ExVideoTag {
                         VideoPacketModExType::TimestampOffsetNano,
                         data,
                         wire_packet_type,
-                    );
+                    )?;
                 }
 
                 buf.put(&four_cc.to_raw()[..]);

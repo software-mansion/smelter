@@ -1,6 +1,6 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::error::FlvVideoTagParseError;
+use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
 
 use super::ex_video::ExVideoPacketType;
 
@@ -110,8 +110,14 @@ pub(super) fn serialize_mod_ex(
     mod_ex_type: VideoPacketModExType,
     mod_ex_data: &[u8],
     next_packet_type: ExVideoPacketType,
-) {
+) -> Result<(), RtmpMessageSerializeError> {
     let data_size = mod_ex_data.len();
+
+    if data_size == 0 {
+        return Err(RtmpMessageSerializeError::InternalError(
+            "ModEx data must be at least 1 byte".into(),
+        ));
+    }
 
     if data_size >= 256 {
         buf.put_u8(0xFF);
@@ -124,4 +130,5 @@ pub(super) fn serialize_mod_ex(
 
     let type_byte = (mod_ex_type.into_raw() << 4) | next_packet_type.into_raw();
     buf.put_u8(type_byte);
+    Ok(())
 }
