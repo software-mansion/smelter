@@ -20,7 +20,9 @@ pub mod parameters {
 
     pub use crate::vulkan_encoder::RateControl;
     #[cfg(feature = "transcoder")]
-    pub use crate::vulkan_transcoder::{TranscoderOutputParameters, TranscoderParameters};
+    pub use crate::vulkan_transcoder::{
+        AnyEncoderParameters, TranscoderOutputParameters, TranscoderParameters,
+    };
 
     #[cfg(feature = "wgpu")]
     pub use crate::wgpu_helpers::WgpuConverterParameters;

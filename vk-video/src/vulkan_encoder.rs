@@ -287,6 +287,21 @@ impl CommandBufferPoolStorage for EncoderCommandBufferPools {
     }
 }
 
+pub(crate) trait Encoder<'a> {
+    fn encode<'b>(
+        &'b mut self,
+        image: Arc<Image>,
+        force_idr: bool,
+        pts: Option<u64>,
+    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VulkanEncoderError>;
+    fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind>;
+    fn download_output(
+        &mut self,
+        is_idr: bool,
+        pts: Option<u64>,
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError>;
+}
+
 pub(crate) struct EncoderTrackerKind {}
 
 impl TrackerKind for EncoderTrackerKind {
@@ -297,37 +312,35 @@ impl TrackerKind for EncoderTrackerKind {
 
 pub(crate) type EncoderTracker = Tracker<EncoderTrackerKind>;
 
-pub(crate) struct EncodeSubmission<'borrow, 'encoder, C: EncodeCodec> {
+pub(crate) struct EncodeSubmission<'borrow, 'encoder> {
     pub(crate) is_idr: bool,
     pub(crate) wait_value: SemaphoreWaitValue,
-    pub(crate) encoder: &'borrow mut VulkanEncoder<'encoder, C>,
+    pub(crate) encoder: &'borrow mut (dyn Encoder<'encoder> + 'encoder),
     pub(crate) pts: Option<u64>,
     _image: Arc<Image>,
 }
 
-impl<'a, 'b, C: EncodeCodec> EncodeSubmission<'a, 'b, C> {
+impl<'a, 'b> EncodeSubmission<'a, 'b> {
     pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.encoder.download_output(self.is_idr, self.pts)
     }
 
     #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     pub(crate) fn mark_waited(&mut self) {
-        self.encoder.tracker.mark_waited(self.wait_value);
+        self.encoder.tracker().mark_waited(self.wait_value);
     }
 
     pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VulkanEncoderError> {
-        self.encoder.tracker.wait_for(self.wait_value, timeout)?;
+        self.encoder.tracker().wait_for(self.wait_value, timeout)?;
         Ok(())
     }
 }
 
-pub(crate) struct UnwaitedEncodeSubmission<'a, 'b, C: EncodeCodec>(
-    pub(crate) EncodeSubmission<'a, 'b, C>,
-);
+pub(crate) struct UnwaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
 
-impl<'a, 'b, C: EncodeCodec> UnwaitedEncodeSubmission<'a, 'b, C> {
+impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
     #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
-    pub(crate) fn mark_waited(mut self) -> WaitedEncodeSubmission<'a, 'b, C> {
+    pub(crate) fn mark_waited(mut self) -> WaitedEncodeSubmission<'a, 'b> {
         self.0.mark_waited();
         WaitedEncodeSubmission(self.0)
     }
@@ -335,7 +348,7 @@ impl<'a, 'b, C: EncodeCodec> UnwaitedEncodeSubmission<'a, 'b, C> {
     pub(crate) fn wait(
         mut self,
         timeout: u64,
-    ) -> Result<WaitedEncodeSubmission<'a, 'b, C>, VulkanEncoderError> {
+    ) -> Result<WaitedEncodeSubmission<'a, 'b>, VulkanEncoderError> {
         self.0.wait(timeout)?;
         Ok(WaitedEncodeSubmission(self.0))
     }
@@ -349,9 +362,9 @@ impl<'a, 'b, C: EncodeCodec> UnwaitedEncodeSubmission<'a, 'b, C> {
     }
 }
 
-pub struct WaitedEncodeSubmission<'a, 'b, C: EncodeCodec>(pub(crate) EncodeSubmission<'a, 'b, C>);
+pub struct WaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
 
-impl<'a, 'b, C: EncodeCodec> WaitedEncodeSubmission<'a, 'b, C> {
+impl<'a, 'b> WaitedEncodeSubmission<'a, 'b> {
     pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.0.download()
     }
@@ -393,7 +406,7 @@ pub struct FullEncoderParameters<C: EncodeCodec> {
     pub(crate) color_range: ColorRange,
 }
 
-impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
+impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     const OUTPUT_BUFFER_LEN: u64 = 4 * MB;
 
     pub(crate) fn new(
@@ -824,12 +837,154 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
         Ok(hal_encoder)
     }
 
-    pub(crate) fn encode<'b>(
+    pub fn stream_parameters(
+        &self,
+        info: C::CodecWriteParametersInfo,
+    ) -> Result<Vec<u8>, VulkanEncoderError> {
+        let mut codec_get_info = C::codec_session_parameters_get_info(info);
+
+        let get_info = vk::VideoEncodeSessionParametersGetInfoKHR::default()
+            .video_session_parameters(self.session_resources.parameters.parameters)
+            .push_next(&mut codec_get_info);
+
+        let data = unsafe {
+            self.encoding_device
+                .vulkan_device
+                .device
+                .video_encode_queue_ext
+                .get_encoded_video_session_parameters_khr(&get_info, None)?
+        };
+
+        Ok(data)
+    }
+
+    pub fn encode_bytes(
+        &mut self,
+        frame: &InputFrame<RawFrameData>,
+        force_idr: bool,
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
+        let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
+        let image = Arc::new(image);
+
+        self.encode(image, force_idr, frame.pts)?
+            .wait_and_download(u64::MAX)
+    }
+
+    #[cfg(feature = "wgpu")]
+    pub fn encode_texture(
+        &mut self,
+        frame: InputFrame<wgpu::Texture>,
+        force_idr: bool,
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
+        let _cmd_encoder = self.copy_wgpu_texture_to_image(&frame)?;
+
+        self.encode(self.input_image.clone(), force_idr, frame.pts)?
+            .wait_and_download(u64::MAX)
+    }
+
+    fn encoder_rate_control_for<'b>(
+        &self,
+        rate_control: RateControl,
+        layers: Option<&'b [vk::VideoEncodeRateControlLayerInfoKHR]>,
+    ) -> Option<vk::VideoEncodeRateControlInfoKHR<'b>> {
+        let layers = layers?;
+
+        match rate_control {
+            RateControl::EncoderDefault => None,
+
+            RateControl::VariableBitrate {
+                virtual_buffer_size,
+                ..
+            } => Some(
+                vk::VideoEncodeRateControlInfoKHR::default()
+                    .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::VBR)
+                    .layers(layers)
+                    .virtual_buffer_size_in_ms(virtual_buffer_size.as_millis() as u32)
+                    .initial_virtual_buffer_size_in_ms(0),
+            ),
+
+            RateControl::ConstantBitrate {
+                virtual_buffer_size,
+                ..
+            } => Some(
+                vk::VideoEncodeRateControlInfoKHR::default()
+                    .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::CBR)
+                    .layers(layers)
+                    .virtual_buffer_size_in_ms(virtual_buffer_size.as_millis() as u32)
+                    .initial_virtual_buffer_size_in_ms(0),
+            ),
+
+            RateControl::Disabled => {
+                let mut rate_control = vk::VideoEncodeRateControlInfoKHR::default()
+                    .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::DISABLED)
+                    .layers(layers);
+
+                rate_control.layer_count = 0;
+                Some(rate_control)
+            }
+        }
+    }
+
+    fn rate_control_layers_for<'b, 'c: 'b>(
+        &self,
+        rate_control: RateControl,
+        codec_layer_info: Option<&'b mut [C::CodecRateControlLayerInfo<'c>]>,
+    ) -> Option<Vec<vk::VideoEncodeRateControlLayerInfoKHR<'b>>> {
+        let codec_layer_info = codec_layer_info?;
+        if let RateControl::EncoderDefault = rate_control {
+            return None;
+        }
+
+        if codec_layer_info.is_empty() {
+            warn!("No layers set for rate control.");
+            return None;
+        }
+
+        let result = codec_layer_info
+            .iter_mut()
+            .map(|codec_layer_info| {
+                let mut layer_info = vk::VideoEncodeRateControlLayerInfoKHR::default()
+                    .frame_rate_numerator(self.session_resources.framerate.numerator)
+                    .frame_rate_denominator(self.session_resources.framerate.denominator.get());
+
+                match rate_control {
+                    RateControl::EncoderDefault => unreachable!(),
+                    RateControl::VariableBitrate {
+                        average_bitrate,
+                        max_bitrate,
+                        ..
+                    } => {
+                        layer_info = layer_info
+                            .average_bitrate(average_bitrate)
+                            .max_bitrate(max_bitrate)
+                            .push_next(codec_layer_info)
+                    }
+
+                    RateControl::ConstantBitrate { bitrate, .. } => {
+                        layer_info = layer_info
+                            .average_bitrate(bitrate)
+                            .max_bitrate(bitrate)
+                            .push_next(codec_layer_info)
+                    }
+
+                    RateControl::Disabled => layer_info = layer_info.push_next(codec_layer_info),
+                }
+
+                layer_info
+            })
+            .collect();
+
+        Some(result)
+    }
+}
+
+impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
+    fn encode<'b>(
         &'b mut self,
         image: Arc<Image>,
         force_idr: bool,
         pts: Option<u64>,
-    ) -> Result<UnwaitedEncodeSubmission<'b, 'a, C>, VulkanEncoderError> {
+    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VulkanEncoderError> {
         let is_idr = force_idr || self.idr_period_counter == 0;
 
         if is_idr {
@@ -1045,8 +1200,7 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
             _image: image,
         }))
     }
-
-    pub fn download_output(
+    fn download_output(
         &mut self,
         is_idr: bool,
         pts: Option<u64>,
@@ -1077,144 +1231,8 @@ impl<'a, C: EncodeCodec> VulkanEncoder<'a, C> {
         })
     }
 
-    pub fn stream_parameters(
-        &self,
-        info: C::CodecWriteParametersInfo,
-    ) -> Result<Vec<u8>, VulkanEncoderError> {
-        let mut codec_get_info = C::codec_session_parameters_get_info(info);
-
-        let get_info = vk::VideoEncodeSessionParametersGetInfoKHR::default()
-            .video_session_parameters(self.session_resources.parameters.parameters)
-            .push_next(&mut codec_get_info);
-
-        let data = unsafe {
-            self.encoding_device
-                .vulkan_device
-                .device
-                .video_encode_queue_ext
-                .get_encoded_video_session_parameters_khr(&get_info, None)?
-        };
-
-        Ok(data)
-    }
-
-    pub fn encode_bytes(
-        &mut self,
-        frame: &InputFrame<RawFrameData>,
-        force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
-        let image = Arc::new(image);
-
-        self.encode(image, force_idr, frame.pts)?
-            .wait_and_download(u64::MAX)
-    }
-
-    #[cfg(feature = "wgpu")]
-    pub fn encode_texture(
-        &mut self,
-        frame: InputFrame<wgpu::Texture>,
-        force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let _cmd_encoder = self.copy_wgpu_texture_to_image(&frame)?;
-
-        self.encode(self.input_image.clone(), force_idr, frame.pts)?
-            .wait_and_download(u64::MAX)
-    }
-
-    fn encoder_rate_control_for<'b>(
-        &self,
-        rate_control: RateControl,
-        layers: Option<&'b [vk::VideoEncodeRateControlLayerInfoKHR]>,
-    ) -> Option<vk::VideoEncodeRateControlInfoKHR<'b>> {
-        let layers = layers?;
-
-        match rate_control {
-            RateControl::EncoderDefault => None,
-
-            RateControl::VariableBitrate {
-                virtual_buffer_size,
-                ..
-            } => Some(
-                vk::VideoEncodeRateControlInfoKHR::default()
-                    .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::VBR)
-                    .layers(layers)
-                    .virtual_buffer_size_in_ms(virtual_buffer_size.as_millis() as u32)
-                    .initial_virtual_buffer_size_in_ms(0),
-            ),
-
-            RateControl::ConstantBitrate {
-                virtual_buffer_size,
-                ..
-            } => Some(
-                vk::VideoEncodeRateControlInfoKHR::default()
-                    .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::CBR)
-                    .layers(layers)
-                    .virtual_buffer_size_in_ms(virtual_buffer_size.as_millis() as u32)
-                    .initial_virtual_buffer_size_in_ms(0),
-            ),
-
-            RateControl::Disabled => {
-                let mut rate_control = vk::VideoEncodeRateControlInfoKHR::default()
-                    .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::DISABLED)
-                    .layers(layers);
-
-                rate_control.layer_count = 0;
-                Some(rate_control)
-            }
-        }
-    }
-
-    fn rate_control_layers_for<'b, 'c: 'b>(
-        &self,
-        rate_control: RateControl,
-        codec_layer_info: Option<&'b mut [C::CodecRateControlLayerInfo<'c>]>,
-    ) -> Option<Vec<vk::VideoEncodeRateControlLayerInfoKHR<'b>>> {
-        let codec_layer_info = codec_layer_info?;
-        if let RateControl::EncoderDefault = rate_control {
-            return None;
-        }
-
-        if codec_layer_info.is_empty() {
-            warn!("No layers set for rate control.");
-            return None;
-        }
-
-        let result = codec_layer_info
-            .iter_mut()
-            .map(|codec_layer_info| {
-                let mut layer_info = vk::VideoEncodeRateControlLayerInfoKHR::default()
-                    .frame_rate_numerator(self.session_resources.framerate.numerator)
-                    .frame_rate_denominator(self.session_resources.framerate.denominator.get());
-
-                match rate_control {
-                    RateControl::EncoderDefault => unreachable!(),
-                    RateControl::VariableBitrate {
-                        average_bitrate,
-                        max_bitrate,
-                        ..
-                    } => {
-                        layer_info = layer_info
-                            .average_bitrate(average_bitrate)
-                            .max_bitrate(max_bitrate)
-                            .push_next(codec_layer_info)
-                    }
-
-                    RateControl::ConstantBitrate { bitrate, .. } => {
-                        layer_info = layer_info
-                            .average_bitrate(bitrate)
-                            .max_bitrate(bitrate)
-                            .push_next(codec_layer_info)
-                    }
-
-                    RateControl::Disabled => layer_info = layer_info.push_next(codec_layer_info),
-                }
-
-                layer_info
-            })
-            .collect();
-
-        Some(result)
+    fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind> {
+        &mut self.tracker
     }
 }
 

@@ -10,8 +10,8 @@ fn main() {
     use vk_video::{
         EncodedInputChunk,
         parameters::{
-            RateControl, ScalingAlgorithm, TranscoderOutputParameters, TranscoderParameters,
-            VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+            AnyEncoderParameters, RateControl, ScalingAlgorithm, TranscoderOutputParameters,
+            TranscoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
         },
     };
 
@@ -67,7 +67,7 @@ fn main() {
             output_parameters: vec![TranscoderOutputParameters {
                 output_width,
                 output_height,
-                encoder_parameters: params,
+                encoder_parameters: AnyEncoderParameters::H264(params),
                 scaling_algorithm,
             }],
         })
