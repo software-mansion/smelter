@@ -50,7 +50,11 @@ pub(super) fn run_connection_thread(
         last_ack: 0,
     };
 
-    let NegotiationResult { app, stream_key } = state.negotiate_connection()?;
+    let NegotiationResult {
+        app,
+        stream_key,
+        supports_enhanced_video: _supports_enhanced_video,
+    } = state.negotiate_connection()?;
     debug!(?app, ?stream_key, "Negotiation complete");
 
     let (sender, receiver) = bounded(1000);
@@ -128,14 +132,29 @@ impl RtmpServerConnectionState {
         loop {
             let msg = self.next_msg()?;
 
-            if let Some((transaction_id, app)) = state.try_match_connect(&msg) {
-                state = NegotiationProgress::WaitingForCreateStream { app };
+            if let Some((transaction_id, app, supports_enhanced_video)) =
+                state.try_match_connect(&msg)
+            {
+                state = NegotiationProgress::WaitingForCreateStream {
+                    app,
+                    supports_enhanced_video,
+                };
                 self.on_connect(transaction_id)?;
                 continue;
             }
 
             if let Some((transaction_id, app)) = state.try_match_create_stream(&msg) {
-                state = NegotiationProgress::WaitingForPublish { app };
+                let supports_enhanced_video = match &state {
+                    NegotiationProgress::WaitingForCreateStream {
+                        supports_enhanced_video,
+                        ..
+                    } => *supports_enhanced_video,
+                    _ => false,
+                };
+                state = NegotiationProgress::WaitingForPublish {
+                    app,
+                    supports_enhanced_video,
+                };
 
                 self.stream.write_msg(RtmpMessage::CommandMessage {
                     msg: CommandMessageOk {
