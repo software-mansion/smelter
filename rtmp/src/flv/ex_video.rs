@@ -9,7 +9,7 @@ use super::{
 };
 
 /// Parsed Enhanced RTMP video tag.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExVideoTag {
     StartSeek,
     EndSeek,
@@ -85,7 +85,7 @@ impl ExVideoFourCc {
 /// This represents the resolved body content. Wire-only signals (`ModEx`, `Multitrack`)
 /// are handled during parsing and do not appear here. `CodedFrames` and `CodedFramesX`
 /// from the wire are unified — `CodedFramesX` sets `composition_time = 0`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExVideoPacket {
     /// Decoder configuration record (SPS/PPS, VPS, etc.)
     SequenceStart(Bytes),

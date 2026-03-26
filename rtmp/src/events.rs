@@ -3,8 +3,8 @@ use std::{collections::HashMap, time::Duration};
 use bytes::Bytes;
 
 use crate::{
-    AudioChannels, AudioCodec, AudioTagSampleSize, AudioTagSoundRate, VideoCodec,
-    VideoTagFrameType, amf0::AmfValue,
+    AudioChannels, AudioCodec, AudioTagSampleSize, AudioTagSoundRate, VideoTag, amf0::AmfValue,
+    flv::ExVideoTag,
 };
 
 mod aac;
@@ -15,8 +15,10 @@ pub enum RtmpEvent {
     H264Data(H264VideoData),
     /// H264 decoder config
     H264Config(H264VideoConfig),
-    /// Raw RTMP message for codecs that we do not explicitly support.
-    UnknownVideoData(GenericVideoData),
+    /// Raw legacy FLV video tag that is not mapped to a specialized event.
+    LegacyVideoData(LegacyVideoData),
+    /// Parsed Enhanced RTMP video tag payload.
+    EnhancedVideoData(EnhancedVideoData),
 
     AacData(AacAudioData),
     /// AAC decoder config
@@ -61,15 +63,17 @@ pub struct H264VideoConfig {
     pub data: Bytes,
 }
 
-// Raw RTMP message for codecs that we do not explicitly support.
+// Raw legacy FLV video tag that is not mapped to a specialized event.
 #[derive(Clone)]
-pub struct GenericVideoData {
+pub struct LegacyVideoData {
     pub timestamp: u32,
+    pub tag: VideoTag,
+}
 
-    /// This value might not represent real sample rate for some codecs
-    pub codec: VideoCodec,
-    pub frame_type: VideoTagFrameType,
-    pub data: Bytes,
+#[derive(Clone)]
+pub struct EnhancedVideoData {
+    pub timestamp: u32,
+    pub tag: ExVideoTag,
 }
 
 impl From<AacAudioConfig> for RtmpEvent {
@@ -93,6 +97,18 @@ impl From<H264VideoConfig> for RtmpEvent {
 impl From<H264VideoData> for RtmpEvent {
     fn from(value: H264VideoData) -> Self {
         RtmpEvent::H264Data(value)
+    }
+}
+
+impl From<LegacyVideoData> for RtmpEvent {
+    fn from(value: LegacyVideoData) -> Self {
+        RtmpEvent::LegacyVideoData(value)
+    }
+}
+
+impl From<EnhancedVideoData> for RtmpEvent {
+    fn from(value: EnhancedVideoData) -> Self {
+        RtmpEvent::EnhancedVideoData(value)
     }
 }
 
@@ -138,13 +154,20 @@ impl std::fmt::Debug for GenericAudioData {
     }
 }
 
-impl std::fmt::Debug for GenericVideoData {
+impl std::fmt::Debug for LegacyVideoData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GenericVideoData")
+        f.debug_struct("LegacyVideoData")
             .field("timestamp", &self.timestamp)
-            .field("codec", &self.codec)
-            .field("frame_type", &self.frame_type)
-            .field("data", &bytes_debug(&self.data))
+            .field("tag", &self.tag)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for EnhancedVideoData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EnhancedVideoData")
+            .field("timestamp", &self.timestamp)
+            .field("tag", &self.tag)
             .finish()
     }
 }

@@ -23,6 +23,16 @@ use crate::{
     transport::RtmpTransport,
 };
 
+const FOURCC_INFO_CAN_DECODE: u8 = 0x01;
+const FOURCC_INFO_CAN_ENCODE: u8 = 0x02;
+const FOURCC_INFO_CAN_FORWARD: u8 = 0x04;
+
+const CAPS_EX_RECONNECT: u8 = 0x01;
+const CAPS_EX_MODEX: u8 = 0x04;
+const CAPS_EX_TIMESTAMP_NANO: u8 = 0x08;
+
+const ERTMP_VIDEO_FOURCC_LIST: [&str; 6] = ["av01", "vp09", "vp08", "hvc1", "vvc1", "avc1"];
+
 /// For server we can pick this number for client it would be based on value
 /// that came as _result for createStream
 const PUBLISHED_MESSAGE_STREAM_ID: u32 = 1;
@@ -43,7 +53,11 @@ pub(super) fn run_connection_thread(
         last_ack: 0,
     };
 
-    let NegotiationResult { app, stream_key } = state.negotiate_connection()?;
+    let NegotiationResult {
+        app,
+        stream_key,
+        supports_enhanced_video: _supports_enhanced_video,
+    } = state.negotiate_connection()?;
     debug!(?app, ?stream_key, "Negotiation complete");
 
     let (sender, receiver) = bounded(1000);
@@ -64,7 +78,8 @@ pub(super) fn run_connection_thread(
             RtmpMessage::Video { video, .. } => match video {
                 VideoMessage::H264Data(data) => RtmpEvent::H264Data(data),
                 VideoMessage::H264Config(config) => RtmpEvent::H264Config(config),
-                VideoMessage::Unknown(data) => RtmpEvent::UnknownVideoData(data),
+                VideoMessage::Legacy(data) => RtmpEvent::LegacyVideoData(data),
+                VideoMessage::Enhanced(data) => RtmpEvent::EnhancedVideoData(data),
             },
             RtmpMessage::DataMessage {
                 data: DataMessage::OnMetaData(metadata),
@@ -120,14 +135,29 @@ impl RtmpServerConnectionState {
         loop {
             let msg = self.next_msg()?;
 
-            if let Some((transaction_id, app)) = state.try_match_connect(&msg) {
-                state = NegotiationProgress::WaitingForCreateStream { app };
+            if let Some((transaction_id, app, supports_enhanced_video)) =
+                state.try_match_connect(&msg)
+            {
+                state = NegotiationProgress::WaitingForCreateStream {
+                    app,
+                    supports_enhanced_video,
+                };
                 self.on_connect(transaction_id)?;
                 continue;
             }
 
             if let Some((transaction_id, app)) = state.try_match_create_stream(&msg) {
-                state = NegotiationProgress::WaitingForPublish { app };
+                let supports_enhanced_video = match &state {
+                    NegotiationProgress::WaitingForCreateStream {
+                        supports_enhanced_video,
+                        ..
+                    } => *supports_enhanced_video,
+                    _ => false,
+                };
+                state = NegotiationProgress::WaitingForPublish {
+                    app,
+                    supports_enhanced_video,
+                };
 
                 self.stream.write_msg(RtmpMessage::CommandMessage {
                     msg: CommandMessageOk {
@@ -182,11 +212,44 @@ impl RtmpServerConnectionState {
         self.stream
             .write_msg(UserControlMessage::StreamBegin { stream_id: 0 }.into())?;
 
+        let video_fourcc_info_map = HashMap::from_iter([
+            (
+                "*".to_string(),
+                AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
+            ),
+            (
+                "avc1".to_string(),
+                AmfValue::Number(
+                    (FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD)
+                        as f64,
+                ),
+            ),
+        ]);
         // _result - connect response
         let props = HashMap::from_iter(
             [
                 ("fmsVer", "FMS/3,0,1,123".into()),
                 ("capabilities", AmfValue::Number(31.0)),
+                (
+                    "fourCcList",
+                    AmfValue::StrictArray(
+                        ERTMP_VIDEO_FOURCC_LIST
+                            .iter()
+                            .map(|v| AmfValue::String((*v).to_string()))
+                            .collect(),
+                    ),
+                ),
+                (
+                    "videoFourCcInfoMap",
+                    AmfValue::Object(video_fourcc_info_map),
+                ),
+                // TODO: add audioFourCcInfoMap once enhanced audio tags are implemented.
+                (
+                    "capsEx",
+                    AmfValue::Number(
+                        (CAPS_EX_RECONNECT | CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO) as f64,
+                    ),
+                ),
             ]
             .into_iter()
             .map(|(k, v)| (k.into(), v)),
