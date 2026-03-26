@@ -43,6 +43,8 @@ pub enum ExVideoFourCc {
     Avc1,
     /// H.265/HEVC (`hvc1`)
     Hvc1,
+    /// H.266/VVC (`vvc1`)
+    Vvc1,
 }
 
 impl ExVideoFourCc {
@@ -53,6 +55,7 @@ impl ExVideoFourCc {
             b"av01" => Ok(Self::Av01),
             b"avc1" => Ok(Self::Avc1),
             b"hvc1" => Ok(Self::Hvc1),
+            b"vvc1" => Ok(Self::Vvc1),
             _ => Err(FlvVideoTagParseError::UnknownVideoFourCc(bytes)),
         }
     }
@@ -64,13 +67,14 @@ impl ExVideoFourCc {
             Self::Av01 => *b"av01",
             Self::Avc1 => *b"avc1",
             Self::Hvc1 => *b"hvc1",
+            Self::Vvc1 => *b"vvc1",
         }
     }
 
     /// Returns true if this codec uses SI24 CompositionTime in CodedFrames.
-    /// Per the spec, only AVC and HEVC carry composition time offset.
+    /// Per the spec, AVC, HEVC, and VVC carry composition time offset.
     fn has_composition_time(self) -> bool {
-        matches!(self, Self::Avc1 | Self::Hvc1)
+        matches!(self, Self::Avc1 | Self::Hvc1 | Self::Vvc1)
     }
 }
 
@@ -218,7 +222,7 @@ impl ExVideoTag {
         })
     }
 
-    /// Parses CodedFrames body. AVC and HEVC include an SI24 composition
+    /// Parses CodedFrames body. AVC, HEVC, and VVC include an SI24 composition
     /// time prefix; other codecs do not (composition_time is set to 0
     /// in the parsed representation).
     fn parse_coded_frames(
