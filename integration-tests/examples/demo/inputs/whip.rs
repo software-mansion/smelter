@@ -5,7 +5,6 @@ use std::{
 
 use anyhow::Result;
 use inquire::{Select, Text};
-use integration_tests::paths::integration_tests_root;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -45,22 +44,12 @@ impl WhipInput {
     }
 
     pub fn on_after_registration(&mut self) -> Result<()> {
-        let html_path = integration_tests_root().join("examples/demo/whip.html");
+        let whip_streamer_url = "https://smelter-labs.github.io/tools/#whip-streamer";
         let url = format!(
-            "file://{}?url=http://127.0.0.1:9000/whip/{}&token={}",
-            html_path.to_str().unwrap(),
-            self.name,
-            self.bearer_token
-        );
-
-        println!("Instructions to start streaming:");
-        println!("1. Open OBS Studio");
-        println!(
-            "2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{}' in 'Server' field and '{}' in 'Bearer Token' field",
+            "{whip_streamer_url}?url=http://127.0.0.1:9000/whip/{}&token={}",
             self.name, self.bearer_token
         );
-        println!("OR");
-        println!("Open in browser:");
+        println!("Open in browser to start streaming:");
         println!("{url}");
         Ok(())
     }

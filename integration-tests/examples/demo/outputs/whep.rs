@@ -5,7 +5,6 @@ use std::{
 
 use anyhow::Result;
 use inquire::{Select, Text};
-use integration_tests::paths::integration_tests_root;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -49,17 +48,13 @@ impl WhepOutput {
     }
 
     pub fn on_after_registration(&mut self) -> Result<()> {
-        let html_path = integration_tests_root().join("examples/demo/whep.html");
+        let whep_player_url = "https://smelter-labs.github.io/tools/#whep-player";
 
         let url = format!(
-            "file://{}?url=http://127.0.0.1:9000/whep/{}&token={}",
-            html_path.to_str().unwrap(),
-            self.name,
-            self.bearer_token
+            "{whep_player_url}?url=http://127.0.0.1:9000/whep/{}&token={}",
+            self.name, self.bearer_token
         );
-
-        println!("Instructions to start receiving stream:");
-        println!("Open in browser:");
+        println!("Open in browser to receive stream:");
         println!("{url}");
         Ok(())
     }
