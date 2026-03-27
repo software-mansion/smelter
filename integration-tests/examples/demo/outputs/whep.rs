@@ -54,7 +54,7 @@ impl WhepOutput {
             "{whep_player_url}?url=http://127.0.0.1:9000/whep/{}&token={}",
             self.name, self.bearer_token
         );
-        println!("Open in browser:");
+        println!("Open in browser to receive stream:");
         println!("{url}");
         Ok(())
     }

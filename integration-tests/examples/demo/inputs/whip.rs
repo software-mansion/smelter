@@ -49,7 +49,7 @@ impl WhipInput {
             "{whip_streamer_url}?url=http://127.0.0.1:9000/whip/{}&token={}",
             self.name, self.bearer_token
         );
-        println!("Open in browser:");
+        println!("Open in browser to start streaming:");
         println!("{url}");
         Ok(())
     }
