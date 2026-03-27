@@ -12,7 +12,7 @@ use crate::{
 pub(crate) enum VideoMessage {
     H264Data(H264VideoData),
     H264Config(H264VideoConfig),
-    Unknown(GenericVideoData),
+    Unknown(GenericVideoData), // TODO: consider completely replace Generic with Enhanced
 }
 
 impl VideoMessage {
@@ -65,7 +65,7 @@ impl VideoMessage {
                 stream_id,
                 chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
                 timestamp: chunk.dts.as_millis() as u32,
-                payload: VideoTag {
+                payload: FlvVideoData::Legacy(VideoTag {
                     h264_packet_type: Some(VideoTagH264PacketType::Data),
                     codec: VideoCodec::H264,
                     composition_time: Some(
@@ -76,7 +76,7 @@ impl VideoMessage {
                         false => VideoTagFrameType::Interframe,
                     },
                     data: chunk.data,
-                }
+                })
                 .serialize()?,
             },
             Self::H264Config(config) => RawMessage {
@@ -84,13 +84,13 @@ impl VideoMessage {
                 stream_id,
                 chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
                 timestamp: 0,
-                payload: VideoTag {
+                payload: FlvVideoData::Legacy(VideoTag {
                     h264_packet_type: Some(VideoTagH264PacketType::Config),
                     codec: VideoCodec::H264,
                     composition_time: Some(0),
                     frame_type: VideoTagFrameType::Keyframe,
                     data: config.data,
-                }
+                })
                 .serialize()?,
             },
             Self::Unknown(data) => RawMessage {
@@ -98,13 +98,13 @@ impl VideoMessage {
                 stream_id,
                 chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
                 timestamp: data.timestamp,
-                payload: VideoTag {
+                payload: FlvVideoData::Legacy(VideoTag {
                     h264_packet_type: None,
                     codec: data.codec,
                     composition_time: None,
                     frame_type: data.frame_type,
                     data: data.data,
-                }
+                })
                 .serialize()?,
             },
         };

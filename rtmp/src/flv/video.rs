@@ -2,7 +2,8 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
 
-/// Struct representing flv VIDEODATA.
+/// Struct representing legacy flv VIDEODATA.
+/// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
 #[derive(Debug, Clone)]
 pub struct VideoTag {
     /// FrameType 4bits
@@ -172,7 +173,7 @@ impl VideoTag {
         })
     }
 
-    pub fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
+    pub(super) fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
         let frame_type = self.frame_type.into_raw();
         let codec_id = self.codec.into_raw();
 

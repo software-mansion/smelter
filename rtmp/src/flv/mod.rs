@@ -10,7 +10,7 @@ pub use video::*;
 
 use crate::{FlvVideoTagParseError, RtmpMessageSerializeError};
 
-const EX_HEADER_BIT: u8 = 0b10000000;
+pub(super) const EX_HEADER_BIT: u8 = 0b10000000;
 
 /// Top-level FLV video data, supporting both legacy and Enhanced RTMP formats.
 ///
