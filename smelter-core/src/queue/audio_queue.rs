@@ -23,19 +23,13 @@ use tracing::debug;
 pub struct AudioQueue {
     sync_point: Instant,
     inputs: HashMap<InputId, WeakQueueInput>,
-    event_emitter: Arc<EventEmitter>,
     ahead_of_time_processing: bool,
 }
 
 impl AudioQueue {
-    pub fn new(
-        sync_point: Instant,
-        event_emitter: Arc<EventEmitter>,
-        ahead_of_time_processing: bool,
-    ) -> Self {
+    pub fn new(sync_point: Instant, ahead_of_time_processing: bool) -> Self {
         AudioQueue {
             inputs: HashMap::new(),
-            event_emitter,
             sync_point,
             ahead_of_time_processing,
         }
@@ -50,35 +44,15 @@ impl AudioQueue {
     }
 
     pub fn pause_input(&mut self, input_id: &InputId, pts: Duration) {
-        let Some(weak) = self.inputs.get(input_id) else {
-            return;
-        };
-        let paused = weak.audio(|input| input.pause_state.pause(pts));
-        if paused == Some(true) {
-            self.event_emitter
-                .emit(Event::AudioInputStreamPaused(input_id.clone()));
-        }
+        self.inputs
+            .get(input_id)
+            .and_then(|input| input.audio(|input| input.pause(pts)));
     }
 
     pub fn resume_input(&mut self, input_id: &InputId, pts: Duration) {
-        let Some(weak) = self.inputs.get(input_id) else {
-            return;
-        };
-        let resumed = weak.audio(|input| {
-            if input.pause_state.resume(pts, input.state) {
-                input.queue.clear();
-                Some(input.state)
-            } else {
-                None
-            }
-        });
-        if let Some(Some(QueueState::Running)) = resumed {
-            // TS SDK tracks state based on those values, so if we pause in
-            // non running state it will be stuck at paused until state does
-            // not change
-            self.event_emitter
-                .emit(Event::AudioInputStreamPlaying(input_id.clone()));
-        }
+        self.inputs
+            .get(input_id)
+            .and_then(|input| input.audio(|input| input.resume(pts)));
     }
 
     pub(super) fn pop_samples_set(
@@ -125,7 +99,7 @@ impl AudioQueue {
 
         let all_required_inputs_ready = self.inputs.values().all(|weak| {
             weak.audio(|input| {
-                (!input.required)
+                (!input.required())
                     || input.try_enqueue_until_ready_for_pts(pts_range, queue_start_pts)
             })
             .unwrap_or(true)
@@ -175,6 +149,9 @@ pub(crate) struct AudioQueueInput {
     event_delivered_guard: EmitOnceGuard,
     event_playing_guard: EmitOnceGuard,
     event_eos_guard: EmitOnceGuard,
+
+    event_emitter: Arc<EventEmitter>,
+    input_id: InputId,
 }
 
 impl AudioQueueInput {
@@ -208,7 +185,34 @@ impl AudioQueueInput {
                 Event::AudioInputStreamEos(input_id.clone()),
                 event_emitter,
             ),
+
+            event_emitter: event_emitter.clone(),
+            input_id: input_id.clone(),
         }
+    }
+
+    pub(super) fn required(&self) -> bool {
+        self.required
+    }
+
+    pub(super) fn pause(&mut self, pts: Duration) {
+        if self.pause_state.pause(pts) {
+            self.event_emitter
+                .emit(Event::AudioInputStreamPaused(self.input_id.clone()));
+        }
+    }
+
+    pub(super) fn resume(&mut self, pts: Duration) {
+        if self.pause_state.resume(pts, self.state) {
+            self.queue.clear();
+            if QueueState::Running == self.state {
+                // TS SDK tracks state based on those values, so if we pause in
+                // non running state it will be stuck at paused until state does
+                // not change
+                self.event_emitter
+                    .emit(Event::AudioInputStreamPlaying(self.input_id.clone()));
+            }
+        };
     }
 
     /// Get batches that have samples in range `range` and remove them from the queue.

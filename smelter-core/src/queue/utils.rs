@@ -6,31 +6,27 @@ use crate::event::{Event, EventEmitter};
 /// Guards against emitting a particular event more than once.
 /// Use `reset` to re-arm after EOS so the event can fire again.
 pub struct EmitOnceGuard {
-    sent: bool,
-    event: Event,
+    event: Option<Event>,
     emitter: Arc<EventEmitter>,
 }
 
 impl EmitOnceGuard {
     pub fn new(event: Event, emitter: &Arc<EventEmitter>) -> Self {
         Self {
-            sent: false,
-            event,
+            event: Some(event),
             emitter: emitter.clone(),
         }
     }
 
     /// Emits the event if it hasn't been sent yet.
     pub fn emit(&mut self) {
-        if self.sent {
-            return;
+        if let Some(event) = self.event.take() {
+            self.emitter.emit(event);
         }
-        self.sent = true;
-        self.emitter.emit(self.event.clone());
     }
 
-    pub fn reset(&mut self) {
-        self.sent = false;
+    pub fn emited(&mut self) -> bool {
+        self.event.is_some()
     }
 }
 
@@ -41,11 +37,6 @@ pub enum QueueState {
     /// After EOS was received, do not attempt to enqueue
     /// packets, after queue is drained go to `Restarted`
     Draining,
-    /// Should behave the same as New, but it always returns
-    /// true when enqueuing until ready. Required input at the start
-    /// should wait for first frame even if it is scheduled for
-    /// the future, but this should not happen after restart.
-    Restarted,
 }
 
 pub struct PauseState {
@@ -78,7 +69,7 @@ impl PauseState {
             return false;
         };
         match state {
-            QueueState::New | QueueState::Restarted => {
+            QueueState::New => {
                 // Input without offset then pause offset should be increased based on first
                 // incoming packet
                 // Input with offset no change

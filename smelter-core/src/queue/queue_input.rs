@@ -1,22 +1,89 @@
 use std::{
+    collections::VecDeque,
     sync::{Arc, Mutex, Weak},
     time::Duration,
 };
 
-use crossbeam_channel::{SendError, Sender, bounded};
+use crossbeam_channel::Sender;
 use smelter_render::{Frame, InputId};
 
-use crate::types::Ref;
+use crate::{queue::video_input::VideoQueueInput, types::Ref};
 
-use super::{SharedState, audio_queue::AudioQueueInput, video_queue::VideoQueueInput};
+use super::{SharedState, audio_queue::AudioQueueInput};
 
 use crate::prelude::*;
 
 pub(super) struct InnerQueueInput {
     pub(super) video: Option<VideoQueueInput>,
     pub(super) audio: Option<AudioQueueInput>,
-    video_sender: Option<Sender<PipelineEvent<Frame>>>,
-    audio_sender: Option<Sender<PipelineEvent<InputAudioSamples>>>,
+    pending: VecDeque<(Option<VideoQueueInput>, Option<VideoQueueInput>)>,
+    required: bool,
+    ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
+}
+
+impl InnerQueueInput {
+    fn maybe_start_next_track(&mut self) {
+        let video_done = self.video.map(|v| v.is_done()).unwrap_or(true);
+        let audio_done = self.audio.map(|a| a.is_done()).unwrap_or(true);
+        if video_done && audio_done {
+            self.replace_track()
+        }
+    }
+
+    fn replace_track(&mut self) {
+        let Some((video, audio)) = self.pending.pop_front() else {
+            return;
+        };
+        self.video = video;
+        self.audio = audio;
+    }
+
+    fn queue_new_track(
+        &mut self,
+        video: Option<VideoTrackOptions>,
+        audio: Option<AudioTrackOptions>,
+    ) -> (Option<Sender<Frame>>, Option<Sender<Frame>>) {
+        if video.is_none() && audio.is_none() {
+            return (None, None);
+        }
+        let state = SharedState::default();
+        let (video_input, video_sender) = match video {
+            Some(video) => {
+                let (video_input, video_sender) = VideoQueueInput::new(
+                    &self.ctx,
+                    &self.input_ref,
+                    self.required,
+                    video.offset,
+                    state.clone(),
+                );
+                (Some(video_input), Some(video_sender))
+            }
+            None => (None, None),
+        };
+        let (audio_input, audio_sender) = match audio {
+            Some(audio) => {
+                let (audio_input, audio_sender) = VideoQueueInput::new(
+                    &self.ctx,
+                    &self.input_ref,
+                    self.required,
+                    audio.offset,
+                    state.clone(),
+                );
+                (Some(audio_input), Some(audio_sender))
+            }
+            None => (None, None),
+        };
+        self.pending.push_back((video_input, audio_input));
+        (video_sender, audio_sender)
+    }
+}
+
+pub(crate) struct VideoTrackOptions {
+    offset: Option<Duration>,
+}
+pub(crate) struct AudioTrackOptions {
+    offset: Option<Duration>,
 }
 
 #[derive(Clone)]
@@ -32,73 +99,50 @@ impl std::fmt::Debug for WeakQueueInput {
 }
 
 impl QueueInput {
-    pub fn new(
-        has_video: bool,
-        has_audio: bool,
-        required: bool,
-        offset: Option<Duration>,
-        ctx: &Arc<PipelineCtx>,
-        input_ref: &Ref<InputId>,
-    ) -> Self {
-        let shared_state = SharedState::default();
-        let sync_point = ctx.queue_sync_point;
-        let event_emitter = &ctx.event_emitter;
-
-        let (video, video_sender) = if has_video {
-            let (sender, receiver) = bounded(5);
-            let input = VideoQueueInput::new(
-                receiver,
-                required,
-                offset,
-                sync_point,
-                shared_state.clone(),
-                input_ref.id(),
-                event_emitter,
-            );
-            (Some(input), Some(sender))
-        } else {
-            (None, None)
-        };
-
-        let (audio, audio_sender) = if has_audio {
-            let (sender, receiver) = bounded(5);
-            let input = AudioQueueInput::new(
-                receiver,
-                required,
-                offset,
-                sync_point,
-                shared_state,
-                input_ref.id(),
-                event_emitter,
-            );
-            (Some(input), Some(sender))
-        } else {
-            (None, None)
-        };
-
+    pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, required: bool) -> Self {
         Self(Arc::new(Mutex::new(InnerQueueInput {
-            video,
-            audio,
-            video_sender,
-            audio_sender,
+            ctx: ctx.clone(),
+            input_ref: input_ref.clone(),
+            required,
+            video: None,
+            audio: None,
+            pending: VecDeque::new(),
         })))
+    }
+
+    pub fn queue_new_track(
+        &mut self,
+        video: Option<VideoTrackOptions>,
+        audio: Option<AudioTrackOptions>,
+    ) -> (Option<Sender<Frame>>, Option<Sender<Frame>>) {
+        self.0.lock().unwrap().queue_new_track(video, audio)
+    }
+
+    pub fn pause(&self) {
+        let mut guard = self.0.lock().unwrap();
+        let pts = guard.ctx.queue_sync_point.elapsed();
+        guard.video.as_mut().map(|v| v.pause(pts));
+        guard.audio.as_mut().map(|a| a.pause(pts));
+    }
+
+    pub fn resume(&self) {
+        let mut guard = self.0.lock().unwrap();
+        let pts = guard.ctx.queue_sync_point.elapsed();
+        guard.video.as_mut().map(|v| v.resume(pts));
+        guard.audio.as_mut().map(|a| a.resume(pts));
     }
 
     pub fn downgrade(&self) -> WeakQueueInput {
         WeakQueueInput(Arc::downgrade(&self.0))
     }
 
-    pub fn has_video(&self) -> bool {
-        self.0.lock().unwrap().video.is_some()
-    }
-
-    pub fn has_audio(&self) -> bool {
-        self.0.lock().unwrap().audio.is_some()
+    pub(super) fn maybe_start_next_track(&mut self) {
+        self.0.lock().unwrap().maybe_start_next_track();
     }
 }
 
 impl WeakQueueInput {
-    pub fn video<F, R>(&self, f: F) -> Option<R>
+    pub(super) fn video<F, R>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut VideoQueueInput) -> R,
     {
@@ -108,7 +152,7 @@ impl WeakQueueInput {
         Some(f(video))
     }
 
-    pub fn audio<F, R>(&self, f: F) -> Option<R>
+    pub(super) fn audio<F, R>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut AudioQueueInput) -> R,
     {
@@ -118,21 +162,16 @@ impl WeakQueueInput {
         Some(f(audio))
     }
 
-    pub fn send_video(&self, event: PipelineEvent<Frame>) -> Result<(), SendError<()>> {
-        let arc = self.0.upgrade().ok_or(SendError(()))?;
-        let sender = {
-            let inner = arc.lock().unwrap();
-            inner.video_sender.as_ref().ok_or(SendError(()))?.clone()
-        };
-        sender.send(event).map_err(|_| SendError(()))
+    pub(crate) fn upgrade(&self) -> Option<QueueInput> {
+        self.0.upgrade().map(QueueInput)
     }
+}
 
-    pub fn send_audio(&self, event: PipelineEvent<InputAudioSamples>) -> Result<(), SendError<()>> {
-        let arc = self.0.upgrade().ok_or(SendError(()))?;
-        let sender = {
-            let inner = arc.lock().unwrap();
-            inner.audio_sender.as_ref().ok_or(SendError(()))?.clone()
-        };
-        sender.send(event).map_err(|_| SendError(()))
+#[derive(Default, Clone)]
+pub(super) struct TrackOffset(Arc<Mutex<Option<Duration>>>);
+
+impl TrackOffset {
+    pub fn get_or_init(&self, offset: Duration) -> Duration {
+        *self.0.lock().unwrap().get_or_insert(offset)
     }
 }

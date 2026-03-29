@@ -2,6 +2,7 @@ mod audio_queue;
 mod queue_input;
 mod queue_thread;
 mod utils;
+mod video_input;
 mod video_queue;
 
 use std::{
@@ -164,16 +165,8 @@ impl Queue {
         let (scheduled_event_sender, scheduled_event_receiver) = bounded(0);
         let sync_point = ctx.queue_sync_point;
         let queue = Arc::new(Queue {
-            video_queue: Mutex::new(VideoQueue::new(
-                sync_point,
-                ctx.event_emitter.clone(),
-                opts.ahead_of_time_processing,
-            )),
-            audio_queue: Mutex::new(AudioQueue::new(
-                sync_point,
-                ctx.event_emitter.clone(),
-                opts.ahead_of_time_processing,
-            )),
+            video_queue: Mutex::new(VideoQueue::new(sync_point, opts.ahead_of_time_processing)),
+            audio_queue: Mutex::new(AudioQueue::new(sync_point, opts.ahead_of_time_processing)),
             inputs: Mutex::new(HashMap::new()),
 
             output_framerate: opts.output_framerate,
@@ -229,18 +222,6 @@ impl Queue {
         self.audio_queue.lock().unwrap().remove_input(input_id);
     }
 
-    pub fn pause_input(&self, input_id: &InputId) {
-        let pts = self.sync_point.elapsed();
-        self.video_queue.lock().unwrap().pause_input(input_id, pts);
-        self.audio_queue.lock().unwrap().pause_input(input_id, pts);
-    }
-
-    pub fn resume_input(&self, input_id: &InputId) {
-        let pts = self.sync_point.elapsed();
-        self.video_queue.lock().unwrap().resume_input(input_id, pts);
-        self.audio_queue.lock().unwrap().resume_input(input_id, pts);
-    }
-
     pub(super) fn start(
         self: &Arc<Self>,
         video_sender: Sender<QueueVideoOutput>,
@@ -275,18 +256,3 @@ impl Debug for ScheduledEvent {
     }
 }
 
-// struct that holds first PTS of either video or audio track,
-// when input has an offset defined, this value can be used to calculate
-// new PTS values while preserving synchronization between tracks
-#[derive(Default, Clone)]
-struct SharedState(Arc<Mutex<Option<Duration>>>);
-
-impl SharedState {
-    fn get_or_init_first_pts(&self, pts: Duration) -> Duration {
-        *self.0.lock().unwrap().get_or_insert(pts)
-    }
-
-    fn first_pts(&self) -> Option<Duration> {
-        *self.0.lock().unwrap()
-    }
-}
