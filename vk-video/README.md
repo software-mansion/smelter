@@ -83,10 +83,12 @@ fn encode_video(
 
     let instance = vk_video::VulkanInstance::new().unwrap();
     let surface = instance.wgpu_instance().create_surface(window).unwrap();
-    let adapter = instance.create_adapter(&vk_video::parameters::VulkanAdapterDescriptor {
-        compatible_surface: Some(&surface),
-        ..Default::default()
-    }).unwrap();
+    let adapter = instance
+        .create_adapter(&vk_video::parameters::VulkanAdapterDescriptor {
+            compatible_surface: Some(&surface),
+            ..Default::default()
+        })
+        .unwrap();
     let device = adapter
         .create_device(&vk_video::parameters::VulkanDeviceDescriptor::default())
         .unwrap();
@@ -112,17 +114,15 @@ fn encode_video(
 
     for frame in frame_receiver.iter() {
         // Encodes NV12 texture and returns encoded frame bytes
-        let encoded_frame = unsafe {
-            encoder
-                .encode(
-                    vk_video::InputFrame {
-                        data: frame,
-                        pts: None,
-                    },
-                    false,
-                )
-                .unwrap()
-        };
+        let encoded_frame = encoder
+            .encode(
+                vk_video::InputFrame {
+                    data: frame,
+                    pts: None,
+                },
+                false,
+            )
+            .unwrap();
     }
 }
 ```

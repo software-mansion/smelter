@@ -86,49 +86,12 @@ impl WgpuTexturesEncoder {
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
     /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
     /// Otherwise, the encoder will decide which frames should be coded this way.
-    ///
-    /// # Safety
-    /// - The texture cannot be a surface texture
-    /// - The texture has to be transitioned to [`wgpu::TextureUses::COPY_SRC`] usage:
-    ///   ```rust
-    ///   # let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
-    ///   #     required_features: wgpu::Features::TEXTURE_FORMAT_NV12,
-    ///   #     ..Default::default()
-    ///   # });
-    ///   # let texture = device.create_texture(&wgpu::TextureDescriptor {
-    ///   #     label: None,
-    ///   #     size: wgpu::Extent3d {
-    ///   #         width: 1280,
-    ///   #         height: 720,
-    ///   #         depth_or_array_layers: 1,
-    ///   #     },
-    ///   #     mip_level_count: 1,
-    ///   #     sample_count: 1,
-    ///   #     dimension: wgpu::TextureDimension::D2,
-    ///   #     format: wgpu::TextureFormat::NV12,
-    ///   #     usage: wgpu::TextureUsages::COPY_SRC,
-    ///   #     view_formats: &[],
-    ///   # });
-    ///   let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    ///   encoder.transition_resources(
-    ///       [].into_iter(),
-    ///       [wgpu::TextureTransition {
-    ///           texture: &texture,
-    ///           state: wgpu::TextureUses::COPY_SRC,
-    ///           selector: None,
-    ///       }]
-    ///       .into_iter(),
-    ///   );
-    ///   queue.submit([encoder.finish()]);
-    ///
-    ///   // Now you can use `WgpuTexturesEncoder::encode` on `texture`
-    ///   ```
-    pub unsafe fn encode(
+    pub fn encode(
         &mut self,
         frame: InputFrame<wgpu::Texture>,
         force_keyframe: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        unsafe { self.vulkan_encoder.encode_texture(frame, force_keyframe) }
+        self.vulkan_encoder.encode_texture(frame, force_keyframe)
     }
 
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.

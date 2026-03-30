@@ -17,6 +17,7 @@
 - Made `wgpu` dependency optional via `wgpu` feature (enabled by default)
 - Added helpers for NV12 <-> RGBA wgpu texture conversion
 - Added `DecoderEvent::SignalFrameEnd` event to make it possible to decode frames early without waiting for the next frame to arrive
+- Encoder API is now safe
 
 ### 🐛 Bug fixes
 - Fix graphical bugs when the decoded bitstream switches to a lower resolution mid-stream

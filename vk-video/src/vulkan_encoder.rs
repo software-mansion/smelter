@@ -478,28 +478,11 @@ impl<'a> VulkanEncoder<'a> {
             EncoderTrackerWaitState::InitializeEncoder,
         )?;
 
-        let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
-            .profiles(std::slice::from_ref(&profile_info.profile_info));
-        let queue_indices = [
-            encoding_device.h264_encode_queues.family_index as u32,
+        let encode_image = Image::new_encode(
+            &encoding_device,
+            session_resources.video_session.max_coded_extent.into(),
+            &profile_info,
             encoding_device.queues.wgpu.family_index as u32,
-        ];
-        let encode_image_info = vk::ImageCreateInfo::default()
-            .image_type(vk::ImageType::TYPE_2D)
-            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
-            .extent(session_resources.video_session.max_coded_extent.into())
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
-            .sharing_mode(vk::SharingMode::CONCURRENT)
-            .queue_family_indices(&queue_indices)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .push_next(&mut profile_list_info);
-        let encode_image = Image::new(
-            encoding_device.allocator.clone(),
-            &encode_image_info,
             tracker.image_layout_tracker.clone(),
         )?;
 
@@ -753,6 +736,12 @@ impl<'a> VulkanEncoder<'a> {
     ) -> Result<wgpu::hal::vulkan::CommandEncoder, WgpuTextureEncoderError> {
         use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
+        let encode_texture_extent = wgpu::Extent3d {
+            width: self.input_image.extent.width,
+            height: self.input_image.extent.height,
+            depth_or_array_layers: self.input_image.extent.depth,
+        };
+
         if !frame.data.usage().contains(wgpu::TextureUsages::COPY_SRC) {
             return Err(WgpuTextureEncoderError::NoCopySrcTextureUsage(
                 frame.data.usage(),
@@ -761,140 +750,119 @@ impl<'a> VulkanEncoder<'a> {
         if frame.data.format() != wgpu::TextureFormat::NV12 {
             return Err(WgpuTextureEncoderError::NotNV12Texture(frame.data.format()));
         }
-
-        let input_image_size = wgpu::Extent3d {
-            width: self.input_image.extent.width,
-            height: self.input_image.extent.height,
-            depth_or_array_layers: self.input_image.extent.depth,
-        };
-        if frame.data.size() != input_image_size {
+        if frame.data.size() != encode_texture_extent {
             return Err(WgpuTextureEncoderError::InconsistentPictureDimensions {
                 provided_dimensions: frame.data.size(),
-                expected_dimensions: input_image_size,
+                expected_dimensions: encode_texture_extent,
             });
         }
 
-        let wgpu_device = unsafe {
+        let hal_device = unsafe {
             self.encoding_device
                 .wgpu_device()
                 .as_hal::<VkApi>()
                 .unwrap()
         };
-        let wgpu_queue = unsafe { self.encoding_device.wgpu_queue().as_hal::<VkApi>().unwrap() };
-        let frame_image = unsafe { frame.data.as_hal::<VkApi>().unwrap().raw_handle() };
+        let hal_queue = unsafe { self.encoding_device.wgpu_queue().as_hal::<VkApi>().unwrap() };
 
-        let mut encoder = unsafe {
-            wgpu_device.create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
-                label: None,
-                queue: &wgpu_queue,
-            })
-        }?;
-
-        unsafe { encoder.begin_encoding(None)? }
-        let buffer = unsafe { encoder.raw_handle() };
-
-        // TODO: This should be abstracted away to some helper function
-        let mut layout = self
-            .tracker
-            .image_layout_tracker
-            .lock()
-            .unwrap()
-            .map
-            .get(&self.input_image.key())
-            .unwrap()
-            .clone();
-
-        // this has to be raw, because normally we have our own command buffer that tracks this.
-        // since we don't have our buffer here and this is only one transition, we can do it
-        // ourselves.
-        self.input_image.transition_layout_raw(
-            buffer,
-            &mut layout,
-            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::TRANSFER,
-            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            },
-        )?;
-
-        unsafe {
-            self.encoding_device.device.cmd_copy_image2(
-                buffer,
-                &vk::CopyImageInfo2::default()
-                    .src_image(frame_image)
-                    .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                    .dst_image(self.input_image.image)
-                    .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .regions(&[
-                        vk::ImageCopy2::default()
-                            .src_subresource(
-                                vk::ImageSubresourceLayers::default()
-                                    .aspect_mask(vk::ImageAspectFlags::PLANE_0)
-                                    .mip_level(0)
-                                    .base_array_layer(0)
-                                    .layer_count(1),
-                            )
-                            .dst_subresource(
-                                vk::ImageSubresourceLayers::default()
-                                    .aspect_mask(vk::ImageAspectFlags::PLANE_0)
-                                    .mip_level(0)
-                                    .base_array_layer(0)
-                                    .layer_count(1),
-                            )
-                            .extent(self.input_image.extent),
-                        vk::ImageCopy2::default()
-                            .src_subresource(
-                                vk::ImageSubresourceLayers::default()
-                                    .aspect_mask(vk::ImageAspectFlags::PLANE_1)
-                                    .mip_level(0)
-                                    .base_array_layer(0)
-                                    .layer_count(1),
-                            )
-                            .dst_subresource(
-                                vk::ImageSubresourceLayers::default()
-                                    .aspect_mask(vk::ImageAspectFlags::PLANE_1)
-                                    .mip_level(0)
-                                    .base_array_layer(0)
-                                    .layer_count(1),
-                            )
-                            .extent(vk::Extent3D {
-                                width: self.input_image.extent.width / 2,
-                                height: self.input_image.extent.height / 2,
-                                depth: 1,
-                            }),
-                    ]),
+        let input_image_clone = self.input_image.clone();
+        let hal_texture = unsafe {
+            hal_device.texture_from_raw(
+                self.input_image.image,
+                &wgpu::hal::TextureDescriptor {
+                    label: None,
+                    size: encode_texture_extent,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::NV12,
+                    usage: wgpu::TextureUses::COPY_DST,
+                    memory_flags: wgpu::hal::MemoryFlags::empty(),
+                    view_formats: Vec::new(),
+                },
+                Some(Box::new(move || {
+                    drop(input_image_clone);
+                })),
+                wgpu::hal::vulkan::TextureMemory::External,
             )
         };
 
+        let texture = unsafe {
+            self.encoding_device
+                .wgpu_device()
+                .create_texture_from_hal::<VkApi>(
+                    hal_texture,
+                    &wgpu::TextureDescriptor {
+                        label: None,
+                        size: encode_texture_extent,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::NV12,
+                        usage: wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    },
+                )
+        };
+
+        // Copy is on the wgpu core queue because it will handle `frame.data` layout transitions for us
+        let mut encoder = self
+            .encoding_device
+            .wgpu_device()
+            .create_command_encoder(&Default::default());
+        encoder.copy_texture_to_texture(
+            frame.data.as_image_copy(),
+            texture.as_image_copy(),
+            encode_texture_extent,
+        );
+
         // TODO: dont wait for all here
         self.tracker.wait_for_all(u64::MAX)?;
-
-        let mut semaphore_submit_info = self
-            .tracker
-            .semaphore_tracker
-            .next_submit_info(EncoderTrackerWaitState::CopyImageToImage);
-        unsafe {
-            wgpu_queue.submit(
-                &[&encoder.end_encoding()?],
-                &[],
-                semaphore_submit_info.wgpu_wait_info(),
-            )?;
-        }
-        semaphore_submit_info.mark_submitted();
+        self.encoding_device.wgpu_queue().submit([encoder.finish()]);
 
         self.tracker
             .image_layout_tracker
             .lock()
             .unwrap()
             .map
-            .insert(self.input_image.key(), layout);
+            .insert(
+                self.input_image.key(),
+                vec![vk::ImageLayout::TRANSFER_DST_OPTIMAL].into_boxed_slice(),
+            );
 
-        Ok(encoder)
+        // wgpu core queue makes it impossible to specify signal semaphores
+        // so we have to make an empty submit on the wgpu hal queue just for the synchronization
+        //
+        // TODO: it'd be better to create one encoder and just reuse it
+        //       because it creates a new command pool every time it's created
+        let mut hal_encoder = unsafe {
+            hal_device
+                .create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
+                    label: Some("vulkan video synchronize with wgpu"),
+                    queue: &hal_queue,
+                })
+                .unwrap()
+        };
+        let command_buffer = unsafe {
+            hal_encoder.begin_encoding(None)?;
+            hal_encoder.end_encoding()?
+        };
+
+        let mut semaphore_submit_info = self
+            .tracker
+            .semaphore_tracker
+            .next_submit_info(EncoderTrackerWaitState::CopyImageToImage);
+        unsafe {
+            hal_queue.submit(
+                &[&command_buffer],
+                &[],
+                semaphore_submit_info.wgpu_wait_info(),
+            )?;
+        }
+
+        semaphore_submit_info.mark_submitted();
+
+        Ok(hal_encoder)
     }
 
     pub(crate) fn encode<'b>(
@@ -1305,29 +1273,20 @@ impl<'a> VulkanEncoder<'a> {
         let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
         let image = Arc::new(image);
 
-        let result = self
-            .encode(image, force_idr, frame.pts)?
-            .wait_and_download(u64::MAX)?;
-
-        Ok(result)
+        self.encode(image, force_idr, frame.pts)?
+            .wait_and_download(u64::MAX)
     }
 
-    /// # Safety
-    /// - The texture cannot be a surface texture
-    /// - The texture has to be transitioned to [`wgpu::TextureUses::COPY_SRC`] usage
     #[cfg(feature = "wgpu")]
-    pub unsafe fn encode_texture(
+    pub fn encode_texture(
         &mut self,
         frame: InputFrame<wgpu::Texture>,
         force_idr: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let _cmd_encoder = self.copy_wgpu_texture_to_image(&frame)?;
 
-        let result = self
-            .encode(self.input_image.clone(), force_idr, frame.pts)?
-            .wait_and_download(u64::MAX)?;
-
-        Ok(result)
+        self.encode(self.input_image.clone(), force_idr, frame.pts)?
+            .wait_and_download(u64::MAX)
     }
 
     fn encoder_rate_control_for<'b>(
