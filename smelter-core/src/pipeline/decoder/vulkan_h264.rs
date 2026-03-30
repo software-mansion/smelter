@@ -48,25 +48,20 @@ impl VideoDecoderInstance for VulkanH264Decoder {
     fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
         trace!(?event, "Vulkan H264 decoder received an event.");
 
-        let chunk = match &event {
+        let decoder_event = match &event {
             EncodedInputEvent::Chunk(chunk) => {
                 self.drop_frames = !chunk.present;
-                vk_video::EncodedInputChunk {
+                vk_video::DecoderEvent::DecodeChunk(vk_video::EncodedInputChunk {
                     data: chunk.data.as_ref(),
                     pts: Some(chunk.pts.as_micros() as u64),
-                }
+                })
             }
-            EncodedInputEvent::LostData => {
-                self.decoder.mark_missing_data();
-                return vec![];
-            }
-            EncodedInputEvent::AuDelimiter => {
-                return vec![];
-            }
+            EncodedInputEvent::LostData => vk_video::DecoderEvent::SignalDataLoss,
+            EncodedInputEvent::AuDelimiter => vk_video::DecoderEvent::SignalFrameEnd,
         };
 
-        let frames = match self.decoder.decode(chunk) {
-            Ok(res) => res,
+        let frames = match self.decoder.process_event(decoder_event) {
+            Ok(frames) => frames,
             Err(DecoderError::ReferenceManagementError(ReferenceManagementError::MissingFrame)) => {
                 if let Some(s) = self.keyframe_request_sender.as_ref() {
                     s.send()
