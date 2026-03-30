@@ -297,8 +297,8 @@ fn register_codecs(
                 }
             }
             VideoEncoderOptions::VulkanH264(_) => {
-                let codecs = filter_h264_codecs_for_vulkan_encoder(ctx, h264_codec_params());
-                for codec in filter_h264_codecs_by_offer(offer, codecs) {
+                let codecs = filter_h264_codecs_by_offer(offer, h264_codec_params());
+                for codec in filter_h264_codecs_for_vulkan_encoder(ctx, codecs) {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }

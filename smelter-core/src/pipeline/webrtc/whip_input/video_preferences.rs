@@ -75,13 +75,12 @@ pub(super) fn video_params_compliant_with_offer(
     offer: &RTCSessionDescription,
 ) -> Vec<RTCRtpCodecParameters> {
     let codecs = params_from_video_preferences(video_preferences);
-    let codecs = if uses_vulkan_h264(video_preferences) {
-        filter_h264_codecs_for_vulkan_decoder(ctx, codecs)
+    let filtered_by_offer_h264_codecs = filter_h264_codecs_by_offer(offer, codecs);
+    if uses_vulkan_h264(video_preferences) {
+        filter_h264_codecs_for_vulkan_decoder(ctx, filtered_by_offer_h264_codecs)
     } else {
-        codecs
-    };
-
-    filter_h264_codecs_by_offer(offer, codecs)
+        filtered_by_offer_h264_codecs
+    }
 }
 
 fn uses_vulkan_h264(video_preferences: &[VideoDecoderOptions]) -> bool {
