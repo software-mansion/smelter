@@ -318,7 +318,7 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
         match err {
             RegisterInputError::AlreadyRegistered(_) => {
-                PipelineErrorInfo::new(INPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
+                PipelineErrorInfo::new(INPUT_STREAM_ALREADY_REGISTERED, ErrorType::Conflict)
             }
 
             // WHEP
@@ -382,7 +382,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
     fn from(err: &RegisterOutputError) -> Self {
         match err {
             RegisterOutputError::AlreadyRegistered(_) => {
-                PipelineErrorInfo::new(OUTPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
+                PipelineErrorInfo::new(OUTPUT_STREAM_ALREADY_REGISTERED, ErrorType::Conflict)
             }
 
             // RTMP
