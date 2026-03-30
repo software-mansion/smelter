@@ -6,6 +6,7 @@ use tracing::{error, info};
 mod bearer_token;
 mod error;
 mod h264_offer_filter;
+mod h264_vulkan_capability_filter;
 mod handle_keyframe_requests;
 mod http_client;
 mod input_rtcp_listener;

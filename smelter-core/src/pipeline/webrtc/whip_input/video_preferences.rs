@@ -11,6 +11,7 @@ use crate::{
     codecs::VideoDecoderOptions,
     pipeline::webrtc::{
         h264_offer_filter::filter_h264_codecs_by_offer,
+        h264_vulkan_capability_filter::filter_h264_codecs_for_vulkan_decoder,
         supported_codec_parameters::{h264_codec_params, vp8_codec_params, vp9_codec_params},
     },
     prelude::WebrtcVideoDecoderOptions,
@@ -69,11 +70,24 @@ pub(super) fn resolve_video_preferences(
 /// This works around a webrtc-rs bug where the SDP answer can contain H264 fmtp parameters
 /// from our codec preferences instead of from the negotiated (offer) codecs.
 pub(super) fn video_params_compliant_with_offer(
+    ctx: &Arc<PipelineCtx>,
     video_preferences: &[VideoDecoderOptions],
     offer: &RTCSessionDescription,
 ) -> Vec<RTCRtpCodecParameters> {
     let codecs = params_from_video_preferences(video_preferences);
+    let codecs = if uses_vulkan_h264(video_preferences) {
+        filter_h264_codecs_for_vulkan_decoder(ctx, codecs)
+    } else {
+        codecs
+    };
+
     filter_h264_codecs_by_offer(offer, codecs)
+}
+
+fn uses_vulkan_h264(video_preferences: &[VideoDecoderOptions]) -> bool {
+    video_preferences
+        .iter()
+        .any(|pref| matches!(pref, VideoDecoderOptions::VulkanH264))
 }
 
 fn params_from_video_preferences(

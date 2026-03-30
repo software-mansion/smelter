@@ -37,68 +37,43 @@ pub fn vp9_codec_params() -> Vec<RTCRtpCodecParameters> {
 }
 
 pub fn h264_codec_params() -> Vec<RTCRtpCodecParameters> {
-    let codec_configs = [
-        // Constrained Baseline, level 3.1
-        (
-            "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
-            102,
-        ),
-        (
-            "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f",
-            127,
-        ),
-        // Constrained Baseline extended, level 3.1
-        (
-            "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
-            125,
-        ),
-        (
-            "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f",
-            108,
-        ),
-        // Main, level 3.1
-        (
-            "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d001f",
-            104,
-        ),
-        (
-            "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=4d001f",
-            105,
-        ),
-        // High, level 3.1
-        (
-            "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64001f",
-            106,
-        ),
-        (
-            "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=64001f",
-            107,
-        ),
-        // High, level 5.0
-        (
-            "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032",
-            123,
-        ),
-        (
-            "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=640032",
-            124,
-        ),
+    let profile_level_ids = [
+        "42001f", // baseline, 3.1
+        "42e01f", // constrained baseline, 3.1
+        "42002a", // baseline, 4.2
+        "4d001f", // main, 3.1
+        "4d0028", // main, 4.0
+        "640028", // high, 4.0
+        "640029", // high, 4.1
+        "64002a", // high, 4.2
+        "640032", // high, 5.0
+        "640033", // high, 5.1
     ];
 
-    codec_configs
-        .iter()
-        .map(|(fmtp, payload_type)| RTCRtpCodecParameters {
-            capability: RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_H264.to_owned(),
-                clock_rate: 90000,
-                channels: 0,
-                sdp_fmtp_line: fmtp.to_string(),
-                rtcp_feedback: get_video_rtcp_feedback(),
-            },
-            payload_type: *payload_type,
-            ..Default::default()
-        })
-        .collect()
+    let mut params = Vec::with_capacity(profile_level_ids.len() * 2);
+    let mut payload_type = 100u8;
+
+    for plid in profile_level_ids {
+        for pmode in [1, 0] {
+            params.push(RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: format!(
+                        "level-asymmetry-allowed=1;packetization-mode={pmode};profile-level-id={plid}"
+                    ),
+                    rtcp_feedback: get_video_rtcp_feedback(),
+                },
+                payload_type,
+                ..Default::default()
+            });
+
+            payload_type += 1;
+        }
+    }
+
+    params
 }
 
 fn get_video_rtcp_feedback() -> Vec<RTCPFeedback> {

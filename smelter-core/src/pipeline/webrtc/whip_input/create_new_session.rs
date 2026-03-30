@@ -32,7 +32,7 @@ pub(crate) async fn create_new_whip_session(
             input.jitter_buffer_options.clone(),
         ))
     })?;
-    let video_codecs = video_params_compliant_with_offer(&video_preferences, &offer);
+    let video_codecs = video_params_compliant_with_offer(&state.ctx, &video_preferences, &offer);
 
     let peer_connection = RecvonlyPeerConnection::new(&state.ctx, &video_codecs).await?;
 
