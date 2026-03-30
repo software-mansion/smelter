@@ -1,14 +1,11 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::future::join_all;
-use js_sys::Object;
 use smelter_render::{Frame, FrameData, FrameSet, InputId};
 use tracing::error;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::VideoFrameCopyToOptions;
-
-use crate::types::ObjectExt;
+use web_sys::{PlaneLayout, VideoFrameCopyToOptions, VideoPixelFormat};
 
 use super::{
     InputFrameKind, InputFrameSet,
@@ -224,37 +221,39 @@ impl RendererInputs {
 async fn get_frame_data(frame: web_sys::VideoFrame) -> Result<Vec<u8>, JsValue> {
     let rect = frame.visible_rect().unwrap();
 
-    let rgba_layout = Object::new();
-    rgba_layout.set("offset", 0);
-    rgba_layout.set("stride", rect.width() * 4.0);
-    let rgba_layout = js_sys::Array::of1(&rgba_layout);
+    let rgba_layout = &[PlaneLayout::new(0, rect.width() as u32 * 4)];
 
     let options = VideoFrameCopyToOptions::new();
-    options.set("format", "RGBA");
-    options.set_layout(&rgba_layout);
+    options.set_format(VideoPixelFormat::Rgba);
+    options.set_layout(rgba_layout);
 
     let buffer_size = frame.allocation_size_with_options(&options)? as usize;
     let mut buffer = vec![0; buffer_size];
     let copy_promise = frame.copy_to_with_u8_slice_and_options(&mut buffer, &options);
 
     let plane_layouts = JsFuture::from(copy_promise).await?;
-    if !check_plane_layouts(&rgba_layout, plane_layouts.dyn_ref().unwrap()) {
+    if !check_plane_layouts(
+        &js_sys::Array::of(rgba_layout),
+        plane_layouts.dyn_ref().unwrap(),
+    ) {
         error!(layouts = ?plane_layouts, frame = ?frame, "Copied frame's plane layouts do not match expected layouts")
     }
     Ok(buffer)
 }
 
-fn check_plane_layouts(expected: &js_sys::Array, received: &js_sys::Array) -> bool {
+fn check_plane_layouts(
+    expected: &js_sys::Array<PlaneLayout>,
+    received: &js_sys::Array<PlaneLayout>,
+) -> bool {
     if expected.length() != received.length() {
         return false;
     }
 
-    use js_sys::Reflect::get;
     for (expected, received) in expected.iter().zip(received.iter()) {
-        if get(&expected, &"offset".into()) != get(&received, &"offset".into()) {
+        if expected.get_offset() != received.get_offset() {
             return false;
         }
-        if get(&expected, &"stride".into()) != get(&received, &"stride".into()) {
+        if expected.get_stride() != received.get_stride() {
             return false;
         }
     }

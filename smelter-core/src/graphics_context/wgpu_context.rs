@@ -14,15 +14,19 @@ pub fn create_wgpu_graphics_ctx(
         features,
         limits,
         compatible_surface,
+        display_handle,
         device_id,
         driver_name,
         ..
     } = opts;
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::all(),
-        ..Default::default()
-    });
+    let instance_desc = match display_handle {
+        Some(display_handle) => wgpu::InstanceDescriptor::new_with_display_handle(
+            display_handle.to_boxed_display_handle(),
+        ),
+        None => wgpu::InstanceDescriptor::new_without_display_handle(),
+    };
+    let instance = wgpu::Instance::new(instance_desc);
 
     #[cfg(not(target_arch = "wasm32"))]
     log_available_adapters(&instance, compatible_surface);
@@ -109,4 +113,14 @@ fn log_available_adapters(instance: &wgpu::Instance, compatible_surface: Option<
         })
         .collect();
     info!("Available adapters: {}", adapters.join(""))
+}
+
+pub trait BoxableHasDisplayHandle: wgpu::wgt::WgpuHasDisplayHandle {
+    fn to_boxed_display_handle(&self) -> Box<dyn wgpu::wgt::WgpuHasDisplayHandle>;
+}
+
+impl<T: wgpu::wgt::WgpuHasDisplayHandle + Clone> BoxableHasDisplayHandle for T {
+    fn to_boxed_display_handle(&self) -> Box<dyn wgpu::wgt::WgpuHasDisplayHandle> {
+        Box::new(self.clone())
+    }
 }

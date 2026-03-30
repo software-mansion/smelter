@@ -21,7 +21,10 @@ impl PremultiplyAlphaPipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Add pre-multiplied alpha pipeline layout"),
-            bind_group_layouts: &[rgba_textures_bind_group_layout, &sampler.bind_group_layout],
+            bind_group_layouts: &[
+                Some(rgba_textures_bind_group_layout),
+                Some(&sampler.bind_group_layout),
+            ],
             immediate_size: 0,
         });
 

@@ -49,10 +49,10 @@ impl LayoutShader {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: LABEL,
                     bind_group_layouts: &[
-                        &wgpu_ctx.format.single_texture_layout,
-                        &params_bind_groups.bind_group_1_layout,
-                        &params_bind_groups.bind_group_2_layout,
-                        &sampler.bind_group_layout,
+                        Some(&wgpu_ctx.format.single_texture_layout),
+                        Some(&params_bind_groups.bind_group_1_layout),
+                        Some(&params_bind_groups.bind_group_2_layout),
+                        Some(&sampler.bind_group_layout),
                     ],
                     immediate_size: 16,
                 });

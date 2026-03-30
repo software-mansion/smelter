@@ -10,6 +10,7 @@
 - `Frame<T>` has been split into `InputFrame<T>` (for encoding) and `OutputFrame<T>` (for decoding). Decoded frames now include color space and color range information.
 - Renamed feature flags: `expose_parsers` -> `expose-parsers`, `vk_api_dump` -> `vk-api-dump`, `vk_validation` -> `vk-validation`.
 - Removed `mark_missing_data` from decoders in favor of `process_event` method.
+- Updated `wgpu` to `29.0.0`
 
 ### ✨ New features
 - One-to-many transcoders via `VulkanDevice::create_transcoder` (needs `transcoder` feature enabled)

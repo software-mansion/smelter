@@ -66,7 +66,7 @@ pub fn run_renderer<'a>(
                         current_frame.frame.size().height,
                     ));
 
-                    renderer.render(&current_frame.frame, window).unwrap();
+                    renderer.render(&current_frame.frame, window);
                 }
 
                 WindowEvent::Resized(new_size) => renderer.resize(new_size),
@@ -212,7 +212,7 @@ impl<'a> Renderer<'a> {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -279,9 +279,21 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    fn render(&mut self, frame: &wgpu::Texture, window: &Window) -> Result<(), wgpu::SurfaceError> {
+    fn render(&mut self, frame: &wgpu::Texture, window: &Window) {
         let device = &self.device;
-        let surface = self.surface.get_current_texture()?;
+        let surface = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(surface_texture)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Validation
+            | wgpu::CurrentSurfaceTexture::Occluded => {
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                self.resize(window.inner_size());
+                return;
+            }
+        };
         let surface_view = surface.texture.create_view(&wgpu::TextureViewDescriptor {
             format: Some(surface.texture.format().remove_srgb_suffix()),
             ..Default::default()
@@ -348,7 +360,5 @@ impl<'a> Renderer<'a> {
         self.queue.submit(Some(command_encoder.finish()));
         window.pre_present_notify();
         surface.present();
-
-        Ok(())
     }
 }

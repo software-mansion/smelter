@@ -20,7 +20,10 @@ impl InterleavedUyvy422ToRgbaConverter {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Interleaved UYVY 4:2:2 to RGBA color converter render pipeline layout"),
-            bind_group_layouts: &[yuv_textures_bind_group_layout, &sampler.bind_group_layout],
+            bind_group_layouts: &[
+                Some(yuv_textures_bind_group_layout),
+                Some(&sampler.bind_group_layout),
+            ],
             immediate_size: 0,
         });
 

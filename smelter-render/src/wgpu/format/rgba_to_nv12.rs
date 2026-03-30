@@ -23,7 +23,10 @@ impl RgbaToNv12Converter {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("RGBA to NV12 color converter render pipeline layout"),
-            bind_group_layouts: &[single_texture_bind_group_layout, &sampler.bind_group_layout],
+            bind_group_layouts: &[
+                Some(single_texture_bind_group_layout),
+                Some(&sampler.bind_group_layout),
+            ],
             immediate_size: 0,
         });
         let y_pipeline = create_converting_pipeline(
