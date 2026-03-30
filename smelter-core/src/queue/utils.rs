@@ -6,37 +6,35 @@ use crate::event::{Event, EventEmitter};
 /// Guards against emitting a particular event more than once.
 /// Use `reset` to re-arm after EOS so the event can fire again.
 pub struct EmitOnceGuard {
-    event: Option<Event>,
+    sent: bool,
+    event: Event,
     emitter: Arc<EventEmitter>,
 }
 
 impl EmitOnceGuard {
     pub fn new(event: Event, emitter: &Arc<EventEmitter>) -> Self {
         Self {
-            event: Some(event),
+            sent: false,
+            event: event,
             emitter: emitter.clone(),
         }
     }
 
     /// Emits the event if it hasn't been sent yet.
     pub fn emit(&mut self) {
-        if let Some(event) = self.event.take() {
-            self.emitter.emit(event);
+        if !self.sent {
+            self.emitter.emit(self.event.clone());
+            self.sent = true;
         }
     }
 
-    pub fn emited(&mut self) -> bool {
-        self.event.is_some()
+    pub fn emited(&self) -> bool {
+        self.sent
     }
-}
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum QueueState {
-    New,
-    Running,
-    /// After EOS was received, do not attempt to enqueue
-    /// packets, after queue is drained go to `Restarted`
-    Draining,
+    pub fn reset(&mut self) {
+        self.sent = false
+    }
 }
 
 pub struct PauseState {
@@ -64,30 +62,9 @@ impl PauseState {
     }
 
     /// Clears paused state. Returns `true` if pause state was changed
-    pub fn resume(&mut self, pts: Duration, state: QueueState) -> bool {
-        let Some(pause_start) = self.paused_at_pts.take() else {
-            return false;
-        };
-        match state {
-            QueueState::New => {
-                // Input without offset then pause offset should be increased based on first
-                // incoming packet
-                // Input with offset no change
-                //
-                // Because we care here mostly for MP4 for now, then this case can only
-                // happen for quick pause after registering.
-                self.pts_offset += pts.saturating_sub(pause_start);
-            }
-            QueueState::Running => {
-                self.pts_offset += pts.saturating_sub(pause_start);
-            }
-            QueueState::Draining => {
-                // We will clear the queue, send EOS on the next loop
-                // and state will be reset, so offset does not matter
-                // after this
-            }
-        }
-        true
+    pub fn resume(&mut self, pts: Duration) -> Option<Duration> {
+        let pause_start = self.paused_at_pts.take()?;
+        Some(pts.saturating_sub(pause_start))
     }
 
     pub fn is_paused(&self) -> bool {

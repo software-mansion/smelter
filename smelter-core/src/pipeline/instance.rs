@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex, Weak},
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use crossbeam_channel::{Receiver, bounded};
@@ -582,7 +582,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     )?;
 
     let ctx = Arc::new(PipelineCtx {
-        queue_sync_point: Instant::now(),
+        queue_ctx: Default::default(),
         default_buffer_duration: opts.default_buffer_duration,
 
         mixing_sample_rate: opts.mixing_sample_rate,

@@ -9,6 +9,8 @@ use std::{
 use crossbeam_channel::{Receiver, Sender, select, tick};
 use tracing::{debug, info, info_span, trace, warn};
 
+use crate::queue::QueueContext;
+
 use super::{Queue, QueueAudioOutput, QueueVideoOutput, ScheduledEvent};
 
 pub(super) struct QueueThread {
@@ -21,7 +23,7 @@ pub(super) struct QueueThread {
 pub(super) struct QueueStartEvent {
     pub video_sender: Sender<QueueVideoOutput>,
     pub audio_sender: Sender<QueueAudioOutput>,
-    pub start_time_pts: Duration,
+    pub queue_ctx: QueueContext,
 }
 
 impl QueueThread {

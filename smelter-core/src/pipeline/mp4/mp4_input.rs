@@ -21,7 +21,7 @@ use crate::{
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
         utils::{H264AvccToAnnexB, input_buffer::InputBuffer},
     },
-    queue::QueueInput,
+    queue::{AudioTrackOptions, QueueInput, VideoTrackOptions, WeakQueueInput},
     utils::{InitializableThread, ShutdownCondition},
 };
 
@@ -38,6 +38,18 @@ impl Mp4Input {
     pub fn seek(&self, position: Duration) {
         if self.events_sender.send(StateEvent::Seek(position)).is_err() {
             debug!("Failed to handle seek event. Channel closed.")
+        }
+    }
+
+    pub fn pause(&self) {
+        if self.events_sender.send(StateEvent::Pause).is_err() {
+            debug!("Failed to handle pause event. Channel closed.")
+        }
+    }
+
+    pub fn resume(&self) {
+        if self.events_sender.send(StateEvent::Resume).is_err() {
+            debug!("Failed to handle resume event. Channel closed.")
         }
     }
 }
@@ -79,17 +91,18 @@ impl Mp4Input {
             }
         });
 
-        let queue_input = QueueInput::new(
-            video.is_some(),
-            audio.is_some(),
-            options.required,
-            options.offset,
-            &ctx,
-            &input_ref,
+        let mut queue_input = QueueInput::new(&ctx, &input_ref, options.required);
+        let (video_sender, audio_sender) = queue_input.queue_new_track(
+            video.as_ref().map(|_| VideoTrackOptions {
+                offset: options.offset,
+            }),
+            audio.as_ref().map(|_| AudioTrackOptions {
+                offset: options.offset,
+            }),
         );
 
-        let (video_handle, video_track) = match video {
-            Some(track) => {
+        let (video_handle, video_track) = match (video, video_sender) {
+            (Some(track), Some(frame_sender)) => {
                 let handle = match (track.decoder_options(), h264_decoder) {
                     (DecoderOptions::H264(h264_config), VideoDecoderOptions::FfmpegH264) => {
                         VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
@@ -97,7 +110,7 @@ impl Mp4Input {
                             VideoDecoderThreadOptions {
                                 ctx: ctx.clone(),
                                 transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
-                                queue_input: queue_input.downgrade(),
+                                frame_sender,
                                 input_buffer_size: CHUNK_BUFFER_SIZE,
                             },
                         )?
@@ -113,7 +126,7 @@ impl Mp4Input {
                             VideoDecoderThreadOptions {
                                 ctx: ctx.clone(),
                                 transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
-                                queue_input: queue_input.downgrade(),
+                                frame_sender,
                                 input_buffer_size: CHUNK_BUFFER_SIZE,
                             },
                         )?
@@ -126,11 +139,11 @@ impl Mp4Input {
                 };
                 (Some(handle), Some(track))
             }
-            None => (None, None),
+            _ => (None, None),
         };
 
-        let (audio_handle, audio_track) = match audio {
-            Some(track) => {
+        let (audio_handle, audio_track) = match (audio, audio_sender) {
+            (Some(track), Some(samples_sender)) => {
                 let handle = match track.decoder_options() {
                     DecoderOptions::Aac(data) => {
                         AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
@@ -140,7 +153,7 @@ impl Mp4Input {
                                 decoder_options: FdkAacDecoderOptions {
                                     asc: Some(data.clone()),
                                 },
-                                queue_input: queue_input.downgrade(),
+                                samples_sender,
                                 input_buffer_size: CHUNK_BUFFER_SIZE,
                             },
                         )?
@@ -153,7 +166,7 @@ impl Mp4Input {
                 };
                 (Some(handle), Some(track))
             }
-            None => (None, None),
+            _ => (None, None),
         };
 
         let (reader, events_sender) = TrackManagerThread::new(
@@ -163,6 +176,7 @@ impl Mp4Input {
             source_file,
             video_handle,
             audio_handle,
+            queue_input.downgrade(),
         );
         std::thread::Builder::new()
             .name("mp4 reader".to_string())
@@ -213,6 +227,8 @@ impl Drop for Mp4Input {
 
 enum StateEvent {
     Seek(Duration),
+    Pause,
+    Resume,
     ThreadFinished(ThreadId),
     InputShutdown,
 }
@@ -239,6 +255,7 @@ struct TrackManagerThread {
     audio_ctx: Option<TrackContext>,
     video_thread: Option<(JoinHandle<TrackThreadResult>, ShutdownCondition)>,
     audio_thread: Option<(JoinHandle<TrackThreadResult>, ShutdownCondition)>,
+    queue_input: WeakQueueInput,
 }
 
 impl TrackManagerThread {
@@ -249,6 +266,7 @@ impl TrackManagerThread {
         source_file: Arc<SourceFile>,
         video_handle: Option<DecoderThreadHandle>,
         audio_handle: Option<DecoderThreadHandle>,
+        queue_input: WeakQueueInput,
     ) -> (Self, Sender<StateEvent>) {
         let (events_sender, events_receiver) = unbounded();
         let buffer = InputBuffer::new(ctx, options.buffer);
@@ -282,42 +300,40 @@ impl TrackManagerThread {
                 audio_ctx,
                 video_thread: None,
                 audio_thread: None,
+                queue_input,
             },
             events_sender,
         )
     }
 
     fn run(mut self, video_track: Option<Track<File>>, audio_track: Option<Track<File>>) {
-        let offset = self.ctx.queue_sync_point.elapsed();
         if let (Some(track), Some(ctx)) = (video_track, &self.video_ctx) {
-            self.video_thread = Some(self.spawn_video(ctx, track, offset, self.options.seek));
+            self.video_thread = Some(self.spawn_video(ctx, track, self.options.seek));
         }
         if let (Some(track), Some(ctx)) = (audio_track, &self.audio_ctx) {
-            self.audio_thread = Some(self.spawn_audio(ctx, track, offset, self.options.seek));
+            self.audio_thread = Some(self.spawn_audio(ctx, track, self.options.seek));
         }
 
         while let Ok(event) = self.events_receiver.recv() {
             match event {
+                StateEvent::Pause => {
+                    let Some(input) = self.queue_input.upgrade() else {
+                        return;
+                    };
+                    input.pause();
+                }
+                StateEvent::Resume => {
+                    let Some(input) = self.queue_input.upgrade() else {
+                        return;
+                    };
+                    input.resume();
+                }
                 StateEvent::Seek(seek) => {
                     self.restart_threads(Some(seek));
                 }
                 StateEvent::ThreadFinished(thread_id) => {
                     match self.options.should_loop {
                         false => {
-                            // in case of seek thread_id will not match
-                            if let (Some((thread_handle, _)), Some(track)) =
-                                (&self.video_thread, &self.video_ctx)
-                                && thread_handle.thread().id() == thread_id
-                            {
-                                let _ = track.decoder_handle.chunk_sender.send(PipelineEvent::EOS);
-                            }
-                            if let (Some((thread_handle, _)), Some(track)) =
-                                (&self.audio_thread, &self.audio_ctx)
-                                && thread_handle.thread().id() == thread_id
-                            {
-                                let _ = track.decoder_handle.chunk_sender.send(PipelineEvent::EOS);
-                            }
-
                             // do not break because user can still
                             // send seek request
                         }
@@ -345,18 +361,6 @@ impl TrackManagerThread {
     }
 
     fn restart_threads(&mut self, seek: Option<Duration>) {
-        let video_thread_finished = self
-            .video_thread
-            .as_ref()
-            .map(|thread| thread.0.is_finished())
-            .unwrap_or(true);
-        let audio_thread_finished = self
-            .audio_thread
-            .as_ref()
-            .map(|thread| thread.0.is_finished())
-            .unwrap_or(true);
-        let threads_finished = video_thread_finished && audio_thread_finished;
-
         if let Some((_, cond)) = self.video_thread.as_ref() {
             cond.mark_for_shutdown()
         }
@@ -373,21 +377,11 @@ impl TrackManagerThread {
             .take()
             .map(|(handle, _)| handle.join().unwrap());
 
-        let offset = match threads_finished {
-            true => self.ctx.queue_sync_point.elapsed(),
-            false => match (&video, &audio) {
-                (None, None) => Duration::ZERO,
-                (None, Some(audio)) => audio.last_pts,
-                (Some(video), None) => video.last_pts,
-                (Some(video), Some(audio)) => Duration::max(video.last_pts, audio.last_pts),
-            },
-        };
-
         if let (Some(result), Some(ctx)) = (video, &self.video_ctx) {
-            self.video_thread = Some(self.spawn_video(ctx, result.track, offset, seek));
+            self.video_thread = Some(self.spawn_video(ctx, result.track, seek));
         }
         if let (Some(result), Some(ctx)) = (audio, &self.audio_ctx) {
-            self.audio_thread = Some(self.spawn_audio(ctx, result.track, offset, seek));
+            self.audio_thread = Some(self.spawn_audio(ctx, result.track, seek));
         }
     }
 
@@ -395,7 +389,6 @@ impl TrackManagerThread {
         &self,
         ctx: &TrackContext,
         track: Track<File>,
-        offset: Duration,
         seek: Option<Duration>,
     ) -> (JoinHandle<TrackThreadResult>, ShutdownCondition) {
         let shutdown_condition = self.input_shutdown_condition.child_condition();
@@ -403,7 +396,6 @@ impl TrackManagerThread {
             ctx: ctx.clone(),
             shutdown_condition: shutdown_condition.clone(),
             track,
-            offset,
             seek,
         };
         let input_id = self.input_ref.to_string();
@@ -421,7 +413,6 @@ impl TrackManagerThread {
         &self,
         ctx: &TrackContext,
         track: Track<File>,
-        offset: Duration,
         seek: Option<Duration>,
     ) -> (JoinHandle<TrackThreadResult>, ShutdownCondition) {
         let shutdown_condition = self.input_shutdown_condition.child_condition();
@@ -429,7 +420,6 @@ impl TrackManagerThread {
             ctx: ctx.clone(),
             shutdown_condition: shutdown_condition.clone(),
             track,
-            offset,
             seek,
         };
         let input_id = self.input_ref.to_string();
@@ -448,23 +438,16 @@ struct TrackThread {
     ctx: TrackContext,
     shutdown_condition: ShutdownCondition,
     track: Track<File>,
-    offset: Duration,
     seek: Option<Duration>,
 }
 
 struct TrackThreadResult {
-    last_pts: Duration,
     track: Track<File>,
 }
 
 impl TrackThread {
     fn run_video_thread(mut self) -> TrackThreadResult {
-        let mut last_pts = self.offset;
-        for (mut chunk, duration) in self.track.chunks(self.seek) {
-            chunk.pts += self.offset;
-            chunk.dts = chunk.dts.map(|dts| dts + self.offset);
-            last_pts = Duration::max(last_pts, chunk.pts + duration);
-
+        for (mut chunk, _duration) in self.track.chunks(self.seek) {
             self.ctx.stats_sender.send(
                 Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
                     .into_event(&self.ctx.input_ref, StatsTrackKind::Video),
@@ -489,19 +472,11 @@ impl TrackThread {
             .ctx
             .event_sender
             .send(StateEvent::ThreadFinished(thread::current().id()));
-        TrackThreadResult {
-            last_pts,
-            track: self.track,
-        }
+        TrackThreadResult { track: self.track }
     }
 
     fn run_audio_thread(mut self) -> TrackThreadResult {
-        let mut last_pts = self.offset;
-        for (mut chunk, duration) in self.track.chunks(self.seek) {
-            chunk.pts += self.offset;
-            chunk.dts = chunk.dts.map(|dts| dts + self.offset);
-            last_pts = Duration::max(last_pts, chunk.pts + duration);
-
+        for (mut chunk, _duration) in self.track.chunks(self.seek) {
             self.ctx.stats_sender.send(
                 Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
                     .into_event(&self.ctx.input_ref, StatsTrackKind::Audio),
@@ -526,10 +501,7 @@ impl TrackThread {
             .ctx
             .event_sender
             .send(StateEvent::ThreadFinished(thread::current().id()));
-        TrackThreadResult {
-            last_pts,
-            track: self.track,
-        }
+        TrackThreadResult { track: self.track }
     }
 }
 

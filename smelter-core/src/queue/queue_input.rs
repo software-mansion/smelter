@@ -7,47 +7,63 @@ use std::{
 use crossbeam_channel::Sender;
 use smelter_render::{Frame, InputId};
 
-use crate::{queue::video_input::VideoQueueInput, types::Ref};
-
-use super::{SharedState, audio_queue::AudioQueueInput};
+use crate::{
+    queue::{audio_input::AudioQueueInput, utils::PauseState, video_input::VideoQueueInput},
+    types::Ref,
+};
 
 use crate::prelude::*;
 
 pub(super) struct InnerQueueInput {
-    pub(super) video: Option<VideoQueueInput>,
-    pub(super) audio: Option<AudioQueueInput>,
-    pending: VecDeque<(Option<VideoQueueInput>, Option<VideoQueueInput>)>,
-    required: bool,
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
+
+    video: Option<VideoQueueInput>,
+    audio: Option<AudioQueueInput>,
+    track_offset: TrackOffset,
+    pause_state: PauseState,
+
+    pending: VecDeque<(
+        Option<VideoQueueInput>,
+        Option<AudioQueueInput>,
+        TrackOffset,
+    )>,
+    required: bool,
 }
 
 impl InnerQueueInput {
     fn maybe_start_next_track(&mut self) {
-        let video_done = self.video.map(|v| v.is_done()).unwrap_or(true);
-        let audio_done = self.audio.map(|a| a.is_done()).unwrap_or(true);
+        let video_done = self.video.as_mut().map(|v| v.is_done()).unwrap_or(true);
+        let audio_done = self.audio.as_mut().map(|a| a.is_done()).unwrap_or(true);
         if video_done && audio_done {
             self.replace_track()
         }
     }
 
+    /// Replace current track with the next pending, do nothing if there is no pending
     fn replace_track(&mut self) {
-        let Some((video, audio)) = self.pending.pop_front() else {
+        let Some((video, audio, track_offset)) = self.pending.pop_front() else {
             return;
         };
         self.video = video;
         self.audio = audio;
+        self.track_offset = track_offset;
+        if self.pause_state.is_paused() {
+            self.video.as_mut().map(|v| v.pause());
+            self.audio.as_mut().map(|a| a.pause());
+            self.pause_state.reset();
+        }
     }
 
     fn queue_new_track(
         &mut self,
         video: Option<VideoTrackOptions>,
         audio: Option<AudioTrackOptions>,
-    ) -> (Option<Sender<Frame>>, Option<Sender<Frame>>) {
+    ) -> (Option<Sender<Frame>>, Option<Sender<InputAudioSamples>>) {
         if video.is_none() && audio.is_none() {
             return (None, None);
         }
-        let state = SharedState::default();
+        let state = TrackOffset::default();
         let (video_input, video_sender) = match video {
             Some(video) => {
                 let (video_input, video_sender) = VideoQueueInput::new(
@@ -63,7 +79,7 @@ impl InnerQueueInput {
         };
         let (audio_input, audio_sender) = match audio {
             Some(audio) => {
-                let (audio_input, audio_sender) = VideoQueueInput::new(
+                let (audio_input, audio_sender) = AudioQueueInput::new(
                     &self.ctx,
                     &self.input_ref,
                     self.required,
@@ -74,16 +90,42 @@ impl InnerQueueInput {
             }
             None => (None, None),
         };
-        self.pending.push_back((video_input, audio_input));
+        self.pending.push_back((video_input, audio_input, state));
         (video_sender, audio_sender)
+    }
+
+    /// Remember the start pts. On resume shift offset by the pts difference:
+    /// - If input already started, add to track offset pts diff
+    /// - If input did not started, track_offset was not initialized yet
+    pub fn pause(&mut self) {
+        if self.pause_state.is_paused() {
+            return;
+        }
+        // zero before queue start
+        let pts = self.ctx.queue_ctx.effective_last_pts();
+        self.pause_state.pause(pts);
+        self.video.as_mut().map(|v| v.pause());
+        self.audio.as_mut().map(|a| a.pause());
+    }
+
+    pub fn resume(&mut self) {
+        if !self.pause_state.is_paused() {
+            return;
+        }
+        let pts = self.ctx.queue_ctx.effective_last_pts();
+        if let Some(pause_time) = self.pause_state.resume(pts) {
+            self.track_offset.map_add(pause_time);
+        }
+        self.video.as_mut().map(|v| v.resume());
+        self.audio.as_mut().map(|a| a.resume());
     }
 }
 
 pub(crate) struct VideoTrackOptions {
-    offset: Option<Duration>,
+    pub offset: Option<Duration>,
 }
 pub(crate) struct AudioTrackOptions {
-    offset: Option<Duration>,
+    pub offset: Option<Duration>,
 }
 
 #[derive(Clone)]
@@ -103,10 +145,15 @@ impl QueueInput {
         Self(Arc::new(Mutex::new(InnerQueueInput {
             ctx: ctx.clone(),
             input_ref: input_ref.clone(),
-            required,
+
             video: None,
             audio: None,
+            track_offset: TrackOffset::default(),
+
             pending: VecDeque::new(),
+
+            required,
+            pause_state: PauseState::new(),
         })))
     }
 
@@ -114,22 +161,20 @@ impl QueueInput {
         &mut self,
         video: Option<VideoTrackOptions>,
         audio: Option<AudioTrackOptions>,
-    ) -> (Option<Sender<Frame>>, Option<Sender<Frame>>) {
+    ) -> (Option<Sender<Frame>>, Option<Sender<InputAudioSamples>>) {
         self.0.lock().unwrap().queue_new_track(video, audio)
     }
 
+    pub fn abort_old_tracks(&mut self) {
+        self.0.lock().unwrap().replace_track()
+    }
+
     pub fn pause(&self) {
-        let mut guard = self.0.lock().unwrap();
-        let pts = guard.ctx.queue_sync_point.elapsed();
-        guard.video.as_mut().map(|v| v.pause(pts));
-        guard.audio.as_mut().map(|a| a.pause(pts));
+        self.0.lock().unwrap().pause();
     }
 
     pub fn resume(&self) {
-        let mut guard = self.0.lock().unwrap();
-        let pts = guard.ctx.queue_sync_point.elapsed();
-        guard.video.as_mut().map(|v| v.resume(pts));
-        guard.audio.as_mut().map(|a| a.resume(pts));
+        self.0.lock().unwrap().resume();
     }
 
     pub fn downgrade(&self) -> WeakQueueInput {
@@ -171,7 +216,16 @@ impl WeakQueueInput {
 pub(super) struct TrackOffset(Arc<Mutex<Option<Duration>>>);
 
 impl TrackOffset {
+    pub fn get(&self) -> Option<Duration> {
+        *self.0.lock().unwrap()
+    }
+
     pub fn get_or_init(&self, offset: Duration) -> Duration {
         *self.0.lock().unwrap().get_or_insert(offset)
+    }
+
+    pub fn map_add(&self, duration: Duration) {
+        let mut guard = self.0.lock().unwrap();
+        guard.as_mut().map(|offset| *offset = *offset + duration);
     }
 }

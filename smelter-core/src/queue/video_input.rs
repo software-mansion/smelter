@@ -1,31 +1,23 @@
-use std::{
-    collections::VecDeque,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError, bounded};
 use smelter_render::{Frame, InputId};
+use tracing::warn;
 
 use crate::{
     PipelineCtx, PipelineEvent, Ref,
     event::{Event, EventEmitter},
-    queue::{
-        queue_input::TrackOffset,
-        utils::{EmitOnceGuard, PauseState, QueueState},
-    },
+    queue::{QueueContext, queue_input::TrackOffset, utils::EmitOnceGuard},
 };
 
+#[derive(Clone)]
 pub(super) struct FrameEvent {
     pub required: bool,
     pub event: PipelineEvent<Frame>,
 }
 
-pub(crate) struct QueueInputState {
-    pub tracks: VecDeque<(Option<VideoInputReceiver>, Option<VideoInputReceiver>)>,
-}
-
 pub(crate) struct VideoQueueInput {
+    queue_ctx: QueueContext,
     /// Frames from the channel might have any PTS, they need to be processed
     /// before adding them to the `queue`.
     receiver: VideoInputReceiver,
@@ -34,16 +26,12 @@ pub(crate) struct VideoQueueInput {
     required: bool,
     /// Offset of the stream relative to the start. If set to `None`
     /// offset will be resolved automatically on the stream start.
-    //offset_from_start: Option<Duration>,
-    sync_point: Instant,
-    /// Offset of the stream relative to the start. If set to `None`
-    /// offset will be resolved automatically on the stream start.
     offset_from_start: Option<Duration>,
 
     track_offset: TrackOffset,
 
-    pause_state: VideoPauseState,
-    state: QueueState,
+    paused: bool,
+    paused_event: Option<FrameEvent>,
 
     event_delivered_guard: EmitOnceGuard,
     event_playing_guard: EmitOnceGuard,
@@ -62,13 +50,13 @@ impl VideoQueueInput {
     ) -> (Self, Sender<Frame>) {
         let (receiver, sender) = VideoInputReceiver::new();
         let input = Self {
+            queue_ctx: ctx.queue_ctx.clone(),
             required,
             offset_from_start: offset,
             receiver,
-            sync_point: ctx.queue_sync_point,
             track_offset,
-            pause_state: VideoPauseState::new(),
-            state: QueueState::New,
+            paused: false,
+            paused_event: None,
             event_delivered_guard: EmitOnceGuard::new(
                 Event::VideoInputStreamDelivered(input_ref.id().clone()),
                 &ctx.event_emitter,
@@ -87,30 +75,54 @@ impl VideoQueueInput {
         (input, sender)
     }
 
-    pub(super) fn is_done(&self) -> bool {
-        self.receiver.is_done()
+    pub(super) fn is_done(&mut self) -> bool {
+        matches!(self.receiver.state(), ReceiverState::Done)
     }
 
     pub(super) fn required(&self) -> bool {
         self.required
     }
 
-    pub(super) fn pause(&mut self, pts: Duration) {
-        if self.pause_state.pause(pts, self.receiver.get_for_pts(pts)) {
-            self.event_emitter
-                .emit(Event::VideoInputStreamPaused(self.input_id.clone()));
+    pub(super) fn pause(&mut self) {
+        if self.paused {
+            return;
         }
+        let pts = self.queue_ctx.last_pts.value().unwrap_or_default();
+        let queue_start_pts = self.queue_ctx.start_time_pts.value();
+        let frame = queue_start_pts
+            .and_then(|queue_start_pts| {
+                // Partially duplicate get_frame logic, we can't call it directly
+                // because we don't want to tiger eos event.
+
+                let offset = self.resolve_offset(pts, queue_start_pts);
+
+                // if buffer_pts is before offset we don't want to return it yet
+                if let Some(offset_from_start) = self.offset_from_start
+                    && pts < queue_start_pts + offset_from_start
+                {
+                    return None;
+                }
+                offset
+            })
+            .and_then(|offset| self.receiver.get_for_pts(pts.saturating_sub(offset)));
+
+        self.paused_event = frame.map(|frame| FrameEvent {
+            required: self.required,
+            event: PipelineEvent::Data(frame),
+        });
+        self.paused = true;
+
+        self.event_emitter
+            .emit(Event::VideoInputStreamPaused(self.input_id.clone()));
     }
 
-    pub(super) fn resume(&mut self, pts: Duration) {
-        if self.pause_state.resume(pts, self.state) {
-            if QueueState::Running == self.state {
-                // TS SDK tracks state based on those values, so if we pause in
-                // non running state it will be stuck at paused until state does
-                // not change
-                self.event_emitter
-                    .emit(Event::VideoInputStreamPlaying(self.input_id.clone()));
-            }
+    pub(super) fn resume(&mut self) {
+        if self.paused {
+            self.paused = false;
+            self.paused_event = None;
+
+            // it will send playing event on next frame
+            self.event_playing_guard.reset();
         };
     }
 
@@ -121,25 +133,24 @@ impl VideoQueueInput {
         buffer_pts: Duration,
         queue_start_pts: Duration,
     ) -> Option<FrameEvent> {
-        if self.pause_state.is_paused() {
-            return self
-                .pause_state
-                .paused_frame(buffer_pts)
-                .map(|event| FrameEvent {
-                    required: self.required,
-                    event,
-                });
+        if self.paused {
+            return self.paused_event.clone();
         }
 
-        let offset = match self.offset_from_start {
-            Some(offset) => self
-                .track_offset
-                .get_or_init((buffer_pts + offset).saturating_sub(queue_start_pts)),
-            None => self.track_offset.get_or_init(buffer_pts),
+        let Some(offset) = self.resolve_offset(buffer_pts, queue_start_pts) else {
+            return None;
         };
+
+        // if buffer_pts is before offset we don't want to return it yet
+        if let Some(offset_from_start) = self.offset_from_start
+            && buffer_pts < queue_start_pts + offset_from_start
+        {
+            return None;
+        }
 
         match self.receiver.get_for_pts(buffer_pts.saturating_sub(offset)) {
             Some(mut frame) => {
+                self.event_playing_guard.emit();
                 frame.pts += offset;
                 Some(FrameEvent {
                     required: self.required,
@@ -147,7 +158,7 @@ impl VideoQueueInput {
                 })
             }
             None => {
-                if self.is_done() {
+                if self.is_done() && !self.event_eos_guard.emited() {
                     self.event_eos_guard.emit();
                     Some(FrameEvent {
                         required: true,
@@ -160,68 +171,84 @@ impl VideoQueueInput {
         }
     }
 
+    pub(super) fn try_enqueue_until_ready_for_pts(
+        &mut self,
+        next_pts: Duration,
+        queue_start_pts: Duration,
+    ) -> bool {
+        if self.paused {
+            return true;
+        }
+
+        let offset = self.resolve_offset(next_pts, queue_start_pts);
+
+        if let Some(offset) = offset {
+            return self
+                .receiver
+                .is_ready_for_pts(next_pts.saturating_sub(offset));
+        }
+
+        match self.receiver.state() {
+            ReceiverState::New => match self.offset_from_start {
+                Some(offset_from_start) => {
+                    next_pts.saturating_sub(queue_start_pts) < offset_from_start
+                }
+                None => true,
+            },
+            ReceiverState::Running => {
+                warn!("receiver running, offset should already be resolved");
+                true
+            }
+            ReceiverState::Done => true,
+        }
+    }
+
+    fn resolve_offset(
+        &mut self,
+        buffer_pts: Duration,
+        queue_start_pts: Duration,
+    ) -> Option<Duration> {
+        if let Some(offset) = self.track_offset.get() {
+            return Some(offset);
+        }
+
+        if self.receiver.state() != ReceiverState::Running {
+            return None;
+        }
+        let offset = match self.offset_from_start {
+            Some(offset_from_start) => self
+                .track_offset
+                .get_or_init(offset_from_start + queue_start_pts),
+            None => self.track_offset.get_or_init(buffer_pts),
+        };
+        Some(offset)
+    }
+
     /// Drops frames that won't be used for processing. This function should only be called before
     /// queue start.
     pub(super) fn drop_old_frames_before_start(&mut self) {
         let is_ready = self.receiver.is_ready_for_pts(Duration::ZERO);
         if self.offset_from_start.is_none() && is_ready {
-            let now = self.sync_point.elapsed();
+            let now = self.queue_ctx.sync_point.elapsed();
             let offset = self.track_offset.get_or_init(now);
             let _ = self.receiver.is_ready_for_pts(now.saturating_sub(offset));
         }
     }
 }
 
-struct VideoPauseState {
-    inner: PauseState,
-    paused_frame: Option<Frame>,
-}
-
-impl VideoPauseState {
-    fn new() -> Self {
-        Self {
-            inner: PauseState::new(),
-            paused_frame: None,
-        }
-    }
-
-    fn pause(&mut self, pts: Duration, frame: Option<Frame>) -> bool {
-        if !self.inner.pause(pts) {
-            return false; // already paused
-        }
-        self.paused_frame = frame;
-        true
-    }
-
-    fn resume(&mut self, pts: Duration, state: QueueState) -> bool {
-        self.paused_frame = None;
-        self.inner.resume(pts, state)
-    }
-
-    /// Returns the paused frame as a PipelineEvent with PTS shifted by time elapsed since pause.
-    fn paused_frame(&self, buffer_pts: Duration) -> Option<PipelineEvent<Frame>> {
-        self.paused_frame.clone().map(|mut frame| {
-            if let Some(paused_at) = self.inner.paused_at_pts() {
-                frame.pts += buffer_pts.saturating_sub(paused_at);
-            }
-            PipelineEvent::Data(frame)
-        })
-    }
-
-    fn is_paused(&self) -> bool {
-        self.inner.is_paused()
-    }
-
-    fn pts_offset(&self) -> Duration {
-        self.inner.pts_offset()
-    }
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum ReceiverState {
+    New,
+    Running,
+    Done,
 }
 
 pub(crate) struct VideoInputReceiver {
     max_size: Duration,
     receiver: Receiver<Frame>,
     buffer: VecDeque<Frame>,
-    is_done: bool,
+    disconnected: bool,
+    state: ReceiverState,
 }
 
 impl VideoInputReceiver {
@@ -231,17 +258,20 @@ impl VideoInputReceiver {
             max_size: Duration::from_secs(1),
             receiver,
             buffer: VecDeque::new(),
-            is_done: false,
+            disconnected: false,
+            state: ReceiverState::New,
         };
         (track, sender)
     }
 
     fn get_for_pts(&mut self, pts: Duration) -> Option<Frame> {
         self.prepare_for_pts(pts);
-        if self.is_done && self.buffer.len() == 1 {
-            self.buffer.front().cloned()
+        if self.disconnected && self.buffer.len() == 1 {
+            let frame = self.buffer.pop_front();
+            self.maybe_transition_to_done();
+            frame
         } else {
-            self.buffer.pop_front()
+            self.buffer.front().cloned()
         }
     }
 
@@ -272,6 +302,7 @@ impl VideoInputReceiver {
 
             let drained = closest_idx > 0;
             self.buffer.drain(0..closest_idx);
+            self.maybe_transition_to_done();
 
             // If we drained frames, there may be room for new frames closer to pts
             if !drained {
@@ -289,14 +320,27 @@ impl VideoInputReceiver {
             match self.receiver.try_recv() {
                 Ok(frame) => {
                     self.buffer.push_back(frame);
+                    self.state = ReceiverState::Running;
                     enqueued = true;
                 }
                 Err(TryRecvError::Empty) => return enqueued,
                 Err(TryRecvError::Disconnected) => {
-                    self.is_done = true;
+                    self.disconnected = true;
+                    self.maybe_transition_to_done();
                     return enqueued;
                 }
             }
+        }
+    }
+
+    fn state(&mut self) -> ReceiverState {
+        self.try_enqueue();
+        self.state
+    }
+
+    fn maybe_transition_to_done(&mut self) {
+        if self.disconnected && self.buffer.is_empty() {
+            self.state = ReceiverState::Done;
         }
     }
 
@@ -305,9 +349,5 @@ impl VideoInputReceiver {
             (Some(front), Some(back)) => back.pts.saturating_sub(front.pts),
             _ => Duration::ZERO,
         }
-    }
-
-    fn is_done(&self) -> bool {
-        self.is_done
     }
 }

@@ -1,10 +1,10 @@
 use std::{marker::PhantomData, sync::Arc};
 
+use crossbeam_channel::Sender;
 use tracing::warn;
 
 use crate::{
     pipeline::decoder::{AudioDecoderStream, DecoderThreadHandle, EncodedInputEvent},
-    queue::WeakQueueInput,
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -15,13 +15,13 @@ use super::AudioDecoder;
 pub(crate) struct AudioDecoderThreadOptions<Decoder: AudioDecoder> {
     pub ctx: Arc<PipelineCtx>,
     pub decoder_options: Decoder::Options,
-    pub queue_input: WeakQueueInput,
+    pub samples_sender: Sender<InputAudioSamples>,
     pub input_buffer_size: usize,
 }
 
 pub(crate) struct AudioDecoderThread<Decoder: AudioDecoder> {
-    stream: Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
-    queue_input: WeakQueueInput,
+    stream: Box<dyn Iterator<Item = InputAudioSamples>>,
+    samples_sender: Sender<InputAudioSamples>,
     _decoder: PhantomData<Decoder>,
 }
 
@@ -38,7 +38,7 @@ where
         let AudioDecoderThreadOptions {
             ctx,
             decoder_options,
-            queue_input,
+            samples_sender,
             input_buffer_size: buffer_size,
         } = options;
 
@@ -54,7 +54,7 @@ where
 
         let state = Self {
             stream: Box::new(decoded_stream.flatten()),
-            queue_input,
+            samples_sender,
             _decoder: PhantomData,
         };
         let output = DecoderThreadHandle { chunk_sender };
@@ -63,7 +63,7 @@ where
 
     fn run(self) {
         for event in self.stream {
-            if self.queue_input.send_audio(event).is_err() {
+            if self.samples_sender.send(event).is_err() {
                 warn!("Failed to send decoded audio samples from decoder. Channel closed.");
                 return;
             }

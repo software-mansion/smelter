@@ -101,6 +101,9 @@ pub enum UpdateInputError {
 
     #[error("Seek is not supported for {0} input. Only MP4 inputs support seeking.")]
     SeekNotSupported(InputProtocolKind),
+
+    #[error("Pausing is not supported for {0} input. Only MP4 inputs support pausing.")]
+    PausingNotSupported(InputProtocolKind),
 }
 
 #[derive(Debug, thiserror::Error)]

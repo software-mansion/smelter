@@ -67,6 +67,26 @@ impl Input {
             _ => Err(UpdateInputError::SeekNotSupported(self.kind())),
         }
     }
+
+    pub fn pause(&self) -> Result<(), UpdateInputError> {
+        match self {
+            Input::Mp4(input) => {
+                input.pause();
+                Ok(())
+            }
+            _ => Err(UpdateInputError::PausingNotSupported(self.kind())),
+        }
+    }
+
+    pub fn resume(&self) -> Result<(), UpdateInputError> {
+        match self {
+            Input::Mp4(input) => {
+                input.resume();
+                Ok(())
+            }
+            _ => Err(UpdateInputError::PausingNotSupported(self.kind())),
+        }
+    }
 }
 
 pub(super) fn new_external_input(

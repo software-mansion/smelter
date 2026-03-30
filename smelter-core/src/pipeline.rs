@@ -15,6 +15,7 @@ use crate::{
         rtmp::RtmpPipelineState,
         webrtc::{WebrtcSettingEngineCtx, WhipWhepPipelineState},
     },
+    queue::QueueContext,
     stats::StatsSender,
 };
 
@@ -109,7 +110,7 @@ pub const DEFAULT_BUFFER_DURATION: Duration = Duration::from_millis(16 * 5); // 
 
 #[derive(Clone)]
 pub(crate) struct PipelineCtx {
-    pub queue_sync_point: Instant,
+    pub queue_ctx: QueueContext,
     pub default_buffer_duration: Duration,
 
     pub mixing_sample_rate: u32,

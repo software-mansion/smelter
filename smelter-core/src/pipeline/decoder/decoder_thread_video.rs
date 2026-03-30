@@ -1,5 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
+use crossbeam_channel::Sender;
 use smelter_render::Frame;
 use tracing::warn;
 
@@ -10,7 +11,6 @@ use crate::{
         BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, EncodedInputEvent,
         VideoDecoderStream,
     },
-    queue::WeakQueueInput,
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -19,13 +19,13 @@ use super::VideoDecoder;
 pub(crate) struct VideoDecoderThreadOptions<Transformer: BytestreamTransformer> {
     pub ctx: Arc<PipelineCtx>,
     pub transformer: Option<Transformer>,
-    pub queue_input: WeakQueueInput,
+    pub frame_sender: Sender<Frame>,
     pub input_buffer_size: usize,
 }
 
 pub(crate) struct VideoDecoderThread<Decoder: VideoDecoder, Transformer: BytestreamTransformer> {
-    stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
-    queue_input: WeakQueueInput,
+    stream: Box<dyn Iterator<Item = Frame>>,
+    frame_sender: Sender<Frame>,
     _decoder: PhantomData<Decoder>,
     _transformer: PhantomData<Transformer>,
 }
@@ -44,7 +44,7 @@ where
         let VideoDecoderThreadOptions {
             ctx,
             transformer,
-            queue_input,
+            frame_sender,
             input_buffer_size: buffer_size,
         } = options;
         let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(buffer_size);
@@ -63,7 +63,7 @@ where
 
         let state = Self {
             stream: Box::new(decoder_stream.flatten()),
-            queue_input,
+            frame_sender,
             _decoder: PhantomData,
             _transformer: PhantomData,
         };
@@ -73,7 +73,7 @@ where
 
     fn run(self) {
         for event in self.stream {
-            if self.queue_input.send_video(event).is_err() {
+            if self.frame_sender.send(event).is_err() {
                 warn!("Failed to send decoded video frame from decoder. Channel closed.");
                 return;
             }

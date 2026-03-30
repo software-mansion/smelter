@@ -1,3 +1,4 @@
+mod audio_input;
 mod audio_queue;
 mod queue_input;
 mod queue_thread;
@@ -9,7 +10,7 @@ use std::{
     collections::HashMap,
     fmt::Debug,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
@@ -22,7 +23,9 @@ use crate::audio_mixer::InputSamplesSet;
 
 use crate::prelude::*;
 
-pub(crate) use self::queue_input::{QueueInput, WeakQueueInput};
+pub(crate) use self::queue_input::{
+    AudioTrackOptions, QueueInput, VideoTrackOptions, WeakQueueInput,
+};
 
 use self::{
     audio_queue::AudioQueue,
@@ -67,6 +70,7 @@ impl From<&PipelineOptions> for QueueOptions {
 ///   `queue_start_pts = sync_point - queue_start_time`
 ///   `public_pts = internal_pts - queue_start_pts`
 pub struct Queue {
+    queue_ctx: QueueContext,
     video_queue: Mutex<VideoQueue>,
     audio_queue: Mutex<AudioQueue>,
     inputs: Mutex<HashMap<InputId, QueueInput>>,
@@ -84,15 +88,37 @@ pub struct Queue {
     /// true - Event will be executed immediately.
     /// false - Event will be discarded.
     run_late_scheduled_events: bool,
-
-    sync_point: Instant,
-    /// Duration since sync point, represents time of
-    /// the queue start
-    start_time_pts: Mutex<Option<Duration>>,
     start_sender: Mutex<Option<Sender<QueueStartEvent>>>,
     scheduled_event_sender: Sender<ScheduledEvent>,
 
     should_close: AtomicBool,
+}
+
+#[derive(Debug, Clone)]
+pub struct QueueContext {
+    sync_point: Instant,
+    /// Duration since sync point, represents time of
+    /// the queue start
+    start_time_pts: SharedPts,
+    last_pts: SharedPts,
+}
+
+impl QueueContext {
+    fn effective_last_pts(&self) -> Duration {
+        self.last_pts
+            .value()
+            .unwrap_or_else(|| self.sync_point.elapsed())
+    }
+}
+
+impl Default for QueueContext {
+    fn default() -> Self {
+        Self {
+            sync_point: Instant::now(),
+            start_time_pts: Default::default(),
+            last_pts: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -163,17 +189,20 @@ impl Queue {
     pub(crate) fn new(opts: QueueOptions, ctx: &Arc<PipelineCtx>) -> Arc<Self> {
         let (queue_start_sender, queue_start_receiver) = bounded(0);
         let (scheduled_event_sender, scheduled_event_receiver) = bounded(0);
-        let sync_point = ctx.queue_sync_point;
         let queue = Arc::new(Queue {
-            video_queue: Mutex::new(VideoQueue::new(sync_point, opts.ahead_of_time_processing)),
-            audio_queue: Mutex::new(AudioQueue::new(sync_point, opts.ahead_of_time_processing)),
+            queue_ctx: ctx.queue_ctx.clone(),
+            video_queue: Mutex::new(VideoQueue::new(
+                ctx.queue_ctx.sync_point,
+                opts.ahead_of_time_processing,
+            )),
+            audio_queue: Mutex::new(AudioQueue::new(
+                ctx.queue_ctx.sync_point,
+                opts.ahead_of_time_processing,
+            )),
             inputs: Mutex::new(HashMap::new()),
 
             output_framerate: opts.output_framerate,
             audio_chunk_duration: DEFAULT_AUDIO_CHUNK_DURATION,
-
-            sync_point,
-            start_time_pts: Mutex::new(None),
 
             scheduled_event_sender,
             start_sender: Mutex::new(Some(queue_start_sender)),
@@ -228,13 +257,13 @@ impl Queue {
         audio_sender: Sender<QueueAudioOutput>,
     ) {
         if let Some(sender) = self.start_sender.lock().unwrap().take() {
-            let start_time_pts = Instant::now().duration_since(self.sync_point);
-            *self.start_time_pts.lock().unwrap() = Some(start_time_pts);
+            let start_time_pts = self.queue_ctx.sync_point.elapsed();
+            self.queue_ctx.start_time_pts.update(start_time_pts);
             sender
                 .send(QueueStartEvent {
                     audio_sender,
                     video_sender,
-                    start_time_pts,
+                    queue_ctx: self.queue_ctx.clone(),
                 })
                 .unwrap()
         }
@@ -256,3 +285,15 @@ impl Debug for ScheduledEvent {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+struct SharedPts(Arc<RwLock<Option<Duration>>>);
+
+impl SharedPts {
+    fn update(&self, pts: Duration) {
+        *self.0.write().unwrap() = Some(pts);
+    }
+
+    fn value(&self) -> Option<Duration> {
+        *self.0.read().unwrap()
+    }
+}

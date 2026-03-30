@@ -34,18 +34,6 @@ impl VideoQueue {
         self.inputs.remove(input_id);
     }
 
-    pub fn pause_input(&mut self, input_id: &InputId, pts: Duration) {
-        self.inputs
-            .get(input_id)
-            .and_then(|input| input.video(|input| input.pause(pts)));
-    }
-
-    pub fn resume_input(&mut self, input_id: &InputId, pts: Duration) {
-        self.inputs
-            .get(input_id)
-            .and_then(|input| input.video(|input| input.resume(pts)));
-    }
-
     /// Gets frames closest to buffer pts. It does not check whether input is ready
     /// or not. It should not be called before pipeline start.
     pub(super) fn get_frames_batch(
