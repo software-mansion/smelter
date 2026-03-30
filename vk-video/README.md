@@ -95,20 +95,22 @@ fn encode_video(
 
     let mut encoder = device
         .create_wgpu_textures_encoder(
-            device
-                .encoder_parameters_high_quality(
-                    vk_video::parameters::VideoParameters {
-                        width: NonZeroU32::new(1920).unwrap(),
-                        height: NonZeroU32::new(1080).unwrap(),
-                        target_framerate: 30.into(),
-                    },
-                    vk_video::parameters::RateControl::VariableBitrate {
-                        average_bitrate: 500_000,
-                        max_bitrate: 2_000_000,
-                        virtual_buffer_size: std::time::Duration::from_secs(2),
-                    },
-                )
-                .unwrap(),
+            vk_video::parameters::EncoderParameters {
+                output_parameters: device
+                    .encoder_parameters_high_quality(
+                        vk_video::parameters::RateControl::VariableBitrate {
+                            average_bitrate: 500_000,
+                            max_bitrate: 2_000_000,
+                            virtual_buffer_size: std::time::Duration::from_secs(2),
+                        },
+                    )
+                    .unwrap(),
+                input_parameters: vk_video::parameters::VideoParameters {
+                    width: NonZeroU32::new(1920).unwrap(),
+                    height: NonZeroU32::new(1080).unwrap(),
+                    target_framerate: 30.into(),
+                },
+            }
         )
         .unwrap();
 

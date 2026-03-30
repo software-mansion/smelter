@@ -4,7 +4,7 @@ use smelter_render::{FrameData, OutputFrameFormat};
 use tracing::{error, info};
 use vk_video::{
     WgpuTexturesEncoder,
-    parameters::{RateControl, Rational, VideoParameters},
+    parameters::{EncoderParameters, RateControl, Rational, VideoParameters},
 };
 
 use crate::{
@@ -72,23 +72,27 @@ impl VideoEncoder for VulkanH264Encoder {
         };
 
         let mut encoder_params = match options.preset {
-            VulkanH264EncoderPreset::HighQuality => {
-                device.encoder_parameters_high_quality(video_params, rate_control)?
-            }
-            VulkanH264EncoderPreset::LowLatency => {
-                device.encoder_parameters_low_latency(video_params, rate_control)?
-            }
+            VulkanH264EncoderPreset::HighQuality => EncoderParameters {
+                input_parameters: video_params,
+                output_parameters: device.encoder_parameters_high_quality(rate_control)?,
+            },
+            VulkanH264EncoderPreset::LowLatency => EncoderParameters {
+                input_parameters: video_params,
+                output_parameters: device.encoder_parameters_low_latency(rate_control)?,
+            },
         };
 
         let gop_size_raw = gop_size_from_ms_framerate(options.keyframe_interval, framerate) as u32;
         let gop_size = NonZero::new(gop_size_raw).unwrap_or(NonZero::new(1).unwrap());
 
-        encoder_params.idr_period = Some(gop_size);
-        encoder_params.color_space = Some(vk_video::parameters::ColorSpace::BT709);
-        encoder_params.color_range = Some(vk_video::parameters::ColorRange::Limited);
+        encoder_params.output_parameters.idr_period = Some(gop_size);
+        encoder_params.output_parameters.color_space =
+            Some(vk_video::parameters::ColorSpace::BT709);
+        encoder_params.output_parameters.color_range =
+            Some(vk_video::parameters::ColorRange::Limited);
 
         if options.bitstream_format == H264BitstreamFormat::Avcc {
-            encoder_params.inline_stream_params = Some(false);
+            encoder_params.output_parameters.inline_stream_params = Some(false);
         }
 
         let encoder = device.create_wgpu_textures_encoder(encoder_params)?;
