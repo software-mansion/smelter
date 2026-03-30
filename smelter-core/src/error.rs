@@ -280,8 +280,10 @@ pub enum DecoderInitError {
 
 pub enum ErrorType {
     UserError,
-    ServerError,
     EntityNotFound,
+    Conflict,
+
+    ServerError,
 }
 
 pub struct PipelineErrorInfo {
