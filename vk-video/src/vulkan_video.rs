@@ -11,12 +11,12 @@ pub mod capabilities {
 pub mod parameters {
     pub use crate::adapter::VulkanAdapterDescriptor;
     pub use crate::device::{
-        ColorRange, ColorSpace, DecoderParameters, EncoderParameters, MissedFrameHandling,
-        Rational, VideoParameters, VulkanDeviceDescriptor,
+        ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParameters,
+        MissedFrameHandling, Rational, VideoParameters, VulkanDeviceDescriptor,
     };
     pub use crate::vulkan_encoder::RateControl;
     #[cfg(feature = "transcoder")]
-    pub use crate::vulkan_transcoder::TranscoderOutputConfig;
+    pub use crate::vulkan_transcoder::{TranscoderOutputParameters, TranscoderParameters};
 
     #[cfg(feature = "wgpu")]
     pub use crate::wgpu_helpers::WgpuConverterParameters;

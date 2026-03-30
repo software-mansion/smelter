@@ -10,7 +10,7 @@ fn main() {
     use vk_video::{
         EncodedInputChunk,
         parameters::{
-            RateControl, ScalingAlgorithm, TranscoderOutputConfig, VideoParameters,
+            RateControl, ScalingAlgorithm, TranscoderOutputParameters, TranscoderParameters,
             VulkanAdapterDescriptor, VulkanDeviceDescriptor,
         },
     };
@@ -54,25 +54,23 @@ fn main() {
         .unwrap();
 
     let params = device
-        .encoder_parameters_high_quality(
-            VideoParameters {
-                width: output_width,
-                height: output_height,
-                target_framerate: 30.into(),
-            },
-            RateControl::VariableBitrate {
-                average_bitrate: 10_000_000,
-                max_bitrate: 12_000_000,
-                virtual_buffer_size: Duration::from_secs(2),
-            },
-        )
+        .encoder_parameters_high_quality(RateControl::VariableBitrate {
+            average_bitrate: 10_000_000,
+            max_bitrate: 12_000_000,
+            virtual_buffer_size: Duration::from_secs(2),
+        })
         .unwrap();
 
     let mut transcoder = device
-        .create_transcoder(&[TranscoderOutputConfig {
-            encoder_parameters: params,
-            scaling_algorithm,
-        }])
+        .create_transcoder(TranscoderParameters {
+            input_framerate: 30.into(),
+            output_parameters: vec![TranscoderOutputParameters {
+                output_width,
+                output_height,
+                encoder_parameters: params,
+                scaling_algorithm,
+            }],
+        })
         .unwrap();
 
     let mut input_file = File::open(input_file).unwrap();

@@ -8,7 +8,8 @@ fn main() {
     use vk_video::{
         InputFrame, RawFrameData, VulkanInstance,
         parameters::{
-            RateControl, VideoParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+            EncoderParameters, RateControl, VideoParameters, VulkanAdapterDescriptor,
+            VulkanDeviceDescriptor,
         },
     };
 
@@ -38,22 +39,20 @@ fn main() {
         .unwrap();
 
     let mut encoder = vulkan_device
-        .create_bytes_encoder(
-            vulkan_device
-                .encoder_parameters_high_quality(
-                    VideoParameters {
-                        width,
-                        height,
-                        target_framerate: 24.into(),
-                    },
-                    RateControl::VariableBitrate {
-                        average_bitrate: 1_000_000,
-                        max_bitrate: 2_000_000,
-                        virtual_buffer_size: std::time::Duration::from_secs(2),
-                    },
-                )
+        .create_bytes_encoder(EncoderParameters {
+            input_parameters: VideoParameters {
+                width,
+                height,
+                target_framerate: 24.into(),
+            },
+            output_parameters: vulkan_device
+                .encoder_parameters_high_quality(RateControl::VariableBitrate {
+                    average_bitrate: 1_000_000,
+                    max_bitrate: 2_000_000,
+                    virtual_buffer_size: std::time::Duration::from_secs(2),
+                })
                 .unwrap(),
-        )
+        })
         .expect("create encoder");
 
     let mut output_file = std::fs::File::create("output.h264").unwrap();

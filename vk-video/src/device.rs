@@ -18,6 +18,8 @@ use crate::parameters::{
 use crate::parser::{h264::H264Parser, reference_manager::ReferenceContext};
 use crate::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
+#[cfg(feature = "transcoder")]
+use crate::vulkan_transcoder::TranscoderParameters;
 use crate::{
     BytesDecoder, BytesEncoder, DecoderError, RawFrameData, VulkanDecoderError, VulkanEncoderError,
     VulkanInitError, VulkanInstance, wrappers::*,
@@ -169,9 +171,9 @@ impl From<&h264_reader::nal::sps::SeqParameterSet> for ColorRange {
     }
 }
 
-/// Parameters for encoder creation
+/// Parameters that describe an encoded output.
 #[derive(Debug, Clone, Copy)]
-pub struct EncoderParameters {
+pub struct EncoderOutputParameters {
     /// Number of frames between IDRs. If [`None`], this will be set to an encoder preferred value,
     /// or, if the encoder doesn't provide a preferred value, to 30.
     pub idr_period: Option<NonZeroU32>,
@@ -186,33 +188,33 @@ pub struct EncoderParameters {
     /// The value must be less than
     /// [`EncodeH264ProfileCapabilities::quality_levels`](crate::capabilities::EncodeH264ProfileCapabilities::quality_levels)
     pub quality_level: u32,
-    pub video_parameters: VideoParameters,
-
     /// A hint indicating what the encoded content is going to be used for.
     ///
     /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
     pub usage_flags: Option<EncoderUsageFlags>,
-
     /// A hint indicating how to tune the encoder implementation.
     pub tuning_mode: Option<EncoderTuningMode>,
-
     /// A hint indicating what kind of content the encoder is going to be used for.
     ///
     /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
     pub content_flags: Option<EncoderContentFlags>,
-
     /// Whether to prepend SPS/PPS NAL units inline before IDR frames.
     /// If `false`, SPS/PPS can be retrieved separately using methods defined on the encoder.
     /// If [`None`], defaults to `true`.
     pub inline_stream_params: Option<bool>,
-
     /// Color space of the encoded output.
     /// If [`None`], defaults to [`ColorSpace::Unspecified`].
     pub color_space: Option<ColorSpace>,
-
     /// Color range of the encoded output.
     /// If [`None`], defaults to [`ColorRange::Limited`].
     pub color_range: Option<ColorRange>,
+}
+
+/// Parameters for encoder creation
+#[derive(Debug, Clone, Copy)]
+pub struct EncoderParameters {
+    pub input_parameters: VideoParameters,
+    pub output_parameters: EncoderOutputParameters,
 }
 
 /// Open connection to a coding-capable device. Also contains a [`wgpu::Device`], a [`wgpu::Queue`] and
@@ -450,14 +452,14 @@ impl VulkanDevice {
     }
 
     /// Create a single-input multiple-output transcoder.
-    /// Each item in `outputs` corresponds to one output.
+    /// Each item in `parameters.output_parameters` corresponds to one output.
     #[cfg(feature = "transcoder")]
     pub fn create_transcoder(
         self: &Arc<Self>,
-        outputs: &[crate::parameters::TranscoderOutputConfig],
+        parameters: TranscoderParameters,
     ) -> Result<crate::vulkan_transcoder::Transcoder, crate::vulkan_transcoder::TranscoderError>
     {
-        crate::vulkan_transcoder::Transcoder::new(self.clone(), outputs.into())
+        crate::vulkan_transcoder::Transcoder::new(self.clone(), parameters)
     }
 
     pub(crate) fn encoding_device(self: &Arc<Self>) -> Result<EncodingDevice, VulkanEncoderError> {
@@ -479,7 +481,12 @@ impl VulkanDevice {
         self: &Arc<Self>,
         parameters: EncoderParameters,
     ) -> Result<BytesEncoder, VulkanEncoderError> {
-        let parameters = self.validate_and_fill_encoder_parameters(parameters)?;
+        let parameters = self.validate_and_fill_encoder_parameters(
+            parameters.output_parameters,
+            parameters.input_parameters.width,
+            parameters.input_parameters.height,
+            parameters.input_parameters.target_framerate,
+        )?;
         let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
 
         Ok(BytesEncoder {
@@ -497,15 +504,13 @@ impl VulkanDevice {
 
     pub fn encoder_parameters_low_latency(
         &self,
-        video_parameters: VideoParameters,
         rate_control: RateControl,
-    ) -> Result<EncoderParameters, VulkanEncoderError> {
+    ) -> Result<EncoderOutputParameters, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities.as_ref() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
 
-        Ok(EncoderParameters {
-            video_parameters,
+        Ok(EncoderOutputParameters {
             profile: caps.max_profile(),
             idr_period: None,
             max_references: None,
@@ -522,15 +527,13 @@ impl VulkanDevice {
 
     pub fn encoder_parameters_high_quality(
         &self,
-        video_parameters: VideoParameters,
         rate_control: RateControl,
-    ) -> Result<EncoderParameters, VulkanEncoderError> {
+    ) -> Result<EncoderOutputParameters, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities.as_ref() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
 
-        Ok(EncoderParameters {
-            video_parameters,
+        Ok(EncoderOutputParameters {
             profile: caps.max_profile(),
             idr_period: None,
             max_references: None,
@@ -552,7 +555,10 @@ impl VulkanDevice {
 
     pub(crate) fn validate_and_fill_encoder_parameters(
         &self,
-        encoder_parameters: EncoderParameters,
+        encoder_parameters: EncoderOutputParameters,
+        width: NonZeroU32,
+        height: NonZeroU32,
+        framerate: Rational,
     ) -> Result<FullEncoderParameters, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities.as_ref() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
@@ -599,7 +605,6 @@ impl VulkanDevice {
         let min_extent = native_profile_caps.video_capabilities.min_coded_extent;
         let max_extent = native_profile_caps.video_capabilities.max_coded_extent;
 
-        let width = encoder_parameters.video_parameters.width;
         if width.get() < min_extent.width || width.get() > max_extent.width {
             return Err(VulkanEncoderError::ParametersError {
                 field: "width",
@@ -610,7 +615,6 @@ impl VulkanDevice {
             });
         }
 
-        let height = encoder_parameters.video_parameters.height;
         if height.get() < min_extent.height || height.get() > max_extent.height {
             return Err(VulkanEncoderError::ParametersError {
                 field: "height",
@@ -676,7 +680,6 @@ impl VulkanDevice {
             });
         }
 
-        let framerate = encoder_parameters.video_parameters.target_framerate;
         if framerate.numerator == 0 {
             return Err(VulkanEncoderError::ParametersError {
                 field: "framerate",

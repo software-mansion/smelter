@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::{num::NonZeroU32, sync::Arc};
 
 use ash::vk;
 
 use crate::{
     DecoderError, EncodedInputChunk, EncodedOutputChunk, OutputFrame, VulkanCommonError,
     VulkanDevice, VulkanEncoderError,
-    device::EncoderParameters,
+    device::{EncoderOutputParameters, Rational},
     parameters::ScalingAlgorithm,
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
@@ -40,20 +40,20 @@ pub enum TranscoderError {
     WrongOutputNumber { expected_max: usize, actual: usize },
 }
 
-/// Configuration for a single transcoder output.
-#[derive(Debug, Clone, Copy)]
-pub struct TranscoderOutputConfig {
-    pub encoder_parameters: EncoderParameters,
-    pub scaling_algorithm: ScalingAlgorithm,
+/// Configuration for a transcoder
+#[derive(Debug, Clone)]
+pub struct TranscoderParameters {
+    pub input_framerate: Rational,
+    pub output_parameters: Vec<TranscoderOutputParameters>,
 }
 
-impl From<EncoderParameters> for TranscoderOutputConfig {
-    fn from(encoder_parameters: EncoderParameters) -> Self {
-        Self {
-            encoder_parameters,
-            scaling_algorithm: ScalingAlgorithm::default(),
-        }
-    }
+/// Configuration for a single transcoder output.
+#[derive(Debug, Clone, Copy)]
+pub struct TranscoderOutputParameters {
+    pub encoder_parameters: EncoderOutputParameters,
+    pub output_width: NonZeroU32,
+    pub output_height: NonZeroU32,
+    pub scaling_algorithm: ScalingAlgorithm,
 }
 
 pub(crate) struct ResizedImages {
@@ -77,7 +77,7 @@ pub struct Transcoder {
 impl Transcoder {
     pub(crate) fn new(
         device: Arc<VulkanDevice>,
-        output_configs: Vec<TranscoderOutputConfig>,
+        config: TranscoderParameters,
     ) -> Result<Self, TranscoderError> {
         let decoder = VulkanDecoder::new(
             Arc::new(
@@ -99,12 +99,23 @@ impl Transcoder {
         let reference_ctx = ReferenceContext::default();
         let sorter = FrameSorter::new();
 
-        let scaling_algorithms: Vec<_> =
-            output_configs.iter().map(|c| c.scaling_algorithm).collect();
-
-        let parameters = output_configs
+        let scaling_algorithms: Vec<_> = config
+            .output_parameters
             .iter()
-            .map(|c| device.validate_and_fill_encoder_parameters(c.encoder_parameters))
+            .map(|c| c.scaling_algorithm)
+            .collect();
+
+        let parameters = config
+            .output_parameters
+            .iter()
+            .map(|c| {
+                device.validate_and_fill_encoder_parameters(
+                    c.encoder_parameters,
+                    c.output_width,
+                    c.output_height,
+                    config.input_framerate,
+                )
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let encoders = parameters
@@ -138,6 +149,10 @@ impl Transcoder {
         self.transcode_instructions(instructions)
     }
 
+    /// Flush the internal queues of the transcoder. Only do this once you're sure no new frames
+    /// are coming, otherwise the output may have the wrong frame order. Returns a [`Vec`] where
+    /// each element corresponds to an output frame. Each frame is a [`Vec`] where each element
+    /// corresponds to one output.
     pub fn flush(&mut self) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, TranscoderError> {
         let instructions = self.flush_parser()?;
         let mut output = self.transcode_instructions(instructions)?;

@@ -41,7 +41,12 @@ impl VulkanDevice {
         self: &Arc<Self>,
         parameters: EncoderParameters,
     ) -> Result<WgpuTexturesEncoder, VulkanEncoderError> {
-        let parameters = self.validate_and_fill_encoder_parameters(parameters)?;
+        let parameters = self.validate_and_fill_encoder_parameters(
+            parameters.output_parameters,
+            parameters.input_parameters.width,
+            parameters.input_parameters.height,
+            parameters.input_parameters.target_framerate,
+        )?;
         let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
         Ok(WgpuTexturesEncoder {
             vulkan_encoder: encoder,

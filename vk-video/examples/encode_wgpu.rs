@@ -1,5 +1,5 @@
 #[cfg(vulkan)]
-use vk_video::WgpuRgbaToNv12Converter;
+use vk_video::{WgpuRgbaToNv12Converter, parameters::EncoderParameters};
 
 #[cfg(vulkan)]
 fn main() {
@@ -51,22 +51,20 @@ fn main() {
     );
 
     let mut encoder = vulkan_device
-        .create_wgpu_textures_encoder(
-            vulkan_device
-                .encoder_parameters_high_quality(
-                    VideoParameters {
-                        width,
-                        height,
-                        target_framerate: 30.into(),
-                    },
-                    RateControl::VariableBitrate {
-                        average_bitrate: 500_000,
-                        max_bitrate: 2_000_000,
-                        virtual_buffer_size: std::time::Duration::from_secs(2),
-                    },
-                )
+        .create_wgpu_textures_encoder(EncoderParameters {
+            input_parameters: VideoParameters {
+                width,
+                height,
+                target_framerate: 30.into(),
+            },
+            output_parameters: vulkan_device
+                .encoder_parameters_high_quality(RateControl::VariableBitrate {
+                    average_bitrate: 500_000,
+                    max_bitrate: 2_000_000,
+                    virtual_buffer_size: std::time::Duration::from_secs(2),
+                })
                 .unwrap(),
-        )
+        })
         .unwrap();
 
     let mut output_file = std::fs::File::create("output.h264").unwrap();
