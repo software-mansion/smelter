@@ -558,7 +558,7 @@ impl From<&RegisterRendererError> for PipelineErrorInfo {
         match err {
             RegisterRendererError::RendererRegistry(err) => match err {
                 RegisterError::KeyTaken { .. } => {
-                    PipelineErrorInfo::new(ENTITY_ALREADY_REGISTERED, ErrorType::UserError)
+                    PipelineErrorInfo::new(ENTITY_ALREADY_REGISTERED, ErrorType::Conflict)
                 }
             },
             RegisterRendererError::Shader(_, _) => {
