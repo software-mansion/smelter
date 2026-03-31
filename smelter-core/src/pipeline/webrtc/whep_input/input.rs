@@ -34,6 +34,7 @@ pub(crate) struct WhepInput {
     ctx: Arc<PipelineCtx>,
     session_url: Url,
     client: Arc<WhipWhepHttpClient>,
+    _peer_connection: RecvonlyPeerConnection,
 }
 
 impl WhepInput {
@@ -157,6 +158,7 @@ async fn init_whep_client(
             ctx,
             session_url,
             client,
+            _peer_connection: pc,
         }),
         InputInitInfo::Other,
         QueueDataReceiver {
