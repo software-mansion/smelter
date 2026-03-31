@@ -502,7 +502,7 @@ impl VulkanDevice {
         self.adapter_info.encode_capabilities
     }
 
-    pub fn encoder_parameters_low_latency(
+    pub fn encoder_output_parameters_low_latency(
         &self,
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters, VulkanEncoderError> {
@@ -525,7 +525,7 @@ impl VulkanDevice {
         })
     }
 
-    pub fn encoder_parameters_high_quality(
+    pub fn encoder_output_parameters_high_quality(
         &self,
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters, VulkanEncoderError> {

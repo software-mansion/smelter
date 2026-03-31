@@ -74,11 +74,11 @@ impl VideoEncoder for VulkanH264Encoder {
         let mut encoder_params = match options.preset {
             VulkanH264EncoderPreset::HighQuality => EncoderParameters {
                 input_parameters: video_params,
-                output_parameters: device.encoder_parameters_high_quality(rate_control)?,
+                output_parameters: device.encoder_output_parameters_high_quality(rate_control)?,
             },
             VulkanH264EncoderPreset::LowLatency => EncoderParameters {
                 input_parameters: video_params,
-                output_parameters: device.encoder_parameters_low_latency(rate_control)?,
+                output_parameters: device.encoder_output_parameters_low_latency(rate_control)?,
             },
         };
 

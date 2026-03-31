@@ -46,7 +46,7 @@ fn main() {
                 target_framerate: 24.into(),
             },
             output_parameters: vulkan_device
-                .encoder_parameters_high_quality(RateControl::VariableBitrate {
+                .encoder_output_parameters_high_quality(RateControl::VariableBitrate {
                     average_bitrate: 1_000_000,
                     max_bitrate: 2_000_000,
                     virtual_buffer_size: std::time::Duration::from_secs(2),
