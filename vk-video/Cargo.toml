@@ -45,6 +45,7 @@ vk-mem = "0.4.0"
 
 [dev-dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
+image = "0.25"
 tracing-subscriber = "0.3.20"
 wgpu = { version = "29.0.0", features = ["noop"] }
 winit = "0.29"

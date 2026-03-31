@@ -199,6 +199,7 @@ impl ReferenceContext {
                     DecoderInstruction::Decode {
                         decode_info,
                         reference_id,
+                        is_reference: false,
                     },
                     DecoderInstruction::Drop {
                         reference_ids: vec![reference_id],
@@ -398,6 +399,7 @@ impl ReferenceContext {
             DecoderInstruction::Decode {
                 decode_info,
                 reference_id,
+                is_reference: true,
             },
         );
 
@@ -430,6 +432,7 @@ impl ReferenceContext {
         let mut decoder_instructions = vec![DecoderInstruction::Decode {
             decode_info,
             reference_id,
+            is_reference: true,
         }];
 
         if num_short_term + num_long_term == sps.max_num_ref_frames.max(1) as usize
@@ -497,7 +500,8 @@ impl ReferenceContext {
         pps: &PicParameterSet,
         pts: Option<u64>,
     ) -> Result<DecodeInformation, ReferenceManagementError> {
-        let PicOrderCnt_for_decoding = self.decode_pic_order_cnt(&header, sps)?;
+        let is_reference = header.dec_ref_pic_marking.is_some();
+        let PicOrderCnt_for_decoding = self.decode_pic_order_cnt(&header, sps, is_reference)?;
         let PicOrderCnt_as_reference_pic = if header.includes_mmco_equal_5() {
             [0, 0]
         } else {
@@ -611,11 +615,12 @@ impl ReferenceContext {
         &mut self,
         header: &SliceHeader,
         sps: &SeqParameterSet,
+        is_reference: bool,
     ) -> Result<[i32; 2], ReferenceManagementError> {
         match sps.pic_order_cnt {
             h264_reader::nal::sps::PicOrderCntType::TypeZero {
                 log2_max_pic_order_cnt_lsb_minus4,
-            } => self.decode_pic_order_cnt_type_zero(header, log2_max_pic_order_cnt_lsb_minus4),
+            } => self.decode_pic_order_cnt_type_zero(header, log2_max_pic_order_cnt_lsb_minus4, is_reference),
 
             h264_reader::nal::sps::PicOrderCntType::TypeOne { .. } => {
                 Err(ReferenceManagementError::PicOrderCntTypeNotSupported(1))
@@ -666,6 +671,7 @@ impl ReferenceContext {
         &mut self,
         header: &SliceHeader,
         log2_max_pic_order_cnt_lsb_minus4: u8,
+        is_reference: bool,
     ) -> Result<[i32; 2], ReferenceManagementError> {
         // this section is very hard to read, but all of this code is just copied from the
         // h.264 spec, where it looks almost exactly like this
@@ -719,8 +725,12 @@ impl ReferenceContext {
             pic_order_cnt_msb + pic_order_cnt_lsb
         };
 
-        self.prev_pic_order_cnt_msb = pic_order_cnt_msb;
-        self.prev_pic_order_cnt_lsb = pic_order_cnt_lsb;
+        // H.264 spec 8.2.1.1: prevPicOrderCntMsb and prevPicOrderCntLsb are derived
+        // from the previous reference picture in decoding order.
+        if is_reference {
+            self.prev_pic_order_cnt_msb = pic_order_cnt_msb;
+            self.prev_pic_order_cnt_lsb = pic_order_cnt_lsb;
+        }
 
         Ok([pic_order_cnt; 2])
     }
@@ -836,30 +846,59 @@ impl ReferenceContext {
         CurrPicOrderCnt: [i32; 2],
         list_kind: BFrameReferenceListKind,
     ) -> Result<Vec<ReferencePictureInfo>, ReferenceManagementError> {
-        let mut reference_list = self
+        // H.264 spec 8.2.4.2.3:
+        // L0: POC < current (descending), then POC > current (ascending)
+        // L1: POC > current (ascending), then POC < current (descending)
+        let (primary_filter, secondary_filter): (
+            Box<dyn Fn(&&ShortTermReferencePicture) -> bool>,
+            Box<dyn Fn(&&ShortTermReferencePicture) -> bool>,
+        ) = match list_kind {
+            BFrameReferenceListKind::L0 => (
+                Box::new(|pic: &&ShortTermReferencePicture| pic.pic_order_cnt < CurrPicOrderCnt),
+                Box::new(|pic: &&ShortTermReferencePicture| pic.pic_order_cnt > CurrPicOrderCnt),
+            ),
+            BFrameReferenceListKind::L1 => (
+                Box::new(|pic: &&ShortTermReferencePicture| pic.pic_order_cnt > CurrPicOrderCnt),
+                Box::new(|pic: &&ShortTermReferencePicture| pic.pic_order_cnt < CurrPicOrderCnt),
+            ),
+        };
+
+        let mut primary = self
             .pictures
             .short_term
             .iter()
-            .filter(|pic| match list_kind {
-                BFrameReferenceListKind::L0 => pic.pic_order_cnt < CurrPicOrderCnt,
-                BFrameReferenceListKind::L1 => pic.pic_order_cnt > CurrPicOrderCnt,
-            })
+            .filter(&primary_filter)
             .collect::<Vec<_>>();
 
-        reference_list.sort_by_key(|pic| match list_kind {
+        let mut secondary = self
+            .pictures
+            .short_term
+            .iter()
+            .filter(&secondary_filter)
+            .collect::<Vec<_>>();
+
+        primary.sort_by_key(|pic| match list_kind {
             BFrameReferenceListKind::L0 => -pic.pic_order_cnt[0],
             BFrameReferenceListKind::L1 => pic.pic_order_cnt[0],
         });
 
-        let reference_list = reference_list
+        secondary.sort_by_key(|pic| match list_kind {
+            BFrameReferenceListKind::L0 => pic.pic_order_cnt[0],
+            BFrameReferenceListKind::L1 => -pic.pic_order_cnt[0],
+        });
+
+        let to_info = |pic: &ShortTermReferencePicture| ReferencePictureInfo {
+            LongTermPicNum: None,
+            FrameNum: pic.header.frame_num,
+            non_existing: false,
+            PicOrderCnt: pic.pic_order_cnt,
+            id: pic.id,
+        };
+
+        let reference_list = primary
             .into_iter()
-            .map(|pic| ReferencePictureInfo {
-                LongTermPicNum: None,
-                FrameNum: pic.header.frame_num,
-                non_existing: false,
-                PicOrderCnt: pic.pic_order_cnt,
-                id: pic.id,
-            })
+            .chain(secondary)
+            .map(to_info)
             .collect();
 
         Ok(reference_list)

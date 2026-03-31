@@ -246,9 +246,10 @@ impl<'a> VulkanDecoder<'a> {
             DecoderInstruction::Decode {
                 decode_info,
                 reference_id,
+                is_reference,
             } => {
                 return self
-                    .process_reference_frame(decode_info, *reference_id)
+                    .do_decode(decode_info, *reference_id, false, *is_reference)
                     .map(Option::Some);
             }
 
@@ -314,14 +315,6 @@ impl<'a> VulkanDecoder<'a> {
         reference_id: ReferenceId,
     ) -> Result<DecodeSubmission<'b, 'a>, VulkanDecoderError> {
         self.do_decode(decode_information, reference_id, true, true)
-    }
-
-    fn process_reference_frame<'b>(
-        &'b mut self,
-        decode_information: &DecodeInformation,
-        reference_id: ReferenceId,
-    ) -> Result<DecodeSubmission<'b, 'a>, VulkanDecoderError> {
-        self.do_decode(decode_information, reference_id, false, true)
     }
 
     fn do_decode<'b>(

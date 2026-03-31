@@ -11,6 +11,7 @@ pub(crate) enum DecoderInstruction {
     Decode {
         decode_info: DecodeInformation,
         reference_id: ReferenceId,
+        is_reference: bool,
     },
 
     Idr {

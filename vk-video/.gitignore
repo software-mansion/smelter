@@ -2,5 +2,6 @@
 Cargo.lock
 *.h264
 *.jpeg
+*.png
 *.mp4
 *.nv12
