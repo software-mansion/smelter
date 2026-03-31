@@ -7,6 +7,7 @@
 - New `EncoderOutputParameters` type (split from `EncoderParameters`) adds fields for:
   - Determining whether stream parameters are inlined in the output stream.
   - Color space and color range.
+- Renamed `Device::encoder_parameters_high_quality` to `Device::encoder_output_parameters_high_quality` and `Device::encoder_parameters_low_latency` to `Device::encoder_output_parameters_low_latency`
 - Changed adapter and device creation API.
 - `Frame<T>` has been split into `InputFrame<T>` (for encoding) and `OutputFrame<T>` (for decoding). Decoded frames now include color space and color range information.
 - Renamed feature flags: `expose_parsers` -> `expose-parsers`, `vk_api_dump` -> `vk-api-dump`, `vk_validation` -> `vk-validation`.

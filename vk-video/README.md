@@ -97,7 +97,7 @@ fn encode_video(
         .create_wgpu_textures_encoder(
             vk_video::parameters::EncoderParameters {
                 output_parameters: device
-                    .encoder_parameters_high_quality(
+                    .encoder_output_parameters_high_quality(
                         vk_video::parameters::RateControl::VariableBitrate {
                             average_bitrate: 500_000,
                             max_bitrate: 2_000_000,
