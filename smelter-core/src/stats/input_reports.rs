@@ -57,6 +57,7 @@ pub struct RtpJitterBufferStatsReport {
     /// Bitrate from the last minute.
     pub bitrate_1_minute: u64,
 
+    /// Stats from the last 10 seconds.
     pub last_10_seconds: RtpJitterBufferSlidingWindowStatsReport,
 }
 
@@ -110,7 +111,7 @@ pub struct Mp4InputStatsReport {
     pub audio: Mp4InputTrackStatsReport,
 }
 
-/// Stats for a track `MP4` in the input.
+/// Stats report for a track `MP4` in the input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct Mp4InputTrackStatsReport {
     /// Bitrate from the last second.
