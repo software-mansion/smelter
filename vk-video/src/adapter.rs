@@ -160,11 +160,11 @@ impl<'a> VulkanAdapter<'a> {
             })
             .map(|(i, _)| i)?;
 
-        let decode_queue_idx = match has_decode_extensions {
+        let decode_queue_idx = match supports_any_decoding {
             true => find_video_queue_idx(
                 &queues,
                 vk::QueueFlags::VIDEO_DECODE_KHR,
-                // TODO: for now, we only look for a single queue that supports all encoding
+                // TODO: for now, we only look for a single queue that supports all decoding
                 supported_decode_operations,
             ),
             false => None,

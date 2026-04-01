@@ -783,9 +783,9 @@ impl<'a> H264DecodeProfileInfo<'a> {
             .std_profile_idc(profile_idc)
             .picture_layout(picture_layout);
 
-        let h264_profile_info: Box<dyn vk::ExtendsVideoProfileInfoKHR> =
+        let h264_profile_info: Box<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync> =
             Box::new(h264_profile_info);
-        let decode_usage_info: Box<dyn vk::ExtendsVideoProfileInfoKHR> =
+        let decode_usage_info: Box<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync> =
             Box::new(decode_usage_info);
 
         let chroma_subsampling = match sps.chroma_info.chroma_format {

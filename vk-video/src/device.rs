@@ -186,8 +186,8 @@ pub struct EncoderOutputParameters<P> {
     /// See [`RateControl`] for description of different rate control modes. The selected mode must
     /// be supported by the device.
     pub rate_control: RateControl,
-    /// Max number of references a P-frame can have. If [`None`], this value will be set
-    /// to the max value supported by the device.
+    /// Max number of references a P-frame can have. This value will be clamped to the max number the
+    /// GPU supports. If [`None`], this value will be set to the max value supported by the device.
     pub max_references: Option<NonZeroU32>,
     /// The profile must be supported by the device
     pub profile: P,
@@ -251,8 +251,16 @@ impl VulkanDevice {
                 true => DECODE_EXTENSIONS.iter().copied(),
                 false => [].iter().copied(),
             })
+            .chain(match adapter.supports_decoding() {
+                true => DECODE_CODEC_EXTENSIONS.iter().copied(),
+                false => [].iter().copied(),
+            })
             .chain(match adapter.supports_encoding() {
                 true => ENCODE_EXTENSIONS.iter().copied(),
+                false => [].iter().copied(),
+            })
+            .chain(match adapter.supports_encoding() {
+                true => ENCODE_CODEC_EXTENSIONS.iter().copied(),
                 false => [].iter().copied(),
             })
             .collect::<Vec<_>>();

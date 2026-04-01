@@ -117,13 +117,13 @@ unsafe impl<'a> Sync for ProfileInfo<'a> {}
 
 pub(crate) struct ProfileInfo<'a> {
     pub(crate) profile_info: vk::VideoProfileInfoKHR<'a>,
-    additional_infos_ptr: Vec<NonNull<dyn vk::ExtendsVideoProfileInfoKHR + 'a>>,
+    additional_infos_ptr: Vec<NonNull<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync + 'a>>,
 }
 
 impl<'a> ProfileInfo<'a> {
     pub(crate) fn new(
         mut profile_info: vk::VideoProfileInfoKHR<'a>,
-        additional_info: Vec<Box<dyn vk::ExtendsVideoProfileInfoKHR + 'a>>,
+        additional_info: Vec<Box<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync + 'a>>,
     ) -> Self {
         let (refs, ptrs) = additional_info
             .into_iter()
