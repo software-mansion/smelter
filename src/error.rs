@@ -55,8 +55,10 @@ where
         stack,
         http_status_code: match err_info.error_type {
             ErrorType::UserError => StatusCode::BAD_REQUEST,
-            ErrorType::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
             ErrorType::EntityNotFound => StatusCode::NOT_FOUND,
+            ErrorType::Conflict => StatusCode::CONFLICT,
+
+            ErrorType::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
         },
     }
 }
