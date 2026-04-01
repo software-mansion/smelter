@@ -1538,6 +1538,7 @@
       },
       "HlsInputStatsReport": {
         "type": "object",
+        "description": "Stats report for `HLS` input.",
         "required": [
           "video",
           "audio",
@@ -1546,25 +1547,30 @@
         ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/HlsInputTrackStatsReport"
+            "$ref": "#/components/schemas/HlsInputTrackStatsReport",
+            "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/HlsInputTrackStatsReport"
+            "$ref": "#/components/schemas/HlsInputTrackStatsReport",
+            "description": "Stats for the audio track."
           },
           "corrupted_packets_received": {
             "type": "integer",
             "format": "int64",
+            "description": "Total count of corrupted packets received.",
             "minimum": 0
           },
           "corrupted_packets_received_last_10_seconds": {
             "type": "integer",
             "format": "int64",
+            "description": "Count of corrupted packets received for the last 10 seconds.",
             "minimum": 0
           }
         }
       },
       "HlsInputTrackSlidingWindowStatsReport": {
         "type": "object",
+        "description": "Stats report for the given time window in the `HLS` input track.",
         "required": [
           "packets_received",
           "discontinuities_detected",
@@ -1579,11 +1585,13 @@
           "packets_received": {
             "type": "integer",
             "format": "int64",
+            "description": "Count of packets received during the given time window.",
             "minimum": 0
           },
           "discontinuities_detected": {
             "type": "integer",
             "format": "int32",
+            "description": "Count of detected discontinuities between packet timestamps\nduring the given time window.",
             "minimum": 0
           },
           "effective_buffer_avg_seconds": {
@@ -1602,7 +1610,7 @@
           "input_buffer_avg_seconds": {
             "type": "number",
             "format": "double",
-            "description": "Size of the InputBuffer"
+            "description": "Size of the input buffer."
           },
           "input_buffer_max_seconds": {
             "type": "number",
@@ -1616,6 +1624,7 @@
       },
       "HlsInputTrackStatsReport": {
         "type": "object",
+        "description": "Stats report for a track in the `HLS` input.",
         "required": [
           "packets_received",
           "discontinuities_detected",
@@ -1627,25 +1636,30 @@
           "packets_received": {
             "type": "integer",
             "format": "int64",
+            "description": "Total count of the packets received.",
             "minimum": 0
           },
           "discontinuities_detected": {
             "type": "integer",
             "format": "int32",
+            "description": "Total count of detected discontinuities between packet timestamps.",
             "minimum": 0
           },
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           },
           "last_10_seconds": {
-            "$ref": "#/components/schemas/HlsInputTrackSlidingWindowStatsReport"
+            "$ref": "#/components/schemas/HlsInputTrackSlidingWindowStatsReport",
+            "description": "Stats from the last 10 seconds."
           }
         }
       },
@@ -1694,21 +1708,25 @@
       },
       "HlsOutputStatsReport": {
         "type": "object",
+        "description": "Stats report for the `HLS` output.",
         "required": [
           "video",
           "audio"
         ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/HlsOutputTrackStatsReport"
+            "$ref": "#/components/schemas/HlsOutputTrackStatsReport",
+            "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/HlsOutputTrackStatsReport"
+            "$ref": "#/components/schemas/HlsOutputTrackStatsReport",
+            "description": "Stats for the audio track."
           }
         }
       },
       "HlsOutputTrackStatsReport": {
         "type": "object",
+        "description": "Stats report for a track in the `HLS` output.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -1717,11 +1735,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           }
         }
@@ -2237,7 +2257,8 @@
               }
             ]
           }
-        ]
+        ],
+        "description": "Stats report for inputs."
       },
       "InputStream": {
         "type": "object",
@@ -2487,21 +2508,25 @@
       },
       "Mp4InputStatsReport": {
         "type": "object",
+        "description": "Stats report for `MP4` input.",
         "required": [
           "video",
           "audio"
         ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/Mp4InputTrackStatsReport"
+            "$ref": "#/components/schemas/Mp4InputTrackStatsReport",
+            "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/Mp4InputTrackStatsReport"
+            "$ref": "#/components/schemas/Mp4InputTrackStatsReport",
+            "description": "Stats for the audio track."
           }
         }
       },
       "Mp4InputTrackStatsReport": {
         "type": "object",
+        "description": "Stats report for a track `MP4` in the input.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -2510,11 +2535,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           }
         }
@@ -2569,21 +2596,25 @@
       },
       "Mp4OutputStatsReport": {
         "type": "object",
+        "description": "Stats report for the `MP4` output.",
         "required": [
           "video",
           "audio"
         ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/Mp4OutputTrackStatsReport"
+            "$ref": "#/components/schemas/Mp4OutputTrackStatsReport",
+            "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/Mp4OutputTrackStatsReport"
+            "$ref": "#/components/schemas/Mp4OutputTrackStatsReport",
+            "description": "Stats for the audio track."
           }
         }
       },
       "Mp4OutputTrackStatsReport": {
         "type": "object",
+        "description": "Stats report for a track in the `MP4` output.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -2592,11 +2623,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           }
         }
@@ -3245,7 +3278,8 @@
               }
             ]
           }
-        ]
+        ],
+        "description": "Stats report for outputs."
       },
       "OutputWhepAudioOptions": {
         "type": "object",
@@ -4189,21 +4223,25 @@
       },
       "RtmpInputStatsReport": {
         "type": "object",
+        "description": "Stats report for `RTMP` input.",
         "required": [
           "video",
           "audio"
         ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/RtmpInputTrackStatsReport"
+            "$ref": "#/components/schemas/RtmpInputTrackStatsReport",
+            "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/RtmpInputTrackStatsReport"
+            "$ref": "#/components/schemas/RtmpInputTrackStatsReport",
+            "description": "Stats for the audio track."
           }
         }
       },
       "RtmpInputTrackStatsReport": {
         "type": "object",
+        "description": "Stats report for a track in `RTMP` input.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -4212,11 +4250,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           }
         }
@@ -4258,21 +4298,25 @@
       },
       "RtmpOutputStatsReport": {
         "type": "object",
+        "description": "Stats report for the `RTMP` output.",
         "required": [
           "video",
           "audio"
         ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/RtmpOutputTrackStatsReport"
+            "$ref": "#/components/schemas/RtmpOutputTrackStatsReport",
+            "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/RtmpOutputTrackStatsReport"
+            "$ref": "#/components/schemas/RtmpOutputTrackStatsReport",
+            "description": "Stats for the audio track."
           }
         }
       },
       "RtmpOutputTrackStatsReport": {
         "type": "object",
+        "description": "Stats report for a track in the `RTMP` output.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -4281,11 +4325,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           }
         }
@@ -4415,21 +4461,25 @@
       },
       "RtpInputStatsReport": {
         "type": "object",
+        "description": "Stats report for `RTP` input.",
         "required": [
           "video_rtp",
           "audio_rtp"
         ],
         "properties": {
           "video_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "Stats for the video track."
           },
           "audio_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "Stats for the audio track."
           }
         }
       },
       "RtpJitterBufferSlidingWindowStatsReport": {
         "type": "object",
+        "description": "Stats report for the given time window in the `RTP` jitter buffer.",
         "required": [
           "packets_lost",
           "packets_received",
@@ -4444,11 +4494,13 @@
           "packets_lost": {
             "type": "integer",
             "format": "int64",
+            "description": "Count of packets lost during the given time window.",
             "minimum": 0
           },
           "packets_received": {
             "type": "integer",
             "format": "int64",
+            "description": "Count of packets received during the given time window.",
             "minimum": 0
           },
           "effective_buffer_avg_seconds": {
@@ -4467,7 +4519,7 @@
           "input_buffer_avg_seconds": {
             "type": "number",
             "format": "double",
-            "description": "Size of the InputBuffer"
+            "description": "Size of the input buffer."
           },
           "input_buffer_max_seconds": {
             "type": "number",
@@ -4481,6 +4533,7 @@
       },
       "RtpJitterBufferStatsReport": {
         "type": "object",
+        "description": "Stats report for `RTP` jitter buffer used in `RTP`, `WHIP` and `WHEP` inputs.",
         "required": [
           "packets_lost",
           "packets_received",
@@ -4492,25 +4545,30 @@
           "packets_lost": {
             "type": "integer",
             "format": "int64",
+            "description": "Total count of packets lost.",
             "minimum": 0
           },
           "packets_received": {
             "type": "integer",
             "format": "int64",
+            "description": "Total count of packets received.",
             "minimum": 0
           },
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           },
           "last_10_seconds": {
-            "$ref": "#/components/schemas/RtpJitterBufferSlidingWindowStatsReport"
+            "$ref": "#/components/schemas/RtpJitterBufferSlidingWindowStatsReport",
+            "description": "Stats from the last 10 seconds."
           }
         }
       },
@@ -4569,21 +4627,25 @@
       },
       "RtpOutputStatsReport": {
         "type": "object",
+        "description": "Stats report for the `RTP` output.",
         "required": [
           "video",
           "audio"
         ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/RtpOutputTrackStatsReport"
+            "$ref": "#/components/schemas/RtpOutputTrackStatsReport",
+            "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/RtpOutputTrackStatsReport"
+            "$ref": "#/components/schemas/RtpOutputTrackStatsReport",
+            "description": "Stats for the audio track."
           }
         }
       },
       "RtpOutputTrackStatsReport": {
         "type": "object",
+        "description": "Stats report for a track in the `RTP` output.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -4592,11 +4654,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           }
         }
@@ -5012,6 +5076,7 @@
         "properties": {
           "inputs": {
             "type": "object",
+            "description": "Statistics for inputs.",
             "additionalProperties": {
               "$ref": "#/components/schemas/InputStatsReport"
             },
@@ -5021,6 +5086,7 @@
           },
           "outputs": {
             "type": "object",
+            "description": "Statistics for outputs.",
             "additionalProperties": {
               "$ref": "#/components/schemas/OutputStatsReport"
             },
@@ -5955,16 +6021,19 @@
       },
       "WhepInputStatsReport": {
         "type": "object",
+        "description": "Stats report for `WHEP` input.",
         "required": [
           "video_rtp",
           "audio_rtp"
         ],
         "properties": {
           "video_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "Stats for the video track."
           },
           "audio_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "Stats for the audio track."
           }
         }
       },
@@ -6005,6 +6074,7 @@
       },
       "WhepOutputStatsReport": {
         "type": "object",
+        "description": "Stats report for `WHEP` output.",
         "required": [
           "video",
           "audio",
@@ -6012,20 +6082,24 @@
         ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/WhepOutputTrackStatsReport"
+            "$ref": "#/components/schemas/WhepOutputTrackStatsReport",
+            "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/WhepOutputTrackStatsReport"
+            "$ref": "#/components/schemas/WhepOutputTrackStatsReport",
+            "description": "Stats for the audio track."
           },
           "connected_peers": {
             "type": "integer",
             "format": "int64",
+            "description": "Count of currently connected peers.",
             "minimum": 0
           }
         }
       },
       "WhepOutputTrackStatsReport": {
         "type": "object",
+        "description": "Stats report for a track in the `WHEP` output.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -6034,11 +6108,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           }
         }
@@ -6369,16 +6445,19 @@
       },
       "WhipInputStatsReport": {
         "type": "object",
+        "description": "Stats report for `WHIP` input.",
         "required": [
           "video_rtp",
           "audio_rtp"
         ],
         "properties": {
           "video_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "Stats for the video track."
           },
           "audio_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport"
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "Stats for the audio track."
           }
         }
       },
@@ -6425,6 +6504,7 @@
       },
       "WhipOutputStatsReport": {
         "type": "object",
+        "description": "Stats report for the `WHIP` output.",
         "required": [
           "video",
           "audio",
@@ -6432,10 +6512,12 @@
         ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/WhipOutputTrackStatsReport"
+            "$ref": "#/components/schemas/WhipOutputTrackStatsReport",
+            "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/WhipOutputTrackStatsReport"
+            "$ref": "#/components/schemas/WhipOutputTrackStatsReport",
+            "description": "Stats for the audio track."
           },
           "is_connected": {
             "type": "boolean"
@@ -6444,6 +6526,7 @@
       },
       "WhipOutputTrackStatsReport": {
         "type": "object",
+        "description": "Stats report for a track in the `WHIP` output.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -6452,11 +6535,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last second.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
+            "description": "Bitrate from the last minute.",
             "minimum": 0
           }
         }
