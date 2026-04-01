@@ -1563,7 +1563,7 @@
           "corrupted_packets_received_last_10_seconds": {
             "type": "integer",
             "format": "int64",
-            "description": "Count of corrupted packets received for the last 10 seconds.",
+            "description": "Count of corrupted packets received in the last 10 seconds.",
             "minimum": 0
           }
         }
@@ -1591,7 +1591,7 @@
           "discontinuities_detected": {
             "type": "integer",
             "format": "int32",
-            "description": "Count of detected discontinuities between packet timestamps\nduring the given time window.",
+            "description": "Count of discontinuities between packet timestamps\nduring the given time window.",
             "minimum": 0
           },
           "effective_buffer_avg_seconds": {
@@ -1642,7 +1642,7 @@
           "discontinuities_detected": {
             "type": "integer",
             "format": "int32",
-            "description": "Total count of detected discontinuities between packet timestamps.",
+            "description": "Total count of discontinuities between packet timestamps.",
             "minimum": 0
           },
           "bitrate_1_second": {
@@ -2526,7 +2526,7 @@
       },
       "Mp4InputTrackStatsReport": {
         "type": "object",
-        "description": "Stats report for a track `MP4` in the input.",
+        "description": "Stats report for a track in `MP4` input.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -5076,7 +5076,7 @@
         "properties": {
           "inputs": {
             "type": "object",
-            "description": "Statistics for inputs.",
+            "description": "Stats for inputs.",
             "additionalProperties": {
               "$ref": "#/components/schemas/InputStatsReport"
             },
@@ -5086,7 +5086,7 @@
           },
           "outputs": {
             "type": "object",
-            "description": "Statistics for outputs.",
+            "description": "Stats for outputs.",
             "additionalProperties": {
               "$ref": "#/components/schemas/OutputStatsReport"
             },
@@ -6520,7 +6520,8 @@
             "description": "Stats for the audio track."
           },
           "is_connected": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Indicator if the output is connected to the `WHIP` server."
           }
         }
       },
