@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::{Receiver, RecvTimeoutError};
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use tracing::{Level, debug, span, trace, warn};
 use webrtc::{
     rtcp::{self, header::PacketType, sender_report::SenderReport},
@@ -24,6 +24,7 @@ use crate::{
             RtpJitterBuffer, RtpJitterBufferInitOptions,
             depayloader::DepayloaderOptions,
             rtp_input::{
+                jitter_buffer::RtpJitterBufferMode,
                 rtp_audio_thread::{
                     RtpAudioThread, RtpAudioThreadOptions, RtpAudioTrackThreadHandle,
                 },
@@ -32,8 +33,11 @@ use crate::{
             util::BindToPortError,
         },
     },
-    queue::QueueInput,
-    utils::InitializableThread,
+    queue::{QueueInput, QueueTrackOffset, QueueTrackOptions},
+    utils::{
+        InitializableThread,
+        input_buffer::{self, InputBuffer},
+    },
 };
 
 use crate::prelude::*;
@@ -73,19 +77,35 @@ impl RtpInput {
             }
         };
 
-        let queue_input = QueueInput::new(
-            opts.video.is_some(),
-            opts.audio.is_some(),
-            opts.required,
-            opts.offset,
-            &ctx,
-            &input_ref,
-        );
+        let queue_input = QueueInput::new(&ctx, &input_ref, opts.required);
+        let buffer_duration = opts.buffer_duration.unwrap_or(Duration::from_millis(200));
+        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+            video: opts.video.is_some(),
+            audio: opts.audio.is_some(),
+            offset: match opts.offset {
+                Some(offset) => QueueTrackOffset::FromStart(offset),
+                None => QueueTrackOffset::None,
+            },
+        });
 
-        let video_handle = Self::start_video_thread(&ctx, &input_ref, opts.video, &queue_input)?;
-        let audio_handle = Self::start_audio_thread(&ctx, &input_ref, opts.audio, &queue_input)?;
+        let jitter_buffer_mode = match opts.transport_protocol {
+            RtpInputTransportProtocol::Udp => RtpJitterBufferMode::Fixed(buffer_duration),
+            RtpInputTransportProtocol::TcpServer => RtpJitterBufferMode::Disabled,
+        };
 
-        let jitter_buffer_init = RtpJitterBufferInitOptions::new(&ctx, opts.jitter_buffer);
+        let input_buffer = match opts.buffer_duration {
+            Some(duration) => InputBuffer::new(&ctx, InputBufferOptions::Const(Some(duration))),
+            None => match opts.transport_protocol {
+                RtpInputTransportProtocol::Udp => todo!(),
+                RtpInputTransportProtocol::TcpServer => todo!(),
+            },
+        };
+
+        let video_handle = Self::start_video_thread(&ctx, &input_ref, opts.video, video_sender)?;
+        let audio_handle = Self::start_audio_thread(&ctx, &input_ref, opts.audio, audio_sender)?;
+
+        let jitter_buffer_init =
+            RtpJitterBufferInitOptions::new(&ctx, jitter_buffer_mode, input_buffer);
 
         // TODO: this could ran on the same thread as tcp/udp socket
         Self::start_rtp_demuxer_thread(
@@ -127,25 +147,24 @@ impl RtpInput {
         ctx: &Arc<PipelineCtx>,
         input_ref: &Ref<InputId>,
         options: Option<VideoDecoderOptions>,
-        queue_input: &QueueInput,
+        frame_sender: Option<Sender<Frame>>,
     ) -> Result<Option<RtpVideoTrackThreadHandle>, DecoderInitError> {
-        let Some(options) = options else {
+        let (Some(options), Some(frame_sender)) = (options, frame_sender) else {
             return Ok(None);
         };
 
-        let queue_input = queue_input.downgrade();
         let handle = match options {
             VideoDecoderOptions::FfmpegH264 => RtpVideoThread::<FfmpegH264Decoder>::spawn(
                 input_ref.clone(),
-                (ctx.clone(), DepayloaderOptions::H264, queue_input),
+                (ctx.clone(), DepayloaderOptions::H264, frame_sender),
             )?,
             VideoDecoderOptions::FfmpegVp8 => RtpVideoThread::<FfmpegVp8Decoder>::spawn(
                 input_ref.clone(),
-                (ctx.clone(), DepayloaderOptions::Vp8, queue_input),
+                (ctx.clone(), DepayloaderOptions::Vp8, frame_sender),
             )?,
             VideoDecoderOptions::FfmpegVp9 => RtpVideoThread::<FfmpegVp9Decoder>::spawn(
                 input_ref.clone(),
-                (ctx.clone(), DepayloaderOptions::Vp9, queue_input),
+                (ctx.clone(), DepayloaderOptions::Vp9, frame_sender),
             )?,
             VideoDecoderOptions::VulkanH264 => {
                 if !ctx.graphics_context.has_vulkan_decoder_support() {
@@ -153,7 +172,7 @@ impl RtpInput {
                 }
                 RtpVideoThread::<VulkanH264Decoder>::spawn(
                     input_ref.clone(),
-                    (ctx.clone(), DepayloaderOptions::H264, queue_input),
+                    (ctx.clone(), DepayloaderOptions::H264, frame_sender),
                 )?
             }
         };
@@ -164,13 +183,12 @@ impl RtpInput {
         ctx: &Arc<PipelineCtx>,
         input_ref: &Ref<InputId>,
         options: Option<RtpAudioOptions>,
-        queue_input: &QueueInput,
+        samples_sender: Option<Sender<InputAudioSamples>>,
     ) -> Result<Option<RtpAudioTrackThreadHandle>, DecoderInitError> {
-        let Some(options) = options else {
+        let (Some(options), Some(samples_sender)) = (options, samples_sender) else {
             return Ok(None);
         };
 
-        let queue_input = queue_input.downgrade();
         let handle = match options {
             RtpAudioOptions::Opus => RtpAudioThread::<OpusDecoder>::spawn(
                 input_ref,
@@ -179,7 +197,7 @@ impl RtpInput {
                     sample_rate: 48_000,
                     decoder_options: (),
                     depayloader_options: DepayloaderOptions::Opus,
-                    queue_input,
+                    samples_sender,
                 },
             )?,
             RtpAudioOptions::FdkAac {
@@ -193,7 +211,7 @@ impl RtpInput {
                     sample_rate: asc.sample_rate,
                     decoder_options: FdkAacDecoderOptions { asc: Some(raw_asc) },
                     depayloader_options: DepayloaderOptions::Aac(depayloader_mode, asc),
-                    queue_input,
+                    samples_sender,
                 },
             )?,
         };

@@ -70,7 +70,6 @@ async fn process_audio_track(
         ctx.track,
         ctx.rtc_receiver,
         RtpJitterBuffer::new(
-            &ctx.pipeline_ctx,
             ctx.buffer,
             48_000,
             Box::new(move |event| {
@@ -120,7 +119,7 @@ async fn process_video_track(
         &ctx.pipeline_ctx,
         ctx.track,
         ctx.rtc_receiver,
-        RtpJitterBuffer::new(&ctx.pipeline_ctx, ctx.buffer, 90_000, on_stats_event),
+        RtpJitterBuffer::new(ctx.buffer, 90_000, on_stats_event),
     );
     let keyframe_request_sender = rtp_reader.enable_pli().await;
 

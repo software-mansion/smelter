@@ -24,7 +24,7 @@ use crate::audio_mixer::InputSamplesSet;
 use crate::prelude::*;
 
 pub(crate) use self::queue_input::{
-    AudioTrackOptions, QueueInput, VideoTrackOptions, WeakQueueInput,
+    QueueInput, QueueTrackOffset, QueueTrackOptions, WeakQueueInput,
 };
 
 use self::{
@@ -55,20 +55,55 @@ impl From<&PipelineOptions> for QueueOptions {
     }
 }
 
-/// Queue is responsible for consuming frames from different inputs and producing
-/// sets of frames from all inputs in a single batch.
+/// - Queue PTS values start from sync_point (Instant).
+/// - Queue start PTS is a duration from sync_point to the start request.
+/// - All inputs should produce timestamp relative to zero for each track.
+///   - If offset is Pts(Duration::ZERO), then input wants to produce timestamp in sync with real time
+///   queue, e.g. important for protocols like WebRTC
+///   - In most other cases first PTS of one of the track should be zero and for the other track
+///   very close to zero (to account for track synchronization)
+/// - New tracks are queued after each other, but caller can force it with `abort_old_tracks`
+/// - Input receiver always operate on values relative to zero, it is responsibility of `VideoQueueInput`
+///   and `AudioQueueInput` to move queue pts value
+/// - TrackOffset is a shared value that needs to be added to Track PTS to go into queue frame of
+///   reference. It is the same value for audio and video to preserve synchronization from input.
+/// - Before input start
+///   - For inputs without offset we remember current pts at a time of first packet.
+///     - offset is initialized it return is_ready for the first time
+///   - For inputs with offset we only check if it is ready for zero pts
+///     - track_offset will never be initialized
+/// - After input start
+///   - For inputs without offset we remember current pts at a time of first packet.
+///     - offset is initialized it return is_ready for the first time
+///   - For inputs with offset we only check if it is ready for zero pts
+///     - track_offset will be initialized when first packet is received, but current
+///       pts does not affect what the offset will be
+/// - Side channel
+///   - Introduce extra latency SIDE_CHANNEL_DELAY
+///   - Inputs that stream side channel
+///     - Video/AudioInputReceiver duration should be increased by SIDE_CHANNEL_DELAY
+///     - Add SIDE_CHANNEL_DELAY to each element in receiver
+///   - Inputs that do not stream side channel
+///     - Add SIDE_CHANNEL_DELAY to each element in receiver
 ///
-/// - All PTS values represent duration from sync_point stored in pipeline.
-///   (That will mean that pts of queue start will not be zero)
-///   - If input has offset defined it is applied in queue, timestamps before represent
-///     packets as if there was no offset
-///   - offset value is counted from `start`, to calculate offset_pts you need to add queue_start_pts
-/// - Conversion from/to this time frame should happen
-///   - on input as early as possible (before decoder when handling protocol/container)
-///   - on output as late as possible (after encoder when handling protocol/container)
-/// - All public timestamp values should refer to time after start.
-///   `queue_start_pts = sync_point - queue_start_time`
-///   `public_pts = internal_pts - queue_start_pts`
+/// - Example usage scenarios:
+///   - MP4 input.
+///     - When you seek, create new track with `queue_new_track`, start new threads and
+///       call `abort_old_tracks`. Don't use offset unless user provided one
+///     - When you loop, create new track but `abort_old_tracks` might not be necessary.
+///       - If you use abort some last frames might be lost
+///       - If you don't use it is possible based on buffer size that video or audio track might
+///         play for a bit longer(this will be a better option when we introduce duration based
+///         channels).
+///   - RTMP server input
+///    - Get effective last pts (should work before start).
+///    - Call `queue_new_track` with pts + buffer size as an offset (e.g. default buffer 1sec)
+///    - On new connection, you don't know if there is audio and video. Create track with
+///      both, drop one if no config after 5 seconds.
+///   - WHIP server input
+///    - Get effective last pts (should work before start) and instant at the time.
+///    - RtpNtpSyncTime should extrapolate PTS values from that pair
+///    - On new connection,
 pub struct Queue {
     queue_ctx: QueueContext,
     video_queue: Mutex<VideoQueue>,
@@ -96,15 +131,16 @@ pub struct Queue {
 
 #[derive(Debug, Clone)]
 pub struct QueueContext {
-    sync_point: Instant,
+    pub sync_point: Instant,
     /// Duration since sync point, represents time of
     /// the queue start
-    start_time_pts: SharedPts,
+    start_pts: SharedPts,
     last_pts: SharedPts,
+    side_channel_delay: Duration,
 }
 
 impl QueueContext {
-    fn effective_last_pts(&self) -> Duration {
+    pub(crate) fn effective_last_pts(&self) -> Duration {
         self.last_pts
             .value()
             .unwrap_or_else(|| self.sync_point.elapsed())
@@ -115,7 +151,7 @@ impl Default for QueueContext {
     fn default() -> Self {
         Self {
             sync_point: Instant::now(),
-            start_time_pts: Default::default(),
+            start_pts: Default::default(),
             last_pts: Default::default(),
         }
     }
@@ -229,15 +265,11 @@ impl Queue {
     pub(crate) fn add_input(&self, input_id: &InputId, queue_input: QueueInput) {
         let weak = queue_input.downgrade();
 
-        if queue_input.has_video() {
-            self.video_queue
-                .lock()
-                .unwrap()
-                .add_input(input_id, weak.clone());
-        }
-        if queue_input.has_audio() {
-            self.audio_queue.lock().unwrap().add_input(input_id, weak);
-        }
+        self.video_queue
+            .lock()
+            .unwrap()
+            .add_input(input_id, weak.clone());
+        self.audio_queue.lock().unwrap().add_input(input_id, weak);
 
         self.inputs
             .lock()
@@ -257,13 +289,13 @@ impl Queue {
         audio_sender: Sender<QueueAudioOutput>,
     ) {
         if let Some(sender) = self.start_sender.lock().unwrap().take() {
-            let start_time_pts = self.queue_ctx.sync_point.elapsed();
-            self.queue_ctx.start_time_pts.update(start_time_pts);
+            let queue_start_pts = self.queue_ctx.sync_point.elapsed();
+            self.queue_ctx.start_pts.update(queue_start_pts);
             sender
                 .send(QueueStartEvent {
                     audio_sender,
                     video_sender,
-                    queue_ctx: self.queue_ctx.clone(),
+                    queue_start_pts,
                 })
                 .unwrap()
         }

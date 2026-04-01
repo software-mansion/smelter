@@ -17,7 +17,6 @@ use crate::{
         },
         webrtc::AsyncReceiverIter,
     },
-    queue::WeakQueueInput,
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -28,8 +27,8 @@ pub(super) struct VideoTrackThreadHandle {
 }
 
 pub(super) struct VideoTrackThread {
-    stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
-    queue_input: WeakQueueInput,
+    stream: Box<dyn Iterator<Item = Frame>>,
+    frame_sender: crossbeam_channel::Sender<Frame>,
 }
 
 impl InitializableThread for VideoTrackThread {
@@ -37,7 +36,7 @@ impl InitializableThread for VideoTrackThread {
         Arc<PipelineCtx>,
         VideoDecoderMapping,
         VideoPayloadTypeMapping,
-        WeakQueueInput,
+        crossbeam_channel::Sender<Frame>,
         KeyframeRequestSender,
     );
 
@@ -45,7 +44,7 @@ impl InitializableThread for VideoTrackThread {
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, decoder_mapping, payload_type_mapping, queue_input, keyframe_request_sender) =
+        let (ctx, decoder_mapping, payload_type_mapping, frame_sender, keyframe_request_sender) =
             options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
@@ -62,28 +61,20 @@ impl InitializableThread for VideoTrackThread {
             depayloader_stream,
             keyframe_request_sender,
         )
-        .flatten();
-
-        let result_stream = decoder_stream
-            .filter_map(|event| match event {
-                PipelineEvent::Data(frame) => Some(PipelineEvent::Data(frame)),
-                // Do not send EOS to queue
-                // TODO: maybe queue should be able to handle packets after EOS
-                PipelineEvent::EOS => None,
-            })
-            .inspect(|frame| trace!(?frame, "Frame produced"));
+        .flatten()
+        .inspect(|frame| trace!(?frame, "Frame produced"));
 
         let state = Self {
-            stream: Box::new(result_stream),
-            queue_input,
+            stream: Box::new(decoder_stream),
+            frame_sender,
         };
         let output = VideoTrackThreadHandle { rtp_packet_sender };
         Ok((state, output))
     }
 
     fn run(self) {
-        for event in self.stream {
-            if self.queue_input.send_video(event).is_err() {
+        for frame in self.stream {
+            if self.frame_sender.send(frame).is_err() {
                 warn!("Failed to send decoded video frame from decoder. Channel closed.");
                 return;
             }
@@ -103,18 +94,21 @@ pub(super) struct AudioTrackThreadHandle {
 }
 
 pub(super) struct AudioTrackThread {
-    stream: Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
-    queue_input: WeakQueueInput,
+    stream: Box<dyn Iterator<Item = InputAudioSamples>>,
+    samples_sender: crossbeam_channel::Sender<InputAudioSamples>,
 }
 
 impl InitializableThread for AudioTrackThread {
-    type InitOptions = (Arc<PipelineCtx>, WeakQueueInput);
+    type InitOptions = (
+        Arc<PipelineCtx>,
+        crossbeam_channel::Sender<InputAudioSamples>,
+    );
 
     type SpawnOutput = AudioTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, queue_input) = options;
+        let (ctx, samples_sender) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
@@ -125,29 +119,22 @@ impl InitializableThread for AudioTrackThread {
         let depayloader_stream =
             DepayloaderStream::new(DepayloaderOptions::Opus, packet_stream).flatten();
 
-        let decoded_stream =
-            AudioDecoderStream::<OpusDecoder, _>::new(ctx, (), depayloader_stream)?.flatten();
-
-        let result_stream = decoded_stream
-            .filter_map(|event| match event {
-                PipelineEvent::Data(batch) => Some(PipelineEvent::Data(batch)),
-                // Do not send EOS to queue
-                // TODO: maybe queue should be able to handle packets after EOS
-                PipelineEvent::EOS => None,
-            })
-            .inspect(|batch| trace!(?batch, "Sample batch produced"));
+        let decoder_stream =
+            AudioDecoderStream::<OpusDecoder, _>::new(ctx, (), depayloader_stream)?
+                .flatten()
+                .inspect(|batch| trace!(?batch, "Sample batch produced"));
 
         let state = Self {
-            stream: Box::new(result_stream),
-            queue_input,
+            stream: Box::new(decoder_stream),
+            samples_sender,
         };
         let output = AudioTrackThreadHandle { rtp_packet_sender };
         Ok((state, output))
     }
 
     fn run(self) {
-        for event in self.stream {
-            if self.queue_input.send_audio(event).is_err() {
+        for samples in self.stream {
+            if self.samples_sender.send(samples).is_err() {
                 warn!("Failed to send decoded audio samples from decoder. Channel closed.");
                 return;
             }

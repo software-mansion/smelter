@@ -23,7 +23,7 @@ pub(super) struct QueueThread {
 pub(super) struct QueueStartEvent {
     pub video_sender: Sender<QueueVideoOutput>,
     pub audio_sender: Sender<QueueAudioOutput>,
-    pub queue_ctx: QueueContext,
+    pub queue_start_pts: Duration,
 }
 
 impl QueueThread {
@@ -102,18 +102,18 @@ impl QueueThreadAfterStart {
     fn new(queue_thread: QueueThread, start_event: QueueStartEvent) -> Self {
         Self {
             queue: queue_thread.queue.clone(),
-            queue_start_pts: start_event.start_time_pts,
+            queue_start_pts: start_event.queue_start_pts,
             audio_processor: AudioQueueProcessor {
                 queue: queue_thread.queue.clone(),
                 sender: start_event.audio_sender,
                 chunks_counter: 0,
-                queue_start_pts: start_event.start_time_pts,
+                queue_start_pts: start_event.queue_start_pts,
             },
             video_processor: VideoQueueProcessor {
                 queue: queue_thread.queue,
                 sender: start_event.video_sender,
                 sent_batches_counter: 0,
-                queue_start_pts: start_event.start_time_pts,
+                queue_start_pts: start_event.queue_start_pts,
             },
             scheduled_event_receiver: queue_thread.scheduled_event_receiver,
             scheduled_events: queue_thread.scheduled_events,

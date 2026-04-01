@@ -21,14 +21,14 @@ use crate::{
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
         utils::{H264AvccToAnnexB, input_buffer::InputBuffer},
     },
-    queue::{AudioTrackOptions, QueueInput, VideoTrackOptions, WeakQueueInput},
+    queue::{QueueTrackOptions, QueueInput, WeakQueueInput},
     utils::{InitializableThread, ShutdownCondition},
 };
 
 use crate::prelude::*;
 
 /// Channel size between input and decoder
-const CHUNK_BUFFER_SIZE: usize = 1;
+const CHUNK_BUFFER_SIZE: usize = 10;
 
 pub struct Mp4Input {
     events_sender: Sender<StateEvent>,
@@ -73,115 +73,50 @@ impl Mp4Input {
             kind: InputProtocolKind::Mp4,
         });
 
-        let video = Mp4FileReader::from_path(&source_file.path)?.try_new_h264_track();
-        let video_duration = video.as_ref().and_then(|track| track.duration());
-        let audio = Mp4FileReader::from_path(&source_file.path)?.try_new_aac_track();
-        let audio_duration = audio.as_ref().and_then(|track| track.duration());
+        let video_track = Mp4FileReader::from_path(&source_file.path)?.try_new_h264_track();
+        let video_duration = video_track.as_ref().and_then(|track| track.duration());
+        let audio_track = Mp4FileReader::from_path(&source_file.path)?.try_new_aac_track();
+        let audio_duration = audio_track.as_ref().and_then(|track| track.duration());
 
-        if video.is_none() && audio.is_none() {
+        if video_track.is_none() && audio_track.is_none() {
             return Err(Mp4InputError::NoTrack.into());
         }
 
-        let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
-        let h264_decoder = options.video_decoders.h264.unwrap_or({
-            if vulkan_supported {
-                VideoDecoderOptions::VulkanH264
-            } else {
-                VideoDecoderOptions::FfmpegH264
-            }
+        if let Some(DecoderOptions::H264(_)) = video_track.as_ref().map(|t| t.decoder_options())
+            && options.video_decoders.h264 == Some(VideoDecoderOptions::VulkanH264)
+            && !ctx.graphics_context.has_vulkan_decoder_support()
+        {
+            return Err(InputInitError::DecoderError(
+                DecoderInitError::VulkanContextRequiredForVulkanDecoder,
+            ));
+        }
+
+        let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
+        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+            video: video_track.is_some(),
+            audio: audio_track.is_some(),
+            offset: options.offset,
         });
 
-        let mut queue_input = QueueInput::new(&ctx, &input_ref, options.required);
-        let (video_sender, audio_sender) = queue_input.queue_new_track(
-            video.as_ref().map(|_| VideoTrackOptions {
-                offset: options.offset,
-            }),
-            audio.as_ref().map(|_| AudioTrackOptions {
-                offset: options.offset,
-            }),
-        );
-
-        let (video_handle, video_track) = match (video, video_sender) {
-            (Some(track), Some(frame_sender)) => {
-                let handle = match (track.decoder_options(), h264_decoder) {
-                    (DecoderOptions::H264(h264_config), VideoDecoderOptions::FfmpegH264) => {
-                        VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
-                            input_ref.clone(),
-                            VideoDecoderThreadOptions {
-                                ctx: ctx.clone(),
-                                transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
-                                frame_sender,
-                                input_buffer_size: CHUNK_BUFFER_SIZE,
-                            },
-                        )?
-                    }
-                    (DecoderOptions::H264(h264_config), VideoDecoderOptions::VulkanH264) => {
-                        if !vulkan_supported {
-                            return Err(InputInitError::DecoderError(
-                                DecoderInitError::VulkanContextRequiredForVulkanDecoder,
-                            ));
-                        }
-                        VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
-                            input_ref.clone(),
-                            VideoDecoderThreadOptions {
-                                ctx: ctx.clone(),
-                                transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
-                                frame_sender,
-                                input_buffer_size: CHUNK_BUFFER_SIZE,
-                            },
-                        )?
-                    }
-                    _ => {
-                        return Err(
-                            Mp4InputError::Unknown("Non H264 decoder options returned.").into()
-                        );
-                    }
-                };
-                (Some(handle), Some(track))
-            }
-            _ => (None, None),
-        };
-
-        let (audio_handle, audio_track) = match (audio, audio_sender) {
-            (Some(track), Some(samples_sender)) => {
-                let handle = match track.decoder_options() {
-                    DecoderOptions::Aac(data) => {
-                        AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
-                            input_ref.clone(),
-                            AudioDecoderThreadOptions {
-                                ctx: ctx.clone(),
-                                decoder_options: FdkAacDecoderOptions {
-                                    asc: Some(data.clone()),
-                                },
-                                samples_sender,
-                                input_buffer_size: CHUNK_BUFFER_SIZE,
-                            },
-                        )?
-                    }
-                    _ => {
-                        return Err(
-                            Mp4InputError::Unknown("Non AAC decoder options returned.").into()
-                        );
-                    }
-                };
-                (Some(handle), Some(track))
-            }
-            _ => (None, None),
-        };
-
-        let (reader, events_sender) = TrackManagerThread::new(
+        let initial_seek = options.seek;
+        let (mut reader, events_sender) = TrackManagerThread::new(
             &ctx,
             &input_ref,
             options,
             source_file,
-            video_handle,
-            audio_handle,
             queue_input.downgrade(),
         );
+
+        if let (Some(track), Some(sender)) = (video_track, video_sender) {
+            reader.spawn_video(track, sender, initial_seek)?;
+        }
+        if let (Some(track), Some(sender)) = (audio_track, audio_sender) {
+            reader.spawn_audio(track, sender, initial_seek)?;
+        }
         std::thread::Builder::new()
             .name("mp4 reader".to_string())
             .spawn(move || {
-                reader.run(video_track, audio_track);
+                reader.run();
             })
             .unwrap();
 
@@ -240,7 +175,6 @@ struct TrackContext {
 
     event_sender: Sender<StateEvent>,
     stats_sender: StatsSender,
-    decoder_handle: DecoderThreadHandle,
 
     _source_file: Arc<SourceFile>,
 }
@@ -251,10 +185,9 @@ struct TrackManagerThread {
     options: Mp4InputOptions,
     events_receiver: Receiver<StateEvent>,
     input_shutdown_condition: ShutdownCondition,
-    video_ctx: Option<TrackContext>,
-    audio_ctx: Option<TrackContext>,
-    video_thread: Option<(JoinHandle<TrackThreadResult>, ShutdownCondition)>,
-    audio_thread: Option<(JoinHandle<TrackThreadResult>, ShutdownCondition)>,
+    track_ctx: TrackContext,
+    video_thread: Option<(JoinHandle<Track<File>>, ShutdownCondition)>,
+    audio_thread: Option<(JoinHandle<Track<File>>, ShutdownCondition)>,
     queue_input: WeakQueueInput,
 }
 
@@ -264,30 +197,18 @@ impl TrackManagerThread {
         input_ref: &Ref<InputId>,
         options: Mp4InputOptions,
         source_file: Arc<SourceFile>,
-        video_handle: Option<DecoderThreadHandle>,
-        audio_handle: Option<DecoderThreadHandle>,
         queue_input: WeakQueueInput,
     ) -> (Self, Sender<StateEvent>) {
         let (events_sender, events_receiver) = unbounded();
         let buffer = InputBuffer::new(ctx, options.buffer);
 
-        let video_ctx = video_handle.map(|handle| TrackContext {
+        let track_ctx = TrackContext {
             input_ref: input_ref.clone(),
             buffer: buffer.clone(),
             event_sender: events_sender.clone(),
             stats_sender: ctx.stats_sender.clone(),
-            decoder_handle: handle,
             _source_file: source_file.clone(),
-        });
-
-        let audio_ctx = audio_handle.map(|handle| TrackContext {
-            input_ref: input_ref.clone(),
-            buffer: buffer.clone(),
-            event_sender: events_sender.clone(),
-            stats_sender: ctx.stats_sender.clone(),
-            decoder_handle: handle,
-            _source_file: source_file.clone(),
-        });
+        };
 
         (
             Self {
@@ -296,8 +217,7 @@ impl TrackManagerThread {
                 options,
                 events_receiver,
                 input_shutdown_condition: ShutdownCondition::default(),
-                video_ctx,
-                audio_ctx,
+                track_ctx,
                 video_thread: None,
                 audio_thread: None,
                 queue_input,
@@ -306,14 +226,7 @@ impl TrackManagerThread {
         )
     }
 
-    fn run(mut self, video_track: Option<Track<File>>, audio_track: Option<Track<File>>) {
-        if let (Some(track), Some(ctx)) = (video_track, &self.video_ctx) {
-            self.video_thread = Some(self.spawn_video(ctx, track, self.options.seek));
-        }
-        if let (Some(track), Some(ctx)) = (audio_track, &self.audio_ctx) {
-            self.audio_thread = Some(self.spawn_audio(ctx, track, self.options.seek));
-        }
-
+    fn run(mut self) {
         while let Ok(event) = self.events_receiver.recv() {
             match event {
                 StateEvent::Pause => {
@@ -361,6 +274,17 @@ impl TrackManagerThread {
     }
 
     fn restart_threads(&mut self, seek: Option<Duration>) {
+        let (video_sender, audio_sender) = {
+            let Some(queue_input) = self.queue_input.upgrade() else {
+                return;
+            };
+            queue_input.queue_new_track(QueueTrackOptions {
+                video: self.video_thread.is_some(),
+                audio: self.audio_thread.is_some(),
+                offset: None,
+            })
+        };
+
         if let Some((_, cond)) = self.video_thread.as_ref() {
             cond.mark_for_shutdown()
         }
@@ -368,32 +292,42 @@ impl TrackManagerThread {
             cond.mark_for_shutdown()
         }
 
-        let video = self
+        let video_track = self
             .video_thread
             .take()
             .map(|(handle, _)| handle.join().unwrap());
-        let audio = self
+        let audio_track = self
             .audio_thread
             .take()
             .map(|(handle, _)| handle.join().unwrap());
 
-        if let (Some(result), Some(ctx)) = (video, &self.video_ctx) {
-            self.video_thread = Some(self.spawn_video(ctx, result.track, seek));
+        if let (Some(track), Some(sender)) = (video_track, video_sender) {
+            self.spawn_video(track, sender, seek);
         }
-        if let (Some(result), Some(ctx)) = (audio, &self.audio_ctx) {
-            self.audio_thread = Some(self.spawn_audio(ctx, result.track, seek));
+        if let (Some(track), Some(sender)) = (audio_track, audio_sender) {
+            self.spawn_audio(track, sender, seek);
         }
+
+        {
+            // TODO: maybe sleep so the new frames have time to go through decoder
+            let Some(queue_input) = self.queue_input.upgrade() else {
+                return;
+            };
+            queue_input.abort_old_tracks();
+        };
     }
 
     fn spawn_video(
-        &self,
-        ctx: &TrackContext,
+        &mut self,
         track: Track<File>,
+        frame_sender: Sender<Frame>,
         seek: Option<Duration>,
-    ) -> (JoinHandle<TrackThreadResult>, ShutdownCondition) {
+    ) -> Result<(), InputInitError> {
+        let decoder_handle = self.spawn_video_decoder_thread(&track, frame_sender)?;
+
         let shutdown_condition = self.input_shutdown_condition.child_condition();
         let track_thread = TrackThread {
-            ctx: ctx.clone(),
+            ctx: self.track_ctx.clone(),
             shutdown_condition: shutdown_condition.clone(),
             track,
             seek,
@@ -403,21 +337,24 @@ impl TrackManagerThread {
             .name("mp4 reader - video".to_string())
             .spawn(move || {
                 let _span = span!(Level::INFO, "MP4 video", input_id = input_id).entered();
-                track_thread.run_video_thread()
+                track_thread.run_video_thread(decoder_handle)
             })
             .unwrap();
-        (handle, shutdown_condition)
+        self.video_thread = Some((handle, shutdown_condition));
+        Ok(())
     }
 
     fn spawn_audio(
-        &self,
-        ctx: &TrackContext,
+        &mut self,
         track: Track<File>,
+        samples_sender: Sender<InputAudioSamples>,
         seek: Option<Duration>,
-    ) -> (JoinHandle<TrackThreadResult>, ShutdownCondition) {
+    ) -> Result<(), InputInitError> {
+        let decoder_handle = self.spawn_audio_decoder_thread(&track, samples_sender)?;
+
         let shutdown_condition = self.input_shutdown_condition.child_condition();
         let track_thread = TrackThread {
-            ctx: ctx.clone(),
+            ctx: self.track_ctx.clone(),
             shutdown_condition: shutdown_condition.clone(),
             track,
             seek,
@@ -427,10 +364,82 @@ impl TrackManagerThread {
             .name("mp4 reader - audio".to_string())
             .spawn(move || {
                 let _span = span!(Level::INFO, "MP4 audio", input_id = input_id).entered();
-                track_thread.run_audio_thread()
+                track_thread.run_audio_thread(decoder_handle)
             })
             .unwrap();
-        (handle, shutdown_condition)
+        self.audio_thread = Some((handle, shutdown_condition));
+        Ok(())
+    }
+
+    fn spawn_video_decoder_thread(
+        &self,
+        track: &Track<File>,
+        frame_sender: Sender<Frame>,
+    ) -> Result<DecoderThreadHandle, InputInitError> {
+        let vulkan_supported = self.ctx.graphics_context.has_vulkan_decoder_support();
+        let h264_decoder = self.options.video_decoders.h264.unwrap_or({
+            match vulkan_supported {
+                true => VideoDecoderOptions::VulkanH264,
+                false => VideoDecoderOptions::FfmpegH264,
+            }
+        });
+        let handle = match (track.decoder_options(), h264_decoder) {
+            (DecoderOptions::H264(h264_config), VideoDecoderOptions::FfmpegH264) => {
+                VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                    self.input_ref.clone(),
+                    VideoDecoderThreadOptions {
+                        ctx: self.ctx.clone(),
+                        transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
+                        frame_sender,
+                        input_buffer_size: CHUNK_BUFFER_SIZE,
+                    },
+                )?
+            }
+            (DecoderOptions::H264(h264_config), VideoDecoderOptions::VulkanH264) => {
+                if !vulkan_supported {
+                    return Err(InputInitError::DecoderError(
+                        DecoderInitError::VulkanContextRequiredForVulkanDecoder,
+                    ));
+                }
+                VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
+                    self.input_ref.clone(),
+                    VideoDecoderThreadOptions {
+                        ctx: self.ctx.clone(),
+                        transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
+                        frame_sender,
+                        input_buffer_size: CHUNK_BUFFER_SIZE,
+                    },
+                )?
+            }
+            _ => {
+                return Err(Mp4InputError::Unknown("Non H264 decoder options returned.").into());
+            }
+        };
+        Ok(handle)
+    }
+
+    fn spawn_audio_decoder_thread(
+        &self,
+        track: &Track<File>,
+        samples_sender: Sender<InputAudioSamples>,
+    ) -> Result<DecoderThreadHandle, InputInitError> {
+        let handle = match track.decoder_options() {
+            DecoderOptions::Aac(data) => AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
+                self.input_ref.clone(),
+                AudioDecoderThreadOptions {
+                    ctx: self.ctx.clone(),
+                    decoder_options: FdkAacDecoderOptions {
+                        asc: Some(data.clone()),
+                    },
+                    samples_sender,
+                    input_buffer_size: CHUNK_BUFFER_SIZE,
+                },
+            )?,
+            _ => {
+                return Err(Mp4InputError::Unknown("Non AAC decoder options returned.").into());
+            }
+        };
+        Ok(handle)
     }
 }
 
@@ -441,12 +450,8 @@ struct TrackThread {
     seek: Option<Duration>,
 }
 
-struct TrackThreadResult {
-    track: Track<File>,
-}
-
 impl TrackThread {
-    fn run_video_thread(mut self) -> TrackThreadResult {
+    fn run_video_thread(mut self, decoder_handle: DecoderThreadHandle) -> Track<File> {
         for (mut chunk, _duration) in self.track.chunks(self.seek) {
             self.ctx.stats_sender.send(
                 Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
@@ -458,7 +463,7 @@ impl TrackThread {
             chunk.pts += self.ctx.buffer.size();
 
             trace!(pts=?chunk.pts, "MP4 reader produced a video chunk.");
-            let chunk_sender = &self.ctx.decoder_handle.chunk_sender;
+            let chunk_sender = &decoder_handle.chunk_sender;
             if chunk_sender.send(PipelineEvent::Data(chunk)).is_err() {
                 debug!("Failed to send a video chunk. Channel closed.");
                 break;
@@ -472,10 +477,10 @@ impl TrackThread {
             .ctx
             .event_sender
             .send(StateEvent::ThreadFinished(thread::current().id()));
-        TrackThreadResult { track: self.track }
+        self.track
     }
 
-    fn run_audio_thread(mut self) -> TrackThreadResult {
+    fn run_audio_thread(mut self, decoder_handle: DecoderThreadHandle) -> Track<File> {
         for (mut chunk, _duration) in self.track.chunks(self.seek) {
             self.ctx.stats_sender.send(
                 Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
@@ -486,8 +491,8 @@ impl TrackThread {
             self.ctx.buffer.recalculate_buffer(chunk.pts);
             chunk.pts += self.ctx.buffer.size();
 
-            trace!(pts=?chunk.pts, "MP4 reader produced a audio chunk.");
-            let chunk_sender = &self.ctx.decoder_handle.chunk_sender;
+            trace!(pts=?chunk.pts, "MP4 reader produced an audio chunk.");
+            let chunk_sender = &decoder_handle.chunk_sender;
             if chunk_sender.send(PipelineEvent::Data(chunk)).is_err() {
                 debug!("Failed to send a audio chunk. Channel closed.");
                 break;
@@ -501,7 +506,7 @@ impl TrackThread {
             .ctx
             .event_sender
             .send(StateEvent::ThreadFinished(thread::current().id()));
-        TrackThreadResult { track: self.track }
+        self.track
     }
 }
 

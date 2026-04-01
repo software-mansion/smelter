@@ -17,20 +17,6 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
             endpoint_override,
         } = value;
 
-        let (required, offset) = new_queue_options(required, offset_ms)?;
-
-        let jitter_buffer = if !required && offset.is_none() {
-            core::RtpJitterBufferOptions {
-                mode: core::RtpJitterBufferMode::QueueBased,
-                buffer: core::InputBufferOptions::LatencyOptimized,
-            }
-        } else {
-            core::RtpJitterBufferOptions {
-                mode: core::RtpJitterBufferMode::Fixed(Duration::from_millis(200)),
-                buffer: core::InputBufferOptions::None,
-            }
-        };
-
         let video_preferences = match video {
             Some(options) => match options.decoder_preferences.as_deref() {
                 Some([]) | None => vec![core::WebrtcVideoDecoderOptions::Any],
@@ -44,8 +30,7 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
             bearer_token,
             endpoint_override,
             jitter_buffer,
-            required,
-            offset,
+            required: required.unwrap_or(false),
         };
 
         Ok(core::RegisterInputOptions::Whip(whip_options))

@@ -95,7 +95,9 @@ fn wait_with_deadline<T>(
             },
             Err(err) => match err {
                 oneshot::error::TryRecvError::Closed => {
-                    return Err(InputInitError::InternalServerError);
+                    return Err(InputInitError::InternalServerError(
+                        "WHEP input thread failed to initialize. Result channel closed",
+                    ));
                 }
                 oneshot::error::TryRecvError::Empty => {}
             },

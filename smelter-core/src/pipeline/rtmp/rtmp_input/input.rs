@@ -4,7 +4,6 @@ use crate::{
     pipeline::{
         input::Input,
         rtmp::rtmp_input::state::{RtmpInputStateOptions, RtmpInputsState},
-        utils::input_buffer::InputBuffer,
     },
     queue::QueueInput,
 };
@@ -31,16 +30,7 @@ impl RtmpServerInput {
             kind: InputProtocolKind::Rtmp,
         });
 
-        let queue_input = QueueInput::new(
-            true,
-            true,
-            options.required,
-            options.offset,
-            &ctx,
-            &input_ref,
-        );
-
-        let buffer = InputBuffer::new(&ctx, options.buffer);
+        let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
 
         state.inputs.add_input(
             &input_ref,
@@ -49,7 +39,6 @@ impl RtmpServerInput {
                 stream_key: options.stream_key,
                 queue_input: queue_input.downgrade(),
                 decoders: options.decoders,
-                buffer,
             },
         )?;
 

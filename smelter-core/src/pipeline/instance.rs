@@ -111,8 +111,8 @@ impl Pipeline {
 
         if let Some(pause) = pause {
             match pause {
-                true => self.queue.pause_input(input_id),
-                false => self.queue.resume_input(input_id),
+                true => input.input.pause()?,
+                false => input.input.resume()?,
             }
         }
 

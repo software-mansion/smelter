@@ -132,10 +132,8 @@ where
     let (input, input_result, queue_input) = build_input(pipeline_ctx, Ref::new(&input_id))
         .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
 
-    let (audio_eos_received, video_eos_received) = (
-        queue_input.has_audio().then_some(false),
-        queue_input.has_video().then_some(false),
-    );
+    // TODO: for now assume that
+    let (audio_eos_received, video_eos_received) = (Some(false), Some(false));
 
     let pipeline_input = PipelineInput {
         input,

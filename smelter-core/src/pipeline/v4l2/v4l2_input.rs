@@ -1,7 +1,7 @@
 use std::{
     path::Path,
     sync::{Arc, atomic::AtomicBool},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use smelter_render::{FrameData, Framerate, InputId, NvPlanes, Resolution};
@@ -10,7 +10,7 @@ use tracing::{Level, debug, error, info, span, warn};
 use crate::{
     pipeline::input::Input,
     prelude::*,
-    queue::{QueueInput, WeakQueueInput},
+    queue::{QueueTrackOptions, QueueInput},
 };
 
 use v4l::{
@@ -62,14 +62,21 @@ impl V4l2Input {
         // the library recommends to skip the first frame
         stream.next().map_err(V4l2InputError::IoError)?;
 
-        let queue_input = QueueInput::new(true, false, opts.required, None, &ctx, &input_ref);
+        let queue_input = QueueInput::new(&ctx, &input_ref, opts.required);
+        let (Some(video_sender), _) =
+            queue_input.queue_new_track(QueueTrackOptions { video: true, audio: false, offset: None })
+        else {
+            return Err(InputInitError::InternalServerError(
+                "Video sender is None in V4L2 input",
+            ));
+        };
 
         let should_close = Arc::new(AtomicBool::new(false));
 
         let mut state = InputState {
             config: device_config,
             ctx,
-            queue_input: queue_input.downgrade(),
+            sender: video_sender,
             should_close: should_close.clone(),
             stream,
         };
@@ -250,15 +257,15 @@ struct InputState<'a> {
     config: V4l2DeviceConfig,
     ctx: Arc<PipelineCtx>,
     should_close: Arc<AtomicBool>,
-    queue_input: WeakQueueInput,
+    sender: crossbeam_channel::Sender<Frame>,
     stream: v4l::io::mmap::Stream<'a>,
 }
 
 impl InputState<'_> {
     fn run(&mut self) {
+        let mut start_time = None;
         loop {
             if self.should_close.load(std::sync::atomic::Ordering::Relaxed) {
-                self.send_eos();
                 return;
             }
 
@@ -283,7 +290,6 @@ impl InputState<'_> {
                     if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
                         if let Err(err) = self.config.refresh_format() {
                             error!(%err, "Error when trying to refresh parameters.");
-                            self.send_eos();
                             return;
                         }
 
@@ -298,7 +304,6 @@ impl InputState<'_> {
                     if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
                         if let Err(err) = self.config.refresh_format() {
                             error!(%err, "Fatal error when trying to refresh parameters.");
-                            self.send_eos();
                             return;
                         }
 
@@ -312,24 +317,21 @@ impl InputState<'_> {
                 }
             };
 
+            let start_time = start_time.get_or_insert_with(|| Instant::now());
             let frame = Frame {
-                pts: self.ctx.queue_sync_point.elapsed() + Duration::from_millis(20),
+                pts: start_time.elapsed() + Duration::from_millis(20),
                 data,
                 resolution: self.config.resolution,
             };
 
-            if self
-                .queue_input
-                .send_video(PipelineEvent::Data(frame))
-                .is_err()
-            {
+            if self.sender.send(frame).is_err() {
                 debug!("Failed to send video chunk. Channel closed.");
             }
         }
     }
 
     fn send_eos(&self) {
-        if self.queue_input.send_video(PipelineEvent::EOS).is_err() {
+        if self.sender.send_video(PipelineEvent::EOS).is_err() {
             debug!("Cannot send EOS. Channel closed.");
         }
     }

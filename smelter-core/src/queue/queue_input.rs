@@ -57,40 +57,41 @@ impl InnerQueueInput {
 
     fn queue_new_track(
         &mut self,
-        video: Option<VideoTrackOptions>,
-        audio: Option<AudioTrackOptions>,
+        opts: QueueTrackOptions,
     ) -> (Option<Sender<Frame>>, Option<Sender<InputAudioSamples>>) {
-        if video.is_none() && audio.is_none() {
+        if !opts.video && !opts.audio {
             return (None, None);
         }
-        let state = TrackOffset::default();
-        let (video_input, video_sender) = match video {
-            Some(video) => {
-                let (video_input, video_sender) = VideoQueueInput::new(
-                    &self.ctx,
-                    &self.input_ref,
-                    self.required,
-                    video.offset,
-                    state.clone(),
-                );
-                (Some(video_input), Some(video_sender))
-            }
-            None => (None, None),
+        let (track_offset, offset_from_start) = match opts.offset {
+            QueueTrackOffset::None => (TrackOffset::default(), None),
+            QueueTrackOffset::Pts(duration) => (TrackOffset::from(duration), None),
+            QueueTrackOffset::FromStart(duration) => (TrackOffset::default(), Some(duration)),
         };
-        let (audio_input, audio_sender) = match audio {
-            Some(audio) => {
-                let (audio_input, audio_sender) = AudioQueueInput::new(
-                    &self.ctx,
-                    &self.input_ref,
-                    self.required,
-                    audio.offset,
-                    state.clone(),
-                );
-                (Some(audio_input), Some(audio_sender))
-            }
-            None => (None, None),
+        let (video_input, video_sender) = if opts.video {
+            let (video_input, video_sender) = VideoQueueInput::new(
+                &self.ctx,
+                &self.input_ref,
+                self.required,
+                offset_from_start,
+                track_offset.clone(),
+            );
+            (Some(video_input), Some(video_sender))
+        } else {
+            (None, None)
         };
-        self.pending.push_back((video_input, audio_input, state));
+        let (audio_input, audio_sender) = if opts.audio {
+            let (audio_input, audio_sender) = AudioQueueInput::new(
+                &self.ctx,
+                &self.input_ref,
+                self.required,
+                offset_from_start,
+                track_offset.clone(),
+            );
+            (Some(audio_input), Some(audio_sender))
+        } else {
+            (None, None)
+        };
+        self.pending.push_back((video_input, audio_input, track_offset));
         (video_sender, audio_sender)
     }
 
@@ -121,11 +122,18 @@ impl InnerQueueInput {
     }
 }
 
-pub(crate) struct VideoTrackOptions {
-    pub offset: Option<Duration>,
+pub(crate) enum QueueTrackOffset {
+    None,
+    /// Effectively offset from sync point
+    Pts(Duration),
+    /// Offset from start point
+    FromStart(Duration),
 }
-pub(crate) struct AudioTrackOptions {
-    pub offset: Option<Duration>,
+
+pub(crate) struct QueueTrackOptions {
+    pub video: bool,
+    pub audio: bool,
+    pub offset: QueueTrackOffset,
 }
 
 #[derive(Clone)]
@@ -158,14 +166,13 @@ impl QueueInput {
     }
 
     pub fn queue_new_track(
-        &mut self,
-        video: Option<VideoTrackOptions>,
-        audio: Option<AudioTrackOptions>,
+        &self,
+        opts: QueueTrackOptions,
     ) -> (Option<Sender<Frame>>, Option<Sender<InputAudioSamples>>) {
-        self.0.lock().unwrap().queue_new_track(video, audio)
+        self.0.lock().unwrap().queue_new_track(opts)
     }
 
-    pub fn abort_old_tracks(&mut self) {
+    pub fn abort_old_tracks(&self) {
         self.0.lock().unwrap().replace_track()
     }
 
@@ -227,5 +234,11 @@ impl TrackOffset {
     pub fn map_add(&self, duration: Duration) {
         let mut guard = self.0.lock().unwrap();
         guard.as_mut().map(|offset| *offset = *offset + duration);
+    }
+}
+
+impl From<Duration> for TrackOffset {
+    fn from(value: Duration) -> Self {
+        Self(Arc::new(Mutex::))
     }
 }

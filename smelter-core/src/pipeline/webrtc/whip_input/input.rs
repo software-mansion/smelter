@@ -35,14 +35,7 @@ impl WhipInput {
             kind: InputProtocolKind::Whip,
         });
 
-        let queue_input = QueueInput::new(
-            true,
-            true,
-            options.required,
-            options.offset,
-            &ctx,
-            &input_ref,
-        );
+        let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
 
         let endpoint_id = options
             .endpoint_override

@@ -45,14 +45,14 @@ impl VideoQueueInput {
         ctx: &Arc<PipelineCtx>,
         input_ref: &Ref<InputId>,
         required: bool,
-        offset: Option<Duration>,
+        offset_from_start: Option<Duration>,
         track_offset: TrackOffset,
     ) -> (Self, Sender<Frame>) {
-        let (receiver, sender) = VideoInputReceiver::new();
+        let (receiver, sender) = VideoInputReceiver::new(ctx.queue_ctx.side_channel_delay);
         let input = Self {
             queue_ctx: ctx.queue_ctx.clone(),
             required,
-            offset_from_start: offset,
+            offset_from_start,
             receiver,
             track_offset,
             paused: false,
@@ -88,7 +88,7 @@ impl VideoQueueInput {
             return;
         }
         let pts = self.queue_ctx.last_pts.value().unwrap_or_default();
-        let queue_start_pts = self.queue_ctx.start_time_pts.value();
+        let queue_start_pts = self.queue_ctx.start_pts.value();
         let frame = queue_start_pts
             .and_then(|queue_start_pts| {
                 // Partially duplicate get_frame logic, we can't call it directly
@@ -96,7 +96,7 @@ impl VideoQueueInput {
 
                 let offset = self.resolve_offset(pts, queue_start_pts);
 
-                // if buffer_pts is before offset we don't want to return it yet
+                // if pts is before offset we don't want to return it yet
                 if let Some(offset_from_start) = self.offset_from_start
                     && pts < queue_start_pts + offset_from_start
                 {
@@ -130,25 +130,25 @@ impl VideoQueueInput {
     /// whether stream is required or not.
     pub(super) fn get_frame(
         &mut self,
-        buffer_pts: Duration,
+        pts: Duration,
         queue_start_pts: Duration,
     ) -> Option<FrameEvent> {
         if self.paused {
             return self.paused_event.clone();
         }
 
-        let Some(offset) = self.resolve_offset(buffer_pts, queue_start_pts) else {
+        let Some(offset) = self.resolve_offset(pts, queue_start_pts) else {
             return None;
         };
 
         // if buffer_pts is before offset we don't want to return it yet
         if let Some(offset_from_start) = self.offset_from_start
-            && buffer_pts < queue_start_pts + offset_from_start
+            && pts < queue_start_pts + offset_from_start
         {
             return None;
         }
 
-        match self.receiver.get_for_pts(buffer_pts.saturating_sub(offset)) {
+        match self.receiver.get_for_pts(pts.saturating_sub(offset)) {
             Some(mut frame) => {
                 self.event_playing_guard.emit();
                 frame.pts += offset;
@@ -215,6 +215,7 @@ impl VideoQueueInput {
         if self.receiver.state() != ReceiverState::Running {
             return None;
         }
+        self.event_delivered_guard.emit();
         let offset = match self.offset_from_start {
             Some(offset_from_start) => self
                 .track_offset
@@ -227,8 +228,12 @@ impl VideoQueueInput {
     /// Drops frames that won't be used for processing. This function should only be called before
     /// queue start.
     pub(super) fn drop_old_frames_before_start(&mut self) {
-        let is_ready = self.receiver.is_ready_for_pts(Duration::ZERO);
-        if self.offset_from_start.is_none() && is_ready {
+        if self.receiver.state() == ReceiverState::New {
+            return;
+        }
+
+        self.event_delivered_guard.emit();
+        if self.offset_from_start.is_none() {
             let now = self.queue_ctx.sync_point.elapsed();
             let offset = self.track_offset.get_or_init(now);
             let _ = self.receiver.is_ready_for_pts(now.saturating_sub(offset));
@@ -249,10 +254,11 @@ pub(crate) struct VideoInputReceiver {
     buffer: VecDeque<Frame>,
     disconnected: bool,
     state: ReceiverState,
+    delay: Duration,
 }
 
 impl VideoInputReceiver {
-    pub fn new() -> (Self, Sender<Frame>) {
+    pub fn new(delay: Duration) -> (Self, Sender<Frame>) {
         let (sender, receiver) = bounded(1);
         let track = Self {
             max_size: Duration::from_secs(1),
@@ -260,11 +266,15 @@ impl VideoInputReceiver {
             buffer: VecDeque::new(),
             disconnected: false,
             state: ReceiverState::New,
+            delay,
         };
         (track, sender)
     }
 
     fn get_for_pts(&mut self, pts: Duration) -> Option<Frame> {
+        if self.state == ReceiverState::Done {
+            return None;
+        }
         self.prepare_for_pts(pts);
         if self.disconnected && self.buffer.len() == 1 {
             let frame = self.buffer.pop_front();
@@ -276,6 +286,9 @@ impl VideoInputReceiver {
     }
 
     fn is_ready_for_pts(&mut self, pts: Duration) -> bool {
+        if self.state == ReceiverState::Done {
+            return true;
+        }
         self.prepare_for_pts(pts);
         let mut iter = self.buffer.iter();
         match (iter.next(), iter.next()) {
@@ -318,7 +331,8 @@ impl VideoInputReceiver {
                 return enqueued;
             }
             match self.receiver.try_recv() {
-                Ok(frame) => {
+                Ok(mut frame) => {
+                    frame.pts += self.delay;
                     self.buffer.push_back(frame);
                     self.state = ReceiverState::Running;
                     enqueued = true;

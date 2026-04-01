@@ -20,7 +20,6 @@ pub struct WhipInputOptions {
     pub endpoint_override: Option<Arc<str>>,
     pub jitter_buffer: RtpJitterBufferOptions,
     pub required: bool,
-    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -30,7 +29,6 @@ pub struct WhepInputOptions {
     pub endpoint_url: Arc<str>,
     pub jitter_buffer: RtpJitterBufferOptions,
     pub required: bool,
-    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

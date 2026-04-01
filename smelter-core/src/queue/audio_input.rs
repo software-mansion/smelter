@@ -48,7 +48,7 @@ impl AudioQueueInput {
         offset: Option<Duration>,
         track_offset: TrackOffset,
     ) -> (Self, Sender<InputAudioSamples>) {
-        let (receiver, sender) = AudioInputReceiver::new();
+        let (receiver, sender) = AudioInputReceiver::new(ctx.queue_ctx.side_channel_delay);
         let input = Self {
             queue_ctx: ctx.queue_ctx.clone(),
             required,
@@ -208,6 +208,11 @@ impl AudioQueueInput {
     /// Drops samples that won't be used for processing. This function should only be called before
     /// queue start.
     pub(super) fn drop_old_samples_before_start(&mut self) {
+        if self.receiver.state() == ReceiverState::New {
+            return;
+        }
+
+        self.event_delivered_guard.emit();
         if self.offset_from_start.is_none() {
             let now = self.queue_ctx.sync_point.elapsed();
             let offset = self.track_offset.get_or_init(now);
@@ -229,10 +234,11 @@ pub(crate) struct AudioInputReceiver {
     buffer: VecDeque<InputAudioSamples>,
     disconnected: bool,
     state: ReceiverState,
+    delay: Duration,
 }
 
 impl AudioInputReceiver {
-    pub fn new() -> (Self, Sender<InputAudioSamples>) {
+    pub fn new(delay: Duration) -> (Self, Sender<InputAudioSamples>) {
         let (sender, receiver) = bounded(1);
         let track = Self {
             max_size: Duration::from_secs(1),
@@ -240,12 +246,16 @@ impl AudioInputReceiver {
             buffer: VecDeque::new(),
             disconnected: false,
             state: ReceiverState::New,
+            delay,
         };
         (track, sender)
     }
 
     /// Pop all batches with `start_pts < pts`. Every batch is returned exactly once.
     fn pop_before_pts(&mut self, pts: Duration) -> Vec<InputAudioSamples> {
+        if self.state == ReceiverState::Done {
+            return Vec::new();
+        }
         self.try_enqueue_until(pts);
 
         let mut result = Vec::new();
@@ -261,6 +271,9 @@ impl AudioInputReceiver {
     }
 
     fn is_ready_for_pts(&mut self, end_pts: Duration) -> bool {
+        if self.state == ReceiverState::Done {
+            return true;
+        }
         self.try_enqueue_until(end_pts);
         match self.buffer.back() {
             Some(batch) => batch.end_pts() >= end_pts,
@@ -280,7 +293,8 @@ impl AudioInputReceiver {
                 return;
             }
             match self.receiver.try_recv() {
-                Ok(batch) => {
+                Ok(mut batch) => {
+                    batch.start_pts += self.delay;
                     self.buffer.push_back(batch);
                     self.state = ReceiverState::Running;
                 }

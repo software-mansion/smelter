@@ -15,16 +15,7 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             decoder_map,
         } = value;
 
-        let (required, offset) = new_queue_options(required, offset_ms)?;
-
-        let buffer = if !required && offset.is_none() {
-            core::InputBufferOptions::Const(None)
-        } else {
-            core::InputBufferOptions::None
-        };
-
         let h264 = decoder_map
-            .as_ref()
             .and_then(|decoders| decoders.get(&InputRtmpCodec::H264))
             .map(|decoder| match decoder {
                 RtmpVideoDecoderOptions::FfmpegH264 => Ok(core::VideoDecoderOptions::FfmpegH264),
@@ -36,9 +27,7 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             app,
             stream_key,
             decoders: core::RtmpServerInputDecoders { h264 },
-            buffer,
-            required,
-            offset,
+            required: required.unwrap_or(false),
         };
 
         Ok(core::RegisterInputOptions::RtmpServer(input_options))

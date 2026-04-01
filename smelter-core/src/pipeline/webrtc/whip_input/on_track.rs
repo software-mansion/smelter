@@ -1,3 +1,6 @@
+use std::sync::Mutex;
+
+use crossbeam_channel::Sender;
 use tracing::{Instrument, debug, info_span, trace, warn};
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
@@ -26,33 +29,54 @@ pub(super) fn handle_on_track(
     ctx: WhipTrackContext,
     input_ref: Ref<InputId>,
     video_preferences: Vec<VideoDecoderOptions>,
+    video_sender: &mut Mutex<Option<Sender<Frame>>>,
+    audio_sender: &mut Mutex<Option<Sender<InputAudioSamples>>>,
 ) {
     let kind = ctx.track.kind();
     let span = info_span!("WHIP input track", ?kind, input_id=%input_ref);
-
-    tokio::spawn(
-        async move {
-            debug!("on_track called");
-            let result = match kind {
-                RTPCodecType::Audio => process_audio_track(ctx, input_ref).await,
-                RTPCodecType::Video => process_video_track(ctx, input_ref, video_preferences).await,
-                RTPCodecType::Unspecified => {
-                    warn!("Unknown track kind");
-                    Ok(())
+    {
+        let _span = span.enter();
+        debug!("on_track called");
+    }
+    match kind {
+        RTPCodecType::Audio => {
+            let Some(audio_sender) = audio_sender.lock().unwrap().take() else {
+                warn!("Audio track already started");
+                return;
+            };
+            let task = async move {
+                if let Err(err) = process_audio_track(ctx, input_ref, audio_sender).await {
+                    // TODO: address after WhipWhepServerError rework
+                    warn!(?err, "On track handler failed")
                 }
             };
-            if let Err(err) = result {
-                // TODO: address after WhipWhepServerError rework
-                warn!(?err, "On track handler failed")
-            }
+            tokio::spawn(task.instrument(span));
         }
-        .instrument(span),
-    );
+        RTPCodecType::Video => {
+            let Some(video_sender) = video_sender.lock().unwrap().take() else {
+                warn!("Audio track already started");
+                return;
+            };
+            let task = async move {
+                if let Err(err) =
+                    process_video_track(ctx, input_ref, video_preferences, video_sender).await
+                {
+                    // TODO: address after WhipWhepServerError rework
+                    warn!(?err, "On track handler failed")
+                }
+            };
+            tokio::spawn(task.instrument(span));
+        }
+        RTPCodecType::Unspecified => {
+            warn!("Unknown track kind");
+        }
+    };
 }
 
 async fn process_audio_track(
     ctx: WhipTrackContext,
     input_ref: Ref<InputId>,
+    samples_sender: Sender<InputAudioSamples>,
 ) -> Result<(), WhipWhepServerError> {
     if !audio_codec_negotiated(&ctx.rtc_receiver).await {
         warn!("Skipping audio track, no valid codec negotiated");
@@ -61,13 +85,9 @@ async fn process_audio_track(
         ));
     };
 
-    let queue_input = ctx
-        .inputs
-        .get_with(&input_ref, |input| Ok(input.queue_input.clone()))?;
-
     let handle = AudioTrackThread::spawn(
         format!("WHIP input audio, input_id: {input_ref}"),
-        (ctx.pipeline_ctx.clone(), queue_input),
+        (ctx.pipeline_ctx.clone(), samples_sender),
     )?;
 
     let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
@@ -105,6 +125,7 @@ async fn process_video_track(
     ctx: WhipTrackContext,
     input_ref: Ref<InputId>,
     video_preferences: Vec<VideoDecoderOptions>,
+    video_sender: Sender<Frame>,
 ) -> Result<(), WhipWhepServerError> {
     let (Some(decoder_mapping), Some(payload_type_mapping)) = (
         VideoDecoderMapping::from_webrtc_receiver(&ctx.rtc_receiver, &video_preferences).await,
@@ -115,10 +136,6 @@ async fn process_video_track(
             "No video codecs negotiated".to_string(),
         ));
     };
-
-    let queue_input = ctx
-        .inputs
-        .get_with(&input_ref, |input| Ok(input.queue_input.clone()))?;
 
     let on_stats_event = {
         let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
@@ -141,7 +158,7 @@ async fn process_video_track(
             ctx.pipeline_ctx.clone(),
             decoder_mapping,
             payload_type_mapping,
-            queue_input,
+            video_sender,
             keyframe_request_sender,
         ),
     )?;

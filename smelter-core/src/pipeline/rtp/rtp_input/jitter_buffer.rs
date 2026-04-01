@@ -23,6 +23,17 @@ struct JitterBufferPacket {
 }
 
 #[derive(Debug, Clone)]
+pub enum RtpJitterBufferMode {
+    /// Fixed size buffer
+    Fixed(Duration),
+    /// Jitter buffer synchronized to real-time queue, packets are in jitter buffer
+    /// as long as `queue.sync_point.elapsed()` is smaller than PTS of a packet.
+    QueueBased,
+    /// Disable jitter buffer
+    Disabled,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct RtpJitterBufferInitOptions {
     mode: RtpJitterBufferMode,
     buffer: InputBuffer,
@@ -30,10 +41,10 @@ pub(crate) struct RtpJitterBufferInitOptions {
 }
 
 impl RtpJitterBufferInitOptions {
-    pub fn new(ctx: &Arc<PipelineCtx>, opts: RtpJitterBufferOptions) -> Self {
+    pub fn new(ctx: &Arc<PipelineCtx>, mode: RtpJitterBufferMode, buffer: InputBuffer) -> Self {
         Self {
-            mode: opts.mode,
-            buffer: InputBuffer::new(ctx, opts.buffer),
+            mode,
+            buffer,
             ntp_sync_point: RtpNtpSyncPoint::new(),
         }
     }
@@ -63,8 +74,9 @@ impl RtpJitterBuffer {
         clock_rate: u32,
         on_stats_event: Box<dyn FnMut(RtpJitterBufferStatsEvent) + 'static + Send>,
     ) -> Self {
+        let queue_sync_point = ctx.queue_ctx.sync_point;
         let timestamp_sync =
-            RtpTimestampSync::new(ctx.queue_sync_point, opts.ntp_sync_point, clock_rate);
+            RtpTimestampSync::new(queue_sync_point, opts.ntp_sync_point, clock_rate);
 
         Self {
             mode: opts.mode,
@@ -73,7 +85,7 @@ impl RtpJitterBuffer {
             seq_num_rollover: SequenceNumberRollover::default(),
             packets: BTreeMap::new(),
             next_seq_num: None,
-            queue_sync_point: ctx.queue_sync_point,
+            queue_sync_point,
             on_stats_event,
         }
     }

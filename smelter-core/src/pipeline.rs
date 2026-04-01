@@ -1,8 +1,4 @@
-use std::{
-    path::Path,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use ::rtmp::TlsConfig;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};

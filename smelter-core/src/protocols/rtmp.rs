@@ -1,12 +1,9 @@
-use std::{io, sync::Arc, time::Duration};
+use std::{io, sync::Arc};
 
 use smelter_render::InputId;
 use url::Url;
 
-use crate::{
-    InputBufferOptions,
-    codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions},
-};
+use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 
 #[derive(Debug, Clone)]
 pub struct RtmpOutputOptions {
@@ -66,9 +63,7 @@ pub struct RtmpServerInputOptions {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
     pub decoders: RtmpServerInputDecoders,
-    pub buffer: InputBufferOptions,
     pub required: bool,
-    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]

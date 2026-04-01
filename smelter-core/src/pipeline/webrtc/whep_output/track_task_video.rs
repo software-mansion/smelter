@@ -5,12 +5,15 @@ use smelter_render::Frame;
 use tokio::sync::broadcast;
 use tracing::warn;
 
-use crate::pipeline::webrtc::whep_output::WhepOutputStatsSender;
-use crate::prelude::*;
 use crate::{
-    pipeline::encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
+    pipeline::{
+        encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
+        webrtc::whep_output::WhepOutputStatsSender,
+    },
     utils::{InitializableThread, ThreadMetadata},
 };
+
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhepVideoTrackThreadHandle {

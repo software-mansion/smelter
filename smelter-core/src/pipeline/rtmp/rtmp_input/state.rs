@@ -28,7 +28,6 @@ pub(crate) struct RtmpInputStateOptions {
     pub stream_key: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: RtmpServerInputDecoders,
-    pub buffer: InputBuffer,
 }
 
 impl RtmpInputState {

@@ -14,6 +14,8 @@ const POW_2_32: f64 = (1i64 << 32) as f64;
 
 #[derive(Debug)]
 /// State that should be shared between different RTP tracks to use for synchronization.
+/// Whenever you create the sync point you should queue new track with
+/// `QueueTrackOffset::Pts(Duration::ZERO)`
 pub(crate) struct RtpNtpSyncPoint {
     /// First 32 bits represent seconds, last 32 bits fraction of the second.
     /// Represents NTP time of sync point

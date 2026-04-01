@@ -11,7 +11,6 @@ use crate::{
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
     },
-    queue::WeakQueueInput,
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -22,19 +21,19 @@ pub(crate) struct RtpVideoTrackThreadHandle {
 }
 
 pub(super) struct RtpVideoThread<Decoder: VideoDecoder + 'static> {
-    stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
-    queue_input: WeakQueueInput,
+    stream: Box<dyn Iterator<Item = Frame>>,
+    frame_sender: Sender<Frame>,
     _decoder: PhantomData<Decoder>,
 }
 
 impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
-    type InitOptions = (Arc<PipelineCtx>, DepayloaderOptions, WeakQueueInput);
+    type InitOptions = (Arc<PipelineCtx>, DepayloaderOptions, Sender<Frame>);
 
     type SpawnOutput = RtpVideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, depayloader_options, queue_input) = options;
+        let (ctx, depayloader_options, frame_sender) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = crossbeam_channel::bounded(5);
         let depayloader_stream =
@@ -44,7 +43,7 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
 
         let state = Self {
             stream: Box::new(decoder_stream.flatten()),
-            queue_input,
+            frame_sender,
             _decoder: PhantomData,
         };
         let output = RtpVideoTrackThreadHandle { rtp_packet_sender };
@@ -53,7 +52,7 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
 
     fn run(self) {
         for event in self.stream {
-            if self.queue_input.send_video(event).is_err() {
+            if self.frame_sender.send(event).is_err() {
                 warn!("Failed to send decoded video frame from decoder. Channel closed.");
                 return;
             }
