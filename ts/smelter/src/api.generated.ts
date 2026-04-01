@@ -1293,70 +1293,160 @@ export type WebEmbeddingMethod =
   | "chromium_embedding"
   | "native_embedding_over_content"
   | "native_embedding_under_content";
+/**
+ * Stats report for inputs.
+ */
 export type InputStatsReport =
   | {
       type: "rtp";
+      /**
+       * Stats for the video track.
+       */
       video_rtp: RtpJitterBufferStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio_rtp: RtpJitterBufferStatsReport;
     }
   | {
       type: "whip";
+      /**
+       * Stats for the video track.
+       */
       video_rtp: RtpJitterBufferStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio_rtp: RtpJitterBufferStatsReport;
     }
   | {
       type: "whep";
+      /**
+       * Stats for the video track.
+       */
       video_rtp: RtpJitterBufferStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio_rtp: RtpJitterBufferStatsReport;
     }
   | {
       type: "hls";
+      /**
+       * Stats for the video track.
+       */
       video: HlsInputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio: HlsInputTrackStatsReport;
+      /**
+       * Total count of corrupted packets received.
+       */
       corrupted_packets_received: number;
+      /**
+       * Count of corrupted packets received in the last 10 seconds.
+       */
       corrupted_packets_received_last_10_seconds: number;
     }
   | {
       type: "rtmp";
+      /**
+       * Stats for the video track.
+       */
       video: RtmpInputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio: RtmpInputTrackStatsReport;
     }
   | {
       type: "mp4";
+      /**
+       * Stats for the video track.
+       */
       video: Mp4InputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio: Mp4InputTrackStatsReport;
     };
+/**
+ * Stats report for outputs.
+ */
 export type OutputStatsReport =
   | {
       type: "whep";
+      /**
+       * Stats for the video track.
+       */
       video: WhepOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio: WhepOutputTrackStatsReport;
+      /**
+       * Count of currently connected peers.
+       */
       connected_peers: number;
     }
   | {
       type: "whip";
+      /**
+       * Stats for the video track.
+       */
       video: WhipOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio: WhipOutputTrackStatsReport;
+      /**
+       * Indicator if the output is connected to the `WHIP` server.
+       */
       is_connected: boolean;
     }
   | {
       type: "hls";
+      /**
+       * Stats for the video track.
+       */
       video: HlsOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio: HlsOutputTrackStatsReport;
     }
   | {
       type: "mp4";
+      /**
+       * Stats for the video track.
+       */
       video: Mp4OutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio: Mp4OutputTrackStatsReport;
     }
   | {
       type: "rtmp";
+      /**
+       * Stats for the video track.
+       */
       video: RtmpOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio: RtmpOutputTrackStatsReport;
     }
   | {
       type: "rtp";
+      /**
+       * Stats for the video track.
+       */
       video: RtpOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
       audio: RtpOutputTrackStatsReport;
     };
 
@@ -1706,22 +1796,55 @@ export interface UpdateInputRequest {
   seek_ms?: number | null;
 }
 export interface StatsReport {
+  /**
+   * Stats for inputs.
+   */
   inputs: {
     [k: string]: InputStatsReport;
   };
+  /**
+   * Stats for outputs.
+   */
   outputs: {
     [k: string]: OutputStatsReport;
   };
 }
+/**
+ * Stats report for `RTP` jitter buffer used in `RTP`, `WHIP` and `WHEP` inputs.
+ */
 export interface RtpJitterBufferStatsReport {
+  /**
+   * Total count of packets lost.
+   */
   packets_lost: number;
+  /**
+   * Total count of packets received.
+   */
   packets_received: number;
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
+  /**
+   * Stats from the last 10 seconds.
+   */
   last_10_seconds: RtpJitterBufferSlidingWindowStatsReport;
 }
+/**
+ * Stats report for the given time window in the `RTP` jitter buffer.
+ */
 export interface RtpJitterBufferSlidingWindowStatsReport {
+  /**
+   * Count of packets lost during the given time window.
+   */
   packets_lost: number;
+  /**
+   * Count of packets received during the given time window.
+   */
   packets_received: number;
   /**
    * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
@@ -1730,21 +1853,48 @@ export interface RtpJitterBufferSlidingWindowStatsReport {
   effective_buffer_max_seconds: number;
   effective_buffer_min_seconds: number;
   /**
-   * Size of the InputBuffer
+   * Size of the input buffer.
    */
   input_buffer_avg_seconds: number;
   input_buffer_max_seconds: number;
   input_buffer_min_seconds: number;
 }
+/**
+ * Stats report for a track in the `HLS` input.
+ */
 export interface HlsInputTrackStatsReport {
+  /**
+   * Total count of the packets received.
+   */
   packets_received: number;
+  /**
+   * Total count of discontinuities between packet timestamps.
+   */
   discontinuities_detected: number;
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
+  /**
+   * Stats from the last 10 seconds.
+   */
   last_10_seconds: HlsInputTrackSlidingWindowStatsReport;
 }
+/**
+ * Stats report for the given time window in the `HLS` input track.
+ */
 export interface HlsInputTrackSlidingWindowStatsReport {
+  /**
+   * Count of packets received during the given time window.
+   */
   packets_received: number;
+  /**
+   * Count of discontinuities between packet timestamps during the given time window.
+   */
   discontinuities_detected: number;
   /**
    * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
@@ -1753,41 +1903,113 @@ export interface HlsInputTrackSlidingWindowStatsReport {
   effective_buffer_max_seconds: number;
   effective_buffer_min_seconds: number;
   /**
-   * Size of the InputBuffer
+   * Size of the input buffer.
    */
   input_buffer_avg_seconds: number;
   input_buffer_max_seconds: number;
   input_buffer_min_seconds: number;
 }
+/**
+ * Stats report for a track in `RTMP` input.
+ */
 export interface RtmpInputTrackStatsReport {
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
 }
+/**
+ * Stats report for a track in `MP4` input.
+ */
 export interface Mp4InputTrackStatsReport {
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
 }
+/**
+ * Stats report for a track in the `WHEP` output.
+ */
 export interface WhepOutputTrackStatsReport {
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
 }
+/**
+ * Stats report for a track in the `WHIP` output.
+ */
 export interface WhipOutputTrackStatsReport {
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
 }
+/**
+ * Stats report for a track in the `HLS` output.
+ */
 export interface HlsOutputTrackStatsReport {
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
 }
+/**
+ * Stats report for a track in the `MP4` output.
+ */
 export interface Mp4OutputTrackStatsReport {
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
 }
+/**
+ * Stats report for a track in the `RTMP` output.
+ */
 export interface RtmpOutputTrackStatsReport {
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
 }
+/**
+ * Stats report for a track in the `RTP` output.
+ */
 export interface RtpOutputTrackStatsReport {
+  /**
+   * Bitrate from the last second.
+   */
   bitrate_1_second: number;
+  /**
+   * Bitrate from the last minute.
+   */
   bitrate_1_minute: number;
 }
