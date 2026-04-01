@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### 💥 Breaking changes
+
+### ✨ New features
+
+### 🐛 Bug fixes
+
+## [v0.3.0](https://github.com/software-mansion/smelter/releases/tag/vk-video%2Fv0.3.0)
+
+### 💥 Breaking changes
 - `EncoderParameters` had its structure changed, introducing `EncoderOutputParameters` as one of the fields
 - New `EncoderOutputParameters` type (split from `EncoderParameters`) adds fields for:
   - Determining whether stream parameters are inlined in the output stream.
