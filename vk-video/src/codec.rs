@@ -49,6 +49,7 @@ pub(crate) trait EncodeCodec: Codec {
     type ReferenceInfo: Copy + 'static;
     type ReferenceListInfo;
     fn reference_list_info(
+        counters: &Self::EncodingCounters,
         active_reference_slots: &VecDeque<(usize, Self::ReferenceInfo)>,
     ) -> Self::ReferenceListInfo;
     fn new_slot_reference_info(

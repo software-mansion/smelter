@@ -11,6 +11,7 @@ use crate::codec::h264::parameters::vk_to_h264_level_idc;
 use crate::codec::h265::H265Codec;
 use crate::codec::h265::parameters::vk_to_h265_level_idc;
 use crate::parameters::H264Profile;
+use crate::parameters::H265Profile;
 use crate::wrappers::*;
 
 pub(crate) fn query_video_format_properties<'a>(
@@ -173,6 +174,19 @@ impl NativeEncodeH265Capabilities {
         let main = profile_caps(vk::native::StdVideoH265ProfileIdc_STD_VIDEO_H265_PROFILE_IDC_MAIN);
 
         Self { main }
+    }
+
+    pub(crate) fn profile(
+        &self,
+        profile: H265Profile,
+    ) -> Option<&NativeEncodeProfileCapabilities<H265Codec>> {
+        match profile {
+            H265Profile::Main => self.main.as_ref(),
+        }
+    }
+
+    pub(crate) fn max_profile(&self) -> H265Profile {
+        H265Profile::Main
     }
 }
 

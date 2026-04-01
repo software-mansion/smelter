@@ -15,7 +15,8 @@ use crate::device::caps::{
 };
 use crate::device::queues::{Queue, QueueIndex, Queues, VideoQueues};
 use crate::parameters::{
-    EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, RateControl,
+    EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, H265Profile,
+    RateControl,
 };
 use crate::parser::{h264::H264Parser, reference_manager::ReferenceContext};
 use crate::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
@@ -520,6 +521,64 @@ impl VulkanDevice {
         self.adapter_info.encode_capabilities
     }
 
+    fn encoder_output_parameters_low_latency<P>(
+        profile: P,
+        rate_control: RateControl,
+    ) -> EncoderOutputParameters<P> {
+        EncoderOutputParameters {
+            profile,
+            idr_period: None,
+            max_references: None,
+            rate_control,
+            quality_level: 0,
+            usage_flags: Some(EncoderUsageFlags::DEFAULT),
+            content_flags: Some(EncoderContentFlags::DEFAULT),
+            tuning_mode: Some(EncoderTuningMode::LOW_LATENCY),
+            inline_stream_params: None,
+            color_space: None,
+            color_range: None,
+        }
+    }
+
+    fn encoder_output_parameters_high_quality<P>(
+        profile: P,
+        rate_control: RateControl,
+        quality_level: u32,
+    ) -> EncoderOutputParameters<P> {
+        EncoderOutputParameters {
+            profile,
+            idr_period: None,
+            max_references: None,
+            rate_control,
+            quality_level,
+            usage_flags: Some(EncoderUsageFlags::DEFAULT),
+            content_flags: Some(EncoderContentFlags::DEFAULT),
+            tuning_mode: Some(EncoderTuningMode::HIGH_QUALITY),
+            inline_stream_params: None,
+            color_space: None,
+            color_range: None,
+        }
+    }
+
+    pub fn encoder_output_parameters_h265_low_latency(
+        &self,
+        rate_control: RateControl,
+    ) -> Result<EncoderOutputParameters<H265Profile>, VulkanEncoderError> {
+        let Some(caps) = self.native_encode_capabilities.as_ref() else {
+            return Err(VulkanEncoderError::VulkanEncoderUnsupported);
+        };
+
+        let caps = caps
+            .h265
+            .as_ref()
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+
+        Ok(Self::encoder_output_parameters_low_latency(
+            caps.max_profile(),
+            rate_control,
+        ))
+    }
+
     pub fn encoder_output_parameters_h264_low_latency(
         &self,
         rate_control: RateControl,
@@ -533,19 +592,37 @@ impl VulkanDevice {
             .as_ref()
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
-        Ok(EncoderOutputParameters {
-            profile: caps.max_profile(),
-            idr_period: None,
-            max_references: None,
+        Ok(Self::encoder_output_parameters_low_latency(
+            caps.max_profile(),
             rate_control,
-            quality_level: 0,
-            usage_flags: Some(EncoderUsageFlags::DEFAULT),
-            content_flags: Some(EncoderContentFlags::DEFAULT),
-            tuning_mode: Some(EncoderTuningMode::LOW_LATENCY),
-            inline_stream_params: None,
-            color_space: None,
-            color_range: None,
-        })
+        ))
+    }
+
+    pub fn encoder_output_parameters_h265_high_quality(
+        &self,
+        rate_control: RateControl,
+    ) -> Result<EncoderOutputParameters<H265Profile>, VulkanEncoderError> {
+        let Some(caps) = self.native_encode_capabilities.as_ref() else {
+            return Err(VulkanEncoderError::VulkanEncoderUnsupported);
+        };
+
+        let caps = caps
+            .h265
+            .as_ref()
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+
+        let quality_level = caps
+            .profile(caps.max_profile())
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
+            .encode_capabilities
+            .max_quality_levels
+            - 1;
+
+        Ok(Self::encoder_output_parameters_high_quality(
+            caps.max_profile(),
+            rate_control,
+            quality_level,
+        ))
     }
 
     pub fn encoder_output_parameters_h264_high_quality(
@@ -561,24 +638,18 @@ impl VulkanDevice {
             .as_ref()
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
-        Ok(EncoderOutputParameters {
-            profile: caps.max_profile(),
-            idr_period: None,
-            max_references: None,
+        let quality_level = caps
+            .profile(caps.max_profile())
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
+            .encode_capabilities
+            .max_quality_levels
+            - 1;
+
+        Ok(Self::encoder_output_parameters_high_quality(
+            caps.max_profile(),
             rate_control,
-            quality_level: caps
-                .profile(caps.max_profile())
-                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
-                .encode_capabilities
-                .max_quality_levels
-                - 1,
-            usage_flags: Some(EncoderUsageFlags::DEFAULT),
-            content_flags: Some(EncoderContentFlags::DEFAULT),
-            tuning_mode: Some(EncoderTuningMode::HIGH_QUALITY),
-            inline_stream_params: None,
-            color_space: None,
-            color_range: None,
-        })
+            quality_level,
+        ))
     }
 
     pub(crate) fn validate_and_fill_encoder_parameters<C: EncodeCodec>(

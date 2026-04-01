@@ -389,7 +389,7 @@ pub struct VulkanEncoder<'a, C: EncodeCodec> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FullEncoderParameters<C: EncodeCodec> {
+pub(crate) struct FullEncoderParameters<C: EncodeCodec> {
     pub(crate) idr_period: NonZeroU32,
     pub(crate) width: NonZeroU32,
     pub(crate) height: NonZeroU32,
@@ -404,6 +404,15 @@ pub struct FullEncoderParameters<C: EncodeCodec> {
     pub(crate) inline_stream_params: bool,
     pub(crate) color_space: ColorSpace,
     pub(crate) color_range: ColorRange,
+}
+
+impl<C: EncodeCodec> From<&FullEncoderParameters<C>> for vk::VideoEncodeUsageInfoKHR<'_> {
+    fn from(params: &FullEncoderParameters<C>) -> Self {
+        vk::VideoEncodeUsageInfoKHR::default()
+            .video_usage_hints(params.usage_flags)
+            .tuning_mode(params.tuning_mode)
+            .video_content_hints(params.content_flags)
+    }
 }
 
 impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
@@ -1084,7 +1093,8 @@ impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
 
         let bitstream_unit_infos = [bitstream_unit_info];
 
-        let reference_list_info = C::reference_list_info(&self.active_reference_slots);
+        let reference_list_info =
+            C::reference_list_info(&self.counters, &self.active_reference_slots);
 
         let picture_info_data = C::picture_info_data(&self.counters, is_idr, &reference_list_info);
 
