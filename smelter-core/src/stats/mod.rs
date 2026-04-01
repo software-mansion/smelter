@@ -27,10 +27,10 @@ pub(crate) use state::StatsEvent;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 pub struct StatsReport {
-    /// Statistics for inputs.
+    /// Stats for inputs.
     pub inputs: BTreeMap<String, InputStatsReport>,
 
-    /// Statistics for outputs.
+    /// Stats for outputs.
     pub outputs: BTreeMap<String, OutputStatsReport>,
 }
 

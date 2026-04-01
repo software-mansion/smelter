@@ -133,7 +133,7 @@ pub struct HlsInputStatsReport {
     /// Total count of corrupted packets received.
     pub corrupted_packets_received: u64,
 
-    /// Count of corrupted packets received for the last 10 seconds.
+    /// Count of corrupted packets received in the last 10 seconds.
     pub corrupted_packets_received_last_10_seconds: u64,
 }
 
@@ -142,7 +142,7 @@ pub struct HlsInputStatsReport {
 pub struct HlsInputTrackStatsReport {
     /// Total count of the packets received.
     pub packets_received: u64,
-    /// Total count of detected discontinuities between packet timestamps.
+    /// Total count of discontinuities between packet timestamps.
     pub discontinuities_detected: u32,
 
     /// Bitrate from the last second.
@@ -160,7 +160,7 @@ pub struct HlsInputTrackSlidingWindowStatsReport {
     /// Count of packets received during the given time window.
     pub packets_received: u64,
 
-    /// Count of detected discontinuities between packet timestamps
+    /// Count of discontinuities between packet timestamps
     /// during the given time window.
     pub discontinuities_detected: u32,
 

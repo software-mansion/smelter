@@ -46,7 +46,7 @@ pub struct WhipOutputStatsReport {
     /// Stats for the audio track.
     pub audio: WhipOutputTrackStatsReport,
 
-    // Indicator if the client is connected to the server.
+    /// Indicator if the output is connected to the `WHIP` server.
     pub is_connected: bool,
 }
 
