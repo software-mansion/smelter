@@ -111,7 +111,7 @@ pub struct Mp4InputStatsReport {
     pub audio: Mp4InputTrackStatsReport,
 }
 
-/// Stats report for a track `MP4` in the input.
+/// Stats report for a track in `MP4` input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct Mp4InputTrackStatsReport {
     /// Bitrate from the last second.
