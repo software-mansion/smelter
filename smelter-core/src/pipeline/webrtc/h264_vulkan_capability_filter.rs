@@ -4,29 +4,14 @@ use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 
 use crate::pipeline::PipelineCtx;
 
-#[derive(Debug, Clone, Copy)]
-struct H264ProfileLevelSupport {
-    baseline_max_level_idc: Option<u8>,
-    main_max_level_idc: Option<u8>,
-    high_max_level_idc: Option<u8>,
-}
-
-impl H264ProfileLevelSupport {
-    fn max_level_for_profile(self, profile_idc: u8) -> Option<u8> {
-        match profile_idc {
-            0x42 => self.baseline_max_level_idc,
-            0x4d => self.main_max_level_idc,
-            0x64 => self.high_max_level_idc,
-            _ => None,
-        }
-    }
-}
-
 pub(crate) fn filter_h264_codecs_for_vulkan_encoder(
     ctx: &Arc<PipelineCtx>,
     codecs: Vec<RTCRtpCodecParameters>,
 ) -> Vec<RTCRtpCodecParameters> {
-    let Some(support) = vulkan_h264_encode_profile_level_support(ctx) else {
+    let Some(support) = ctx
+        .graphics_context
+        .vulkan_h264_encode_profile_level_support()
+    else {
         return codecs;
     };
 
@@ -37,7 +22,10 @@ pub(crate) fn filter_h264_codecs_for_vulkan_decoder(
     ctx: &Arc<PipelineCtx>,
     codecs: Vec<RTCRtpCodecParameters>,
 ) -> Vec<RTCRtpCodecParameters> {
-    let Some(support) = vulkan_h264_decode_profile_level_support(ctx) else {
+    let Some(support) = ctx
+        .graphics_context
+        .vulkan_h264_decode_profile_level_support()
+    else {
         return codecs;
     };
 
@@ -46,7 +34,7 @@ pub(crate) fn filter_h264_codecs_for_vulkan_decoder(
 
 fn filter_h264_codecs_by_profile_level_support(
     codecs: Vec<RTCRtpCodecParameters>,
-    support: H264ProfileLevelSupport,
+    support: crate::graphics_context::H264ProfileLevelSupport,
 ) -> Vec<RTCRtpCodecParameters> {
     codecs
         .into_iter()
@@ -79,47 +67,5 @@ fn h264_profile_level_idc_from_fmtp(fmtp: &str) -> Option<(u8, u8)> {
         return Some((profile_idc, level_idc));
     }
 
-    None
-}
-
-#[cfg(feature = "vk-video")]
-fn vulkan_h264_encode_profile_level_support(
-    ctx: &Arc<PipelineCtx>,
-) -> Option<H264ProfileLevelSupport> {
-    let vulkan_ctx = ctx.graphics_context.vulkan_ctx.as_ref()?;
-    let caps = vulkan_ctx.device.encode_capabilities().h264?;
-
-    Some(H264ProfileLevelSupport {
-        baseline_max_level_idc: caps.baseline_profile.map(|p| p.max_level_idc),
-        main_max_level_idc: caps.main_profile.map(|p| p.max_level_idc),
-        high_max_level_idc: caps.high_profile.map(|p| p.max_level_idc),
-    })
-}
-
-#[cfg(not(feature = "vk-video"))]
-fn vulkan_h264_encode_profile_level_support(
-    _ctx: &Arc<PipelineCtx>,
-) -> Option<H264ProfileLevelSupport> {
-    None
-}
-
-#[cfg(feature = "vk-video")]
-fn vulkan_h264_decode_profile_level_support(
-    ctx: &Arc<PipelineCtx>,
-) -> Option<H264ProfileLevelSupport> {
-    let vulkan_ctx = ctx.graphics_context.vulkan_ctx.as_ref()?;
-    let caps = vulkan_ctx.device.decode_capabilities().h264?;
-
-    Some(H264ProfileLevelSupport {
-        baseline_max_level_idc: caps.baseline_profile.map(|p| p.max_level_idc),
-        main_max_level_idc: caps.main_profile.map(|p| p.max_level_idc),
-        high_max_level_idc: caps.high_profile.map(|p| p.max_level_idc),
-    })
-}
-
-#[cfg(not(feature = "vk-video"))]
-fn vulkan_h264_decode_profile_level_support(
-    _ctx: &Arc<PipelineCtx>,
-) -> Option<H264ProfileLevelSupport> {
     None
 }

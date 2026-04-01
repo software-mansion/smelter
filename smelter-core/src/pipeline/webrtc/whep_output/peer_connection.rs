@@ -31,9 +31,9 @@ use webrtc::{
 
 use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
-    h264_offer_filter::filter_h264_codecs_by_offer,
+    h264_offer_filter::h264_codecs_from_offer,
     h264_vulkan_capability_filter::filter_h264_codecs_for_vulkan_encoder,
-    supported_codec_parameters::{h264_codec_params, vp8_codec_params, vp9_codec_params},
+    supported_codec_parameters::{vp8_codec_params, vp9_codec_params},
 };
 
 use crate::prelude::*;
@@ -291,13 +291,12 @@ fn register_codecs(
     if let Some(encoder) = video_encoder {
         match encoder {
             VideoEncoderOptions::FfmpegH264(_) => {
-                let codecs = filter_h264_codecs_by_offer(offer, h264_codec_params());
-                for codec in codecs {
+                for codec in h264_codecs_from_offer(offer) {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
             VideoEncoderOptions::VulkanH264(_) => {
-                let codecs = filter_h264_codecs_by_offer(offer, h264_codec_params());
+                let codecs = h264_codecs_from_offer(offer);
                 for codec in filter_h264_codecs_for_vulkan_encoder(ctx, codecs) {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }

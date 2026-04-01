@@ -4,8 +4,10 @@ use tracing::warn;
 use webrtc::{
     api::media_engine::MIME_TYPE_H264,
     peer_connection::sdp::session_description::RTCSessionDescription,
-    rtp_transceiver::rtp_codec::RTCRtpCodecParameters,
+    rtp_transceiver::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters},
 };
+
+use super::supported_codec_parameters::get_video_rtcp_feedback;
 
 #[derive(Debug, Clone)]
 struct OfferH264Params {
@@ -20,40 +22,24 @@ struct ParsedH264Fmtp {
     packetization_mode: String,
 }
 
-/// Mirrors H264 variants from the SDP offer.
+/// Builds H264 codec parameters by copying every H264 variant from the SDP offer.
 ///
 /// For each offered H264 payload type, we emit a local codec entry with the same
-/// payload type and negotiated fmtp constraints, so WHIP answers can include every
-/// offered H264 profile/level and WHEP can expose as many H264 subtypes as possible.
-pub(crate) fn filter_h264_codecs_by_offer(
-    offer: &RTCSessionDescription,
-    codecs: Vec<RTCRtpCodecParameters>,
-) -> Vec<RTCRtpCodecParameters> {
+/// payload type and fmtp, so negotiation produces an exact match. This allows
+/// accepting any H264 profile/level the peer supports.
+///
+/// Returns an empty list if no H264 codecs are found in the offer.
+pub(crate) fn h264_codecs_from_offer(offer: &RTCSessionDescription) -> Vec<RTCRtpCodecParameters> {
     let offer_h264_params = match extract_h264_params_from_offer(offer) {
         Some(params) if !params.is_empty() => params,
-        Some(_) => {
-            // Offer has no explicit H264 fmtp lines.
-            return codecs;
-        }
+        Some(_) => return Vec::new(),
         None => {
-            warn!("Failed to parse SDP offer for H264 codec filtering, using all codecs");
-            return codecs;
+            warn!("Failed to parse SDP offer for H264 codecs");
+            return Vec::new();
         }
     };
 
-    let (h264_templates, mut passthrough): (Vec<_>, Vec<_>) = codecs
-        .into_iter()
-        .partition(|codec| codec.capability.mime_type == MIME_TYPE_H264);
-
-    if h264_templates.is_empty() {
-        return passthrough;
-    }
-
-    // Any H264 template works: payload type and fmtp are overwritten from the offer.
-    let Some(template) = h264_templates.into_iter().next() else {
-        return passthrough;
-    };
-
+    let mut codecs = Vec::new();
     let mut seen = HashSet::new();
     for offer in offer_h264_params {
         if !seen.insert((
@@ -64,17 +50,23 @@ pub(crate) fn filter_h264_codecs_by_offer(
             continue;
         }
 
-        let mut codec = template.clone();
-
-        codec.payload_type = offer.payload_type;
-        codec.capability.sdp_fmtp_line = build_h264_fmtp(
-            offer.profile_level_id.as_deref(),
-            offer.packetization_mode.as_str(),
-        );
-        passthrough.push(codec);
+        codecs.push(RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_H264.to_owned(),
+                clock_rate: 90000,
+                channels: 0,
+                sdp_fmtp_line: build_h264_fmtp(
+                    offer.profile_level_id.as_deref(),
+                    offer.packetization_mode.as_str(),
+                ),
+                rtcp_feedback: get_video_rtcp_feedback(),
+            },
+            payload_type: offer.payload_type,
+            ..Default::default()
+        });
     }
 
-    passthrough
+    codecs
 }
 
 /// Extracts H264 payload parameters from offer fmtp/rtpmap lines.

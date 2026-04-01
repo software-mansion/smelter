@@ -10,9 +10,9 @@ use webrtc::{
 use crate::{
     codecs::VideoDecoderOptions,
     pipeline::webrtc::{
-        h264_offer_filter::filter_h264_codecs_by_offer,
+        h264_offer_filter::h264_codecs_from_offer,
         h264_vulkan_capability_filter::filter_h264_codecs_for_vulkan_decoder,
-        supported_codec_parameters::{h264_codec_params, vp8_codec_params, vp9_codec_params},
+        supported_codec_parameters::{vp8_codec_params, vp9_codec_params},
     },
     prelude::WebrtcVideoDecoderOptions,
 };
@@ -64,48 +64,37 @@ pub(super) fn resolve_video_preferences(
     Ok(video_preferences)
 }
 
-/// Builds codec parameters from video preferences, filtered to only include H264 variants
-/// whose exact `profile-level-id` + `packetization-mode` appear in the SDP offer.
+/// Builds codec parameters from video preferences, with H264 variants copied directly
+/// from the SDP offer. This ensures exact matches during negotiation regardless of
+/// which H264 profile/level the peer uses, since ffmpeg can decode any profile.
 ///
-/// This works around a webrtc-rs bug where the SDP answer can contain H264 fmtp parameters
-/// from our codec preferences instead of from the negotiated (offer) codecs.
+/// For Vulkan H264, the offer-derived codecs are further filtered by hardware capabilities.
 pub(super) fn video_params_compliant_with_offer(
     ctx: &Arc<PipelineCtx>,
     video_preferences: &[VideoDecoderOptions],
     offer: &RTCSessionDescription,
 ) -> Vec<RTCRtpCodecParameters> {
-    let codecs = params_from_video_preferences(video_preferences);
-    let filtered_by_offer_h264_codecs = filter_h264_codecs_by_offer(offer, codecs);
-    if uses_vulkan_h264(video_preferences) {
-        filter_h264_codecs_for_vulkan_decoder(ctx, filtered_by_offer_h264_codecs)
-    } else {
-        filtered_by_offer_h264_codecs
-    }
+    let codecs: Vec<RTCRtpCodecParameters> = video_preferences
+        .iter()
+        .flat_map(|pref| match pref {
+            VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
+                let h264_codecs = h264_codecs_from_offer(offer);
+                if uses_vulkan_h264(video_preferences) {
+                    filter_h264_codecs_for_vulkan_decoder(ctx, h264_codecs)
+                } else {
+                    h264_codecs
+                }
+            }
+            VideoDecoderOptions::FfmpegVp8 => vp8_codec_params(),
+            VideoDecoderOptions::FfmpegVp9 => vp9_codec_params(),
+        })
+        .collect();
+
+    codecs
 }
 
 fn uses_vulkan_h264(video_preferences: &[VideoDecoderOptions]) -> bool {
     video_preferences
         .iter()
         .any(|pref| matches!(pref, VideoDecoderOptions::VulkanH264))
-}
-
-fn params_from_video_preferences(
-    video_preferences: &[VideoDecoderOptions],
-) -> Vec<RTCRtpCodecParameters> {
-    video_preferences
-        .iter()
-        .flat_map(|pref| match pref {
-            VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
-                h264_codec_params()
-            }
-            VideoDecoderOptions::FfmpegVp8 => vp8_codec_params(),
-            VideoDecoderOptions::FfmpegVp9 => vp9_codec_params(),
-        })
-        .unique_by(|c| {
-            (
-                c.capability.mime_type.clone(),
-                c.capability.sdp_fmtp_line.clone(),
-            )
-        })
-        .collect()
 }

@@ -50,33 +50,30 @@ pub fn h264_codec_params() -> Vec<RTCRtpCodecParameters> {
         "640033", // high, 5.1
     ];
 
-    let mut params = Vec::with_capacity(profile_level_ids.len() * 2);
-    let mut payload_type = 100u8;
+    let opus_payload_types: [u8; 2] = [110, 111];
+    let payload_types = (100u8..).filter(|pt| !opus_payload_types.contains(pt));
 
-    for plid in profile_level_ids {
-        for pmode in [1, 0] {
-            params.push(RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
-                    mime_type: MIME_TYPE_H264.to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: format!(
-                        "level-asymmetry-allowed=1;packetization-mode={pmode};profile-level-id={plid}"
-                    ),
-                    rtcp_feedback: get_video_rtcp_feedback(),
-                },
-                payload_type,
-                ..Default::default()
-            });
-
-            payload_type += 1;
-        }
-    }
-
-    params
+    profile_level_ids
+        .iter()
+        .flat_map(|plid| [1, 0].map(|pmode| (plid, pmode)))
+        .zip(payload_types)
+        .map(|((plid, pmode), payload_type)| RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_H264.to_owned(),
+                clock_rate: 90000,
+                channels: 0,
+                sdp_fmtp_line: format!(
+                    "level-asymmetry-allowed=1;packetization-mode={pmode};profile-level-id={plid}"
+                ),
+                rtcp_feedback: get_video_rtcp_feedback(),
+            },
+            payload_type,
+            ..Default::default()
+        })
+        .collect()
 }
 
-fn get_video_rtcp_feedback() -> Vec<RTCPFeedback> {
+pub(crate) fn get_video_rtcp_feedback() -> Vec<RTCPFeedback> {
     vec![
         RTCPFeedback {
             typ: "goog-remb".to_owned(),

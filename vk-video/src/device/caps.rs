@@ -98,8 +98,6 @@ pub struct EncodeProfileCapabilities {
     pub max_references: u32,
     /// The count of [Vulkan Video encode quality levels](https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#encode-quality-level)
     pub quality_levels: u32,
-    /// The maximum H264 level.
-    pub max_level_idc: u8,
 }
 
 #[derive(Debug, Clone)]
