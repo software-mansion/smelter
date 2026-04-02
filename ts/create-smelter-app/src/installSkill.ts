@@ -1,17 +1,13 @@
 import chalk from 'chalk';
-import { selectPrompt } from './utils/prompts';
+import { confirmPrompt } from './utils/prompts';
 import { spawn } from './utils/spawn';
 
 const SMELTER_SKILL_REPO = 'smelter-labs/skills';
 const SMELTER_SKILL_NAME = 'smelter-ts-docs';
 
 export async function promptInstallSkill(directory: string): Promise<void> {
-  const installSkill = await selectPrompt(
-    'Would you like to install the Smelter TypeScript SDK skill for your AI coding assistant with the `npx skills` tool?',
-    [
-      { title: 'No', value: false },
-      { title: 'Yes', value: true },
-    ]
+  const installSkill = await confirmPrompt(
+    'Would you like to install the Smelter TypeScript SDK skill for the AI coding assistant with the `npx skills` tool?'
   );
 
   if (!installSkill) {
