@@ -19,6 +19,7 @@ use crate::{
         webrtc::{
             handle_keyframe_requests::handle_keyframe_requests,
             whip_output::{
+                WhipOutputStatsSender,
                 peer_connection::WeakPeerConnection,
                 track_task_audio::{WhipAudioTrackThread, WhipAudioTrackThreadOptions},
                 track_task_video::{WhipVideoTrackThread, WhipVideoTrackThreadOptions},
@@ -76,6 +77,8 @@ pub async fn setup_video_track(
     debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
 
+    let stats_sender = WhipOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
+
     let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
         let supported = supported_codecs.iter().find_map(|codec_params| {
             match encoder_options.matches(&codec_params.capability) {
@@ -125,6 +128,7 @@ pub async fn setup_video_track(
                         ssrc,
                     ),
                     chunks_sender: sender,
+                    stats_sender,
                 },
             )
         }
@@ -140,6 +144,7 @@ pub async fn setup_video_track(
                         ssrc,
                     ),
                     chunks_sender: sender,
+                    stats_sender,
                 },
             )
         }
@@ -154,6 +159,7 @@ pub async fn setup_video_track(
                     ssrc,
                 ),
                 chunks_sender: sender,
+                stats_sender,
             },
         ),
         VideoEncoderOptions::FfmpegVp9(options) => WhipVideoTrackThread::<FfmpegVp9Encoder>::spawn(
@@ -167,6 +173,7 @@ pub async fn setup_video_track(
                     ssrc,
                 ),
                 chunks_sender: sender,
+                stats_sender,
             },
         ),
     }?;
