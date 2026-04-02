@@ -190,24 +190,52 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     /// `start_index` is the last sync sample before seek (for decoder warmup).
     /// `present_from_index` is the first sample at or after seek.
     /// Returns `None` if seek is past the end.
-    fn find_seek_start_sample(&mut self, seek: Duration) -> Option<(u32, u32)> {
+    fn find_seek_start_sample(&self, seek: Duration) -> Option<(u32, u32)> {
         let seek_timescale = ((seek + self.offset).as_secs_f64() * self.timescale as f64) as u64;
-        let mut best_sync_index = 1u32;
-        // TODO: improve performance
-        for i in 1..=self.sample_count {
-            match self.reader.read_sample(self.track_id, i) {
-                Ok(Some(sample)) => {
-                    if sample.is_sync {
-                        best_sync_index = i
-                    }
-                    if sample.start_time >= seek_timescale {
-                        return Some((best_sync_index, i));
-                    }
-                }
-                _ => return None,
+        let track = &self.reader.tracks()[&self.track_id];
+
+        // The STTS box maps samples to batches of the same sample length
+        let stts = &track.trak.mdia.minf.stbl.stts;
+
+        let mut first_batch_sample_id = 1u32;
+        let mut elapsed = 0u64;
+        let mut present_from_index = None;
+
+        // Finds the first sample after the provided seek point.
+        for entry in &stts.entries {
+            let batch_end_time = elapsed + entry.sample_count as u64 * entry.sample_delta as u64;
+
+            if seek_timescale < batch_end_time {
+                let offset_in_batch = {
+                    let time_into_batch = seek_timescale - elapsed;
+                    time_into_batch.div_ceil(entry.sample_delta as u64) as u32
+                };
+                present_from_index = Some(first_batch_sample_id + offset_in_batch);
+                break;
             }
+
+            elapsed = batch_end_time;
+            first_batch_sample_id += entry.sample_count;
         }
-        None
+
+        let present_from_index = present_from_index?;
+
+        // The STSS box contains indices of sync samples (e.g. key frames).
+        // `None` means all samples are sync samples.
+        let stss = &track.trak.mdia.minf.stbl.stss;
+
+        let sync_index = match &stss {
+            Some(stss) => {
+                let pos = stss.entries.partition_point(|&s| s <= present_from_index);
+
+                // `pos == 0` means no sync sample was found before the seek time.
+                // Fall back to the first sample.
+                if pos == 0 { 1 } else { stss.entries[pos - 1] }
+            }
+            None => present_from_index,
+        };
+
+        Some((sync_index, present_from_index))
     }
 }
 
