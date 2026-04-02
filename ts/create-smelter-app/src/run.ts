@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { resolveOptions } from './options';
 import { createNodeProject } from './createNodeProject';
+import { promptInstallSkill } from './installSkill';
 
 export default async function () {
   const options = await resolveOptions();
@@ -12,6 +13,10 @@ export default async function () {
   }
   console.log();
   console.log(chalk.green('Project created successfully.'));
+  console.log();
+
+  await promptInstallSkill(options.directory);
+
   console.log();
   console.log(`To get started run:`);
   console.log(
