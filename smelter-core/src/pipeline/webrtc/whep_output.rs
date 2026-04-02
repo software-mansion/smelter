@@ -60,22 +60,16 @@ impl WhepOutput {
             kind: OutputProtocolKind::Whep,
         });
 
-        let stats_sender = WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
-
         let video_options = options
             .video
             .as_ref()
-            .map(|video| {
-                Self::init_video_thread(&ctx, &output_ref, video.clone(), stats_sender.clone())
-            })
+            .map(|video| Self::init_video_thread(&ctx, &output_ref, video.clone()))
             .transpose()?;
 
         let audio_options = options
             .audio
             .as_ref()
-            .map(|audio| {
-                Self::init_audio_thread(&ctx, &output_ref, audio.clone(), stats_sender.clone())
-            })
+            .map(|audio| Self::init_audio_thread(&ctx, &output_ref, audio.clone()))
             .transpose()?;
 
         state.outputs.add_output(
@@ -99,9 +93,9 @@ impl WhepOutput {
         ctx: &Arc<PipelineCtx>,
         output_ref: &Ref<OutputId>,
         options: VideoEncoderOptions,
-        stats_sender: WhepOutputStatsSender,
     ) -> Result<WhepVideoConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
+        let stats_sender = WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
 
         let thread_handle = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
@@ -166,9 +160,9 @@ impl WhepOutput {
         ctx: &Arc<PipelineCtx>,
         output_ref: &Ref<OutputId>,
         options: AudioEncoderOptions,
-        stats_sender: WhepOutputStatsSender,
     ) -> Result<WhepAudioConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
+        let stats_sender = WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
 
         let thread_handle = match options.clone() {
             AudioEncoderOptions::Opus(options) => WhepAudioTrackThread::<OpusEncoder>::spawn(
