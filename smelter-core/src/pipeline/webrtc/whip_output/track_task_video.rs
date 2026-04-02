@@ -5,6 +5,7 @@ use smelter_render::{Frame, error::ErrorStack};
 use tokio::sync::mpsc;
 use tracing::warn;
 
+use crate::pipeline::webrtc::whip_output::WhipOutputStatsSender;
 use crate::prelude::*;
 use crate::{
     pipeline::{
@@ -29,6 +30,7 @@ pub(super) struct WhipVideoTrackThreadOptions<Encoder: VideoEncoder> {
     pub encoder_options: Encoder::Options,
     pub payloader_options: PayloaderOptions,
     pub chunks_sender: mpsc::Sender<RtpPacket>,
+    pub stats_sender: WhipOutputStatsSender,
 }
 
 pub(super) struct WhipVideoTrackThread<Encoder: VideoEncoder> {
@@ -52,6 +54,7 @@ where
             encoder_options,
             payloader_options,
             chunks_sender,
+            stats_sender,
         } = options;
 
         let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
@@ -63,17 +66,22 @@ where
 
         let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
-        let stream = payloaded_stream.flatten().filter_map(|event| match event {
-            Ok(PipelineEvent::Data(packet)) => Some(packet),
-            Ok(PipelineEvent::EOS) => None,
-            Err(err) => {
-                warn!(
-                    "Depayloading error: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-                None
-            }
-        });
+        let stream = payloaded_stream
+            .flatten()
+            .filter_map(move |event| match event {
+                Ok(PipelineEvent::Data(packet)) => {
+                    stats_sender.bytes_sent_event(packet.len(), StatsTrackKind::Video);
+                    Some(packet)
+                }
+                Ok(PipelineEvent::EOS) => None,
+                Err(err) => {
+                    warn!(
+                        "Depayloading error: {}",
+                        ErrorStack::new(&err).into_string()
+                    );
+                    None
+                }
+            });
 
         let state = Self {
             stream: Box::new(stream),
