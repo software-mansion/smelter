@@ -197,6 +197,8 @@ pub async fn setup_audio_track(
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
+    let stats_sender = WhipOutputStatsSender::new(ctx.stats_sender.clone(), output_id.clone());
+
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
     let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
         let supported = supported_codecs.iter().find_map(|codec_params| {
@@ -246,6 +248,7 @@ pub async fn setup_audio_track(
                     ssrc,
                 ),
                 chunks_sender: sender,
+                stats_sender,
             },
         ),
         AudioEncoderOptions::FdkAac(_options) => {
