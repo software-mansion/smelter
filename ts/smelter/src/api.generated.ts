@@ -1822,15 +1822,15 @@ export interface RtpJitterBufferStatsReport {
    */
   packets_received: number;
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
   /**
-   * Stats from the last 10 seconds.
+   * Jitter buffer stats in the 10 second window.
    */
   last_10_seconds: RtpJitterBufferSlidingWindowStatsReport;
 }
@@ -1850,13 +1850,25 @@ export interface RtpJitterBufferSlidingWindowStatsReport {
    * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
    */
   effective_buffer_avg_seconds: number;
+  /**
+   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
+   */
   effective_buffer_max_seconds: number;
+  /**
+   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
+   */
   effective_buffer_min_seconds: number;
   /**
    * Size of the input buffer.
    */
   input_buffer_avg_seconds: number;
+  /**
+   * Size of the input buffer.
+   */
   input_buffer_max_seconds: number;
+  /**
+   * Size of the input buffer.
+   */
   input_buffer_min_seconds: number;
 }
 /**
@@ -1872,11 +1884,11 @@ export interface HlsInputTrackStatsReport {
    */
   discontinuities_detected: number;
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
   /**
@@ -1900,13 +1912,25 @@ export interface HlsInputTrackSlidingWindowStatsReport {
    * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
    */
   effective_buffer_avg_seconds: number;
+  /**
+   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
+   */
   effective_buffer_max_seconds: number;
+  /**
+   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
+   */
   effective_buffer_min_seconds: number;
   /**
    * Size of the input buffer.
    */
   input_buffer_avg_seconds: number;
+  /**
+   * Size of the input buffer.
+   */
   input_buffer_max_seconds: number;
+  /**
+   * Size of the input buffer.
+   */
   input_buffer_min_seconds: number;
 }
 /**
@@ -1914,11 +1938,11 @@ export interface HlsInputTrackSlidingWindowStatsReport {
  */
 export interface RtmpInputTrackStatsReport {
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1927,11 +1951,11 @@ export interface RtmpInputTrackStatsReport {
  */
 export interface Mp4InputTrackStatsReport {
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1940,11 +1964,11 @@ export interface Mp4InputTrackStatsReport {
  */
 export interface WhepOutputTrackStatsReport {
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1953,11 +1977,11 @@ export interface WhepOutputTrackStatsReport {
  */
 export interface WhipOutputTrackStatsReport {
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1966,11 +1990,11 @@ export interface WhipOutputTrackStatsReport {
  */
 export interface HlsOutputTrackStatsReport {
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1979,11 +2003,11 @@ export interface HlsOutputTrackStatsReport {
  */
 export interface Mp4OutputTrackStatsReport {
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1992,11 +2016,11 @@ export interface Mp4OutputTrackStatsReport {
  */
 export interface RtmpOutputTrackStatsReport {
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
 }
@@ -2005,11 +2029,11 @@ export interface RtmpOutputTrackStatsReport {
  */
 export interface RtpOutputTrackStatsReport {
   /**
-   * Bitrate from the last second.
+   * Bitrate in the one second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate from the last minute.
+   * Bitrate in the one minute window.
    */
   bitrate_1_minute: number;
 }

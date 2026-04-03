@@ -1601,11 +1601,13 @@
           },
           "effective_buffer_max_seconds": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
           },
           "effective_buffer_min_seconds": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
           },
           "input_buffer_avg_seconds": {
             "type": "number",
@@ -1614,11 +1616,13 @@
           },
           "input_buffer_max_seconds": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Size of the input buffer."
           },
           "input_buffer_min_seconds": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Size of the input buffer."
           }
         }
       },
@@ -1648,13 +1652,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           },
           "last_10_seconds": {
@@ -1735,13 +1739,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           }
         }
@@ -2535,13 +2539,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           }
         }
@@ -2623,13 +2627,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           }
         }
@@ -4250,13 +4254,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           }
         }
@@ -4325,13 +4329,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           }
         }
@@ -4510,11 +4514,13 @@
           },
           "effective_buffer_max_seconds": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
           },
           "effective_buffer_min_seconds": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
           },
           "input_buffer_avg_seconds": {
             "type": "number",
@@ -4523,11 +4529,13 @@
           },
           "input_buffer_max_seconds": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Size of the input buffer."
           },
           "input_buffer_min_seconds": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Size of the input buffer."
           }
         }
       },
@@ -4557,18 +4565,18 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           },
           "last_10_seconds": {
             "$ref": "#/components/schemas/RtpJitterBufferSlidingWindowStatsReport",
-            "description": "Stats from the last 10 seconds."
+            "description": "Jitter buffer stats in the 10 second window."
           }
         }
       },
@@ -4654,13 +4662,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           }
         }
@@ -6108,13 +6116,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           }
         }
@@ -6536,13 +6544,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last second.",
+            "description": "Bitrate in the one second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate from the last minute.",
+            "description": "Bitrate in the one minute window.",
             "minimum": 0
           }
         }
