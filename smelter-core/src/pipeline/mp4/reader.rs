@@ -197,7 +197,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         // The STTS box maps samples to batches of the same sample length
         let stts = &track.trak.mdia.minf.stbl.stts;
 
-        let mut first_batch_sample_id = 1u32;
+        let mut batch_first_sample_id = 1u32;
         let mut elapsed = 0u64;
         let mut present_from_index = None;
 
@@ -207,15 +207,15 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
 
             if seek_timescale < batch_end_time {
                 let offset_in_batch = {
-                    let time_into_batch = seek_timescale - elapsed;
-                    time_into_batch.div_ceil(entry.sample_delta as u64) as u32
+                    let batch_seek_timescale = seek_timescale - elapsed;
+                    batch_seek_timescale.div_ceil(entry.sample_delta as u64) as u32
                 };
-                present_from_index = Some(first_batch_sample_id + offset_in_batch);
+                present_from_index = Some(batch_first_sample_id + offset_in_batch);
                 break;
             }
 
             elapsed = batch_end_time;
-            first_batch_sample_id += entry.sample_count;
+            batch_first_sample_id += entry.sample_count;
         }
 
         let present_from_index = present_from_index?;
