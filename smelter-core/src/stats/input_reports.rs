@@ -52,12 +52,12 @@ pub struct RtpJitterBufferStatsReport {
     /// Total count of packets received.
     pub packets_received: u64,
 
-    /// Bitrate from the last second.
+    /// Bitrate in the one second window.
     pub bitrate_1_second: u64,
-    /// Bitrate from the last minute.
+    /// Bitrate in the one minute window.
     pub bitrate_1_minute: u64,
 
-    /// Stats from the last 10 seconds.
+    /// Jitter buffer stats in the 10 second window.
     pub last_10_seconds: RtpJitterBufferSlidingWindowStatsReport,
 }
 
@@ -72,12 +72,18 @@ pub struct RtpJitterBufferSlidingWindowStatsReport {
     /// Measured when packet leaves jitter buffer. This value represents
     /// how much time packet has to reach the queue to be processed.
     pub effective_buffer_avg_seconds: f64,
+    /// Measured when packet leaves jitter buffer. This value represents
+    /// how much time packet has to reach the queue to be processed.
     pub effective_buffer_max_seconds: f64,
+    /// Measured when packet leaves jitter buffer. This value represents
+    /// how much time packet has to reach the queue to be processed.
     pub effective_buffer_min_seconds: f64,
 
     /// Size of the input buffer.
     pub input_buffer_avg_seconds: f64,
+    /// Size of the input buffer.
     pub input_buffer_max_seconds: f64,
+    /// Size of the input buffer.
     pub input_buffer_min_seconds: f64,
 }
 
@@ -94,10 +100,10 @@ pub struct RtmpInputStatsReport {
 /// Stats report for a track in `RTMP` input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct RtmpInputTrackStatsReport {
-    /// Bitrate from the last second.
+    /// Bitrate in the one second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate from the last minute.
+    /// Bitrate in the one minute window.
     pub bitrate_1_minute: u64,
 }
 
@@ -114,10 +120,10 @@ pub struct Mp4InputStatsReport {
 /// Stats report for a track in `MP4` input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct Mp4InputTrackStatsReport {
-    /// Bitrate from the last second.
+    /// Bitrate in the one second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate from the last minute.
+    /// Bitrate in the one minute window.
     pub bitrate_1_minute: u64,
 }
 
@@ -145,9 +151,9 @@ pub struct HlsInputTrackStatsReport {
     /// Total count of discontinuities between packet timestamps.
     pub discontinuities_detected: u32,
 
-    /// Bitrate from the last second.
+    /// Bitrate in the one second window.
     pub bitrate_1_second: u64,
-    /// Bitrate from the last minute.
+    /// Bitrate in the one minute window.
     pub bitrate_1_minute: u64,
 
     /// Stats from the last 10 seconds.
@@ -167,11 +173,17 @@ pub struct HlsInputTrackSlidingWindowStatsReport {
     /// Measured when packet leaves jitter buffer. This value represents
     /// how much time packet has to reach the queue to be processed.
     pub effective_buffer_avg_seconds: f64,
+    /// Measured when packet leaves jitter buffer. This value represents
+    /// how much time packet has to reach the queue to be processed.
     pub effective_buffer_max_seconds: f64,
+    /// Measured when packet leaves jitter buffer. This value represents
+    /// how much time packet has to reach the queue to be processed.
     pub effective_buffer_min_seconds: f64,
 
     /// Size of the input buffer.
     pub input_buffer_avg_seconds: f64,
+    /// Size of the input buffer.
     pub input_buffer_max_seconds: f64,
+    /// Size of the input buffer.
     pub input_buffer_min_seconds: f64,
 }
