@@ -219,6 +219,9 @@ pub struct Rescaler {
 
     /// List of box shadows.
     pub box_shadow: Option<Vec<BoxShadow>>,
+
+    /// (**default=`"bilinear"`**) Scaling filter used when rendering this component.
+    pub scaling_filter: Option<ImageScalingFilter>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
@@ -230,6 +233,18 @@ pub enum RescaleMode {
     /// Resize the component proportionally, so one of the dimensions is the same as its parent
     /// and the entire area of the parent is covered. Parts of a child that do not fit inside the parent are not rendered.
     Fill,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageScalingFilter {
+    /// (**default**) GPU bilinear texture filtering.
+    Bilinear,
+    /// Lanczos3 filter (6×6 kernel). Higher quality, especially for downscaling.
+    Lanczos3,
+    /// Trilinear filtering from generated mipmaps. Good quality downscaling with
+    /// hardware-accelerated LOD selection. Cheaper than Lanczos3.
+    Trilinear,
 }
 
 /// WebView component renders a website using Chromium.

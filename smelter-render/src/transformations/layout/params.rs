@@ -6,7 +6,7 @@ use wgpu::{
 
 use crate::{
     Resolution,
-    scene::RGBAColor,
+    scene::{ImageScalingFilter, RGBAColor},
     wgpu::{WgpuCtx, utils::convert_to_shader_color},
 };
 
@@ -239,11 +239,18 @@ impl ParamsBindGroups {
                     crop,
                     border_color,
                     border_width,
+                    scaling_filter,
+                    mip_level,
                 } => {
                     let layout_info = LayoutInfo {
                         layout_type: 0,
                         index: texture_params.len() as u32,
                         masks_len: masks.len() as u32,
+                    };
+                    let scaling_filter_value: u32 = match scaling_filter {
+                        ImageScalingFilter::Bilinear => 0,
+                        ImageScalingFilter::Lanczos3 => 1,
+                        ImageScalingFilter::Trilinear => 2,
                     };
                     let mut texture_params_bytes = [0u8; 80];
                     texture_params_bytes[0..16].copy_from_slice(&border_radius_bytes);
@@ -259,6 +266,9 @@ impl ParamsBindGroups {
                     texture_params_bytes[60..64].copy_from_slice(&crop.height.to_le_bytes());
                     texture_params_bytes[64..68].copy_from_slice(&rotation_degrees.to_le_bytes());
                     texture_params_bytes[68..72].copy_from_slice(&border_width.to_le_bytes());
+                    texture_params_bytes[72..76]
+                        .copy_from_slice(&scaling_filter_value.to_le_bytes());
+                    texture_params_bytes[76..80].copy_from_slice(&mip_level.to_le_bytes());
                     texture_params.push(texture_params_bytes);
                     layout_infos.push(layout_info);
                 }

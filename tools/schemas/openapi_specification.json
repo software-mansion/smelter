@@ -1887,6 +1887,14 @@
         },
         "additionalProperties": false
       },
+      "ImageScalingFilter": {
+        "type": "string",
+        "enum": [
+          "bilinear",
+          "lanczos3",
+          "trilinear"
+        ]
+      },
       "ImageSpec": {
         "oneOf": [
           {
@@ -3927,6 +3935,17 @@
               "$ref": "#/components/schemas/BoxShadow"
             },
             "description": "List of box shadows."
+          },
+          "scaling_filter": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageScalingFilter",
+                "description": "(**default=`\"bilinear\"`**) Scaling filter used when rendering this component."
+              }
+            ]
           }
         },
         "additionalProperties": false

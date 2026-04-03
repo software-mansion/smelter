@@ -189,6 +189,11 @@ impl TryFrom<Rescaler> for scene::RescalerComponent {
             Some(RescaleMode::Fill) => scene::RescaleMode::Fill,
             None => scene::RescaleMode::Fit,
         };
+        let scaling_filter = match rescaler.scaling_filter {
+            Some(ImageScalingFilter::Lanczos3) => scene::ImageScalingFilter::Lanczos3,
+            Some(ImageScalingFilter::Trilinear) => scene::ImageScalingFilter::Trilinear,
+            Some(ImageScalingFilter::Bilinear) | None => scene::ImageScalingFilter::Bilinear,
+        };
         Ok(Self {
             id: rescaler.id.map(Into::into),
             child: Box::new((*rescaler.child).try_into()?),
@@ -215,6 +220,7 @@ impl TryFrom<Rescaler> for scene::RescalerComponent {
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
+            scaling_filter,
         })
     }
 }

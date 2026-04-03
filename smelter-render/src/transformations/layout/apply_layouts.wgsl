@@ -42,6 +42,9 @@ struct TextureParams {
     rotation_degrees: f32,
     // border size in pixels
     border_width: f32,
+    // 0 = bilinear, 1 = lanczos3, 2 = trilinear
+    scaling_filter: u32,
+    mip_level: f32,
 }
 
 struct ColorParams {
@@ -86,6 +89,50 @@ struct LayoutInfo {
 @group(3) @binding(0) var sampler_: sampler;
 
 var<immediate> layout_info: LayoutInfo;
+
+const PI: f32 = 3.14159265358979323846;
+
+fn sinc(x: f32) -> f32 {
+    if abs(x) < 1e-6 {
+        return 1.0;
+    }
+    let px = PI * x;
+    return sin(px) / px;
+}
+
+fn lanczos3_weight(x: f32) -> f32 {
+    if abs(x) >= 3.0 {
+        return 0.0;
+    }
+    return sinc(x) * sinc(x / 3.0);
+}
+
+fn sample_lanczos3(tex_coords: vec2<f32>, mip_level: i32) -> vec4<f32> {
+    let dim = vec2<i32>(textureDimensions(texture, mip_level));
+    let fc = vec2<f32>(dim) * tex_coords - 0.5;
+    let center_x = floor(fc.x);
+    let center_y = floor(fc.y);
+    let max_coord = dim - vec2<i32>(1, 1);
+
+    var sum = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    var weight_sum = 0.0;
+    for (var dy = -2; dy <= 3; dy++) {
+        let sy = clamp(i32(center_y) + dy, 0, max_coord.y);
+        let wy = lanczos3_weight(fc.y - (center_y + f32(dy)));
+        for (var dx = -2; dx <= 3; dx++) {
+            let sx = clamp(i32(center_x) + dx, 0, max_coord.x);
+            let wx = lanczos3_weight(fc.x - (center_x + f32(dx)));
+            let w = wx * wy;
+            sum += textureLoad(texture, vec2<i32>(sx, sy), mip_level) * w;
+            weight_sum += w;
+        }
+    }
+
+    if weight_sum < 1e-6 {
+        return textureLoad(texture, clamp(vec2<i32>(i32(center_x), i32(center_y)), vec2<i32>(0, 0), max_coord), mip_level);
+    }
+    return sum / weight_sum;
+}
 
 fn rotation_matrix(rotation: f32) -> mat4x4<f32> {
     // wgsl is column-major
@@ -275,7 +322,14 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
     switch layout_info.layout_type {
         case 0u: {
-            let sample = textureSample(texture, sampler_, input.tex_coords);
+            var sample: vec4<f32>;
+            if texture_params[layout_info.index].scaling_filter == 1u {
+                sample = sample_lanczos3(input.tex_coords, i32(texture_params[layout_info.index].mip_level));
+            } else if texture_params[layout_info.index].scaling_filter == 2u {
+                sample = textureSampleLevel(texture, sampler_, input.tex_coords, texture_params[layout_info.index].mip_level);
+            } else {
+                sample = textureSample(texture, sampler_, input.tex_coords);
+            }
 
             let width = texture_params[layout_info.index].width;
             let height = texture_params[layout_info.index].height;

@@ -822,6 +822,10 @@ export type Component =
        * List of box shadows.
        */
       box_shadow?: BoxShadow[] | null;
+      /**
+       * (**default=`"bilinear"`**) Scaling filter used when rendering this component.
+       */
+      scaling_filter?: ImageScalingFilter | null;
     };
 export type ComponentId = string;
 export type ViewDirection = "row" | "column";
@@ -917,6 +921,7 @@ export type TextWeight =
 export type AspectRatio = string;
 export type VerticalAlign = "top" | "center" | "bottom" | "justified";
 export type RescaleMode = "fit" | "fill";
+export type ImageScalingFilter = "bilinear" | "lanczos3" | "trilinear";
 export type AudioMixingStrategy = "sum_clip" | "sum_scale";
 export type RtpAudioEncoderOptions = {
   type: "opus";

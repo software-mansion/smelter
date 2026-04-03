@@ -37,6 +37,7 @@ pub(super) fn layout_tiles(
         border_color: RGBAColor(0, 0, 0, 0),
         border_radius: BorderRadius::ZERO,
         box_shadow: vec![],
+        scaling_filter: Default::default(),
     }
 }
 
@@ -77,6 +78,7 @@ fn layout_child(child: &mut StatefulComponent, tile: Option<Tile>, pts: Duration
                 border_color: RGBAColor(0, 0, 0, 0),
                 border_radius: BorderRadius::ZERO,
                 box_shadow: vec![],
+                scaling_filter: Default::default(),
             }
         }
         _ => {
@@ -99,6 +101,7 @@ fn layout_child(child: &mut StatefulComponent, tile: Option<Tile>, pts: Duration
                 border_color: RGBAColor(0, 0, 0, 0),
                 border_radius: BorderRadius::ZERO,
                 box_shadow: vec![],
+                scaling_filter: Default::default(),
             }
         }
     }

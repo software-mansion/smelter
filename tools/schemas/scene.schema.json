@@ -914,6 +914,17 @@
               "items": {
                 "$ref": "#/definitions/BoxShadow"
               }
+            },
+            "scaling_filter": {
+              "description": "(**default=`\"bilinear\"`**) Scaling filter used when rendering this component.",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ImageScalingFilter"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false
@@ -1499,6 +1510,31 @@
           "type": "string",
           "enum": [
             "fill"
+          ]
+        }
+      ]
+    },
+    "ImageScalingFilter": {
+      "oneOf": [
+        {
+          "description": "(**default**) GPU bilinear texture filtering.",
+          "type": "string",
+          "enum": [
+            "bilinear"
+          ]
+        },
+        {
+          "description": "Lanczos3 filter (6×6 kernel). Higher quality, especially for downscaling.",
+          "type": "string",
+          "enum": [
+            "lanczos3"
+          ]
+        },
+        {
+          "description": "Trilinear filtering from generated mipmaps. Good quality downscaling with hardware-accelerated LOD selection. Cheaper than Lanczos3.",
+          "type": "string",
+          "enum": [
+            "trilinear"
           ]
         }
       ]

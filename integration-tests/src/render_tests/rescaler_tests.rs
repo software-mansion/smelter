@@ -223,5 +223,43 @@ fn rescaler_tests() {
         )),
         ..default.clone()
     });
+    let grid_input = TestInput::new_multiscale_grid(
+        1,
+        Resolution {
+            width: 5760,
+            height: 3240,
+        },
+    );
+    let output_1080p = Resolution {
+        width: 1920,
+        height: 1080,
+    };
+    runner.add(TestCase {
+        name: "rescaler/scaling_filter_bilinear",
+        steps: test_steps_from_scene(include_str!(
+            "./rescaler/scaling_filter_bilinear.scene.json"
+        )),
+        inputs: vec![grid_input.clone()],
+        resolution: output_1080p,
+        ..default.clone()
+    });
+    runner.add(TestCase {
+        name: "rescaler/scaling_filter_trilinear",
+        steps: test_steps_from_scene(include_str!(
+            "./rescaler/scaling_filter_trilinear.scene.json"
+        )),
+        inputs: vec![grid_input.clone()],
+        resolution: output_1080p,
+        ..default.clone()
+    });
+    runner.add(TestCase {
+        name: "rescaler/scaling_filter_lanczos3",
+        steps: test_steps_from_scene(include_str!(
+            "./rescaler/scaling_filter_lanczos3.scene.json"
+        )),
+        inputs: vec![grid_input.clone()],
+        resolution: output_1080p,
+        ..default.clone()
+    });
     runner.run()
 }

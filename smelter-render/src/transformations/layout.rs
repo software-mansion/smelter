@@ -1,8 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     Resolution,
-    scene::{BorderRadius, BoxShadow, RGBAColor, Size},
+    scene::{BorderRadius, BoxShadow, ImageScalingFilter, RGBAColor, Size},
     state::{RenderCtx, node_texture::NodeTexture},
 };
 
@@ -82,6 +82,8 @@ enum RenderLayoutContent {
         border_color: RGBAColor,
         border_width: f32,
         crop: Crop,
+        scaling_filter: ImageScalingFilter,
+        mip_level: f32,
     },
     #[allow(dead_code)]
     BoxShadow { color: RGBAColor, blur_radius: f32 },
@@ -134,6 +136,8 @@ pub struct NestedLayout {
     pub border_radius: BorderRadius,
     pub box_shadow: Vec<BoxShadow>,
 
+    pub scaling_filter: ImageScalingFilter,
+
     pub(crate) children: Vec<NestedLayout>,
     /// Describes how many children of this component are nodes. This value also
     /// counts `layout` if its content is a `LayoutContent::ChildNode`.
@@ -168,26 +172,109 @@ impl LayoutNode {
             .collect();
         let output_resolution = self.layout_provider.resolution(pts);
         let layouts = self.layout_provider.layouts(pts, &input_resolutions);
-        let layouts = layouts.flatten(&input_resolutions, output_resolution);
+        let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
 
-        let textures: Vec<Option<&NodeTexture>> = layouts
+        // Compute mip levels for Lanczos3/Trilinear child nodes and deduplicate by source index
+        let mut mip_levels_needed: HashMap<usize, u32> = HashMap::new();
+        for layout in &mut layouts {
+            let layout_width = layout.width;
+            let layout_height = layout.height;
+            if let RenderLayoutContent::ChildNode {
+                index,
+                crop,
+                scaling_filter,
+                mip_level,
+                ..
+            } = &mut layout.content
+            {
+                let ratio = f32::max(crop.width / layout_width, crop.height / layout_height);
+                if ratio > 1.0 {
+                    let levels_needed = match scaling_filter {
+                        ImageScalingFilter::Lanczos3 => {
+                            *mip_level = ratio.log2().floor();
+                            // Lanczos3 samples from a single integer mip level
+                            *mip_level as u32
+                        }
+                        ImageScalingFilter::Trilinear => {
+                            *mip_level = ratio.log2();
+                            // textureSampleLevel interpolates between floor and ceil levels
+                            (*mip_level).ceil() as u32
+                        }
+                        ImageScalingFilter::Bilinear => continue,
+                    };
+                    let entry = mip_levels_needed.entry(*index).or_insert(0);
+                    *entry = (*entry).max(levels_needed);
+                }
+            }
+        }
+
+        // Generate mipped textures for sources that need them
+        let mut encoder =
+            ctx.wgpu_ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("layout node"),
+                });
+
+        let format = ctx.wgpu_ctx.default_view_format();
+        let mut mipped_textures: HashMap<usize, crate::wgpu::utils::MippedTexture> = HashMap::new();
+        for (source_index, max_level) in &mip_levels_needed {
+            if let Some(node_texture) = sources.get(*source_index)
+                && let Some(state) = node_texture.state()
+            {
+                let mipped = ctx.wgpu_ctx.utils.mipmap_generator.generate(
+                    &mut encoder,
+                    ctx.wgpu_ctx,
+                    state.texture(),
+                    format,
+                    // +1 because max_level is 0-indexed but generate expects a count
+                    *max_level + 1,
+                );
+                mipped_textures.insert(*source_index, mipped);
+            }
+        }
+
+        // Resolve texture views: one per layout entry
+        let resolved_views: Vec<&wgpu::TextureView> = layouts
             .iter()
-            .map(|layout| match layout.content {
-                RenderLayoutContent::BoxShadow { .. } => None,
-                RenderLayoutContent::Color { .. } => None,
-                RenderLayoutContent::ChildNode { index, .. } => match sources.get(index) {
-                    Some(node_texture) => Some(*node_texture),
-                    None => {
-                        error!("Invalid source index in layout");
-                        None
+            .map(|layout| match &layout.content {
+                RenderLayoutContent::ChildNode {
+                    index, mip_level, ..
+                } => {
+                    if *mip_level > 0.0
+                        && let Some(mipped) = mipped_textures.get(index)
+                    {
+                        return &mipped.view;
                     }
-                },
+
+                    match sources.get(*index) {
+                        Some(node_texture) => node_texture
+                            .state()
+                            .map(|s| s.view())
+                            .unwrap_or_else(|| ctx.wgpu_ctx.default_empty_view()),
+                        None => {
+                            error!("Invalid source index in layout");
+                            ctx.wgpu_ctx.default_empty_view()
+                        }
+                    }
+                }
+                RenderLayoutContent::Color { .. } | RenderLayoutContent::BoxShadow { .. } => {
+                    ctx.wgpu_ctx.default_empty_view()
+                }
             })
             .collect();
 
         let target = target.ensure_size(ctx.wgpu_ctx, output_resolution);
-        self.shader
-            .render(ctx.wgpu_ctx, output_resolution, layouts, &textures, target);
+        self.shader.render(
+            ctx.wgpu_ctx,
+            output_resolution,
+            layouts,
+            &resolved_views,
+            target,
+            &mut encoder,
+        );
+
+        ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
 }
 
@@ -213,6 +300,7 @@ impl NestedLayout {
             border_color: RGBAColor(0, 0, 0, 0),
             border_radius: BorderRadius::ZERO,
             box_shadow: vec![],
+            scaling_filter: ImageScalingFilter::Bilinear,
         }
     }
 }
