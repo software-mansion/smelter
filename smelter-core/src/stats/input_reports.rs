@@ -52,12 +52,12 @@ pub struct RtpJitterBufferStatsReport {
     /// Total count of packets received.
     pub packets_received: u64,
 
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 
-    /// Jitter buffer stats in the 10 second window.
+    /// Jitter buffer stats in the 10-second window.
     pub last_10_seconds: RtpJitterBufferSlidingWindowStatsReport,
 }
 
@@ -100,10 +100,10 @@ pub struct RtmpInputStatsReport {
 /// Stats report for a track in `RTMP` input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct RtmpInputTrackStatsReport {
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 }
 
@@ -120,10 +120,10 @@ pub struct Mp4InputStatsReport {
 /// Stats report for a track in `MP4` input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct Mp4InputTrackStatsReport {
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 }
 
@@ -151,12 +151,12 @@ pub struct HlsInputTrackStatsReport {
     /// Total count of discontinuities between packet timestamps.
     pub discontinuities_detected: u32,
 
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 
-    /// Stats from the last 10 seconds.
+    /// Track stats in the 10-second window.
     pub last_10_seconds: HlsInputTrackSlidingWindowStatsReport,
 }
 
