@@ -30,10 +30,10 @@ pub struct WhepOutputStatsReport {
 /// Stats report for a track in the `WHEP` output.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct WhepOutputTrackStatsReport {
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 }
 
@@ -53,10 +53,10 @@ pub struct WhipOutputStatsReport {
 /// Stats report for a track in the `WHIP` output.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct WhipOutputTrackStatsReport {
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 }
 
@@ -73,10 +73,10 @@ pub struct HlsOutputStatsReport {
 /// Stats report for a track in the `HLS` output.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct HlsOutputTrackStatsReport {
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 }
 
@@ -93,10 +93,10 @@ pub struct Mp4OutputStatsReport {
 /// Stats report for a track in the `MP4` output.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct Mp4OutputTrackStatsReport {
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 }
 
@@ -113,10 +113,10 @@ pub struct RtmpOutputStatsReport {
 /// Stats report for a track in the `RTMP` output.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct RtmpOutputTrackStatsReport {
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 }
 
@@ -133,9 +133,9 @@ pub struct RtpOutputStatsReport {
 /// Stats report for a track in the `RTP` output.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct RtpOutputTrackStatsReport {
-    /// Bitrate in the one second window.
+    /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 
-    /// Bitrate in the one minute window.
+    /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 }
