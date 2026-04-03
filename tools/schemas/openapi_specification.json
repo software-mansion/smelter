@@ -1652,18 +1652,18 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           },
           "last_10_seconds": {
             "$ref": "#/components/schemas/HlsInputTrackSlidingWindowStatsReport",
-            "description": "Stats from the last 10 seconds."
+            "description": "Track stats in the 10-second window."
           }
         }
       },
@@ -1739,13 +1739,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           }
         }
@@ -2539,13 +2539,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           }
         }
@@ -2627,13 +2627,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           }
         }
@@ -4254,13 +4254,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           }
         }
@@ -4329,13 +4329,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           }
         }
@@ -4565,18 +4565,18 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           },
           "last_10_seconds": {
             "$ref": "#/components/schemas/RtpJitterBufferSlidingWindowStatsReport",
-            "description": "Jitter buffer stats in the 10 second window."
+            "description": "Jitter buffer stats in the 10-second window."
           }
         }
       },
@@ -4662,13 +4662,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           }
         }
@@ -6116,13 +6116,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           }
         }
@@ -6544,13 +6544,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one second window.",
+            "description": "Bitrate in the 1-second window.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the one minute window.",
+            "description": "Bitrate in the 1-minute window.",
             "minimum": 0
           }
         }

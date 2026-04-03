@@ -1822,15 +1822,15 @@ export interface RtpJitterBufferStatsReport {
    */
   packets_received: number;
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
   /**
-   * Jitter buffer stats in the 10 second window.
+   * Jitter buffer stats in the 10-second window.
    */
   last_10_seconds: RtpJitterBufferSlidingWindowStatsReport;
 }
@@ -1884,15 +1884,15 @@ export interface HlsInputTrackStatsReport {
    */
   discontinuities_detected: number;
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
   /**
-   * Stats from the last 10 seconds.
+   * Track stats in the 10-second window.
    */
   last_10_seconds: HlsInputTrackSlidingWindowStatsReport;
 }
@@ -1938,11 +1938,11 @@ export interface HlsInputTrackSlidingWindowStatsReport {
  */
 export interface RtmpInputTrackStatsReport {
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1951,11 +1951,11 @@ export interface RtmpInputTrackStatsReport {
  */
 export interface Mp4InputTrackStatsReport {
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1964,11 +1964,11 @@ export interface Mp4InputTrackStatsReport {
  */
 export interface WhepOutputTrackStatsReport {
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1977,11 +1977,11 @@ export interface WhepOutputTrackStatsReport {
  */
 export interface WhipOutputTrackStatsReport {
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
 }
@@ -1990,11 +1990,11 @@ export interface WhipOutputTrackStatsReport {
  */
 export interface HlsOutputTrackStatsReport {
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
 }
@@ -2003,11 +2003,11 @@ export interface HlsOutputTrackStatsReport {
  */
 export interface Mp4OutputTrackStatsReport {
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
 }
@@ -2016,11 +2016,11 @@ export interface Mp4OutputTrackStatsReport {
  */
 export interface RtmpOutputTrackStatsReport {
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
 }
@@ -2029,11 +2029,11 @@ export interface RtmpOutputTrackStatsReport {
  */
 export interface RtpOutputTrackStatsReport {
   /**
-   * Bitrate in the one second window.
+   * Bitrate in the 1-second window.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the one minute window.
+   * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
 }
