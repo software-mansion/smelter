@@ -1,11 +1,10 @@
-use std::sync::Arc;
+use std::{ptr::NonNull, sync::Arc};
 
 use ash::{Entry, vk};
 
 mod command;
 mod debug;
 mod mem;
-mod parameter_sets;
 #[cfg(feature = "transcoder")]
 mod pipeline;
 mod sync;
@@ -15,7 +14,6 @@ mod vk_extensions;
 pub(crate) use command::*;
 pub(crate) use debug::*;
 pub(crate) use mem::*;
-pub(crate) use parameter_sets::*;
 #[cfg(feature = "transcoder")]
 pub(crate) use pipeline::*;
 pub(crate) use sync::*;
@@ -111,5 +109,48 @@ impl std::ops::Deref for Device {
 impl Drop for Device {
     fn drop(&mut self) {
         unsafe { self.destroy_device(None) };
+    }
+}
+
+unsafe impl<'a> Send for ProfileInfo<'a> {}
+unsafe impl<'a> Sync for ProfileInfo<'a> {}
+
+pub(crate) struct ProfileInfo<'a> {
+    pub(crate) profile_info: vk::VideoProfileInfoKHR<'a>,
+    additional_infos_ptr: Vec<NonNull<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync + 'a>>,
+}
+
+impl<'a> ProfileInfo<'a> {
+    pub(crate) fn new(
+        mut profile_info: vk::VideoProfileInfoKHR<'a>,
+        additional_info: Vec<Box<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync + 'a>>,
+    ) -> Self {
+        let (refs, ptrs) = additional_info
+            .into_iter()
+            .map(|i| {
+                let r = Box::leak(i);
+                let p = NonNull::from(&mut *r);
+                (r, p)
+            })
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+
+        for r in refs {
+            profile_info = profile_info.push_next(r);
+        }
+
+        Self {
+            profile_info,
+            additional_infos_ptr: ptrs,
+        }
+    }
+}
+
+impl Drop for ProfileInfo<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            for ptr in self.additional_infos_ptr.drain(..) {
+                let _ = Box::from_raw(ptr.as_ptr());
+            }
+        }
     }
 }

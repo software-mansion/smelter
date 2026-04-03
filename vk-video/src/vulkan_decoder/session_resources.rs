@@ -11,12 +11,13 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     VulkanDecoderError,
+    codec::h264::parameters::{
+        H264DecodeProfileInfo, SeqParameterSetExt as _, h264_level_idc_to_max_dpb_mbs,
+        vk_to_h264_level_idc,
+    },
     device::DecodingDevice,
     vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers},
-    wrappers::{
-        DecodeInputBufferPool, DecodingQueryPool, H264DecodeProfileInfo, OpenCommandBuffer,
-        SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc,
-    },
+    wrappers::{DecodeInputBufferPool, DecodingQueryPool, OpenCommandBuffer, VideoSession},
 };
 
 mod images;
@@ -75,7 +76,7 @@ impl<'a> VideoSessionResources<'a> {
         let max_level_idc = vk_to_h264_level_idc(
             decoding_device
                 .profile_capabilities
-                .h264_decode_capabilities
+                .codec_decode_capabilities
                 .max_level_idc,
         )?;
 
@@ -216,7 +217,7 @@ impl<'a> VideoSessionResources<'a> {
         let max_level_idc = vk_to_h264_level_idc(
             decoding_device
                 .profile_capabilities
-                .h264_decode_capabilities
+                .codec_decode_capabilities
                 .max_level_idc,
         )?;
 
@@ -290,14 +291,12 @@ impl<'a> VideoSessionResources<'a> {
         tracker: &mut DecoderTracker,
         image_modifiers: ImageModifiers,
     ) -> Result<DecodingImages<'a>, VulkanDecoderError> {
-        let mut dpb_format = decoding_device
-            .profile_capabilities
-            .h264_dpb_format_properties;
+        let mut dpb_format = decoding_device.profile_capabilities.dpb_format_properties;
         // image modifiers are only applied to the output picture, which is the dst_image if it
         // exists, dpb otherwise
         if decoding_device
             .profile_capabilities
-            .h264_dst_format_properties
+            .dst_format_properties
             .is_none()
         {
             dpb_format.image_create_flags |= image_modifiers.create_flags;
@@ -305,7 +304,7 @@ impl<'a> VideoSessionResources<'a> {
         }
         let dst_format = decoding_device
             .profile_capabilities
-            .h264_dst_format_properties
+            .dst_format_properties
             .map(|p| {
                 p.image_create_flags(p.image_create_flags | image_modifiers.create_flags)
                     .image_usage_flags(p.image_usage_flags | image_modifiers.usage_flags)

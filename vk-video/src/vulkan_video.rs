@@ -2,7 +2,8 @@ pub mod capabilities {
     pub use crate::adapter::AdapterInfo;
     pub use crate::device::caps::{
         DecodeCapabilities, DecodeH264Capabilities, DecodeH264ProfileCapabilities,
-        EncodeCapabilities, EncodeH264Capabilities, EncodeH264ProfileCapabilities,
+        DecodeH265Capabilities, DecodeH265ProfileCapabilities, EncodeCapabilities,
+        EncodeH264Capabilities, EncodeH265Capabilities, EncodeProfileCapabilities,
     };
 
     pub use ash::vk::PhysicalDeviceType as VulkanDeviceType;
@@ -14,9 +15,14 @@ pub mod parameters {
         ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParameters,
         MissedFrameHandling, Rational, VideoParameters, VulkanDeviceDescriptor,
     };
+
+    pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<H264Profile>;
+
     pub use crate::vulkan_encoder::RateControl;
     #[cfg(feature = "transcoder")]
-    pub use crate::vulkan_transcoder::{TranscoderOutputParameters, TranscoderParameters};
+    pub use crate::vulkan_transcoder::{
+        AnyEncoderParameters, TranscoderOutputParameters, TranscoderParameters,
+    };
 
     #[cfg(feature = "wgpu")]
     pub use crate::wgpu_helpers::WgpuConverterParameters;
@@ -68,6 +74,8 @@ mod wgpu_api;
 #[cfg(feature = "wgpu")]
 pub use wgpu_api::*;
 
+use crate::codec::h264::H264Codec;
+use crate::codec::h264::encode::H264WriteParametersInfo;
 use crate::device::{ColorRange, ColorSpace};
 use crate::parser::h264::AccessUnit;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
@@ -305,11 +313,11 @@ impl BytesDecoder {
 }
 
 /// An encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
-pub struct BytesEncoder {
-    pub(crate) vulkan_encoder: VulkanEncoder<'static>,
+pub struct BytesEncoderH264 {
+    pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
 }
 
-impl BytesEncoder {
+impl BytesEncoderH264 {
     /// The result is a chunk of H264 bytecode.
     ///
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
@@ -328,7 +336,11 @@ impl BytesEncoder {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        self.vulkan_encoder.stream_parameters(true, false)
+        self.vulkan_encoder
+            .stream_parameters(H264WriteParametersInfo {
+                write_sps: true,
+                write_pps: false,
+            })
     }
 
     /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
@@ -336,6 +348,10 @@ impl BytesEncoder {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        self.vulkan_encoder.stream_parameters(false, true)
+        self.vulkan_encoder
+            .stream_parameters(H264WriteParametersInfo {
+                write_sps: false,
+                write_pps: true,
+            })
     }
 }

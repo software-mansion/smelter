@@ -10,8 +10,8 @@ fn main() {
     use vk_video::{
         EncodedInputChunk,
         parameters::{
-            RateControl, ScalingAlgorithm, TranscoderOutputParameters, TranscoderParameters,
-            VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+            AnyEncoderParameters, RateControl, ScalingAlgorithm, TranscoderOutputParameters,
+            TranscoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
         },
     };
 
@@ -54,7 +54,7 @@ fn main() {
         .unwrap();
 
     let params = device
-        .encoder_output_parameters_high_quality(RateControl::VariableBitrate {
+        .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
             average_bitrate: 10_000_000,
             max_bitrate: 12_000_000,
             virtual_buffer_size: Duration::from_secs(2),
@@ -67,7 +67,7 @@ fn main() {
             output_parameters: vec![TranscoderOutputParameters {
                 output_width,
                 output_height,
-                encoder_parameters: params,
+                encoder_parameters: AnyEncoderParameters::H264(params),
                 scaling_algorithm,
             }],
         })

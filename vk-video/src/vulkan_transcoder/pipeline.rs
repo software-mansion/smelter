@@ -6,11 +6,11 @@ use crate::{
     VulkanDevice,
     parameters::ScalingAlgorithm,
     vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
-    vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState, H264EncodeProfileInfo},
+    vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     vulkan_transcoder::TranscoderError,
     wrappers::{
         CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
-        Image, ImageView, PipelineLayout, SemaphoreWaitValue, ShaderModule,
+        Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
     },
 };
 
@@ -108,12 +108,7 @@ impl ImageHeap {
             let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
                 .profiles(std::slice::from_ref(&config.profile.profile_info));
             let queue_indices = [
-                self.device
-                    .queues
-                    .h264_encode
-                    .as_ref()
-                    .unwrap()
-                    .family_index as u32,
+                self.device.queues.encode.as_ref().unwrap().family_index as u32,
                 self.device.queues.compute.family_index as u32,
             ];
             let create_info = vk::ImageCreateInfo::default()
@@ -155,7 +150,7 @@ impl ImageHeap {
 pub(crate) struct OutputConfig {
     pub(crate) width: u32,
     pub(crate) height: u32,
-    pub(crate) profile: H264EncodeProfileInfo<'static>,
+    pub(crate) profile: ProfileInfo<'static>,
     pub(crate) scaling_algorithm: ScalingAlgorithm,
 }
 

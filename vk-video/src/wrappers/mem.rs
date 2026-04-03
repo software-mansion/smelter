@@ -5,12 +5,12 @@ use vk_mem::Alloc;
 
 use crate::{
     VulkanCommonError, VulkanDecoderError, VulkanInitError,
+    codec::h264::parameters::H264DecodeProfileInfo,
     device::EncodingDevice,
-    vulkan_encoder::H264EncodeProfileInfo,
-    wrappers::{ImageLayoutTracker, OpenCommandBuffer},
+    wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
 };
 
-use super::{Device, H264DecodeProfileInfo, Instance};
+use super::{Device, Instance};
 
 pub(crate) struct Allocator {
     allocator: vk_mem::Allocator,
@@ -202,7 +202,7 @@ impl Buffer {
     pub(crate) fn new_encode(
         allocator: Arc<Allocator>,
         size: u64,
-        profile: &H264EncodeProfileInfo,
+        profile: &ProfileInfo,
     ) -> Result<Self, VulkanCommonError> {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
             .profiles(std::slice::from_ref(&profile.profile_info));
@@ -371,14 +371,14 @@ impl Image {
     pub(crate) fn new_encode(
         device: &EncodingDevice,
         extent: vk::Extent3D,
-        profile: &H264EncodeProfileInfo,
+        profile: &ProfileInfo,
         additional_queue_index: u32,
         tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, VulkanCommonError> {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
             .profiles(std::slice::from_ref(&profile.profile_info));
         let queue_indices = [
-            device.h264_encode_queues.family_index as u32,
+            device.encode_queues.family_index as u32,
             additional_queue_index,
         ];
         let encode_image_info = vk::ImageCreateInfo::default()

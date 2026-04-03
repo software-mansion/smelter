@@ -7,6 +7,7 @@ use crate::{
     VulkanDecoderError, VulkanEncoderError,
     device::{ColorRange, ColorSpace, Rational},
     parameters::H264Profile,
+    wrappers::ProfileInfo,
 };
 
 const MACROBLOCK_SIZE: u32 = 16;
@@ -69,7 +70,7 @@ impl SeqParameterSetExt for SeqParameterSet {
     }
 }
 
-pub(crate) struct VkSequenceParameterSet {
+pub(crate) struct VkH264SequenceParameterSet {
     pub(crate) sps: vk::native::StdVideoH264SequenceParameterSet,
 
     /// # Safety
@@ -85,9 +86,9 @@ pub(crate) struct VkSequenceParameterSet {
     vui_ptr: Option<NonNull<vk::native::StdVideoH264SequenceParameterSetVui>>,
 }
 
-impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
+impl From<&'_ SeqParameterSet> for VkH264SequenceParameterSet {
     #[allow(non_snake_case)]
-    fn from(sps: &SeqParameterSet) -> VkSequenceParameterSet {
+    fn from(sps: &SeqParameterSet) -> VkH264SequenceParameterSet {
         let flags = vk::native::StdVideoH264SpsFlags {
             _bitfield_1: vk::native::StdVideoH264SpsFlags::new_bitfield_1(
                 sps.constraint_flags.flag0().into(),
@@ -250,7 +251,7 @@ impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
     }
 }
 
-impl Drop for VkSequenceParameterSet {
+impl Drop for VkH264SequenceParameterSet {
     fn drop(&mut self) {
         self.scaling_lists_ptr
             .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
@@ -262,7 +263,7 @@ impl Drop for VkSequenceParameterSet {
     }
 }
 
-impl VkSequenceParameterSet {
+impl VkH264SequenceParameterSet {
     #[allow(non_snake_case)]
     pub(crate) fn new_encode(
         profile: H264Profile,
@@ -272,7 +273,7 @@ impl VkSequenceParameterSet {
         color_space: ColorSpace,
         color_range: ColorRange,
         framerate: Rational,
-    ) -> Result<VkSequenceParameterSet, VulkanEncoderError> {
+    ) -> Result<VkH264SequenceParameterSet, VulkanEncoderError> {
         // separate_colour_plane_flag is 0 so the crop units are based on SubWidthC and SubHeightC for YUV420
         // with enabled frame_mbs_only_flag
         let (CropUnitX, CropUnitY) = (2, 2);
@@ -382,8 +383,8 @@ impl VkSequenceParameterSet {
     }
 }
 
-unsafe impl Send for VkSequenceParameterSet {}
-unsafe impl Sync for VkSequenceParameterSet {}
+unsafe impl Send for VkH264SequenceParameterSet {}
+unsafe impl Sync for VkH264SequenceParameterSet {}
 
 pub(crate) struct H264ScalingLists {
     pub(crate) list: vk::native::StdVideoH264ScalingLists,
@@ -592,150 +593,12 @@ fn h264_profile_idc_to_vk(
     }
 }
 
-unsafe impl<'a> Send for ProfileInfo<'a> {}
-unsafe impl<'a> Sync for ProfileInfo<'a> {}
-
-pub(crate) struct ProfileInfo<'a> {
-    pub(crate) profile_info: vk::VideoProfileInfoKHR<'a>,
-    additional_infos_ptr: Vec<NonNull<dyn vk::ExtendsVideoProfileInfoKHR + 'a>>,
-}
-
-impl<'a> ProfileInfo<'a> {
-    pub(crate) fn new(
-        mut profile_info: vk::VideoProfileInfoKHR<'a>,
-        additional_info: Vec<Box<dyn vk::ExtendsVideoProfileInfoKHR + 'a>>,
-    ) -> Self {
-        let (refs, ptrs) = additional_info
-            .into_iter()
-            .map(|i| {
-                let r = Box::leak(i);
-                let p = NonNull::from(&mut *r);
-                (r, p)
-            })
-            .unzip::<_, _, Vec<_>, Vec<_>>();
-
-        for r in refs {
-            profile_info = profile_info.push_next(r);
-        }
-
-        Self {
-            profile_info,
-            additional_infos_ptr: ptrs,
-        }
-    }
-}
-
-impl Drop for ProfileInfo<'_> {
-    fn drop(&mut self) {
-        unsafe {
-            for ptr in self.additional_infos_ptr.drain(..) {
-                let _ = Box::from_raw(ptr.as_ptr());
-            }
-        }
-    }
-}
-
-pub(crate) struct H264DecodeProfileInfo<'a> {
-    pub(crate) profile_info: ProfileInfo<'a>,
-    pub(crate) profile_idc: vk::native::StdVideoH264ProfileIdc,
-    pub(crate) picture_layout: vk::VideoDecodeH264PictureLayoutFlagsKHR,
-}
-
-impl PartialEq for H264DecodeProfileInfo<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        other.profile_info.profile_info.chroma_subsampling
-            == self.profile_info.profile_info.chroma_subsampling
-            && other.profile_info.profile_info.luma_bit_depth
-                == self.profile_info.profile_info.luma_bit_depth
-            && other.profile_info.profile_info.chroma_bit_depth
-                == self.profile_info.profile_info.chroma_bit_depth
-            && other.profile_idc == self.profile_idc
-            && other.picture_layout == self.picture_layout
-    }
-}
-
-impl Eq for H264DecodeProfileInfo<'_> {}
-
-impl<'a> H264DecodeProfileInfo<'a> {
-    pub(crate) fn from_sps_decode(
-        sps: &SeqParameterSet,
-        decode_usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
-    ) -> Result<Self, VulkanDecoderError> {
-        let profile_idc = h264_profile_idc_to_vk(sps.profile());
-
-        if profile_idc == vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_INVALID {
-            return Err(VulkanDecoderError::InvalidInputData(
-                "unsupported h264 profile".into(),
-            ));
-        }
-
-        let picture_layout = vk::VideoDecodeH264PictureLayoutFlagsKHR::PROGRESSIVE;
-
-        let h264_profile_info = vk::VideoDecodeH264ProfileInfoKHR::default()
-            .std_profile_idc(profile_idc)
-            .picture_layout(picture_layout);
-
-        let h264_profile_info: Box<dyn vk::ExtendsVideoProfileInfoKHR> =
-            Box::new(h264_profile_info);
-        let decode_usage_info: Box<dyn vk::ExtendsVideoProfileInfoKHR> =
-            Box::new(decode_usage_info);
-
-        let chroma_subsampling = match sps.chroma_info.chroma_format {
-            h264_reader::nal::sps::ChromaFormat::YUV420 => {
-                vk::VideoChromaSubsamplingFlagsKHR::TYPE_420
-            }
-            h264_reader::nal::sps::ChromaFormat::Monochrome
-            | h264_reader::nal::sps::ChromaFormat::YUV422
-            | h264_reader::nal::sps::ChromaFormat::YUV444
-            | h264_reader::nal::sps::ChromaFormat::Invalid(_) => {
-                return Err(VulkanDecoderError::InvalidInputData(format!(
-                    "unsupported chroma format: {:?}",
-                    sps.chroma_info.chroma_format
-                )));
-            }
-        };
-
-        let luma_bit_depth = if sps.chroma_info.bit_depth_luma_minus8 + 8 == 8 {
-            vk::VideoComponentBitDepthFlagsKHR::TYPE_8
-        } else {
-            return Err(VulkanDecoderError::InvalidInputData(format!(
-                "unsupported luma bit length: {}",
-                sps.chroma_info.bit_depth_luma_minus8 + 8
-            )));
-        };
-
-        let chroma_bit_depth = if sps.chroma_info.bit_depth_chroma_minus8 + 8 == 8 {
-            vk::VideoComponentBitDepthFlagsKHR::TYPE_8
-        } else {
-            return Err(VulkanDecoderError::InvalidInputData(format!(
-                "unsupported chroma bit length: {}",
-                sps.chroma_info.bit_depth_chroma_minus8 + 8
-            )));
-        };
-
-        let profile_info = vk::VideoProfileInfoKHR::default()
-            .video_codec_operation(vk::VideoCodecOperationFlagsKHR::DECODE_H264)
-            .chroma_subsampling(chroma_subsampling)
-            .luma_bit_depth(luma_bit_depth)
-            .chroma_bit_depth(chroma_bit_depth);
-
-        Ok(Self {
-            profile_info: ProfileInfo::new(
-                profile_info,
-                vec![h264_profile_info, decode_usage_info],
-            ),
-            profile_idc,
-            picture_layout,
-        })
-    }
-}
-
-pub(crate) struct VkPictureParameterSet {
+pub(crate) struct VkH264PictureParameterSet {
     pub(crate) pps: vk::native::StdVideoH264PictureParameterSet,
     scaling_list_ptr: Option<NonNull<H264ScalingLists>>,
 }
 
-impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkPictureParameterSet {
+impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkH264PictureParameterSet {
     #[allow(non_snake_case)]
     fn from(pps: &h264_reader::nal::pps::PicParameterSet) -> Self {
         let flags = vk::native::StdVideoH264PpsFlags {
@@ -801,17 +664,17 @@ impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkPictureParameterSet 
     }
 }
 
-unsafe impl Send for VkPictureParameterSet {}
-unsafe impl Sync for VkPictureParameterSet {}
+unsafe impl Send for VkH264PictureParameterSet {}
+unsafe impl Sync for VkH264PictureParameterSet {}
 
-impl Drop for VkPictureParameterSet {
+impl Drop for VkH264PictureParameterSet {
     fn drop(&mut self) {
         self.scaling_list_ptr
             .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
     }
 }
 
-impl VkPictureParameterSet {
+impl VkH264PictureParameterSet {
     pub(crate) fn new_encode() -> Self {
         let pps = vk::native::StdVideoH264PictureParameterSet {
             flags: vk::native::StdVideoH264PpsFlags {
@@ -877,5 +740,100 @@ impl From<ColorSpace> for H264ColorDescription {
                 matrix_coefficients: 5,
             },
         }
+    }
+}
+
+pub(crate) struct H264DecodeProfileInfo<'a> {
+    pub(crate) profile_info: ProfileInfo<'a>,
+    pub(crate) profile_idc: vk::native::StdVideoH264ProfileIdc,
+    pub(crate) picture_layout: vk::VideoDecodeH264PictureLayoutFlagsKHR,
+}
+
+impl PartialEq for H264DecodeProfileInfo<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        other.profile_info.profile_info.chroma_subsampling
+            == self.profile_info.profile_info.chroma_subsampling
+            && other.profile_info.profile_info.luma_bit_depth
+                == self.profile_info.profile_info.luma_bit_depth
+            && other.profile_info.profile_info.chroma_bit_depth
+                == self.profile_info.profile_info.chroma_bit_depth
+            && other.profile_idc == self.profile_idc
+            && other.picture_layout == self.picture_layout
+    }
+}
+
+impl Eq for H264DecodeProfileInfo<'_> {}
+
+impl<'a> H264DecodeProfileInfo<'a> {
+    pub(crate) fn from_sps_decode(
+        sps: &SeqParameterSet,
+        decode_usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
+    ) -> Result<Self, VulkanDecoderError> {
+        let profile_idc = h264_profile_idc_to_vk(sps.profile());
+
+        if profile_idc == vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_INVALID {
+            return Err(VulkanDecoderError::InvalidInputData(
+                "unsupported h264 profile".into(),
+            ));
+        }
+
+        let picture_layout = vk::VideoDecodeH264PictureLayoutFlagsKHR::PROGRESSIVE;
+
+        let h264_profile_info = vk::VideoDecodeH264ProfileInfoKHR::default()
+            .std_profile_idc(profile_idc)
+            .picture_layout(picture_layout);
+
+        let h264_profile_info: Box<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync> =
+            Box::new(h264_profile_info);
+        let decode_usage_info: Box<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync> =
+            Box::new(decode_usage_info);
+
+        let chroma_subsampling = match sps.chroma_info.chroma_format {
+            h264_reader::nal::sps::ChromaFormat::YUV420 => {
+                vk::VideoChromaSubsamplingFlagsKHR::TYPE_420
+            }
+            h264_reader::nal::sps::ChromaFormat::Monochrome
+            | h264_reader::nal::sps::ChromaFormat::YUV422
+            | h264_reader::nal::sps::ChromaFormat::YUV444
+            | h264_reader::nal::sps::ChromaFormat::Invalid(_) => {
+                return Err(VulkanDecoderError::InvalidInputData(format!(
+                    "unsupported chroma format: {:?}",
+                    sps.chroma_info.chroma_format
+                )));
+            }
+        };
+
+        let luma_bit_depth = if sps.chroma_info.bit_depth_luma_minus8 + 8 == 8 {
+            vk::VideoComponentBitDepthFlagsKHR::TYPE_8
+        } else {
+            return Err(VulkanDecoderError::InvalidInputData(format!(
+                "unsupported luma bit length: {}",
+                sps.chroma_info.bit_depth_luma_minus8 + 8
+            )));
+        };
+
+        let chroma_bit_depth = if sps.chroma_info.bit_depth_chroma_minus8 + 8 == 8 {
+            vk::VideoComponentBitDepthFlagsKHR::TYPE_8
+        } else {
+            return Err(VulkanDecoderError::InvalidInputData(format!(
+                "unsupported chroma bit length: {}",
+                sps.chroma_info.bit_depth_chroma_minus8 + 8
+            )));
+        };
+
+        let profile_info = vk::VideoProfileInfoKHR::default()
+            .video_codec_operation(vk::VideoCodecOperationFlagsKHR::DECODE_H264)
+            .chroma_subsampling(chroma_subsampling)
+            .luma_bit_depth(luma_bit_depth)
+            .chroma_bit_depth(chroma_bit_depth);
+
+        Ok(Self {
+            profile_info: ProfileInfo::new(
+                profile_info,
+                vec![h264_profile_info, decode_usage_info],
+            ),
+            profile_idc,
+            picture_layout,
+        })
     }
 }

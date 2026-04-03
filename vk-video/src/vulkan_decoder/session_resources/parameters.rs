@@ -5,9 +5,11 @@ use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 
 use crate::{
     VulkanDecoderError, VulkanDevice,
-    vulkan_decoder::{
-        Device, VideoSessionParameters, VkPictureParameterSet, VkSequenceParameterSet,
+    codec::h264::{
+        H264Codec, H264VkParameters,
+        parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
     },
+    vulkan_decoder::{Device, VideoSessionParameters},
 };
 
 use super::H264DecodeProfileInfo;
@@ -17,8 +19,8 @@ use super::H264DecodeProfileInfo;
 /// existing sps or pps.
 pub(crate) struct VideoSessionParametersManager {
     pub(crate) parameters: Arc<VideoSessionParameters>,
-    sps: HashMap<u8, VkSequenceParameterSet>,
-    pps: HashMap<(u8, u8), VkPictureParameterSet>,
+    sps: HashMap<u8, VkH264SequenceParameterSet>,
+    pps: HashMap<(u8, u8), VkH264PictureParameterSet>,
     device: Arc<Device>,
     session: vk::VideoSessionKHR,
     update_sequence_count: u32,
@@ -30,11 +32,13 @@ impl VideoSessionParametersManager {
         session: vk::VideoSessionKHR,
     ) -> Result<Self, VulkanDecoderError> {
         Ok(Self {
-            parameters: Arc::new(VideoSessionParameters::new(
+            parameters: Arc::new(VideoSessionParameters::new::<H264Codec>(
                 vulkan_ctx.device.clone(),
                 session,
-                &[],
-                &[],
+                H264VkParameters {
+                    sps: Vec::new(),
+                    pps: Vec::new(),
+                },
                 None,
                 None,
             )?),
@@ -62,11 +66,10 @@ impl VideoSessionParametersManager {
         let sps = self.sps.values().map(|sps| sps.sps).collect::<Vec<_>>();
         let pps = self.pps.values().map(|pps| pps.pps).collect::<Vec<_>>();
 
-        self.parameters = Arc::new(VideoSessionParameters::new(
+        self.parameters = Arc::new(VideoSessionParameters::new::<H264Codec>(
             self.device.clone(),
             session,
-            &sps,
-            &pps,
+            H264VkParameters { sps, pps },
             None,
             None,
         )?);
@@ -81,7 +84,7 @@ impl VideoSessionParametersManager {
         match self.sps.entry(key) {
             std::collections::hash_map::Entry::Occupied(mut e) => {
                 e.insert(sps.into());
-                self.recreate_parameters(&[self.sps[&key].sps], &[])
+                self.recreate_parameters(vec![self.sps[&key].sps], Vec::new())
             }
             std::collections::hash_map::Entry::Vacant(e) => {
                 e.insert(sps.into());
@@ -95,7 +98,7 @@ impl VideoSessionParametersManager {
         match self.pps.entry(key) {
             std::collections::hash_map::Entry::Occupied(mut e) => {
                 e.insert(pps.into());
-                self.recreate_parameters(&[], &[self.pps[&key].pps])
+                self.recreate_parameters(Vec::new(), vec![self.pps[&key].pps])
             }
 
             std::collections::hash_map::Entry::Vacant(e) => {
@@ -117,15 +120,17 @@ impl VideoSessionParametersManager {
 
     fn recreate_parameters(
         &mut self,
-        initial_sps: &[vk::native::StdVideoH264SequenceParameterSet],
-        initial_pps: &[vk::native::StdVideoH264PictureParameterSet],
+        initial_sps: Vec<vk::native::StdVideoH264SequenceParameterSet>,
+        initial_pps: Vec<vk::native::StdVideoH264PictureParameterSet>,
     ) -> Result<(), VulkanDecoderError> {
         self.update_sequence_count = 0;
-        self.parameters = Arc::new(VideoSessionParameters::new(
+        self.parameters = Arc::new(VideoSessionParameters::new::<H264Codec>(
             self.device.clone(),
             self.session,
-            initial_sps,
-            initial_pps,
+            H264VkParameters {
+                sps: initial_sps,
+                pps: initial_pps,
+            },
             Some(&self.parameters),
             None,
         )?);

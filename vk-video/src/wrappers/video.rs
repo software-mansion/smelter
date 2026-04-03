@@ -4,6 +4,7 @@ use ash::vk;
 
 use crate::{
     VulkanCommonError, VulkanDevice,
+    codec::Codec,
     device::queues::VideoQueues,
     parser::reference_manager::{PictureInfo, ReferencePictureInfo},
     wrappers::{ImageLayoutTracker, OpenCommandBuffer},
@@ -17,21 +18,16 @@ pub(crate) struct VideoSessionParameters {
 }
 
 impl VideoSessionParameters {
-    pub(crate) fn new(
+    pub(crate) fn new<C: Codec>(
         device: Arc<Device>,
         session: vk::VideoSessionKHR,
-        initial_sps: &[vk::native::StdVideoH264SequenceParameterSet],
-        initial_pps: &[vk::native::StdVideoH264PictureParameterSet],
+        initial_parameters: C::VkParameters<'_>,
         template: Option<&Self>,
         encode_quality_level: Option<u32>,
     ) -> Result<Self, VulkanCommonError> {
-        let decode_add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
-            .std_sp_ss(initial_sps)
-            .std_pp_ss(initial_pps);
+        let decode_add_info = C::decode_parameters_add_info(&initial_parameters);
 
-        let encode_add_info = vk::VideoEncodeH264SessionParametersAddInfoKHR::default()
-            .std_sp_ss(initial_sps)
-            .std_pp_ss(initial_pps);
+        let encode_add_info = C::encode_parameters_add_info(&initial_parameters);
 
         let mut quality_level = vk::VideoEncodeQualityLevelInfoKHR::default();
 
@@ -44,23 +40,17 @@ impl VideoSessionParameters {
             )
             .video_session(session);
 
-        let mut h264_decode_info = vk::VideoDecodeH264SessionParametersCreateInfoKHR::default()
-            .max_std_sps_count(32)
-            .max_std_pps_count(32)
-            .parameters_add_info(&decode_add_info);
+        let mut decode_create_info = C::decode_parameters_create_info(&decode_add_info);
 
-        let mut h264_encode_info = vk::VideoEncodeH264SessionParametersCreateInfoKHR::default()
-            .max_std_sps_count(32)
-            .max_std_pps_count(32)
-            .parameters_add_info(&encode_add_info);
+        let mut encode_create_info = C::encode_parameters_create_info(&encode_add_info);
 
         if let Some(encode_quality_level) = encode_quality_level {
             quality_level = quality_level.quality_level(encode_quality_level);
             create_info = create_info
-                .push_next(&mut h264_encode_info)
+                .push_next(&mut encode_create_info)
                 .push_next(&mut quality_level);
         } else {
-            create_info = create_info.push_next(&mut h264_decode_info);
+            create_info = create_info.push_next(&mut decode_create_info);
         }
 
         let parameters = unsafe {
