@@ -77,13 +77,9 @@ pub(super) fn video_params_compliant_with_offer(
     let codecs: Vec<RTCRtpCodecParameters> = video_preferences
         .iter()
         .flat_map(|pref| match pref {
-            VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
-                let h264_codecs = h264_codecs_from_offer(offer);
-                if uses_vulkan_h264(video_preferences) {
-                    filter_h264_codecs_for_vulkan_decoder(ctx, h264_codecs)
-                } else {
-                    h264_codecs
-                }
+            VideoDecoderOptions::FfmpegH264 => h264_codecs_from_offer(offer),
+            VideoDecoderOptions::VulkanH264 => {
+                filter_h264_codecs_for_vulkan_decoder(ctx, h264_codecs_from_offer(offer))
             }
             VideoDecoderOptions::FfmpegVp8 => vp8_codec_params(),
             VideoDecoderOptions::FfmpegVp9 => vp9_codec_params(),
@@ -91,10 +87,4 @@ pub(super) fn video_params_compliant_with_offer(
         .collect();
 
     codecs
-}
-
-fn uses_vulkan_h264(video_preferences: &[VideoDecoderOptions]) -> bool {
-    video_preferences
-        .iter()
-        .any(|pref| matches!(pref, VideoDecoderOptions::VulkanH264))
 }

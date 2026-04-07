@@ -4,20 +4,6 @@ use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 
 use crate::pipeline::PipelineCtx;
 
-pub(crate) fn filter_h264_codecs_for_vulkan_encoder(
-    ctx: &Arc<PipelineCtx>,
-    codecs: Vec<RTCRtpCodecParameters>,
-) -> Vec<RTCRtpCodecParameters> {
-    let Some(support) = ctx
-        .graphics_context
-        .vulkan_h264_encode_profile_level_support()
-    else {
-        return codecs;
-    };
-
-    filter_h264_codecs_by_profile_level_support(codecs, support)
-}
-
 pub(crate) fn filter_h264_codecs_for_vulkan_decoder(
     ctx: &Arc<PipelineCtx>,
     codecs: Vec<RTCRtpCodecParameters>,

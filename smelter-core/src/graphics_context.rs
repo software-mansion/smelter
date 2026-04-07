@@ -82,23 +82,6 @@ impl GraphicsContext {
     }
 
     #[cfg(feature = "vk-video")]
-    pub fn vulkan_h264_encode_profile_level_support(&self) -> Option<H264ProfileLevelSupport> {
-        let vulkan_ctx = self.vulkan_ctx.as_ref()?;
-        let caps = vulkan_ctx.device.encode_capabilities().h264?;
-
-        Some(H264ProfileLevelSupport {
-            baseline_max_level_idc: caps.baseline_profile.map(|p| p.max_level_idc),
-            main_max_level_idc: caps.main_profile.map(|p| p.max_level_idc),
-            high_max_level_idc: caps.high_profile.map(|p| p.max_level_idc),
-        })
-    }
-
-    #[cfg(not(feature = "vk-video"))]
-    pub fn vulkan_h264_encode_profile_level_support(&self) -> Option<H264ProfileLevelSupport> {
-        None
-    }
-
-    #[cfg(feature = "vk-video")]
     pub fn vulkan_h264_decode_profile_level_support(&self) -> Option<H264ProfileLevelSupport> {
         let vulkan_ctx = self.vulkan_ctx.as_ref()?;
         let caps = vulkan_ctx.device.decode_capabilities().h264?;

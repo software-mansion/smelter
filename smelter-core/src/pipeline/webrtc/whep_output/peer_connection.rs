@@ -32,7 +32,6 @@ use webrtc::{
 use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
     h264_offer_filter::h264_codecs_from_offer,
-    h264_vulkan_capability_filter::filter_h264_codecs_for_vulkan_encoder,
     supported_codec_parameters::{vp8_codec_params, vp9_codec_params},
 };
 
@@ -282,7 +281,7 @@ impl Drop for PeerConnection {
 }
 
 fn register_codecs(
-    ctx: &Arc<PipelineCtx>,
+    _ctx: &Arc<PipelineCtx>,
     media_engine: &mut MediaEngine,
     video_encoder: Option<VideoEncoderOptions>,
     audio_encoder: Option<AudioEncoderOptions>,
@@ -290,14 +289,14 @@ fn register_codecs(
 ) -> Result<(), WhipWhepServerError> {
     if let Some(encoder) = video_encoder {
         match encoder {
-            VideoEncoderOptions::FfmpegH264(_) => {
+            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+                // For Vulkan H264: we don't filter H264 codec subtypes from the offer.
+                // The Vulkan encoder uses a single hardcoded profile/level (currently
+                // Constrained Baseline 4.1) regardless of what was negotiated in SDP.
+                // By echoing all H264 variants from the offer back in the answer, we
+                // ensure SDP negotiation succeeds with any client. The actual encoded
+                // stream will always use the hardcoded profile/level.
                 for codec in h264_codecs_from_offer(offer) {
-                    media_engine.register_codec(codec, RTPCodecType::Video)?;
-                }
-            }
-            VideoEncoderOptions::VulkanH264(_) => {
-                let codecs = h264_codecs_from_offer(offer);
-                for codec in filter_h264_codecs_for_vulkan_encoder(ctx, codecs) {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
