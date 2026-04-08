@@ -206,10 +206,9 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
             let batch_end_time = elapsed + entry.sample_count as u64 * entry.sample_delta as u64;
 
             if seek_timescale < batch_end_time {
-                let offset_in_batch = {
-                    let batch_seek_timescale = seek_timescale - elapsed;
-                    batch_seek_timescale.div_ceil(entry.sample_delta as u64) as u32
-                };
+                let offset_in_batch =
+                    (seek_timescale - elapsed).div_ceil(entry.sample_delta as u64) as u32;
+
                 present_from_index = Some(batch_first_sample_id + offset_in_batch);
                 break;
             }
