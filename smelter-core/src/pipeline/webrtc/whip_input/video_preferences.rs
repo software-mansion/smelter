@@ -10,9 +10,8 @@ use webrtc::{
 use crate::{
     codecs::VideoDecoderOptions,
     pipeline::webrtc::{
-        h264_offer_filter::h264_codecs_from_offer,
         h264_vulkan_capability_filter::filter_h264_codecs_for_vulkan_decoder,
-        supported_codec_parameters::{vp8_codec_params, vp9_codec_params},
+        offer_codec_filter::video_codecs_from_offer,
     },
     prelude::WebrtcVideoDecoderOptions,
 };
@@ -64,25 +63,34 @@ pub(super) fn resolve_video_preferences(
     Ok(video_preferences)
 }
 
-/// Builds codec parameters from video preferences, with H264 variants copied directly
-/// from the SDP offer. This ensures exact matches during negotiation regardless of
-/// which H264 profile/level the peer uses, since ffmpeg can decode any profile.
+/// Builds codec parameters from video preferences, with codec variants copied directly
+/// from the SDP offer. This ensures payload types don't collide across codecs, since
+/// all payload types come from the same offer.
 ///
+/// For codecs not present in the offer, falls back to hardcoded defaults.
 /// For Vulkan H264, the offer-derived codecs are further filtered by hardware capabilities.
 pub(super) fn video_params_compliant_with_offer(
     ctx: &Arc<PipelineCtx>,
     video_preferences: &[VideoDecoderOptions],
     offer: &RTCSessionDescription,
 ) -> Vec<RTCRtpCodecParameters> {
+    let offer_codecs = video_codecs_from_offer(offer);
     let codecs: Vec<RTCRtpCodecParameters> = video_preferences
         .iter()
         .flat_map(|pref| match pref {
-            VideoDecoderOptions::FfmpegH264 => h264_codecs_from_offer(offer),
+            VideoDecoderOptions::FfmpegH264 => offer_codecs.h264.clone(),
             VideoDecoderOptions::VulkanH264 => {
-                filter_h264_codecs_for_vulkan_decoder(ctx, h264_codecs_from_offer(offer))
+                filter_h264_codecs_for_vulkan_decoder(ctx, offer_codecs.h264.clone())
             }
-            VideoDecoderOptions::FfmpegVp8 => vp8_codec_params(),
-            VideoDecoderOptions::FfmpegVp9 => vp9_codec_params(),
+            VideoDecoderOptions::FfmpegVp8 => offer_codecs.vp8.clone(),
+            VideoDecoderOptions::FfmpegVp9 => offer_codecs.vp9.clone(),
+        })
+        .unique_by(|codec| {
+            (
+                codec.payload_type,
+                codec.capability.mime_type.clone(),
+                codec.capability.sdp_fmtp_line.clone(),
+            )
         })
         .collect();
 
