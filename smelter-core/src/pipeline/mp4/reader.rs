@@ -191,7 +191,8 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     /// `present_from_index` is the first sample at or after seek.
     /// Returns `None` if seek is past the end.
     fn find_seek_start_sample(&self, seek: Duration) -> Option<(u32, u32)> {
-        let seek_timescale = ((seek + self.offset).as_secs_f64() * self.timescale as f64) as u64;
+        let seek_timescale =
+            (seek.saturating_sub(self.offset).as_secs_f64() * self.timescale as f64) as u64;
         let track = &self.reader.tracks()[&self.track_id];
 
         // The STTS box maps samples to batches of samples with the same length
