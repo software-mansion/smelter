@@ -194,7 +194,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         let seek_timescale = ((seek + self.offset).as_secs_f64() * self.timescale as f64) as u64;
         let track = &self.reader.tracks()[&self.track_id];
 
-        // The STTS box maps samples to batches of the same sample length
+        // The STTS box maps samples to batches of samples with the same length
         let stts = &track.trak.mdia.minf.stbl.stts;
 
         let mut batch_first_sample_id = 1u32;
