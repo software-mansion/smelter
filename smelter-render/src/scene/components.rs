@@ -225,8 +225,6 @@ pub struct RescalerComponent {
     pub border_color: RGBAColor,
 
     pub box_shadow: Vec<BoxShadow>,
-
-    pub scaling_filter: ImageScalingFilter,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -240,7 +238,6 @@ pub enum ImageScalingFilter {
     #[default]
     Bilinear,
     Lanczos3,
-    Trilinear,
 }
 
 #[derive(Debug, Clone)]
@@ -300,7 +297,6 @@ impl Default for RescalerComponent {
             border_width: 0.0,
             border_color: RGBAColor(0, 0, 0, 0),
             box_shadow: vec![],
-            scaling_filter: ImageScalingFilter::Bilinear,
         }
     }
 }

@@ -42,7 +42,7 @@ struct TextureParams {
     rotation_degrees: f32,
     // border size in pixels
     border_width: f32,
-    // 0 = bilinear, 1 = lanczos3, 2 = trilinear
+    // 0 = bilinear, 1 = lanczos3
     scaling_filter: u32,
     mip_level: f32,
 }
@@ -325,8 +325,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             var sample: vec4<f32>;
             if texture_params[layout_info.index].scaling_filter == 1u {
                 sample = sample_lanczos3(input.tex_coords, i32(texture_params[layout_info.index].mip_level));
-            } else if texture_params[layout_info.index].scaling_filter == 2u {
-                sample = textureSampleLevel(texture, sampler_, input.tex_coords, texture_params[layout_info.index].mip_level);
             } else {
                 sample = textureSample(texture, sampler_, input.tex_coords);
             }

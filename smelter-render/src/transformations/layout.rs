@@ -4,6 +4,7 @@ use crate::{
     Resolution,
     scene::{BorderRadius, BoxShadow, ImageScalingFilter, RGBAColor, Size},
     state::{RenderCtx, node_texture::NodeTexture},
+    types::RenderingMode,
 };
 
 mod flatten;
@@ -136,8 +137,6 @@ pub struct NestedLayout {
     pub border_radius: BorderRadius,
     pub box_shadow: Vec<BoxShadow>,
 
-    pub scaling_filter: ImageScalingFilter,
-
     pub(crate) children: Vec<NestedLayout>,
     /// Describes how many children of this component are nodes. This value also
     /// counts `layout` if its content is a `LayoutContent::ChildNode`.
@@ -174,7 +173,13 @@ impl LayoutNode {
         let layouts = self.layout_provider.layouts(pts, &input_resolutions);
         let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
 
-        // Compute mip levels for Lanczos3/Trilinear child nodes and deduplicate by source index
+        // Determine scaling filter globally from the rendering mode
+        let global_filter = match ctx.wgpu_ctx.mode {
+            RenderingMode::GpuOptimized | RenderingMode::WebGl => ImageScalingFilter::Lanczos3,
+            RenderingMode::CpuOptimized => ImageScalingFilter::Bilinear,
+        };
+
+        // Apply global filter and compute mip levels for Lanczos3 child nodes
         let mut mip_levels_needed: HashMap<usize, u32> = HashMap::new();
         for layout in &mut layouts {
             let layout_width = layout.width;
@@ -187,6 +192,7 @@ impl LayoutNode {
                 ..
             } = &mut layout.content
             {
+                *scaling_filter = global_filter;
                 let ratio = f32::max(crop.width / layout_width, crop.height / layout_height);
                 if ratio > 1.0 {
                     let levels_needed = match scaling_filter {
@@ -194,11 +200,6 @@ impl LayoutNode {
                             *mip_level = ratio.log2().floor();
                             // Lanczos3 samples from a single integer mip level
                             *mip_level as u32
-                        }
-                        ImageScalingFilter::Trilinear => {
-                            *mip_level = ratio.log2();
-                            // textureSampleLevel interpolates between floor and ceil levels
-                            (*mip_level).ceil() as u32
                         }
                         ImageScalingFilter::Bilinear => continue,
                     };
@@ -300,7 +301,6 @@ impl NestedLayout {
             border_color: RGBAColor(0, 0, 0, 0),
             border_radius: BorderRadius::ZERO,
             box_shadow: vec![],
-            scaling_filter: ImageScalingFilter::Bilinear,
         }
     }
 }

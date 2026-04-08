@@ -11,7 +11,7 @@ use anyhow::Result;
 use smelter::routes::update_output::UpdateOutputRequest;
 use smelter_render::{
     Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId, RendererSpec,
-    Resolution, scene::Component,
+    RenderingMode, Resolution, scene::Component,
 };
 
 pub(super) const OUTPUT_ID: &str = "output_1";
@@ -35,6 +35,7 @@ pub(super) struct TestCase {
     pub allowed_error: f32,
     pub resolution: Resolution,
     pub output_format: OutputFrameFormat,
+    pub rendering_mode: RenderingMode,
 }
 
 impl Default for TestCase {
@@ -51,6 +52,7 @@ impl Default for TestCase {
                 height: 360,
             },
             output_format: OutputFrameFormat::PlanarYuv420Bytes,
+            rendering_mode: RenderingMode::GpuOptimized,
         }
     }
 }
@@ -62,7 +64,7 @@ pub(super) enum TestResult {
 
 impl TestCase {
     pub(super) fn renderer(&self) -> Renderer {
-        let renderer = create_renderer();
+        let renderer = create_renderer(self.rendering_mode);
         for (id, spec) in self.renderers.iter() {
             renderer
                 .register_renderer(id.clone(), spec.clone())

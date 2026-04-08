@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use crate::{
     scene::{
-        BorderRadius, HorizontalAlign, ImageScalingFilter, RGBAColor, RescaleMode, Size,
-        StatefulComponent, VerticalAlign, layout::StatefulLayoutComponent,
+        BorderRadius, HorizontalAlign, RGBAColor, RescaleMode, Size, StatefulComponent,
+        VerticalAlign, layout::StatefulLayoutComponent,
     },
     transformations::layout::{LayoutContent, Mask, NestedLayout},
 };
@@ -151,14 +151,12 @@ impl RescalerComponentParam {
                 border_color: RGBAColor(0, 0, 0, 0),
                 border_radius: BorderRadius::ZERO,
                 box_shadow: vec![],
-                scaling_filter: self.scaling_filter,
             }],
             child_nodes_count,
             border_width: self.border_width,
             border_color: self.border_color,
             border_radius,
             box_shadow: self.box_shadow.clone(),
-            scaling_filter: ImageScalingFilter::Bilinear,
         }
     }
 }

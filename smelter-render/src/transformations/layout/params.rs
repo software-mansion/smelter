@@ -250,7 +250,6 @@ impl ParamsBindGroups {
                     let scaling_filter_value: u32 = match scaling_filter {
                         ImageScalingFilter::Bilinear => 0,
                         ImageScalingFilter::Lanczos3 => 1,
-                        ImageScalingFilter::Trilinear => 2,
                     };
                     let mut texture_params_bytes = [0u8; 80];
                     texture_params_bytes[0..16].copy_from_slice(&border_radius_bytes);

@@ -123,7 +123,6 @@ impl ViewComponentParam {
             border_color: self.border_color,
             border_radius,
             box_shadow: self.box_shadow.clone(),
-            scaling_filter: Default::default(),
         }
     }
 
@@ -177,7 +176,6 @@ impl ViewComponentParam {
                     border_color: RGBAColor(0, 0, 0, 0),
                     border_radius: BorderRadius::ZERO,
                     box_shadow: vec![],
-                    scaling_filter: Default::default(),
                 }
             }
             _ => NestedLayout {
@@ -197,7 +195,6 @@ impl ViewComponentParam {
                 border_color: RGBAColor(0, 0, 0, 0),
                 border_radius: BorderRadius::ZERO,
                 box_shadow: vec![],
-                scaling_filter: Default::default(),
             },
         };
         (layout, static_offset)

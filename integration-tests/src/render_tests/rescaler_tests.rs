@@ -1,4 +1,4 @@
-use smelter_render::Resolution;
+use smelter_render::{RenderingMode, Resolution};
 
 use crate::paths::render_snapshots_dir_path;
 
@@ -241,15 +241,7 @@ fn rescaler_tests() {
         )),
         inputs: vec![grid_input.clone()],
         resolution: output_1080p,
-        ..default.clone()
-    });
-    runner.add(TestCase {
-        name: "rescaler/scaling_filter_trilinear",
-        steps: test_steps_from_scene(include_str!(
-            "./rescaler/scaling_filter_trilinear.scene.json"
-        )),
-        inputs: vec![grid_input.clone()],
-        resolution: output_1080p,
+        rendering_mode: RenderingMode::CpuOptimized,
         ..default.clone()
     });
     runner.add(TestCase {
@@ -259,6 +251,7 @@ fn rescaler_tests() {
         )),
         inputs: vec![grid_input.clone()],
         resolution: output_1080p,
+        rendering_mode: RenderingMode::GpuOptimized,
         ..default.clone()
     });
     runner.run()

@@ -1,6 +1,9 @@
 use std::{iter, mem};
 
-use crate::{Resolution, scene::RGBAColor};
+use crate::{
+    Resolution,
+    scene::{ImageScalingFilter, RGBAColor},
+};
 
 use super::{
     BoxShadow, Crop, LayoutContent, Mask, NestedLayout, RenderLayout, RenderLayoutContent,
@@ -341,7 +344,7 @@ impl NestedLayout {
                     },
                     border_color: self.border_color,
                     border_width: self.border_width,
-                    scaling_filter: self.scaling_filter,
+                    scaling_filter: ImageScalingFilter::Bilinear,
                     mip_level: 0.0,
                 },
                 LayoutContent::None => RenderLayoutContent::Color {

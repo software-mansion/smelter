@@ -11,10 +11,6 @@ export type RescalerStyleProps = {
    */
   rescaleMode?: Api.RescaleMode;
   /**
-   * (**default=`"bilinear"`**) Scaling filter used when rendering this component.
-   */
-  scalingFilter?: Api.ImageScalingFilter;
-  /**
    * (**default=`"center"`**) Horizontal alignment.
    */
   horizontalAlign?: Api.HorizontalAlign;
@@ -129,7 +125,6 @@ function sceneBuilder(
     border_width: style?.borderWidth,
     border_color: style?.borderColor,
     box_shadow: style?.boxShadow && intoApiBoxShadow(style.boxShadow),
-    scaling_filter: style?.scalingFilter,
   };
 }
 

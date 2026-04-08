@@ -3,9 +3,8 @@ use std::{ops::Deref, time::Duration};
 use crate::transformations::layout::NestedLayout;
 
 use super::{
-    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, ImageScalingFilter,
-    IntermediateNode, Position, RGBAColor, RescaleMode, SceneError, Size, StatefulComponent,
-    VerticalAlign,
+    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, IntermediateNode, Position,
+    RGBAColor, RescaleMode, SceneError, Size, StatefulComponent, VerticalAlign,
     components::RescalerComponent,
     layout::StatefulLayoutComponent,
     scene_state::BuildStateTreeCtx,
@@ -38,8 +37,6 @@ struct RescalerComponentParam {
     border_color: RGBAColor,
 
     box_shadow: Vec<BoxShadow>,
-
-    scaling_filter: ImageScalingFilter,
 }
 
 impl StatefulRescalerComponent {
@@ -120,7 +117,6 @@ impl RescalerComponent {
             border_width: self.border_width,
             border_color: self.border_color,
             box_shadow: self.box_shadow,
-            scaling_filter: self.scaling_filter,
         };
 
         let props_changed = previous_state

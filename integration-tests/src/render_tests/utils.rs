@@ -81,7 +81,7 @@ fn get_graphics_ctx() -> GraphicsContext {
     .clone()
 }
 
-pub(super) fn create_renderer() -> Renderer {
+pub(super) fn create_renderer(rendering_mode: RenderingMode) -> Renderer {
     let wgpu_ctx = get_graphics_ctx();
 
     Renderer::new(RendererOptions {
@@ -89,7 +89,7 @@ pub(super) fn create_renderer() -> Renderer {
         framerate: Framerate { num: 30, den: 1 },
         stream_fallback_timeout: Duration::from_secs(3),
         load_system_fonts: false,
-        rendering_mode: RenderingMode::GpuOptimized,
+        rendering_mode,
         device: wgpu_ctx.device,
         queue: wgpu_ctx.queue,
     })
