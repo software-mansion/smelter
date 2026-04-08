@@ -20,7 +20,7 @@ pub struct MipMapGenerator {
 }
 
 impl MipMapGenerator {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub(crate) fn new(device: &wgpu::Device) -> Self {
         let shader_module = device.create_shader_module(wgpu::include_wgsl!("mipmap_blit.wgsl"));
 
         let single_texture_layout =
@@ -107,37 +107,49 @@ impl MipMapGenerator {
         })
     }
 
-    /// Generate mipmaps for `source`. Encodes all blit passes into `encoder`.
-    /// Returns a `MippedTexture` with a full mip chain.
-    pub fn generate(
+    /// Generate mipmaps for `source`, reusing `existing` if its dimensions, format,
+    /// and mip count match. Otherwise allocates a new texture.
+    pub(crate) fn generate(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         ctx: &WgpuCtx,
         source: &wgpu::Texture,
         format: wgpu::TextureFormat,
         max_levels: u32,
+        existing: Option<MippedTexture>,
     ) -> MippedTexture {
         let w = source.width();
         let h = source.height();
         let max_possible = (w.max(h) as f32).log2().floor() as u32 + 1;
         let mip_count = max_levels.clamp(1, max_possible);
 
-        let mipped_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("MipMapGenerator mipped texture"),
-            size: wgpu::Extent3d {
-                width: w,
-                height: h,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: mip_count,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
+        let can_reuse = existing.as_ref().is_some_and(|e| {
+            e.texture.width() == w
+                && e.texture.height() == h
+                && e.mip_count == mip_count
+                && e.texture.format() == format
         });
+
+        let mipped_texture = if can_reuse {
+            existing.unwrap().texture
+        } else {
+            ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("MipMapGenerator mipped texture"),
+                size: wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: mip_count,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            })
+        };
 
         // Copy source mip 0 → mipped mip 0
         encoder.copy_texture_to_texture(

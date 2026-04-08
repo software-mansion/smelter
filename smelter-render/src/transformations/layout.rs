@@ -25,6 +25,7 @@ pub(crate) trait LayoutProvider: Send {
 pub(crate) struct LayoutNode {
     layout_provider: Box<dyn LayoutProvider>,
     shader: Arc<LayoutShader>,
+    mip_cache: HashMap<usize, crate::wgpu::utils::MippedTexture>,
 }
 
 /// When rendering we cut this fragment from texture and stretch it on
@@ -155,6 +156,7 @@ impl LayoutNode {
         Self {
             layout_provider,
             shader,
+            mip_cache: HashMap::new(),
         }
     }
 
@@ -184,9 +186,7 @@ impl LayoutNode {
         };
 
         // Apply global filter and compute mip levels for Lanczos3 child nodes.
-        // Only apply to sources that actually have texture data — ended inputs
-        // fall back to a 1x1 empty texture where Lanczos3 would sample
-        // non-existent mip levels.
+        // Only apply to sources that actually have texture data
         let mut mip_levels_needed: HashMap<usize, u32> = HashMap::new();
         for layout in &mut layouts {
             let layout_width = layout.width;
@@ -221,7 +221,6 @@ impl LayoutNode {
             }
         }
 
-        // Generate mipped textures for sources that need them
         let mut encoder =
             ctx.wgpu_ctx
                 .device
@@ -230,11 +229,13 @@ impl LayoutNode {
                 });
 
         let format = ctx.wgpu_ctx.default_view_format();
+        // Generate mipped textures for sources that need them
         let mut mipped_textures: HashMap<usize, crate::wgpu::utils::MippedTexture> = HashMap::new();
         for (source_index, max_level) in &mip_levels_needed {
             if let Some(node_texture) = sources.get(*source_index)
                 && let Some(state) = node_texture.state()
             {
+                let existing = self.mip_cache.remove(source_index);
                 let mipped = ctx.wgpu_ctx.utils.mipmap_generator.generate(
                     &mut encoder,
                     ctx.wgpu_ctx,
@@ -242,12 +243,12 @@ impl LayoutNode {
                     format,
                     // +1 because max_level is 0-indexed but generate expects a count
                     *max_level + 1,
+                    existing,
                 );
                 mipped_textures.insert(*source_index, mipped);
             }
         }
 
-        // Resolve texture views: one per layout entry
         let resolved_views: Vec<&wgpu::TextureView> = layouts
             .iter()
             .map(|layout| match &layout.content {
@@ -288,6 +289,8 @@ impl LayoutNode {
         );
 
         ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
+
+        self.mip_cache = mipped_textures;
     }
 }
 
