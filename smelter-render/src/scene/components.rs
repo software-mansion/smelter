@@ -233,6 +233,13 @@ pub enum RescaleMode {
     Fill,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ImageScalingFilter {
+    #[default]
+    Bilinear,
+    Lanczos3,
+}
+
 #[derive(Debug, Clone)]
 pub struct TilesComponent {
     pub id: Option<ComponentId>,

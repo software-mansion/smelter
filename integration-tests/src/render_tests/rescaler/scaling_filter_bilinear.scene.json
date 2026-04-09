@@ -1,0 +1,12 @@
+{
+    "video": {
+        "root": {
+            "type": "rescaler",
+            "mode": "fit",
+            "child": {
+                "type": "input_stream",
+                "input_id": "input_1"
+            }
+        }
+    }
+}

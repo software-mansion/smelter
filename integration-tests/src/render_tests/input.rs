@@ -108,4 +108,45 @@ impl TestInput {
             data,
         }
     }
+
+    /// Creates a grid of dark lines on a light background with varying line spacings.
+    /// The image is divided into vertical bands, each with a different grid period (from coarse
+    /// to fine, left to right). Bilinear downscaling will produce moire in the finer bands
+    /// while Lanczos3 will render them as a smooth gray.
+    pub fn new_multiscale_grid(index: usize, resolution: Resolution) -> Self {
+        let mut y_plane = vec![200u8; resolution.width * resolution.height];
+        let u_plane = vec![128u8; (resolution.width * resolution.height) / 4];
+        let v_plane = vec![128u8; (resolution.width * resolution.height) / 4];
+
+        // Vertical bands with decreasing grid periods (in source pixels).
+        // Line width is always 2px; only the spacing changes.
+        // Periods chosen so that at a 3:1 downscale they span from well-resolved
+        // (~7 output px) down to sub-Nyquist (~1 output px), where bilinear aliases.
+        let periods: &[usize] = &[21, 15, 12, 9, 7, 5, 4, 3];
+        let band_width = resolution.width / periods.len();
+
+        for y_coord in 0..resolution.height {
+            for x_coord in 0..resolution.width {
+                let band = (x_coord / band_width).min(periods.len() - 1);
+                let period = periods[band];
+                let on_vertical_line = (x_coord % period) < 2;
+                let on_horizontal_line = (y_coord % period) < 2;
+                if on_vertical_line || on_horizontal_line {
+                    y_plane[y_coord * resolution.width + x_coord] = 30;
+                }
+            }
+        }
+
+        let data = FrameData::PlanarYuv420(YuvPlanes {
+            y_plane: y_plane.into(),
+            u_plane: u_plane.into(),
+            v_plane: v_plane.into(),
+        });
+
+        Self {
+            name: format!("input_{index}"),
+            resolution,
+            data,
+        }
+    }
 }

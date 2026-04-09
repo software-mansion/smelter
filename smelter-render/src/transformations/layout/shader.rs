@@ -4,7 +4,7 @@ use tracing::error;
 
 use crate::{
     Resolution,
-    state::node_texture::{NodeTexture, NodeTextureState},
+    state::node_texture::NodeTextureState,
     wgpu::{
         WgpuCtx, WgpuErrorScope,
         common_pipeline::{self, CreateShaderError, Sampler},
@@ -77,25 +77,38 @@ impl LayoutShader {
         wgpu_ctx: &Arc<WgpuCtx>,
         output_resolution: Resolution,
         layouts: Vec<RenderLayout>,
-        textures: &[Option<&NodeTexture>],
+        texture_views: &[&wgpu::TextureView],
         target: &NodeTextureState,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         let layout_infos = self
             .params_bind_groups
             .update(wgpu_ctx, output_resolution, layouts);
-        let input_texture_bgs: Vec<wgpu::BindGroup> = self.input_textures_bg(wgpu_ctx, textures);
 
-        if layout_infos.len() != input_texture_bgs.len() {
+        if layout_infos.len() != texture_views.len() {
             error!(
-                "Layout infos len ({:?}) and textures bind groups count ({:?}) mismatch",
+                "Layout infos len ({:?}) and texture views count ({:?}) mismatch",
                 layout_infos.len(),
-                input_texture_bgs.len()
+                texture_views.len()
             );
         }
 
-        let mut encoder = wgpu_ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: LABEL });
+        let input_texture_bgs: Vec<wgpu::BindGroup> = texture_views
+            .iter()
+            .map(|view| {
+                wgpu_ctx
+                    .device
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        layout: &wgpu_ctx.format.single_texture_layout,
+                        label: LABEL,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(view),
+                        }],
+                    })
+            })
+            .collect();
+
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: LABEL,
@@ -133,34 +146,5 @@ impl LayoutShader {
                 wgpu_ctx.plane.draw(&mut render_pass);
             }
         }
-        wgpu_ctx.queue.submit(Some(encoder.finish()));
-    }
-
-    fn input_textures_bg(
-        &self,
-        wgpu_ctx: &Arc<WgpuCtx>,
-        textures: &[Option<&NodeTexture>],
-    ) -> Vec<wgpu::BindGroup> {
-        textures
-            .iter()
-            .map(|texture| {
-                texture
-                    .and_then(|texture| texture.state())
-                    .map(|state| state.view())
-                    .unwrap_or(wgpu_ctx.default_empty_view())
-            })
-            .map(|view| {
-                wgpu_ctx
-                    .device
-                    .create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: &wgpu_ctx.format.single_texture_layout,
-                        label: LABEL,
-                        entries: &[wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(view),
-                        }],
-                    })
-            })
-            .collect()
     }
 }

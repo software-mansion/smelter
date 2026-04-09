@@ -1,6 +1,9 @@
 use std::{iter, mem};
 
-use crate::{Resolution, scene::RGBAColor};
+use crate::{
+    Resolution,
+    scene::{ImageScalingFilter, RGBAColor},
+};
 
 use super::{
     BoxShadow, Crop, LayoutContent, Mask, NestedLayout, RenderLayout, RenderLayoutContent,
@@ -142,6 +145,8 @@ impl NestedLayout {
                 index,
                 border_color: RGBAColor(_, _, _, _),
                 border_width: _,
+                scaling_filter: _,
+                mip_level: _,
             } => {
                 // TODO: handle a case when only border is visible (currently impossible)
                 let size = input_resolutions.get(*index).copied().flatten();
@@ -191,11 +196,15 @@ impl NestedLayout {
                         border_color,
                         border_width,
                         crop,
+                        scaling_filter,
+                        mip_level,
                     } => RenderLayoutContent::ChildNode {
                         index,
                         border_color,
                         border_width: border_width * unified_scale,
                         crop,
+                        scaling_filter,
+                        mip_level,
                     },
                     RenderLayoutContent::BoxShadow { color, blur_radius } => {
                         RenderLayoutContent::BoxShadow {
@@ -249,6 +258,8 @@ impl NestedLayout {
                         crop: child_crop,
                         border_color,
                         border_width,
+                        scaling_filter,
+                        mip_level,
                     } => {
                         // Calculate how much top/left coordinates changed when cropping. It represents
                         // how much was removed in layout coordinates. Ignore the change of a position that
@@ -279,6 +290,8 @@ impl NestedLayout {
                                 crop,
                                 border_color,
                                 border_width,
+                                scaling_filter,
+                                mip_level,
                             },
                             border_radius: child.border_radius * unified_scale,
                             masks: self.parent_parent_masks(&child.masks),
@@ -331,6 +344,8 @@ impl NestedLayout {
                     },
                     border_color: self.border_color,
                     border_width: self.border_width,
+                    scaling_filter: ImageScalingFilter::Bilinear,
+                    mip_level: 0.0,
                 },
                 LayoutContent::None => RenderLayoutContent::Color {
                     color: RGBAColor(0, 0, 0, 0),
