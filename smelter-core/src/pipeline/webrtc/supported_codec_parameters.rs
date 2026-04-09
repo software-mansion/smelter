@@ -37,27 +37,25 @@ pub fn vp9_codec_params() -> Vec<RTCRtpCodecParameters> {
 }
 
 pub fn h264_codec_params() -> Vec<RTCRtpCodecParameters> {
-    let profile_level_ids = [
-        "42001f", // baseline, 3.1
-        "42e01f", // constrained baseline, 3.1
-        "42002a", // baseline, 4.2
-        "4d001f", // main, 3.1
-        "4d0028", // main, 4.0
-        "640028", // high, 4.0
-        "640029", // high, 4.1
-        "64002a", // high, 4.2
-        "640032", // high, 5.0
-        "640033", // high, 5.1
+    // (payload_type, packetization_mode, profile_level)
+    let codec_configs = [
+        // constrained baseline, 3.1, included only for Twitch compatibility, SDP offer is rejected if it's missing.
+        (102, 1, "42e01f"),
+        (103, 0, "42e01f"),
+        // constrained baseline, 5.1
+        (104, 1, "42e033"),
+        (105, 0, "42e033"),
+        // main, 5.1
+        (106, 1, "4d0033"),
+        (107, 0, "4d0033"),
+        // high, 5.1
+        (108, 1, "640033"),
+        (109, 0, "640033"),
     ];
 
-    let opus_payload_types: [u8; 2] = [110, 111];
-    let payload_types = (100u8..).filter(|pt| !opus_payload_types.contains(pt));
-
-    profile_level_ids
+    codec_configs
         .iter()
-        .flat_map(|plid| [1, 0].map(|pmode| (plid, pmode)))
-        .zip(payload_types)
-        .map(|((plid, pmode), payload_type)| RTCRtpCodecParameters {
+        .map(|(payload_type, pmode, plid)| RTCRtpCodecParameters {
             capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_H264.to_owned(),
                 clock_rate: 90000,
@@ -67,7 +65,7 @@ pub fn h264_codec_params() -> Vec<RTCRtpCodecParameters> {
                 ),
                 rtcp_feedback: get_video_rtcp_feedback(),
             },
-            payload_type,
+            payload_type: *payload_type,
             ..Default::default()
         })
         .collect()

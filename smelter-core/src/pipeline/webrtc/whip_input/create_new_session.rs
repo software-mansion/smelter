@@ -9,6 +9,7 @@ use crate::pipeline::{
     webrtc::{
         WhipWhepServerState,
         error::WhipWhepServerError,
+        offer_codec_filter::codecs_from_offer,
         peer_connection_recvonly::RecvonlyPeerConnection,
         whip_input::{
             WhipTrackContext, on_track::handle_on_track, state::WhipInputSession,
@@ -32,9 +33,12 @@ pub(crate) async fn create_new_whip_session(
             input.jitter_buffer_options.clone(),
         ))
     })?;
-    let video_codecs = video_params_compliant_with_offer(&state.ctx, &video_preferences, &offer);
+    let offer_codecs = codecs_from_offer(&offer);
+    let video_codecs =
+        video_params_compliant_with_offer(&state.ctx, &video_preferences, &offer_codecs);
 
-    let peer_connection = RecvonlyPeerConnection::new(&state.ctx, &video_codecs).await?;
+    let peer_connection =
+        RecvonlyPeerConnection::new(&state.ctx, &video_codecs, &offer_codecs.opus).await?;
 
     let _video_transceiver = peer_connection.new_video_track(&video_codecs).await?;
     let _audio_transceiver = peer_connection.new_audio_track().await?;

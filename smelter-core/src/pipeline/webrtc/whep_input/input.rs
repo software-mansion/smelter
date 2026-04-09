@@ -10,12 +10,14 @@ use tracing::{Instrument, Level, debug, span};
 use url::Url;
 
 use crate::{
+    AudioChannels,
     pipeline::{
         input::Input,
         rtp::RtpJitterBufferInitOptions,
         webrtc::{
             http_client::{SdpAnswer, WhipWhepHttpClient},
             peer_connection_recvonly::RecvonlyPeerConnection,
+            supported_codec_parameters::opus_codec_params,
             whep_input::{
                 WhepTrackContext, listen_for_trickle_candidates::listen_for_trickle_candidates,
                 on_track::handle_on_track, resolve_video_preferences::resolve_video_preferences,
@@ -117,7 +119,11 @@ async fn init_whep_client(
     let client = WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
     let (video_preferences, video_codecs_params) =
         resolve_video_preferences(&ctx, options.video_preferences)?;
-    let pc = RecvonlyPeerConnection::new(&ctx, &video_codecs_params).await?;
+
+    // WHEP input creates the offer (client side), so use hardcoded audio codec defaults.
+    // Our decoder supports only stereo.
+    let audio_codecs_params = opus_codec_params(true /* fec_first */, AudioChannels::Stereo);
+    let pc = RecvonlyPeerConnection::new(&ctx, &video_codecs_params, &audio_codecs_params).await?;
 
     let _video_transceiver = pc.new_video_track(&video_codecs_params).await?;
     let _audio_transceiver = pc.new_audio_track().await?;

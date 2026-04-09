@@ -29,10 +29,7 @@ use webrtc::{
     track::track_remote::TrackRemote,
 };
 
-use crate::{
-    AudioChannels,
-    pipeline::{PipelineCtx, webrtc::supported_codec_parameters::opus_codec_params},
-};
+use crate::pipeline::PipelineCtx;
 
 #[derive(Debug, Clone)]
 pub(crate) struct OnTrackHdlrContext {
@@ -49,8 +46,9 @@ impl RecvonlyPeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
         video_codecs: &[RTCRtpCodecParameters],
+        audio_codecs: &[RTCRtpCodecParameters],
     ) -> Result<Self, webrtc::Error> {
-        let mut media_engine = media_engine_with_codecs(video_codecs)?;
+        let mut media_engine = media_engine_with_codecs(video_codecs, audio_codecs)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
         let api = APIBuilder::new()
@@ -224,11 +222,11 @@ impl WeakRecvonlyPeerConnection {
 
 fn media_engine_with_codecs(
     video_codecs: &[RTCRtpCodecParameters],
+    audio_codecs: &[RTCRtpCodecParameters],
 ) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
 
-    // our decoder supports only stereo
-    for audio_codec in opus_codec_params(true /* fec_first */, AudioChannels::Stereo) {
+    for audio_codec in audio_codecs {
         media_engine.register_codec(audio_codec.clone(), RTPCodecType::Audio)?;
     }
 

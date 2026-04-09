@@ -2,16 +2,13 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 use tracing::warn;
-use webrtc::{
-    peer_connection::sdp::session_description::RTCSessionDescription,
-    rtp_transceiver::rtp_codec::RTCRtpCodecParameters,
-};
+use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 
 use crate::{
     codecs::VideoDecoderOptions,
     pipeline::webrtc::{
         h264_vulkan_capability_filter::filter_h264_codecs_for_vulkan_decoder,
-        offer_codec_filter::video_codecs_from_offer,
+        offer_codec_filter::OfferCodecs,
     },
     prelude::WebrtcVideoDecoderOptions,
 };
@@ -72,9 +69,8 @@ pub(super) fn resolve_video_preferences(
 pub(super) fn video_params_compliant_with_offer(
     ctx: &Arc<PipelineCtx>,
     video_preferences: &[VideoDecoderOptions],
-    offer: &RTCSessionDescription,
+    offer_codecs: &OfferCodecs,
 ) -> Vec<RTCRtpCodecParameters> {
-    let offer_codecs = video_codecs_from_offer(offer);
     let codecs: Vec<RTCRtpCodecParameters> = video_preferences
         .iter()
         .flat_map(|pref| match pref {

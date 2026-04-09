@@ -23,15 +23,13 @@ use webrtc::{
         sdp::session_description::RTCSessionDescription,
     },
     rtp_transceiver::{
-        rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
+        rtp_codec::{RTCRtpCodecCapability, RTPCodecType},
         rtp_sender::RTCRtpSender,
     },
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-use crate::pipeline::webrtc::{
-    error::WhipWhepServerError, offer_codec_filter::video_codecs_from_offer,
-};
+use crate::pipeline::webrtc::{error::WhipWhepServerError, offer_codec_filter::codecs_from_offer};
 
 use crate::prelude::*;
 
@@ -283,8 +281,8 @@ fn register_codecs(
     audio_encoder: Option<AudioEncoderOptions>,
     offer: &RTCSessionDescription,
 ) -> Result<(), WhipWhepServerError> {
+    let offer_codecs = codecs_from_offer(offer);
     if let Some(encoder) = video_encoder {
-        let video_codecs = video_codecs_from_offer(offer);
         match encoder {
             VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
                 // For Vulkan H264: we don't filter H264 codec subtypes from the offer.
@@ -293,17 +291,17 @@ fn register_codecs(
                 // By echoing all H264 variants from the offer back in the answer, we
                 // ensure SDP negotiation succeeds with any client. The actual encoded
                 // stream will always use the hardcoded profile/level.
-                for codec in video_codecs.h264 {
+                for codec in offer_codecs.h264 {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
             VideoEncoderOptions::FfmpegVp8(_) => {
-                for codec in video_codecs.vp8 {
+                for codec in offer_codecs.vp8 {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
             VideoEncoderOptions::FfmpegVp9(_) => {
-                for codec in video_codecs.vp9 {
+                for codec in offer_codecs.vp9 {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
@@ -317,16 +315,11 @@ fn register_codecs(
                     AudioChannels::Mono => 1,
                     AudioChannels::Stereo => 2,
                 };
-                let fec_first = opts.forward_error_correction;
-                media_engine.register_codec(
-                    create_opus_codec_params(opts.sample_rate, channels, fec_first),
-                    RTPCodecType::Audio,
-                )?;
-
-                media_engine.register_codec(
-                    create_opus_codec_params(opts.sample_rate, channels, !fec_first),
-                    RTPCodecType::Audio,
-                )?;
+                for mut codec in offer_codecs.opus {
+                    codec.capability.clock_rate = opts.sample_rate;
+                    codec.capability.channels = channels;
+                    media_engine.register_codec(codec, RTPCodecType::Audio)?;
+                }
             }
             AudioEncoderOptions::FdkAac(_) => {
                 return Err(WhipWhepServerError::InternalError(
@@ -336,26 +329,6 @@ fn register_codecs(
         }
     }
     Ok(())
-}
-
-fn create_opus_codec_params(
-    sample_rate: u32,
-    channels: u16,
-    fec_enabled: bool,
-) -> RTCRtpCodecParameters {
-    let (payload_type, fec) = if fec_enabled { (111, 1) } else { (110, 0) };
-
-    RTCRtpCodecParameters {
-        capability: RTCRtpCodecCapability {
-            mime_type: MIME_TYPE_OPUS.to_owned(),
-            clock_rate: sample_rate,
-            channels,
-            sdp_fmtp_line: format!("minptime=10;useinbandfec={fec}"),
-            rtcp_feedback: vec![],
-        },
-        payload_type,
-        ..Default::default()
-    }
 }
 
 async fn cleanup_unnegotiated_tracks(

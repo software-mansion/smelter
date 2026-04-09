@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use tracing::warn;
 use webrtc::{
-    api::media_engine::{MIME_TYPE_H264, MIME_TYPE_VP8, MIME_TYPE_VP9},
+    api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     peer_connection::sdp::session_description::RTCSessionDescription,
     rtp_transceiver::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters},
 };
@@ -16,45 +16,57 @@ const DEFAULT_PROFILE_LEVEL_ID: &str = "42000a";
 /// RFC 6184 Section 8.1: default packetization-mode is 0.
 const DEFAULT_PACKETIZATION_MODE: &str = "0";
 
-/// Video codec parameters extracted from an SDP offer, grouped by codec type.
+/// Codec parameters extracted from an SDP offer, grouped by codec type.
 /// Payload types come directly from the offer, so they are guaranteed not to collide.
 #[derive(Debug, Clone)]
-pub(crate) struct OfferVideoCodecs {
+pub(crate) struct OfferCodecs {
     pub h264: Vec<RTCRtpCodecParameters>,
     pub vp8: Vec<RTCRtpCodecParameters>,
     pub vp9: Vec<RTCRtpCodecParameters>,
+    pub opus: Vec<RTCRtpCodecParameters>,
 }
 
-/// Parses the SDP offer once and extracts all video codec parameters (H264, VP8, VP9).
+/// Parses the SDP offer once and extracts all codec parameters
+/// (H264, VP8, VP9 for video; Opus for audio).
 ///
 /// For H264, each offered variant is emitted with its original payload type and fmtp,
 /// so negotiation produces an exact match regardless of profile/level.
 ///
 /// For VP8/VP9, the payload type is copied from the offer.
-pub(crate) fn video_codecs_from_offer(offer: &RTCSessionDescription) -> OfferVideoCodecs {
+///
+/// For Opus, each offered variant is emitted with its original payload type, fmtp,
+/// clock rate, and channel count.
+pub(crate) fn codecs_from_offer(offer: &RTCSessionDescription) -> OfferCodecs {
     let Some(session_description) = offer.unmarshal().ok() else {
-        warn!("Failed to parse SDP offer for video codecs");
-        return OfferVideoCodecs {
+        warn!("Failed to parse SDP offer for codecs");
+        return OfferCodecs {
             h264: Vec::new(),
             vp8: Vec::new(),
             vp9: Vec::new(),
+            opus: Vec::new(),
         };
     };
 
     let mut h264_codecs = Vec::new();
     let mut vp8_codecs = Vec::new();
     let mut vp9_codecs = Vec::new();
+    let mut opus_codecs = Vec::new();
 
     let mut h264_seen = HashSet::new();
     let mut vp8_seen = HashSet::new();
     let mut vp9_seen = HashSet::new();
+    let mut opus_seen = HashSet::new();
 
     for md in &session_description.media_descriptions {
-        if !md.media_name.media.eq_ignore_ascii_case("video") {
+        let media_type = md.media_name.media.as_str();
+        let is_video = media_type.eq_ignore_ascii_case("video");
+        let is_audio = media_type.eq_ignore_ascii_case("audio");
+        if !is_video && !is_audio {
             continue;
         }
 
-        let mut codec_pts: Vec<(u8, &str)> = Vec::new(); // (pt, codec_name)
+        // (pt, codec_name, clock_rate, channels)
+        let mut codec_pts: Vec<(u8, &str, u32, u16)> = Vec::new();
         let mut fmtp_by_pt: HashMap<u8, &str> = HashMap::new();
 
         for attr in &md.attributes {
@@ -67,12 +79,26 @@ pub(crate) fn video_codecs_from_offer(offer: &RTCSessionDescription) -> OfferVid
                     let Some(pt) = pt_str.trim().parse::<u8>().ok() else {
                         continue;
                     };
-                    let codec_name = codec_desc.split('/').next().unwrap_or("");
-                    if codec_name.eq_ignore_ascii_case("H264")
-                        || codec_name.eq_ignore_ascii_case("VP8")
-                        || codec_name.eq_ignore_ascii_case("VP9")
-                    {
-                        codec_pts.push((pt, codec_name));
+                    // codec_desc format: "codec_name/clock_rate[/channels]"
+                    let mut parts = codec_desc.split('/');
+                    let codec_name = parts.next().unwrap_or("");
+                    let clock_rate = parts
+                        .next()
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .unwrap_or(0);
+                    let channels = parts
+                        .next()
+                        .and_then(|s| s.parse::<u16>().ok())
+                        .unwrap_or(0);
+
+                    let recognized = (is_video
+                        && (codec_name.eq_ignore_ascii_case("H264")
+                            || codec_name.eq_ignore_ascii_case("VP8")
+                            || codec_name.eq_ignore_ascii_case("VP9")))
+                        || (is_audio && codec_name.eq_ignore_ascii_case("opus"));
+
+                    if recognized {
+                        codec_pts.push((pt, codec_name, clock_rate, channels));
                     }
                 }
                 "fmtp" => {
@@ -86,7 +112,7 @@ pub(crate) fn video_codecs_from_offer(offer: &RTCSessionDescription) -> OfferVid
             }
         }
 
-        for (pt, codec_name) in codec_pts {
+        for (pt, codec_name, clock_rate, channels) in codec_pts {
             if codec_name.eq_ignore_ascii_case("H264") {
                 let (profile_level_id, packetization_mode) = match fmtp_by_pt.get(&pt) {
                     Some(fmtp) => parse_h264_fmtp(fmtp),
@@ -138,14 +164,33 @@ pub(crate) fn video_codecs_from_offer(offer: &RTCSessionDescription) -> OfferVid
                     payload_type: pt,
                     ..Default::default()
                 });
+            } else if codec_name.eq_ignore_ascii_case("opus") {
+                let fmtp = fmtp_by_pt.get(&pt).copied().unwrap_or("").to_owned();
+
+                if !opus_seen.insert((pt, fmtp.clone())) {
+                    continue;
+                }
+
+                opus_codecs.push(RTCRtpCodecParameters {
+                    capability: RTCRtpCodecCapability {
+                        mime_type: MIME_TYPE_OPUS.to_owned(),
+                        clock_rate,
+                        channels,
+                        sdp_fmtp_line: fmtp,
+                        rtcp_feedback: vec![],
+                    },
+                    payload_type: pt,
+                    ..Default::default()
+                });
             }
         }
     }
 
-    OfferVideoCodecs {
+    OfferCodecs {
         h264: h264_codecs,
         vp8: vp8_codecs,
         vp9: vp9_codecs,
+        opus: opus_codecs,
     }
 }
 
