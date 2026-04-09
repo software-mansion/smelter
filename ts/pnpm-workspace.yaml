@@ -6,6 +6,7 @@ packages:
   - 'smelter-web-wasm'
   - 'smelter-web-client'
   - 'examples/node-examples'
+  - 'examples/node-workerd'
   - 'examples/vite-example'
   - 'examples/vite-web-client'
   - 'create-smelter-app'

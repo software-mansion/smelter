@@ -3,8 +3,7 @@ import fs, { mkdirp, pathExists } from 'fs-extra';
 import type { ChildProcess } from 'child_process';
 import { spawn as nodeSpawn } from 'child_process';
 import { promisify } from 'util';
-import { Stream } from 'stream';
-import fetch from 'node-fetch';
+import { Readable, Stream } from 'stream';
 
 const pipeline = promisify(Stream.pipeline);
 
@@ -54,11 +53,11 @@ export async function sleep(timeoutMs: number): Promise<void> {
 const exampleAssets = [
   {
     path: 'BigBuckBunny.mp4',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    url: 'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fps490s.mp4',
   },
   {
     path: 'ElephantsDream.mp4',
-    url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    url: 'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/ElephantsDream720p24fps60s.mp4',
   },
 ];
 
@@ -81,7 +80,7 @@ async function download(url: string, destination: string): Promise<void> {
     throw err;
   }
   if (response.body) {
-    await pipeline(response.body, fs.createWriteStream(destination));
+    await pipeline(Readable.fromWeb(response.body as any), fs.createWriteStream(destination));
   } else {
     throw Error(`Response with empty body.`);
   }

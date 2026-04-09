@@ -16,7 +16,7 @@ export type ApiRequest = {
 export type MultipartRequest = {
   method: 'POST';
   route: string;
-  body: any; //FormData
+  body: FormData;
   headers?: Record<string, string>;
 };
 

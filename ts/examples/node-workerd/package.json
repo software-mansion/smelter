@@ -1,0 +1,40 @@
+{
+  "name": "node-workerd",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "src/index.tsx",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "watch": "rollup -w --no-watch.clearScreen -c",
+    "build": "rollup -c",
+    "clean": "rimraf dist"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@swmansion/smelter": "workspace:0.4.0-rc.0",
+    "@swmansion/smelter-core": "workspace:0.4.0-rc.0",
+    "@swmansion/smelter-node": "workspace:0.4.0-rc.0",
+    "pino": "^9.5.0",
+    "react": "^18.3.1",
+    "ts-node": "^10.9.2"
+  },
+  "devDependencies": {
+    "@rollup/plugin-alias": "^6.0.0",
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-inject": "^5.0.5",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "rollup": "^4.59.0",
+    "unenv": "^1.10.0"
+  },
+  "keywords": [],
+  "packageManager": "pnpm@10.12.1"
+}
