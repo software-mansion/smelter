@@ -242,6 +242,7 @@ pub async fn handle_image(
     .unwrap()
 }
 
+// This type is currently used only for OpenAPI generation
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 pub struct RegisterFontRequest {
     #[schema(format = Binary, content_media_type = "application/octet-stream")]
