@@ -61,10 +61,7 @@ pub(super) fn resolve_video_preferences(
 }
 
 /// Builds codec parameters from video preferences, with codec variants copied directly
-/// from the SDP offer. This ensures payload types don't collide across codecs, since
-/// all payload types come from the same offer.
-///
-/// For codecs not present in the offer, falls back to hardcoded defaults.
+/// from the SDP offer.
 /// For Vulkan H264, the offer-derived codecs are further filtered by hardware capabilities.
 pub(super) fn video_params_compliant_with_offer(
     ctx: &Arc<PipelineCtx>,

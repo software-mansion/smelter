@@ -65,8 +65,10 @@ pub(crate) fn codecs_from_offer(offer: &RTCSessionDescription) -> OfferCodecs {
             continue;
         }
 
-        // (pt, codec_name, clock_rate, channels)
-        let mut codec_pts: Vec<(u8, &str, u32, u16)> = Vec::new();
+        // (pt, codec_name)
+        let mut video_codec_pts: Vec<(u8, &str)> = Vec::new();
+        // (pt, clock_rate, channels) — Opus-specific fields per RFC 4566
+        let mut opus_pts: Vec<(u8, u32, u16)> = Vec::new();
         let mut fmtp_by_pt: HashMap<u8, &str> = HashMap::new();
 
         for attr in &md.attributes {
@@ -82,23 +84,25 @@ pub(crate) fn codecs_from_offer(offer: &RTCSessionDescription) -> OfferCodecs {
                     // codec_desc format: "codec_name/clock_rate[/channels]"
                     let mut parts = codec_desc.split('/');
                     let codec_name = parts.next().unwrap_or("");
-                    let clock_rate = parts
-                        .next()
-                        .and_then(|s| s.parse::<u32>().ok())
-                        .unwrap_or(0);
-                    let channels = parts
-                        .next()
-                        .and_then(|s| s.parse::<u16>().ok())
-                        .unwrap_or(0);
 
-                    let recognized = (is_video
+                    if is_video
                         && (codec_name.eq_ignore_ascii_case("H264")
                             || codec_name.eq_ignore_ascii_case("VP8")
-                            || codec_name.eq_ignore_ascii_case("VP9")))
-                        || (is_audio && codec_name.eq_ignore_ascii_case("opus"));
-
-                    if recognized {
-                        codec_pts.push((pt, codec_name, clock_rate, channels));
+                            || codec_name.eq_ignore_ascii_case("VP9"))
+                    {
+                        video_codec_pts.push((pt, codec_name));
+                    } else if is_audio && codec_name.eq_ignore_ascii_case("opus") {
+                        // clock_rate is mandatory per RFC 4566; RFC 7587 mandates 48000 for Opus
+                        let clock_rate = parts
+                            .next()
+                            .and_then(|s| s.parse::<u32>().ok())
+                            .unwrap_or(48000);
+                        // channels is optional; RFC 4566 default is 1
+                        let channels = parts
+                            .next()
+                            .and_then(|s| s.parse::<u16>().ok())
+                            .unwrap_or(1);
+                        opus_pts.push((pt, clock_rate, channels));
                     }
                 }
                 "fmtp" => {
@@ -112,7 +116,7 @@ pub(crate) fn codecs_from_offer(offer: &RTCSessionDescription) -> OfferCodecs {
             }
         }
 
-        for (pt, codec_name, clock_rate, channels) in codec_pts {
+        for (pt, codec_name) in video_codec_pts {
             if codec_name.eq_ignore_ascii_case("H264") {
                 let (profile_level_id, packetization_mode) = match fmtp_by_pt.get(&pt) {
                     Some(fmtp) => parse_h264_fmtp(fmtp),
@@ -164,25 +168,27 @@ pub(crate) fn codecs_from_offer(offer: &RTCSessionDescription) -> OfferCodecs {
                     payload_type: pt,
                     ..Default::default()
                 });
-            } else if codec_name.eq_ignore_ascii_case("opus") {
-                let fmtp = fmtp_by_pt.get(&pt).copied().unwrap_or("").to_owned();
-
-                if !opus_seen.insert((pt, fmtp.clone())) {
-                    continue;
-                }
-
-                opus_codecs.push(RTCRtpCodecParameters {
-                    capability: RTCRtpCodecCapability {
-                        mime_type: MIME_TYPE_OPUS.to_owned(),
-                        clock_rate,
-                        channels,
-                        sdp_fmtp_line: fmtp,
-                        rtcp_feedback: vec![],
-                    },
-                    payload_type: pt,
-                    ..Default::default()
-                });
             }
+        }
+
+        for (pt, clock_rate, channels) in opus_pts {
+            let fmtp = fmtp_by_pt.get(&pt).copied().unwrap_or("").to_owned();
+
+            if !opus_seen.insert((pt, fmtp.clone())) {
+                continue;
+            }
+
+            opus_codecs.push(RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_OPUS.to_owned(),
+                    clock_rate,
+                    channels,
+                    sdp_fmtp_line: fmtp,
+                    rtcp_feedback: vec![],
+                },
+                payload_type: pt,
+                ..Default::default()
+            });
         }
     }
 
