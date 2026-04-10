@@ -285,12 +285,11 @@ fn register_codecs(
     if let Some(encoder) = video_encoder {
         match encoder {
             VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
-                // For Vulkan H264: we don't filter H264 codec subtypes from the offer.
-                // The Vulkan encoder uses a single hardcoded profile/level (currently
-                // Constrained Baseline 4.1) regardless of what was negotiated in SDP.
-                // By echoing all H264 variants from the offer back in the answer, we
-                // ensure SDP negotiation succeeds with any client. The actual encoded
-                // stream will always use the hardcoded profile/level.
+                // We intentionally don't filter H264 codec subtypes from the offer.
+                // We echo all offered H264 variants in the answer to maximize
+                // negotiation success across clients. The encoder output is driven by
+                // selected encoder implementation/options, not by negotiated H264
+                // profile/level details from SDP.
                 for codec in offer_codecs.h264 {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }

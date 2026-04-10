@@ -6,7 +6,8 @@ use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 
 use crate::{
     pipeline::webrtc::supported_codec_parameters::{
-        h264_codec_params, opus_codec_params, vp8_codec_params, vp9_codec_params,
+        h264_cb_31_codec_params, h264_codec_params, opus_codec_params, vp8_codec_params,
+        vp9_codec_params,
     },
     prelude::*,
 };
@@ -135,7 +136,8 @@ pub(super) fn codec_params_from_preferences(
             .iter()
             .flat_map(|pref| match pref {
                 VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
-                    h264_codec_params()
+                    // Constrained baseline 3.1 included for Twitch compatibility (rejects SDP offers without it)
+                    [h264_cb_31_codec_params(), h264_codec_params()].concat()
                 }
                 VideoEncoderOptions::FfmpegVp8(_) => vp8_codec_params(),
                 VideoEncoderOptions::FfmpegVp9(_) => vp9_codec_params(),
@@ -147,7 +149,8 @@ pub(super) fn codec_params_from_preferences(
                 )
             })
             .collect(),
-        None => h264_codec_params(), // default codecs register to make audio-only stream work
+        // default codecs register to make audio-only stream work
+        None => [h264_cb_31_codec_params(), h264_codec_params()].concat(),
     };
 
     // Opus is the only supported codec. The only negotiable option in AudioEncoderOptions is FEC.

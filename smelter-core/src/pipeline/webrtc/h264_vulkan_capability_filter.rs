@@ -15,24 +15,19 @@ pub(crate) fn filter_h264_codecs_for_vulkan_decoder(
         return codecs;
     };
 
-    filter_h264_codecs_by_profile_level_support(codecs, support)
-}
-
-fn filter_h264_codecs_by_profile_level_support(
-    codecs: Vec<RTCRtpCodecParameters>,
-    support: crate::graphics_context::H264ProfileLevelSupport,
-) -> Vec<RTCRtpCodecParameters> {
     codecs
         .into_iter()
-        .filter(|codec| {
-            h264_profile_level_idc_from_fmtp(&codec.capability.sdp_fmtp_line).is_none_or(
-                |(profile_idc, level_idc)| {
-                    support
-                        .max_level_for_profile(profile_idc)
-                        .is_some_and(|max_level_idc| level_idc <= max_level_idc)
-                },
-            )
-        })
+        .filter(
+            |codec| match h264_profile_level_idc_from_fmtp(&codec.capability.sdp_fmtp_line) {
+                Some((profile_idc, level_idc)) => {
+                    match support.max_level_for_profile(profile_idc) {
+                        Some(max_level_idc) => level_idc <= max_level_idc,
+                        None => false,
+                    }
+                }
+                None => true,
+            },
+        )
         .collect()
 }
 

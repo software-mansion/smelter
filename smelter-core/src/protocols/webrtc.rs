@@ -1,3 +1,35 @@
+// WebRTC codec negotiation overview
+//
+// WHIP input (server - receives media from remote WHIP client)
+//
+// Remote client sends SDP offer. We extract codecs from the offer and echo
+// all offered variants in our answer for the codec types matching our decoder
+// preferences. For VulkanH264, the offer codecs are further filtered by
+// hardware decode capabilities (unsupported profiles/levels are dropped).
+//
+// WHEP input (client - pulls media from remote WHEP server)
+//
+// We create the SDP offer. Both FfmpegH264 and VulkanH264 advertise the max
+// supported level per profile (constrained baseline, main, high). For FfmpegH264
+// this is always level 5.1; for VulkanH264 the levels come from the GPU's
+// reported decode capabilities. Offer is sent to the server, answer is applied
+// as remote description.
+//
+// WHIP output (client - pushes media to remote WHIP server)
+//
+// We create the SDP offer from encoder preferences. For H.264 encoders (both
+// FFmpeg and Vulkan), the offer includes constrained baseline 3.1 (for Twitch
+// compatibility) plus constrained baseline, main, and high profiles at level
+// 5.1. After receiving the answer, we determine which codec was negotiated and
+// select the matching encoder.
+//
+// WHEP output (server - serves media to remote WHEP client)
+//
+// Remote client sends SDP offer. We echo all offered codec variants in our
+// answer to maximize negotiation success. The actual encoding is driven by our
+// encoder config, not the negotiated profile/level. Tracks where negotiation
+// fails are cleaned up (allowing audio-only or video-only streams).
+
 use reqwest::{Method, StatusCode};
 use smelter_render::Resolution;
 use std::sync::Arc;

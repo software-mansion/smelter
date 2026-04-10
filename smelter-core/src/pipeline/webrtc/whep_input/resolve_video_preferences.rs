@@ -5,7 +5,8 @@ use tracing::warn;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 
 use crate::pipeline::webrtc::supported_codec_parameters::{
-    h264_codec_params, vp8_codec_params, vp9_codec_params,
+    h264_codec_params, h264_codec_params_for_profile_level_support, vp8_codec_params,
+    vp9_codec_params,
 };
 use crate::prelude::*;
 
@@ -55,8 +56,22 @@ pub(crate) fn resolve_video_preferences(
     let mut video_codecs_params: Vec<RTCRtpCodecParameters> = Vec::new();
     for pref in &video_preferences {
         match pref {
-            VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
+            VideoDecoderOptions::FfmpegH264 => {
                 video_codecs_params.extend(h264_codec_params());
+            }
+            VideoDecoderOptions::VulkanH264 => {
+                match ctx
+                    .graphics_context
+                    .vulkan_h264_decode_profile_level_support()
+                {
+                    Some(support) => {
+                        video_codecs_params
+                            .extend(h264_codec_params_for_profile_level_support(support));
+                    }
+                    None => {
+                        video_codecs_params.extend(h264_codec_params());
+                    }
+                }
             }
             VideoDecoderOptions::FfmpegVp8 => {
                 video_codecs_params.extend(vp8_codec_params());
