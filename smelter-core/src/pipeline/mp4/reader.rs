@@ -205,7 +205,6 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         // Finds the first sample after the provided seek point.
         for entry in &stts.entries {
             let batch_duration = entry.sample_count as u64 * entry.sample_delta as u64;
-
             let duration_remaining = seek_timestamp - skipped_duration;
 
             if duration_remaining < batch_duration {
@@ -220,11 +219,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
             samples_skipped += entry.sample_count;
         }
 
-        let present_from_index = match present_from_index {
-            Some(0) => 1,
-            Some(idx) => idx,
-            None => return None,
-        };
+        let present_from_index = u32::max(present_from_index?, 1);
 
         // The STSS box contains indices of sync samples (e.g. key frames).
         // `None` means all samples are sync samples.
@@ -234,10 +229,8 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
             Some(stss) => {
                 let pos = stss.entries.partition_point(|&s| s <= present_from_index);
 
-                // `pos == 0` means no sync sample was found before the seek time.
-                // Fall back to the first sample.
                 match pos {
-                    0 => 1,
+                    0 => 1, // No sync sample found, fall back to the first sample
                     _ => *stss.entries.get(pos - 1).unwrap_or(&1),
                 }
             }
