@@ -5,6 +5,7 @@ use crate::{
     scene::{BorderRadius, BoxShadow, ImageScalingFilter, RGBAColor, Size},
     state::{RenderCtx, node_texture::NodeTexture},
     types::RenderingMode,
+    wgpu::utils::MippedTexture,
 };
 
 mod flatten;
@@ -25,7 +26,7 @@ pub(crate) trait LayoutProvider: Send {
 pub(crate) struct LayoutNode {
     layout_provider: Box<dyn LayoutProvider>,
     shader: Arc<LayoutShader>,
-    mip_cache: HashMap<usize, crate::wgpu::utils::MippedTexture>,
+    mip_cache: HashMap<usize, MippedTexture>,
 }
 
 /// When rendering we cut this fragment from texture and stretch it on
@@ -230,7 +231,7 @@ impl LayoutNode {
 
         let format = ctx.wgpu_ctx.default_view_format();
         // Generate mipped textures for sources that need them
-        let mut mipped_textures: HashMap<usize, crate::wgpu::utils::MippedTexture> = HashMap::new();
+        let mut mipped_textures: HashMap<usize, MippedTexture> = HashMap::new();
         for (source_index, max_level) in &mip_levels_needed {
             if let Some(node_texture) = sources.get(*source_index)
                 && let Some(state) = node_texture.state()
