@@ -220,7 +220,11 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
             samples_skipped += entry.sample_count;
         }
 
-        let present_from_index = present_from_index?;
+        let present_from_index = match present_from_index {
+            Some(0) => 1,
+            Some(idx) => idx,
+            None => return None,
+        };
 
         // The STSS box contains indices of sync samples (e.g. key frames).
         // `None` means all samples are sync samples.
@@ -232,7 +236,10 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
 
                 // `pos == 0` means no sync sample was found before the seek time.
                 // Fall back to the first sample.
-                if pos == 0 { 1 } else { stss.entries[pos - 1] }
+                match pos {
+                    0 => 1,
+                    _ => *stss.entries.get(pos - 1).unwrap_or(&1),
+                }
             }
             None => present_from_index,
         };
