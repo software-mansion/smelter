@@ -382,8 +382,13 @@
         "operationId": "register_font",
         "requestBody": {
           "content": {
-            "multipart/form-data": {}
-          }
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterFontRequest"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -3495,6 +3500,19 @@
       },
       "RGBAColor": {
         "type": "string"
+      },
+      "RegisterFontRequest": {
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "contentMediaType": "application/octet-stream"
+          }
+        }
       },
       "RegisterInput": {
         "oneOf": [

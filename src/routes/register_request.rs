@@ -242,11 +242,18 @@ pub async fn handle_image(
     .unwrap()
 }
 
+// This type is currently used only for OpenAPI generation
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+pub struct RegisterFontRequest {
+    #[schema(format = Binary, content_media_type = "application/octet-stream")]
+    pub file: String,
+}
+
 #[utoipa::path(
     post,
     path = "/api/font/register",
     operation_id = "register_font",
-    request_body(content_type = "multipart/form-data"),
+    request_body(content = RegisterFontRequest, content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Font registered successfully.", body = Response),
         (status = 400, description = "Bad request.", body = ApiError),
