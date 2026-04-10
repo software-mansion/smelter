@@ -191,31 +191,33 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     /// `present_from_index` is the first sample at or after seek.
     /// Returns `None` if seek is past the end.
     fn find_seek_start_sample(&self, seek: Duration) -> Option<(u32, u32)> {
-        let seek_timescale =
+        let seek_timestamp =
             (seek.saturating_sub(self.offset).as_secs_f64() * self.timescale as f64) as u64;
         let track = &self.reader.tracks()[&self.track_id];
 
         // The STTS box maps samples to batches of samples with the same length
         let stts = &track.trak.mdia.minf.stbl.stts;
 
-        let mut batch_first_sample_id = 1u32;
-        let mut elapsed = 0u64;
+        let mut samples_skipped = 0u32;
+        let mut skipped_duration = 0u64;
         let mut present_from_index = None;
 
         // Finds the first sample after the provided seek point.
         for entry in &stts.entries {
-            let batch_end_time = elapsed + entry.sample_count as u64 * entry.sample_delta as u64;
+            let batch_duration = entry.sample_count as u64 * entry.sample_delta as u64;
 
-            if seek_timescale < batch_end_time {
-                let offset_in_batch =
-                    (seek_timescale - elapsed).div_ceil(entry.sample_delta as u64) as u32;
+            let duration_remaining = seek_timestamp - skipped_duration;
 
-                present_from_index = Some(batch_first_sample_id + offset_in_batch);
+            if duration_remaining < batch_duration {
+                let samples_remaining =
+                    duration_remaining.div_ceil(entry.sample_delta as u64) as u32;
+
+                present_from_index = Some(samples_remaining + samples_skipped);
                 break;
             }
 
-            elapsed = batch_end_time;
-            batch_first_sample_id += entry.sample_count;
+            skipped_duration += batch_duration;
+            samples_skipped += entry.sample_count;
         }
 
         let present_from_index = present_from_index?;
