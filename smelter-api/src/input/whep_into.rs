@@ -10,7 +10,10 @@ impl TryFrom<WhepInput> for core::RegisterInputOptions {
             bearer_token,
             video,
             required,
+            side_channel,
         } = value;
+
+        let side_channel = side_channel.unwrap_or_default();
 
         let video_preferences = match video {
             Some(options) => match options.decoder_preferences.as_deref() {
@@ -24,7 +27,11 @@ impl TryFrom<WhepInput> for core::RegisterInputOptions {
             video_preferences,
             endpoint_url,
             bearer_token,
-            required: required.unwrap_or(false),
+            queue_options: core::QueueInputOptions {
+                required: required.unwrap_or(false),
+                video_side_channel: side_channel.video.unwrap_or(false),
+                audio_side_channel: side_channel.audio.unwrap_or(false),
+            },
         };
 
         Ok(core::RegisterInputOptions::Whep(whep_options))

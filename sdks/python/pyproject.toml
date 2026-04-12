@@ -1,0 +1,13 @@
+[project]
+name = "smelter"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "example",
+]
+
+[tool.uv.sources]
+example = { workspace = true }
+
+[tool.uv.workspace]
+members = ["lib", "example"]

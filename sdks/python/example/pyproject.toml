@@ -1,0 +1,17 @@
+[project]
+name = "example"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "smelter-sdk",
+]
+
+[project.scripts]
+example = "example:main"
+
+[tool.uv.sources]
+smelter-sdk = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

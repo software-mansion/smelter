@@ -8,6 +8,7 @@ use crossbeam_channel::{Sender, bounded};
 use tracing::{debug, trace};
 
 use crate::{
+    QueueInputOptions,
     pipeline::input::Input,
     queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
     utils::input_buffer::InputDelayBuffer,
@@ -48,7 +49,14 @@ impl RawDataInput {
             .buffer_duration
             .unwrap_or(ctx.default_buffer_duration);
 
-        let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
+        let queue_input = QueueInput::new(
+            &ctx,
+            &input_ref,
+            QueueInputOptions {
+                required: options.required,
+                ..Default::default()
+            },
+        );
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: options.video,
             audio: options.audio,

@@ -9,6 +9,7 @@ use crate::{
         AacAudioSpecificConfig, AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions,
     },
     protocols::{Port, PortOrRange},
+    queue::QueueInputOptions,
 };
 
 #[derive(Debug, Clone)]
@@ -17,7 +18,7 @@ pub struct RtpInputOptions {
     pub transport_protocol: RtpInputTransportProtocol,
     pub video: Option<VideoDecoderOptions>,
     pub audio: Option<RtpAudioOptions>,
-    pub required: bool,
+    pub queue_options: QueueInputOptions,
     pub offset: Option<Duration>,
     pub buffer_duration: Option<Duration>,
 }

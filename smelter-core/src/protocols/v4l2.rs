@@ -2,13 +2,15 @@ use std::sync::Arc;
 
 use smelter_render::{Framerate, Resolution};
 
+use crate::queue::QueueInputOptions;
+
 #[derive(Debug, Clone)]
 pub struct V4l2InputOptions {
     pub path: Arc<std::path::Path>,
     pub resolution: Option<Resolution>,
     pub format: V4l2Format,
     pub framerate: Option<Framerate>,
-    pub required: bool,
+    pub queue_options: QueueInputOptions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

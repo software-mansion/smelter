@@ -4,6 +4,7 @@ use smelter_render::InputId;
 use url::Url;
 
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
+use crate::queue::QueueInputOptions;
 
 #[derive(Debug, Clone)]
 pub struct RtmpOutputOptions {
@@ -63,7 +64,7 @@ pub struct RtmpServerInputOptions {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
     pub decoders: RtmpServerInputDecoders,
-    pub required: bool,
+    pub queue_options: QueueInputOptions,
 }
 
 #[derive(Debug, Clone)]

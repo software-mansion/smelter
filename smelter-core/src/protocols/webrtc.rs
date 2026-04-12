@@ -10,6 +10,7 @@ use crate::{
         FfmpegVp9EncoderOptions, OpusEncoderOptions, VideoEncoderOptions, VulkanH264EncoderOptions,
     },
     error::{DecoderInitError, EncoderInitError},
+    queue::QueueInputOptions,
 };
 
 #[derive(Debug, Clone)]
@@ -17,7 +18,7 @@ pub struct WhipInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
-    pub required: bool,
+    pub queue_options: QueueInputOptions,
 }
 
 #[derive(Debug, Clone)]
@@ -25,7 +26,7 @@ pub struct WhepInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_url: Arc<str>,
-    pub required: bool,
+    pub queue_options: QueueInputOptions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

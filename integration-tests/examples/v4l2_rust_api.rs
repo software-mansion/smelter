@@ -70,7 +70,10 @@ mod main_module {
             resolution: Some(VIDEO_RESOLUTION),
             format: V4l2Format::Yuyv,
             framerate: Some(Framerate { num: 30, den: 1 }),
-            required: false,
+            queue_options: QueueInputOptions {
+                required: false,
+                ..Default::default()
+            },
         })
     }
 

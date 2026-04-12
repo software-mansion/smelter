@@ -1,6 +1,7 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
+use crate::queue::QueueInputOptions;
 
 #[derive(Debug, Clone)]
 pub struct Mp4InputOptions {
@@ -8,8 +9,8 @@ pub struct Mp4InputOptions {
     pub should_loop: bool,
     pub video_decoders: Mp4InputVideoDecoders,
     pub seek: Option<Duration>,
-    pub required: bool,
     pub offset: Option<Duration>,
+    pub queue_options: QueueInputOptions,
 }
 
 #[derive(Debug, Clone)]

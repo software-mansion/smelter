@@ -1,12 +1,13 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
+use crate::queue::QueueInputOptions;
 
 #[derive(Debug, Clone)]
 pub struct HlsInputOptions {
     pub url: Arc<str>,
     pub video_decoders: HlsInputVideoDecoders,
-    pub required: bool,
+    pub queue_options: QueueInputOptions,
     pub offset: Option<Duration>,
 }
 

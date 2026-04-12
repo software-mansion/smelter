@@ -45,6 +45,7 @@ pub fn benchmark_pipeline_options(
         rtmp_server: PipelineRtmpServerOptions::Disable,
         wgpu_options: PipelineWgpuOptions::Context(graphics_context),
         side_channel_delay: Duration::ZERO,
+        side_channel_socket_dir: None,
     }
 }
 

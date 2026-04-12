@@ -7,7 +7,10 @@ use tracing::{debug, trace, warn};
 use crate::{
     PipelineCtx, PipelineEvent, Ref,
     event::{Event, EventEmitter},
-    queue::{QueueContext, queue_input::TrackOffset, utils::EmitOnceGuard},
+    queue::{
+        QueueContext, queue_input::TrackOffset, side_channel::AudioSideChannel,
+        utils::EmitOnceGuard,
+    },
 };
 
 use crate::prelude::*;
@@ -49,8 +52,10 @@ impl AudioQueueInput {
         required: bool,
         offset: Option<Duration>,
         track_offset: TrackOffset,
+        side_channel: Option<AudioSideChannel>,
     ) -> (Self, Sender<InputAudioSamples>) {
-        let (receiver, sender) = AudioInputReceiver::new(ctx.queue_ctx.side_channel_delay);
+        let (receiver, sender) =
+            AudioInputReceiver::new(ctx.queue_ctx.side_channel_delay, side_channel);
         let input = Self {
             queue_ctx: ctx.queue_ctx.clone(),
             required,
@@ -237,10 +242,14 @@ pub(crate) struct AudioInputReceiver {
     disconnected: bool,
     state: ReceiverState,
     delay: Duration,
+    side_channel: Option<AudioSideChannel>,
 }
 
 impl AudioInputReceiver {
-    pub fn new(delay: Duration) -> (Self, Sender<InputAudioSamples>) {
+    pub fn new(
+        delay: Duration,
+        side_channel: Option<AudioSideChannel>,
+    ) -> (Self, Sender<InputAudioSamples>) {
         let (sender, receiver) = bounded(1);
         let track = Self {
             max_size: Duration::from_millis(100),
@@ -249,6 +258,7 @@ impl AudioInputReceiver {
             disconnected: false,
             state: ReceiverState::New,
             delay,
+            side_channel,
         };
         (track, sender)
     }
@@ -286,6 +296,10 @@ impl AudioInputReceiver {
     /// Enqueue batches from the channel, allowing exceeding `max_size`
     /// if the buffer doesn't yet cover `needed_pts`.
     fn try_enqueue_until(&mut self, needed_pts: Duration) {
+        let side_channel_size = match self.side_channel {
+            Some(_) => self.delay,
+            None => Duration::ZERO,
+        };
         loop {
             if self.disconnected {
                 return;
@@ -294,13 +308,16 @@ impl AudioInputReceiver {
             let has_needed = back
                 .map(|batch| batch.end_pts() > needed_pts)
                 .unwrap_or(false);
-            if has_needed && self.size() >= self.max_size {
+            if has_needed && self.size() >= self.max_size && self.size() >= side_channel_size {
                 return;
             }
             match self.receiver.try_recv() {
                 Ok(mut batch) => {
                     trace!(pts_range=?batch.pts_range(), pending=self.receiver.len(), "Enqueue samples");
                     batch.start_pts += self.delay;
+                    if let Some(side_channel) = &self.side_channel {
+                        side_channel.send_samples(&batch);
+                    }
                     self.buffer.push_back(batch);
                     self.state = ReceiverState::Running;
                 }

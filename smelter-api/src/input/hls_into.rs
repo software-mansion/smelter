@@ -12,9 +12,11 @@ impl TryFrom<HlsInput> for core::RegisterInputOptions {
             required,
             offset_ms,
             decoder_map,
+            side_channel,
         } = value;
 
         let (required, offset) = new_queue_options(required, offset_ms)?;
+        let side_channel = side_channel.unwrap_or_default();
 
         let h264 = decoder_map
             .as_ref()
@@ -30,7 +32,11 @@ impl TryFrom<HlsInput> for core::RegisterInputOptions {
         let input_options = core::HlsInputOptions {
             url,
             video_decoders,
-            required,
+            queue_options: core::QueueInputOptions {
+                required,
+                video_side_channel: side_channel.video.unwrap_or(false),
+                audio_side_channel: side_channel.audio.unwrap_or(false),
+            },
             offset,
         };
 

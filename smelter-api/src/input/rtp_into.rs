@@ -18,9 +18,11 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             required,
             offset_ms,
             transport_protocol,
+            side_channel,
         } = value;
 
         let (required, offset) = new_queue_options(required, offset_ms)?;
+        let side_channel = side_channel.unwrap_or_default();
 
         let transport_protocol = transport_protocol.unwrap_or(TransportProtocol::Udp).into();
 
@@ -48,7 +50,11 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             audio: audio.map(TryFrom::try_from).transpose()?,
             transport_protocol,
             buffer_duration: None,
-            required,
+            queue_options: core::QueueInputOptions {
+                required,
+                video_side_channel: side_channel.video.unwrap_or(false),
+                audio_side_channel: side_channel.audio.unwrap_or(false),
+            },
             offset,
         }))
     }

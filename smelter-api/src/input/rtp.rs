@@ -4,6 +4,8 @@ use utoipa::ToSchema;
 
 use crate::*;
 
+use super::SideChannel;
+
 /// Parameters for an input stream from RTP source.
 /// At least one of `video` and `audio` has to be defined.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
@@ -24,6 +26,8 @@ pub struct RtpInput {
     /// not defined then the stream will be synchronized based on the delivery time of the initial
     /// frames.
     pub offset_ms: Option<f64>,
+    /// Enable side channel for video and/or audio track.
+    pub side_channel: Option<SideChannel>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]

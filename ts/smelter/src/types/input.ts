@@ -2,6 +2,7 @@ import type * as Api from '../api.js';
 import type { InputHlsDecoderMap } from './input/hls.js';
 import type { InputMp4DecoderMap } from './input/mp4.js';
 import type { InputRtpAudioOptions, InputRtpVideoOptions } from './input/rtp.js';
+import type { SideChannel } from './input/common.js';
 import type { InputWhipVideoOptions } from './input/whip.js';
 import type { InputWhepVideoOptions } from './input/whep.js';
 import type { InputRtmpDecoderMap } from './input/rtmp.js';
@@ -42,6 +43,10 @@ export type RegisterRtpInput = {
    * frames.
    */
   offsetMs?: number | null;
+  /**
+   * Enable side channel for video and/or audio track.
+   */
+  sideChannel?: SideChannel;
 };
 
 export type RegisterMp4Input = {
@@ -80,6 +85,10 @@ export type RegisterMp4Input = {
    * Assigns which decoder should be used for media encoded with a specific codec.
    */
   decoderMap?: InputMp4DecoderMap | null;
+  /**
+   * Enable side channel for video and/or audio track.
+   */
+  sideChannel?: SideChannel;
 };
 
 export type RegisterHlsInput = {
@@ -101,6 +110,10 @@ export type RegisterHlsInput = {
    * Assigns which decoder should be used for media encoded with a specific codec.
    */
   decoderMap?: InputHlsDecoderMap | null;
+  /**
+   * Enable side channel for video and/or audio track.
+   */
+  sideChannel?: SideChannel;
 };
 
 export type RegisterWhipServerInput = {
@@ -124,6 +137,10 @@ export type RegisterWhipServerInput = {
    * frames.
    */
   offsetMs?: number | null;
+  /**
+   * Enable side channel for video and/or audio track.
+   */
+  sideChannel?: SideChannel;
 };
 
 export type RegisterWhepClientInput = {
@@ -150,6 +167,10 @@ export type RegisterWhepClientInput = {
    * frames.
    */
   offsetMs?: number | null;
+  /**
+   * Enable side channel for video and/or audio track.
+   */
+  sideChannel?: SideChannel;
 };
 
 export type RegisterRtmpServerInput = {
@@ -174,6 +195,10 @@ export type RegisterRtmpServerInput = {
    * Assigns which decoder should be used for media encoded with a specific codec.
    */
   decoderMap?: InputRtmpDecoderMap | null;
+  /**
+   * Enable side channel for video and/or audio track.
+   */
+  sideChannel?: SideChannel;
 };
 
 export type RegisterV4l2Input = {
@@ -212,4 +237,8 @@ export type RegisterV4l2Input = {
    * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
    */
   required?: boolean | null;
+  /**
+   * Enable side channel for video and/or audio track.
+   */
+  sideChannel?: SideChannel;
 };

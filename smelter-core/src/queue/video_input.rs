@@ -7,7 +7,10 @@ use tracing::{debug, trace, warn};
 use crate::{
     PipelineCtx, PipelineEvent, Ref,
     event::{Event, EventEmitter},
-    queue::{QueueContext, queue_input::TrackOffset, utils::EmitOnceGuard},
+    queue::{
+        QueueContext, queue_input::TrackOffset, side_channel::VideoSideChannel,
+        utils::EmitOnceGuard,
+    },
 };
 
 #[derive(Clone)]
@@ -47,8 +50,10 @@ impl VideoQueueInput {
         required: bool,
         offset_from_start: Option<Duration>,
         track_offset: TrackOffset,
+        side_channel: Option<VideoSideChannel>,
     ) -> (Self, Sender<Frame>) {
-        let (receiver, sender) = VideoInputReceiver::new(ctx.queue_ctx.side_channel_delay);
+        let (receiver, sender) =
+            VideoInputReceiver::new(ctx.queue_ctx.side_channel_delay, side_channel);
         let input = Self {
             queue_ctx: ctx.queue_ctx.clone(),
             required,
@@ -247,10 +252,11 @@ pub(crate) struct VideoInputReceiver {
     disconnected: bool,
     state: ReceiverState,
     delay: Duration,
+    side_channel: Option<VideoSideChannel>,
 }
 
 impl VideoInputReceiver {
-    pub fn new(delay: Duration) -> (Self, Sender<Frame>) {
+    pub fn new(delay: Duration, side_channel: Option<VideoSideChannel>) -> (Self, Sender<Frame>) {
         let (sender, receiver) = bounded(1);
         let track = Self {
             max_size: Duration::from_millis(100),
@@ -259,6 +265,7 @@ impl VideoInputReceiver {
             disconnected: false,
             state: ReceiverState::New,
             delay,
+            side_channel,
         };
         (track, sender)
     }
@@ -317,17 +324,26 @@ impl VideoInputReceiver {
     }
 
     fn try_enqueue(&mut self) {
+        let side_channel_size = match self.side_channel {
+            Some(_) => self.delay,
+            None => Duration::ZERO,
+        };
+
         loop {
             if self.disconnected {
                 return;
             }
-            if self.size() >= self.max_size {
+
+            if self.size() >= self.max_size && self.size() >= side_channel_size {
                 return;
             }
             match self.receiver.try_recv() {
                 Ok(mut frame) => {
                     trace!(pts=?frame.pts, pending=self.receiver.len(), "Enqueue frame");
                     frame.pts += self.delay;
+                    if let Some(side_channel) = &mut self.side_channel {
+                        side_channel.send_frame(&frame);
+                    }
                     self.buffer.push_back(frame);
                     self.state = ReceiverState::Running;
                 }

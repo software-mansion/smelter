@@ -66,6 +66,10 @@
             cargo-nextest
             rust-analyzer
 
+            # Python
+            python313
+            uv
+
             clang-tools
             llvmPackages.bintools
             wayland

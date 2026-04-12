@@ -86,7 +86,7 @@ impl DeckLink {
             .enable_audio(AUDIO_SAMPLE_RATE, decklink::AudioSampleType::Sample32bit, 2)
             .map_err(DeckLinkInputError::DecklinkError)?;
 
-        let queue_input = QueueInput::new(&ctx, &input_ref, opts.required);
+        let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
             audio: opts.enable_audio,

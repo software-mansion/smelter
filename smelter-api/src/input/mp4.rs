@@ -5,6 +5,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::SideChannel;
+
 /// Input stream from MP4 file.
 /// Exactly one of `url` and `path` has to be defined.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
@@ -29,6 +31,8 @@ pub struct Mp4Input {
     pub seek_ms: Option<f64>,
     /// Assigns which decoder should be used for media encoded with a specific codec.
     pub decoder_map: Option<HashMap<InputMp4Codec, Mp4VideoDecoderOptions>>,
+    /// Enable side channel for video and/or audio track.
+    pub side_channel: Option<SideChannel>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq, Eq, Hash)]

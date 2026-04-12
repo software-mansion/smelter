@@ -86,8 +86,11 @@ fn main() {
             h264: Some(VideoDecoderOptions::FfmpegH264),
         },
         seek: None,
-        required: true,
         offset: Some(Duration::ZERO),
+        queue_options: QueueInputOptions {
+            required: true,
+            ..Default::default()
+        },
     });
 
     Pipeline::register_input(&state.pipeline().unwrap(), input_id.clone(), input_options).unwrap();

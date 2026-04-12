@@ -292,8 +292,11 @@ impl SingleBenchmarkPass {
                 },
                 source: Mp4InputSource::File(path.to_path_buf().into()),
                 seek: None,
-                required: true,
                 offset: None,
+                queue_options: QueueInputOptions {
+                    required: true,
+                    ..Default::default()
+                },
             }),
         )
     }

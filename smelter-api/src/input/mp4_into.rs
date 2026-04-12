@@ -17,11 +17,13 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
             seek_ms,
             should_loop,
             decoder_map,
+            side_channel,
         } = value;
 
         const BAD_URL_PATH_SPEC: &str = "Exactly one of `url` or `path` has to be specified in a register request for an mp4 input.";
 
         let (required, offset) = new_queue_options(required, offset_ms)?;
+        let side_channel = side_channel.unwrap_or_default();
 
         let source = match (url, path) {
             (Some(_), Some(_)) | (None, None) => {
@@ -52,8 +54,12 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
             should_loop: should_loop.unwrap_or(false),
             video_decoders,
             seek,
-            required,
             offset,
+            queue_options: core::QueueInputOptions {
+                required,
+                video_side_channel: side_channel.video.unwrap_or(false),
+                audio_side_channel: side_channel.audio.unwrap_or(false),
+            },
         }))
     }
 }
