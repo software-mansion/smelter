@@ -11,7 +11,9 @@ pub(crate) struct VkH265VideoParameterSet {
     dec_pic_buf_mgr: Option<NonNull<vk::native::StdVideoH265DecPicBufMgr>>,
 }
 
-fn profile_tier_level(params: &FullEncoderParameters<H265Codec>) -> vk::native::StdVideoH265ProfileTierLevel {
+fn profile_tier_level(
+    params: &FullEncoderParameters<H265Codec>,
+) -> vk::native::StdVideoH265ProfileTierLevel {
     vk::native::StdVideoH265ProfileTierLevel {
         flags: vk::native::StdVideoH265ProfileTierLevelFlags {
             _bitfield_align_1: [],
@@ -25,21 +27,26 @@ fn profile_tier_level(params: &FullEncoderParameters<H265Codec>) -> vk::native::
     }
 }
 
+fn dec_pic_buf_mgr(
+    params: &FullEncoderParameters<H265Codec>,
+) -> vk::native::StdVideoH265DecPicBufMgr {
+    let mut dec_pic_buf_mgr = vk::native::StdVideoH265DecPicBufMgr {
+        max_num_reorder_pics: [0; 7],
+        max_dec_pic_buffering_minus1: [0; 7],
+        max_latency_increase_plus1: [0; 7],
+    };
+    dec_pic_buf_mgr.max_dec_pic_buffering_minus1[0] = params.max_references.get() as u8;
+    dec_pic_buf_mgr.max_latency_increase_plus1[0] = 1;
+    dec_pic_buf_mgr.max_num_reorder_pics[0] = 0;
+
+    dec_pic_buf_mgr
+}
+
 impl VkH265VideoParameterSet {
     pub(crate) fn new_encode(params: &FullEncoderParameters<H265Codec>) -> Self {
-        let profile_tier_level = Box::new(profile_tier_level(params));
-        let profile_tier_level = NonNull::from(Box::leak(profile_tier_level));
+        let profile_tier_level = NonNull::from(Box::leak(Box::new(profile_tier_level(params))));
 
-        let mut dec_pic_buf_mgr = Box::new(vk::native::StdVideoH265DecPicBufMgr {
-            max_num_reorder_pics: [0; 7],
-            max_dec_pic_buffering_minus1: [0; 7],
-            max_latency_increase_plus1: [0; 7],
-        });
-        dec_pic_buf_mgr.max_dec_pic_buffering_minus1[0] = params.max_references.get() as u8;
-        dec_pic_buf_mgr.max_latency_increase_plus1[0] = 1;
-        dec_pic_buf_mgr.max_num_reorder_pics[0] = 0;
-
-        let dec_pic_buf_mgr = NonNull::from(Box::leak(dec_pic_buf_mgr));
+        let dec_pic_buf_mgr = NonNull::from(Box::leak(Box::new(dec_pic_buf_mgr(params))));
 
         Self {
             profile_tier_level: Some(profile_tier_level),
@@ -83,12 +90,14 @@ impl Drop for VkH265VideoParameterSet {
 pub(crate) struct VkH265SequenceParameterSet {
     profile_tier_level: Option<NonNull<vk::native::StdVideoH265ProfileTierLevel>>,
     pub(crate) sps: vk::native::StdVideoH265SequenceParameterSet,
+    dec_pic_buf_mgr: Option<NonNull<vk::native::StdVideoH265DecPicBufMgr>>,
 }
 
 impl VkH265SequenceParameterSet {
     pub(crate) fn new_encode(params: &FullEncoderParameters<H265Codec>) -> Self {
         // TODO: VUI
         let profile_tier_level = NonNull::from_mut(Box::leak(Box::new(profile_tier_level(params))));
+        let dec_pic_buf_mgr = NonNull::from(Box::leak(Box::new(dec_pic_buf_mgr(params))));
         Self {
             sps: vk::native::StdVideoH265SequenceParameterSet {
                 flags: vk::native::StdVideoH265SpsFlags {
@@ -99,7 +108,8 @@ impl VkH265SequenceParameterSet {
                         0, 0, 0, 0, 0, // scc extension
                     ),
                 },
-                chroma_format_idc: vk::native::StdVideoH265ChromaFormatIdc_STD_VIDEO_H265_CHROMA_FORMAT_IDC_420,
+                chroma_format_idc:
+                    vk::native::StdVideoH265ChromaFormatIdc_STD_VIDEO_H265_CHROMA_FORMAT_IDC_420,
                 pic_width_in_luma_samples: params.width.get(),
                 pic_height_in_luma_samples: params.height.get(),
                 sps_video_parameter_set_id: 0,
@@ -131,7 +141,7 @@ impl VkH265SequenceParameterSet {
                 conf_win_top_offset: 0,                           // TODO
                 conf_win_bottom_offset: 0,                        // TODO
                 pProfileTierLevel: profile_tier_level.as_ptr(),
-                pDecPicBufMgr: std::ptr::null(),
+                pDecPicBufMgr: dec_pic_buf_mgr.as_ptr(),
                 pScalingLists: std::ptr::null(),
                 pShortTermRefPicSet: std::ptr::null(),
                 pLongTermRefPicsSps: std::ptr::null(),
@@ -140,6 +150,7 @@ impl VkH265SequenceParameterSet {
             },
 
             profile_tier_level: Some(profile_tier_level),
+            dec_pic_buf_mgr: Some(dec_pic_buf_mgr),
         }
     }
 }
@@ -148,7 +159,11 @@ impl Drop for VkH265SequenceParameterSet {
     fn drop(&mut self) {
         unsafe {
             if let Some(profile_tier_level) = self.profile_tier_level {
-                drop(Box::from_raw(profile_tier_level.as_ptr()))
+                drop(Box::from_raw(profile_tier_level.as_ptr()));
+            }
+
+            if let Some(dec_pic_buf_mgr) = self.dec_pic_buf_mgr {
+                drop(Box::from_raw(dec_pic_buf_mgr.as_ptr()));
             }
         }
     }
