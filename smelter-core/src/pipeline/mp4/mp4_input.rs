@@ -459,7 +459,6 @@ impl TrackThread {
     fn run_video_thread(mut self) -> TrackThreadResult {
         let mut last_pts = self.offset;
         for (mut chunk, duration) in self.track.chunks(self.seek) {
-            chunk.pts += self.offset;
             chunk.dts = chunk.dts.map(|dts| dts + self.offset);
             last_pts = Duration::max(last_pts, chunk.pts + duration);
 
@@ -496,7 +495,6 @@ impl TrackThread {
     fn run_audio_thread(mut self) -> TrackThreadResult {
         let mut last_pts = self.offset;
         for (mut chunk, duration) in self.track.chunks(self.seek) {
-            chunk.pts += self.offset;
             chunk.dts = chunk.dts.map(|dts| dts + self.offset);
             last_pts = Duration::max(last_pts, chunk.pts + duration);
 
