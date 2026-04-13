@@ -132,8 +132,7 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
         match first_elst {
             Some(elst) => {
                 if elst.media_time == u32::MAX as u64 {
-                    // The result of overflowing -1,
-                    // it signifies empty edit
+                    // The result of overflowing -1, it signifies empty edit
                     return Duration::ZERO;
                 }
                 Duration::from_secs_f64(elst.media_time as f64 / track.timescale() as f64)
@@ -212,7 +211,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
                 let samples_remaining =
                     duration_remaining.div_ceil(entry.sample_delta as u64) as u32;
 
-                present_from_index = Some(samples_remaining + samples_skipped);
+                present_from_index = Some(samples_remaining + samples_skipped + 1);
                 break;
             }
 

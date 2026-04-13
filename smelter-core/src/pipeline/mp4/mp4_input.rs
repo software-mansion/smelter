@@ -459,6 +459,7 @@ impl TrackThread {
     fn run_video_thread(mut self) -> TrackThreadResult {
         let mut last_pts = self.offset;
         for (mut chunk, duration) in self.track.chunks(self.seek) {
+            chunk.pts += self.offset;
             chunk.dts = chunk.dts.map(|dts| dts + self.offset);
             last_pts = Duration::max(last_pts, chunk.pts + duration);
 
@@ -495,6 +496,7 @@ impl TrackThread {
     fn run_audio_thread(mut self) -> TrackThreadResult {
         let mut last_pts = self.offset;
         for (mut chunk, duration) in self.track.chunks(self.seek) {
+            chunk.pts += self.offset;
             chunk.dts = chunk.dts.map(|dts| dts + self.offset);
             last_pts = Duration::max(last_pts, chunk.pts + duration);
 
@@ -507,10 +509,10 @@ impl TrackThread {
             self.ctx.buffer.recalculate_buffer(chunk.pts);
             chunk.pts += self.ctx.buffer.size();
 
-            trace!(pts=?chunk.pts, "MP4 reader produced a audio chunk.");
+            trace!(pts=?chunk.pts, "MP4 reader produced an audio chunk.");
             let chunk_sender = &self.ctx.decoder_handle.chunk_sender;
             if chunk_sender.send(PipelineEvent::Data(chunk)).is_err() {
-                debug!("Failed to send a audio chunk. Channel closed.");
+                debug!("Failed to send an audio chunk. Channel closed.");
                 break;
             }
 
