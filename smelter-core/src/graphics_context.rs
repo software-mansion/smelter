@@ -80,6 +80,41 @@ impl GraphicsContext {
     pub fn has_vulkan_encoder_support(&self) -> bool {
         false
     }
+
+    #[cfg(feature = "vk-video")]
+    pub fn vulkan_h264_decode_profile_level_support(&self) -> Option<H264ProfileLevelSupport> {
+        let vulkan_ctx = self.vulkan_ctx.as_ref()?;
+        let caps = vulkan_ctx.device.decode_capabilities().h264?;
+
+        Some(H264ProfileLevelSupport {
+            baseline_max_level_idc: caps.baseline_profile.map(|p| p.max_level_idc),
+            main_max_level_idc: caps.main_profile.map(|p| p.max_level_idc),
+            high_max_level_idc: caps.high_profile.map(|p| p.max_level_idc),
+        })
+    }
+
+    #[cfg(not(feature = "vk-video"))]
+    pub fn vulkan_h264_decode_profile_level_support(&self) -> Option<H264ProfileLevelSupport> {
+        None
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct H264ProfileLevelSupport {
+    pub baseline_max_level_idc: Option<u8>,
+    pub main_max_level_idc: Option<u8>,
+    pub high_max_level_idc: Option<u8>,
+}
+
+impl H264ProfileLevelSupport {
+    pub fn max_level_for_profile(self, profile_idc: u8) -> Option<u8> {
+        match profile_idc {
+            0x42 => self.baseline_max_level_idc,
+            0x4d => self.main_max_level_idc,
+            0x64 => self.high_max_level_idc,
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
