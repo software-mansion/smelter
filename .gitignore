@@ -37,6 +37,6 @@ target/
 .direnv
 /result
 
-demo_json.json
+demo_json*.json
 
 .claude/settings.local.json
