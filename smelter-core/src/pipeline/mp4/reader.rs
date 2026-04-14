@@ -65,13 +65,16 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             return None;
         };
 
+        let (offset, delay) = Self::calculate_offset(track, self.reader.timescale());
+
         Some(Track {
             sample_count: track.sample_count(),
             timescale: track.timescale(),
             track_id,
             duration: track.duration(),
             decoder_options: DecoderOptions::Aac(asc),
-            offset: Self::calculate_offset(track),
+            offset,
+            delay,
             reader: self.reader,
         })
     }
@@ -108,37 +111,50 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
                 .collect(),
         };
 
+        let (offset, delay) = Self::calculate_offset(track, self.reader.timescale());
+
         Some(Track {
             sample_count: track.sample_count(),
             timescale: track.timescale(),
             track_id,
             duration: track.duration(),
             decoder_options: DecoderOptions::H264(h264_config),
-            offset: Self::calculate_offset(track),
+            offset,
+            delay,
             reader: self.reader,
         })
     }
 
-    /// This implementation synchronizes using first elst box. If box is missing or
-    /// first edit is empty then zero offset is used.
-    fn calculate_offset(track: &Mp4Track) -> Duration {
-        let first_elst = track
+    /// Calculates the media-time offset and presentation delay from the edit list.
+    ///
+    /// Returns `(offset, delay)` where:
+    /// - `offset` is derived from `media_time` of the first non-empty edit (used for seeking)
+    /// - `delay` is the sum of `segment_duration` of all leading empty edits (presentation delay)
+    fn calculate_offset(track: &Mp4Track, movie_timescale: u32) -> (Duration, Duration) {
+        let entries = track
             .trak
             .edts
             .as_ref()
             .and_then(|edts| edts.elst.as_ref())
-            .and_then(|elst| elst.entries.first());
+            .map(|elst| elst.entries.as_slice())
+            .unwrap_or(&[]);
 
-        match first_elst {
-            Some(elst) => {
-                if elst.media_time == u32::MAX as u64 {
-                    // The result of overflowing -1, it signifies empty edit
-                    return Duration::ZERO;
-                }
-                Duration::from_secs_f64(elst.media_time as f64 / track.timescale() as f64)
+        let mut delay_ticks: u64 = 0;
+        let mut offset = Duration::ZERO;
+
+        for entry in entries {
+            // u32::MAX value is the result of overflowing -1
+            if entry.media_time == u32::MAX as u64 || entry.media_time == u64::MAX {
+                delay_ticks += entry.segment_duration;
+            } else {
+                offset =
+                    Duration::from_secs_f64(entry.media_time as f64 / track.timescale() as f64);
+                break;
             }
-            None => Duration::ZERO,
         }
+
+        let delay = Duration::from_secs_f64(delay_ticks as f64 / movie_timescale as f64);
+        (offset, delay)
     }
 }
 
@@ -150,6 +166,7 @@ pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
     duration: Duration,
     decoder_options: DecoderOptions,
     offset: Duration,
+    delay: Duration,
 }
 
 impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
@@ -283,13 +300,16 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
         let start_time = sample.start_time;
         let sample_duration =
             Duration::from_secs_f64(sample.duration as f64 / self.track.timescale as f64);
+        let delay = self.track.delay;
 
         let dts = Duration::from_secs_f64(start_time as f64 / self.track.timescale as f64)
-            .saturating_sub(self.seek);
+            .saturating_sub(self.seek)
+            + delay;
         let pts = Duration::from_secs_f64(
             (start_time as f64 + rendering_offset as f64) / self.track.timescale as f64,
         )
-        .saturating_sub(self.seek);
+        .saturating_sub(self.seek)
+            + delay;
 
         // When seeking in video, we start reading from the nearest sync (keyframe)
         // sample before the seek point so the decoder can build up its reference
