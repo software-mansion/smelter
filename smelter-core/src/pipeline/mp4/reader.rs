@@ -132,8 +132,7 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
         match first_elst {
             Some(elst) => {
                 if elst.media_time == u32::MAX as u64 {
-                    // most likely the result of overflowing -1
-                    // it signifies empty edit
+                    // The result of overflowing -1, it signifies empty edit
                     return Duration::ZERO;
                 }
                 Duration::from_secs_f64(elst.media_time as f64 / track.timescale() as f64)
@@ -155,22 +154,24 @@ pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
 
 impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     pub(crate) fn chunks(&mut self, seek: Option<Duration>) -> TrackChunks<'_, Reader> {
-        if let Some(seek) = seek
-            && let Some((start_index, present_index)) = self.find_seek_start_sample(seek)
-        {
-            TrackChunks {
+        let seek = match seek {
+            Some(seek) => seek + self.offset,
+            None => self.offset,
+        };
+
+        match self.find_seek_start_sample(seek) {
+            Some((start_index, present_index)) => TrackChunks {
                 track: self,
                 seek,
                 next_sample_index: start_index,
                 present_from_index: present_index,
-            }
-        } else {
-            TrackChunks {
+            },
+            None => TrackChunks {
                 track: self,
                 seek: Duration::ZERO,
                 next_sample_index: 1,
                 present_from_index: 1,
-            }
+            },
         }
     }
 
@@ -191,8 +192,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     /// `present_from_index` is the first sample at or after seek.
     /// Returns `None` if seek is past the end.
     fn find_seek_start_sample(&self, seek: Duration) -> Option<(u32, u32)> {
-        let seek_timestamp =
-            (seek.saturating_sub(self.offset).as_secs_f64() * self.timescale as f64) as u64;
+        let seek_timestamp = (seek.as_secs_f64() * self.timescale as f64) as u64;
         let track = &self.reader.tracks()[&self.track_id];
 
         // The STTS box maps samples to batches of samples with the same length
@@ -211,7 +211,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
                 let samples_remaining =
                     duration_remaining.div_ceil(entry.sample_delta as u64) as u32;
 
-                present_from_index = Some(samples_remaining + samples_skipped);
+                present_from_index = Some(samples_remaining + samples_skipped + 1);
                 break;
             }
 
@@ -289,7 +289,6 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
         let pts = Duration::from_secs_f64(
             (start_time as f64 + rendering_offset as f64) / self.track.timescale as f64,
         )
-        .saturating_sub(self.track.offset)
         .saturating_sub(self.seek);
 
         // When seeking in video, we start reading from the nearest sync (keyframe)
