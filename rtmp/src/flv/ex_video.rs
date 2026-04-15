@@ -62,7 +62,7 @@ impl ExVideoFourCc {
         }
     }
 
-    fn to_raw(self) -> [u8; 4] {
+    fn into_raw(self) -> [u8; 4] {
         match self {
             Self::Vp08 => *b"vp08",
             Self::Vp09 => *b"vp09",
@@ -277,13 +277,14 @@ impl ExVideoTag {
                     ExVideoPacket::CodedFrames {
                         composition_time, ..
                     } => {
-                        // Per spec, only AVC/HEVC/VVC include SI24 CompositionTime on wire
-                        // in CodedFrames. For other codecs (VP8/VP9/AV1) composition_time
-                        // is not serialized regardless of its value.
-                        // CodedFramesX omits SI24 (implicit zero) as a wire optimization.
-                        if four_cc.has_composition_time() && *composition_time != 0 {
+                        if !four_cc.has_composition_time() {
+                            // VP8/VP9/AV1: always CodedFrames, no SI24 on wire
+                            (ExVideoPacketType::CodedFrames, false)
+                        } else if *composition_time != 0 {
+                            // AVC/HEVC/VVC with nonzero CT: CodedFrames with SI24
                             (ExVideoPacketType::CodedFrames, true)
                         } else {
+                            // AVC/HEVC/VVC with CT=0: CodedFramesX optimization
                             (ExVideoPacketType::CodedFramesX, false)
                         }
                     }
@@ -342,7 +343,7 @@ impl ExVideoTag {
                     )?;
                 }
 
-                buf.put(&four_cc.to_raw()[..]);
+                buf.put(&four_cc.into_raw()[..]);
 
                 if needs_composition_time
                     && let ExVideoPacket::CodedFrames {

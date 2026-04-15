@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    RtmpConnectionError, RtmpMessageParseError,
+    RtmpClientConfig, RtmpConnectionError, RtmpMessageParseError,
     amf0::AmfValue,
     error::RtmpStreamError,
     message::{
@@ -137,7 +137,7 @@ impl NegotiationProgress {
 
 pub(super) fn send_connect(
     stream: &mut RtmpMessageStream,
-    app: &str,
+    config: &RtmpClientConfig,
 ) -> Result<(), RtmpConnectionError> {
     let video_fourcc_info_map = HashMap::from_iter([
         (
@@ -153,7 +153,8 @@ pub(super) fn send_connect(
     ]);
     let props = HashMap::from_iter(
         [
-            ("app", app.into()),
+            ("app", config.app.clone().into()),
+            ("tcUrl", config.tc_url().into()),
             ("flashVer", "FMS/3,0,1,123".into()),
             // True if proxy is being used
             ("fpad", AmfValue::Boolean(false)),
