@@ -1,7 +1,7 @@
 use core::fmt;
 use std::time::Duration;
 
-use crate::{prelude::*, utils::input_buffer::TimedValue};
+use crate::prelude::*;
 
 pub struct EncodedInputChunk {
     pub data: bytes::Bytes,
@@ -13,18 +13,6 @@ pub struct EncodedInputChunk {
     /// be decoded correctly, but resulting frames should not be sent to the queue.
     /// In those cases this field should be set to false.
     pub present: bool,
-}
-
-impl TimedValue for EncodedInputChunk {
-    fn timestamp_range(&self) -> (Duration, Duration) {
-        // dts should be monotonic, so better to estimate duration
-        // of the set of chunks, but some chunks might be missing
-        // dts and pts might be in a very different reference frame
-        (
-            self.pts.saturating_sub(Duration::from_millis(10)),
-            self.pts + Duration::from_millis(10),
-        )
-    }
 }
 
 impl fmt::Debug for EncodedInputChunk {

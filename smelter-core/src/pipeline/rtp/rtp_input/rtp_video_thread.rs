@@ -1,6 +1,5 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
-use crossbeam_channel::Sender;
 use tracing::warn;
 
 use crate::{
@@ -11,10 +10,16 @@ use crate::{
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
     },
-    utils::{InitializableThread, ThreadMetadata},
+    queue::QueueSender,
+    utils::{
+        InitializableThread, ThreadMetadata,
+        channel::{Sender, duration_bounded},
+    },
 };
 
 use crate::prelude::*;
+
+const RTP_BUFFER: Duration = Duration::from_secs(1);
 
 pub(crate) struct RtpVideoTrackThreadHandle {
     pub rtp_packet_sender: Sender<PipelineEvent<RtpInputEvent>>,
@@ -22,12 +27,12 @@ pub(crate) struct RtpVideoTrackThreadHandle {
 
 pub(super) struct RtpVideoThread<Decoder: VideoDecoder + 'static> {
     stream: Box<dyn Iterator<Item = Frame>>,
-    frame_sender: Sender<Frame>,
+    frame_sender: QueueSender<Frame>,
     _decoder: PhantomData<Decoder>,
 }
 
 impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
-    type InitOptions = (Arc<PipelineCtx>, DepayloaderOptions, Sender<Frame>);
+    type InitOptions = (Arc<PipelineCtx>, DepayloaderOptions, QueueSender<Frame>);
 
     type SpawnOutput = RtpVideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
@@ -35,7 +40,7 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, depayloader_options, frame_sender) = options;
 
-        let (rtp_packet_sender, rtp_packet_receiver) = crossbeam_channel::bounded(5);
+        let (rtp_packet_sender, rtp_packet_receiver) = duration_bounded(RTP_BUFFER);
         let depayloader_stream =
             DepayloaderStream::new(depayloader_options, rtp_packet_receiver.into_iter());
         let decoder_stream =

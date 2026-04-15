@@ -8,9 +8,9 @@ use std::{
     time::Duration,
 };
 
+use crate::queue::QueueSender;
 use crate::queue::{QueueTrackOffset, QueueTrackOptions, WeakQueueInput};
 use bytes::Bytes;
-use crossbeam_channel::Sender;
 use ffmpeg_next::{
     Dictionary, Packet, Stream,
     ffi::{
@@ -190,7 +190,7 @@ impl HlsDemuxerThread {
 
     fn start_audio_decoder(
         &mut self,
-        samples_sender: Sender<InputAudioSamples>,
+        samples_sender: QueueSender<InputAudioSamples>,
     ) -> Result<(), InputInitError> {
         let Some(stream) = self.input_ctx.audio_stream() else {
             return Ok(());
@@ -223,7 +223,10 @@ impl HlsDemuxerThread {
         Ok(())
     }
 
-    fn spawn_video_decoder(&mut self, frame_sender: Sender<Frame>) -> Result<(), InputInitError> {
+    fn spawn_video_decoder(
+        &mut self,
+        frame_sender: QueueSender<Frame>,
+    ) -> Result<(), InputInitError> {
         let Some(stream) = self.input_ctx.video_stream() else {
             return Ok(());
         };

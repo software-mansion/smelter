@@ -1,9 +1,7 @@
-use crossbeam_channel::Sender;
 use tracing::{Instrument, debug, info_span, trace, warn};
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
 use crate::{
-    PipelineEvent,
     codecs::VideoDecoderOptions,
     pipeline::{
         decoder::VideoDecoderMapping,
@@ -18,6 +16,7 @@ use crate::{
             whip_input::WhipTrackContext,
         },
     },
+    queue::QueueSender,
     utils::InitializableThread,
 };
 
@@ -27,8 +26,8 @@ pub(super) fn handle_on_track(
     ctx: WhipTrackContext,
     input_ref: Ref<InputId>,
     video_preferences: Vec<VideoDecoderOptions>,
-    video_sender: &mut Option<Sender<Frame>>,
-    audio_sender: &mut Option<Sender<InputAudioSamples>>,
+    video_sender: &mut Option<QueueSender<Frame>>,
+    audio_sender: &mut Option<QueueSender<InputAudioSamples>>,
 ) {
     let kind = ctx.track.kind();
     let span = info_span!("WHIP input track", ?kind, input_id=%input_ref);
@@ -74,7 +73,7 @@ pub(super) fn handle_on_track(
 async fn process_audio_track(
     ctx: WhipTrackContext,
     input_ref: Ref<InputId>,
-    samples_sender: Sender<InputAudioSamples>,
+    samples_sender: QueueSender<InputAudioSamples>,
 ) -> Result<(), WhipWhepServerError> {
     if !audio_codec_negotiated(&ctx.rtc_receiver).await {
         warn!("Skipping audio track, no valid codec negotiated");
@@ -122,7 +121,7 @@ async fn process_video_track(
     ctx: WhipTrackContext,
     input_ref: Ref<InputId>,
     video_preferences: Vec<VideoDecoderOptions>,
-    video_sender: Sender<Frame>,
+    video_sender: QueueSender<Frame>,
 ) -> Result<(), WhipWhepServerError> {
     let (Some(decoder_mapping), Some(payload_type_mapping)) = (
         VideoDecoderMapping::from_webrtc_receiver(&ctx.rtc_receiver, &video_preferences).await,

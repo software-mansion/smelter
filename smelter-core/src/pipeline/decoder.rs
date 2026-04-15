@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use smelter_render::Frame;
 
-use crate::{pipeline::utils::duration_channel, prelude::*};
+use crate::pipeline::utils::channel::Sender;
+
+use crate::prelude::*;
 
 pub(super) mod decoder_thread_audio;
 pub(super) mod decoder_thread_video;
@@ -40,7 +42,7 @@ pub(crate) enum EncodedInputEvent {
 
 #[derive(Debug, Clone)]
 pub(crate) struct DecoderThreadHandle {
-    pub chunk_sender: duration_channel::Sender<PipelineEvent<EncodedInputChunk>>,
+    pub chunk_sender: Sender<PipelineEvent<EncodedInputChunk>>,
 }
 
 pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {

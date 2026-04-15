@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{Sender, TrySendError};
+use crossbeam_channel::TrySendError;
 use decklink::{
     AudioInputPacket, DetectedVideoInputFormatFlags, DisplayMode, InputCallback,
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
@@ -13,14 +13,15 @@ use smelter_render::{Frame, FrameData, Resolution, error::ErrorStack};
 use tracing::{Span, debug, info, trace, warn};
 
 use crate::pipeline::decklink::format::{BitDepth, Colorspace, Format};
+use crate::queue::QueueSender;
 
 use crate::prelude::*;
 
 use super::AUDIO_SAMPLE_RATE;
 
 pub(super) struct ChannelCallbackAdapter {
-    video_sender: Option<Sender<Frame>>,
-    audio_sender: Option<Sender<InputAudioSamples>>,
+    video_sender: Option<QueueSender<Frame>>,
+    audio_sender: Option<QueueSender<InputAudioSamples>>,
     span: Span,
 
     // I'm not sure, but I suspect that holding Arc here would create a circular
@@ -36,8 +37,8 @@ impl ChannelCallbackAdapter {
     pub(super) fn new(
         ctx: &Arc<PipelineCtx>,
         span: Span,
-        video_sender: Option<Sender<Frame>>,
-        audio_sender: Option<Sender<InputAudioSamples>>,
+        video_sender: Option<QueueSender<Frame>>,
+        audio_sender: Option<QueueSender<InputAudioSamples>>,
         input: Weak<decklink::Input>,
         initial_format: Format,
     ) -> Self {
@@ -56,7 +57,7 @@ impl ChannelCallbackAdapter {
     fn handle_video_frame(
         &self,
         video_frame: &mut VideoInputFrame,
-        sender: &Sender<Frame>,
+        sender: &QueueSender<Frame>,
     ) -> Result<(), decklink::DeckLinkError> {
         let stream_time = video_frame.stream_time()?;
         let offset = {
@@ -180,7 +181,7 @@ impl ChannelCallbackAdapter {
     fn handle_audio_packet(
         &self,
         audio_packet: &mut AudioInputPacket,
-        sender: &Sender<InputAudioSamples>,
+        sender: &QueueSender<InputAudioSamples>,
     ) -> Result<(), decklink::DeckLinkError> {
         let packet_time = audio_packet.packet_time()?;
         let offset = {

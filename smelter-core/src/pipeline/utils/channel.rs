@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::input_buffer::TimedValue;
+use crate::utils::TimedValue;
 
 struct Shared<T> {
     inner: Mutex<Inner<T>>,
@@ -23,11 +23,10 @@ struct Inner<T> {
 
 impl<T: TimedValue> Inner<T> {
     fn buffered_duration(&self) -> Duration {
-        match (self.buffer.front(), self.buffer.back()) {
-            (Some(first), Some(last)) => last
-                .timestamp_range()
-                .1
-                .saturating_sub(first.timestamp_range().0),
+        let first_ts = self.buffer.iter().find_map(|i| i.timestamp_range());
+        let last_ts = self.buffer.iter().rev().find_map(|i| i.timestamp_range());
+        match (first_ts, last_ts) {
+            (Some(first), Some(last)) => last.1.saturating_sub(first.0),
             _ => Duration::ZERO,
         }
     }
@@ -45,7 +44,7 @@ impl<T: TimedValue> Inner<T> {
     }
 }
 
-pub(crate) fn channel<T: TimedValue>(capacity: Duration) -> (Sender<T>, Receiver<T>) {
+pub(crate) fn duration_bounded<T: TimedValue>(capacity: Duration) -> (Sender<T>, Receiver<T>) {
     let shared = Arc::new(Shared {
         inner: Mutex::new(Inner {
             buffer: VecDeque::new(),
@@ -79,32 +78,31 @@ impl<T> std::fmt::Debug for Sender<T> {
 impl<T: TimedValue> Sender<T> {
     /// Blocks until there is room or the receiver is dropped.
     pub fn send(&self, item: T) -> Result<(), SendError<T>> {
-        let mut inner = self.shared.inner.lock().unwrap();
+        let mut guard = self.shared.inner.lock().unwrap();
         loop {
-            if !inner.receiver_alive {
+            if !guard.receiver_alive {
                 return Err(SendError(item));
             }
-            if !inner.is_full() {
-                break;
+            if !guard.is_full() {
+                guard.push(item);
+                self.shared.not_empty.notify_one();
+                return Ok(());
             }
-            inner = self.shared.not_full.wait(inner).unwrap();
+            guard = self.shared.not_full.wait(guard).unwrap();
         }
-        inner.push(item);
-        self.shared.not_empty.notify_one();
-        Ok(())
     }
 
     /// Non-blocking send.
     #[allow(dead_code)]
     pub fn try_send(&self, item: T) -> Result<(), TrySendError<T>> {
-        let mut inner = self.shared.inner.lock().unwrap();
-        if !inner.receiver_alive {
+        let mut guard = self.shared.inner.lock().unwrap();
+        if !guard.receiver_alive {
             return Err(TrySendError::Disconnected(item));
         }
-        if inner.is_full() {
+        if guard.is_full() {
             return Err(TrySendError::Full(item));
         }
-        inner.push(item);
+        guard.push(item);
         self.shared.not_empty.notify_one();
         Ok(())
     }
@@ -112,31 +110,32 @@ impl<T: TimedValue> Sender<T> {
     /// Blocks until there is room, the receiver is dropped, or the timeout elapses.
     pub fn send_timeout(&self, item: T, timeout: Duration) -> Result<(), SendTimeoutError<T>> {
         let deadline = Instant::now() + timeout;
-        let mut inner = self.shared.inner.lock().unwrap();
+        let mut guard = self.shared.inner.lock().unwrap();
         loop {
-            if !inner.receiver_alive {
+            if !guard.receiver_alive {
                 return Err(SendTimeoutError::Disconnected(item));
             }
-            if !inner.is_full() {
-                break;
+            if !guard.is_full() {
+                guard.push(item);
+                self.shared.not_empty.notify_one();
+                return Ok(());
             }
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err(SendTimeoutError::Timeout(item));
-            }
-            let (guard, timeout_result) =
-                self.shared.not_full.wait_timeout(inner, remaining).unwrap();
-            inner = guard;
-            if timeout_result.timed_out() && inner.is_full() {
-                if !inner.receiver_alive {
+            guard = {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(SendTimeoutError::Timeout(item));
+                }
+                let (guard, timeout_result) =
+                    self.shared.not_full.wait_timeout(guard, remaining).unwrap();
+                if !guard.receiver_alive {
                     return Err(SendTimeoutError::Disconnected(item));
                 }
-                return Err(SendTimeoutError::Timeout(item));
+                if timeout_result.timed_out() && guard.is_full() {
+                    return Err(SendTimeoutError::Timeout(item));
+                }
+                guard
             }
         }
-        inner.push(item);
-        self.shared.not_empty.notify_one();
-        Ok(())
     }
 
     pub fn buffered_duration(&self) -> Duration {
@@ -172,28 +171,28 @@ pub(crate) struct Receiver<T> {
 impl<T: TimedValue> Receiver<T> {
     /// Blocks until an item is available or all senders are dropped.
     pub fn recv(&self) -> Result<T, RecvError> {
-        let mut inner = self.shared.inner.lock().unwrap();
+        let mut guard = self.shared.inner.lock().unwrap();
         loop {
-            if let Some(item) = inner.pop() {
+            if let Some(item) = guard.pop() {
                 self.shared.not_full.notify_one();
                 return Ok(item);
             }
-            if inner.sender_count == 0 {
+            if guard.sender_count == 0 {
                 return Err(RecvError);
             }
-            inner = self.shared.not_empty.wait(inner).unwrap();
+            guard = self.shared.not_empty.wait(guard).unwrap();
         }
     }
 
     /// Non-blocking receive.
     #[allow(dead_code)]
     pub fn try_recv(&self) -> Result<T, TryRecvError> {
-        let mut inner = self.shared.inner.lock().unwrap();
-        if let Some(item) = inner.pop() {
+        let mut guard = self.shared.inner.lock().unwrap();
+        if let Some(item) = guard.pop() {
             self.shared.not_full.notify_one();
             return Ok(item);
         }
-        if inner.sender_count == 0 {
+        if guard.sender_count == 0 {
             return Err(TryRecvError::Disconnected);
         }
         Err(TryRecvError::Empty)
@@ -202,8 +201,8 @@ impl<T: TimedValue> Receiver<T> {
 
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
-        let mut inner = self.shared.inner.lock().unwrap();
-        inner.receiver_alive = false;
+        let mut guard = self.shared.inner.lock().unwrap();
+        guard.receiver_alive = false;
         self.shared.not_full.notify_all();
     }
 }
@@ -232,16 +231,16 @@ impl<T: TimedValue> Iterator for DurationReceiverIter<T> {
 // ── Errors ──────────────────────────────────────────────────────────
 
 #[derive(Debug)]
-pub(crate) struct SendError<T>(pub T);
+pub struct SendError<T>(pub T);
 
 #[derive(Debug)]
-pub(crate) enum TrySendError<T> {
+pub enum TrySendError<T> {
     Full(T),
     Disconnected(T),
 }
 
 #[derive(Debug)]
-pub(crate) enum SendTimeoutError<T> {
+pub enum SendTimeoutError<T> {
     Timeout(T),
     Disconnected(T),
 }
@@ -250,7 +249,7 @@ pub(crate) enum SendTimeoutError<T> {
 pub(crate) struct RecvError;
 
 #[derive(Debug)]
-pub(crate) enum TryRecvError {
+pub enum TryRecvError {
     Empty,
     Disconnected,
 }
@@ -267,8 +266,8 @@ mod tests {
     }
 
     impl TimedValue for TestItem {
-        fn timestamp_range(&self) -> (Duration, Duration) {
-            (self.start, self.end)
+        fn timestamp_range(&self) -> Option<(Duration, Duration)> {
+            Some((self.start, self.end))
         }
     }
 
@@ -282,7 +281,7 @@ mod tests {
 
     #[test]
     fn send_recv_basic() {
-        let (tx, rx) = channel(Duration::from_millis(100));
+        let (tx, rx) = duration_bounded(Duration::from_millis(100));
         tx.send(item(0, 30, 1)).unwrap();
         tx.send(item(30, 60, 2)).unwrap();
         assert_eq!(rx.recv().unwrap().value, 1);
@@ -292,7 +291,7 @@ mod tests {
     #[test]
     fn try_send_returns_full_when_capacity_exceeded() {
         // capacity=50ms; after two items span is 0..60 = 60ms >= 50ms, so channel is full
-        let (tx, _rx) = channel(Duration::from_millis(50));
+        let (tx, _rx) = duration_bounded(Duration::from_millis(50));
         tx.try_send(item(0, 30, 1)).unwrap();
         tx.try_send(item(30, 60, 2)).unwrap();
         match tx.try_send(item(60, 90, 3)) {
@@ -304,7 +303,7 @@ mod tests {
     #[test]
     fn send_blocks_until_recv_frees_capacity() {
         // capacity=50ms; after two items span is 0..60 = 60ms >= 50ms
-        let (tx, rx) = channel(Duration::from_millis(50));
+        let (tx, rx) = duration_bounded(Duration::from_millis(50));
         tx.send(item(0, 30, 1)).unwrap();
         tx.send(item(30, 60, 2)).unwrap();
 
@@ -323,21 +322,21 @@ mod tests {
 
     #[test]
     fn recv_returns_error_when_all_senders_dropped() {
-        let (tx, rx) = channel::<TestItem>(Duration::from_secs(1));
+        let (tx, rx) = duration_bounded::<TestItem>(Duration::from_secs(1));
         drop(tx);
         assert!(rx.recv().is_err());
     }
 
     #[test]
     fn send_returns_error_when_receiver_dropped() {
-        let (tx, rx) = channel(Duration::from_secs(1));
+        let (tx, rx) = duration_bounded(Duration::from_secs(1));
         drop(rx);
         assert!(tx.send(item(0, 10, 1)).is_err());
     }
 
     #[test]
     fn into_iter_yields_until_senders_drop() {
-        let (tx, rx) = channel(Duration::from_secs(1));
+        let (tx, rx) = duration_bounded(Duration::from_secs(1));
         tx.send(item(0, 10, 1)).unwrap();
         tx.send(item(10, 20, 2)).unwrap();
         drop(tx);
@@ -347,7 +346,7 @@ mod tests {
 
     #[test]
     fn clone_sender_keeps_channel_alive() {
-        let (tx, rx) = channel(Duration::from_secs(1));
+        let (tx, rx) = duration_bounded(Duration::from_secs(1));
         let tx2 = tx.clone();
         drop(tx);
         tx2.send(item(0, 10, 1)).unwrap();

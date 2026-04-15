@@ -3,7 +3,8 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
+use crossbeam_channel::{Receiver, RecvTimeoutError};
+
 use tracing::{Level, debug, span, trace, warn};
 use webrtc::{
     rtcp::{self, header::PacketType, sender_report::SenderReport},
@@ -33,8 +34,8 @@ use crate::{
             util::BindToPortError,
         },
     },
-    queue::{QueueInput, QueueTrackOffset, QueueTrackOptions},
-    utils::InitializableThread,
+    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
+    utils::{InitializableThread, channel::Sender},
 };
 
 use crate::prelude::*;
@@ -151,7 +152,7 @@ impl RtpInput {
         ctx: &Arc<PipelineCtx>,
         input_ref: &Ref<InputId>,
         options: Option<VideoDecoderOptions>,
-        frame_sender: Option<Sender<Frame>>,
+        frame_sender: Option<QueueSender<Frame>>,
     ) -> Result<Option<RtpVideoTrackThreadHandle>, DecoderInitError> {
         let (Some(options), Some(frame_sender)) = (options, frame_sender) else {
             return Ok(None);
@@ -187,7 +188,7 @@ impl RtpInput {
         ctx: &Arc<PipelineCtx>,
         input_ref: &Ref<InputId>,
         options: Option<RtpAudioOptions>,
-        samples_sender: Option<Sender<InputAudioSamples>>,
+        samples_sender: Option<QueueSender<InputAudioSamples>>,
     ) -> Result<Option<RtpAudioTrackThreadHandle>, DecoderInitError> {
         let (Some(options), Some(samples_sender)) = (options, samples_sender) else {
             return Ok(None);

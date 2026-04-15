@@ -5,7 +5,6 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::Sender;
 use smelter_render::{Frame, InputId};
 use tracing::info;
 
@@ -15,6 +14,29 @@ use crate::{
 };
 
 use crate::prelude::*;
+
+pub(crate) struct QueueSender<T>(crossbeam_channel::Sender<T>);
+
+impl<T> QueueSender<T> {
+    pub(crate) fn new(sender: crossbeam_channel::Sender<T>) -> Self {
+        Self(sender)
+    }
+
+    pub fn send(&self, item: T) -> Result<(), crossbeam_channel::SendError<T>> {
+        self.0.send(item)
+    }
+
+    #[allow(dead_code)]
+    pub fn try_send(&self, item: T) -> Result<(), crossbeam_channel::TrySendError<T>> {
+        self.0.try_send(item)
+    }
+}
+
+impl<T> std::fmt::Debug for QueueSender<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QueueSender").finish()
+    }
+}
 
 pub(super) struct InnerQueueInput {
     ctx: Arc<PipelineCtx>,
@@ -75,7 +97,10 @@ impl InnerQueueInput {
     fn queue_new_track(
         &mut self,
         opts: QueueTrackOptions,
-    ) -> (Option<Sender<Frame>>, Option<Sender<InputAudioSamples>>) {
+    ) -> (
+        Option<QueueSender<Frame>>,
+        Option<QueueSender<InputAudioSamples>>,
+    ) {
         if !opts.video && !opts.audio {
             return (None, None);
         }
@@ -94,7 +119,7 @@ impl InnerQueueInput {
                 offset_from_start,
                 track_offset.clone(),
             );
-            (Some(video_input), Some(video_sender))
+            (Some(video_input), Some(QueueSender::new(video_sender)))
         } else {
             (None, None)
         };
@@ -106,7 +131,7 @@ impl InnerQueueInput {
                 offset_from_start,
                 track_offset.clone(),
             );
-            (Some(audio_input), Some(audio_sender))
+            (Some(audio_input), Some(QueueSender::new(audio_sender)))
         } else {
             (None, None)
         };
@@ -198,7 +223,10 @@ impl QueueInput {
     pub fn queue_new_track(
         &self,
         opts: QueueTrackOptions,
-    ) -> (Option<Sender<Frame>>, Option<Sender<InputAudioSamples>>) {
+    ) -> (
+        Option<QueueSender<Frame>>,
+        Option<QueueSender<InputAudioSamples>>,
+    ) {
         self.0.lock().unwrap().queue_new_track(opts)
     }
 

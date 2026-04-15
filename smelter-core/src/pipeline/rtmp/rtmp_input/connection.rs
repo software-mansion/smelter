@@ -1,6 +1,5 @@
 use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
-use crossbeam_channel::Sender;
 use rtmp::{AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent};
 use smelter_render::{InputId, error::ErrorStack};
 use tracing::{Level, info, span, warn};
@@ -21,10 +20,10 @@ use crate::{
             ffmpeg_h264, vulkan_h264,
         },
         rtmp::rtmp_input::state::RtmpInputState,
-        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, duration_channel},
+        utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
     },
-    queue::{QueueTrackOffset, QueueTrackOptions},
-    utils::InitializableThread,
+    queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
+    utils::{InitializableThread, channel::Sender},
 };
 
 use crate::prelude::*;
@@ -92,9 +91,7 @@ enum TrackState {
 }
 
 impl TrackState {
-    fn chunk_sender(
-        &mut self,
-    ) -> Option<duration_channel::Sender<PipelineEvent<EncodedInputChunk>>> {
+    fn chunk_sender(&mut self) -> Option<Sender<PipelineEvent<EncodedInputChunk>>> {
         match self {
             TrackState::Ready(handle) => Some(handle.chunk_sender.clone()),
             TrackState::BeforeFirstEvent => {
@@ -143,8 +140,8 @@ struct RtmpConnectionState {
 
     video_track_state: TrackState,
     audio_track_state: TrackState,
-    video_sender: Option<Sender<Frame>>,
-    audio_sender: Option<Sender<InputAudioSamples>>,
+    video_sender: Option<QueueSender<Frame>>,
+    audio_sender: Option<QueueSender<InputAudioSamples>>,
 
     first_pts: Option<Duration>,
 }
