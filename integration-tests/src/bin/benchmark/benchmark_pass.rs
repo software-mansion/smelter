@@ -93,6 +93,7 @@ pub struct SingleBenchmarkPass {
     pub warm_up_time: Duration,
     pub decoder: VideoDecoderOptions,
     pub rendering_mode: RenderingMode,
+    pub audio: bool,
 }
 
 impl SingleBenchmarkPass {
@@ -144,16 +145,18 @@ impl SingleBenchmarkPass {
                 let root = (self.scene_builder)(&scene_ctx, output_id);
                 let receiver: Box<dyn DurationReceiver + Send> = match self.encoder {
                     EncoderOptions::Disabled => {
-                        self.register_pipeline_raw_output(&pipeline, output_id, root)?
+                        self.register_pipeline_raw_output(&pipeline, output_id, root, &inputs)?
                     }
                     EncoderOptions::FfmpegH264(preset) => self
                         .register_pipeline_encoded_output_ffmpeg(
-                            &pipeline, output_id, root, preset,
+                            &pipeline, output_id, root, preset, &inputs,
                         )?,
 
                     #[cfg(not(target_os = "macos"))]
                     EncoderOptions::VulkanH264 => {
-                        self.register_pipeline_encoded_output_vulkan(&pipeline, output_id, root)?
+                        self.register_pipeline_encoded_output_vulkan(
+                            &pipeline, output_id, root, &inputs,
+                        )?
                     }
                 };
 
@@ -177,13 +180,46 @@ impl SingleBenchmarkPass {
         Ok(result)
     }
 
+    fn audio_output_options(
+        &self,
+        inputs: &[InputId],
+    ) -> (Option<RegisterOutputAudioOptions>, Option<AudioEncoderOptions>) {
+        if !self.audio {
+            return (None, None);
+        }
+        let register = RegisterOutputAudioOptions {
+            initial: AudioMixerConfig {
+                inputs: inputs
+                    .iter()
+                    .map(|input_id| AudioMixerInputConfig {
+                        input_id: input_id.clone(),
+                        volume: 1.0,
+                    })
+                    .collect(),
+            },
+            mixing_strategy: AudioMixingStrategy::SumClip,
+            channels: AudioChannels::Stereo,
+            end_condition: PipelineOutputEndCondition::Never,
+        };
+        let encoder = AudioEncoderOptions::Opus(OpusEncoderOptions {
+            channels: AudioChannels::Stereo,
+            preset: OpusEncoderPreset::Voip,
+            sample_rate: 48000,
+            forward_error_correction: false,
+            packet_loss: 0,
+        });
+        (Some(register), Some(encoder))
+    }
+
     fn register_pipeline_encoded_output_ffmpeg(
         &self,
         pipeline: &Arc<Mutex<Pipeline>>,
         output_id: &OutputId,
         root: Component,
         preset: FfmpegH264EncoderPreset,
+        inputs: &[InputId],
     ) -> Result<Box<dyn DurationReceiver + Send>, RegisterOutputError> {
+        let (audio_register, audio_encoder) = self.audio_output_options(inputs);
         let result = Pipeline::register_encoded_data_output(
             pipeline,
             output_id.clone(),
@@ -192,9 +228,9 @@ impl SingleBenchmarkPass {
                     initial: root,
                     end_condition: PipelineOutputEndCondition::Never,
                 }),
-                audio: None,
+                audio: audio_register,
                 output_options: EncodedDataOutputOptions {
-                    audio: None,
+                    audio: audio_encoder,
                     video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                         preset,
                         bitrate: None,
@@ -219,7 +255,9 @@ impl SingleBenchmarkPass {
         pipeline: &Arc<Mutex<Pipeline>>,
         output_id: &OutputId,
         root: Component,
+        inputs: &[InputId],
     ) -> Result<Box<dyn DurationReceiver + Send>, RegisterOutputError> {
+        let (audio_register, audio_encoder) = self.audio_output_options(inputs);
         let result = Pipeline::register_encoded_data_output(
             pipeline,
             output_id.clone(),
@@ -228,9 +266,9 @@ impl SingleBenchmarkPass {
                     initial: root,
                     end_condition: PipelineOutputEndCondition::Never,
                 }),
-                audio: None,
+                audio: audio_register,
                 output_options: EncodedDataOutputOptions {
-                    audio: None,
+                    audio: audio_encoder,
                     video: Some(VideoEncoderOptions::VulkanH264(VulkanH264EncoderOptions {
                         resolution: smelter_render::Resolution {
                             width: self.output_resolution.width,
@@ -251,7 +289,9 @@ impl SingleBenchmarkPass {
         pipeline: &Arc<Mutex<Pipeline>>,
         output_id: &OutputId,
         root: Component,
+        inputs: &[InputId],
     ) -> Result<Box<dyn DurationReceiver + Send>, RegisterOutputError> {
+        let (audio_register, _audio_encoder) = self.audio_output_options(inputs);
         let result = Pipeline::register_raw_data_output(
             pipeline,
             output_id.clone(),
@@ -260,7 +300,7 @@ impl SingleBenchmarkPass {
                     initial: root,
                     end_condition: PipelineOutputEndCondition::Never,
                 }),
-                audio: None,
+                audio: audio_register,
                 output_options: RawDataOutputOptions {
                     audio: None,
                     video: Some(RawDataOutputVideoOptions {

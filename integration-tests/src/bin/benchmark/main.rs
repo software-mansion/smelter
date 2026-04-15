@@ -159,6 +159,7 @@ fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
 
                 warm_up_time: Duration::from_secs(2),
                 rendering_mode: RenderingMode::GpuOptimized,
+                audio: false,
             }
         })),
     }]

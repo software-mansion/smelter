@@ -193,6 +193,36 @@ pub fn four_video_layout(ctx: &SceneContext, output_id: &OutputId) -> Component 
     })
 }
 
+pub fn nine_video_layout(ctx: &SceneContext, output_id: &OutputId) -> Component {
+    let (output_index, _) = ctx
+        .outputs
+        .iter()
+        .enumerate()
+        .find(|(_index, id)| id == &output_id)
+        .unwrap();
+
+    if ctx.inputs.is_empty() {
+        return blank(ctx, output_id);
+    }
+
+    let children: Vec<Component> = (0..9)
+        .map(|i| {
+            let input_id = ctx.inputs[(output_index * 9 + i) % ctx.inputs.len()].clone();
+            Component::InputStream(InputStreamComponent {
+                id: None,
+                input_id,
+            })
+        })
+        .collect();
+
+    Component::Tiles(TilesComponent {
+        margin: 2.0,
+        children,
+        background_color: RGBAColor(128, 128, 128, 255),
+        ..Default::default()
+    })
+}
+
 // One less copy than single_video_layout
 pub fn single_video_pass_through(ctx: &SceneContext, output_id: &OutputId) -> Component {
     let (output_index, _) = ctx

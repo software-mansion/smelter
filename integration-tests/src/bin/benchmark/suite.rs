@@ -12,8 +12,8 @@ use crate::{
     benchmark_pass::{InputFile, SingleBenchmarkPass},
     scenes::{
         SceneBuilderFn, blank, example_image, example_shader, four_video_layout, image_with_shader,
-        simple_tiles_with_all_inputs, single_video_layout, single_video_pass_through, static_image,
-        two_video_layout,
+        nine_video_layout, simple_tiles_with_all_inputs, single_video_layout,
+        single_video_pass_through, static_image, two_video_layout,
     },
     utils::{
         ensure_bunny_480p24fps, ensure_bunny_720p24fps, ensure_bunny_1080p30fps,
@@ -88,6 +88,7 @@ impl BenchmarkSuiteContext {
 
             warm_up_time: Duration::from_secs(2),
             rendering_mode: self.default_rendering_mode,
+            audio: true,
         }
     }
 }
@@ -255,10 +256,9 @@ pub fn minimal_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
 fn benchmark_set_constant_input_output_ratio(
     ctx: &'static BenchmarkSuiteContext,
 ) -> Vec<Benchmark> {
-    let const_input_output_ratio_scenes: [(&'static str, SceneBuilderFn, u64); 3] = [
-        ("1 input per output", single_video_layout, 1),
-        ("2 inputs per output", two_video_layout, 2),
+    let const_input_output_ratio_scenes: [(&'static str, SceneBuilderFn, u64); 2] = [
         ("4 inputs per output", four_video_layout, 4),
+        ("9 inputs per output", nine_video_layout, 9),
     ];
     let const_input_output_ratio_encoder_presets = [
         //EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Ultrafast),
@@ -268,22 +268,10 @@ fn benchmark_set_constant_input_output_ratio(
     ];
 
     let const_input_output_ratio_input = [
-        //(
-        //    "bbb_mp4_480p24fps",
-        //    InputFile::Mp4(ctx.bbb_mp4_480p24fps.clone()),
-        //),
-        //(
-        //    "bbb_mp4_720p24fps",
-        //    InputFile::Mp4(ctx.bbb_mp4_720p24fps.clone()),
-        //),
         (
-            "bbb_mp4_1080p30fps",
-            InputFile::Mp4(ctx.bbb_mp4_1080p30fps.clone()),
+            "bbb_mp4_720p24fps",
+            InputFile::Mp4(ctx.bbb_mp4_720p24fps.clone()),
         ),
-        //(
-        //    "bbb_mp4_2160p30fps",
-        //    InputFile::Mp4(ctx.bbb_mp4_2160p30fps.clone()),
-        //),
     ];
 
     let const_input_output_ratio_decoder = vec![
