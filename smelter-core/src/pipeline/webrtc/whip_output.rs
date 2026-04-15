@@ -41,6 +41,15 @@ mod setup_track;
 mod track_task_audio;
 mod track_task_video;
 
+/// WHIP output - pushes media to a remote WHIP server.
+///
+/// ## Codec negotiation
+///
+/// This side creates the SDP offer from encoder preferences. For H.264 encoders
+/// (FFmpeg and Vulkan), the offer includes constrained baseline 3.1 (for Twitch
+/// compatibility) and constrained baseline, main, and high profiles at level
+/// 5.1. After receiving the answer, we determine which codec was negotiated and
+/// select the matching encoder.
 #[derive(Debug)]
 pub(crate) struct WhipOutput {
     pub video: Option<WhipVideoTrackThreadHandle>,

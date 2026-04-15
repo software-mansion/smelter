@@ -19,6 +19,13 @@ use crate::prelude::*;
 /// WHIP input - receives WebRTC ingest via WHIP HTTP endpoint, decodes, and feeds
 /// frames/samples into the queue.
 ///
+/// ## Codec negotiation
+///
+/// Remote client sends SDP offer. We extract codecs from the offer and echo all
+/// offered variants in our answer for codec types matching our decoder preferences.
+/// For Vulkan H.264, the offer codecs are further filtered by hardware decode
+/// capabilities (unsupported profiles/levels are dropped).
+///
 /// ## Timestamps
 ///
 /// - On connection

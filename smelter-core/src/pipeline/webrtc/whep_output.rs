@@ -35,6 +35,14 @@ pub(super) mod stream_media_to_peer;
 pub(super) mod track_task_audio;
 pub(super) mod track_task_video;
 
+/// WHEP output - serves media to a remote WHEP client.
+///
+/// ## Codec negotiation
+///
+/// Remote client sends SDP offer. We echo all offered codec variants in our
+/// answer to maximize negotiation success. The actual encoding is driven by our
+/// encoder config, not the negotiated profile/level. Tracks where negotiation
+/// fails are cleaned up (allowing audio-only or video-only streams).
 #[derive(Debug)]
 pub struct WhepOutput {
     video: Option<WhepVideoTrackThreadHandle>,
