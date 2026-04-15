@@ -33,6 +33,14 @@ const WHEP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
 /// WHEP input - connects to a remote WebRTC endpoint via WHEP HTTP client,
 /// decodes, and feeds frames/samples into the queue.
 ///
+/// ## Codec negotiation
+///
+/// This side creates the SDP offer. For H.264 decoders (FFmpeg and Vulkan), we
+/// advertise constrained baseline, main, and high profiles with the highest
+/// supported level per profile. For FfmpegH264 this is always level 5.1;
+/// for VulkanH264 the levels come from the GPU's reported decode capabilities.
+/// Offer is sent to the server, answer is applied as remote description.
+///
 /// ## Timestamps
 ///
 /// - Connection is established during input registration (with a 60s timeout).
