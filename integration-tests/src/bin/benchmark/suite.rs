@@ -88,7 +88,7 @@ impl BenchmarkSuiteContext {
 
             warm_up_time: Duration::from_secs(2),
             rendering_mode: self.default_rendering_mode,
-            audio: false,
+            audio: true,
         }
     }
 }
