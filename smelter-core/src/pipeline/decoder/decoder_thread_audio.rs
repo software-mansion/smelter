@@ -1,10 +1,13 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 use crossbeam_channel::Sender;
 use tracing::warn;
 
 use crate::{
-    pipeline::decoder::{AudioDecoderStream, DecoderThreadHandle, EncodedInputEvent},
+    pipeline::{
+        decoder::{AudioDecoderStream, DecoderThreadHandle, EncodedInputEvent},
+        utils::duration_channel,
+    },
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -16,7 +19,7 @@ pub(crate) struct AudioDecoderThreadOptions<Decoder: AudioDecoder> {
     pub ctx: Arc<PipelineCtx>,
     pub decoder_options: Decoder::Options,
     pub samples_sender: Sender<InputAudioSamples>,
-    pub input_buffer_size: usize,
+    pub input_buffer_size: Duration,
 }
 
 pub(crate) struct AudioDecoderThread<Decoder: AudioDecoder> {
@@ -42,7 +45,7 @@ where
             input_buffer_size: buffer_size,
         } = options;
 
-        let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(buffer_size);
+        let (chunk_sender, chunk_receiver) = duration_channel::channel(buffer_size);
 
         let chunk_stream = chunk_receiver.into_iter().map(|event| match event {
             PipelineEvent::Data(chunk) => PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)),

@@ -21,7 +21,7 @@ use crate::{
             ffmpeg_h264, vulkan_h264,
         },
         rtmp::rtmp_input::state::RtmpInputState,
-        utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
+        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, duration_channel},
     },
     queue::{QueueTrackOffset, QueueTrackOptions},
     utils::InitializableThread,
@@ -30,6 +30,7 @@ use crate::{
 use crate::prelude::*;
 
 const RTMP_BUFFER: Duration = Duration::from_secs(2);
+const RTMP_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 pub(crate) fn start_connection_thread(
     ctx: Arc<PipelineCtx>,
@@ -91,7 +92,9 @@ enum TrackState {
 }
 
 impl TrackState {
-    fn chunk_sender(&mut self) -> Option<Sender<PipelineEvent<EncodedInputChunk>>> {
+    fn chunk_sender(
+        &mut self,
+    ) -> Option<duration_channel::Sender<PipelineEvent<EncodedInputChunk>>> {
         match self {
             TrackState::Ready(handle) => Some(handle.chunk_sender.clone()),
             TrackState::BeforeFirstEvent => {
@@ -169,7 +172,7 @@ impl RtmpConnectionState {
             ctx: self.ctx.clone(),
             transformer: Some(H264AvccToAnnexB::new(h264_config)),
             frame_sender,
-            input_buffer_size: 1000,
+            input_buffer_size: RTMP_MAX_BUFFER,
         };
 
         let h264_decoder = self.decoders.h264.unwrap_or_else(|| {
@@ -208,7 +211,7 @@ impl RtmpConnectionState {
                 asc: Some(config.data().clone()),
             },
             samples_sender,
-            input_buffer_size: 1000,
+            input_buffer_size: RTMP_MAX_BUFFER,
         };
         let input_ref = self.input_ref.clone();
         let handle = AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref, options)

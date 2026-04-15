@@ -2,6 +2,8 @@ use std::{collections::VecDeque, time::Duration};
 
 use smelter_render::Frame;
 
+use crate::{PipelineEvent, prelude::EncodedInputChunk};
+
 // Trait used to estimate duration the item
 pub(crate) trait TimedValue {
     fn timestamp_range(&self) -> (Duration, Duration);
@@ -13,6 +15,15 @@ impl TimedValue for Frame {
             self.pts.saturating_sub(Duration::from_millis(10)),
             self.pts + Duration::from_millis(10),
         )
+    }
+}
+
+impl TimedValue for PipelineEvent<EncodedInputChunk> {
+    fn timestamp_range(&self) -> (Duration, Duration) {
+        match self {
+            PipelineEvent::Data(chunk) => (chunk.pts, chunk.pts),
+            PipelineEvent::EOS => (Duration::MAX, Duration::MAX),
+        }
     }
 }
 

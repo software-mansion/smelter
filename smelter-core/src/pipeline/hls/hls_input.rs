@@ -39,6 +39,12 @@ use crate::{
 
 use crate::prelude::*;
 
+/// If we assume that max reasonable segment size is 10 second, then
+/// range for desired buffer should be larger than the segment (18 second)
+const MAX_BUFFER_SIZE: Duration = Duration::from_secs(40);
+const DESIRED_MIN_BUFFER_SIZE: Duration = Duration::from_secs(6);
+const DESIRED_MAX_BUFFER_SIZE: Duration = Duration::from_secs(24);
+
 /// HLS input - reads from an HLS URL via FFmpeg, demuxes H.264/AAC tracks,
 /// decodes, and feeds frames/samples into the queue.
 ///
@@ -203,7 +209,7 @@ impl HlsDemuxerThread {
                 ctx: self.ctx.clone(),
                 decoder_options: FdkAacDecoderOptions { asc },
                 samples_sender,
-                input_buffer_size: 5000,
+                input_buffer_size: MAX_BUFFER_SIZE,
             },
         )?;
 
@@ -243,7 +249,7 @@ impl HlsDemuxerThread {
             ctx: self.ctx.clone(),
             transformer: h264_config.map(H264AvccToAnnexB::new),
             frame_sender,
-            input_buffer_size: 5000,
+            input_buffer_size: MAX_BUFFER_SIZE,
         };
 
         let vulkan_supported = self.ctx.graphics_context.has_vulkan_decoder_support();
@@ -339,11 +345,11 @@ impl HlsDemuxerThread {
         if let Some(track) = self.audio.as_mut().or(self.video.as_mut())
             && track.index == stream_id
         {
-            // TODO: make it duration based
-            if track.handle.chunk_sender.len() > 1500 {
+            let buffered = track.handle.chunk_sender.buffered_duration();
+            if buffered > DESIRED_MAX_BUFFER_SIZE {
                 *first_pts = first_pts.saturating_add(Duration::from_micros(100))
             }
-            if track.handle.chunk_sender.len() < 500 {
+            if buffered < DESIRED_MIN_BUFFER_SIZE {
                 *first_pts = first_pts.saturating_sub(Duration::from_micros(100))
             }
         }

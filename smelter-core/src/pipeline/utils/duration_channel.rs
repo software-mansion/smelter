@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use super::input_buffer::TimedValue;
@@ -70,6 +70,12 @@ pub(crate) struct Sender<T> {
     shared: Arc<Shared<T>>,
 }
 
+impl<T> std::fmt::Debug for Sender<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("duration_channel::Sender").finish()
+    }
+}
+
 impl<T: TimedValue> Sender<T> {
     /// Blocks until there is room or the receiver is dropped.
     pub fn send(&self, item: T) -> Result<(), SendError<T>> {
@@ -89,6 +95,7 @@ impl<T: TimedValue> Sender<T> {
     }
 
     /// Non-blocking send.
+    #[allow(dead_code)]
     pub fn try_send(&self, item: T) -> Result<(), TrySendError<T>> {
         let mut inner = self.shared.inner.lock().unwrap();
         if !inner.receiver_alive {
@@ -100,6 +107,40 @@ impl<T: TimedValue> Sender<T> {
         inner.push(item);
         self.shared.not_empty.notify_one();
         Ok(())
+    }
+
+    /// Blocks until there is room, the receiver is dropped, or the timeout elapses.
+    pub fn send_timeout(&self, item: T, timeout: Duration) -> Result<(), SendTimeoutError<T>> {
+        let deadline = Instant::now() + timeout;
+        let mut inner = self.shared.inner.lock().unwrap();
+        loop {
+            if !inner.receiver_alive {
+                return Err(SendTimeoutError::Disconnected(item));
+            }
+            if !inner.is_full() {
+                break;
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(SendTimeoutError::Timeout(item));
+            }
+            let (guard, timeout_result) =
+                self.shared.not_full.wait_timeout(inner, remaining).unwrap();
+            inner = guard;
+            if timeout_result.timed_out() && inner.is_full() {
+                if !inner.receiver_alive {
+                    return Err(SendTimeoutError::Disconnected(item));
+                }
+                return Err(SendTimeoutError::Timeout(item));
+            }
+        }
+        inner.push(item);
+        self.shared.not_empty.notify_one();
+        Ok(())
+    }
+
+    pub fn buffered_duration(&self) -> Duration {
+        self.shared.inner.lock().unwrap().buffered_duration()
     }
 }
 
@@ -145,6 +186,7 @@ impl<T: TimedValue> Receiver<T> {
     }
 
     /// Non-blocking receive.
+    #[allow(dead_code)]
     pub fn try_recv(&self) -> Result<T, TryRecvError> {
         let mut inner = self.shared.inner.lock().unwrap();
         if let Some(item) = inner.pop() {
@@ -195,6 +237,12 @@ pub(crate) struct SendError<T>(pub T);
 #[derive(Debug)]
 pub(crate) enum TrySendError<T> {
     Full(T),
+    Disconnected(T),
+}
+
+#[derive(Debug)]
+pub(crate) enum SendTimeoutError<T> {
+    Timeout(T),
     Disconnected(T),
 }
 

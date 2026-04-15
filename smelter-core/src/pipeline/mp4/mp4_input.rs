@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::{Receiver, SendTimeoutError, Sender, unbounded};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use smelter_render::error::ErrorStack;
 use tracing::{Level, debug, error, span, trace, warn};
 
@@ -23,13 +23,16 @@ use crate::{
         utils::H264AvccToAnnexB,
     },
     queue::{QueueInput, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
-    utils::{InitializableThread, ShutdownCondition},
+    utils::{
+        InitializableThread, ShutdownCondition,
+        duration_channel::{self, SendTimeoutError},
+    },
 };
 
 use crate::prelude::*;
 
-/// Channel size between input and decoder
-const CHUNK_BUFFER_SIZE: usize = 100;
+/// Channel capacity between input and decoder
+const CHUNK_BUFFER_DURATION: Duration = Duration::from_secs(2);
 
 /// MP4 input - reads from a local file or downloaded URL, demuxes H.264/AAC tracks,
 /// decodes, and feeds frames/samples into the queue. Supports seek, pause, and resume.
@@ -439,7 +442,7 @@ impl TrackManagerThread {
                         ctx: self.ctx.clone(),
                         transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
                         frame_sender,
-                        input_buffer_size: CHUNK_BUFFER_SIZE,
+                        input_buffer_size: CHUNK_BUFFER_DURATION,
                     },
                 )?
             }
@@ -455,7 +458,7 @@ impl TrackManagerThread {
                         ctx: self.ctx.clone(),
                         transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
                         frame_sender,
-                        input_buffer_size: CHUNK_BUFFER_SIZE,
+                        input_buffer_size: CHUNK_BUFFER_DURATION,
                     },
                 )?
             }
@@ -480,7 +483,7 @@ impl TrackManagerThread {
                         asc: Some(data.clone()),
                     },
                     samples_sender,
-                    input_buffer_size: CHUNK_BUFFER_SIZE,
+                    input_buffer_size: CHUNK_BUFFER_DURATION,
                 },
             )?,
             _ => {
@@ -551,7 +554,7 @@ impl TrackThread {
 
     fn try_send(
         event: PipelineEvent<EncodedInputChunk>,
-        sender: &Sender<PipelineEvent<EncodedInputChunk>>,
+        sender: &duration_channel::Sender<PipelineEvent<EncodedInputChunk>>,
         shutdown_condition: &ShutdownCondition,
     ) -> bool {
         let mut event_state = Some(event);
