@@ -29,6 +29,13 @@ pub struct RtmpClientConfig {
     pub use_tls: bool,
 }
 
+impl RtmpClientConfig {
+    fn tc_url(&self) -> String {
+        let scheme = if self.use_tls { "rtmps" } else { "rtmp" };
+        format!("{}://{}:{}/{}", scheme, self.host, self.port, self.app)
+    }
+}
+
 pub struct RtmpClient {
     state: RtmpClientState,
     stream_id: u32,
@@ -64,7 +71,7 @@ impl RtmpClient {
             last_ack: 0,
         };
 
-        let stream_id = state.negotiate_connection(&config.app, &config.stream_key)?;
+        let stream_id = state.negotiate_connection(&config)?;
         debug!("Negotiation complete");
 
         Ok(Self {
@@ -134,11 +141,10 @@ impl Drop for RtmpClient {
 impl RtmpClientState {
     fn negotiate_connection(
         &mut self,
-        app: &str,
-        stream_key: &str,
+        config: &RtmpClientConfig,
     ) -> Result<u32, RtmpConnectionError> {
         let mut state = NegotiationProgress::WaitingForConnectResult;
-        send_connect(&mut self.stream, app)?;
+        send_connect(&mut self.stream, config)?;
 
         loop {
             let msg = match self.stream.read_msg() {
@@ -160,7 +166,7 @@ impl RtmpClientState {
                 state = NegotiationProgress::WaitingForOnStatus {
                     stream_id: response.stream_id,
                 };
-                send_publish(&mut self.stream, stream_key, response.stream_id)?;
+                send_publish(&mut self.stream, &config.stream_key, response.stream_id)?;
 
                 // should be after StreamBegin but e.g. YouTube does not send it
                 self.stream
@@ -336,10 +342,14 @@ impl NegotiationProgress {
     }
 }
 
-fn send_connect(stream: &mut RtmpMessageStream, app: &str) -> Result<(), RtmpConnectionError> {
+fn send_connect(
+    stream: &mut RtmpMessageStream,
+    config: &RtmpClientConfig,
+) -> Result<(), RtmpConnectionError> {
     let props = HashMap::from_iter(
         [
-            ("app", app.into()),
+            ("app", config.app.as_str().into()),
+            ("tcUrl", config.tc_url().into()),
             ("flashVer", "FMS/3,0,1,123".into()),
             // True if proxy is being used
             ("fpad", AmfValue::Boolean(false)),
