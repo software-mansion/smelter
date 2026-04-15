@@ -54,7 +54,7 @@ pub(super) fn start_udp_reader_thread(
         .spawn(move || {
             let _span = span!(
                 Level::INFO,
-                "RTP TCP server",
+                "RTP UDP Receiver",
                 input_id = input_ref.to_string()
             )
             .entered();
@@ -94,7 +94,7 @@ fn run_udp_receiver_thread(
             .send(Bytes::copy_from_slice(&buffer[..received_bytes]))
             .is_err()
         {
-            debug!("Failed to send raw RTP packet from TCP server element. Channel closed.");
+            debug!("Failed to send raw RTP packet UDP receiver thread. Channel closed.");
             return;
         }
     }

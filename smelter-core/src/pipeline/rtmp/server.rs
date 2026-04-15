@@ -68,7 +68,7 @@ fn handle_incoming_connection(
     inputs.get_mut_with(&input_ref, |input| {
         input.ensure_no_active_connection(&input_ref)?;
         let handle = start_connection_thread(ctx, &input_ref, input, conn);
-        input.connection_handle = Some(handle);
+        input.connection_handle = handle;
         Ok(())
     })
 }

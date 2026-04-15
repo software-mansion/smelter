@@ -11,7 +11,7 @@ use crate::{
         rtp::RtpInput,
         webrtc::{WhepInput, WhipInput},
     },
-    queue::QueueDataReceiver,
+    queue::QueueInput,
 };
 
 use crate::prelude::*;
@@ -67,24 +67,44 @@ impl Input {
             _ => Err(UpdateInputError::SeekNotSupported(self.kind())),
         }
     }
+
+    pub fn pause(&self) -> Result<(), UpdateInputError> {
+        match self {
+            Input::Mp4(input) => {
+                input.pause();
+                Ok(())
+            }
+            _ => Err(UpdateInputError::PausingNotSupported(self.kind())),
+        }
+    }
+
+    pub fn resume(&self) -> Result<(), UpdateInputError> {
+        match self {
+            Input::Mp4(input) => {
+                input.resume();
+                Ok(())
+            }
+            _ => Err(UpdateInputError::PausingNotSupported(self.kind())),
+        }
+    }
 }
 
 pub(super) fn new_external_input(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    options: ProtocolInputOptions,
-) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    options: RegisterInputOptions,
+) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
     match options {
-        ProtocolInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_ref, opts),
-        ProtocolInputOptions::RtmpServer(opts) => RtmpServerInput::new_input(ctx, input_ref, opts),
-        ProtocolInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_ref, opts),
-        ProtocolInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_ref, opts),
-        ProtocolInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_ref, opts),
-        ProtocolInputOptions::Whep(opts) => WhepInput::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::RtmpServer(opts) => RtmpServerInput::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::Whep(opts) => WhepInput::new_input(ctx, input_ref, opts),
         #[cfg(target_os = "linux")]
-        ProtocolInputOptions::V4l2(opts) => super::v4l2::V4l2Input::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::V4l2(opts) => super::v4l2::V4l2Input::new_input(ctx, input_ref, opts),
         #[cfg(feature = "decklink")]
-        ProtocolInputOptions::DeckLink(opts) => {
+        RegisterInputOptions::DeckLink(opts) => {
             super::decklink::DeckLink::new_input(ctx, input_ref, opts)
         }
     }
@@ -95,14 +115,13 @@ pub(super) fn new_external_input(
 pub(super) fn register_pipeline_input<BuildFn, NewInputResult>(
     pipeline: &Arc<Mutex<Pipeline>>,
     input_id: InputId,
-    queue_options: QueueInputOptions,
     build_input: BuildFn,
 ) -> Result<NewInputResult, RegisterInputError>
 where
     BuildFn: FnOnce(
         Arc<PipelineCtx>,
         Ref<InputId>,
-    ) -> Result<(Input, NewInputResult, QueueDataReceiver), InputInitError>,
+    ) -> Result<(Input, NewInputResult, QueueInput), InputInitError>,
 {
     if pipeline.lock().unwrap().inputs.contains_key(&input_id) {
         return Err(RegisterInputError::AlreadyRegistered(input_id));
@@ -110,13 +129,11 @@ where
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
-    let (input, input_result, receiver) = build_input(pipeline_ctx, Ref::new(&input_id))
+    let (input, input_result, queue_input) = build_input(pipeline_ctx, Ref::new(&input_id))
         .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
 
-    let (audio_eos_received, video_eos_received) = (
-        receiver.audio.as_ref().map(|_| false),
-        receiver.video.as_ref().map(|_| false),
-    );
+    // TODO: for now assume that
+    let (audio_eos_received, video_eos_received) = (Some(false), Some(false));
 
     let pipeline_input = PipelineInput {
         input,
@@ -147,7 +164,7 @@ where
     }
 
     guard.inputs.insert(input_id.clone(), pipeline_input);
-    guard.queue.add_input(&input_id, receiver, queue_options);
+    guard.queue.add_input(&input_id, queue_input);
     guard.audio_mixer.register_input(input_id.clone());
     guard.renderer.register_input(input_id);
 

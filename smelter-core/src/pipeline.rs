@@ -1,8 +1,4 @@
-use std::{
-    path::Path,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use ::rtmp::TlsConfig;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};
@@ -15,6 +11,7 @@ use crate::{
         rtmp::RtmpPipelineState,
         webrtc::{WebrtcSettingEngineCtx, WhipWhepPipelineState},
     },
+    queue::QueueContext,
     stats::StatsSender,
 };
 
@@ -58,6 +55,7 @@ pub struct PipelineOptions {
     pub run_late_scheduled_events: bool,
     pub never_drop_output_frames: bool,
     pub ahead_of_time_processing: bool,
+    pub side_channel_delay: Duration,
 
     pub output_framerate: Framerate,
     pub mixing_sample_rate: u32,
@@ -109,7 +107,7 @@ pub const DEFAULT_BUFFER_DURATION: Duration = Duration::from_millis(16 * 5); // 
 
 #[derive(Clone)]
 pub(crate) struct PipelineCtx {
-    pub queue_sync_point: Instant,
+    pub queue_ctx: QueueContext,
     pub default_buffer_duration: Duration,
 
     pub mixing_sample_rate: u32,

@@ -19,7 +19,6 @@ use super::InputStatsEvent;
 pub(crate) enum HlsInputStatsEvent {
     Video(HlsInputTrackStatsEvent),
     Audio(HlsInputTrackStatsEvent),
-    CorruptedPacketReceived,
 }
 
 impl HlsInputStatsEvent {
@@ -44,8 +43,6 @@ pub(crate) enum HlsInputTrackStatsEvent {
 pub struct HlsInputState {
     pub video: HlsInputTrackState,
     pub audio: HlsInputTrackState,
-    pub corrupted_packets_received: u64,
-    pub corrupted_packets_received_10_secs: SlidingWindowValue<u64>,
 }
 
 #[derive(Debug)]
@@ -68,12 +65,7 @@ impl HlsInputState {
         let video = HlsInputTrackState::new();
         let audio = HlsInputTrackState::new();
 
-        Self {
-            video,
-            audio,
-            corrupted_packets_received: 0,
-            corrupted_packets_received_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
-        }
+        Self { video, audio }
     }
 
     pub fn report(&mut self) -> HlsInputStatsReport {
@@ -83,10 +75,6 @@ impl HlsInputState {
         HlsInputStatsReport {
             video: video_report,
             audio: audio_report,
-            corrupted_packets_received: self.corrupted_packets_received,
-            corrupted_packets_received_last_10_seconds: self
-                .corrupted_packets_received_10_secs
-                .sum(),
         }
     }
 
@@ -94,10 +82,6 @@ impl HlsInputState {
         match event {
             HlsInputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
             HlsInputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
-            HlsInputStatsEvent::CorruptedPacketReceived => {
-                self.corrupted_packets_received += 1;
-                self.corrupted_packets_received_10_secs.push(1);
-            }
         }
     }
 }

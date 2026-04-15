@@ -16,8 +16,6 @@ pub struct WhepInput {
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,
-    /// Offset in milliseconds relative to the pipeline start (start request).
-    pub offset_ms: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]

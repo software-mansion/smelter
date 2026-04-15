@@ -1,9 +1,5 @@
-use std::time::Duration;
-
 use crate::common_core::prelude as core;
 use crate::*;
-
-use super::queue_options::new_queue_options;
 
 impl TryFrom<WhipInput> for core::RegisterInputOptions {
     type Error = TypeError;
@@ -12,26 +8,9 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
         let WhipInput {
             video,
             required,
-            offset_ms,
             bearer_token,
             endpoint_override,
         } = value;
-
-        let queue_options = new_queue_options(required, offset_ms)?;
-
-        let jitter_buffer = match &queue_options {
-            core::QueueInputOptions {
-                required: false,
-                offset: None,
-            } => core::RtpJitterBufferOptions {
-                mode: core::RtpJitterBufferMode::QueueBased,
-                buffer: core::InputBufferOptions::LatencyOptimized,
-            },
-            _ => core::RtpJitterBufferOptions {
-                mode: core::RtpJitterBufferMode::Fixed(Duration::from_millis(200)),
-                buffer: core::InputBufferOptions::None,
-            },
-        };
 
         let video_preferences = match video {
             Some(options) => match options.decoder_preferences.as_deref() {
@@ -45,15 +24,10 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
             video_preferences,
             bearer_token,
             endpoint_override,
-            jitter_buffer,
+            required: required.unwrap_or(false),
         };
 
-        let input_options = core::ProtocolInputOptions::Whip(whip_options);
-
-        Ok(core::RegisterInputOptions {
-            input_options,
-            queue_options,
-        })
+        Ok(core::RegisterInputOptions::Whip(whip_options))
     }
 }
 

@@ -1,12 +1,41 @@
-use std::{sync::Arc, thread, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
-use crossbeam_channel::{Receiver, Sender, bounded};
+use crossbeam_channel::{Sender, bounded};
 use tracing::{debug, trace};
 
-use crate::{pipeline::input::Input, queue::QueueDataReceiver};
+use crate::{
+    pipeline::input::Input,
+    queue::{QueueInput, QueueTrackOffset, QueueTrackOptions},
+    utils::input_buffer::InputDelayBuffer,
+};
 
 use crate::prelude::*;
 
+/// RawData input - receives raw video frames and audio samples via in-process channels,
+/// normalizes timestamps, and feeds them into the queue.
+///
+/// ## Timestamps
+///
+/// - Queue tracks are created immediately.
+/// - With offset (`opts.offset = Some(offset)`)
+///   - PTS of first frame is normalized to zero (subtracts first observed PTS)
+///   - Register track with `QueueTrackOffset::FromStart(offset)`
+///   - There is a initial buffering phase, but it does not affect the result
+///     because offset from start already establishes synchronization
+/// - Without offset (`opts.offset = None`)
+///   - PTS of first frame is normalized to zero (subtracts first observed PTS)
+///   - Before any frame is produced it's first buffered until `options.buffer_duration`
+///     is collected
+///   - Register track with `QueueTrackOffset::None`
+///
+/// ### Unsupported scenarios
+/// - If ahead of time processing is enabled, initial registration will happen on pts already
+///   processed by the queue, but queue will wait and eventually stream will show up, with
+///   the portion at the start cut off.
 pub struct RawDataInput;
 
 impl RawDataInput {
@@ -14,46 +43,57 @@ impl RawDataInput {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         options: RawDataInputOptions,
-    ) -> Result<(Input, RawDataInputSender, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, RawDataInputSender, QueueInput), InputInitError> {
         let buffer_duration = options
             .buffer_duration
             .unwrap_or(ctx.default_buffer_duration);
-        let (video_sender, video_receiver) = match options.video {
-            true => {
-                let (sender, receiver) =
-                    spawn_video_repacking_thread(ctx.clone(), &input_ref, buffer_duration);
-                (Some(sender), Some(receiver))
-            }
-            false => (None, None),
-        };
-        let (audio_sender, audio_receiver) = match options.audio {
-            true => {
-                let (sender, receiver) =
-                    spawn_audio_repacking_thread(ctx.clone(), &input_ref, buffer_duration);
-                (Some(sender), Some(receiver))
-            }
-            false => (None, None),
-        };
+
+        let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
+        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+            video: options.video,
+            audio: options.audio,
+            offset: match options.offset {
+                Some(offset) => QueueTrackOffset::FromStart(offset),
+                None => QueueTrackOffset::None,
+            },
+        });
+
+        let first_pts = Arc::new(Mutex::new(None));
+
+        let video_sender = video_sender.map(|frame_sender| {
+            spawn_video_repacking_thread(
+                &input_ref,
+                first_pts.clone(),
+                InputDelayBuffer::new(buffer_duration),
+                frame_sender,
+            )
+        });
+        let audio_sender = audio_sender.map(|samples_sender| {
+            spawn_audio_repacking_thread(
+                &input_ref,
+                first_pts.clone(),
+                InputDelayBuffer::new(buffer_duration),
+                samples_sender,
+            )
+        });
+
         Ok((
             Input::RawDataChannel,
             RawDataInputSender {
                 video: video_sender,
                 audio: audio_sender,
             },
-            QueueDataReceiver {
-                video: video_receiver,
-                audio: audio_receiver,
-            },
+            queue_input,
         ))
     }
 }
 
 fn spawn_video_repacking_thread(
-    ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    buffer_duration: Duration,
-) -> (Sender<PipelineEvent<Frame>>, Receiver<PipelineEvent<Frame>>) {
-    let (output_sender, output_receiver) = bounded(5);
+    first_pts: Arc<Mutex<Option<Duration>>>,
+    mut buffer: InputDelayBuffer<Frame>,
+    frame_sender: Sender<Frame>,
+) -> Sender<PipelineEvent<Frame>> {
     let (input_sender, input_receiver) = bounded::<PipelineEvent<Frame>>(1000);
 
     thread::Builder::new()
@@ -61,40 +101,38 @@ fn spawn_video_repacking_thread(
             "Raw channel video synchronization thread for input {input_ref}"
         ))
         .spawn(move || {
-            let mut start_pts = None;
-            let mut first_frame_pts = None;
             for event in input_receiver.into_iter() {
-                let event = match event {
-                    PipelineEvent::Data(mut frame) => {
-                        let start_pts =
-                            *start_pts.get_or_insert_with(|| ctx.queue_sync_point.elapsed());
-                        let first_frame_pts = *first_frame_pts.get_or_insert(frame.pts);
-                        frame.pts = frame.pts + start_pts + buffer_duration - first_frame_pts;
-                        PipelineEvent::Data(frame)
-                    }
-                    PipelineEvent::EOS => PipelineEvent::EOS,
+                match event {
+                    PipelineEvent::Data(frame) => buffer.write(frame),
+                    PipelineEvent::EOS => buffer.mark_end(),
                 };
-                trace!(?event, "Sending raw frame");
-                if output_sender.send(event).is_err() {
-                    debug!("Failed to send packet. Channel closed.");
+
+                while let Some(mut frame) = buffer.read() {
+                    let first_pts = *first_pts.lock().unwrap().get_or_insert(frame.pts);
+                    frame.pts = frame.pts.saturating_sub(first_pts);
+
+                    trace!(?frame, "Sending raw frame");
+                    if frame_sender.send(frame).is_err() {
+                        debug!("Failed to send frame. Channel closed.");
+                        break;
+                    }
+                }
+                if buffer.is_done() {
                     break;
                 }
             }
         })
         .unwrap();
 
-    (input_sender, output_receiver)
+    input_sender
 }
 
 fn spawn_audio_repacking_thread(
-    ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    buffer_duration: Duration,
-) -> (
-    Sender<PipelineEvent<InputAudioSamples>>,
-    Receiver<PipelineEvent<InputAudioSamples>>,
-) {
-    let (output_sender, output_receiver) = bounded(5);
+    first_pts: Arc<Mutex<Option<Duration>>>,
+    mut buffer: InputDelayBuffer<InputAudioSamples>,
+    samples_sender: Sender<InputAudioSamples>,
+) -> Sender<PipelineEvent<InputAudioSamples>> {
     let (input_sender, input_receiver) = bounded::<PipelineEvent<InputAudioSamples>>(1000);
 
     thread::Builder::new()
@@ -102,28 +140,28 @@ fn spawn_audio_repacking_thread(
             "Raw channel audio synchronization thread for input {input_ref}"
         ))
         .spawn(move || {
-            let mut start_pts = None;
-            let mut first_frame_pts = None;
             for event in input_receiver.into_iter() {
-                let event = match event {
-                    PipelineEvent::Data(mut batch) => {
-                        let start_pts =
-                            *start_pts.get_or_insert_with(|| ctx.queue_sync_point.elapsed());
-                        let first_frame_pts = *first_frame_pts.get_or_insert(batch.start_pts);
-                        batch.start_pts =
-                            batch.start_pts + start_pts + buffer_duration - first_frame_pts;
-                        PipelineEvent::Data(batch)
-                    }
-                    PipelineEvent::EOS => PipelineEvent::EOS,
+                match event {
+                    PipelineEvent::Data(frame) => buffer.write(frame),
+                    PipelineEvent::EOS => buffer.mark_end(),
                 };
-                trace!(?event, "Sending raw samples");
-                if output_sender.send(event).is_err() {
-                    debug!("Failed to send packet. Channel closed.");
+
+                while let Some(mut batch) = buffer.read() {
+                    let first_pts = *first_pts.lock().unwrap().get_or_insert(batch.start_pts);
+                    batch.start_pts = batch.start_pts.saturating_sub(first_pts);
+
+                    trace!(?batch, "Sending raw frame");
+                    if samples_sender.send(batch).is_err() {
+                        debug!("Failed to send sample batch. Channel closed.");
+                        break;
+                    }
+                }
+                if buffer.is_done() {
                     break;
                 }
             }
         })
         .unwrap();
 
-    (input_sender, output_receiver)
+    input_sender
 }

@@ -4,8 +4,6 @@ use std::{
 };
 
 use axum::http::HeaderMap;
-use crossbeam_channel::Sender;
-use smelter_render::Frame;
 use tracing::error;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
@@ -15,6 +13,7 @@ use crate::{
         bearer_token::validate_token, error::WhipWhepServerError,
         peer_connection_recvonly::RecvonlyPeerConnection,
     },
+    queue::WeakQueueInput,
 };
 
 use crate::prelude::*;
@@ -137,9 +136,7 @@ pub(crate) struct WhipInputStateOptions {
     pub bearer_token: Arc<str>,
     pub endpoint_id: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
-    pub frame_sender: Sender<PipelineEvent<Frame>>,
-    pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
-    pub jitter_buffer_options: RtpJitterBufferOptions,
+    pub queue_input: WeakQueueInput,
 }
 
 #[derive(Debug)]
@@ -147,10 +144,8 @@ pub(crate) struct WhipInputState {
     pub bearer_token: Arc<str>,
     pub endpoint_id: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
-    pub frame_sender: Sender<PipelineEvent<Frame>>,
-    pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub queue_input: WeakQueueInput,
     pub session: Option<WhipInputSession>,
-    pub jitter_buffer_options: RtpJitterBufferOptions,
 }
 
 #[derive(Debug)]
@@ -165,10 +160,8 @@ impl WhipInputState {
             bearer_token: options.bearer_token,
             endpoint_id: options.endpoint_id,
             video_preferences: options.video_preferences,
-            frame_sender: options.frame_sender,
-            input_samples_sender: options.input_samples_sender,
+            queue_input: options.queue_input,
             session: None,
-            jitter_buffer_options: options.jitter_buffer_options,
         }
     }
 

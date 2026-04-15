@@ -2,7 +2,7 @@ use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
 use crossbeam_channel::Sender;
 use rtmp::{AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent};
-use smelter_render::{Frame, InputId, error::ErrorStack};
+use smelter_render::{InputId, error::ErrorStack};
 use tracing::{Level, info, span, warn};
 
 use crate::{
@@ -21,32 +21,42 @@ use crate::{
             ffmpeg_h264, vulkan_h264,
         },
         rtmp::rtmp_input::state::RtmpInputState,
-        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, input_buffer::InputBuffer},
+        utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
     },
+    queue::{QueueTrackOffset, QueueTrackOptions},
     utils::InitializableThread,
 };
 
 use crate::prelude::*;
+
+const RTMP_BUFFER: Duration = Duration::from_secs(2);
 
 pub(crate) fn start_connection_thread(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     input: &RtmpInputState,
     conn: rtmp::RtmpServerConnection,
-) -> JoinHandle<()> {
+) -> Option<JoinHandle<()>> {
     let input_id = input_ref.to_string();
+    let queue_input = input.queue_input.upgrade()?;
+    let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+        video: true,
+        audio: true,
+        offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + RTMP_BUFFER),
+    });
+
     let mut state = RtmpConnectionState {
         ctx,
         input_ref: input_ref.clone(),
-        frame_sender: input.frame_sender.clone(),
-        samples_sender: input.input_samples_sender.clone(),
         decoders: input.decoders.clone(),
-        buffer: input.buffer.clone(),
-        first_packet_offset: None,
         video_track_state: TrackState::BeforeFirstEvent,
         audio_track_state: TrackState::BeforeFirstEvent,
+        video_sender,
+        audio_sender,
+        first_pts: None,
     };
-    std::thread::Builder::new()
+
+    let handle = std::thread::Builder::new()
         .name(format!("RTMP thread for input {input_id}"))
         .spawn(move || {
             let _span = span!(Level::INFO, "RTMP thread", input_id = input_id).entered();
@@ -68,7 +78,8 @@ pub(crate) fn start_connection_thread(
 
             info!("RTMP stream connection closed");
         })
-        .unwrap()
+        .unwrap();
+    Some(handle)
 }
 
 enum TrackState {
@@ -114,20 +125,25 @@ enum RtmpConnectionError {
 
     #[error("Audio decoder not initialized yet")]
     AudioDecoderNotInitialized,
+
+    #[error("Video track already configured")]
+    ReceivedSecondVideoTrack,
+
+    #[error("Audio track already configured")]
+    ReceivedSecondAudioTrack,
 }
 
 struct RtmpConnectionState {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
-    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     decoders: RtmpServerInputDecoders,
-    buffer: InputBuffer,
 
     video_track_state: TrackState,
     audio_track_state: TrackState,
+    video_sender: Option<Sender<Frame>>,
+    audio_sender: Option<Sender<InputAudioSamples>>,
 
-    first_packet_offset: Option<Duration>,
+    first_pts: Option<Duration>,
 }
 
 impl RtmpConnectionState {
@@ -144,12 +160,15 @@ impl RtmpConnectionState {
     }
 
     fn process_video_config(&mut self, config: H264VideoConfig) -> Result<(), RtmpConnectionError> {
+        let Some(frame_sender) = self.video_sender.take() else {
+            return Err(RtmpConnectionError::ReceivedSecondVideoTrack);
+        };
         let h264_config = H264AvcDecoderConfig::parse(config.data)?;
 
         let options = VideoDecoderThreadOptions {
             ctx: self.ctx.clone(),
             transformer: Some(H264AvccToAnnexB::new(h264_config)),
-            frame_sender: self.frame_sender.clone(),
+            frame_sender,
             input_buffer_size: 1000,
         };
 
@@ -180,12 +199,15 @@ impl RtmpConnectionState {
     }
 
     fn process_audio_config(&mut self, config: AacAudioConfig) -> Result<(), RtmpConnectionError> {
+        let Some(samples_sender) = self.audio_sender.take() else {
+            return Err(RtmpConnectionError::ReceivedSecondAudioTrack);
+        };
         let options = AudioDecoderThreadOptions {
             ctx: self.ctx.clone(),
             decoder_options: FdkAacDecoderOptions {
                 asc: Some(config.data().clone()),
             },
-            samples_sender: self.samples_sender.clone(),
+            samples_sender,
             input_buffer_size: 1000,
         };
         let input_ref = self.input_ref.clone();
@@ -201,7 +223,7 @@ impl RtmpConnectionState {
             .chunk_sender()
             .ok_or(RtmpConnectionError::VideoDecoderNotInitialized)?;
 
-        let pts = self.shift_pts_to_queue_offset(video.pts);
+        let pts = self.normalize_pts(video.pts);
         let chunk = EncodedInputChunk {
             data: video.data,
             pts,
@@ -226,7 +248,7 @@ impl RtmpConnectionState {
             .chunk_sender()
             .ok_or(RtmpConnectionError::AudioDecoderNotInitialized)?;
 
-        let pts = self.shift_pts_to_queue_offset(audio.pts);
+        let pts = self.normalize_pts(audio.pts);
         let chunk = EncodedInputChunk {
             data: audio.data.clone(),
             pts,
@@ -245,13 +267,17 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn shift_pts_to_queue_offset(&mut self, pts: Duration) -> Duration {
-        let offset = *self
-            .first_packet_offset
-            .get_or_insert_with(|| self.ctx.queue_sync_point.elapsed().saturating_sub(pts));
+    fn normalize_pts(&mut self, pts: Duration) -> Duration {
+        let first_pts = *self.first_pts.get_or_insert(pts);
 
-        let pts = pts + offset;
-        self.buffer.recalculate_buffer(pts);
-        pts + self.buffer.size()
+        // drop unused track, it matters only if input is required
+        // and does not have audio or video track. Channels need to be large
+        // enough to fit 5 second
+        if pts.saturating_sub(first_pts) > Duration::from_secs(5) {
+            self.video_sender.take();
+            self.audio_sender.take();
+        }
+
+        pts.saturating_sub(first_pts)
     }
 }

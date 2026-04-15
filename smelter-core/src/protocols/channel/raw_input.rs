@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crossbeam_channel::Sender;
 
-use crate::prelude::*;
+use crate::{prelude::*, utils::input_buffer::TimedValue};
 
 #[derive(Debug)]
 pub struct RawDataInputSender {
@@ -24,6 +24,8 @@ pub struct RawDataInputOptions {
     ///
     /// By default DEFAULT_BUFFER_DURATION will be used.
     pub buffer_duration: Option<Duration>,
+    pub required: bool,
+    pub offset: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +33,12 @@ pub struct InputAudioSamples {
     pub samples: AudioSamples,
     pub start_pts: Duration,
     pub sample_rate: u32,
+}
+
+impl TimedValue for InputAudioSamples {
+    fn timestamp_range(&self) -> (Duration, Duration) {
+        self.pts_range()
+    }
 }
 
 impl InputAudioSamples {

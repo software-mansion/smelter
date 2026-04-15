@@ -4,18 +4,21 @@ use tracing::debug;
 use uuid::Uuid;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
-use crate::pipeline::{
-    rtp::RtpJitterBufferInitOptions,
-    webrtc::{
-        WhipWhepServerState,
-        error::WhipWhepServerError,
-        offer_codec_filter::codecs_from_offer,
-        peer_connection_recvonly::RecvonlyPeerConnection,
-        whip_input::{
-            WhipTrackContext, on_track::handle_on_track, state::WhipInputSession,
-            video_preferences::video_params_compliant_with_offer,
+use crate::{
+    pipeline::{
+        rtp::{RtpJitterBufferMode, RtpJitterBufferSharedContext},
+        webrtc::{
+            WhipWhepServerState,
+            error::WhipWhepServerError,
+            offer_codec_filter::codecs_from_offer,
+            peer_connection_recvonly::RecvonlyPeerConnection,
+            whip_input::{
+                WhipTrackContext, on_track::handle_on_track, state::WhipInputSession,
+                video_preferences::video_params_compliant_with_offer,
+            },
         },
     },
+    queue::{QueueTrackOffset, QueueTrackOptions},
 };
 
 use crate::prelude::*;
@@ -27,12 +30,15 @@ pub(crate) async fn create_new_whip_session(
 ) -> Result<(Arc<str>, RTCSessionDescription), WhipWhepServerError> {
     let inputs = state.inputs.clone();
 
-    let (video_preferences, jitter_buffer_options) = inputs.get_with(&input_ref, |input| {
-        Ok((
-            input.video_preferences.clone(),
-            input.jitter_buffer_options.clone(),
-        ))
+    let (queue_input, video_preferences) = inputs.get_with(&input_ref, |input| {
+        Ok((input.queue_input.upgrade(), input.video_preferences.clone()))
     })?;
+    let Some(queue_input) = queue_input else {
+        return Err(WhipWhepServerError::NotFound(format!(
+            "Input {input_ref} not found"
+        )));
+    };
+
     let offer_codecs = codecs_from_offer(&offer);
     let video_codecs =
         video_params_compliant_with_offer(&state.ctx, &video_preferences, &offer_codecs);
@@ -59,15 +65,7 @@ pub(crate) async fn create_new_whip_session(
     })?;
     debug!("SDP answer: {}", answer.sdp);
 
-    {
-        let input_ref = input_ref.clone();
-        let buffer = RtpJitterBufferInitOptions::new(&state.ctx, jitter_buffer_options);
-        peer_connection.on_track(move |track_ctx| {
-            let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);
-            handle_on_track(ctx, input_ref.clone(), video_preferences.clone());
-        })
-    };
-
+    let weak_pear_connection = peer_connection.downgrade();
     let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
     // It will fail if there is already connected peer connection
     inputs.get_mut_with(&input_ref, |input| {
@@ -76,6 +74,32 @@ pub(crate) async fn create_new_whip_session(
             session_id: session_id.clone(),
         })
     })?;
+
+    if let Some(peer_connection) = weak_pear_connection.upgrade() {
+        let input_ref = input_ref.clone();
+        let buffer = RtpJitterBufferSharedContext::new(
+            &state.ctx,
+            RtpJitterBufferMode::RealTime,
+            state.ctx.queue_ctx.sync_point,
+        );
+
+        let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+            video: true,
+            audio: true,
+            offset: QueueTrackOffset::Pts(Duration::ZERO),
+        });
+
+        peer_connection.on_track(move |track_ctx| {
+            let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);
+            handle_on_track(
+                ctx,
+                input_ref.clone(),
+                video_preferences.clone(),
+                &mut video_sender,
+                &mut audio_sender,
+            );
+        })
+    };
 
     Ok((session_id, answer))
 }

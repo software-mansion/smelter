@@ -15,13 +15,13 @@ use super::AudioDecoder;
 pub(crate) struct AudioDecoderThreadOptions<Decoder: AudioDecoder> {
     pub ctx: Arc<PipelineCtx>,
     pub decoder_options: Decoder::Options,
-    pub samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub samples_sender: Sender<InputAudioSamples>,
     pub input_buffer_size: usize,
 }
 
 pub(crate) struct AudioDecoderThread<Decoder: AudioDecoder> {
-    stream: Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
-    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    stream: Box<dyn Iterator<Item = InputAudioSamples>>,
+    samples_sender: Sender<InputAudioSamples>,
     _decoder: PhantomData<Decoder>,
 }
 

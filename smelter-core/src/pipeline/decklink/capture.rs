@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
+use crossbeam_channel::{Sender, TrySendError};
 use decklink::{
     AudioInputPacket, DetectedVideoInputFormatFlags, DisplayMode, InputCallback,
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
@@ -18,14 +18,9 @@ use crate::prelude::*;
 
 use super::AUDIO_SAMPLE_RATE;
 
-pub(super) struct DataReceivers {
-    pub(super) video: Option<Receiver<PipelineEvent<Frame>>>,
-    pub(super) audio: Option<Receiver<PipelineEvent<InputAudioSamples>>>,
-}
-
 pub(super) struct ChannelCallbackAdapter {
-    video_sender: Option<Sender<PipelineEvent<Frame>>>,
-    audio_sender: Option<Sender<PipelineEvent<InputAudioSamples>>>,
+    video_sender: Option<Sender<Frame>>,
+    audio_sender: Option<Sender<InputAudioSamples>>,
     span: Span,
 
     // I'm not sure, but I suspect that holding Arc here would create a circular
@@ -41,48 +36,34 @@ impl ChannelCallbackAdapter {
     pub(super) fn new(
         ctx: &Arc<PipelineCtx>,
         span: Span,
-        enable_audio: bool,
+        video_sender: Option<Sender<Frame>>,
+        audio_sender: Option<Sender<InputAudioSamples>>,
         input: Weak<decklink::Input>,
         initial_format: Format,
-    ) -> (Self, DataReceivers) {
-        let (video_sender, video_receiver) = bounded(1000);
-        let (audio_sender, audio_receiver) = match enable_audio {
-            true => {
-                let (sender, receiver) = bounded(1000);
-                (Some(sender), Some(receiver))
-            }
-            false => (None, None),
-        };
-        (
-            Self {
-                video_sender: Some(video_sender),
-                audio_sender,
-                span,
-                input,
-                // 15 ms is a buffer that should be enough for frame to be delivered to queue
-                sync_point: ctx.queue_sync_point + Duration::from_millis(15),
-                audio_offset: Mutex::new(None),
-                video_offset: Mutex::new(None),
-                last_format: Mutex::new(initial_format),
-            },
-            DataReceivers {
-                video: Some(video_receiver),
-                audio: audio_receiver,
-            },
-        )
+    ) -> Self {
+        Self {
+            video_sender,
+            audio_sender,
+            span,
+            input,
+            sync_point: ctx.queue_ctx.sync_point,
+            audio_offset: Mutex::new(None),
+            video_offset: Mutex::new(None),
+            last_format: Mutex::new(initial_format),
+        }
     }
 
     fn handle_video_frame(
         &self,
         video_frame: &mut VideoInputFrame,
-        sender: &Sender<PipelineEvent<Frame>>,
+        sender: &Sender<Frame>,
     ) -> Result<(), decklink::DeckLinkError> {
         let stream_time = video_frame.stream_time()?;
         let offset = {
             let mut guard = self.video_offset.lock().unwrap();
             *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(stream_time))
         };
-        let pts = stream_time + offset;
+        let pts = stream_time + offset + Duration::from_millis(40);
 
         let width = video_frame.width();
         let height = video_frame.height();
@@ -107,7 +88,7 @@ impl ChannelCallbackAdapter {
         };
 
         trace!(?frame, ?pixel_format, "Received frame from decklink");
-        match sender.try_send(PipelineEvent::Data(frame)) {
+        match sender.try_send(frame) {
             Ok(_) => (),
             Err(TrySendError::Full(_)) => {
                 warn!(
@@ -199,14 +180,14 @@ impl ChannelCallbackAdapter {
     fn handle_audio_packet(
         &self,
         audio_packet: &mut AudioInputPacket,
-        sender: &Sender<PipelineEvent<InputAudioSamples>>,
+        sender: &Sender<InputAudioSamples>,
     ) -> Result<(), decklink::DeckLinkError> {
         let packet_time = audio_packet.packet_time()?;
         let offset = {
             let mut guard = self.audio_offset.lock().unwrap();
             *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(packet_time))
         };
-        let pts = packet_time + offset;
+        let pts = packet_time + offset + Duration::from_millis(40);
 
         let samples = audio_packet.as_32_bit_stereo()?;
         let samples = InputAudioSamples {
@@ -220,11 +201,12 @@ impl ChannelCallbackAdapter {
             sample_rate: AUDIO_SAMPLE_RATE,
         };
         trace!(?samples, "Received audio samples from decklink");
-        match sender.try_send(PipelineEvent::Data(samples)) {
+        match sender.try_send(samples) {
             Ok(_) => (),
             Err(TrySendError::Full(_)) => {
                 warn!(
-                    "Failed to send samples from DeckLink. Channel is full, dropping samples pts={pts:?}."
+                    ?pts,
+                    "Failed to send samples from DeckLink. Channel is full, dropping samples."
                 )
             }
             Err(TrySendError::Disconnected(_)) => {

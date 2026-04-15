@@ -1546,9 +1546,7 @@
         "description": "Stats report for `HLS` input.",
         "required": [
           "video",
-          "audio",
-          "corrupted_packets_received",
-          "corrupted_packets_received_last_10_seconds"
+          "audio"
         ],
         "properties": {
           "video": {
@@ -1558,18 +1556,6 @@
           "audio": {
             "$ref": "#/components/schemas/HlsInputTrackStatsReport",
             "description": "Stats for the audio track."
-          },
-          "corrupted_packets_received": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Total count of corrupted packets received.",
-            "minimum": 0
-          },
-          "corrupted_packets_received_last_10_seconds": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Count of corrupted packets received in the last 10 seconds.",
-            "minimum": 0
           }
         }
       },
@@ -4216,14 +4202,6 @@
             ],
             "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
           },
-          "offset_ms": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Offset in milliseconds relative to the pipeline start (start request). If the offset is\nnot defined then the stream will be synchronized based on the delivery time of the initial\nframes."
-          },
           "decoder_map": {
             "type": [
               "object",
@@ -6033,14 +6011,6 @@
               "null"
             ],
             "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
-          },
-          "offset_ms": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Offset in milliseconds relative to the pipeline start (start request)."
           }
         },
         "additionalProperties": false
@@ -6457,14 +6427,6 @@
               "null"
             ],
             "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
-          },
-          "offset_ms": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Offset in milliseconds relative to the pipeline start (start request). If the offset is\nnot defined then the stream will be synchronized based on the delivery time of the initial\nframes."
           }
         },
         "additionalProperties": false

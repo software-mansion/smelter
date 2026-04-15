@@ -1,8 +1,6 @@
 use crate::common_core::prelude as core;
 use crate::*;
 
-use super::queue_options::new_queue_options;
-
 impl TryFrom<RtmpInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
@@ -11,19 +9,8 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             app,
             stream_key,
             required,
-            offset_ms,
             decoder_map,
         } = value;
-
-        let queue_options = new_queue_options(required, offset_ms)?;
-
-        let buffer = match &queue_options {
-            core::QueueInputOptions {
-                required: false,
-                offset: None,
-            } => core::InputBufferOptions::Const(None),
-            _ => core::InputBufferOptions::None,
-        };
 
         let h264 = decoder_map
             .as_ref()
@@ -38,12 +25,9 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             app,
             stream_key,
             decoders: core::RtmpServerInputDecoders { h264 },
-            buffer,
+            required: required.unwrap_or(false),
         };
 
-        Ok(core::RegisterInputOptions {
-            input_options: core::ProtocolInputOptions::RtmpServer(input_options),
-            queue_options,
-        })
+        Ok(core::RegisterInputOptions::RtmpServer(input_options))
     }
 }

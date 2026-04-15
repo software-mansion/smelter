@@ -4,10 +4,15 @@ use std::{
     time::Duration,
 };
 
-use smelter_render::{Frame, FrameData, Framerate, InputId, NvPlanes, Resolution};
-use tracing::{Level, debug, error, info, span, warn};
+use crossbeam_channel::{Sender, TrySendError};
+use smelter_render::{FrameData, Framerate, InputId, NvPlanes, Resolution};
+use tracing::{Level, debug, error, info, span, trace, warn};
 
-use crate::{pipeline::input::Input, prelude::*, queue::QueueDataReceiver};
+use crate::{
+    pipeline::input::Input,
+    prelude::*,
+    queue::{QueueInput, QueueTrackOffset, QueueTrackOptions},
+};
 
 use v4l::{
     Format, FourCC,
@@ -40,6 +45,24 @@ impl TryFrom<FourCC> for V4l2Format {
     }
 }
 
+/// V4L2 input - captures raw video frames from a Video4Linux2 device (e.g. webcam,
+/// capture card, virtual camera) and feeds them into the queue. Video only, no audio.
+///
+/// ## Timestamps
+///
+/// - Register track with `QueueTrackOffset::Pts(Duration::ZERO)` which means
+///   that PTS should be relative to queue `sync_point`.
+/// - PTS of each frame is `sync_point.elapsed() + 20ms` (real-time capture with a
+///   small fixed buffer to account for delivery latency). This effectively syncs
+///   with the queue on every frame.
+/// - Never block on sending.
+///
+/// ### Unsupported scenarios
+/// - If ahead of time processing is enabled, initial registration will happen on pts already
+///   processed by the queue, but queue will wait and eventually stream will show up, with
+///   the portion at the start cut off.
+/// - If queue is to slow (e.g. other input required and to slow), media will be delivered to
+///   queue to late and dropped
 pub struct V4l2Input {
     should_close: Arc<AtomicBool>,
 }
@@ -49,7 +72,7 @@ impl V4l2Input {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         opts: V4l2InputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let device_config = V4l2DeviceConfig::initialize(&opts)?;
 
         let mut stream =
@@ -58,13 +81,23 @@ impl V4l2Input {
         // the library recommends to skip the first frame
         stream.next().map_err(V4l2InputError::IoError)?;
 
-        let (frame_sender, frame_receiver) = crossbeam_channel::bounded(10);
+        let queue_input = QueueInput::new(&ctx, &input_ref, opts.required);
+        let (Some(video_sender), _) = queue_input.queue_new_track(QueueTrackOptions {
+            video: true,
+            audio: false,
+            offset: QueueTrackOffset::Pts(Duration::ZERO),
+        }) else {
+            return Err(InputInitError::InternalServerError(
+                "Video sender is None in V4L2 input",
+            ));
+        };
+
         let should_close = Arc::new(AtomicBool::new(false));
 
         let mut state = InputState {
             config: device_config,
             ctx,
-            sender: frame_sender,
+            sender: video_sender,
             should_close: should_close.clone(),
             stream,
         };
@@ -81,10 +114,7 @@ impl V4l2Input {
         Ok((
             Input::V4l2(Self { should_close }),
             InputInitInfo::Other,
-            QueueDataReceiver {
-                video: Some(frame_receiver),
-                audio: None,
-            },
+            queue_input,
         ))
     }
 }
@@ -248,7 +278,7 @@ struct InputState<'a> {
     config: V4l2DeviceConfig,
     ctx: Arc<PipelineCtx>,
     should_close: Arc<AtomicBool>,
-    sender: crossbeam_channel::Sender<PipelineEvent<Frame>>,
+    sender: Sender<Frame>,
     stream: v4l::io::mmap::Stream<'a>,
 }
 
@@ -256,7 +286,6 @@ impl InputState<'_> {
     fn run(&mut self) {
         loop {
             if self.should_close.load(std::sync::atomic::Ordering::Relaxed) {
-                self.send_eos();
                 return;
             }
 
@@ -281,7 +310,6 @@ impl InputState<'_> {
                     if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
                         if let Err(err) = self.config.refresh_format() {
                             error!(%err, "Error when trying to refresh parameters.");
-                            self.send_eos();
                             return;
                         }
 
@@ -296,7 +324,6 @@ impl InputState<'_> {
                     if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
                         if let Err(err) = self.config.refresh_format() {
                             error!(%err, "Fatal error when trying to refresh parameters.");
-                            self.send_eos();
                             return;
                         }
 
@@ -311,20 +338,19 @@ impl InputState<'_> {
             };
 
             let frame = Frame {
-                pts: self.ctx.queue_sync_point.elapsed() + Duration::from_millis(20),
+                pts: self.ctx.queue_ctx.sync_point.elapsed() + Duration::from_millis(20),
                 data,
                 resolution: self.config.resolution,
             };
 
-            if self.sender.send(PipelineEvent::Data(frame)).is_err() {
-                debug!("Failed to send video chunk. Channel closed.");
+            match self.sender.try_send(frame) {
+                Ok(()) => (),
+                Err(TrySendError::Full(_)) => trace!("Dropping frame"),
+                Err(TrySendError::Disconnected(_)) => {
+                    debug!("Failed to send video chunk. Channel closed.");
+                    return;
+                }
             }
-        }
-    }
-
-    fn send_eos(&self) {
-        if self.sender.send(PipelineEvent::EOS).is_err() {
-            debug!("Cannot send EOS. Channel closed.");
         }
     }
 }

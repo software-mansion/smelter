@@ -184,7 +184,7 @@ pub fn start_ffmpeg_send(
 ) -> Result<(Option<Child>, Option<Child>)> {
     match test_sample {
         TestSample::BigBuckBunnyH264Opus | TestSample::ElephantsDreamH264Opus => {
-            start_ffmpeg_send_from_file(
+            start_ffmpeg_send_rtp_from_file(
                 ip,
                 video_port,
                 audio_port,
@@ -193,7 +193,7 @@ pub fn start_ffmpeg_send(
             )
         }
         TestSample::BigBuckBunnyVP8Opus | TestSample::ElephantsDreamVP8Opus => {
-            start_ffmpeg_send_from_file(
+            start_ffmpeg_send_rtp_from_file(
                 ip,
                 video_port,
                 audio_port,
@@ -202,7 +202,7 @@ pub fn start_ffmpeg_send(
             )
         }
         TestSample::BigBuckBunnyVP9Opus | TestSample::ElephantsDreamVP9Opus => {
-            start_ffmpeg_send_from_file(
+            start_ffmpeg_send_rtp_from_file(
                 ip,
                 video_port,
                 audio_port,
@@ -218,7 +218,7 @@ pub fn start_ffmpeg_send(
             Video::H264,
         ),
         TestSample::SampleH264 => match video_port {
-            Some(port) => start_ffmpeg_send_from_file(
+            Some(port) => start_ffmpeg_send_rtp_from_file(
                 ip,
                 Some(port),
                 None,
@@ -228,7 +228,7 @@ pub fn start_ffmpeg_send(
             None => Err(anyhow!("video port required for test sample")),
         },
         TestSample::SampleVP8 => match video_port {
-            Some(port) => start_ffmpeg_send_from_file(
+            Some(port) => start_ffmpeg_send_rtp_from_file(
                 ip,
                 Some(port),
                 None,
@@ -238,7 +238,7 @@ pub fn start_ffmpeg_send(
             None => Err(anyhow!("video port required for test sample")),
         },
         TestSample::SampleVP9 => match video_port {
-            Some(port) => start_ffmpeg_send_from_file(
+            Some(port) => start_ffmpeg_send_rtp_from_file(
                 ip,
                 Some(port),
                 None,
@@ -306,7 +306,7 @@ pub fn start_ffmpeg_send(
     }
 }
 
-pub fn start_ffmpeg_send_from_file(
+pub fn start_ffmpeg_send_rtp_from_file(
     ip: &str,
     video_port: Option<u16>,
     audio_port: Option<u16>,

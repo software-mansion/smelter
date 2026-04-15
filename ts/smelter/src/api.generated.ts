@@ -60,10 +60,6 @@ export type RegisterInput =
        */
       required?: boolean | null;
       /**
-       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
-       */
-      offset_ms?: number | null;
-      /**
        * Assigns which decoder should be used for media encoded with a specific codec.
        */
       decoder_map?: {
@@ -121,10 +117,6 @@ export type RegisterInput =
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
-      /**
-       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
-       */
-      offset_ms?: number | null;
     }
   | {
       type: "whep_client";
@@ -144,10 +136,6 @@ export type RegisterInput =
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
-      /**
-       * Offset in milliseconds relative to the pipeline start (start request).
-       */
-      offset_ms?: number | null;
     }
   | {
       type: "hls";
@@ -1340,14 +1328,6 @@ export type InputStatsReport =
        * Stats for the audio track.
        */
       audio: HlsInputTrackStatsReport;
-      /**
-       * Total count of corrupted packets received.
-       */
-      corrupted_packets_received: number;
-      /**
-       * Count of corrupted packets received in the last 10 seconds.
-       */
-      corrupted_packets_received_last_10_seconds: number;
     }
   | {
       type: "rtmp";

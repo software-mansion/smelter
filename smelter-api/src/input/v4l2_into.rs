@@ -6,21 +6,16 @@ impl TryFrom<V4l2Input> for core::RegisterInputOptions {
 
     #[cfg(target_os = "linux")]
     fn try_from(value: V4l2Input) -> Result<Self, Self::Error> {
-        use super::queue_options::new_queue_options;
-        let queue_options = new_queue_options(value.required, None)?;
-
-        Ok(core::RegisterInputOptions {
-            input_options: core::ProtocolInputOptions::V4l2(core::V4l2InputOptions {
-                path: value.path,
-                format: value.format.into(),
-                resolution: value.resolution.map(Into::into),
-                framerate: value
-                    .framerate
-                    .map(smelter_render::Framerate::try_from)
-                    .transpose()?,
-            }),
-            queue_options,
-        })
+        Ok(core::RegisterInputOptions::V4l2(core::V4l2InputOptions {
+            path: value.path,
+            format: value.format.into(),
+            resolution: value.resolution.map(Into::into),
+            framerate: value
+                .framerate
+                .map(smelter_render::Framerate::try_from)
+                .transpose()?,
+            required: value.required.unwrap_or(false),
+        }))
     }
 
     #[cfg(not(target_os = "linux"))]

@@ -1,9 +1,11 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use tracing::{Level, error, span};
 
-use crate::pipeline::decklink::format::Format;
-use crate::{pipeline::input::Input, queue::QueueDataReceiver};
+use crate::pipeline::input::Input;
+use crate::queue::{QueueTrackOffset, QueueTrackOptions};
+use crate::{pipeline::decklink::format::Format, queue::QueueInput};
 
 use crate::prelude::*;
 
@@ -16,6 +18,32 @@ mod format;
 // sample rate returned from DeckLink
 const AUDIO_SAMPLE_RATE: u32 = 48_000;
 
+/// DeckLink input - captures raw video (and optionally audio) from a Blackmagic
+/// DeckLink capture card via the DeckLink SDK callback interface.
+///
+/// ## Timestamps
+///
+/// - Register track with `QueueTrackOffset::Pts(Duration::ZERO)` which means
+///   that PTS should be relative to queue `sync_point`.
+/// - On first video/audio packet, compute offset as `sync_point.elapsed() - stream_time`.
+///   PTS of each subsequent packet is `stream_time + offset + 40ms`.
+/// - The 40ms buffer accounts for delivery latency, value could lower for video, but
+///   but for audio we need at least 40ms.
+/// - Never block on sending. Frames/samples are dropped if the channel is full.
+///
+/// ### Format detection
+/// - Initial video mode is provisional (HD720p50). `enable_format_detection` is set,
+///   so the SDK calls `video_input_format_changed` when the real format is detected.
+/// - On format change, streams are paused, video is re-enabled with the new mode,
+///   streams are flushed and restarted, and video/audio offsets are reset (recomputed
+///   on the next packet).
+///
+/// ### Unsupported scenarios
+/// - If ahead of time processing is enabled, initial registration will happen on pts already
+///   processed by the queue, but queue will wait and eventually stream will show up, with
+///   the portion at the start cut off.
+/// - If queue is to slow (e.g. other input required and to slow), media will be delivered to
+///   queue to late and dropped
 pub struct DeckLink {
     input: Arc<decklink::Input>,
 }
@@ -25,7 +53,7 @@ impl DeckLink {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         opts: DeckLinkInputOptions,
-    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let span = span!(
             Level::INFO,
             "DeckLink input",
@@ -58,10 +86,17 @@ impl DeckLink {
             .enable_audio(AUDIO_SAMPLE_RATE, decklink::AudioSampleType::Sample32bit, 2)
             .map_err(DeckLinkInputError::DecklinkError)?;
 
-        let (callback, receivers) = ChannelCallbackAdapter::new(
+        let queue_input = QueueInput::new(&ctx, &input_ref, opts.required);
+        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+            video: true,
+            audio: opts.enable_audio,
+            offset: QueueTrackOffset::Pts(Duration::ZERO),
+        });
+        let callback = ChannelCallbackAdapter::new(
             &ctx,
             span,
-            opts.enable_audio,
+            video_sender,
+            audio_sender,
             Arc::<decklink::Input>::downgrade(&input),
             Format::new(initial_mode, initial_pixel_format),
         );
@@ -75,10 +110,7 @@ impl DeckLink {
         Ok((
             Input::DeckLink(Self { input }),
             InputInitInfo::Other,
-            QueueDataReceiver {
-                video: receivers.video,
-                audio: receivers.audio,
-            },
+            queue_input,
         ))
     }
 }

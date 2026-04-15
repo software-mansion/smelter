@@ -42,7 +42,6 @@ use crate::{
         FfmpegVp9EncoderOptions, OpusEncoderOptions, VideoEncoderOptions, VulkanH264EncoderOptions,
     },
     error::{DecoderInitError, EncoderInitError},
-    protocols::RtpJitterBufferOptions,
 };
 
 #[derive(Debug, Clone)]
@@ -50,7 +49,7 @@ pub struct WhipInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
-    pub jitter_buffer: RtpJitterBufferOptions,
+    pub required: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -58,7 +57,7 @@ pub struct WhepInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_url: Arc<str>,
-    pub jitter_buffer: RtpJitterBufferOptions,
+    pub required: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

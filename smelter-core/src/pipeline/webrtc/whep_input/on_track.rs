@@ -1,5 +1,4 @@
 use crossbeam_channel::Sender;
-use smelter_render::Frame;
 use tracing::{Instrument, debug, info_span, trace, warn};
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
@@ -24,41 +23,56 @@ use crate::prelude::*;
 pub fn handle_on_track(
     ctx: WhepTrackContext,
     input_ref: Ref<InputId>,
-    input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
     video_preferences: Vec<VideoDecoderOptions>,
+    video_sender: &mut Option<Sender<Frame>>,
+    audio_sender: &mut Option<Sender<InputAudioSamples>>,
 ) {
     let kind = ctx.track.kind();
     let span = info_span!("WHEP input track", ?kind, input_id=%input_ref);
+    {
+        let _span = span.enter();
+        debug!("on_track called");
+    }
 
-    tokio::spawn(
-        async move {
-            debug!("on_track called");
-            let result = match kind {
-                RTPCodecType::Audio => {
-                    process_audio_track(ctx, input_ref, input_samples_sender).await
-                }
-                RTPCodecType::Video => {
-                    process_video_track(ctx, input_ref, frame_sender, video_preferences).await
-                }
-                RTPCodecType::Unspecified => {
-                    warn!("Unknown track kind");
-                    Ok(())
+    match kind {
+        RTPCodecType::Audio => {
+            let Some(audio_sender) = audio_sender.take() else {
+                warn!("Audio track already started");
+                return;
+            };
+            let task = async move {
+                if let Err(err) = process_audio_track(ctx, input_ref, audio_sender).await {
+                    // TODO: address after WhipWhepServerError rework
+                    warn!(?err, "On track handler failed")
                 }
             };
-            if let Err(err) = result {
-                // TODO: address after WhipWhepServerError rework
-                warn!(?err, "On track handler failed")
-            }
+            tokio::spawn(task.instrument(span));
         }
-        .instrument(span),
-    );
+        RTPCodecType::Video => {
+            let Some(video_sender) = video_sender.take() else {
+                warn!("Audio track already started");
+                return;
+            };
+            let task = async move {
+                if let Err(err) =
+                    process_video_track(ctx, input_ref, video_preferences, video_sender).await
+                {
+                    // TODO: address after WhipWhepServerError rework
+                    warn!(?err, "On track handler failed")
+                }
+            };
+            tokio::spawn(task.instrument(span));
+        }
+        RTPCodecType::Unspecified => {
+            warn!("Unknown track kind");
+        }
+    };
 }
 
 async fn process_audio_track(
     ctx: WhepTrackContext,
     input_ref: Ref<InputId>,
-    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    samples_sender: Sender<InputAudioSamples>,
 ) -> Result<(), WebrtcClientError> {
     if !audio_codec_negotiated(&ctx.rtc_receiver).await {
         warn!("Skipping audio track, no valid codec negotiated");
@@ -76,7 +90,6 @@ async fn process_audio_track(
         ctx.track,
         ctx.rtc_receiver,
         RtpJitterBuffer::new(
-            &ctx.pipeline_ctx,
             ctx.buffer,
             48_000,
             Box::new(move |event| {
@@ -104,8 +117,8 @@ async fn process_audio_track(
 async fn process_video_track(
     ctx: WhepTrackContext,
     input_ref: Ref<InputId>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
     video_preferences: Vec<VideoDecoderOptions>,
+    frame_sender: Sender<Frame>,
 ) -> Result<(), WebrtcClientError> {
     let (Some(decoder_mapping), Some(payload_type_mapping)) = (
         VideoDecoderMapping::from_webrtc_receiver(&ctx.rtc_receiver, &video_preferences).await,
@@ -126,7 +139,7 @@ async fn process_video_track(
         &ctx.pipeline_ctx,
         ctx.track,
         ctx.rtc_receiver,
-        RtpJitterBuffer::new(&ctx.pipeline_ctx, ctx.buffer, 90_000, on_stats_event),
+        RtpJitterBuffer::new(ctx.buffer, 90_000, on_stats_event),
     );
     let keyframe_request_sender = rtp_reader.enable_pli().await;
 

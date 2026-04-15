@@ -12,7 +12,7 @@ use integration_tests::{
         BUNNY_VP9_URL,
     },
     examples::{AssetData, TestSample, download_asset},
-    ffmpeg::{start_ffmpeg_send, start_ffmpeg_send_from_file},
+    ffmpeg::{start_ffmpeg_send, start_ffmpeg_send_rtp_from_file},
     gstreamer::{
         start_gst_send_from_file_tcp, start_gst_send_from_file_udp, start_gst_send_tcp,
         start_gst_send_udp,
@@ -243,7 +243,7 @@ impl RtpInput {
             (Some(v), None) => {
                 let video_codec = v.decoder.into();
                 match path {
-                    Some(path) => start_ffmpeg_send_from_file(
+                    Some(path) => start_ffmpeg_send_rtp_from_file(
                         IP,
                         Some(self.port),
                         None,
@@ -258,7 +258,7 @@ impl RtpInput {
             }
             (None, Some(_audio)) => match path {
                 Some(path) => {
-                    start_ffmpeg_send_from_file(IP, None, Some(self.port), path.clone(), None)?
+                    start_ffmpeg_send_rtp_from_file(IP, None, Some(self.port), path.clone(), None)?
                 }
                 None => {
                     self.download_asset()?;

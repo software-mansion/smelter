@@ -1,4 +1,3 @@
-use core::f64;
 use std::sync::Arc;
 
 use schemars::JsonSchema;
@@ -22,10 +21,6 @@ pub struct WhipInput {
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,
-    /// Offset in milliseconds relative to the pipeline start (start request). If the offset is
-    /// not defined then the stream will be synchronized based on the delivery time of the initial
-    /// frames.
-    pub offset_ms: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
