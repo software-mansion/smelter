@@ -21,7 +21,7 @@ jobs:
 
         steps:
             - name: Checkout repo
-              uses: actions/checkout@v2
+              uses: actions/checkout@v6
               with:
                   submodules: "true"
 
@@ -31,9 +31,9 @@ jobs:
                   version: 10
                   
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
-                  node-version: "20"
+                node-version: '24'
 
             - name: Check vite+react WASM demo
               working-directory: ./demos/vite-web-wasm

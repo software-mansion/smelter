@@ -18,7 +18,7 @@ jobs:
               uses: dtolnay/rust-toolchain@stable
 
             - name: 📥 Checkout repo
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: 📦 Package
               run: cargo run -p tools --bin package_for_release
@@ -51,7 +51,7 @@ jobs:
               uses: dtolnay/rust-toolchain@stable
 
             - name: 📥 Checkout repo
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: 📦 Package
               run: cargo run -p tools --bin package_for_release
@@ -77,7 +77,7 @@ jobs:
               uses: dtolnay/rust-toolchain@stable
 
             - name: 📥 Checkout repo
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: 📦 Package
               run: cargo run -p tools --bin package_for_release
@@ -105,7 +105,7 @@ jobs:
               uses: dtolnay/rust-toolchain@stable
 
             - name: 📥 Checkout repo
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: 📦 Package
               run: cargo run -p tools --bin package_for_release

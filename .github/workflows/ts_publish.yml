@@ -19,22 +19,23 @@ jobs:
 
         steps:
             - name: Checkout repo
-              uses: actions/checkout@v2
+              uses: actions/checkout@v6
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
                   toolchain: 1.94
 
+            - name: Setup Node.js
+              uses: actions/setup-node@v6
+              with:
+                node-version: '24'
+                registry-url: 'https://registry.npmjs.org'
+
             - name: Install pnpm
               uses: pnpm/action-setup@v4
               with: 
                   version: 10
-
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "20"
 
             - name: Install project dependencies
               working-directory: ./ts
@@ -94,7 +95,7 @@ jobs:
                     echo "Version ${VERSION} was already published, skipping."
                   fi
 
-            - name: Publish @swmasnion/smelter-web-client
+            - name: Publish @swmansion/smelter-web-client
               working-directory: ./ts/smelter-web-client
               run: |
                   VERSION=$(jq -r .version package.json)

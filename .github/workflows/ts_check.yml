@@ -17,7 +17,7 @@ jobs:
 
         steps:
             - name: Checkout repo
-              uses: actions/checkout@v2
+              uses: actions/checkout@v6
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -30,9 +30,11 @@ jobs:
                   version: 10
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
-                  node-version: "20"
+                node-version: '24'
+
+
 
             - name: Install project dependencies
               working-directory: ./ts
