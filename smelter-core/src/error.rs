@@ -1,3 +1,4 @@
+use reqwest::StatusCode;
 use smelter_render::{
     InputId, OutputId,
     error::{
@@ -285,6 +286,7 @@ pub enum ErrorType {
     UserError,
     EntityNotFound,
     Conflict,
+    UpstreamError(StatusCode),
 
     ServerError,
 }
@@ -316,6 +318,7 @@ const RESOURCE_DOES_NOT_EXIST: &str = "RESOURCE_DOES_NOT_EXIST";
 const INVALID_MP4_SOURCE: &str = "INVALID_MP4_SOURCE";
 const WHEP_INVALID_SERVER_URL: &str = "WHEP_INVALID_SERVER_URL";
 const WHEP_REQUEST_FAILED: &str = "WHEP_REQUEST_FAILED";
+const WHEP_BAD_STATUS: &str = "WHEP_BAD_STATUS";
 
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
@@ -334,6 +337,14 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
                 if matches!(err.as_ref(), WebrtcClientError::RequestFailed(_, _)) =>
             {
                 PipelineErrorInfo::new(WHEP_REQUEST_FAILED, ErrorType::UserError)
+            }
+            RegisterInputError::InputError(_, InputInitError::Whep(err))
+                if matches!(err.as_ref(), WebrtcClientError::BadStatus(_, _)) =>
+            {
+                let WebrtcClientError::BadStatus(status, _) = err.as_ref() else {
+                    unreachable!()
+                };
+                PipelineErrorInfo::new(WHEP_BAD_STATUS, ErrorType::UpstreamError(*status))
             }
 
             // MP4
@@ -376,6 +387,7 @@ const UNKNOWN_REGISTER_OUTPUT_ERROR: &str = "UNKNOWN_REGISTER_OUTPUT_ERROR";
 const RTMP_CONNECTION_FAILED: &str = "RTMP_CONNECTION_FAILED";
 const WHIP_INVALID_SERVER_URL: &str = "WHIP_INVALID_SERVER_URL";
 const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
+const WHIP_BAD_STATUS: &str = "WHIP_BAD_STATUS";
 
 const SERVER_PATH_RESOLUTION_FAILED: &str = "SERVER_PATH_RESOLUTION_FAILED";
 #[cfg(feature = "vk-video")]
@@ -406,6 +418,14 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
                 if matches!(err.as_ref(), WebrtcClientError::RequestFailed(_, _)) =>
             {
                 PipelineErrorInfo::new(WHIP_REQUEST_FAILED, ErrorType::UserError)
+            }
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
+                if matches!(err.as_ref(), WebrtcClientError::BadStatus(_, _)) =>
+            {
+                let WebrtcClientError::BadStatus(status, _) = err.as_ref() else {
+                    unreachable!()
+                };
+                PipelineErrorInfo::new(WHIP_BAD_STATUS, ErrorType::UpstreamError(*status))
             }
 
             // FFmpeg (used in MP4/HLS output)
