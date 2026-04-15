@@ -1,0 +1,116 @@
+name: TypeScript SDK - publish
+
+on:
+  push:
+    tags:
+      - 'ts-sdk/v*'
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.94
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v6
+              with:
+                node-version: '24'
+                registry-url: 'https://registry.npmjs.org'
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v4
+              with: 
+                  version: 10
+
+            - name: Install project dependencies
+              working-directory: ./ts
+              run: pnpm install --frozen-lockfile
+
+            - name: Build
+              working-directory: ./ts
+              run: pnpm run build:all
+
+            - name: Publish @swmansion/smelter
+              working-directory: ./ts/smelter
+              run: |
+                  VERSION=$(jq -r .version package.json)
+                  if ! pnpm view "@swmansion/smelter@${VERSION}" version 2>/dev/null; then
+                    pnpm publish --tag next
+                  else
+                    echo "Version ${VERSION} was already published, skipping."
+                  fi
+
+            - name: Publish @swmansion/smelter-core
+              working-directory: ./ts/smelter-core
+              run: |
+                  VERSION=$(jq -r .version package.json)
+                  if ! pnpm view "@swmansion/smelter-core@${VERSION}" version 2>/dev/null; then
+                    pnpm publish --tag next
+                  else
+                    echo "Version ${VERSION} was already published, skipping."
+                  fi
+
+            - name: Publish @swmansion/smelter-node
+              working-directory: ./ts/smelter-node
+              run: |
+                  VERSION=$(jq -r .version package.json)
+                  if ! pnpm view "@swmansion/smelter-node@${VERSION}" version 2>/dev/null; then
+                    pnpm publish --tag next
+                  else
+                    echo "Version ${VERSION} was already published, skipping."
+                  fi
+
+            - name: Publish @swmansion/smelter-browser-render
+              working-directory: ./ts/smelter-browser-render
+              run: |
+                  VERSION=$(jq -r .version package.json)
+                  if ! pnpm view "@swmansion/smelter-browser-render@${VERSION}" version 2>/dev/null; then
+                    pnpm publish --tag next
+                  else
+                    echo "Version ${VERSION} was already published, skipping."
+                  fi
+
+            - name: Publish @swmansion/smelter-web-wasm
+              working-directory: ./ts/smelter-web-wasm
+              run: |
+                  VERSION=$(jq -r .version package.json)
+                  if ! pnpm view "@swmansion/smelter-web-wasm@${VERSION}" version 2>/dev/null; then
+                    pnpm publish --tag next
+                  else
+                    echo "Version ${VERSION} was already published, skipping."
+                  fi
+
+            - name: Publish @swmansion/smelter-web-client
+              working-directory: ./ts/smelter-web-client
+              run: |
+                  VERSION=$(jq -r .version package.json)
+                  if ! pnpm view "@swmansion/smelter-web-client@${VERSION}" version 2>/dev/null; then
+                    pnpm publish --tag next
+                  else
+                    echo "Version ${VERSION} was already published, skipping."
+                  fi
+
+            - name: Publish create-smelter-app
+              working-directory: ./ts/create-smelter-app
+              run: |
+                  VERSION=$(jq -r .version package.json)
+                  if ! pnpm view "create-smelter-app@${VERSION}" version 2>/dev/null; then
+                    pnpm publish --tag next
+                  else
+                    echo "Version ${VERSION} was already published, skipping."
+                  fi

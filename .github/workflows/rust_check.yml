@@ -37,7 +37,7 @@ jobs:
                   tool: cargo-nextest
 
             - name: 📥 Checkout repo
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: 🧩 Git submodules update
               run: |
@@ -89,7 +89,7 @@ jobs:
                   components: rustfmt, clippy
 
             - name: 📥 Checkout repo
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
@@ -130,7 +130,7 @@ jobs:
                   version: 9
 
             - name: 📥 Checkout repo
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
