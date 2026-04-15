@@ -1,0 +1,310 @@
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Condvar, Mutex},
+    time::Duration,
+};
+
+use super::input_buffer::TimedValue;
+
+struct Shared<T> {
+    inner: Mutex<Inner<T>>,
+    /// Signaled when an item is pushed (receiver waits on this).
+    not_empty: Condvar,
+    /// Signaled when an item is popped (sender waits on this).
+    not_full: Condvar,
+}
+
+struct Inner<T> {
+    buffer: VecDeque<T>,
+    capacity: Duration,
+    sender_count: usize,
+    receiver_alive: bool,
+}
+
+impl<T: TimedValue> Inner<T> {
+    fn buffered_duration(&self) -> Duration {
+        match (self.buffer.front(), self.buffer.back()) {
+            (Some(first), Some(last)) => last
+                .timestamp_range()
+                .1
+                .saturating_sub(first.timestamp_range().0),
+            _ => Duration::ZERO,
+        }
+    }
+
+    fn is_full(&self) -> bool {
+        self.buffered_duration() >= self.capacity
+    }
+
+    fn push(&mut self, item: T) {
+        self.buffer.push_back(item);
+    }
+
+    fn pop(&mut self) -> Option<T> {
+        self.buffer.pop_front()
+    }
+}
+
+pub(crate) fn channel<T: TimedValue>(capacity: Duration) -> (Sender<T>, Receiver<T>) {
+    let shared = Arc::new(Shared {
+        inner: Mutex::new(Inner {
+            buffer: VecDeque::new(),
+            capacity,
+            sender_count: 1,
+            receiver_alive: true,
+        }),
+        not_empty: Condvar::new(),
+        not_full: Condvar::new(),
+    });
+    (
+        Sender {
+            shared: shared.clone(),
+        },
+        Receiver { shared },
+    )
+}
+
+// ── Sender ──────────────────────────────────────────────────────────
+
+pub(crate) struct Sender<T> {
+    shared: Arc<Shared<T>>,
+}
+
+impl<T: TimedValue> Sender<T> {
+    /// Blocks until there is room or the receiver is dropped.
+    pub fn send(&self, item: T) -> Result<(), SendError<T>> {
+        let mut inner = self.shared.inner.lock().unwrap();
+        loop {
+            if !inner.receiver_alive {
+                return Err(SendError(item));
+            }
+            if !inner.is_full() {
+                break;
+            }
+            inner = self.shared.not_full.wait(inner).unwrap();
+        }
+        inner.push(item);
+        self.shared.not_empty.notify_one();
+        Ok(())
+    }
+
+    /// Non-blocking send.
+    pub fn try_send(&self, item: T) -> Result<(), TrySendError<T>> {
+        let mut inner = self.shared.inner.lock().unwrap();
+        if !inner.receiver_alive {
+            return Err(TrySendError::Disconnected(item));
+        }
+        if inner.is_full() {
+            return Err(TrySendError::Full(item));
+        }
+        inner.push(item);
+        self.shared.not_empty.notify_one();
+        Ok(())
+    }
+}
+
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Self {
+        self.shared.inner.lock().unwrap().sender_count += 1;
+        Self {
+            shared: self.shared.clone(),
+        }
+    }
+}
+
+impl<T> Drop for Sender<T> {
+    fn drop(&mut self) {
+        let mut inner = self.shared.inner.lock().unwrap();
+        inner.sender_count -= 1;
+        if inner.sender_count == 0 {
+            self.shared.not_empty.notify_all();
+        }
+    }
+}
+
+// ── Receiver ────────────────────────────────────────────────────────
+
+pub(crate) struct Receiver<T> {
+    shared: Arc<Shared<T>>,
+}
+
+impl<T: TimedValue> Receiver<T> {
+    /// Blocks until an item is available or all senders are dropped.
+    pub fn recv(&self) -> Result<T, RecvError> {
+        let mut inner = self.shared.inner.lock().unwrap();
+        loop {
+            if let Some(item) = inner.pop() {
+                self.shared.not_full.notify_one();
+                return Ok(item);
+            }
+            if inner.sender_count == 0 {
+                return Err(RecvError);
+            }
+            inner = self.shared.not_empty.wait(inner).unwrap();
+        }
+    }
+
+    /// Non-blocking receive.
+    pub fn try_recv(&self) -> Result<T, TryRecvError> {
+        let mut inner = self.shared.inner.lock().unwrap();
+        if let Some(item) = inner.pop() {
+            self.shared.not_full.notify_one();
+            return Ok(item);
+        }
+        if inner.sender_count == 0 {
+            return Err(TryRecvError::Disconnected);
+        }
+        Err(TryRecvError::Empty)
+    }
+}
+
+impl<T> Drop for Receiver<T> {
+    fn drop(&mut self) {
+        let mut inner = self.shared.inner.lock().unwrap();
+        inner.receiver_alive = false;
+        self.shared.not_full.notify_all();
+    }
+}
+
+impl<T: TimedValue> IntoIterator for Receiver<T> {
+    type Item = T;
+    type IntoIter = DurationReceiverIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        DurationReceiverIter { receiver: self }
+    }
+}
+
+pub(crate) struct DurationReceiverIter<T> {
+    receiver: Receiver<T>,
+}
+
+impl<T: TimedValue> Iterator for DurationReceiverIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        self.receiver.recv().ok()
+    }
+}
+
+// ── Errors ──────────────────────────────────────────────────────────
+
+#[derive(Debug)]
+pub(crate) struct SendError<T>(pub T);
+
+#[derive(Debug)]
+pub(crate) enum TrySendError<T> {
+    Full(T),
+    Disconnected(T),
+}
+
+#[derive(Debug)]
+pub(crate) struct RecvError;
+
+#[derive(Debug)]
+pub(crate) enum TryRecvError {
+    Empty,
+    Disconnected,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, PartialEq)]
+    struct TestItem {
+        start: Duration,
+        end: Duration,
+        value: u32,
+    }
+
+    impl TimedValue for TestItem {
+        fn timestamp_range(&self) -> (Duration, Duration) {
+            (self.start, self.end)
+        }
+    }
+
+    fn item(start_ms: u64, end_ms: u64, value: u32) -> TestItem {
+        TestItem {
+            start: Duration::from_millis(start_ms),
+            end: Duration::from_millis(end_ms),
+            value,
+        }
+    }
+
+    #[test]
+    fn send_recv_basic() {
+        let (tx, rx) = channel(Duration::from_millis(100));
+        tx.send(item(0, 30, 1)).unwrap();
+        tx.send(item(30, 60, 2)).unwrap();
+        assert_eq!(rx.recv().unwrap().value, 1);
+        assert_eq!(rx.recv().unwrap().value, 2);
+    }
+
+    #[test]
+    fn try_send_returns_full_when_capacity_exceeded() {
+        // capacity=50ms; after two items span is 0..60 = 60ms >= 50ms, so channel is full
+        let (tx, _rx) = channel(Duration::from_millis(50));
+        tx.try_send(item(0, 30, 1)).unwrap();
+        tx.try_send(item(30, 60, 2)).unwrap();
+        match tx.try_send(item(60, 90, 3)) {
+            Err(TrySendError::Full(_)) => {}
+            other => panic!("expected Full, got {:?}", other.map(|_| ())),
+        }
+    }
+
+    #[test]
+    fn send_blocks_until_recv_frees_capacity() {
+        // capacity=50ms; after two items span is 0..60 = 60ms >= 50ms
+        let (tx, rx) = channel(Duration::from_millis(50));
+        tx.send(item(0, 30, 1)).unwrap();
+        tx.send(item(30, 60, 2)).unwrap();
+
+        let handle = std::thread::spawn(move || {
+            // This blocks because span 0..90 = 90ms > 50ms capacity
+            tx.send(item(60, 90, 3)).unwrap();
+        });
+
+        std::thread::sleep(Duration::from_millis(50));
+        // Popping item(0,30) makes span 30..60 = 30ms < 50ms, unblocking sender
+        assert_eq!(rx.recv().unwrap().value, 1);
+        handle.join().unwrap();
+        assert_eq!(rx.recv().unwrap().value, 2);
+        assert_eq!(rx.recv().unwrap().value, 3);
+    }
+
+    #[test]
+    fn recv_returns_error_when_all_senders_dropped() {
+        let (tx, rx) = channel::<TestItem>(Duration::from_secs(1));
+        drop(tx);
+        assert!(rx.recv().is_err());
+    }
+
+    #[test]
+    fn send_returns_error_when_receiver_dropped() {
+        let (tx, rx) = channel(Duration::from_secs(1));
+        drop(rx);
+        assert!(tx.send(item(0, 10, 1)).is_err());
+    }
+
+    #[test]
+    fn into_iter_yields_until_senders_drop() {
+        let (tx, rx) = channel(Duration::from_secs(1));
+        tx.send(item(0, 10, 1)).unwrap();
+        tx.send(item(10, 20, 2)).unwrap();
+        drop(tx);
+        let values: Vec<u32> = rx.into_iter().map(|i| i.value).collect();
+        assert_eq!(values, vec![1, 2]);
+    }
+
+    #[test]
+    fn clone_sender_keeps_channel_alive() {
+        let (tx, rx) = channel(Duration::from_secs(1));
+        let tx2 = tx.clone();
+        drop(tx);
+        tx2.send(item(0, 10, 1)).unwrap();
+        assert_eq!(rx.recv().unwrap().value, 1);
+        drop(tx2);
+        assert!(rx.recv().is_err());
+    }
+}
