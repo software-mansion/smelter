@@ -73,8 +73,8 @@ impl ExVideoFourCc {
         }
     }
 
-    /// Returns true if this codec uses SI24 CompositionTime in CodedFrames.
-    /// Per the spec, AVC, HEVC, and VVC carry composition time offset.
+    /// Returns true if this codec carries a 3-byte signed composition time
+    /// offset in CodedFrames packets. Per the spec: AVC, HEVC, and VVC.
     fn has_composition_time(self) -> bool {
         matches!(self, Self::Avc1 | Self::Hvc1 | Self::Vvc1)
     }
@@ -91,7 +91,7 @@ pub enum ExVideoPacket {
     SequenceStart(Bytes),
     /// Video frame data with composition time offset.
     /// For codecs without composition time (VP8, VP9, AV1), `composition_time` is 0.
-    /// Encompasses both wire types `CodedFrames` (explicit SI24) and `CodedFramesX` (implicit 0).
+    /// Encompasses both wire types `CodedFrames` (explicit composition time) and `CodedFramesX` (implicit 0).
     CodedFrames { composition_time: i32, data: Bytes },
     /// End of sequence marker. No payload.
     SequenceEnd,
@@ -224,9 +224,9 @@ impl ExVideoTag {
         })
     }
 
-    /// Parses CodedFrames body. AVC, HEVC, and VVC include an SI24 composition
-    /// time prefix; other codecs do not (composition_time is set to 0
-    /// in the parsed representation).
+    /// Parses CodedFrames body. AVC, HEVC, and VVC include a 3-byte signed
+    /// composition time offset prefix; other codecs do not (composition_time
+    /// is set to 0 in the parsed representation).
     fn parse_coded_frames(
         data: Bytes,
         four_cc: ExVideoFourCc,
@@ -278,13 +278,14 @@ impl ExVideoTag {
                         composition_time, ..
                     } => {
                         if !four_cc.has_composition_time() {
-                            // VP8/VP9/AV1: always CodedFrames, no SI24 on wire
+                            // VP8/VP9/AV1: no composition time on wire
                             (ExVideoPacketType::CodedFrames, false)
                         } else if *composition_time != 0 {
-                            // AVC/HEVC/VVC with nonzero CT: CodedFrames with SI24
+                            // AVC/HEVC/VVC with nonzero composition time
                             (ExVideoPacketType::CodedFrames, true)
                         } else {
-                            // AVC/HEVC/VVC with CT=0: CodedFramesX optimization
+                            // AVC/HEVC/VVC with zero composition time: use CodedFramesX
+                            // to skip the 3-byte composition time field on wire
                             (ExVideoPacketType::CodedFramesX, false)
                         }
                     }

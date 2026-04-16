@@ -14,17 +14,12 @@ use crate::{
 const CONNECT_TRANSACTION_ID: u32 = 1;
 const CREATE_STREAM_TRANSACTION_ID: u32 = 2;
 
-const FOURCC_INFO_CAN_DECODE: u8 = 0x01;
-const FOURCC_INFO_CAN_ENCODE: u8 = 0x02;
-const FOURCC_INFO_CAN_FORWARD: u8 = 0x04;
+use crate::{
+    CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, FOURCC_INFO_CAN_DECODE,
+    FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD,
+};
 
-const CAPS_EX_RECONNECT: u8 = 0x01;
-const CAPS_EX_MODEX: u8 = 0x04;
-const CAPS_EX_TIMESTAMP_NANO: u8 = 0x08;
-
-const ERTMP_VIDEO_FOURCC_LIST: [&str; 6] = ["av01", "vp09", "vp08", "hvc1", "vvc1", "avc1"];
-
-const VIDEO_FOURCC_KEYS: [&str; 6] = ["avc1", "hvc1", "vvc1", "av01", "vp09", "vp08"];
+use crate::VIDEO_FOURCC_LIST;
 
 /// -> - from client to server
 /// <- - from server to client
@@ -166,7 +161,7 @@ pub(super) fn send_connect(
             (
                 "fourCcList",
                 AmfValue::StrictArray(
-                    ERTMP_VIDEO_FOURCC_LIST
+                    VIDEO_FOURCC_LIST
                         .iter()
                         .map(|v| AmfValue::String((*v).to_string()))
                         .collect(),
@@ -250,7 +245,7 @@ fn fourcc_list_supports_video(value: &AmfValue) -> bool {
     };
 
     items.iter().any(|item| match item {
-        AmfValue::String(v) => v == "*" || VIDEO_FOURCC_KEYS.contains(&v.as_str()),
+        AmfValue::String(v) => v == "*" || VIDEO_FOURCC_LIST.contains(&v.as_str()),
         _ => false,
     })
 }
@@ -266,6 +261,6 @@ fn video_fourcc_info_map_supports_video(value: &AmfValue) -> bool {
         let AmfValue::Number(mask) = v else {
             return false;
         };
-        *mask > 0.0 && (k == "*" || VIDEO_FOURCC_KEYS.contains(&k.as_str()))
+        *mask > 0.0 && (k == "*" || VIDEO_FOURCC_LIST.contains(&k.as_str()))
     })
 }

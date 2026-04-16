@@ -44,7 +44,7 @@ impl VideoMessage {
             (VideoCodec::H264, Some(VideoTagH264PacketType::Data)) => {
                 Self::H264Data(H264VideoData {
                     pts: Duration::from_millis(
-                        (timestamp as i64 + tag.composition_time.unwrap_or(0) as i64) as u64,
+                        (timestamp as i64 + tag.composition_time.unwrap_or(0) as i64).max(0) as u64,
                     ),
                     dts: Duration::from_millis(timestamp.into()),
                     data: tag.data,
@@ -90,6 +90,7 @@ impl VideoMessage {
                     data,
                 },
             frame_type,
+            timestamp_offset_nanos,
             ..
         } = &tag
         {
@@ -101,9 +102,15 @@ impl VideoMessage {
                 }
             };
 
+            let nanos_offset = u64::from(timestamp_offset_nanos.unwrap_or(0));
+            let dts = Duration::from_millis(timestamp.into()) + Duration::from_nanos(nanos_offset);
+            let pts =
+                Duration::from_millis((timestamp as i64 + *composition_time as i64).max(0) as u64)
+                    + Duration::from_nanos(nanos_offset);
+
             return Ok(Self::H264Data(H264VideoData {
-                pts: Duration::from_millis((timestamp as i64 + *composition_time as i64) as u64),
-                dts: Duration::from_millis(timestamp.into()),
+                pts,
+                dts,
                 data: data.clone(),
                 is_keyframe,
             }));
@@ -262,6 +269,40 @@ mod tests {
         match reparsed {
             FlvVideoData::Enhanced(parsed_tag) => assert_eq!(parsed_tag, tag),
             other => panic!("expected Enhanced flv payload, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn applies_enhanced_timestamp_offset_nanos_to_h264_data() {
+        let payload = FlvVideoData::Enhanced(ExVideoTag::VideoBody {
+            four_cc: ExVideoFourCc::Avc1,
+            packet: ExVideoPacket::CodedFrames {
+                composition_time: 5,
+                data: Bytes::from_static(b"frame"),
+            },
+            frame_type: VideoTagFrameType::Interframe,
+            timestamp_offset_nanos: Some(777),
+        })
+        .serialize()
+        .unwrap();
+
+        let message = VideoMessage::from_raw(RawMessage {
+            msg_type: MessageType::Video.into_raw(),
+            stream_id: 1,
+            chunk_stream_id: 6,
+            timestamp: 100,
+            payload,
+        })
+        .unwrap();
+
+        match message {
+            VideoMessage::H264Data(data) => {
+                assert_eq!(data.dts.as_nanos(), 100_000_777);
+                assert_eq!(data.pts.as_nanos(), 105_000_777);
+                assert!(!data.is_keyframe);
+                assert_eq!(data.data, Bytes::from_static(b"frame"));
+            }
+            other => panic!("expected H264Data, got {other:?}"),
         }
     }
 }

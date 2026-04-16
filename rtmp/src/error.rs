@@ -148,6 +148,9 @@ pub enum FlvVideoTagParseError {
     #[error("Unknown VideoPacketModExType header value: {0}")]
     UnknownVideoPacketModExType(u8),
 
+    #[error("Invalid TimestampOffsetNano value: {0}")]
+    InvalidTimestampOffsetNanos(u32),
+
     #[error("Unsupported video packet type: {0}")]
     UnsupportedPacketType(u8),
 
