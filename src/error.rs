@@ -58,13 +58,7 @@ where
             ErrorType::EntityNotFound => StatusCode::NOT_FOUND,
             ErrorType::Conflict => StatusCode::CONFLICT,
 
-            ErrorType::UpstreamError(upstream_status) => {
-                if upstream_status.is_client_error() {
-                    upstream_status
-                } else {
-                    StatusCode::BAD_GATEWAY
-                }
-            }
+            ErrorType::BadGateway => StatusCode::BAD_GATEWAY,
             ErrorType::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
         },
     }
