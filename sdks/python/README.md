@@ -15,5 +15,18 @@ uv sync
 ## Running
 
 ```bash
-uv run example <smelter-socket-dir>
+uv run example <optional_example.mp4>
 ```
+
+### Streaming camera
+
+If you did not provide mp4 file you can stream your webcam by going to:
+
+[https://smelter-labs.github.io/tools/#whip-streamer?url=http://127.0.0.1:9000/whip/input&token=example](https://smelter-labs.github.io/tools/#whip-streamer?url=http://127.0.0.1:9000/whip/input&token=example)
+
+### Output stream
+
+To watch composed output stream go to:
+
+[https://smelter-labs.github.io/tools/#whep-player?url=http://127.0.0.1:9000/whep/output&token=example](https://smelter-labs.github.io/tools/#whep-player?url=http://127.0.0.1:9000/whep/output&token=example)
+
