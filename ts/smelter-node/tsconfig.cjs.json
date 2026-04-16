@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "cjs",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2019"
+  }
+}

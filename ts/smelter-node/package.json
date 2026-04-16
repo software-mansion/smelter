@@ -8,31 +8,39 @@
     "url": "https://github.com/software-mansion/smelter/issues"
   },
   "homepage": "https://smelter.dev",
+  "type": "module",
   "files": [
-    "/dist"
+    "/esm",
+    "/cjs"
   ],
-  "main": "dist/index.js",
+  "main": "cjs/index.js",
+  "exports": {
+    "import": "./esm/index.js",
+    "require": "./cjs/index.js",
+    "types": "./esm/index.d.ts"
+  },
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "watch": "tsc --watch --preserveWatchOutput",
-    "build": "tsc",
-    "clean": "rimraf dist",
+    "watch": "concurrently \"pnpm run watch:esm\" \"pnpm run watch:cjs\"",
+    "watch:esm": "tsc --watch --preserveWatchOutput",
+    "watch:cjs": "tsc --watch --preserveWatchOutput -p ./tsconfig.cjs.json",
+    "build": "pnpm run build:esm && pnpm run build:cjs",
+    "build:esm": "tsc && echo '{\"type\": \"module\"}' > esm/package.json",
+    "build:cjs": "tsc -p ./tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > cjs/package.json",
+    "clean": "rimraf esm cjs",
     "prepublishOnly": "pnpm run clean && pnpm run build"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.19.7",
-    "@types/node-fetch": "^2.6.11",
     "@types/react": "^18.3.3",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.12"
   },
   "dependencies": {
     "@swmansion/smelter-core": "workspace:0.4.0-rc.0",
-    "form-data": "^4.0.4",
     "fs-extra": "^11.2.0",
-    "node-fetch": "^2.6.7",
     "pino": "^9.5.0",
     "pino-pretty": "^13.0.0",
     "tar": "^7.5.11",

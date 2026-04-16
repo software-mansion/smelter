@@ -1,5 +1,3 @@
-import fetch from 'node-fetch';
-import FormData from 'form-data';
 import type { ReactElement } from 'react';
 import {
   type SmelterManager,
@@ -85,20 +83,20 @@ export default class OfflineSmelter {
   }
 
   public async registerFont(fontSource: string | ArrayBuffer): Promise<object> {
-    let fontBuffer: Buffer;
+    let fontBlob: Blob;
 
     if (fontSource instanceof ArrayBuffer) {
-      fontBuffer = Buffer.from(fontSource);
+      fontBlob = new Blob([fontSource]);
     } else {
       const response = await fetch(fontSource);
       if (!response.ok) {
         throw new Error(`Failed to fetch the font file from ${fontSource}`);
       }
-      fontBuffer = await response.buffer();
+      fontBlob = await response.blob();
     }
 
     const formData = new FormData();
-    formData.append('fontFile', fontBuffer);
+    formData.append('fontFile', fontBlob);
 
     return await this.scheduler.run(async () => {
       return this.coreSmelter.manager.sendMultipartRequest({
