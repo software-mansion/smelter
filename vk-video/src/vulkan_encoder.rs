@@ -151,7 +151,8 @@ impl VideoSessionResources<'_> {
             vk::ImageLayout::VIDEO_ENCODE_DPB_KHR,
         )?;
 
-        let codec_parameters = C::codec_parameters(parameters)?;
+        let codec_parameters =
+            C::codec_parameters(parameters, &encode_capabilities.codec_encode_capabilities)?;
 
         let session_parameters = VideoSessionParameters::new::<C>(
             encoding_device.vulkan_device.device.clone(),
@@ -1228,8 +1229,10 @@ impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
         };
 
         let encoded = unsafe {
-            self.output_buffer
-                .download_data_from_buffer(feedback.bytes_written as usize)?
+            self.output_buffer.download_data_from_buffer_at(
+                feedback.offset as usize,
+                feedback.bytes_written as usize,
+            )?
         };
 
         output.extend_from_slice(&encoded);

@@ -281,10 +281,21 @@ impl Buffer {
         &mut self,
         size: usize,
     ) -> Result<Vec<u8>, VulkanCommonError> {
+        unsafe { self.download_data_from_buffer_at(0, size) }
+    }
+
+    /// ## Safety
+    /// the buffer has to be mappable and readable.
+    /// `offset + size` must not exceed the buffer allocation size.
+    pub(crate) unsafe fn download_data_from_buffer_at(
+        &mut self,
+        offset: usize,
+        size: usize,
+    ) -> Result<Vec<u8>, VulkanCommonError> {
         let output;
         unsafe {
             let memory = self.allocator.map_memory(&mut self.allocation)?;
-            let memory_slice = std::slice::from_raw_parts_mut(memory, size);
+            let memory_slice = std::slice::from_raw_parts_mut(memory.add(offset), size);
             output = memory_slice.to_vec();
             self.allocator.unmap_memory(&mut self.allocation);
         }

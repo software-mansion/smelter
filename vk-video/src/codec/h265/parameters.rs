@@ -94,17 +94,43 @@ pub(crate) struct VkH265SequenceParameterSet {
 }
 
 impl VkH265SequenceParameterSet {
-    pub(crate) fn new_encode(params: &FullEncoderParameters<H265Codec>) -> Self {
+    pub(crate) fn new_encode(
+        params: &FullEncoderParameters<H265Codec>,
+        ctb_log2_size: u32,
+    ) -> Self {
         // TODO: VUI
-        let profile_tier_level = NonNull::from_mut(Box::leak(Box::new(profile_tier_level(params))));
+        let profile_tier_level = NonNull::from(Box::leak(Box::new(profile_tier_level(params))));
         let dec_pic_buf_mgr = NonNull::from(Box::leak(Box::new(dec_pic_buf_mgr(params))));
+
+        let min_cb_log2_size: u32 = 3; // MinCbSizeY = 8
+        let log2_diff_max_min_luma_coding_block_size = ctb_log2_size - min_cb_log2_size;
+
+        let min_tb_log2_size: u32 = 2; // MinTbSizeY = 4
+        // MaxTbLog2SizeY = min(5, ctb_log2_size) per H.265 spec: MaxTbSizeY can be at most 32
+        let max_tb_log2_size = ctb_log2_size.min(5);
+        let log2_diff_max_min_luma_transform_block_size = max_tb_log2_size - min_tb_log2_size;
+
         Self {
             sps: vk::native::StdVideoH265SequenceParameterSet {
                 flags: vk::native::StdVideoH265SpsFlags {
                     _bitfield_align_1: [],
                     _bitfield_1: vk::native::StdVideoH265SpsFlags::new_bitfield_1(
-                        1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, // range extension
+                        1, // sps_temporal_id_nesting_flag
+                        0, // separate_colour_plane_flag
+                        0, // conformance_window_flag (driver will override if needed)
+                        0, // sps_sub_layer_ordering_info_present_flag
+                        0, // scaling_list_enabled_flag
+                        0, // sps_scaling_list_data_present_flag
+                        1, // amp_enabled_flag
+                        1, // sample_adaptive_offset_enabled_flag
+                        0, // pcm_enabled_flag
+                        0, // pcm_loop_filter_disabled_flag (irrelevant when pcm disabled)
+                        0, // long_term_ref_pics_present_flag
+                        1, // sps_temporal_mvp_enabled_flag
+                        1, // strong_intra_smoothing_enabled_flag
+                        0, // vui_parameters_present_flag
+                        0, // sps_extension_present_flag
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // range extension
                         0, 0, 0, 0, 0, // scc extension
                     ),
                 },
@@ -118,13 +144,16 @@ impl VkH265SequenceParameterSet {
                 bit_depth_luma_minus8: 0,
                 bit_depth_chroma_minus8: 0,
                 log2_max_pic_order_cnt_lsb_minus4: 4,
-                log2_min_luma_coding_block_size_minus3: 0, // ffmpeg
-                log2_diff_max_min_luma_coding_block_size: 3, // ffmpeg
-                log2_min_luma_transform_block_size_minus2: 0, // ffmpeg
-                log2_diff_max_min_luma_transform_block_size: 3, // ffmpeg
-                max_transform_hierarchy_depth_inter: 0,
-                max_transform_hierarchy_depth_intra: 0,
-                num_short_term_ref_pic_sets: 0, // I think we will put ref sets in each slice?
+                log2_min_luma_coding_block_size_minus3: (min_cb_log2_size - 3) as u8,
+                log2_diff_max_min_luma_coding_block_size: log2_diff_max_min_luma_coding_block_size
+                    as u8,
+                log2_min_luma_transform_block_size_minus2: (min_tb_log2_size - 2) as u8,
+                log2_diff_max_min_luma_transform_block_size:
+                    log2_diff_max_min_luma_transform_block_size as u8,
+                // max depth = CtbLog2SizeY - MinTbLog2SizeY = ctb_log2_size - min_tb_log2_size
+                max_transform_hierarchy_depth_inter: (ctb_log2_size - min_tb_log2_size) as u8,
+                max_transform_hierarchy_depth_intra: (ctb_log2_size - min_tb_log2_size) as u8,
+                num_short_term_ref_pic_sets: 0, // ref sets are in each slice header
                 num_long_term_ref_pics_sps: 0,
                 pcm_sample_bit_depth_luma_minus1: 0,   // disabled
                 pcm_sample_bit_depth_chroma_minus1: 0, // disabled
@@ -136,10 +165,10 @@ impl VkH265SequenceParameterSet {
                 delta_palette_max_predictor_size: 0,              //disabled
                 motion_vector_resolution_control_idc: 0,          //disabled
                 sps_num_palette_predictor_initializers_minus1: 0, //disabled
-                conf_win_left_offset: 0,                          // TODO
-                conf_win_right_offset: 0,                         // TODO
-                conf_win_top_offset: 0,                           // TODO
-                conf_win_bottom_offset: 0,                        // TODO
+                conf_win_left_offset: 0,
+                conf_win_right_offset: 0,
+                conf_win_top_offset: 0,
+                conf_win_bottom_offset: 0,
                 pProfileTierLevel: profile_tier_level.as_ptr(),
                 pDecPicBufMgr: dec_pic_buf_mgr.as_ptr(),
                 pScalingLists: std::ptr::null(),
@@ -180,8 +209,37 @@ impl VkH265PictureParameterSet {
                 flags: vk::native::StdVideoH265PpsFlags {
                     _bitfield_align_1: [],
                     _bitfield_1: vk::native::StdVideoH265PpsFlags::new_bitfield_1(
-                        0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0,
+                        0, // dependent_slice_segments_enabled_flag
+                        0, // output_flag_present_flag
+                        1, // sign_data_hiding_enabled_flag
+                        0, // cabac_init_present_flag
+                        0, // constrained_intra_pred_flag
+                        1, // transform_skip_enabled_flag
+                        1, // cu_qp_delta_enabled_flag
+                        0, // pps_slice_chroma_qp_offsets_present_flag
+                        0, // weighted_pred_flag
+                        0, // weighted_bipred_flag
+                        0, // transquant_bypass_enabled_flag
+                        0, // tiles_enabled_flag
+                        0, // entropy_coding_sync_enabled_flag
+                        0, // uniform_spacing_flag
+                        0, // loop_filter_across_tiles_enabled_flag
+                        1, // pps_loop_filter_across_slices_enabled_flag
+                        0, // deblocking_filter_control_present_flag
+                        0, // deblocking_filter_override_enabled_flag
+                        0, // pps_deblocking_filter_disabled_flag
+                        0, // pps_scaling_list_data_present_flag
+                        0, // lists_modification_present_flag
+                        0, // slice_segment_header_extension_present_flag
+                        0, // pps_extension_present_flag
+                        0, // cross_component_prediction_enabled_flag
+                        0, // chroma_qp_offset_list_enabled_flag
+                        0, // pps_curr_pic_ref_enabled_flag
+                        0, // residual_adaptive_colour_transform_enabled_flag
+                        0, // pps_slice_act_qp_offsets_present_flag
+                        0, // pps_palette_predictor_initializers_present_flag
+                        0, // monochrome_palette_flag
+                        0, // pps_range_extension_flag
                     ),
                 },
                 sps_video_parameter_set_id: 0,

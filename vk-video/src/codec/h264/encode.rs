@@ -60,6 +60,7 @@ impl EncodeCodec for H264Codec {
 
     fn codec_parameters(
         parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
+        _codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
     ) -> Result<Self::OwnedParameters, VulkanEncoderError> {
         let sps = VkH264SequenceParameterSet::new_encode(
             parameters.profile,

@@ -73,12 +73,12 @@ fn main() {
         .create_transcoder(TranscoderParameters {
             input_framerate: 30.into(),
             output_parameters: vec![
-                // TranscoderOutputParameters {
-                //     output_width,
-                //     output_height,
-                //     encoder_parameters: AnyEncoderParameters::H264(params_h264),
-                //     scaling_algorithm,
-                // },
+                TranscoderOutputParameters {
+                    output_width,
+                    output_height,
+                    encoder_parameters: AnyEncoderParameters::H264(params_h264),
+                    scaling_algorithm,
+                },
                 TranscoderOutputParameters {
                     output_width,
                     output_height,
@@ -90,7 +90,7 @@ fn main() {
         .unwrap();
 
     let mut input_file = File::open(input_file).unwrap();
-    // let mut output_file_h264 = File::create("output.h264").unwrap();
+    let mut output_file_h264 = File::create("output.h264").unwrap();
     let mut output_file_h265 = File::create("output.h265").unwrap();
 
     let mut buffer = vec![0; 4096];
@@ -104,17 +104,15 @@ fn main() {
         let output = transcoder.transcode(input).unwrap();
 
         for output in output {
-            // output_file_h264.write_all(&output[0].data).unwrap();
-            // output_file_h265.write_all(&output[1].data).unwrap();
-            output_file_h265.write_all(&output[0].data).unwrap();
+            output_file_h264.write_all(&output[0].data).unwrap();
+            output_file_h265.write_all(&output[1].data).unwrap();
         }
     }
 
     let flushed = transcoder.flush().unwrap();
     for output in flushed {
-        // output_file_h264.write_all(&output[0].data).unwrap();
-        // output_file_h265.write_all(&output[1].data).unwrap();
-        output_file_h265.write_all(&output[0].data).unwrap();
+        output_file_h264.write_all(&output[0].data).unwrap();
+        output_file_h265.write_all(&output[1].data).unwrap();
     }
 }
 

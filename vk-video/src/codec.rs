@@ -33,6 +33,7 @@ pub(crate) trait EncodeCodec: Codec {
     }
     fn codec_parameters(
         parameters: &FullEncoderParameters<Self>,
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
     ) -> Result<Self::OwnedParameters, VulkanEncoderError>;
     fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters) -> Self::VkParameters<'a>;
 
