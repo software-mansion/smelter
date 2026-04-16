@@ -58,6 +58,7 @@ where
             ErrorType::EntityNotFound => StatusCode::NOT_FOUND,
             ErrorType::Conflict => StatusCode::CONFLICT,
 
+            ErrorType::BadGateway => StatusCode::BAD_GATEWAY,
             ErrorType::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
         },
     }
