@@ -65,29 +65,36 @@ impl VideoQueue {
         next_pts: Duration,
         queue_start_pts: Duration,
     ) -> bool {
+        self.inputs
+            .values()
+            .filter_map(|input| input.upgrade())
+            .for_each(|input| input.maybe_start_next_track());
+
+        let input_status: Vec<_> = self
+            .inputs
+            .iter()
+            .filter_map(|(_, weak)| {
+                weak.video(|input| {
+                    let is_ready = input.is_ready_for_pts(next_pts, queue_start_pts);
+                    let is_required = input.required();
+                    (is_ready, is_required)
+                })
+            })
+            .collect();
+
         if !self.ahead_of_time_processing && self.sync_point + next_pts > Instant::now() {
             return false;
         }
 
-        self.inputs
-            .values()
-            .filter_map(|input| input.upgrade())
-            .for_each(|mut input| input.maybe_start_next_track());
-
-        let all_inputs_ready = self.inputs.values().all(|weak| {
-            weak.video(|input| input.is_ready_for_pts(next_pts, queue_start_pts))
-                .unwrap_or(true)
-        });
+        let all_inputs_ready = input_status.iter().all(|(is_ready, _)| *is_ready);
         if all_inputs_ready {
             return true;
         }
 
-        let all_required_inputs_ready = self.inputs.values().all(|weak| {
-            weak.video(|input| {
-                input.is_ready_for_pts(next_pts, queue_start_pts) || !input.required()
-            })
-            .unwrap_or(true)
-        });
+        let all_required_inputs_ready = input_status
+            .iter()
+            .filter(|(_is_ready, is_required)| *is_required)
+            .all(|(is_ready, _is_required)| *is_ready);
         if !all_required_inputs_ready {
             return false;
         }

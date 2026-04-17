@@ -119,7 +119,7 @@ impl QueueThreadAfterStart {
     }
 
     fn run(mut self) {
-        let ticker = tick(Duration::from_millis(10));
+        let ticker = tick(Duration::from_millis(5));
 
         while !self.queue.should_close.load(Ordering::Relaxed) {
             select! {
