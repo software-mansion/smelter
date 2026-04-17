@@ -160,16 +160,16 @@ impl Pipeline {
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
         register_options: RegisterEncodedDataOutputOptions,
-    ) -> Result<Receiver<EncodedOutputEvent>, RegisterOutputError> {
+    ) -> Result<EncodedDataOutputHandle, RegisterOutputError> {
         register_pipeline_output(
             pipeline,
             output_id,
             register_options.video,
             register_options.audio,
             |ctx, output_ref| {
-                let (output, result) =
+                let (output, handle) =
                     EncodedDataOutput::new(ctx, output_ref, register_options.output_options)?;
-                Ok((Box::new(output), result))
+                Ok((Box::new(output), handle))
             },
         )
     }

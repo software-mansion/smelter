@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crossbeam_channel::{Receiver, bounded};
+use crossbeam_channel::bounded;
 use smelter_render::OutputId;
 
 use crate::{
@@ -36,7 +36,7 @@ impl EncodedDataOutput {
         ctx: Arc<PipelineCtx>,
         output_id: Ref<OutputId>,
         options: EncodedDataOutputOptions,
-    ) -> Result<(Self, Receiver<EncodedOutputEvent>), OutputInitError> {
+    ) -> Result<(Self, EncodedDataOutputHandle), OutputInitError> {
         let (sender, encoded_chunks_receiver) = bounded(1);
         let video = match &options.video {
             Some(video) => match video {
@@ -110,7 +110,17 @@ impl EncodedDataOutput {
             None => None,
         };
 
-        Ok((Self { video, audio }, encoded_chunks_receiver))
+        let handle = EncodedDataOutputHandle {
+            receiver: encoded_chunks_receiver,
+            video: video.as_ref().map(|v| VideoEncoderInfo {
+                resolution: v.config.resolution,
+                extradata: v.config.extradata.clone(),
+            }),
+            audio: audio.as_ref().map(|a| AudioEncoderInfo {
+                extradata: a.config.extradata.clone(),
+            }),
+        };
+        Ok((Self { video, audio }, handle))
     }
 }
 
