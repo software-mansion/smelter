@@ -243,7 +243,7 @@ impl AudioInputReceiver {
     pub fn new(delay: Duration) -> (Self, Sender<InputAudioSamples>) {
         let (sender, receiver) = bounded(1);
         let track = Self {
-            max_size: Duration::from_secs(1),
+            max_size: Duration::from_millis(100),
             receiver,
             buffer: VecDeque::new(),
             disconnected: false,

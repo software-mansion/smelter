@@ -218,7 +218,7 @@ impl QueueInput {
         WeakQueueInput(Arc::downgrade(&self.0))
     }
 
-    pub(super) fn maybe_start_next_track(&mut self) {
+    pub(super) fn maybe_start_next_track(&self) {
         self.0.lock().unwrap().maybe_start_next_track();
     }
 }
