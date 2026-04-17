@@ -86,6 +86,9 @@ impl<T: TimedValue> Sender<T> {
             if !guard.is_full() {
                 guard.push(item);
                 self.shared.not_empty.notify_one();
+                if !guard.is_full() {
+                    self.shared.not_full.notify_one();
+                }
                 return Ok(());
             }
             guard = self.shared.not_full.wait(guard).unwrap();
@@ -102,8 +105,13 @@ impl<T: TimedValue> Sender<T> {
         if guard.is_full() {
             return Err(TrySendError::Full(item));
         }
+
         guard.push(item);
         self.shared.not_empty.notify_one();
+        if !guard.is_full() {
+            self.shared.not_full.notify_one();
+        }
+
         Ok(())
     }
 
@@ -118,6 +126,9 @@ impl<T: TimedValue> Sender<T> {
             if !guard.is_full() {
                 guard.push(item);
                 self.shared.not_empty.notify_one();
+                if !guard.is_full() {
+                    self.shared.not_full.notify_one();
+                }
                 return Ok(());
             }
             guard = {
