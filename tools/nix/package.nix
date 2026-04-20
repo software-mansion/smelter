@@ -1,5 +1,5 @@
 { rustPlatform
-, ffmpeg_7-headless
+, ffmpeg_8-headless
 , openssl
 , pkg-config
 , llvmPackages
@@ -14,11 +14,8 @@
 , makeWrapper
 }:
 let
-  ffmpeg = ffmpeg_7-headless.override {
-    withRtmp = false;
-  };
   buildInputs = [
-    ffmpeg
+    ffmpeg_8-headless
     openssl
     libopus
     libGL
