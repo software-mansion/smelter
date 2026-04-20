@@ -20,14 +20,14 @@
             atk
             at-spi2-atk
             expat
-            xorg.libxcb
+            libxcb
             libxkbcommon
-            xorg.libX11
-            xorg.libXcomposite
-            xorg.libXdamage
-            xorg.libXext
-            xorg.libXfixes
-            xorg.libXrandr
+            libX11
+            libxcomposite
+            libxdamage
+            libxext
+            libxfixes
+            libxrandr
             mesa
             gtk3
             pango
@@ -35,7 +35,7 @@
             dbus
             at-spi2-core
             cups
-            xorg.libxshmfence
+            libxshmfence
           ] ++ (
             pkgs.lib.optionals pkgs.stdenv.isLinux [
               libdrm
@@ -44,11 +44,8 @@
               alsa-lib
             ]
           );
-          ffmpeg = pkgs.ffmpeg_7-full.override {
-            withRtmp = false;
-          };
           devDependencies = with pkgs; [
-            ffmpeg
+            ffmpeg_8-full
 
             gst_all_1.gstreamer
             gst_all_1.gst-plugins-base
@@ -100,7 +97,7 @@
               packages = devDependencies ++ [ pkgs.mesa pkgs.blackmagic-desktop-video ];
 
               env.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-              env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.libGL pkgs.blackmagic-desktop-video  pkgs.wayland pkgs.vulkan-loader ]);
+              env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.libGL pkgs.blackmagic-desktop-video pkgs.wayland pkgs.vulkan-loader ]);
 
               inputsFrom = [ packageWithoutChromium ];
             };
