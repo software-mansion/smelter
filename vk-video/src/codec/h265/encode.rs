@@ -107,7 +107,7 @@ impl EncodeCodec for H265Codec {
             },
             slice_segment_address: 0,
             collocated_ref_idx: 0, // collocate with previous ref frame (I hope that's what it means)
-            MaxNumMergeCand: 3,
+            MaxNumMergeCand: 5,    // anything different and amd breaks
             slice_qp_delta: 0,
             slice_cb_qp_offset: 0,
             slice_cr_qp_offset: 0,
@@ -243,16 +243,17 @@ impl EncodeCodec for H265Codec {
             flags: vk::native::StdVideoEncodeH265PictureInfoFlags {
                 _bitfield_align_1: [],
                 _bitfield_1: vk::native::StdVideoEncodeH265PictureInfoFlags::new_bitfield_1(
-                    1,              // is_reference
-                    is_idr as u32,  // IrapPicFlag
-                    0,              // used_for_long_term_reference
-                    0,              // discardable_flag
-                    0,              // cross_layer_bla_flag
-                    1,              // pic_output_flag
-                    0,              // no_output_of_prior_pics_flag
-                    0,              // short_term_ref_pic_set_sps_flag
-                    !is_idr as u32, // slice_temporal_mvp_enabled_flag
-                    0,              // reserved
+                    1,             // is_reference
+                    is_idr as u32, // IrapPicFlag
+                    0,             // used_for_long_term_reference
+                    0,             // discardable_flag
+                    0,             // cross_layer_bla_flag
+                    1,             // pic_output_flag
+                    0,             // no_output_of_prior_pics_flag
+                    0,             // short_term_ref_pic_set_sps_flag
+                    0,             // slice_temporal_mvp_enabled_flag (must be 0 when
+                    // sps_temporal_mvp_enabled_flag is 0, H.265 7.4.7.1)
+                    0, // reserved
                 ),
             },
             pic_type: pic_type(is_idr),

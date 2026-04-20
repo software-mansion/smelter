@@ -126,7 +126,8 @@ impl VkH265SequenceParameterSet {
                         0, // pcm_enabled_flag
                         0, // pcm_loop_filter_disabled_flag (irrelevant when pcm disabled)
                         0, // long_term_ref_pics_present_flag
-                        1, // sps_temporal_mvp_enabled_flag
+                        0, // sps_temporal_mvp_enabled_flag (amd
+                        // doesnt advertise support and breaks when this is set)
                         1, // strong_intra_smoothing_enabled_flag
                         0, // vui_parameters_present_flag
                         0, // sps_extension_present_flag
@@ -211,7 +212,8 @@ impl VkH265PictureParameterSet {
                     _bitfield_1: vk::native::StdVideoH265PpsFlags::new_bitfield_1(
                         0, // dependent_slice_segments_enabled_flag
                         0, // output_flag_present_flag
-                        1, // sign_data_hiding_enabled_flag
+                        0, // sign_data_hiding_enabled_flag (amd
+                        // doesnt advertise this and break whe its turned on)
                         0, // cabac_init_present_flag
                         0, // constrained_intra_pred_flag
                         1, // transform_skip_enabled_flag
