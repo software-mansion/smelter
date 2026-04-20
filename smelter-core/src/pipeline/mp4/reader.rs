@@ -180,15 +180,29 @@ pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
 
 impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     pub(crate) fn chunks(&mut self, seek: Option<Duration>) -> TrackChunks<'_, Reader> {
-        let seek = match seek {
-            Some(seek) => seek + self.track_start_offset,
-            None => self.track_start_offset,
-        };
+        let user_seek = seek.unwrap_or(Duration::ZERO);
 
-        match self.find_seek_start_sample(seek) {
+        // Position on the raw media-sample timeline (the STTS-described timeline where
+        // each stored sample has a fixed time) from which sample reading should start.
+        // Computed so that any portion of `user_seek` that falls inside the leading
+        // `presentation_delay` (black screen) is absorbed by that black screen instead
+        // of being skipped over real samples. When `user_seek <= presentation_delay`
+        // this collapses to `track_start_offset`, meaning "start at the very first
+        // sample the `elst` box tells us to actually play"; excess seek beyond the
+        // black screen advances further into media.
+        let media_seek =
+            self.track_start_offset + user_seek.saturating_sub(self.presentation_delay);
+
+        // Used in `sample_into_chunk` to shift each sample's pts so that the user's
+        // seek point becomes pts 0. If the user seeks into the leading black screen
+        // (user_seek < presentation_delay), the first real sample gets a positive pts
+        // equal to the remaining black screen, which the pipeline fills with black.
+        let track_seek = self.track_start_offset + user_seek;
+
+        match self.find_seek_start_sample(media_seek) {
             Some((start_index, present_index)) => TrackChunks {
                 track: self,
-                track_seek: seek,
+                track_seek,
                 next_sample_index: start_index,
                 present_from_index: present_index,
             },
@@ -270,9 +284,9 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
 pub(crate) struct TrackChunks<'a, Reader: Read + Seek + Send + 'static> {
     track: &'a mut Track<Reader>,
 
-    /// Absolute position in the track (NOT the `mp4` file) to start reading from, measured from the start of the
-    /// media. Equals the user-provided seek time plus the track's `offset` (the leading
-    /// content trimmed by the `elst` box).
+    /// Value subtracted from each sample's pts to align presentation with the user's seek.
+    /// Equals the user-provided seek time plus `track_start_offset` (the leading media trimmed
+    /// by the `elst` box).
     track_seek: Duration,
     next_sample_index: u32,
     present_from_index: u32,
