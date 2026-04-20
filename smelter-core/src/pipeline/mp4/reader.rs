@@ -65,7 +65,8 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             return None;
         };
 
-        let (offset, delay) = Self::calculate_elst_edits(track, self.reader.timescale());
+        let (track_start_offset, presentation_delay) =
+            Self::calculate_elst_edits(track, self.reader.timescale());
 
         Some(Track {
             sample_count: track.sample_count(),
@@ -73,8 +74,8 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             track_id,
             duration: track.duration(),
             decoder_options: DecoderOptions::Aac(asc),
-            track_start_offset: offset,
-            presentation_delay: delay,
+            track_start_offset,
+            presentation_delay,
             reader: self.reader,
         })
     }
@@ -206,11 +207,22 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
                 next_sample_index: start_index,
                 present_from_index: present_index,
             },
-            None => TrackChunks {
-                track: self,
-                track_seek: Duration::ZERO,
-                next_sample_index: 1,
-                present_from_index: 1,
+            None => match self.find_seek_start_sample(self.track_start_offset) {
+                Some((start_index, present_index)) => {
+                    let track_start_offset = self.track_start_offset;
+                    TrackChunks {
+                        track: self,
+                        track_seek: track_start_offset,
+                        next_sample_index: start_index,
+                        present_from_index: present_index,
+                    }
+                }
+                None => TrackChunks {
+                    track: self,
+                    track_seek: Duration::ZERO,
+                    next_sample_index: 1,
+                    present_from_index: 1,
+                },
             },
         }
     }
