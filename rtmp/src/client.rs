@@ -2,10 +2,7 @@ use tracing::{debug, warn};
 
 use crate::{
     RtmpConnectionError, RtmpEvent, RtmpMessageSerializeError,
-    client::negotiation::{
-        NegotiationProgress, connect_response_supports_enhanced, send_connect, send_create_stream,
-        send_publish,
-    },
+    client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
     error::RtmpStreamError,
     message::{
         AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, DataMessage, RtmpMessage,
@@ -171,8 +168,8 @@ impl RtmpClientState {
                 Err(err) => return Err(err.into()),
             };
 
-            if let Some(response) = state.try_match_connect_response(&msg)? {
-                self.peer_supports_enhanced = connect_response_supports_enhanced(&response);
+            if let Some((_response, supports_enhanced)) = state.try_match_connect_response(&msg)? {
+                self.peer_supports_enhanced = supports_enhanced;
                 state = NegotiationProgress::WaitingForCreateStreamResult;
                 send_create_stream(&mut self.stream)?;
                 continue;

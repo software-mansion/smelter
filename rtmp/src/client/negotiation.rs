@@ -51,7 +51,7 @@ impl NegotiationProgress {
     pub(super) fn try_match_connect_response(
         &self,
         msg: &RtmpMessage,
-    ) -> Result<Option<CommandMessageConnectSuccess>, RtmpConnectionError> {
+    ) -> Result<Option<(CommandMessageConnectSuccess, bool)>, RtmpConnectionError> {
         let NegotiationProgress::WaitingForConnectResult = self else {
             return Ok(None);
         };
@@ -73,7 +73,11 @@ impl NegotiationProgress {
                     .to_connect_success()
                     .map_err(RtmpMessageParseError::CommandMessage)
                     .map_err(RtmpStreamError::ParseMessage)?;
-                Ok(Some(connect_success))
+                // Fallback to checking 'information' because some non-compliant RTMP
+                // servers mistakenly place Enhanced RTMP capabilities there instead of 'properties'.
+                let supports_enhanced = map_supports_enhanced(&connect_success.properties)
+                    || map_supports_enhanced(&connect_success.information);
+                Ok(Some((connect_success, supports_enhanced)))
             }
             Err(err) => Err(RtmpConnectionError::ErrorOnConnect(format!("{err:?}"))),
         }
@@ -223,10 +227,6 @@ pub(super) fn send_publish(
     Ok(())
 }
 
-pub(super) fn connect_response_supports_enhanced(response: &CommandMessageConnectSuccess) -> bool {
-    map_supports_enhanced(&response.properties) || map_supports_enhanced(&response.information)
-}
-
 fn map_supports_enhanced(map: &HashMap<String, AmfValue>) -> bool {
     // TODO: include audio capability indicators once enhanced audio is implemented.
     let has_fourcc_list = map
@@ -257,10 +257,11 @@ fn video_fourcc_info_map_supports_video(value: &AmfValue) -> bool {
         _ => return false,
     };
 
-    map.iter().any(|(k, v)| {
-        let AmfValue::Number(mask) = v else {
-            return false;
-        };
-        *mask > 0.0 && (k == "*" || VIDEO_FOURCC_LIST.contains(&k.as_str()))
+    map.iter().any(|(k, v)| match v {
+        AmfValue::Number(mask) if *mask > 0.0 => {
+            k == "*" || VIDEO_FOURCC_LIST.contains(&k.as_str())
+        }
+        AmfValue::Number(_) => false,
+        _ => false,
     })
 }
