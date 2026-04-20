@@ -185,8 +185,12 @@ impl NativeEncodeH265Capabilities {
         }
     }
 
-    pub(crate) fn max_profile(&self) -> H265Profile {
-        H265Profile::Main
+    pub(crate) fn max_profile(&self) -> Option<H265Profile> {
+        if self.main.is_some() {
+            Some(H265Profile::Main)
+        } else {
+            None
+        }
     }
 }
 
@@ -252,13 +256,15 @@ impl NativeEncodeH264Capabilities {
         }
     }
 
-    pub(crate) fn max_profile(&self) -> H264Profile {
+    pub(crate) fn max_profile(&self) -> Option<H264Profile> {
         if self.high.is_some() {
-            H264Profile::High
+            Some(H264Profile::High)
         } else if self.main.is_some() {
-            H264Profile::Main
+            Some(H264Profile::Main)
+        } else if self.baseline.is_some() {
+            Some(H264Profile::Baseline)
         } else {
-            H264Profile::Baseline
+            None
         }
     }
 }
@@ -628,13 +634,15 @@ impl NativeDecodeH264Capabilities {
         }
     }
 
-    pub(crate) fn max_profile(&self) -> H264Profile {
+    pub(crate) fn max_profile(&self) -> Option<H264Profile> {
         if self.high.is_some() {
-            H264Profile::High
+            Some(H264Profile::High)
         } else if self.main.is_some() {
-            H264Profile::Main
+            Some(H264Profile::Main)
+        } else if self.baseline.is_some() {
+            Some(H264Profile::Baseline)
         } else {
-            H264Profile::Baseline
+            None
         }
     }
 }

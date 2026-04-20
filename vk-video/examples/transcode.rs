@@ -53,18 +53,21 @@ fn main() {
         .create_device(&VulkanDeviceDescriptor::default())
         .unwrap();
 
+    let average_bitrate = 1_000_000;
+    let max_bitrate = 1_200_000;
+
     let params_h264 = device
         .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
-            average_bitrate: 10_000_000,
-            max_bitrate: 12_000_000,
+            average_bitrate,
+            max_bitrate,
             virtual_buffer_size: Duration::from_secs(2),
         })
         .unwrap();
 
     let params_h265 = device
         .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
-            average_bitrate: 10_000_000,
-            max_bitrate: 12_000_000,
+            average_bitrate,
+            max_bitrate,
             virtual_buffer_size: Duration::from_secs(2),
         })
         .unwrap();

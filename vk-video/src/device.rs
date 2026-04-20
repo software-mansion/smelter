@@ -428,7 +428,9 @@ impl VulkanDevice {
             .as_ref()
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
 
-        let max_profile = decode_caps.max_profile();
+        let max_profile = decode_caps
+            .max_profile()
+            .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
 
         Ok(DecodingDevice {
             vulkan_device: self.clone(),
@@ -574,7 +576,8 @@ impl VulkanDevice {
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
         Ok(Self::encoder_output_parameters_low_latency(
-            caps.max_profile(),
+            caps.max_profile()
+                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             rate_control,
         ))
     }
@@ -593,7 +596,8 @@ impl VulkanDevice {
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
         Ok(Self::encoder_output_parameters_low_latency(
-            caps.max_profile(),
+            caps.max_profile()
+                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             rate_control,
         ))
     }
@@ -612,14 +616,18 @@ impl VulkanDevice {
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
         let quality_level = caps
-            .profile(caps.max_profile())
+            .profile(
+                caps.max_profile()
+                    .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
+            )
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
             .encode_capabilities
             .max_quality_levels
             - 1;
 
         Ok(Self::encoder_output_parameters_high_quality(
-            caps.max_profile(),
+            caps.max_profile()
+                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             rate_control,
             quality_level,
         ))
@@ -639,14 +647,18 @@ impl VulkanDevice {
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
         let quality_level = caps
-            .profile(caps.max_profile())
+            .profile(
+                caps.max_profile()
+                    .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
+            )
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
             .encode_capabilities
             .max_quality_levels
             - 1;
 
         Ok(Self::encoder_output_parameters_high_quality(
-            caps.max_profile(),
+            caps.max_profile()
+                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             rate_control,
             quality_level,
         ))

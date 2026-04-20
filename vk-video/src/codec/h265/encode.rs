@@ -59,15 +59,13 @@ impl EncodeCodec for H265Codec {
         parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
     ) -> Result<Self::OwnedParameters, crate::VulkanEncoderError> {
-        let ctb_log2_size = largest_ctb_log2_size(codec_capabilities.ctb_sizes);
-
         Ok(Self::OwnedParameters {
             vps: vec![VkH265VideoParameterSet::new_encode(parameters)],
             sps: vec![VkH265SequenceParameterSet::new_encode(
                 parameters,
-                ctb_log2_size,
+                codec_capabilities,
             )],
-            pps: vec![VkH265PictureParameterSet::new_encode()],
+            pps: vec![VkH265PictureParameterSet::new_encode(codec_capabilities)],
         })
     }
 
@@ -80,15 +78,23 @@ impl EncodeCodec for H265Codec {
     }
 
     type BitstreamUnitData = vk::native::StdVideoEncodeH265SliceSegmentHeader;
-    fn bitstream_unit_data(is_idr: bool) -> Self::BitstreamUnitData {
+    fn bitstream_unit_data(
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
+        is_idr: bool,
+    ) -> Self::BitstreamUnitData {
+        let slice_sao = codec_capabilities
+            .std_syntax_flags
+            .contains(vk::VideoEncodeH265StdFlagsKHR::SAMPLE_ADAPTIVE_OFFSET_ENABLED_FLAG_SET)
+            as u32;
+
         vk::native::StdVideoEncodeH265SliceSegmentHeader {
             flags: vk::native::StdVideoEncodeH265SliceSegmentHeaderFlags {
                 _bitfield_align_1: [],
                 _bitfield_1: vk::native::StdVideoEncodeH265SliceSegmentHeaderFlags::new_bitfield_1(
                     1,                          // first_slice_segment_in_pic_flag
                     0,                          // dependent_slice_segment_flag
-                    1,                          // slice_sao_luma_flag
-                    1,                          // slice_sao_chroma_flag
+                    slice_sao,                  // slice_sao_luma_flag
+                    slice_sao,                  // slice_sao_chroma_flag
                     if is_idr { 0 } else { 1 }, // num_ref_idx_active_override_flag
                     0,                          // mvd_l1_zero_flag
                     0,                          // cabac_init_flag
@@ -236,9 +242,17 @@ impl EncodeCodec for H265Codec {
     type PictureInfoData = vk::native::StdVideoEncodeH265PictureInfo;
     fn picture_info_data(
         counters: &Self::EncodingCounters,
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
         is_idr: bool,
         ref_lists: &Self::ReferenceListInfo,
     ) -> Self::PictureInfoData {
+        // Must be 0 when sps_temporal_mvp_enabled_flag is 0 (H.265 7.4.7.1).
+        // For IDR slices there are no reference pictures to derive MV candidates from.
+        let slice_temporal_mvp_enabled_flag = (codec_capabilities
+            .std_syntax_flags
+            .contains(vk::VideoEncodeH265StdFlagsKHR::SPS_TEMPORAL_MVP_ENABLED_FLAG_SET)
+            && !is_idr) as u32;
+
         vk::native::StdVideoEncodeH265PictureInfo {
             flags: vk::native::StdVideoEncodeH265PictureInfoFlags {
                 _bitfield_align_1: [],
@@ -251,8 +265,7 @@ impl EncodeCodec for H265Codec {
                     1,             // pic_output_flag
                     0,             // no_output_of_prior_pics_flag
                     0,             // short_term_ref_pic_set_sps_flag
-                    0,             // slice_temporal_mvp_enabled_flag (must be 0 when
-                    // sps_temporal_mvp_enabled_flag is 0, H.265 7.4.7.1)
+                    slice_temporal_mvp_enabled_flag,
                     0, // reserved
                 ),
             },
@@ -392,18 +405,6 @@ fn pic_type(is_idr: bool) -> u32 {
         vk::native::StdVideoH265PictureType_STD_VIDEO_H265_PICTURE_TYPE_IDR
     } else {
         vk::native::StdVideoH265PictureType_STD_VIDEO_H265_PICTURE_TYPE_P
-    }
-}
-
-/// Pick the largest supported CTB size and return its log2.
-/// TYPE_64 → 6, TYPE_32 → 5, TYPE_16 → 4.
-fn largest_ctb_log2_size(ctb_sizes: vk::VideoEncodeH265CtbSizeFlagsKHR) -> u32 {
-    if ctb_sizes.contains(vk::VideoEncodeH265CtbSizeFlagsKHR::TYPE_64) {
-        6
-    } else if ctb_sizes.contains(vk::VideoEncodeH265CtbSizeFlagsKHR::TYPE_32) {
-        5
-    } else {
-        4
     }
 }
 

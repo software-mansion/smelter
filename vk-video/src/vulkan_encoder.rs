@@ -1050,7 +1050,6 @@ impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
         self.begin_video_coding(cmd_buffer.buffer());
 
         if is_idr {
-            // TODO: controllable rate control, framerate and all stream parameters
             self.issue_coding_control_reset_for(cmd_buffer.buffer(), self.rate_control);
         }
 
@@ -1080,15 +1079,18 @@ impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
         // colleague that we should just try reversing the order we have. It ended up working.
         // I don't know how anyone is supposed to find this.
 
-        let bitstream_unit_data = C::bitstream_unit_data(is_idr);
+        let profile_capabilities = C::encode_codec_profile_capabilities(
+            &self.encoding_device.native_encode_capabilities,
+            self.profile,
+        )?;
+
+        let bitstream_unit_data =
+            C::bitstream_unit_data(&profile_capabilities.codec_encode_capabilities, is_idr);
         let bitstream_unit_info = C::bitstream_unit_info(
             &bitstream_unit_data,
             self.rate_control,
-            &C::encode_codec_profile_capabilities(
-                &self.encoding_device.native_encode_capabilities,
-                self.profile,
-            )?
-            .quality_level_properties[self.session_resources.quality_level as usize],
+            &profile_capabilities.quality_level_properties
+                [self.session_resources.quality_level as usize],
             is_idr,
         );
 
@@ -1097,7 +1099,12 @@ impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
         let reference_list_info =
             C::reference_list_info(&self.counters, &self.active_reference_slots);
 
-        let picture_info_data = C::picture_info_data(&self.counters, is_idr, &reference_list_info);
+        let picture_info_data = C::picture_info_data(
+            &self.counters,
+            &profile_capabilities.codec_encode_capabilities,
+            is_idr,
+            &reference_list_info,
+        );
 
         let mut picture_info = C::picture_info(&picture_info_data, &bitstream_unit_infos);
 

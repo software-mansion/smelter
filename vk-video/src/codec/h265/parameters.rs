@@ -96,11 +96,13 @@ pub(crate) struct VkH265SequenceParameterSet {
 impl VkH265SequenceParameterSet {
     pub(crate) fn new_encode(
         params: &FullEncoderParameters<H265Codec>,
-        ctb_log2_size: u32,
+        caps: &vk::VideoEncodeH265CapabilitiesKHR<'_>,
     ) -> Self {
         // TODO: VUI
         let profile_tier_level = NonNull::from(Box::leak(Box::new(profile_tier_level(params))));
         let dec_pic_buf_mgr = NonNull::from(Box::leak(Box::new(dec_pic_buf_mgr(params))));
+
+        let ctb_log2_size = largest_supported_ctb_log2_size(caps.ctb_sizes);
 
         let min_cb_log2_size: u32 = 3; // MinCbSizeY = 8
         let log2_diff_max_min_luma_coding_block_size = ctb_log2_size - min_cb_log2_size;
@@ -109,6 +111,15 @@ impl VkH265SequenceParameterSet {
         // MaxTbLog2SizeY = min(5, ctb_log2_size) per H.265 spec: MaxTbSizeY can be at most 32
         let max_tb_log2_size = ctb_log2_size.min(5);
         let log2_diff_max_min_luma_transform_block_size = max_tb_log2_size - min_tb_log2_size;
+
+        let sample_adaptive_offset_enabled_flag = caps
+            .std_syntax_flags
+            .contains(vk::VideoEncodeH265StdFlagsKHR::SAMPLE_ADAPTIVE_OFFSET_ENABLED_FLAG_SET)
+            as u32;
+        let sps_temporal_mvp_enabled_flag = caps
+            .std_syntax_flags
+            .contains(vk::VideoEncodeH265StdFlagsKHR::SPS_TEMPORAL_MVP_ENABLED_FLAG_SET)
+            as u32;
 
         Self {
             sps: vk::native::StdVideoH265SequenceParameterSet {
@@ -122,17 +133,29 @@ impl VkH265SequenceParameterSet {
                         0, // scaling_list_enabled_flag
                         0, // sps_scaling_list_data_present_flag
                         1, // amp_enabled_flag
-                        1, // sample_adaptive_offset_enabled_flag
+                        sample_adaptive_offset_enabled_flag,
                         0, // pcm_enabled_flag
                         0, // pcm_loop_filter_disabled_flag (irrelevant when pcm disabled)
                         0, // long_term_ref_pics_present_flag
-                        0, // sps_temporal_mvp_enabled_flag (amd
-                        // doesnt advertise support and breaks when this is set)
+                        sps_temporal_mvp_enabled_flag,
                         1, // strong_intra_smoothing_enabled_flag
                         0, // vui_parameters_present_flag
                         0, // sps_extension_present_flag
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // range extension
-                        0, 0, 0, 0, 0, // scc extension
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0, // range extension
+                        0,
+                        0,
+                        0,
+                        0,
+                        0, // scc extension
                     ),
                 },
                 chroma_format_idc:
@@ -199,12 +222,31 @@ impl Drop for VkH265SequenceParameterSet {
     }
 }
 
+fn largest_supported_ctb_log2_size(ctb_sizes: vk::VideoEncodeH265CtbSizeFlagsKHR) -> u32 {
+    if ctb_sizes.contains(vk::VideoEncodeH265CtbSizeFlagsKHR::TYPE_64) {
+        6
+    } else if ctb_sizes.contains(vk::VideoEncodeH265CtbSizeFlagsKHR::TYPE_32) {
+        5
+    } else {
+        4
+    }
+}
+
 pub(crate) struct VkH265PictureParameterSet {
     pub(crate) pps: vk::native::StdVideoH265PictureParameterSet,
 }
 
 impl VkH265PictureParameterSet {
-    pub(crate) fn new_encode() -> Self {
+    pub(crate) fn new_encode(caps: &vk::VideoEncodeH265CapabilitiesKHR<'_>) -> Self {
+        let sign_data_hiding_enabled_flag = caps
+            .std_syntax_flags
+            .contains(vk::VideoEncodeH265StdFlagsKHR::SIGN_DATA_HIDING_ENABLED_FLAG_SET)
+            as u32;
+        let transform_skip_enabled_flag = caps
+            .std_syntax_flags
+            .contains(vk::VideoEncodeH265StdFlagsKHR::TRANSFORM_SKIP_ENABLED_FLAG_SET)
+            as u32;
+
         Self {
             pps: vk::native::StdVideoH265PictureParameterSet {
                 flags: vk::native::StdVideoH265PpsFlags {
@@ -212,11 +254,10 @@ impl VkH265PictureParameterSet {
                     _bitfield_1: vk::native::StdVideoH265PpsFlags::new_bitfield_1(
                         0, // dependent_slice_segments_enabled_flag
                         0, // output_flag_present_flag
-                        0, // sign_data_hiding_enabled_flag (amd
-                        // doesnt advertise this and break whe its turned on)
+                        sign_data_hiding_enabled_flag,
                         0, // cabac_init_present_flag
                         0, // constrained_intra_pred_flag
-                        1, // transform_skip_enabled_flag
+                        transform_skip_enabled_flag,
                         1, // cu_qp_delta_enabled_flag
                         0, // pps_slice_chroma_qp_offsets_present_flag
                         0, // weighted_pred_flag

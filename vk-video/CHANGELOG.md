@@ -4,7 +4,11 @@
 
 ### 💥 Breaking changes
 
+- Encoders and encoder parameters are now created using codec-specific methods, e. g. `Device::encoder_output_parameters_low_latency` -> `Device::encoder_output_parameters_h264_low_latency`, `Device::create_bytes_encoder` -> `Device::create_bytes_encoder_h264`
+
 ### ✨ New features
+
+- Added an H.265 encoder
 
 ### 🐛 Bug fixes
 

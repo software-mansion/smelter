@@ -60,7 +60,7 @@ impl EncodeCodec for H264Codec {
 
     fn codec_parameters(
         parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
-        _codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
     ) -> Result<Self::OwnedParameters, VulkanEncoderError> {
         let sps = VkH264SequenceParameterSet::new_encode(
             parameters.profile,
@@ -71,7 +71,7 @@ impl EncodeCodec for H264Codec {
             parameters.color_range,
             parameters.framerate,
         )?;
-        let pps = VkH264PictureParameterSet::new_encode();
+        let pps = VkH264PictureParameterSet::new_encode(codec_capabilities, parameters.profile);
 
         Ok(Self::OwnedParameters {
             sps: vec![sps],
@@ -87,7 +87,10 @@ impl EncodeCodec for H264Codec {
     }
 
     type BitstreamUnitData = vk::native::StdVideoEncodeH264SliceHeader;
-    fn bitstream_unit_data(is_idr: bool) -> Self::BitstreamUnitData {
+    fn bitstream_unit_data(
+        _codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
+        is_idr: bool,
+    ) -> Self::BitstreamUnitData {
         vk::native::StdVideoEncodeH264SliceHeader {
             flags: vk::native::StdVideoEncodeH264SliceHeaderFlags {
                 _bitfield_align_1: [],
@@ -191,6 +194,7 @@ impl EncodeCodec for H264Codec {
     type PictureInfoData = vk::native::StdVideoEncodeH264PictureInfo;
     fn picture_info_data(
         counters: &Self::EncodingCounters,
+        _codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
         is_idr: bool,
         ref_lists: &Self::ReferenceListInfo,
     ) -> Self::PictureInfoData {
@@ -199,7 +203,7 @@ impl EncodeCodec for H264Codec {
                 _bitfield_align_1: [],
                 _bitfield_1: vk::native::StdVideoEncodeH264PictureInfoFlags::new_bitfield_1(
                     is_idr as u32,
-                    1, // TODO
+                    1, // TODO: must be the same as nal_ref_idc != 0
                     0,
                     0, // long term refs
                     0, // adaptive reference control

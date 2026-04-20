@@ -675,16 +675,29 @@ impl Drop for VkH264PictureParameterSet {
 }
 
 impl VkH264PictureParameterSet {
-    pub(crate) fn new_encode() -> Self {
+    pub(crate) fn new_encode(
+        caps: &vk::VideoEncodeH264CapabilitiesKHR<'_>,
+        profile: H264Profile,
+    ) -> Self {
+        let transform_8x8_mode_flag = (caps
+            .std_syntax_flags
+            .contains(vk::VideoEncodeH264StdFlagsKHR::TRANSFORM_8X8_MODE_FLAG_SET)
+            && matches!(profile, H264Profile::High)) as u32;
+
         let pps = vk::native::StdVideoH264PictureParameterSet {
             flags: vk::native::StdVideoH264PpsFlags {
                 __bindgen_padding_0: [0; 3],
                 _bitfield_align_1: [],
                 _bitfield_1: vk::native::StdVideoH264PpsFlags::new_bitfield_1(
-                    0, 0, 0, 1, // maybe turn off to enable superfast decoding
+                    transform_8x8_mode_flag,
+                    0,
+                    0,
+                    1, // maybe turn off to enable superfast decoding
                     0, // think about this -- think really hard, it seems this
                     // means you need to supply the weights yourself
-                    0, 1, 0,
+                    0,
+                    1,
+                    0,
                 ),
             },
             seq_parameter_set_id: 0,
