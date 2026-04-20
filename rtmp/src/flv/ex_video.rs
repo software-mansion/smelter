@@ -9,7 +9,7 @@ use super::{
 };
 
 /// Parsed Enhanced RTMP video tag.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExVideoTag {
     StartSeek,
     EndSeek,
@@ -62,7 +62,7 @@ impl ExVideoFourCc {
         }
     }
 
-    fn to_raw(self) -> [u8; 4] {
+    fn into_raw(self) -> [u8; 4] {
         match self {
             Self::Vp08 => *b"vp08",
             Self::Vp09 => *b"vp09",
@@ -73,8 +73,8 @@ impl ExVideoFourCc {
         }
     }
 
-    /// Returns true if this codec uses SI24 CompositionTime in CodedFrames.
-    /// Per the spec, AVC, HEVC, and VVC carry composition time offset.
+    /// Returns true if this codec carries a 3-byte signed composition time
+    /// offset in CodedFrames packets. Per the spec: AVC, HEVC, and VVC.
     fn has_composition_time(self) -> bool {
         matches!(self, Self::Avc1 | Self::Hvc1 | Self::Vvc1)
     }
@@ -85,13 +85,13 @@ impl ExVideoFourCc {
 /// This represents the resolved body content. Wire-only signals (`ModEx`, `Multitrack`)
 /// are handled during parsing and do not appear here. `CodedFrames` and `CodedFramesX`
 /// from the wire are unified — `CodedFramesX` sets `composition_time = 0`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExVideoPacket {
     /// Decoder configuration record (SPS/PPS, VPS, etc.)
     SequenceStart(Bytes),
     /// Video frame data with composition time offset.
     /// For codecs without composition time (VP8, VP9, AV1), `composition_time` is 0.
-    /// Encompasses both wire types `CodedFrames` (explicit SI24) and `CodedFramesX` (implicit 0).
+    /// Encompasses both wire types `CodedFrames` (explicit composition time) and `CodedFramesX` (implicit 0).
     CodedFrames { composition_time: i32, data: Bytes },
     /// End of sequence marker. No payload.
     SequenceEnd,
@@ -224,9 +224,9 @@ impl ExVideoTag {
         })
     }
 
-    /// Parses CodedFrames body. AVC, HEVC, and VVC include an SI24 composition
-    /// time prefix; other codecs do not (composition_time is set to 0
-    /// in the parsed representation).
+    /// Parses CodedFrames body. AVC, HEVC, and VVC include a 3-byte signed
+    /// composition time offset prefix; other codecs do not (composition_time
+    /// is set to 0 in the parsed representation).
     fn parse_coded_frames(
         data: Bytes,
         four_cc: ExVideoFourCc,
@@ -277,13 +277,15 @@ impl ExVideoTag {
                     ExVideoPacket::CodedFrames {
                         composition_time, ..
                     } => {
-                        // Per spec, only AVC/HEVC/VVC include SI24 CompositionTime on wire
-                        // in CodedFrames. For other codecs (VP8/VP9/AV1) composition_time
-                        // is not serialized regardless of its value.
-                        // CodedFramesX omits SI24 (implicit zero) as a wire optimization.
-                        if four_cc.has_composition_time() && *composition_time != 0 {
+                        if !four_cc.has_composition_time() {
+                            // VP8/VP9/AV1: no composition time on wire
+                            (ExVideoPacketType::CodedFrames, false)
+                        } else if *composition_time != 0 {
+                            // AVC/HEVC/VVC with nonzero composition time
                             (ExVideoPacketType::CodedFrames, true)
                         } else {
+                            // AVC/HEVC/VVC with zero composition time: use CodedFramesX
+                            // to skip the 3-byte composition time field on wire
                             (ExVideoPacketType::CodedFramesX, false)
                         }
                     }
@@ -342,7 +344,7 @@ impl ExVideoTag {
                     )?;
                 }
 
-                buf.put(&four_cc.to_raw()[..]);
+                buf.put(&four_cc.into_raw()[..]);
 
                 if needs_composition_time
                     && let ExVideoPacket::CodedFrames {

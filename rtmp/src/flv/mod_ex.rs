@@ -26,6 +26,8 @@ impl VideoPacketModExType {
     }
 }
 
+const MAX_TIMESTAMP_OFFSET_NANOS: u32 = 999_999;
+
 /// Result of resolving ModEx prefixes from the wire.
 pub(super) struct ModExResult {
     pub packet_type: ExVideoPacketType,
@@ -78,14 +80,16 @@ pub(super) fn resolve_mod_ex(data: Bytes) -> Result<ModExResult, FlvVideoTagPars
         match mod_ex_type {
             VideoPacketModExType::TimestampOffsetNano => {
                 let mod_ex_data = &data[mod_ex_data_start..mod_ex_data_start + mod_ex_data_size];
-                if mod_ex_data.len() >= 3 {
-                    timestamp_offset_nanos = Some(u32::from_be_bytes([
-                        0,
-                        mod_ex_data[0],
-                        mod_ex_data[1],
-                        mod_ex_data[2],
-                    ]));
+                if mod_ex_data.len() < 3 {
+                    return Err(FlvVideoTagParseError::TooShort);
                 }
+
+                let nanos = u32::from_be_bytes([0, mod_ex_data[0], mod_ex_data[1], mod_ex_data[2]]);
+                if nanos > MAX_TIMESTAMP_OFFSET_NANOS {
+                    return Err(FlvVideoTagParseError::InvalidTimestampOffsetNanos(nanos));
+                }
+
+                let _ = timestamp_offset_nanos.replace(nanos);
             }
         }
 
@@ -131,4 +135,55 @@ pub(super) fn serialize_mod_ex(
     let type_byte = (mod_ex_type.into_raw() << 4) | next_packet_type.into_raw();
     buf.put_u8(type_byte);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+
+    use super::{ExVideoPacketType, resolve_mod_ex};
+    use crate::error::FlvVideoTagParseError;
+
+    #[test]
+    fn resolve_mod_ex_rejects_short_timestamp_offset_payload() {
+        // data size = 2 bytes (encoded as UI8 value 1, then +1)
+        let data = Bytes::from_static(&[
+            1, 0xAA, 0xBB,
+            0x00, // [modExType=0 TimestampOffsetNano | nextPacketType=0 SequenceStart]
+        ]);
+
+        let result = resolve_mod_ex(data);
+        assert!(matches!(result, Err(FlvVideoTagParseError::TooShort)));
+    }
+
+    #[test]
+    fn resolve_mod_ex_rejects_timestamp_offset_above_spec_max() {
+        // 1_000_000 ns (0x0F4240) exceeds the v2 spec max of 999_999 ns.
+        let data = Bytes::from_static(&[
+            2, 0x0F, 0x42, 0x40,
+            0x01, // [modExType=0 TimestampOffsetNano | nextPacketType=1 CodedFrames]
+        ]);
+
+        let result = resolve_mod_ex(data);
+        assert!(matches!(
+            result,
+            Err(FlvVideoTagParseError::InvalidTimestampOffsetNanos(
+                1_000_000
+            ))
+        ));
+    }
+
+    #[test]
+    fn resolve_mod_ex_accepts_valid_timestamp_offset() {
+        // 999_999 ns (0x0F423F)
+        let data = Bytes::from_static(&[
+            2, 0x0F, 0x42, 0x3F,
+            0x01, // [modExType=0 TimestampOffsetNano | nextPacketType=1 CodedFrames]
+        ]);
+
+        let result = resolve_mod_ex(data).unwrap();
+        assert_eq!(result.packet_type, ExVideoPacketType::CodedFrames);
+        assert_eq!(result.timestamp_offset_nanos, Some(999_999));
+        assert!(result.remaining.is_empty());
+    }
 }

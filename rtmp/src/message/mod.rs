@@ -78,7 +78,7 @@ pub(crate) enum RtmpMessage {
 impl RtmpMessage {
     pub fn is_media_packet(&self) -> bool {
         match self {
-            Self::Video { video, .. } => !matches!(video, VideoMessage::H264Config(_)),
+            Self::Video { video, .. } => video.is_media_packet(),
             Self::Audio { audio, .. } => !matches!(audio, AudioMessage::AacConfig(_)),
             _ => false,
         }

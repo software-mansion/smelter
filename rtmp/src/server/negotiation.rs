@@ -66,7 +66,7 @@ impl NegotiationProgress {
     }
 
     pub fn try_match_create_stream(&self, msg: &RtmpMessage) -> Option<(u32, Arc<str>)> {
-        let NegotiationProgress::WaitingForCreateStream { app } = self else {
+        let NegotiationProgress::WaitingForCreateStream { app, .. } = self else {
             return None;
         };
 

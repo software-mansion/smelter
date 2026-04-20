@@ -23,6 +23,13 @@ use crate::{
     transport::RtmpTransport,
 };
 
+use crate::{
+    CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, FOURCC_INFO_CAN_DECODE,
+    FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD,
+};
+
+use crate::VIDEO_FOURCC_LIST;
+
 /// For server we can pick this number for client it would be based on value
 /// that came as _result for createStream
 const PUBLISHED_MESSAGE_STREAM_ID: u32 = 1;
@@ -64,7 +71,8 @@ pub(super) fn run_connection_thread(
             RtmpMessage::Video { video, .. } => match video {
                 VideoMessage::H264Data(data) => RtmpEvent::H264Data(data),
                 VideoMessage::H264Config(config) => RtmpEvent::H264Config(config),
-                VideoMessage::Unknown(data) => RtmpEvent::UnknownVideoData(data),
+                VideoMessage::Legacy(data) => RtmpEvent::LegacyVideoData(data),
+                VideoMessage::Enhanced(data) => RtmpEvent::EnhancedVideoData(data),
             },
             RtmpMessage::DataMessage {
                 data: DataMessage::OnMetaData(metadata),
@@ -182,11 +190,44 @@ impl RtmpServerConnectionState {
         self.stream
             .write_msg(UserControlMessage::StreamBegin { stream_id: 0 }.into())?;
 
+        let video_fourcc_info_map = HashMap::from_iter([
+            (
+                "*".to_string(),
+                AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
+            ),
+            (
+                "avc1".to_string(),
+                AmfValue::Number(
+                    (FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD)
+                        as f64,
+                ),
+            ),
+        ]);
         // _result - connect response
         let props = HashMap::from_iter(
             [
                 ("fmsVer", "FMS/3,0,1,123".into()),
                 ("capabilities", AmfValue::Number(31.0)),
+                (
+                    "fourCcList",
+                    AmfValue::StrictArray(
+                        VIDEO_FOURCC_LIST
+                            .iter()
+                            .map(|v| AmfValue::String((*v).to_string()))
+                            .collect(),
+                    ),
+                ),
+                (
+                    "videoFourCcInfoMap",
+                    AmfValue::Object(video_fourcc_info_map),
+                ),
+                // TODO: add audioFourCcInfoMap once enhanced audio tags are implemented.
+                (
+                    "capsEx",
+                    AmfValue::Number(
+                        (CAPS_EX_RECONNECT | CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO) as f64,
+                    ),
+                ),
             ]
             .into_iter()
             .map(|(k, v)| (k.into(), v)),
