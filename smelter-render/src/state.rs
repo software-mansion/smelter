@@ -30,6 +30,7 @@ use self::{
     renderers::Renderers,
 };
 
+pub mod frame_pre_processor;
 pub mod input_texture;
 pub mod node_texture;
 pub mod output_texture;
@@ -185,9 +186,8 @@ impl Renderer {
             .update_scene(output_id, resolution, scene_root, output_format)
     }
 
-    pub fn wgpu_ctx(&self) -> (Arc<wgpu::Device>, Arc<wgpu::Queue>) {
-        let guard = self.0.lock().unwrap();
-        (guard.wgpu_ctx.device.clone(), guard.wgpu_ctx.queue.clone())
+    pub fn wgpu_ctx(&self) -> Arc<WgpuCtx> {
+        self.0.lock().unwrap().wgpu_ctx.clone()
     }
 }
 

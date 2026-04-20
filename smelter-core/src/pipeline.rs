@@ -1,7 +1,9 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
 use ::rtmp::TlsConfig;
-use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};
+use smelter_render::{
+    Framerate, RenderingMode, WgpuCtx, WgpuFeatures, web_renderer::ChromiumContext,
+};
 use tokio::runtime::Runtime;
 
 use crate::{
@@ -116,6 +118,7 @@ pub(crate) struct PipelineCtx {
 
     pub download_dir: Arc<Path>,
     pub graphics_context: GraphicsContext,
+    pub wgpu_ctx: Arc<WgpuCtx>,
     pub event_emitter: Arc<EventEmitter>,
     pub stats_sender: StatsSender,
     pub webrtc_stun_servers: Arc<Vec<String>>,

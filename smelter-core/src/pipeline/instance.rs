@@ -597,6 +597,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         stats_sender,
         tokio_rt: tokio_rt.clone(),
         graphics_context,
+        wgpu_ctx: renderer.wgpu_ctx(),
         whip_whep_state: match opts.whip_whep_server {
             PipelineWhipWhepServerOptions::Enable { port } => {
                 Some(WhipWhepPipelineState::new(port))

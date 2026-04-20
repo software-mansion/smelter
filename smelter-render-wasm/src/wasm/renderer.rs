@@ -107,10 +107,10 @@ impl Renderer {
     }
 
     fn wgpu_ctx(&self) -> WgpuCtx {
-        let (device, queue) = self.renderer.wgpu_ctx();
+        let ctx = self.renderer.wgpu_ctx();
         WgpuCtx {
-            device: device.as_ref().clone(),
-            queue: queue.as_ref().clone(),
+            device: ctx.device.as_ref().clone(),
+            queue: ctx.queue.as_ref().clone(),
         }
     }
 }
