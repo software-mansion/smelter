@@ -1,3 +1,5 @@
+use bytes::Bytes;
+use crossbeam_channel::Receiver;
 use smelter_render::scene::Component;
 
 use crate::prelude::*;
@@ -77,6 +79,24 @@ pub enum PipelineOutputEndCondition {
 #[derive(Debug)]
 pub struct OutputInfo {
     pub protocol: OutputProtocolKind,
+}
+
+#[derive(Debug, Clone)]
+pub struct EncodedDataOutputHandle {
+    pub receiver: Receiver<EncodedOutputEvent>,
+    pub video: Option<VideoEncoderInfo>,
+    pub audio: Option<AudioEncoderInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VideoEncoderInfo {
+    pub resolution: Resolution,
+    pub extradata: Option<Bytes>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AudioEncoderInfo {
+    pub extradata: Option<Bytes>,
 }
 
 #[derive(Debug, Clone, Copy)]
