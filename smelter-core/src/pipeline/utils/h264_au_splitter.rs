@@ -54,19 +54,6 @@ impl H264AuSplitter {
                 }
             };
 
-            // Parser returns nalus which may not start with a start code
-            // but each nalu always ends with the start code of the next nalu,
-            // so we have to make sure that there is a start code in the beginning
-            const START_CODES: [&[u8]; 2] = [&[0, 0, 0, 1], &[0, 0, 1]];
-            if let Some(first_nalu) = au.0.first() {
-                let has_start_code = START_CODES
-                    .iter()
-                    .any(|code| first_nalu.raw_bytes.starts_with(code));
-                if !has_start_code {
-                    data.extend_from_slice(&[0, 0, 1]);
-                }
-            }
-
             for nalu in au.0.iter() {
                 data.extend_from_slice(&nalu.raw_bytes);
             }
