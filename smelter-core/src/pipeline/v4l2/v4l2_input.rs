@@ -4,14 +4,14 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::{Sender, TrySendError};
+use crossbeam_channel::TrySendError;
 use smelter_render::{FrameData, Framerate, InputId, NvPlanes, Resolution};
 use tracing::{Level, debug, error, info, span, trace, warn};
 
 use crate::{
     pipeline::input::Input,
     prelude::*,
-    queue::{QueueInput, QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
 };
 
 use v4l::{
@@ -278,7 +278,7 @@ struct InputState<'a> {
     config: V4l2DeviceConfig,
     ctx: Arc<PipelineCtx>,
     should_close: Arc<AtomicBool>,
-    sender: Sender<Frame>,
+    sender: QueueSender<Frame>,
     stream: v4l::io::mmap::Stream<'a>,
 }
 

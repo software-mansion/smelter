@@ -1,6 +1,5 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
-use crossbeam_channel::Sender;
 use smelter_render::Frame;
 use tracing::warn;
 
@@ -11,7 +10,8 @@ use crate::{
         BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, EncodedInputEvent,
         VideoDecoderStream,
     },
-    utils::{InitializableThread, ThreadMetadata},
+    queue::QueueSender,
+    utils::{InitializableThread, ThreadMetadata, channel::duration_bounded},
 };
 
 use super::VideoDecoder;
@@ -19,13 +19,13 @@ use super::VideoDecoder;
 pub(crate) struct VideoDecoderThreadOptions<Transformer: BytestreamTransformer> {
     pub ctx: Arc<PipelineCtx>,
     pub transformer: Option<Transformer>,
-    pub frame_sender: Sender<Frame>,
-    pub input_buffer_size: usize,
+    pub frame_sender: QueueSender<Frame>,
+    pub input_buffer_size: Duration,
 }
 
 pub(crate) struct VideoDecoderThread<Decoder: VideoDecoder, Transformer: BytestreamTransformer> {
     stream: Box<dyn Iterator<Item = Frame>>,
-    frame_sender: Sender<Frame>,
+    frame_sender: QueueSender<Frame>,
     _decoder: PhantomData<Decoder>,
     _transformer: PhantomData<Transformer>,
 }
@@ -47,7 +47,7 @@ where
             frame_sender,
             input_buffer_size: buffer_size,
         } = options;
-        let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(buffer_size);
+        let (chunk_sender, chunk_receiver) = duration_bounded(buffer_size);
 
         let transformed_bytestream =
             BytestreamTransformStream::new(transformer, chunk_receiver.into_iter()).map(|event| {

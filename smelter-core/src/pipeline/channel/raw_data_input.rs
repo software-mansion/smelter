@@ -9,7 +9,7 @@ use tracing::{debug, trace};
 
 use crate::{
     pipeline::input::Input,
-    queue::{QueueInput, QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
     utils::input_buffer::InputDelayBuffer,
 };
 
@@ -92,7 +92,7 @@ fn spawn_video_repacking_thread(
     input_ref: &Ref<InputId>,
     first_pts: Arc<Mutex<Option<Duration>>>,
     mut buffer: InputDelayBuffer<Frame>,
-    frame_sender: Sender<Frame>,
+    frame_sender: QueueSender<Frame>,
 ) -> Sender<PipelineEvent<Frame>> {
     let (input_sender, input_receiver) = bounded::<PipelineEvent<Frame>>(1000);
 
@@ -131,7 +131,7 @@ fn spawn_audio_repacking_thread(
     input_ref: &Ref<InputId>,
     first_pts: Arc<Mutex<Option<Duration>>>,
     mut buffer: InputDelayBuffer<InputAudioSamples>,
-    samples_sender: Sender<InputAudioSamples>,
+    samples_sender: QueueSender<InputAudioSamples>,
 ) -> Sender<PipelineEvent<InputAudioSamples>> {
     let (input_sender, input_receiver) = bounded::<PipelineEvent<InputAudioSamples>>(1000);
 

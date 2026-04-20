@@ -1,6 +1,5 @@
 use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
-use crossbeam_channel::Sender;
 use rtmp::{AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent};
 use smelter_render::{InputId, error::ErrorStack};
 use tracing::{Level, info, span, warn};
@@ -23,13 +22,14 @@ use crate::{
         rtmp::rtmp_input::state::RtmpInputState,
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
     },
-    queue::{QueueTrackOffset, QueueTrackOptions},
-    utils::InitializableThread,
+    queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
+    utils::{InitializableThread, channel::Sender},
 };
 
 use crate::prelude::*;
 
 const RTMP_BUFFER: Duration = Duration::from_secs(2);
+const RTMP_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 pub(crate) fn start_connection_thread(
     ctx: Arc<PipelineCtx>,
@@ -140,8 +140,8 @@ struct RtmpConnectionState {
 
     video_track_state: TrackState,
     audio_track_state: TrackState,
-    video_sender: Option<Sender<Frame>>,
-    audio_sender: Option<Sender<InputAudioSamples>>,
+    video_sender: Option<QueueSender<Frame>>,
+    audio_sender: Option<QueueSender<InputAudioSamples>>,
 
     first_pts: Option<Duration>,
 }
@@ -169,7 +169,7 @@ impl RtmpConnectionState {
             ctx: self.ctx.clone(),
             transformer: Some(H264AvccToAnnexB::new(h264_config)),
             frame_sender,
-            input_buffer_size: 1000,
+            input_buffer_size: RTMP_MAX_BUFFER,
         };
 
         let h264_decoder = self.decoders.h264.unwrap_or_else(|| {
@@ -208,7 +208,7 @@ impl RtmpConnectionState {
                 asc: Some(config.data().clone()),
             },
             samples_sender,
-            input_buffer_size: 1000,
+            input_buffer_size: RTMP_MAX_BUFFER,
         };
         let input_ref = self.input_ref.clone();
         let handle = AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref, options)

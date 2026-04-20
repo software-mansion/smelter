@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use std::{
     fmt,
     path::{Path, PathBuf},
@@ -7,7 +8,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use smelter_core::{
     codecs::*,
     error::{RegisterInputError, RegisterOutputError},

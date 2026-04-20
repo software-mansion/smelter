@@ -17,6 +17,7 @@ use crate::{
         },
         webrtc::AsyncReceiverIter,
     },
+    queue::QueueSender,
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -28,7 +29,7 @@ pub(super) struct VideoTrackThreadHandle {
 
 pub(super) struct VideoTrackThread {
     stream: Box<dyn Iterator<Item = Frame>>,
-    frame_sender: crossbeam_channel::Sender<Frame>,
+    frame_sender: QueueSender<Frame>,
 }
 
 impl InitializableThread for VideoTrackThread {
@@ -36,7 +37,7 @@ impl InitializableThread for VideoTrackThread {
         Arc<PipelineCtx>,
         VideoDecoderMapping,
         VideoPayloadTypeMapping,
-        crossbeam_channel::Sender<Frame>,
+        QueueSender<Frame>,
         KeyframeRequestSender,
     );
 
@@ -95,14 +96,11 @@ pub(super) struct AudioTrackThreadHandle {
 
 pub(super) struct AudioTrackThread {
     stream: Box<dyn Iterator<Item = InputAudioSamples>>,
-    samples_sender: crossbeam_channel::Sender<InputAudioSamples>,
+    samples_sender: QueueSender<InputAudioSamples>,
 }
 
 impl InitializableThread for AudioTrackThread {
-    type InitOptions = (
-        Arc<PipelineCtx>,
-        crossbeam_channel::Sender<InputAudioSamples>,
-    );
+    type InitOptions = (Arc<PipelineCtx>, QueueSender<InputAudioSamples>);
 
     type SpawnOutput = AudioTrackThreadHandle;
     type SpawnError = DecoderInitError;

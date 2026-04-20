@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::{Receiver, SendTimeoutError, Sender, unbounded};
+use crossbeam_channel::{Receiver, unbounded};
 use smelter_render::error::ErrorStack;
 use tracing::{Level, debug, error, span, trace, warn};
 
@@ -22,14 +22,17 @@ use crate::{
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
         utils::H264AvccToAnnexB,
     },
-    queue::{QueueInput, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
-    utils::{InitializableThread, ShutdownCondition},
+    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
+    utils::{
+        InitializableThread, ShutdownCondition,
+        channel::{SendTimeoutError, Sender},
+    },
 };
 
 use crate::prelude::*;
 
-/// Channel size between input and decoder
-const CHUNK_BUFFER_SIZE: usize = 100;
+/// Channel capacity between input and decoder
+const CHUNK_BUFFER_DURATION: Duration = Duration::from_secs(2);
 
 /// MP4 input - reads from a local file or downloaded URL, demuxes H.264/AAC tracks,
 /// decodes, and feeds frames/samples into the queue. Supports seek, pause, and resume.
@@ -65,7 +68,7 @@ const CHUNK_BUFFER_SIZE: usize = 100;
 ///   processed by the queue, but queue will wait and eventually stream will show up, with
 ///   the portion at the start cut off.
 pub struct Mp4Input {
-    events_sender: Sender<StateEvent>,
+    events_sender: crossbeam_channel::Sender<StateEvent>,
 }
 
 impl Mp4Input {
@@ -210,7 +213,7 @@ enum StateEvent {
 struct TrackContext {
     input_ref: Ref<InputId>,
 
-    event_sender: Sender<StateEvent>,
+    event_sender: crossbeam_channel::Sender<StateEvent>,
     stats_sender: StatsSender,
 
     _source_file: Arc<SourceFile>,
@@ -235,7 +238,7 @@ impl TrackManagerThread {
         options: Mp4InputOptions,
         source_file: Arc<SourceFile>,
         queue_input: WeakQueueInput,
-    ) -> (Self, Sender<StateEvent>) {
+    ) -> (Self, crossbeam_channel::Sender<StateEvent>) {
         let (events_sender, events_receiver) = unbounded();
 
         let track_ctx = TrackContext {
@@ -368,7 +371,7 @@ impl TrackManagerThread {
     fn spawn_video(
         &mut self,
         track: Track<File>,
-        frame_sender: Sender<Frame>,
+        frame_sender: QueueSender<Frame>,
         seek: Option<Duration>,
     ) -> Result<(), InputInitError> {
         let decoder_handle = self.spawn_video_decoder_thread(&track, frame_sender)?;
@@ -395,7 +398,7 @@ impl TrackManagerThread {
     fn spawn_audio(
         &mut self,
         track: Track<File>,
-        samples_sender: Sender<InputAudioSamples>,
+        samples_sender: QueueSender<InputAudioSamples>,
         seek: Option<Duration>,
     ) -> Result<(), InputInitError> {
         let decoder_handle = self.spawn_audio_decoder_thread(&track, samples_sender)?;
@@ -422,7 +425,7 @@ impl TrackManagerThread {
     fn spawn_video_decoder_thread(
         &self,
         track: &Track<File>,
-        frame_sender: Sender<Frame>,
+        frame_sender: QueueSender<Frame>,
     ) -> Result<DecoderThreadHandle, InputInitError> {
         let vulkan_supported = self.ctx.graphics_context.has_vulkan_decoder_support();
         let h264_decoder = self.options.video_decoders.h264.unwrap_or({
@@ -439,7 +442,7 @@ impl TrackManagerThread {
                         ctx: self.ctx.clone(),
                         transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
                         frame_sender,
-                        input_buffer_size: CHUNK_BUFFER_SIZE,
+                        input_buffer_size: CHUNK_BUFFER_DURATION,
                     },
                 )?
             }
@@ -455,7 +458,7 @@ impl TrackManagerThread {
                         ctx: self.ctx.clone(),
                         transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
                         frame_sender,
-                        input_buffer_size: CHUNK_BUFFER_SIZE,
+                        input_buffer_size: CHUNK_BUFFER_DURATION,
                     },
                 )?
             }
@@ -469,7 +472,7 @@ impl TrackManagerThread {
     fn spawn_audio_decoder_thread(
         &self,
         track: &Track<File>,
-        samples_sender: Sender<InputAudioSamples>,
+        samples_sender: QueueSender<InputAudioSamples>,
     ) -> Result<DecoderThreadHandle, InputInitError> {
         let handle = match track.decoder_options() {
             DecoderOptions::Aac(data) => AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
@@ -480,7 +483,7 @@ impl TrackManagerThread {
                         asc: Some(data.clone()),
                     },
                     samples_sender,
-                    input_buffer_size: CHUNK_BUFFER_SIZE,
+                    input_buffer_size: CHUNK_BUFFER_DURATION,
                 },
             )?,
             _ => {

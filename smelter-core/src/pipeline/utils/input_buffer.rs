@@ -1,20 +1,6 @@
 use std::{collections::VecDeque, time::Duration};
 
-use smelter_render::Frame;
-
-// Trait used to estimate duration the item
-pub(crate) trait TimedValue {
-    fn timestamp_range(&self) -> (Duration, Duration);
-}
-
-impl TimedValue for Frame {
-    fn timestamp_range(&self) -> (Duration, Duration) {
-        (
-            self.pts.saturating_sub(Duration::from_millis(10)),
-            self.pts + Duration::from_millis(10),
-        )
-    }
-}
+use crate::utils::TimedValue;
 
 /// Buffer specific duration of data before returning first timestamp
 pub(crate) struct InputDelayBuffer<T: TimedValue> {
@@ -36,10 +22,12 @@ impl<T: TimedValue> InputDelayBuffer<T> {
 
     pub fn write(&mut self, item: T) {
         self.buffer.push_back(item);
-        if !self.ready
-            && let (Some(first), Some(last)) = (self.buffer.front(), self.buffer.back())
-        {
-            self.ready = last.timestamp_range().1.abs_diff(first.timestamp_range().0) > self.size
+        if !self.ready {
+            let first_ts = self.buffer.iter().find_map(|i| i.timestamp_range());
+            let last_ts = self.buffer.iter().rev().find_map(|i| i.timestamp_range());
+            if let (Some(first), Some(last)) = (first_ts, last_ts) {
+                self.ready = last.1.abs_diff(first.0) > self.size;
+            }
         }
     }
 
