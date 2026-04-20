@@ -11,3 +11,36 @@ example = { workspace = true }
 
 [tool.uv.workspace]
 members = ["lib", "example"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.11",
+    "ty>=0.0.31",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["**/__pycache__"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ty.src]
+include = ["lib", "example"]
+exclude = ["**/__pycache__", "**/.venv"]
+
+[tool.ty.environment]
+python-version = "3.13"

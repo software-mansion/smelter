@@ -30,7 +30,6 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-
 FRAME_FORMATS = {
     0: "PlanarYuv420",
     1: "PlanarYuv422",

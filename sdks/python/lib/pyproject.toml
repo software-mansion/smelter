@@ -3,6 +3,10 @@ name = "smelter-sdk"
 version = "0.1.0"
 requires-python = ">=3.13"
 
+[project.scripts]
+check = "smelter._scripts:check"
+fix = "smelter._scripts:fix"
+
 [tool.hatch.build.targets.wheel]
 packages = ["smelter"]
 

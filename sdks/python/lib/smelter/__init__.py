@@ -4,12 +4,20 @@ __version__ = "0.1.0"
 
 from .side_channel import (
     AudioBatch,
-    SideChannelConnection,
+    AudioConnection,
+    SideChannelInfo,
+    SideChannelKind,
+    SideChannelManager,
+    VideoConnection,
     VideoFrame,
 )
 
 __all__ = [
     "AudioBatch",
-    "SideChannelConnection",
+    "AudioConnection",
+    "SideChannelInfo",
+    "SideChannelKind",
+    "SideChannelManager",
+    "VideoConnection",
     "VideoFrame",
 ]
