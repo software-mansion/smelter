@@ -191,8 +191,8 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         // this collapses to `track_start_offset`, meaning "start at the very first
         // sample the `elst` box tells us to actually play"; excess seek beyond the
         // black screen advances further into media.
-        let media_seek =
-            self.track_start_offset + user_seek.saturating_sub(self.presentation_delay);
+        let delayed_user_seek = user_seek.saturating_sub(self.presentation_delay);
+        let media_seek = self.track_start_offset + delayed_user_seek;
 
         // Used in `sample_into_chunk` to shift each sample's pts so that the user's
         // seek point becomes pts 0. If the user seeks into the leading black screen
