@@ -201,28 +201,17 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         let track_seek = self.track_start_offset + user_seek;
 
         match self.find_seek_start_sample(media_seek) {
-            Some((start_index, present_index)) => TrackChunks {
+            Ok((start_index, present_index)) => TrackChunks {
                 track: self,
                 track_seek,
                 next_sample_index: start_index,
                 present_from_index: present_index,
             },
-            None => match self.find_seek_start_sample(self.track_start_offset) {
-                Some((start_index, present_index)) => {
-                    let track_start_offset = self.track_start_offset;
-                    TrackChunks {
-                        track: self,
-                        track_seek: track_start_offset,
-                        next_sample_index: start_index,
-                        present_from_index: present_index,
-                    }
-                }
-                None => TrackChunks {
-                    track: self,
-                    track_seek: Duration::ZERO,
-                    next_sample_index: 1,
-                    present_from_index: 1,
-                },
+            Err(unpresentable) => TrackChunks {
+                track: self,
+                track_seek,
+                next_sample_index: unpresentable,
+                present_from_index: unpresentable,
             },
         }
     }
@@ -242,13 +231,17 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     /// Returns `(start_index, present_from_index)` for the given seek position.
     /// `start_index` is the last sync sample before seek (for decoder warmup).
     /// `present_from_index` is the first sample at or after seek.
-    /// Returns `None` if seek is past the end.
-    fn find_seek_start_sample(&self, seek: Duration) -> Option<(u32, u32)> {
+    /// If seek is past the end, returns `Err` with index one past the last sample
+    fn find_seek_start_sample(&self, seek: Duration) -> Result<(u32, u32), u32> {
         let seek_timestamp = (seek.as_secs_f64() * self.timescale as f64) as u64;
         let track = &self.reader.tracks()[&self.track_id];
 
         // The STTS box maps samples to batches of samples with the same length
         let stts = &track.trak.mdia.minf.stbl.stts;
+
+        // The STSS box contains indices of sync samples (e.g. key frames).
+        // `None` means all samples are sync samples.
+        let stss = &track.trak.mdia.minf.stbl.stss;
 
         let mut samples_skipped = 0u32;
         let mut skipped_duration = 0u64;
@@ -271,11 +264,10 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
             samples_skipped += entry.sample_count;
         }
 
-        let present_from_index = u32::max(present_from_index?, 1);
-
-        // The STSS box contains indices of sync samples (e.g. key frames).
-        // `None` means all samples are sync samples.
-        let stss = &track.trak.mdia.minf.stbl.stss;
+        let present_from_index = match present_from_index {
+            Some(pfi) => u32::max(pfi, 1),
+            None => return Err(samples_skipped + 1),
+        };
 
         let sync_index = match &stss {
             Some(stss) => {
@@ -289,7 +281,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
             None => present_from_index,
         };
 
-        Some((sync_index, present_from_index))
+        Ok((sync_index, present_from_index))
     }
 }
 
