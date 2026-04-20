@@ -6,6 +6,8 @@ dependencies = [
     "smelter-sdk",
     "faster-whisper",
     "numpy",
+    "ultralytics>=8.4.40",
+    "opencv-python-headless>=4.13.0.92",
 ]
 
 [project.scripts]

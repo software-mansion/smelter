@@ -58,6 +58,7 @@ def setup_pipeline(mp4_path: str | None):
                 },
                 "side_channel": {
                     "audio": True,
+                    "video": True,
                 },
             },
         )
@@ -72,6 +73,7 @@ def setup_pipeline(mp4_path: str | None):
                 },
                 "side_channel": {
                     "audio": True,
+                    "video": True,
                 },
             },
         )
@@ -114,63 +116,118 @@ def setup_pipeline(mp4_path: str | None):
     api_post("/api/start")
 
 
-def update_scene(text: str, schedule_time_ms: float):
+OUTPUT_W = 1920
+OUTPUT_H = 1080
+
+
+def _subtitle_view(text: str) -> dict:
+    return {
+        "type": "view",
+        "background_color": "#000000EE",
+        "border_radius": 24,
+        "padding_horizontal": 80,
+        "left": 40,
+        "bottom": 40,
+        "width": OUTPUT_W - 2 * 160,
+        "height": 120,
+        "overflow": "hidden",
+        "children": [
+            {
+                "type": "rescaler",
+                "child": {
+                    "type": "view",
+                    "width": (OUTPUT_W - 2 * 160) * 4,
+                    "height": 4 * 120,
+                    "direction": "column",
+                    "children": [
+                        {"type": "view"},
+                        {
+                            "type": "text",
+                            "text": text,
+                            "wrap": "word",
+                            "font_size": 40 * 4,
+                            "line_height": 50 * 4,
+                            "width": (OUTPUT_W - 2 * 160) * 4,
+                            "color": "#FFFFFFFF",
+                            "align": "center",
+                        },
+                        {"type": "view"},
+                    ],
+                },
+            },
+        ],
+    }
+
+
+def _detection_box_view(det) -> dict:
+    # `det` has normalized coordinates; map to the full output canvas.
+    left = int(det.x * OUTPUT_W)
+    top = int(det.y * OUTPUT_H)
+    width = max(2, int(det.width * OUTPUT_W))
+    height = max(2, int(det.height * OUTPUT_H))
+    id_part = f"#{det.track_id} " if det.track_id is not None else ""
+    label = f"{id_part}{det.class_name} {det.confidence:.2f}"
+    # Stable per-track component id lets smelter interpolate the view's transform
+    # (left/top/width/height) between consecutive update_scene calls.
+    box_id = f"det-{det.track_id}" if det.track_id is not None else None
+    view: dict = {
+        "type": "view",
+        "left": left,
+        "top": top,
+        "width": width,
+        "height": height,
+        "border_width": 4,
+        "border_color": "#00FF88FF",
+        "border_radius": 6,
+        "transition": {"duration_ms": 500},
+        "children": [
+            {
+                "type": "view",
+                "left": 0,
+                "top": 0,
+                "width": min(width, 260),
+                "height": 36,
+                "background_color": "#00FF88EE",
+                "padding_horizontal": 8,
+                "children": [
+                    {
+                        "type": "text",
+                        "text": label,
+                        "font_size": 24,
+                        "color": "#000000FF",
+                    },
+                ],
+            },
+        ],
+    }
+    if box_id is not None:
+        view["id"] = box_id
+    return view
+
+
+def update_scene(text: str, detections: list, schedule_time_ms: float):
+    children: list[dict] = [
+        {
+            "type": "rescaler",
+            "child": {
+                "type": "input_stream",
+                "input_id": INPUT_ID,
+            },
+        },
+    ]
+    children.extend(_detection_box_view(d) for d in detections)
+    if text:
+        children.append(_subtitle_view(text))
+
     api_post(
         f"/api/output/{OUTPUT_ID}/update",
         {
             "video": {
                 "root": {
-                    "type": "rescaler",
-                    "child": {
-                        "type": "view",
-                        "width": 1920,
-                        "height": 1080,
-                        "children": [
-                            {
-                                "type": "rescaler",
-                                "child": {
-                                    "type": "input_stream",
-                                    "input_id": INPUT_ID,
-                                },
-                            },
-                            {
-                                "type": "view",
-                                "background_color": "#000000EE",
-                                "border_radius": 24,
-                                "padding_horizontal": 80,
-                                "left": 40,
-                                "bottom": 40,
-                                "width": 1920 - 2 * 160,
-                                "height": 120,
-                                "overflow": "hidden",
-                                "children": [
-                                    {
-                                        "type": "rescaler",
-                                        "child": {
-                                            "type": "view",
-                                            "width": (1920 - 2 * 160) * 4,
-                                            "height": 4 * 120,
-                                            "direction": "column",
-                                            "children": [
-                                                {"type": "view"},
-                                                {
-                                                    "type": "text",
-                                                    "text": text,
-                                                    "wrap": "word",
-                                                    "font_size": 40 * 4,
-                                                    "line_height": 50 * 4,
-                                                    "width": (1920 - 2 * 160) * 4,
-                                                    "color": "#FFFFFFFF",
-                                                    "align": "center",
-                                                },
-                                                {"type": "view"},
-                                            ],
-                                        },
-                                    },
-                                ],
-                            },
-                        ],
-                    },
+                    "type": "view",
+                    "width": OUTPUT_W,
+                    "height": OUTPUT_H,
+                    "children": children,
                 },
             },
             "audio": {
