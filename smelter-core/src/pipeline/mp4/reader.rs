@@ -73,8 +73,8 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             track_id,
             duration: track.duration(),
             decoder_options: DecoderOptions::Aac(asc),
-            offset,
-            delay,
+            track_start_offset: offset,
+            presentation_delay: delay,
             reader: self.reader,
         })
     }
@@ -119,8 +119,8 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             track_id,
             duration: track.duration(),
             decoder_options: DecoderOptions::H264(h264_config),
-            offset,
-            delay,
+            track_start_offset: offset,
+            presentation_delay: delay,
             reader: self.reader,
         })
     }
@@ -128,9 +128,9 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
     /// Calculates the media-time offset and presentation delay from the edit list.
     ///
     /// Returns `(offset, delay)` where:
-    /// - `offset` is derived from `media_time` of the first non-empty edit. Contains information
+    /// - `track_start_offset` - derived from `media_time` of the first non-empty edit. Contains information
     ///   how much time should be cut from the beginning of the track.
-    /// - `delay` is the sum of `duration` of all leading empty edits. Contains information on how
+    /// - `presentation_delay` - the sum of `duration` of all leading empty edits. Contains information on how
     ///   much track presentation should be delayed
     fn calculate_elst_edits(track: &Mp4Track, movie_timescale: u32) -> (Duration, Duration) {
         let entries = track
@@ -142,21 +142,22 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             .unwrap_or(&[]);
 
         let mut delay_ticks: u64 = 0;
-        let mut offset = Duration::ZERO;
+        let mut track_start_offset = Duration::ZERO;
 
         for entry in entries {
             // u32::MAX value is the result of overflowing -1
             if entry.media_time == u32::MAX as u64 || entry.media_time == u64::MAX {
                 delay_ticks += entry.segment_duration;
             } else {
-                offset =
+                track_start_offset =
                     Duration::from_secs_f64(entry.media_time as f64 / track.timescale() as f64);
                 break;
             }
         }
 
-        let delay = Duration::from_secs_f64(delay_ticks as f64 / movie_timescale as f64);
-        (offset, delay)
+        let presentation_delay =
+            Duration::from_secs_f64(delay_ticks as f64 / movie_timescale as f64);
+        (track_start_offset, presentation_delay)
     }
 }
 
@@ -167,27 +168,33 @@ pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
     track_id: u32,
     duration: Duration,
     decoder_options: DecoderOptions,
-    offset: Duration,
-    delay: Duration,
+
+    /// How much time should be cut from the beginning of the track, derived from the `media_time`
+    /// field of the first non-empty edit in the `elst` box.
+    track_start_offset: Duration,
+
+    /// How much the track presentation should be delayed, derived from the summed `segment_duration`
+    /// of all leading empty edits (`media_time == -1`) in the `elst` box.
+    presentation_delay: Duration,
 }
 
 impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     pub(crate) fn chunks(&mut self, seek: Option<Duration>) -> TrackChunks<'_, Reader> {
         let seek = match seek {
-            Some(seek) => seek + self.offset,
-            None => self.offset,
+            Some(seek) => seek + self.track_start_offset,
+            None => self.track_start_offset,
         };
 
         match self.find_seek_start_sample(seek) {
             Some((start_index, present_index)) => TrackChunks {
                 track: self,
-                seek,
+                track_seek: seek,
                 next_sample_index: start_index,
                 present_from_index: present_index,
             },
             None => TrackChunks {
                 track: self,
-                seek: Duration::ZERO,
+                track_seek: Duration::ZERO,
                 next_sample_index: 1,
                 present_from_index: 1,
             },
@@ -262,7 +269,11 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
 
 pub(crate) struct TrackChunks<'a, Reader: Read + Seek + Send + 'static> {
     track: &'a mut Track<Reader>,
-    seek: Duration,
+
+    /// Absolute position in the track (NOT the `mp4` file) to start reading from, measured from the start of the
+    /// media. Equals the user-provided seek time plus the track's `offset` (the leading
+    /// content trimmed by the `elst` box).
+    track_seek: Duration,
     next_sample_index: u32,
     present_from_index: u32,
 }
@@ -302,15 +313,14 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
         let start_time = sample.start_time;
         let sample_duration =
             Duration::from_secs_f64(sample.duration as f64 / self.track.timescale as f64);
-        let delay = self.track.delay;
-        tracing::error!(?delay);
+        let presentation_delay = self.track.presentation_delay;
 
         let dts = Duration::from_secs_f64(start_time as f64 / self.track.timescale as f64);
         let mut pts = Duration::from_secs_f64(
             (start_time as f64 + rendering_offset as f64) / self.track.timescale as f64,
         );
-        pts += delay;
-        pts = pts.saturating_sub(self.seek);
+        pts += presentation_delay;
+        pts = pts.saturating_sub(self.track_seek);
 
         // When seeking in video, we start reading from the nearest sync (keyframe)
         // sample before the seek point so the decoder can build up its reference
