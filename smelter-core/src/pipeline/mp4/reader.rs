@@ -65,7 +65,7 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             return None;
         };
 
-        let (offset, delay) = Self::calculate_offset(track, self.reader.timescale());
+        let (offset, delay) = Self::calculate_elst_edits(track, self.reader.timescale());
 
         Some(Track {
             sample_count: track.sample_count(),
@@ -111,7 +111,7 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
                 .collect(),
         };
 
-        let (offset, delay) = Self::calculate_offset(track, self.reader.timescale());
+        let (offset, delay) = Self::calculate_elst_edits(track, self.reader.timescale());
 
         Some(Track {
             sample_count: track.sample_count(),
@@ -128,9 +128,11 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
     /// Calculates the media-time offset and presentation delay from the edit list.
     ///
     /// Returns `(offset, delay)` where:
-    /// - `offset` is derived from `media_time` of the first non-empty edit (used for seeking)
-    /// - `delay` is the sum of `segment_duration` of all leading empty edits (presentation delay)
-    fn calculate_offset(track: &Mp4Track, movie_timescale: u32) -> (Duration, Duration) {
+    /// - `offset` is derived from `media_time` of the first non-empty edit. Contains information
+    ///   how much time should be cut from the beginning of the track.
+    /// - `delay` is the sum of `duration` of all leading empty edits. Contains information on how
+    ///   much track presentation should be delayed
+    fn calculate_elst_edits(track: &Mp4Track, movie_timescale: u32) -> (Duration, Duration) {
         let entries = track
             .trak
             .edts
@@ -301,15 +303,14 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
         let sample_duration =
             Duration::from_secs_f64(sample.duration as f64 / self.track.timescale as f64);
         let delay = self.track.delay;
+        tracing::error!(?delay);
 
-        let dts = Duration::from_secs_f64(start_time as f64 / self.track.timescale as f64)
-            .saturating_sub(self.seek)
-            + delay;
-        let pts = Duration::from_secs_f64(
+        let dts = Duration::from_secs_f64(start_time as f64 / self.track.timescale as f64);
+        let mut pts = Duration::from_secs_f64(
             (start_time as f64 + rendering_offset as f64) / self.track.timescale as f64,
-        )
-        .saturating_sub(self.seek)
-            + delay;
+        );
+        pts += delay;
+        pts = pts.saturating_sub(self.seek);
 
         // When seeking in video, we start reading from the nearest sync (keyframe)
         // sample before the seek point so the decoder can build up its reference
