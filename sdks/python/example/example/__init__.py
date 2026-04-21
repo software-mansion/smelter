@@ -66,7 +66,7 @@ def main():
 
     def on_detection(detections: list[Detection], pts_nanos: int):
         text, detections = state.set_detections(detections)
-        update_scene(text, detections, pts_nanos / 1e6)
+        update_scene(text, detections, (pts_nanos / 1e6) - 250)
 
     try:
         setup_pipeline(mp4_path)

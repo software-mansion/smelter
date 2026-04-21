@@ -4,8 +4,14 @@ on:
     workflow_dispatch: {}
     push:
         branches: [master]
+        paths:
+            - 'sdks/python/**'
+            - '.github/workflows/python_check.yml'
     pull_request:
         types: [opened, synchronize]
+        paths:
+            - 'sdks/python/**'
+            - '.github/workflows/python_check.yml'
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
