@@ -241,8 +241,10 @@ impl CommandMessage {
             }
         };
 
+        // Some publishers additionally prefix the command names with "@".
+        // Accept both forms.
         match command_name.as_str() {
-            "connect" => {
+            "connect" | "@connect" => {
                 let command_object = take_object(&mut values, 2)?;
                 let optional_args = values.get(3).cloned();
                 Ok(CommandMessage::Connect {
@@ -252,7 +254,7 @@ impl CommandMessage {
                 })
             }
 
-            "close" => {
+            "close" | "@close" => {
                 let command_object = take_value(&mut values, 2);
                 Ok(CommandMessage::Close {
                     transaction_id,
@@ -260,7 +262,7 @@ impl CommandMessage {
                 })
             }
 
-            "createStream" => {
+            "createStream" | "@createStream" => {
                 let command_object = take_value(&mut values, 2);
                 Ok(CommandMessage::CreateStream {
                     transaction_id,
@@ -288,13 +290,13 @@ impl CommandMessage {
                 })))
             }
 
-            "onStatus" => {
+            "onStatus" | "@onStatus" => {
                 // [command_name, transaction_id=0, command_object=null, info_object]
                 let info_object = take_value(&mut values, 3);
                 Ok(CommandMessage::OnStatus(info_object))
             }
 
-            "play" => {
+            "play" | "@play" => {
                 let stream_name = take_string(&mut values, 3)?;
                 let start = take_optional_number(&values, 4);
                 let duration = take_optional_number(&values, 5);
@@ -308,7 +310,7 @@ impl CommandMessage {
                 })
             }
 
-            "play2" => {
+            "play2" | "@play2" => {
                 // [command_name, transaction_id, null, parameters]
                 let parameters = take_value(&mut values, 3);
                 Ok(CommandMessage::Play2 {
@@ -317,7 +319,7 @@ impl CommandMessage {
                 })
             }
 
-            "deleteStream" => {
+            "deleteStream" | "@deleteStream" => {
                 let stream_id = take_number(&mut values, 3)? as u32;
                 Ok(CommandMessage::DeleteStream {
                     transaction_id,
@@ -325,7 +327,7 @@ impl CommandMessage {
                 })
             }
 
-            "receiveAudio" => {
+            "receiveAudio" | "@receiveAudio" => {
                 let bool_flag = take_bool(&mut values, 3)?;
                 Ok(CommandMessage::ReceiveAudio {
                     transaction_id,
@@ -333,7 +335,7 @@ impl CommandMessage {
                 })
             }
 
-            "receiveVideo" => {
+            "receiveVideo" | "@receiveVideo" => {
                 let bool_flag = take_bool(&mut values, 3)?;
                 Ok(CommandMessage::ReceiveVideo {
                     transaction_id,
@@ -341,7 +343,7 @@ impl CommandMessage {
                 })
             }
 
-            "publish" => {
+            "publish" | "@publish" => {
                 let publishing_name = take_string(&mut values, 3)?;
                 let publishing_type = take_string(&mut values, 4)?;
                 Ok(CommandMessage::Publish {
@@ -350,7 +352,7 @@ impl CommandMessage {
                 })
             }
 
-            "seek" => {
+            "seek" | "@seek" => {
                 let milliseconds = take_number(&mut values, 3)?;
                 Ok(CommandMessage::Seek {
                     transaction_id,
@@ -358,7 +360,7 @@ impl CommandMessage {
                 })
             }
 
-            "pause" => {
+            "pause" | "@pause" => {
                 let pause = take_bool(&mut values, 3)?;
                 let milliseconds = take_number(&mut values, 4)?;
                 Ok(CommandMessage::Pause {
