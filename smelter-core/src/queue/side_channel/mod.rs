@@ -29,7 +29,7 @@ impl VideoSideChannel {
         Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            server: VideoSideChannelServer::new(path, 1, ctx.wgpu_ctx.clone()),
+            server: VideoSideChannelServer::new(path, input_ref.id(), ctx.wgpu_ctx.clone()),
         }
     }
 
@@ -68,7 +68,7 @@ impl AudioSideChannel {
         Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            server: AudioSideChannelServer::new(path, 10),
+            server: AudioSideChannelServer::new(path, input_ref.id()),
         }
     }
 

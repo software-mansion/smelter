@@ -12,15 +12,16 @@ use std::{
 
 use bytes::Bytes;
 use crossbeam_channel::{Sender, TrySendError};
-use smelter_render::{Frame, FramePreProcessor, WgpuCtx};
-use tracing::debug;
+use smelter_render::{Frame, FramePreProcessor, InputId, WgpuCtx};
+use tracing::{Span, debug, info_span};
 
 use crate::prelude::InputAudioSamples;
 
 use super::serialize::{serialize_audio_batch, serialize_rgba_frame};
 
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(500);
-const CLIENT_CHANNEL_CAPACITY: usize = 1;
+const VIDEO_CHANNEL_CAPACITY: usize = 1;
+const AUDIO_CHANNEL_CAPACITY: usize = 10;
 
 struct ServerCleanup {
     socket_path: PathBuf,
@@ -41,13 +42,20 @@ pub(super) struct VideoSideChannelServer {
 }
 
 impl VideoSideChannelServer {
-    pub fn new(socket_path: PathBuf, channel_capacity: usize, wgpu_ctx: Arc<WgpuCtx>) -> Self {
-        let (clients, cleanup) = bind_and_spawn_accept(socket_path, "video-sc");
+    pub fn new(socket_path: PathBuf, input_id: &InputId, wgpu_ctx: Arc<WgpuCtx>) -> Self {
+        let span = info_span!("side_channel", kind = "video", input_id = %input_id);
+        let (clients, cleanup) = bind_and_spawn_accept(
+            socket_path,
+            "video-sc",
+            VIDEO_CHANNEL_CAPACITY,
+            span.clone(),
+        );
 
-        let (sender, receiver) = crossbeam_channel::bounded::<Frame>(channel_capacity);
+        let (sender, receiver) = crossbeam_channel::bounded::<Frame>(VIDEO_CHANNEL_CAPACITY);
         thread::Builder::new()
             .name("video-sc-send".to_string())
             .spawn(move || {
+                let _enter = span.entered();
                 let mut pre_processor = FramePreProcessor::new(wgpu_ctx);
                 while let Ok(frame) = receiver.recv() {
                     let resolution = frame.resolution;
@@ -74,13 +82,21 @@ pub(super) struct AudioSideChannelServer {
 }
 
 impl AudioSideChannelServer {
-    pub fn new(socket_path: PathBuf, channel_capacity: usize) -> Self {
-        let (clients, cleanup) = bind_and_spawn_accept(socket_path, "audio-sc");
+    pub fn new(socket_path: PathBuf, input_id: &InputId) -> Self {
+        let span = info_span!("side_channel", kind = "audio", input_id = %input_id);
+        let (clients, cleanup) = bind_and_spawn_accept(
+            socket_path,
+            "audio-sc",
+            AUDIO_CHANNEL_CAPACITY,
+            span.clone(),
+        );
 
-        let (sender, receiver) = crossbeam_channel::bounded::<InputAudioSamples>(channel_capacity);
+        let (sender, receiver) =
+            crossbeam_channel::bounded::<InputAudioSamples>(AUDIO_CHANNEL_CAPACITY);
         thread::Builder::new()
             .name("audio-sc-send".to_string())
             .spawn(move || {
+                let _enter = span.entered();
                 while let Ok(batch) = receiver.recv() {
                     let data = serialize_audio_batch(&batch);
                     send_to_clients(&clients, data);
@@ -101,6 +117,8 @@ type Clients = Arc<Mutex<Vec<Sender<Bytes>>>>;
 fn bind_and_spawn_accept(
     socket_path: PathBuf,
     name_prefix: &'static str,
+    client_channel_capacity: usize,
+    span: Span,
 ) -> (Clients, Arc<ServerCleanup>) {
     let _ = std::fs::remove_file(&socket_path);
     let listener =
@@ -115,7 +133,16 @@ fn bind_and_spawn_accept(
     let shutdown_accept = shutdown.clone();
     thread::Builder::new()
         .name(format!("{name_prefix}-accept"))
-        .spawn(move || accept_loop(listener, clients_accept, shutdown_accept, name_prefix))
+        .spawn(move || {
+            let _enter = span.entered();
+            accept_loop(
+                listener,
+                clients_accept,
+                shutdown_accept,
+                name_prefix,
+                client_channel_capacity,
+            )
+        })
         .expect("Failed to spawn side channel accept thread");
 
     let cleanup = Arc::new(ServerCleanup {
@@ -130,16 +157,21 @@ fn accept_loop(
     clients: Clients,
     shutdown: Arc<AtomicBool>,
     name_prefix: &'static str,
+    client_channel_capacity: usize,
 ) {
     while !shutdown.load(Ordering::Relaxed) {
         match listener.accept() {
             Ok((stream, _)) => {
                 debug!("Side channel: new client connected");
                 let (sender, receiver) =
-                    crossbeam_channel::bounded::<Bytes>(CLIENT_CHANNEL_CAPACITY);
+                    crossbeam_channel::bounded::<Bytes>(client_channel_capacity);
+                let client_span = Span::current();
                 thread::Builder::new()
                     .name(format!("{name_prefix}-client"))
-                    .spawn(move || client_loop(stream, receiver))
+                    .spawn(move || {
+                        let _enter = client_span.entered();
+                        client_loop(stream, receiver);
+                    })
                     .expect("Failed to spawn side channel client thread");
                 clients.lock().unwrap().push(sender);
             }

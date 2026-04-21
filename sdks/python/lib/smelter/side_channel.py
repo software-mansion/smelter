@@ -157,7 +157,7 @@ class SideChannelManager:
     def __init__(self, socket_dir: str):
         self._socket_dir = socket_dir
 
-    def list(self) -> list[SideChannelInfo]:
+    def list_channels(self) -> list[SideChannelInfo]:
         results = []
         for name in os.listdir(self._socket_dir):
             if not name.endswith(".sock"):

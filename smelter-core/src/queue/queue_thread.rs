@@ -199,11 +199,16 @@ impl QueueThreadAfterStart {
             .first_key_value()
             .map(|(pts, _)| *pts + self.queue_start_pts);
 
+        let min_pts = video_pts
+            .min(audio_pts_range.0)
+            .min(event_pts.unwrap_or_default());
+
         let new_event_pts = scheduled_event.pts + self.queue_start_pts;
 
-        let is_future_event = new_event_pts >= video_pts
-            && new_event_pts >= audio_pts_range.0
-            && new_event_pts >= event_pts.unwrap_or(Duration::ZERO);
+        let is_future_event = new_event_pts >= min_pts;
+        if !is_future_event {
+            tracing::warn!(?new_event_pts, ?min_pts, "Scheduled event received to late")
+        }
 
         if self.queue.run_late_scheduled_events || is_future_event {
             match self.scheduled_events.get_mut(&scheduled_event.pts) {

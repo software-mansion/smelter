@@ -18,6 +18,12 @@ uv sync
 uv run example <optional_example.mp4>
 ```
 
+By default, it detects people on the video, but you can change it e.g. 
+
+```bash
+DETECT_CLASSES=car,truck uv run example ../../../cars.mp4
+```
+
 ### Streaming camera
 
 If you did not provide mp4 file you can stream your webcam by going to:
