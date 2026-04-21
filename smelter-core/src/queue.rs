@@ -62,55 +62,54 @@ impl From<&PipelineOptions> for QueueOptions {
     }
 }
 
-/// - Queue PTS values start from sync_point (Instant).
-/// - Queue start PTS is a duration from sync_point to the start request.
-/// - All inputs should produce timestamp relative to zero for each track.
-///   - If offset is Pts(Duration::ZERO), then input wants to produce timestamp in sync with real time
-///     queue, e.g. important for protocols like WebRTC
-///   - In most other cases first PTS of one of the track should be zero and for the other track
-///     very close to zero (to account for track synchronization)
-/// - New tracks are queued after each other, but caller can force it with `abort_old_tracks`
-/// - Input receiver always operate on values relative to zero, it is responsibility of `VideoQueueInput`
-///   and `AudioQueueInput` to move queue pts value
-/// - TrackOffset is a shared value that needs to be added to Track PTS to go into queue frame of
-///   reference. It is the same value for audio and video to preserve synchronization from input.
-/// - Before input start
-///   - For inputs without offset we remember current pts at a time of first packet.
-///     - offset is initialized it return is_ready for the first time
-///   - For inputs with offset we only check if it is ready for zero pts
-///     - track_offset will never be initialized
-/// - After input start
-///   - For inputs without offset we remember current pts at a time of first packet.
-///     - offset is initialized it return is_ready for the first time
-///   - For inputs with offset we only check if it is ready for zero pts
-///     - track_offset will be initialized when first packet is received, but current
-///       pts does not affect what the offset will be
-/// - Side channel
-///   - Introduce extra latency SIDE_CHANNEL_DELAY
-///   - Inputs that stream side channel
-///     - Video/AudioInputReceiver duration should be increased by SIDE_CHANNEL_DELAY
-///     - Add SIDE_CHANNEL_DELAY to each element in receiver
-///   - Inputs that do not stream side channel
-///     - Add SIDE_CHANNEL_DELAY to each element in receiver
+/// - Queue PTS values are measured from `sync_point` (an `Instant` captured at Queue
+///   construction).
+/// - `start_pts` is the duration from `sync_point` to the moment `start` is called.
+/// - Inputs produce per-track PTS relative to the track's own zero. Moving those into the
+///   queue's frame of reference is the job of `VideoQueueInput` / `AudioQueueInput`.
+///   - `QueueTrackOffset::Pts(Duration::ZERO)` means the track's zero should line up with
+///     the queue's `sync_point` — i.e. the track produces timestamps in sync with wall clock
+///     (used by realtime protocols like WebRTC, V4L2, DeckLink).
+///   - `QueueTrackOffset::Pts(d)` shifts the track so its zero maps to `sync_point + d`
+///     (RTMP uses `effective_last_pts + RTMP_BUFFER` to leave room for decoding).
+///   - `QueueTrackOffset::FromStart(d)` places the track's zero at `start_pts + d`.
+///   - `QueueTrackOffset::None` defers: the offset is fixed on the first received packet.
+/// - `TrackOffset` is shared between a track's video and audio so their synchronization
+///   from the input side is preserved.
+/// - Multiple tracks can be queued back-to-back via `queue_new_track`; the next one starts
+///   once the current one is done. Callers can force an early swap with `abort_old_track`.
+///
+/// - Offset initialization:
+///   - `Pts(d)`: `track_offset` is set to `d` at construction; it never changes.
+///   - `FromStart(d)`: `track_offset` is initialized to `start_pts + d` when the first
+///     packet is received after queue start.
+///   - `None`: `track_offset` is initialized on the first packet — before queue start to
+///     `sync_point.elapsed()` at that moment (via `drop_old_frames_before_start`), after
+///     queue start to the current queue PTS at which the packet is observed.
+///
+/// - Side channel (`side_channel_delay`):
+///   - Every input receiver (both with and without a side channel) shifts incoming PTS
+///     by `side_channel_delay`, so the whole pipeline runs that far behind the inputs.
+///   - Inputs with a side channel additionally allow their receiver buffer to grow up to
+///     `side_channel_delay` worth of data, so the side-channel subscriber receives frames
+///     ahead of when the queue consumes them — leaving the subscriber roughly
+///     `side_channel_delay` time to process before the frame is due.
 ///
 /// - Example usage scenarios:
-///   - MP4 input.
-///     - When you seek, create new track with `queue_new_track`, start new threads and
-///       call `abort_old_tracks`. Don't use offset unless user provided one
-///     - When you loop, create new track but `abort_old_tracks` might not be necessary.
-///       - If you use abort some last frames might be lost
-///       - If you don't use it is possible based on buffer size that video or audio track might
-///         play for a bit longer(this will be a better option when we introduce duration based
-///         channels).
-///   - RTMP server input
-///    - Get effective last pts (should work before start).
-///    - Call `queue_new_track` with pts + buffer size as an offset (e.g. default buffer 1sec)
-///    - On new connection, you don't know if there is audio and video. Create track with
-///      both, drop one if no config after 5 seconds.
-///   - WHIP server input
-///    - Get effective last pts (should work before start) and instant at the time.
-///    - RtpNtpSyncTime should extrapolate PTS values from that pair
-///    - On new connection,
+///   - MP4 input:
+///     - On seek, create a new track with `queue_new_track`, start new reader threads, then
+///       call `abort_old_track` to switch immediately.
+///     - On loop, create a new track; `abort_old_track` is optional. Skipping it may leak a
+///       few extra frames from the previous iteration depending on buffer size.
+///   - RTMP server input:
+///     - Read `effective_last_pts` (valid before and after start).
+///     - Register a track with `QueueTrackOffset::Pts(effective_last_pts + RTMP_BUFFER)`
+///       (`RTMP_BUFFER` is currently 2s) so decoded data has time to land.
+///     - Create the track with both audio and video senders; drop the unused one if no
+///       config arrives within 5s.
+///   - WHIP / WHEP / V4L2 / DeckLink:
+///     - Register a track with `QueueTrackOffset::Pts(Duration::ZERO)` so input PTS is
+///       aligned to `sync_point`.
 pub struct Queue {
     queue_ctx: QueueContext,
     video_queue: Mutex<VideoQueue>,
