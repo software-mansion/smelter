@@ -1,0 +1,13 @@
+[package]
+name = "libsrt-sys"
+version = "0.1.0"
+edition = "2021"
+links = "srt"
+
+[dependencies]
+libc = "0.2"
+openssl-sys = "0.9"
+
+[build-dependencies]
+bindgen = "0.72"
+cmake = "0.1"

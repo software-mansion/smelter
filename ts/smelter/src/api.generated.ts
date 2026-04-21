@@ -183,6 +183,33 @@ export type RegisterInput =
       side_channel?: SideChannel | null;
     }
   | {
+      type: "srt";
+      /**
+       * UDP port on which the compositor listens for incoming SRT connections.
+       */
+      port: number;
+      /**
+       * Parameters of the video track carried in the MPEG-TS stream.
+       */
+      video?: InputSrtVideoOptions | null;
+      /**
+       * Whether an AAC audio track is present in the MPEG-TS stream.
+       */
+      audio?: boolean | null;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
+       */
+      offset_ms?: number | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
+  | {
       type: "v4l2";
       /**
        * Path to the V4L2 device.
@@ -278,6 +305,7 @@ export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type WhepVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type HlsVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type SrtVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type V4L2InputFormat = "yuyv" | "nv12";
 export type Framerate = string | number;
 export type RegisterOutput =
@@ -1480,6 +1508,9 @@ export interface InputWhipVideoOptions {
 }
 export interface InputWhepVideoOptions {
   decoder_preferences?: WhepVideoDecoderOptions[] | null;
+}
+export interface InputSrtVideoOptions {
+  decoder: SrtVideoDecoderOptions;
 }
 export interface Resolution {
   /**
