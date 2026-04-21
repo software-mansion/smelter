@@ -8,8 +8,8 @@ use strum::{Display, EnumIter};
 use crate::{
     inputs::InputHandle,
     outputs::{
-        hls::HlsOutput, mp4::Mp4Output, rtmp::RtmpOutput, rtp::RtpOutput, whep::WhepOutput,
-        whip::WhipOutput,
+        hls::HlsOutput, mp4::Mp4Output, rtmp::RtmpOutput, rtp::RtpOutput, srt::SrtOutput,
+        whep::WhepOutput, whip::WhipOutput,
     },
 };
 
@@ -17,6 +17,7 @@ pub mod hls;
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
+pub mod srt;
 pub mod whep;
 pub mod whip;
 
@@ -31,6 +32,7 @@ pub enum OutputHandle {
     Whip(WhipOutput),
     Whep(WhepOutput),
     Hls(HlsOutput),
+    Srt(SrtOutput),
 }
 
 impl OutputHandle {
@@ -42,6 +44,7 @@ impl OutputHandle {
             OutputHandle::Whip(o) => &o.name,
             OutputHandle::Whep(o) => &o.name,
             OutputHandle::Hls(o) => &o.name,
+            OutputHandle::Srt(o) => &o.name,
         }
     }
 
@@ -53,6 +56,7 @@ impl OutputHandle {
             OutputHandle::Whip(o) => o.serialize_register(inputs),
             OutputHandle::Whep(o) => o.serialize_register(inputs),
             OutputHandle::Hls(o) => o.serialize_register(inputs),
+            OutputHandle::Srt(o) => o.serialize_register(inputs),
         }
     }
     pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
@@ -63,6 +67,7 @@ impl OutputHandle {
             OutputHandle::Whip(o) => o.serialize_update(inputs),
             OutputHandle::Whep(o) => o.serialize_update(inputs),
             OutputHandle::Hls(o) => o.serialize_update(inputs),
+            OutputHandle::Srt(o) => o.serialize_update(inputs),
         }
     }
 
@@ -81,6 +86,7 @@ impl OutputHandle {
             OutputHandle::Rtp(o) => o.on_after_registration(),
             OutputHandle::Whep(o) => o.on_after_registration(),
             OutputHandle::Hls(o) => o.on_after_registration(),
+            OutputHandle::Srt(o) => o.on_after_registration(),
             _ => Ok(()),
         }
     }
@@ -111,6 +117,9 @@ pub enum OutputProtocol {
 
     #[strum(to_string = "hls")]
     Hls,
+
+    #[strum(to_string = "srt")]
+    Srt,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

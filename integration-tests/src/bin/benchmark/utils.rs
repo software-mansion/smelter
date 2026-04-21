@@ -1,8 +1,8 @@
 use anyhow::Result;
 use integration_tests::paths::integration_tests_root;
 use smelter_core::{
-    DEFAULT_BUFFER_DURATION, PipelineOptions, PipelineRtmpServerOptions, PipelineWgpuOptions,
-    PipelineWhipWhepServerOptions, graphics_context::GraphicsContext,
+    DEFAULT_BUFFER_DURATION, PipelineOptions, PipelineRtmpServerOptions, PipelineSrtServerOptions,
+    PipelineWgpuOptions, PipelineWhipWhepServerOptions, graphics_context::GraphicsContext,
 };
 use std::{
     fs::{self, File},
@@ -43,6 +43,7 @@ pub fn benchmark_pipeline_options(
         webrtc_udp_port_strategy: None,
         webrtc_nat_1to1_ips: Arc::new(vec![]),
         rtmp_server: PipelineRtmpServerOptions::Disable,
+        srt_server: PipelineSrtServerOptions::Disable,
         wgpu_options: PipelineWgpuOptions::Context(graphics_context),
         side_channel_delay: Duration::ZERO,
         side_channel_socket_dir: None,

@@ -1,0 +1,156 @@
+use crate::common_core::prelude as core;
+use crate::*;
+
+impl TryFrom<SrtOutput> for core::RegisterOutputOptions {
+    type Error = TypeError;
+
+    fn try_from(value: SrtOutput) -> Result<Self, Self::Error> {
+        let SrtOutput {
+            video,
+            audio,
+            encryption,
+        } = value;
+
+        if video.is_none() && audio.is_none() {
+            return Err(TypeError::new(
+                "At least one of \"video\" and \"audio\" fields have to be specified.",
+            ));
+        }
+
+        let (video_encoder_options, output_video_options) = match video {
+            Some(OutputSrtVideoOptions {
+                resolution,
+                send_eos_when,
+                encoder,
+                initial,
+            }) => {
+                let output_options = core::RegisterOutputVideoOptions {
+                    initial: initial.try_into()?,
+                    end_condition: send_eos_when.unwrap_or_default().try_into()?,
+                };
+
+                (
+                    Some(encoder.to_pipeline_options(resolution)?),
+                    Some(output_options),
+                )
+            }
+            None => (None, None),
+        };
+        let (audio_encoder_options, output_audio_options) = match audio {
+            Some(OutputSrtAudioOptions {
+                mixing_strategy,
+                send_eos_when,
+                encoder,
+                channels,
+                initial,
+            }) => {
+                let channels = channels.unwrap_or(AudioChannels::Stereo);
+                let output_audio_options = core::RegisterOutputAudioOptions {
+                    initial: initial.try_into()?,
+                    end_condition: send_eos_when.unwrap_or_default().try_into()?,
+                    mixing_strategy: mixing_strategy
+                        .unwrap_or(AudioMixingStrategy::SumClip)
+                        .into(),
+                    channels: channels.into(),
+                };
+
+                (
+                    Some(encoder.to_pipeline_options(channels)),
+                    Some(output_audio_options),
+                )
+            }
+            None => (None, None),
+        };
+
+        let encryption = encryption
+            .map(|e| {
+                let passphrase_len = e.passphrase.len();
+                if !(10..=79).contains(&passphrase_len) {
+                    return Err(TypeError::new(
+                        "SRT encryption passphrase must be between 10 and 79 characters long.",
+                    ));
+                }
+                let key_length = match e.encryption {
+                    SrtEncryption::Aes128 => core::SrtEncryptionKeyLength::Aes128,
+                    SrtEncryption::Aes192 => core::SrtEncryptionKeyLength::Aes192,
+                    SrtEncryption::Aes256 => core::SrtEncryptionKeyLength::Aes256,
+                };
+                Ok(core::SrtOutputEncryption {
+                    passphrase: e.passphrase,
+                    key_length,
+                })
+            })
+            .transpose()?;
+
+        let output_options = core::ProtocolOutputOptions::Srt(core::SrtOutputOptions {
+            video: video_encoder_options,
+            audio: audio_encoder_options,
+            encryption,
+        });
+
+        Ok(Self {
+            output_options,
+            video: output_video_options,
+            audio: output_audio_options,
+        })
+    }
+}
+
+impl SrtVideoEncoderOptions {
+    fn to_pipeline_options(
+        &self,
+        resolution: Resolution,
+    ) -> Result<core::VideoEncoderOptions, TypeError> {
+        let encoder_options = match self {
+            SrtVideoEncoderOptions::FfmpegH264 {
+                preset,
+                bitrate,
+                keyframe_interval_ms,
+                pixel_format,
+                ffmpeg_options,
+            } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
+                preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                resolution: resolution.into(),
+                pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+                raw_options: ffmpeg_options
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+                bitstream_format: core::H264BitstreamFormat::AnnexB,
+            }),
+            SrtVideoEncoderOptions::VulkanH264 {
+                bitrate,
+                keyframe_interval_ms,
+            } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
+                resolution: resolution.into(),
+                bitrate: bitrate
+                    .map(|bitrate| {
+                        Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
+                            bitrate.try_into()?,
+                        ))
+                    })
+                    .transpose()?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                preset: core::VulkanH264EncoderPreset::HighQuality,
+                bitstream_format: core::H264BitstreamFormat::AnnexB,
+            }),
+        };
+        Ok(encoder_options)
+    }
+}
+
+impl SrtAudioEncoderOptions {
+    fn to_pipeline_options(&self, channels: AudioChannels) -> core::AudioEncoderOptions {
+        match self {
+            SrtAudioEncoderOptions::Aac { sample_rate } => {
+                core::AudioEncoderOptions::FdkAac(core::FdkAacEncoderOptions {
+                    channels: channels.into(),
+                    sample_rate: sample_rate.unwrap_or(48000),
+                })
+            }
+        }
+    }
+}

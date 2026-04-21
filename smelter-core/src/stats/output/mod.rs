@@ -80,6 +80,7 @@ impl OutputStatsState {
             OutputProtocolKind::Mp4 => OutputStatsState::Mp4(Mp4OutputState::new()),
             OutputProtocolKind::Rtp => OutputStatsState::Rtp(RtpOutputState::new()),
             OutputProtocolKind::Rtmp => OutputStatsState::Rtmp(RtmpOutputState::new()),
+            OutputProtocolKind::Srt => unimplemented!(),
             OutputProtocolKind::RawDataChannel => unimplemented!(),
             OutputProtocolKind::EncodedDataChannel => unimplemented!(),
         }

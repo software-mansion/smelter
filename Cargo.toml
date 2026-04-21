@@ -17,6 +17,8 @@ members = [
     "gpu-video",
     "libcef",
     "rtmp",
+    "libsrt",
+    "mpegts",
 
     # Tools/utils/tests
     "integration-tests",
@@ -39,6 +41,8 @@ smelter-render = { path = "smelter-render" }
 libcef = { path = "libcef" }
 gpu-video = { path = "gpu-video", features = ["expose-parsers"] }
 rtmp = { path = "rtmp" }
+libsrt = { path = "libsrt" }
+mpegts = { path = "mpegts" }
 bytes = "1.11.1"
 serde_json = { version = "1.0.99", features = ["preserve_order"] }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
