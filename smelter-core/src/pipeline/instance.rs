@@ -362,10 +362,9 @@ impl Pipeline {
         callback: F,
     ) {
         let weak = Arc::downgrade(pipeline);
-        // Drop the pipeline guard before `Queue::schedule_event`: it sends on a rendezvous
-        // channel to the queue thread, which may currently be running a previously-scheduled
-        // callback that is itself waiting on `pipeline.lock()`. Holding the lock here would
-        // deadlock (queue thread waits for the lock, we wait for the queue thread to receive).
+        // We can't keep pipeline lock here because handling
+        // pipeline event might require acquire pipeline lock
+        // while already holding queue lock
         let queue = pipeline.lock().unwrap().queue.clone();
         queue.schedule_event(
             pts,
