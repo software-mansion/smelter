@@ -1,28 +1,38 @@
 use std::{
-    io::Write,
+    io::{self, Write},
     os::unix::net::{UnixListener, UnixStream},
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     thread,
+    time::Duration,
 };
 
-use crossbeam_channel::Sender;
+use bytes::Bytes;
+use crossbeam_channel::{Sender, TrySendError};
 use tracing::debug;
 
-struct SocketCleanup {
+const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const CLIENT_CHANNEL_CAPACITY: usize = 1;
+
+struct ServerCleanup {
     socket_path: PathBuf,
+    should_close: Arc<AtomicBool>,
 }
 
-impl Drop for SocketCleanup {
+impl Drop for ServerCleanup {
     fn drop(&mut self) {
+        self.should_close.store(true, Ordering::Relaxed);
         let _ = std::fs::remove_file(&self.socket_path);
     }
 }
 
 #[derive(Clone)]
 pub(super) struct SideChannelServer {
-    pub sender: Sender<Vec<u8>>,
-    _cleanup: Arc<SocketCleanup>,
+    pub sender: Sender<Bytes>,
+    _cleanup: Arc<ServerCleanup>,
 }
 
 impl SideChannelServer {
@@ -30,20 +40,25 @@ impl SideChannelServer {
         let _ = std::fs::remove_file(&socket_path);
         let listener =
             UnixListener::bind(&socket_path).expect("Failed to bind side channel unix socket");
+        listener
+            .set_nonblocking(true)
+            .expect("Failed to set side channel listener to non-blocking");
 
-        let clients: Arc<Mutex<Vec<UnixStream>>> = Arc::new(Mutex::new(Vec::new()));
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let clients: Arc<Mutex<Vec<Sender<Bytes>>>> = Arc::new(Mutex::new(Vec::new()));
         let clients_accept = clients.clone();
+        let shutdown_accept = shutdown.clone();
         thread::Builder::new()
             .name(format!("{name_prefix}-accept"))
-            .spawn(move || accept_loop(listener, clients_accept))
+            .spawn(move || accept_loop(listener, clients_accept, shutdown_accept, name_prefix))
             .expect("Failed to spawn side channel accept thread");
 
-        let (sender, receiver) = crossbeam_channel::bounded::<Vec<u8>>(channel_capacity);
+        let (sender, receiver) = crossbeam_channel::bounded::<Bytes>(channel_capacity);
         thread::Builder::new()
             .name(format!("{name_prefix}-send"))
             .spawn(move || {
                 while let Ok(data) = receiver.recv() {
-                    send_to_clients(&clients, &data);
+                    send_to_clients(&clients, data);
                 }
                 debug!("{name_prefix} sender thread finished");
             })
@@ -51,17 +66,34 @@ impl SideChannelServer {
 
         Self {
             sender,
-            _cleanup: Arc::new(SocketCleanup { socket_path }),
+            _cleanup: Arc::new(ServerCleanup {
+                socket_path,
+                should_close: shutdown,
+            }),
         }
     }
 }
 
-fn accept_loop(listener: UnixListener, clients: Arc<Mutex<Vec<UnixStream>>>) {
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
+fn accept_loop(
+    listener: UnixListener,
+    clients: Arc<Mutex<Vec<Sender<Bytes>>>>,
+    shutdown: Arc<AtomicBool>,
+    name_prefix: &'static str,
+) {
+    while !shutdown.load(Ordering::Relaxed) {
+        match listener.accept() {
+            Ok((stream, _)) => {
                 debug!("Side channel: new client connected");
-                clients.lock().unwrap().push(stream);
+                let (sender, receiver) =
+                    crossbeam_channel::bounded::<Bytes>(CLIENT_CHANNEL_CAPACITY);
+                thread::Builder::new()
+                    .name(format!("{name_prefix}-client"))
+                    .spawn(move || client_loop(stream, receiver))
+                    .expect("Failed to spawn side channel client thread");
+                clients.lock().unwrap().push(sender);
+            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                thread::sleep(ACCEPT_POLL_INTERVAL);
             }
             Err(e) => {
                 debug!("Side channel: accept error: {e}");
@@ -69,20 +101,34 @@ fn accept_loop(listener: UnixListener, clients: Arc<Mutex<Vec<UnixStream>>>) {
             }
         }
     }
+    debug!("Side channel: accept thread finished");
 }
 
-fn send_to_clients(clients: &Mutex<Vec<UnixStream>>, data: &[u8]) {
+fn send_to_clients(clients: &Mutex<Vec<Sender<Bytes>>>, data: Bytes) {
     let mut clients = clients.lock().unwrap();
-    clients.retain_mut(|stream| {
+    clients.retain(|sender| match sender.try_send(data.clone()) {
+        Ok(()) => true,
+        Err(TrySendError::Full(_)) => {
+            debug!("Side channel: dropping message, client channel full");
+            true
+        }
+        Err(TrySendError::Disconnected(_)) => {
+            debug!("Side channel: client disconnected");
+            false
+        }
+    });
+}
+
+fn client_loop(mut stream: UnixStream, receiver: crossbeam_channel::Receiver<Bytes>) {
+    while let Ok(data) = receiver.recv() {
         let len_bytes = (data.len() as u32).to_be_bytes();
         if stream.write_all(&len_bytes).is_err() {
-            debug!("Side channel: client disconnected (length write)");
-            return false;
+            debug!("Side channel: client write failed (length)");
+            return;
         }
-        if stream.write_all(data).is_err() {
-            debug!("Side channel: client disconnected (data write)");
-            return false;
+        if stream.write_all(&data).is_err() {
+            debug!("Side channel: client write failed (data)");
+            return;
         }
-        true
-    });
+    }
 }

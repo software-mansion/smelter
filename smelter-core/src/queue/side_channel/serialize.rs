@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use smelter_render::Frame;
 
 use crate::{prelude::InputAudioSamples, types::AudioSamples};
@@ -38,7 +39,7 @@ fn write_plane(buf: &mut Vec<u8>, plane: &[u8]) {
     buf.extend_from_slice(plane);
 }
 
-pub(super) fn serialize_frame(frame: &Frame) -> Option<Vec<u8>> {
+pub(super) fn serialize_frame(frame: &Frame) -> Option<Bytes> {
     use smelter_render::FrameData;
 
     let (format, planes): (u8, Vec<&[u8]>) = match &frame.data {
@@ -82,10 +83,10 @@ pub(super) fn serialize_frame(frame: &Frame) -> Option<Vec<u8>> {
         write_plane(&mut buf, plane);
     }
 
-    Some(buf)
+    Some(Bytes::from(buf))
 }
 
-pub(super) fn serialize_audio_batch(batch: &InputAudioSamples) -> Vec<u8> {
+pub(super) fn serialize_audio_batch(batch: &InputAudioSamples) -> Bytes {
     let (channel_count, sample_count) = match &batch.samples {
         AudioSamples::Mono(s) => (1u8, s.len()),
         AudioSamples::Stereo(s) => (2u8, s.len()),
@@ -114,5 +115,5 @@ pub(super) fn serialize_audio_batch(batch: &InputAudioSamples) -> Vec<u8> {
         }
     }
 
-    buf
+    Bytes::from(buf)
 }
