@@ -4,6 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::SideChannel;
+
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RtmpInput {
@@ -20,6 +22,8 @@ pub struct RtmpInput {
     pub required: Option<bool>,
     /// Assigns which decoder should be used for media encoded with a specific codec.
     pub decoder_map: Option<HashMap<InputRtmpCodec, RtmpVideoDecoderOptions>>,
+    /// Enable side channel for video and/or audio track.
+    pub side_channel: Option<SideChannel>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq, Eq, Hash)]

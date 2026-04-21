@@ -10,9 +10,10 @@ use tracing::{Level, debug, error, info, span, trace, warn};
 
 use crate::{
     pipeline::input::Input,
-    prelude::*,
     queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
 };
+
+use crate::prelude::*;
 
 use v4l::{
     Format, FourCC,
@@ -81,7 +82,7 @@ impl V4l2Input {
         // the library recommends to skip the first frame
         stream.next().map_err(V4l2InputError::IoError)?;
 
-        let queue_input = QueueInput::new(&ctx, &input_ref, opts.required);
+        let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
         let (Some(video_sender), _) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
             audio: false,

@@ -26,7 +26,14 @@ impl TryFrom<DeckLink> for core::RegisterInputOptions {
                 persistent_id,
                 enable_audio: value.enable_audio.unwrap_or(true),
                 pixel_format: Some(core::DeckLinkPixelFormat::Format8BitYUV),
-                required: value.required.unwrap_or(false),
+                queue_options: {
+                    let side_channel = value.side_channel.unwrap_or_default();
+                    core::QueueInputOptions {
+                        required: value.required.unwrap_or(false),
+                        video_side_channel: side_channel.video.unwrap_or(false),
+                        audio_side_channel: side_channel.audio.unwrap_or(false),
+                    }
+                },
             },
         ))
     }

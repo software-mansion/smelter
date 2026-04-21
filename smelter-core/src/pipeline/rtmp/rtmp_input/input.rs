@@ -55,7 +55,7 @@ impl RtmpServerInput {
             kind: InputProtocolKind::Rtmp,
         });
 
-        let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
+        let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
 
         state.inputs.add_input(
             &input_ref,

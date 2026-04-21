@@ -1,0 +1,41 @@
+name: Python SDK - check
+
+on:
+    workflow_dispatch: {}
+    push:
+        branches: [master]
+    pull_request:
+        types: [opened, synchronize]
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+    python_check:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repo
+              uses: actions/checkout@v6
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  enable-cache: true
+
+            - name: Install project dependencies
+              working-directory: ./sdks/python
+              run: uv sync --locked
+
+            - name: Lint
+              working-directory: ./sdks/python
+              run: uv run ruff check .
+
+            - name: Format check
+              working-directory: ./sdks/python
+              run: uv run ruff format --check .
+
+            - name: Typecheck
+              working-directory: ./sdks/python
+              run: uv run ty check

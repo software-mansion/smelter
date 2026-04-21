@@ -104,7 +104,7 @@ impl RtpInput {
         };
 
         let buffer = opts.buffer_duration.unwrap_or(Duration::from_millis(80));
-        let queue_input = QueueInput::new(&ctx, &input_ref, opts.required);
+        let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
 
         // - For TCP + offset we don't need any buffer, but shifting
         //   by a constant does not change anything when offset is defined

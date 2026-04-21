@@ -16,6 +16,7 @@ mod whip;
 mod whip_into;
 
 mod queue_options;
+mod side_channel;
 
 pub use decklink::*;
 pub use hls::*;
@@ -25,3 +26,5 @@ pub use rtp::*;
 pub use v4l2::*;
 pub use whep::*;
 pub use whip::*;
+
+pub use side_channel::*;

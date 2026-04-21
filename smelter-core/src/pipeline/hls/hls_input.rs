@@ -8,8 +8,6 @@ use std::{
     time::Duration,
 };
 
-use crate::queue::QueueSender;
-use crate::queue::{QueueTrackOffset, QueueTrackOptions, WeakQueueInput};
 use bytes::Bytes;
 use ffmpeg_next::{
     Dictionary, Packet, Stream,
@@ -34,7 +32,7 @@ use crate::{
         input::Input,
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread},
     },
-    queue::QueueInput,
+    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
 };
 
 use crate::prelude::*;
@@ -88,7 +86,7 @@ impl HlsInput {
         });
 
         let input_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
-        let queue_input = QueueInput::new(&ctx, &input_ref, opts.required);
+        let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
 
         if input_ctx.video_stream().is_some()
             && opts.video_decoders.h264 == Some(VideoDecoderOptions::VulkanH264)

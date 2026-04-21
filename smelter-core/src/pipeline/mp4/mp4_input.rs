@@ -128,7 +128,7 @@ impl Mp4Input {
             ));
         }
 
-        let queue_input = QueueInput::new(&ctx, &input_ref, options.required);
+        let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options.clone());
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: video_track.is_some(),
             audio: audio_track.is_some(),

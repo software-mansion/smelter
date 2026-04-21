@@ -1383,6 +1383,17 @@
               "null"
             ],
             "description": "(**default=`false`**) If input is required and frames are not processed\non time, then Smelter will delay producing output frames."
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -1537,6 +1548,17 @@
                 "h264"
               ]
             }
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -2497,6 +2519,17 @@
                 "h264"
               ]
             }
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -4217,6 +4250,17 @@
                 "h264"
               ]
             }
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -4455,6 +4499,17 @@
             ],
             "format": "double",
             "description": "Offset in milliseconds relative to the pipeline start (start request). If the offset is\nnot defined then the stream will be synchronized based on the delivery time of the initial\nframes."
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -5071,6 +5126,26 @@
         },
         "additionalProperties": false
       },
+      "SideChannel": {
+        "type": "object",
+        "properties": {
+          "video": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Enable side channel for video track."
+          },
+          "audio": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Enable side channel for audio track."
+          }
+        },
+        "additionalProperties": false
+      },
       "StatsReport": {
         "type": "object",
         "required": [
@@ -5561,6 +5636,17 @@
               "null"
             ],
             "description": "(**default=`false`**) If input is required and frames are not processed\non time, then Smelter will delay producing output frames."
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -6011,6 +6097,17 @@
               "null"
             ],
             "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -6427,6 +6524,17 @@
               "null"
             ],
             "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
           }
         },
         "additionalProperties": false

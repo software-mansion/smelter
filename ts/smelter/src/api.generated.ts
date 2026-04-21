@@ -44,6 +44,10 @@ export type RegisterInput =
        * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
        */
       offset_ms?: number | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
     }
   | {
       type: "rtmp_server";
@@ -65,6 +69,10 @@ export type RegisterInput =
       decoder_map?: {
         [k: string]: RtmpVideoDecoderOptions;
       } | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
     }
   | {
       type: "mp4";
@@ -98,6 +106,10 @@ export type RegisterInput =
       decoder_map?: {
         [k: string]: Mp4VideoDecoderOptions;
       } | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
     }
   | {
       type: "whip_server";
@@ -117,6 +129,10 @@ export type RegisterInput =
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
     }
   | {
       type: "whep_client";
@@ -136,6 +152,10 @@ export type RegisterInput =
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
     }
   | {
       type: "hls";
@@ -157,6 +177,10 @@ export type RegisterInput =
       decoder_map?: {
         [k: string]: HlsVideoDecoderOptions;
       } | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
     }
   | {
       type: "v4l2";
@@ -186,6 +210,10 @@ export type RegisterInput =
        * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
     }
   | {
       type: "decklink";
@@ -215,6 +243,10 @@ export type RegisterInput =
        * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
     };
 export type PortOrPortRange = string | number;
 export type TransportProtocol = "udp" | "tcp_server";
@@ -1432,6 +1464,16 @@ export type OutputStatsReport =
 
 export interface InputRtpVideoOptions {
   decoder: RtpVideoDecoderOptions;
+}
+export interface SideChannel {
+  /**
+   * Enable side channel for video track.
+   */
+  video?: boolean | null;
+  /**
+   * Enable side channel for audio track.
+   */
+  audio?: boolean | null;
 }
 export interface InputWhipVideoOptions {
   decoder_preferences?: WhipVideoDecoderOptions[] | null;

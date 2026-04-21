@@ -1,5 +1,7 @@
 pub use decklink::PixelFormat as DeckLinkPixelFormat;
 
+use crate::queue::QueueInputOptions;
+
 #[derive(Debug, Clone)]
 pub struct DeckLinkInputOptions {
     pub subdevice_index: Option<u32>,
@@ -11,7 +13,7 @@ pub struct DeckLinkInputOptions {
     /// Force specified pixel format, value resolved in input format
     /// autodetection will be ignored.
     pub pixel_format: Option<DeckLinkPixelFormat>,
-    pub required: bool,
+    pub queue_options: QueueInputOptions,
 }
 
 #[derive(Debug, thiserror::Error)]

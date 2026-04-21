@@ -33,6 +33,7 @@ target/
 
 # Generated during runtime
 /shmem
+/sockets
 
 .direnv
 /result

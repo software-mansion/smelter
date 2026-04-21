@@ -2,6 +2,7 @@ mod audio_input;
 mod audio_queue;
 mod queue_input;
 mod queue_thread;
+mod side_channel;
 mod utils;
 mod video_input;
 mod video_queue;
@@ -9,6 +10,7 @@ mod video_queue;
 use std::{
     collections::HashMap,
     fmt::Debug,
+    path::Path,
     sync::{
         Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering},
@@ -23,6 +25,7 @@ use crate::audio_mixer::InputSamplesSet;
 
 use crate::prelude::*;
 
+pub use self::queue_input::QueueInputOptions;
 pub(crate) use self::queue_input::{
     QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput,
 };
@@ -35,13 +38,14 @@ use self::{
 
 const DEFAULT_AUDIO_CHUNK_DURATION: Duration = Duration::from_millis(20); // typical audio packet size
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct QueueOptions {
     pub output_framerate: Framerate,
     pub ahead_of_time_processing: bool,
     pub run_late_scheduled_events: bool,
     pub never_drop_output_frames: bool,
     pub side_channel_delay: Duration,
+    pub side_channel_socket_dir: Option<Arc<Path>>,
 }
 
 impl From<&PipelineOptions> for QueueOptions {
@@ -53,6 +57,7 @@ impl From<&PipelineOptions> for QueueOptions {
             run_late_scheduled_events: opt.run_late_scheduled_events,
             never_drop_output_frames: opt.never_drop_output_frames,
             side_channel_delay: opt.side_channel_delay,
+            side_channel_socket_dir: opt.side_channel_socket_dir.clone(),
         }
     }
 }
@@ -139,6 +144,7 @@ pub struct QueueContext {
     start_pts: SharedPts,
     last_pts: SharedPts,
     side_channel_delay: Duration,
+    pub(crate) side_channel_socket_dir: Option<Arc<Path>>,
 }
 
 impl QueueContext {
@@ -220,6 +226,7 @@ impl Queue {
             start_pts: Default::default(),
             last_pts: Default::default(),
             side_channel_delay: opts.side_channel_delay,
+            side_channel_socket_dir: opts.side_channel_socket_dir,
         };
         let (queue_start_sender, queue_start_receiver) = bounded(0);
         let (scheduled_event_sender, scheduled_event_receiver) = bounded(0);
@@ -320,7 +327,7 @@ impl Debug for ScheduledEvent {
 }
 
 #[derive(Debug, Default, Clone)]
-struct SharedPts(Arc<RwLock<Option<Duration>>>);
+pub(super) struct SharedPts(Arc<RwLock<Option<Duration>>>);
 
 impl SharedPts {
     fn update(&self, pts: Duration) {

@@ -9,7 +9,12 @@ use smelter_render::{Frame, InputId};
 use tracing::info;
 
 use crate::{
-    queue::{audio_input::AudioQueueInput, utils::PauseState, video_input::VideoQueueInput},
+    queue::{
+        audio_input::AudioQueueInput,
+        side_channel::{AudioSideChannel, VideoSideChannel},
+        utils::PauseState,
+        video_input::VideoQueueInput,
+    },
     types::Ref,
 };
 
@@ -53,6 +58,8 @@ pub(super) struct InnerQueueInput {
         TrackOffset,
     )>,
     required: bool,
+    video_side_channel: Option<VideoSideChannel>,
+    audio_side_channel: Option<AudioSideChannel>,
 }
 
 impl InnerQueueInput {
@@ -112,24 +119,34 @@ impl InnerQueueInput {
             QueueTrackOffset::FromStart(duration) => (TrackOffset::default(), Some(duration)),
         };
         let (video_input, video_sender) = if opts.video {
+            let side_channel = self
+                .video_side_channel
+                .as_ref()
+                .map(|sc| sc.with_track_offset(&track_offset));
             let (video_input, video_sender) = VideoQueueInput::new(
                 &self.ctx,
                 &self.input_ref,
                 self.required,
                 offset_from_start,
                 track_offset.clone(),
+                side_channel,
             );
             (Some(video_input), Some(QueueSender::new(video_sender)))
         } else {
             (None, None)
         };
         let (audio_input, audio_sender) = if opts.audio {
+            let side_channel = self
+                .audio_side_channel
+                .as_ref()
+                .map(|sc| sc.with_track_offset(&track_offset));
             let (audio_input, audio_sender) = AudioQueueInput::new(
                 &self.ctx,
                 &self.input_ref,
                 self.required,
                 offset_from_start,
                 track_offset.clone(),
+                side_channel,
             );
             (Some(audio_input), Some(QueueSender::new(audio_sender)))
         } else {
@@ -203,8 +220,32 @@ impl std::fmt::Debug for WeakQueueInput {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct QueueInputOptions {
+    pub required: bool,
+    pub audio_side_channel: bool,
+    pub video_side_channel: bool,
+}
+
 impl QueueInput {
-    pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, required: bool) -> Self {
+    pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, opts: QueueInputOptions) -> Self {
+        let socket_dir = &ctx.queue_ctx.side_channel_socket_dir;
+        let video_side_channel = match (opts.video_side_channel, socket_dir) {
+            (true, Some(dir)) => {
+                let path = dir.join(format!("video_{}.sock", input_ref.id()));
+                info!(?path, "Starting video side channel");
+                Some(VideoSideChannel::new(path, ctx.queue_ctx.start_pts.clone()))
+            }
+            _ => None,
+        };
+        let audio_side_channel = match (opts.audio_side_channel, socket_dir) {
+            (true, Some(dir)) => {
+                let path = dir.join(format!("audio_{}.sock", input_ref.id()));
+                info!(?path, "Starting audio side channel");
+                Some(AudioSideChannel::new(path, ctx.queue_ctx.start_pts.clone()))
+            }
+            _ => None,
+        };
         Self(Arc::new(Mutex::new(InnerQueueInput {
             ctx: ctx.clone(),
             input_ref: input_ref.clone(),
@@ -215,8 +256,10 @@ impl QueueInput {
 
             pending: VecDeque::new(),
 
-            required,
+            required: opts.required,
             pause_state: PauseState::new(),
+            video_side_channel,
+            audio_side_channel,
         })))
     }
 

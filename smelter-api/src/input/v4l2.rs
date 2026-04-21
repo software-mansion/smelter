@@ -6,6 +6,8 @@ use utoipa::ToSchema;
 
 use crate::{Framerate, Resolution};
 
+use super::SideChannel;
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct V4l2Input {
@@ -36,6 +38,8 @@ pub struct V4l2Input {
     /// (**default=`false`**) If input is required and frames are not processed
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,
+    /// Enable side channel for video and/or audio track.
+    pub side_channel: Option<SideChannel>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
