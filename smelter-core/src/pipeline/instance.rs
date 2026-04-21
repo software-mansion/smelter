@@ -362,9 +362,9 @@ impl Pipeline {
         callback: F,
     ) {
         let weak = Arc::downgrade(pipeline);
-        // We can't keep pipeline lock here because handling
-        // pipeline event might require acquire pipeline lock
-        // while already holding queue lock
+        // Do not hold the pipeline lock across `queue.schedule_event(...)`.
+        // That call may block on a rendezvous (`bounded(0)`) send, and the
+        // scheduled callback may later need to acquire the pipeline lock.
         let queue = pipeline.lock().unwrap().queue.clone();
         queue.schedule_event(
             pts,
