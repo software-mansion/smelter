@@ -1,2 +1,4 @@
 tools/schemas/** linguist-generated
 Cargo.lock linguist-generated
+pnpm-lock.yaml linguist-generated
+uv.lock linguist-generated
