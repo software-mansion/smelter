@@ -8,6 +8,7 @@ pub enum RegisterInputOptions {
     RtmpServer(RtmpServerInputOptions),
     Mp4(Mp4InputOptions),
     Hls(HlsInputOptions),
+    Srt(SrtInputOptions),
     Whip(WhipInputOptions),
     Whep(WhepInputOptions),
     #[cfg(target_os = "linux")]
@@ -42,6 +43,7 @@ pub enum InputProtocolKind {
     Rtmp,
     Mp4,
     Hls,
+    Srt,
     Whip,
     Whep,
     V4l2,
@@ -56,6 +58,7 @@ impl fmt::Display for InputProtocolKind {
             InputProtocolKind::Rtmp => write!(f, "rtmp"),
             InputProtocolKind::Mp4 => write!(f, "mp4"),
             InputProtocolKind::Hls => write!(f, "hls"),
+            InputProtocolKind::Srt => write!(f, "srt"),
             InputProtocolKind::Whip => write!(f, "whip"),
             InputProtocolKind::Whep => write!(f, "whep"),
             InputProtocolKind::V4l2 => write!(f, "v4l2"),

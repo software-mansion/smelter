@@ -183,6 +183,33 @@ export type RegisterInput =
       side_channel?: SideChannel | null;
     }
   | {
+      type: "srt";
+      /**
+       * Parameters of the video track carried in the MPEG-TS stream.
+       */
+      video?: InputSrtVideoOptions | null;
+      /**
+       * Whether an AAC audio track is present in the MPEG-TS stream.
+       */
+      audio?: boolean | null;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
+       */
+      offset_ms?: number | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+      /**
+       * Enable AES encryption on the incoming SRT stream. The sender must connect with the matching `passphrase`.
+       */
+      encryption?: SrtInputEncryption | null;
+    }
+  | {
       type: "v4l2";
       /**
        * Path to the V4L2 device.
@@ -278,6 +305,8 @@ export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type WhepVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type HlsVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type SrtVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type SrtEncryption = "aes128" | "aes192" | "aes256";
 export type V4L2InputFormat = "yuyv" | "nv12";
 export type Framerate = string | number;
 export type RegisterOutput =
@@ -389,6 +418,21 @@ export type RegisterOutput =
        * Audio track configuration.
        */
       audio?: OutputHlsAudioOptions | null;
+    }
+  | {
+      type: "srt";
+      /**
+       * Video stream configuration.
+       */
+      video?: OutputSrtVideoOptions | null;
+      /**
+       * Audio stream configuration.
+       */
+      audio?: OutputSrtAudioOptions | null;
+      /**
+       * Enable AES encryption on the outgoing SRT stream. The caller must connect with the matching `passphrase`.
+       */
+      encryption?: SrtOutputEncryption | null;
     };
 export type InputId = string;
 export type RtpVideoEncoderOptions =
@@ -1282,6 +1326,50 @@ export type HlsAudioEncoderOptions = {
    */
   sample_rate?: number | null;
 };
+export type SrtVideoEncoderOptions =
+  | {
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+    };
+export type SrtAudioEncoderOptions = {
+  type: "aac";
+  /**
+   * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+   */
+  sample_rate?: number | null;
+};
 export type ImageSpec =
   | {
       asset_type: "png";
@@ -1480,6 +1568,19 @@ export interface InputWhipVideoOptions {
 }
 export interface InputWhepVideoOptions {
   decoder_preferences?: WhepVideoDecoderOptions[] | null;
+}
+export interface InputSrtVideoOptions {
+  decoder: SrtVideoDecoderOptions;
+}
+export interface SrtInputEncryption {
+  /**
+   * Passphrase used to derive the AES key. Must be 10–79 characters long.
+   */
+  passphrase: string;
+  /**
+   * AES key length used for the stream.
+   */
+  encryption: SrtEncryption;
 }
 export interface Resolution {
   /**
@@ -1784,6 +1885,56 @@ export interface OutputHlsAudioOptions {
    * Initial audio mixer configuration for output.
    */
   initial: AudioScene;
+}
+export interface OutputSrtVideoOptions {
+  /**
+   * Output resolution in pixels.
+   */
+  resolution: Resolution;
+  /**
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Video encoder options.
+   */
+  encoder: SrtVideoEncoderOptions;
+  /**
+   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   */
+  initial: VideoScene;
+}
+export interface OutputSrtAudioOptions {
+  /**
+   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   */
+  mixing_strategy?: AudioMixingStrategy | null;
+  /**
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Audio encoder options.
+   */
+  encoder: SrtAudioEncoderOptions;
+  /**
+   * Channels configuration.
+   */
+  channels?: AudioChannels | null;
+  /**
+   * Initial audio mixer configuration for output.
+   */
+  initial: AudioScene;
+}
+export interface SrtOutputEncryption {
+  /**
+   * Passphrase used to derive the AES key. Must be 10–79 characters long.
+   */
+  passphrase: string;
+  /**
+   * AES key length used for the stream.
+   */
+  encryption: SrtEncryption;
 }
 export interface WebRendererSpec {
   /**

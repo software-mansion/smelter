@@ -52,6 +52,9 @@ pub struct Config {
     pub rtmp_server_port: u16,
     pub rtmp_enable: bool,
     pub rtmp_tls_config: Option<TlsConfig>,
+
+    pub srt_server_port: u16,
+    pub srt_enable: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -357,6 +360,18 @@ fn try_read_config() -> Result<Config, String> {
         _ => None,
     };
 
+    let srt_server_port = match env::var("SMELTER_SRT_SERVER_PORT") {
+        Ok(port) => port
+            .parse::<u16>()
+            .map_err(|_| "SMELTER_SRT_SERVER_PORT has to be valid port number")?,
+        Err(_) => 9710,
+    };
+
+    let srt_enable = match env::var("SMELTER_START_SRT_SERVER") {
+        Ok(enable) => bool_env_from_str(&enable).unwrap_or(true),
+        Err(_) => true,
+    };
+
     let log_file = match env::var("SMELTER_LOG_FILE") {
         Ok(path) => Some(Arc::from(PathBuf::from(path))),
         Err(_) => None,
@@ -405,6 +420,8 @@ fn try_read_config() -> Result<Config, String> {
         rtmp_server_port,
         rtmp_enable,
         rtmp_tls_config,
+        srt_server_port,
+        srt_enable,
         rendering_mode,
     };
     Ok(config)

@@ -80,6 +80,7 @@ pub async fn status_handler(
                 InputProtocolKind::Whip => "whip",
                 InputProtocolKind::Whep => "whep",
                 InputProtocolKind::Hls => "hls",
+                InputProtocolKind::Srt => "srt",
                 InputProtocolKind::V4l2 => "v4l2",
                 InputProtocolKind::DeckLink => "decklink",
                 InputProtocolKind::RawDataChannel => "raw_data",
@@ -101,6 +102,7 @@ pub async fn status_handler(
                 OutputProtocolKind::Whip => "whip",
                 OutputProtocolKind::Whep => "whep",
                 OutputProtocolKind::Hls => "hls",
+                OutputProtocolKind::Srt => "srt",
                 OutputProtocolKind::EncodedDataChannel => "encoded_data",
                 OutputProtocolKind::RawDataChannel => "raw_data",
             };

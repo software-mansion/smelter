@@ -14,8 +14,8 @@ use crate::{
 };
 use smelter_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId,
-    RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec, V4l2Input, WebRendererSpec, WhepInput,
-    WhepOutput, WhipInput, WhipOutput,
+    RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec, SrtInput, SrtOutput, V4l2Input,
+    WebRendererSpec, WhepInput, WhepOutput, WhipInput, WhipOutput,
 };
 
 use super::ApiState;
@@ -29,6 +29,7 @@ pub enum RegisterInput {
     WhipServer(WhipInput),
     WhepClient(WhepInput),
     Hls(HlsInput),
+    Srt(SrtInput),
     V4l2(V4l2Input),
     #[serde(rename = "decklink")]
     DeckLink(DeckLink),
@@ -43,6 +44,7 @@ pub enum RegisterOutput {
     WhipClient(WhipOutput),
     WhepServer(WhepOutput),
     Hls(HlsOutput),
+    Srt(SrtOutput),
 }
 
 #[utoipa::path(
@@ -85,6 +87,9 @@ pub async fn handle_input(
             }
             RegisterInput::Hls(hls) => {
                 Pipeline::register_input(&api.pipeline()?, input_id.into(), hls.try_into()?)?
+            }
+            RegisterInput::Srt(srt) => {
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), srt.try_into()?)?
             }
             RegisterInput::V4l2(v4l2) => {
                 Pipeline::register_input(&api.pipeline()?, input_id.into(), v4l2.try_into()?)?
@@ -153,6 +158,9 @@ pub async fn handle_output(
             }
             RegisterOutput::Hls(hls) => {
                 Pipeline::register_output(&api.pipeline()?, output_id.into(), hls.try_into()?)?
+            }
+            RegisterOutput::Srt(srt) => {
+                Pipeline::register_output(&api.pipeline()?, output_id.into(), srt.try_into()?)?
             }
         };
         match response {

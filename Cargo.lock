@@ -2856,6 +2856,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsrt"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "libsrt-sys",
+]
+
+[[package]]
+name = "libsrt-sys"
+version = "0.1.0"
+dependencies = [
+ "bindgen 0.72.1",
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
 name = "linebender_resource_handle"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3121,6 +3138,14 @@ name = "mpeg4-audio-const"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a1fe2275b68991faded2c80aa4a33dba398b77d276038b8f50701a22e55918"
+
+[[package]]
+name = "mpegts"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "multer"
@@ -5084,7 +5109,9 @@ dependencies = [
  "glyphon",
  "gpu-video",
  "itertools 0.14.0",
+ "libsrt",
  "mp4",
+ "mpegts",
  "opus",
  "pollster",
  "rand 0.9.3",
