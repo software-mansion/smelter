@@ -68,10 +68,14 @@ export default class Smelter {
     inputId: string,
     request: Extract<RegisterInput, { type: 'whip_server' }>
   ): Promise<WhipInputHandle>;
+
   public async registerInput(
     inputId: string,
     request: Extract<RegisterInput, { type: 'mp4' }>
   ): Promise<Mp4InputHandle>;
+
+  public async registerInput(inputId: string, request: RegisterInput): Promise<InputHandle>;
+
   public async registerInput(inputId: string, request: RegisterInput): Promise<InputHandle> {
     return await this.scheduler.run(async () => {
       return await this.coreSmelter.registerInput(inputId, request);
