@@ -35,6 +35,7 @@ mod hls;
 mod mp4;
 mod rtmp;
 mod rtp;
+mod srt;
 mod webrtc;
 
 mod input;

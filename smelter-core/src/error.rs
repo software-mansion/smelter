@@ -237,6 +237,9 @@ pub enum InputInitError {
     #[error(transparent)]
     Rtmp(#[from] RtmpServerError),
 
+    #[error(transparent)]
+    Srt(#[from] SrtInputError),
+
     #[cfg(feature = "decklink")]
     #[error(transparent)]
     DeckLink(#[from] DeckLinkInputError),
