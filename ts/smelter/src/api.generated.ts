@@ -417,6 +417,21 @@ export type RegisterOutput =
        * Audio track configuration.
        */
       audio?: OutputHlsAudioOptions | null;
+    }
+  | {
+      type: "srt";
+      /**
+       * UDP port on which Smelter listens for incoming SRT callers.
+       */
+      port: number;
+      /**
+       * Video stream configuration.
+       */
+      video?: OutputSrtVideoOptions | null;
+      /**
+       * Audio stream configuration.
+       */
+      audio?: OutputSrtAudioOptions | null;
     };
 export type InputId = string;
 export type RtpVideoEncoderOptions =
@@ -1310,6 +1325,50 @@ export type HlsAudioEncoderOptions = {
    */
   sample_rate?: number | null;
 };
+export type SrtVideoEncoderOptions =
+  | {
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+    };
+export type SrtAudioEncoderOptions = {
+  type: "aac";
+  /**
+   * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+   */
+  sample_rate?: number | null;
+};
 export type ImageSpec =
   | {
       asset_type: "png";
@@ -1809,6 +1868,46 @@ export interface OutputHlsAudioOptions {
   encoder: HlsAudioEncoderOptions;
   /**
    * Specifies channels configuration.
+   */
+  channels?: AudioChannels | null;
+  /**
+   * Initial audio mixer configuration for output.
+   */
+  initial: AudioScene;
+}
+export interface OutputSrtVideoOptions {
+  /**
+   * Output resolution in pixels.
+   */
+  resolution: Resolution;
+  /**
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Video encoder options.
+   */
+  encoder: SrtVideoEncoderOptions;
+  /**
+   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   */
+  initial: VideoScene;
+}
+export interface OutputSrtAudioOptions {
+  /**
+   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   */
+  mixing_strategy?: AudioMixingStrategy | null;
+  /**
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Audio encoder options.
+   */
+  encoder: SrtAudioEncoderOptions;
+  /**
+   * Channels configuration.
    */
   channels?: AudioChannels | null;
   /**

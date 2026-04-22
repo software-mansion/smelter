@@ -1,7 +1,14 @@
 use std::time::Duration;
 
-use crate::codecs::VideoDecoderOptions;
+use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 use crate::queue::QueueInputOptions;
+
+#[derive(Debug, Clone)]
+pub struct SrtOutputOptions {
+    pub port: u16,
+    pub video: Option<VideoEncoderOptions>,
+    pub audio: Option<AudioEncoderOptions>,
+}
 
 #[derive(Debug, Clone)]
 pub struct SrtInputOptions {
@@ -35,4 +42,19 @@ pub enum SrtInputError {
 
     #[error("SRT input accepts only an H264 video decoder.")]
     InvalidVideoDecoder,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SrtOutputError {
+    #[error("SRT library error: {0}")]
+    Srt(#[from] libsrt::Error),
+
+    #[error("Failed to bind SRT listener to port {0}.")]
+    Bind(u16, #[source] libsrt::Error),
+
+    #[error("SRT output accepts only H264 video encoders.")]
+    UnsupportedVideoCodec,
+
+    #[error("SRT output accepts only AAC audio encoders.")]
+    UnsupportedAudioCodec,
 }

@@ -167,6 +167,9 @@ pub enum OutputInitError {
 
     #[error(transparent)]
     RtmpError(#[from] RtmpClientError),
+
+    #[error(transparent)]
+    SrtError(#[from] SrtOutputError),
 }
 
 /// Error that can happen after registration

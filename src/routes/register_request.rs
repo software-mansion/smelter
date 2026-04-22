@@ -14,8 +14,8 @@ use crate::{
 };
 use smelter_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId,
-    RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec, SrtInput, V4l2Input, WebRendererSpec,
-    WhepInput, WhepOutput, WhipInput, WhipOutput,
+    RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec, SrtInput, SrtOutput, V4l2Input,
+    WebRendererSpec, WhepInput, WhepOutput, WhipInput, WhipOutput,
 };
 
 use super::ApiState;
@@ -44,6 +44,7 @@ pub enum RegisterOutput {
     WhipClient(WhipOutput),
     WhepServer(WhepOutput),
     Hls(HlsOutput),
+    Srt(SrtOutput),
 }
 
 #[utoipa::path(
@@ -157,6 +158,9 @@ pub async fn handle_output(
             }
             RegisterOutput::Hls(hls) => {
                 Pipeline::register_output(&api.pipeline()?, output_id.into(), hls.try_into()?)?
+            }
+            RegisterOutput::Srt(srt) => {
+                Pipeline::register_output(&api.pipeline()?, output_id.into(), srt.try_into()?)?
             }
         };
         match response {
