@@ -52,10 +52,9 @@ pub fn pipeline_test(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let expanded = quote! {
-        #[test]
+        #[cfg_attr(test, test)]
         #input
 
-        #[allow(dead_code)]
         const #const_name: crate::pipeline_tests::PipelineTest =
             crate::pipeline_tests::PipelineTest {
                 test_name: #fn_name_str,
