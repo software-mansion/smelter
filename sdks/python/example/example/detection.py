@@ -153,7 +153,7 @@ def run_detection(
             active_tracks.update(lingering)
             output = list(detections)
             output.extend(det for tid, (det, age) in lingering.items() if age > 0)
-            # Report the update 250 ms before the frame's actual pts. Detection box
+            # Report the update 100 ms before the frame's actual pts. Detection box
             # views use a 200 ms transition (see _detection_box_view), so scheduling
             # the scene half a transition early means the animation lands on the new
             # position at the moment the frame itself is rendered.

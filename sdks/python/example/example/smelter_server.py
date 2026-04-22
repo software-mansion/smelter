@@ -332,8 +332,6 @@ class UpdateCoordinator:
     def push_video(self, pts_ms: float, detections: list):
         with self._lock:
             self._video.append((pts_ms, detections))
-            # See AUDIO_INFERENCE_CHUNK_MS: video pts runs ahead of audio pts in
-            # "freshness" by the audio chunk length, so compensate here.
             self._last_pts_ms = max(self._last_pts_ms, pts_ms)
             ready = list(self._drain_ready())
             self._cleanup()
@@ -471,7 +469,7 @@ def start_server() -> tuple[subprocess.Popen, str]:
     server = subprocess.Popen(
         [os.environ["SMELTER_PATH"]]
         if "SMELTER_PATH" in os.environ
-        else ["cargo", "run", "-p", "smelter", "--bin", "main_process"],
+        else ["cargo", "run", "-p", "smelter", "-r", "--bin", "main_process"],
         env=env,
         stdout=sys.stdout,
         stderr=sys.stderr,

@@ -43,7 +43,7 @@ const AUDIO_SAMPLE_RATE: u32 = 48_000;
 ///   processed by the queue, but queue will wait and eventually stream will show up, with
 ///   the portion at the start cut off.
 /// - If queue is to slow (e.g. other input required and to slow), media will be delivered to
-///   queue to late and dropped
+///   queue too late and dropped
 pub struct DeckLink {
     input: Arc<decklink::Input>,
 }

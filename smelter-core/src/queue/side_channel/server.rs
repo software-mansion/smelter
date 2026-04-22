@@ -62,7 +62,7 @@ impl VideoSideChannelServer {
                     let pts = frame.pts;
                     let rgba_bytes = pre_processor.process_to_bytes(frame, None);
                     let data = serialize_rgba_frame(resolution, pts, rgba_bytes);
-                    send_to_clients(&clients, data);
+                    broadcast_to_client_threads(&clients, data);
                 }
                 debug!("video-sc-send thread finished");
             })
@@ -99,7 +99,7 @@ impl AudioSideChannelServer {
                 let _enter = span.entered();
                 while let Ok(batch) = receiver.recv() {
                     let data = serialize_audio_batch(&batch);
-                    send_to_clients(&clients, data);
+                    broadcast_to_client_threads(&clients, data);
                 }
                 debug!("audio-sc-send thread finished");
             })
@@ -127,18 +127,18 @@ fn bind_and_spawn_accept(
         .set_nonblocking(true)
         .expect("Failed to set side channel listener to non-blocking");
 
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let should_close = Arc::new(AtomicBool::new(false));
     let clients: Clients = Arc::new(Mutex::new(Vec::new()));
     let clients_accept = clients.clone();
-    let shutdown_accept = shutdown.clone();
+    let should_close_clone = should_close.clone();
     thread::Builder::new()
         .name(format!("{name_prefix}-accept"))
         .spawn(move || {
             let _enter = span.entered();
-            accept_loop(
+            run_accept_clients_thread(
                 listener,
                 clients_accept,
-                shutdown_accept,
+                should_close_clone,
                 name_prefix,
                 client_channel_capacity,
             )
@@ -147,19 +147,19 @@ fn bind_and_spawn_accept(
 
     let cleanup = Arc::new(ServerCleanup {
         socket_path,
-        should_close: shutdown,
+        should_close,
     });
     (clients, cleanup)
 }
 
-fn accept_loop(
+fn run_accept_clients_thread(
     listener: UnixListener,
     clients: Clients,
-    shutdown: Arc<AtomicBool>,
+    should_close: Arc<AtomicBool>,
     name_prefix: &'static str,
     client_channel_capacity: usize,
 ) {
-    while !shutdown.load(Ordering::Relaxed) {
+    while !should_close.load(Ordering::Relaxed) {
         match listener.accept() {
             Ok((stream, _)) => {
                 debug!("Side channel: new client connected");
@@ -170,7 +170,7 @@ fn accept_loop(
                     .name(format!("{name_prefix}-client"))
                     .spawn(move || {
                         let _enter = client_span.entered();
-                        client_loop(stream, receiver);
+                        run_client_sender_thread(stream, receiver);
                     })
                     .expect("Failed to spawn side channel client thread");
                 clients.lock().unwrap().push(sender);
@@ -187,7 +187,21 @@ fn accept_loop(
     debug!("Side channel: accept thread finished");
 }
 
-fn send_to_clients(clients: &Mutex<Vec<Sender<Bytes>>>, data: Bytes) {
+fn run_client_sender_thread(mut stream: UnixStream, receiver: crossbeam_channel::Receiver<Bytes>) {
+    while let Ok(data) = receiver.recv() {
+        let len_bytes = (data.len() as u32).to_be_bytes();
+        if stream.write_all(&len_bytes).is_err() {
+            debug!("Side channel: client write failed (length)");
+            return;
+        }
+        if stream.write_all(&data).is_err() {
+            debug!("Side channel: client write failed (data)");
+            return;
+        }
+    }
+}
+
+fn broadcast_to_client_threads(clients: &Mutex<Vec<Sender<Bytes>>>, data: Bytes) {
     let mut clients = clients.lock().unwrap();
     clients.retain(|sender| match sender.try_send(data.clone()) {
         Ok(()) => true,
@@ -200,18 +214,4 @@ fn send_to_clients(clients: &Mutex<Vec<Sender<Bytes>>>, data: Bytes) {
             false
         }
     });
-}
-
-fn client_loop(mut stream: UnixStream, receiver: crossbeam_channel::Receiver<Bytes>) {
-    while let Ok(data) = receiver.recv() {
-        let len_bytes = (data.len() as u32).to_be_bytes();
-        if stream.write_all(&len_bytes).is_err() {
-            debug!("Side channel: client write failed (length)");
-            return;
-        }
-        if stream.write_all(&data).is_err() {
-            debug!("Side channel: client write failed (data)");
-            return;
-        }
-    }
 }

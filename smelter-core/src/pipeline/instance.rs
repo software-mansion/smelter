@@ -338,7 +338,7 @@ impl Pipeline {
             return;
         }
         info!("Starting pipeline.");
-        let (video_sender, video_receiver) = bounded(1);
+        let (video_sender, video_receiver) = bounded(2);
         let (audio_sender, audio_receiver) = bounded(100);
         guard.queue.start(video_sender, audio_sender);
 
