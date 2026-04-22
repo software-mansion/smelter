@@ -9,7 +9,7 @@ pub struct VideoTag {
     /// FrameType 4bits
     pub frame_type: VideoTagFrameType,
     /// CodecID 4bits
-    pub codec: VideoCodec,
+    pub codec: LegacyFlvVideoCodec,
 
     /// AVCPacketType 8bits IF CodecID == 7
     /// H264 only
@@ -53,8 +53,10 @@ impl VideoTagFrameType {
     }
 }
 
+/// FLV legacy video codec id (4-bit CodecID on the wire).
+/// Internal wire-layer type; users of the library should use [`crate::RtmpVideoCodec`].
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum VideoCodec {
+pub enum LegacyFlvVideoCodec {
     SorensonH263,
     ScreenVideo,
     Vp6,
@@ -63,7 +65,7 @@ pub enum VideoCodec {
     H264,
 }
 
-impl VideoCodec {
+impl LegacyFlvVideoCodec {
     fn try_from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
         match value {
             2 => Ok(Self::SorensonH263),
@@ -141,9 +143,9 @@ impl VideoTag {
         let codec_id = data[0] & 0b00001111;
 
         let frame_type = VideoTagFrameType::from_raw(frame_type)?;
-        let codec = VideoCodec::try_from_raw(codec_id)?;
+        let codec = LegacyFlvVideoCodec::try_from_raw(codec_id)?;
         match codec {
-            VideoCodec::H264 => Self::parse_h264(data, frame_type),
+            LegacyFlvVideoCodec::H264 => Self::parse_h264(data, frame_type),
             _ => Ok(Self {
                 h264_packet_type: None,
                 composition_time: None,
@@ -166,7 +168,7 @@ impl VideoTag {
 
         Ok(Self {
             frame_type,
-            codec: VideoCodec::H264,
+            codec: LegacyFlvVideoCodec::H264,
             h264_packet_type: Some(avc_packet_type),
             composition_time: Some(composition_time),
             data: data.slice(5..),
@@ -179,7 +181,7 @@ impl VideoTag {
 
         let first_byte = (frame_type << 4) | codec_id;
         match self.codec {
-            VideoCodec::H264 => self.serialize_h264(first_byte),
+            LegacyFlvVideoCodec::H264 => self.serialize_h264(first_byte),
             _ => {
                 let mut data = BytesMut::with_capacity(self.data.len() + 1);
                 data.put_u8(first_byte);

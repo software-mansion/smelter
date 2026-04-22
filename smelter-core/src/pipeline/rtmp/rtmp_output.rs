@@ -6,8 +6,7 @@ use smelter_render::error::ErrorStack;
 use tracing::{debug, warn};
 
 use rtmp::{
-    AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpClient, RtmpClientConfig,
-    RtmpStreamError,
+    RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError, RtmpVideoCodec, TrackId,
 };
 
 use crate::{
@@ -117,13 +116,18 @@ impl RtmpClientOutput {
         })?;
 
         if let Some(config) = video_config {
-            client.send(H264VideoConfig {
+            client.send(rtmp::VideoConfig {
+                track_id: TrackId::PRIMARY,
+                codec: RtmpVideoCodec::H264,
                 data: config.extradata.clone(),
             })?;
         }
         if let Some(config) = audio_config {
-            let config = AacAudioConfig::try_from(config.extradata.clone())?;
-            client.send(config)?;
+            client.send(rtmp::AudioConfig {
+                track_id: TrackId::PRIMARY,
+                codec: RtmpAudioCodec::Aac,
+                data: config.extradata.clone(),
+            })?;
         }
         Ok(client)
     }
@@ -238,8 +242,10 @@ impl Output for RtmpClientOutput {
     }
 }
 
-fn video_chunk_to_event(chunk: EncodedOutputChunk) -> H264VideoData {
-    H264VideoData {
+fn video_chunk_to_event(chunk: EncodedOutputChunk) -> rtmp::Video {
+    rtmp::Video {
+        track_id: TrackId::PRIMARY,
+        codec: RtmpVideoCodec::H264,
         pts: chunk.pts,
         dts: chunk.dts.unwrap_or(chunk.pts),
         data: chunk.data,
@@ -247,8 +253,10 @@ fn video_chunk_to_event(chunk: EncodedOutputChunk) -> H264VideoData {
     }
 }
 
-fn audio_chunk_to_event(chunk: EncodedOutputChunk, channels: rtmp::AudioChannels) -> AacAudioData {
-    AacAudioData {
+fn audio_chunk_to_event(chunk: EncodedOutputChunk, channels: rtmp::AudioChannels) -> rtmp::Audio {
+    rtmp::Audio {
+        track_id: TrackId::PRIMARY,
+        codec: RtmpAudioCodec::Aac,
         pts: chunk.pts,
         channels,
         data: chunk.data,

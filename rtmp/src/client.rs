@@ -1,7 +1,7 @@
 use tracing::{debug, warn};
 
 use crate::{
-    RtmpConnectionError, RtmpEvent, RtmpMessageSerializeError,
+    RtmpConnectionError, RtmpEvent, RtmpMessageSerializeError, RtmpVideoCodec,
     client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
     error::RtmpStreamError,
     message::{
@@ -84,44 +84,38 @@ impl RtmpClient {
         RtmpEvent: From<T>,
     {
         let event = match RtmpEvent::from(event) {
-            RtmpEvent::H264Data(data) => RtmpMessage::Video {
-                video: VideoMessage::H264Data(data),
-                stream_id: self.stream_id,
-            },
-            RtmpEvent::H264Config(config) => RtmpMessage::Video {
-                video: VideoMessage::H264Config(config),
-                stream_id: self.stream_id,
-            },
-            RtmpEvent::AacData(data) => RtmpMessage::Audio {
-                audio: AudioMessage::AacData(data),
-                stream_id: self.stream_id,
-            },
-            RtmpEvent::AacConfig(config) => RtmpMessage::Audio {
-                audio: AudioMessage::AacConfig(config),
-                stream_id: self.stream_id,
-            },
-            RtmpEvent::UnknownAudioData(audio) => RtmpMessage::Audio {
-                audio: AudioMessage::Unknown(audio),
-                stream_id: self.stream_id,
-            },
-            RtmpEvent::LegacyVideoData(video) => RtmpMessage::Video {
-                video: VideoMessage::Legacy(video),
-                stream_id: self.stream_id,
-            },
-            RtmpEvent::EnhancedVideoData(video) => {
-                // Enhanced RTMP video requires explicit connect capability signaling.
-                if !self.state.peer_supports_enhanced {
+            RtmpEvent::VideoData(data) => {
+                if data.codec != RtmpVideoCodec::H264 && !self.state.peer_supports_enhanced {
                     return Err(RtmpMessageSerializeError::InternalError(
                         "Peer did not negotiate Enhanced RTMP video support".into(),
                     )
                     .into());
                 }
-
                 RtmpMessage::Video {
-                    video: VideoMessage::Enhanced(video),
+                    video: VideoMessage::Data(data),
                     stream_id: self.stream_id,
                 }
             }
+            RtmpEvent::VideoConfig(config) => {
+                if config.codec != RtmpVideoCodec::H264 && !self.state.peer_supports_enhanced {
+                    return Err(RtmpMessageSerializeError::InternalError(
+                        "Peer did not negotiate Enhanced RTMP video support".into(),
+                    )
+                    .into());
+                }
+                RtmpMessage::Video {
+                    video: VideoMessage::Config(config),
+                    stream_id: self.stream_id,
+                }
+            }
+            RtmpEvent::AudioData(data) => RtmpMessage::Audio {
+                audio: AudioMessage::Data(data),
+                stream_id: self.stream_id,
+            },
+            RtmpEvent::AudioConfig(config) => RtmpMessage::Audio {
+                audio: AudioMessage::Config(config),
+                stream_id: self.stream_id,
+            },
             RtmpEvent::Metadata(metadata) => RtmpMessage::DataMessage {
                 data: DataMessage::OnMetaData(metadata),
                 stream_id: self.stream_id,

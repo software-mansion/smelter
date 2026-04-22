@@ -18,23 +18,21 @@ fn main() {
         thread::spawn(move || {
             for media_data in &conn {
                 match media_data {
-                    RtmpEvent::H264Config(video_config) => {
+                    RtmpEvent::VideoConfig(video_config) => {
                         info!(?video_config, "video config")
                     }
-                    RtmpEvent::AacConfig(audio_config) => {
+                    RtmpEvent::AudioConfig(audio_config) => {
                         info!(?audio_config, "audio config")
                     }
-                    RtmpEvent::H264Data(video) => {
+                    RtmpEvent::VideoData(video) => {
                         info!(?video, ?app, ?stream_key, "Received video")
                     }
-                    RtmpEvent::AacData(audio) => info!(?audio, ?app, ?stream_key, "Received audio"),
+                    RtmpEvent::AudioData(audio) => {
+                        info!(?audio, ?app, ?stream_key, "Received audio")
+                    }
                     RtmpEvent::Metadata(data) => {
                         info!("Metadata received");
                         println!("{data:#?}");
-                    }
-                    _ => {
-                        info!("Raw packets");
-                        println!("{media_data:#?}");
                     }
                 };
             }

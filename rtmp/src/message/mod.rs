@@ -79,7 +79,7 @@ impl RtmpMessage {
     pub fn is_media_packet(&self) -> bool {
         match self {
             Self::Video { video, .. } => video.is_media_packet(),
-            Self::Audio { audio, .. } => !matches!(audio, AudioMessage::AacConfig(_)),
+            Self::Audio { audio, .. } => audio.is_media_packet(),
             _ => false,
         }
     }
