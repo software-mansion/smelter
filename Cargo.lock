@@ -2568,6 +2568,7 @@ dependencies = [
  "fuzzy-matcher",
  "image",
  "inquire",
+ "integration-tests-macros",
  "libcef",
  "opus",
  "rand 0.9.3",
@@ -2589,6 +2590,15 @@ dependencies = [
  "webrtc",
  "webrtc-util",
  "wgpu",
+]
+
+[[package]]
+name = "integration-tests-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]

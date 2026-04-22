@@ -1,19 +1,27 @@
 use std::time::Duration;
 
-use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, compare_video_dumps,
-    input_dump_from_disk, video::VideoValidationConfig,
-};
 use anyhow::Result;
+use integration_tests_macros::pipeline_test;
 use serde_json::json;
 
-/// Schedules an output update.
-///
-/// Show `input_1` for 2 seconds.
-/// Show `input_1` and `input_2` side by side (transition with animation) for 18 seconds.
-#[test]
+use crate::{
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, compare_video_dumps,
+    input_dump_from_disk, pipeline_tests::PipelineTest, video::VideoValidationConfig,
+};
+
+#[allow(dead_code)]
+pub const TESTS: &[PipelineTest] = &[SCHEDULE_UPDATE];
+
+#[pipeline_test(
+    description = "
+        Schedules an output update.
+
+        Show `input_1` for 2 seconds.
+        Show `input_1` and `input_2` side by side (transition with animation) for 18 seconds.
+    ",
+    snapshot_name = "schedule_update_output.rtp"
+)]
 pub fn schedule_update() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "schedule_update_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let input_2_port = instance.get_port();

@@ -1,18 +1,27 @@
 use std::{thread, time::Duration};
 
-use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, compare_video_dumps,
-    input_dump_from_disk, paths::integration_tests_root, video::VideoValidationConfig,
-};
 use anyhow::Result;
+use integration_tests_macros::pipeline_test;
 use serde_json::json;
 
-/// Setup scene with stream and image and send unregister request after 4 seconds for both.
-///
-/// Show image and stream for 4 seconds. After that only image is displayed.
-#[test]
+use crate::{
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, compare_video_dumps,
+    input_dump_from_disk, paths::integration_tests_root, pipeline_tests::PipelineTest,
+    video::VideoValidationConfig,
+};
+
+#[allow(dead_code)]
+pub const TESTS: &[PipelineTest] = &[UNREGISTERING_FLAKY];
+
+#[pipeline_test(
+    description = "
+        Setup scene with stream and image and send unregister request after 4 seconds for both.
+
+        Show image and stream for 4 seconds. After that only image is displayed.
+    ",
+    snapshot_name = "unregistering_test_output.rtp"
+)]
 pub fn unregistering_flaky() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "unregistering_test_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_port = instance.get_port();
     let output_port_1 = instance.get_port();

@@ -1,23 +1,35 @@
 use std::{thread, time::Duration};
 
-use anyhow::Result;
-use serde_json::json;
-
 use crate::{
     CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, compare_video_dumps,
-    input_dump_from_disk, video::VideoValidationConfig,
+    input_dump_from_disk, pipeline_tests::PipelineTest, video::VideoValidationConfig,
 };
 
-/// Check if the input stream is passed to the output correctly even if entire
-/// stream was delivered before the compositor start. (TCP input)
-///
-/// Output:
-/// - Display entire input stream from the beginning (16 seconds). No black frames at the
-///   beginning. Starts with a green color.
-/// - Black screen for remaining 4 seconds.
-#[test]
+use anyhow::Result;
+use integration_tests_macros::pipeline_test;
+use serde_json::json;
+
+#[allow(dead_code)]
+pub const TESTS: &[PipelineTest] = &[
+    PUSH_INPUT_BEFORE_START_TCP,
+    PUSH_INPUT_BEFORE_START_UDP,
+    PUSH_INPUT_BEFORE_START_TCP_NO_OFFSET,
+    PUSH_INPUT_BEFORE_START_UDP_NO_OFFSET,
+];
+
+#[pipeline_test(
+    description = "
+        Check if the input stream is passed to the output correctly even if entire
+        stream was delivered before the compositor start. (TCP input)
+
+        Output:
+        - Display entire input stream from the beginning (16 seconds). No black frames at the
+          beginning. Starts with a green color.
+        - Black screen for remaining 4 seconds.
+    ",
+    snapshot_name = "push_entire_input_before_start_tcp.rtp"
+)]
 pub fn push_input_before_start_tcp() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "push_entire_input_before_start_tcp.rtp";
     let instance = CompositorInstance::start(None);
     let input_port = instance.get_port();
     let output_port = instance.get_port();
@@ -93,16 +105,19 @@ pub fn push_input_before_start_tcp() -> Result<()> {
     Ok(())
 }
 
-/// Check if the input stream is passed to the output correctly even if entire
-/// stream was delivered before the compositor start. (UDP)
-///
-/// Output:
-/// - Display entire input stream from the beginning (16 seconds). No black frames at the
-///   beginning. Starts with a green screen.
-/// - Black screen for remaining 4 seconds.
-#[test]
+#[pipeline_test(
+    description = "
+        Check if the input stream is passed to the output correctly even if entire
+        stream was delivered before the compositor start. (UDP)
+
+        Output:
+        - Display entire input stream from the beginning (16 seconds). No black frames at the
+          beginning. Starts with a green screen.
+        - Black screen for remaining 4 seconds.
+    ",
+    snapshot_name = "push_entire_input_before_start_udp.rtp"
+)]
 pub fn push_input_before_start_udp() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "push_entire_input_before_start_udp.rtp";
     let instance = CompositorInstance::start(None);
     let input_port = instance.get_port();
     let output_port = instance.get_port();
@@ -178,16 +193,19 @@ pub fn push_input_before_start_udp() -> Result<()> {
     Ok(())
 }
 
-/// Check if the input stream is processed correctly if the stream is delivered few seconds before
-/// queue start. Test case where there is no offset defined. (TCP server)
-///
-/// Output:
-/// - Display input stream without initial 5 seconds from the beginning (11 seconds). Not black frames at the
-///   beginning. Starts with a red color. Initial 5 second of input stream is missing.
-/// - Black screen for remaining 9 seconds.
-#[test]
+#[pipeline_test(
+    description = "
+        Check if the input stream is processed correctly if the stream is delivered few seconds before
+        queue start. Test case where there is no offset defined. (TCP server)
+
+        Output:
+        - Display input stream without initial 5 seconds from the beginning (11 seconds). Not black frames at the
+          beginning. Starts with a red color. Initial 5 second of input stream is missing.
+        - Black screen for remaining 9 seconds.
+    ",
+    snapshot_name = "push_entire_input_before_start_tcp_without_offset.rtp"
+)]
 pub fn push_input_before_start_tcp_no_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "push_entire_input_before_start_tcp_without_offset.rtp";
     let instance = CompositorInstance::start(None);
     let input_port = instance.get_port();
     let output_port = instance.get_port();
@@ -263,16 +281,19 @@ pub fn push_input_before_start_tcp_no_offset() -> Result<()> {
     Ok(())
 }
 
-/// Check if the input stream is processed correctly if the stream is delivered few seconds before
-/// queue start. Test case where there is no offset defined. (UPD)
-///
-/// Output:
-/// - Display entire input stream from the beginning (16 seconds). No black frames at the
-///   beginning. Starts with a red color. Initial 5 second of input stream is missing.
-/// - Black screen for remaining 19 seconds.
-#[test]
+#[pipeline_test(
+    description = "
+        Check if the input stream is processed correctly if the stream is delivered few seconds before
+        queue start. Test case where there is no offset defined. (UPD)
+
+        Output:
+        - Display entire input stream from the beginning (16 seconds). No black frames at the
+          beginning. Starts with a red color. Initial 5 second of input stream is missing.
+        - Black screen for remaining 19 seconds.
+    ",
+    snapshot_name = "push_entire_input_before_start_udp_without_offset.rtp"
+)]
 pub fn push_input_before_start_udp_no_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "push_entire_input_before_start_udp_without_offset.rtp";
     let instance = CompositorInstance::start(None);
     let input_port = instance.get_port();
     let output_port = instance.get_port();

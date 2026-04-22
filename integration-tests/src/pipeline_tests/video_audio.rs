@@ -1,4 +1,5 @@
 use anyhow::Result;
+use integration_tests_macros::pipeline_test;
 use serde_json::json;
 use std::time::Duration;
 
@@ -6,15 +7,22 @@ use crate::{
     CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
     audio::{self, AudioAnalyzeTolerance, AudioValidationConfig, RealFrequencyTolerance},
     compare_audio_dumps, compare_video_dumps, input_dump_from_disk,
+    pipeline_tests::PipelineTest,
     video::VideoValidationConfig,
 };
 
-/// Input and output streams with muxed video and audio.
-///
-/// Show `input_1` with audio for 20 seconds.
-#[test]
+#[allow(dead_code)]
+pub const TESTS: &[PipelineTest] = &[SINGLE_INPUT_WITH_VIDEO_AND_AUDIO_FLAKY];
+
+#[pipeline_test(
+    description = "
+        Input and output streams with muxed video and audio.
+
+        Show `input_1` with audio for 20 seconds.
+    ",
+    snapshot_name = "single_input_with_video_and_audio_output.rtp"
+)]
 pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "single_input_with_video_and_audio_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_port = instance.get_port();
     let output_port = instance.get_port();
