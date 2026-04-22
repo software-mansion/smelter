@@ -98,10 +98,6 @@ impl VideoQueueInput {
             // Partially duplicate get_frame logic, we can't call it directly
             // because we don't want to tiger eos event.
             let offset = self.resolve_offset(pts, queue_start_pts)?;
-            // if pts is before offset we don't want to return it yet
-            if pts < offset {
-                return None;
-            }
             self.receiver.get_for_pts(pts.saturating_sub(offset))
         });
 
@@ -146,11 +142,6 @@ impl VideoQueueInput {
         }
 
         let offset = self.resolve_offset(pts, queue_start_pts)?;
-
-        // if buffer_pts is before offset we don't want to return it yet
-        if pts < offset {
-            return None;
-        }
 
         let input_pts = pts.saturating_sub(offset);
         trace!(queue_pts=?pts, ?input_pts, "Try get frame");
@@ -270,11 +261,20 @@ impl VideoInputReceiver {
         (track, sender)
     }
 
+    /// Get for pts returns the frame for specified pts.
+    ///
+    /// Frame pts always needs to be older (lower value). If it is not return None,
+    /// this behavior diverges from `is_ready_for_pts`.
     fn get_for_pts(&mut self, pts: Duration) -> Option<Frame> {
         if self.state == ReceiverState::Done {
             return None;
         }
         self.prepare_for_pts(pts);
+        match self.buffer.front() {
+            Some(front) if front.pts > pts => return None,
+            None => return None,
+            _ => {}
+        }
         if self.disconnected && self.buffer.len() == 1 {
             let frame = self.buffer.pop_front();
             self.maybe_transition_to_done();
@@ -284,8 +284,14 @@ impl VideoInputReceiver {
         }
     }
 
+    /// Receiver is ready for pts if:
+    /// - it already finished
+    /// - it has any frame in buffer that is newer than pts
+    ///
+    /// If first pts is newer it is still considered ready, but get_for_pts
+    /// will not return that frame for that pts
     fn is_ready_for_pts(&mut self, pts: Duration) -> bool {
-        if self.state() == ReceiverState::Done || self.disconnected {
+        if self.disconnected {
             return true;
         }
         self.prepare_for_pts(pts);
@@ -297,27 +303,23 @@ impl VideoInputReceiver {
         }
     }
 
+    /// After this call, only the front frame of `self.buffer` might be older than `pts`;
+    /// all remaining frames are newer.
     fn prepare_for_pts(&mut self, pts: Duration) {
         loop {
             self.try_enqueue();
-            if self.buffer.is_empty() {
-                return;
+            let mut dropped = false;
+
+            // if second element is older than pts then we can drop firs one
+            while let Some(second) = self.buffer.get(1)
+                && second.pts <= pts
+            {
+                self.buffer.pop_front();
+                dropped = true;
             }
-
-            let closest_idx = self
-                .buffer
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, frame)| frame.pts.abs_diff(pts))
-                .map(|(idx, _)| idx)
-                .unwrap();
-
-            let drained = closest_idx > 0;
-            self.buffer.drain(0..closest_idx);
-            self.maybe_transition_to_done();
-
-            // If we drained frames, there may be room for new frames closer to pts
-            if !drained {
+            // If we dropped any frames, there may be room to enqueue more.
+            if !dropped {
+                self.maybe_transition_to_done();
                 return;
             }
         }
