@@ -1,8 +1,5 @@
 use std::{
-    ffi::{CString, c_int, c_void},
-    mem,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    ptr, slice,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -11,14 +8,8 @@ use std::{
     time::Duration,
 };
 
-use bytes::Bytes;
-use ffmpeg_next::ffi::{
-    AV_NOPTS_VALUE, AVERROR_EOF, AVFMT_FLAG_CUSTOM_IO, AVFormatContext, AVIOContext, AVMediaType,
-    AVPacket, AVRational, AVStream, av_find_input_format, av_free, av_init_packet, av_malloc,
-    av_packet_unref, av_read_frame, avformat_alloc_context, avformat_close_input,
-    avformat_find_stream_info, avformat_open_input, avio_alloc_context, avio_context_free,
-};
 use libsrt::{EPOLL_ERR, EPOLL_IN, EpollEvent, SrtEpoll, SrtSocket};
+use mpegts::{Demuxer, DemuxerEvent, EsPacket, StreamType, TS_CLOCK_HZ, TS_PACKET_SIZE};
 use tracing::{Level, debug, info, span, warn};
 
 use crate::{
@@ -37,11 +28,12 @@ use crate::{
 
 use crate::prelude::*;
 
-/// Buffer filled by the SRT demuxer for AVFormatContext probing.
-const AVIO_BUFFER_SIZE: usize = 1316 * 7;
+/// Receive buffer used when reading from the SRT socket. Sized to hold several
+/// MPEG-TS packets per recv to minimise syscall overhead.
+const SRT_RECV_BUFFER_SIZE: usize = TS_PACKET_SIZE * 7;
 
-/// How long AVIO read polls SRT before checking the shutdown flag.
-const AVIO_POLL_TIMEOUT_MS: i64 = 500;
+/// How long the SRT epoll waits before re-checking the shutdown flag.
+const SRT_POLL_TIMEOUT_MS: i64 = 500;
 
 /// How long the accept loop waits between shutdown checks.
 const ACCEPT_POLL_TIMEOUT_MS: i64 = 500;
@@ -50,17 +42,18 @@ const ACCEPT_POLL_TIMEOUT_MS: i64 = 500;
 const CHUNK_BUFFER_DURATION: Duration = Duration::from_secs(2);
 
 /// SRT input - listens on an UDP port for an incoming SRT stream, demuxes the
-/// MPEG-TS container (via FFmpeg) and forwards H.264 video and AAC audio to the
-/// decoders.
+/// MPEG-TS container (pure Rust, via the `mpegts` crate) and forwards H.264
+/// video and AAC audio to the decoders.
 ///
 /// ## Flow
 ///
 /// - A listener SRT socket is bound to the configured port and put into
 ///   non-blocking mode. An SRT epoll waits for an incoming connection.
-/// - On connection, the accepted socket becomes the source for a custom
-///   `AVIOContext` that feeds `avformat_open_input` with `mpegts` forced.
-/// - FFmpeg's demuxer reads packets; the thread routes them to the appropriate
-///   decoder based on the configured track options.
+/// - On connection, the accepted socket's bytes are streamed into an
+///   [`mpegts::Demuxer`]. The demuxer parses PAT/PMT and emits reassembled
+///   PES payloads as [`EsPacket`]s.
+/// - The thread routes ES packets to the appropriate decoder based on the
+///   configured track options.
 /// - When the peer disconnects or `SrtInput` is dropped, EOS is sent to the
 ///   decoders and the thread exits.
 pub struct SrtInput {
@@ -253,100 +246,182 @@ impl SrtDemuxerThread {
             return;
         }
 
-        let avio_ctx = Box::new(AvioSrtCtx {
-            socket: connection,
-            shutdown: shutdown.clone(),
-            epoll: match SrtEpoll::new() {
-                Ok(e) => e,
-                Err(err) => {
-                    warn!("Failed to create SRT epoll for connection: {err}");
-                    send_eos(&video_handle, &audio_handle);
-                    return;
-                }
-            },
-        });
-        if let Err(err) = avio_ctx.epoll.add(&avio_ctx.socket, EPOLL_IN | EPOLL_ERR) {
+        let epoll = match SrtEpoll::new() {
+            Ok(e) => e,
+            Err(err) => {
+                warn!("Failed to create SRT epoll for connection: {err}");
+                send_eos(&video_handle, &audio_handle);
+                return;
+            }
+        };
+        if let Err(err) = epoll.add(&connection, EPOLL_IN | EPOLL_ERR) {
             warn!("Failed to add SRT connection to epoll: {err}");
             send_eos(&video_handle, &audio_handle);
             return;
         }
 
-        let mut fmt_ctx = match MpegTsFormatContext::open(avio_ctx) {
-            Ok(ctx) => ctx,
-            Err(err) => {
-                warn!("Failed to open MPEG-TS stream over SRT: {err}");
-                send_eos(&video_handle, &audio_handle);
-                return;
-            }
-        };
-
-        let video_stream = fmt_ctx.find_stream(AVMediaType::AVMEDIA_TYPE_VIDEO);
-        let audio_stream = fmt_ctx.find_stream(AVMediaType::AVMEDIA_TYPE_AUDIO);
-
+        let mut demuxer = Demuxer::new();
+        let mut video_pid: Option<u16> = None;
+        let mut audio_pid: Option<u16> = None;
         let mut first_pts: Option<Duration> = None;
+        let mut buf = [0u8; SRT_RECV_BUFFER_SIZE];
 
-        loop {
+        'outer: loop {
             if shutdown.load(Ordering::Relaxed) {
                 break;
             }
-            match fmt_ctx.read_packet() {
-                ReadResult::Packet(pkt) => {
-                    let stream_index = pkt.stream_index;
-                    let time_base = pkt.time_base;
-                    let pts_raw = pkt.pts.unwrap_or(0);
-                    let dts_raw = pkt.dts;
-                    let pts = timestamp_to_duration(pts_raw, time_base);
-                    let dts = dts_raw.map(|dts| timestamp_to_duration(dts, time_base));
-                    let offset = *first_pts.get_or_insert(pts);
-                    let pts = pts.saturating_sub(offset);
-                    let dts = dts.map(|dts| dts.saturating_sub(offset));
-
-                    if Some(stream_index) == video_stream
-                        && let Some(handle) = &video_handle
-                    {
-                        let chunk = EncodedInputChunk {
-                            data: pkt.data,
-                            pts,
-                            dts,
-                            kind: MediaKind::Video(VideoCodec::H264),
-                            present: true,
-                        };
-                        if handle
-                            .chunk_sender
-                            .send(PipelineEvent::Data(chunk))
-                            .is_err()
-                        {
-                            debug!("Video decoder channel closed.");
-                        }
-                    } else if Some(stream_index) == audio_stream
-                        && let Some(handle) = &audio_handle
-                    {
-                        let chunk = EncodedInputChunk {
-                            data: pkt.data,
-                            pts,
-                            dts,
-                            kind: MediaKind::Audio(AudioCodec::Aac),
-                            present: true,
-                        };
-                        if handle
-                            .chunk_sender
-                            .send(PipelineEvent::Data(chunk))
-                            .is_err()
-                        {
-                            debug!("Audio decoder channel closed.");
-                        }
-                    }
-                }
-                ReadResult::Eof => break,
-                ReadResult::Error(err) => {
-                    warn!("SRT MPEG-TS read error: {err}");
-                    break;
+            match read_from_srt(&connection, &epoll, &shutdown, &mut buf) {
+                ReadOutcome::Data(bytes) => demuxer.push(bytes),
+                ReadOutcome::WouldBlock => {}
+                ReadOutcome::Eof => {
+                    demuxer.flush();
+                    drain_events(
+                        &mut demuxer,
+                        &mut video_pid,
+                        &mut audio_pid,
+                        &mut first_pts,
+                        &video_handle,
+                        &audio_handle,
+                    );
+                    break 'outer;
                 }
             }
+            drain_events(
+                &mut demuxer,
+                &mut video_pid,
+                &mut audio_pid,
+                &mut first_pts,
+                &video_handle,
+                &audio_handle,
+            );
         }
 
         info!(?input_ref, "SRT input stream ended");
         send_eos(&video_handle, &audio_handle);
+    }
+}
+
+fn drain_events(
+    demuxer: &mut Demuxer,
+    video_pid: &mut Option<u16>,
+    audio_pid: &mut Option<u16>,
+    first_pts: &mut Option<Duration>,
+    video_handle: &Option<DecoderThreadHandle>,
+    audio_handle: &Option<DecoderThreadHandle>,
+) {
+    while let Some(event) = demuxer.pop_event() {
+        match event {
+            DemuxerEvent::ProgramDiscovered(streams) => {
+                *video_pid = streams
+                    .iter()
+                    .find(|s| matches!(s.stream_type, StreamType::H264))
+                    .map(|s| s.pid);
+                *audio_pid = streams
+                    .iter()
+                    .find(|s| matches!(s.stream_type, StreamType::AacAdts | StreamType::AacLatm))
+                    .map(|s| s.pid);
+            }
+            DemuxerEvent::EsPacket(pkt) => forward_es_packet(
+                pkt,
+                video_pid,
+                audio_pid,
+                first_pts,
+                video_handle,
+                audio_handle,
+            ),
+        }
+    }
+}
+
+fn forward_es_packet(
+    pkt: EsPacket,
+    video_pid: &Option<u16>,
+    audio_pid: &Option<u16>,
+    first_pts: &mut Option<Duration>,
+    video_handle: &Option<DecoderThreadHandle>,
+    audio_handle: &Option<DecoderThreadHandle>,
+) {
+    let Some(pts_ticks) = pkt.pts else {
+        return;
+    };
+    let pts = ticks_to_duration(pts_ticks);
+    let dts = pkt.dts.map(ticks_to_duration);
+    let offset = *first_pts.get_or_insert(pts);
+    let pts = pts.saturating_sub(offset);
+    let dts = dts.map(|dts| dts.saturating_sub(offset));
+
+    if Some(pkt.pid) == *video_pid
+        && let Some(handle) = video_handle
+    {
+        let chunk = EncodedInputChunk {
+            data: pkt.data,
+            pts,
+            dts,
+            kind: MediaKind::Video(VideoCodec::H264),
+            present: true,
+        };
+        if handle
+            .chunk_sender
+            .send(PipelineEvent::Data(chunk))
+            .is_err()
+        {
+            debug!("Video decoder channel closed.");
+        }
+    } else if Some(pkt.pid) == *audio_pid
+        && let Some(handle) = audio_handle
+    {
+        let chunk = EncodedInputChunk {
+            data: pkt.data,
+            pts,
+            dts,
+            kind: MediaKind::Audio(AudioCodec::Aac),
+            present: true,
+        };
+        if handle
+            .chunk_sender
+            .send(PipelineEvent::Data(chunk))
+            .is_err()
+        {
+            debug!("Audio decoder channel closed.");
+        }
+    }
+}
+
+enum ReadOutcome<'a> {
+    Data(&'a [u8]),
+    WouldBlock,
+    Eof,
+}
+
+fn read_from_srt<'a>(
+    socket: &SrtSocket,
+    epoll: &SrtEpoll,
+    shutdown: &Arc<AtomicBool>,
+    buf: &'a mut [u8],
+) -> ReadOutcome<'a> {
+    let mut events = [EpollEvent { sock: 0, events: 0 }; 1];
+    if shutdown.load(Ordering::Relaxed) {
+        return ReadOutcome::Eof;
+    }
+    match epoll.wait(&mut events, SRT_POLL_TIMEOUT_MS) {
+        Ok(0) => ReadOutcome::WouldBlock,
+        Ok(_) => {
+            if events[0].events & EPOLL_ERR != 0 {
+                return ReadOutcome::Eof;
+            }
+            match socket.recv(buf) {
+                Ok(0) => ReadOutcome::Eof,
+                Ok(n) => ReadOutcome::Data(&buf[..n]),
+                Err(err) => {
+                    debug!("SRT recv returned error (treating as EOF): {err}");
+                    ReadOutcome::Eof
+                }
+            }
+        }
+        Err(err) => {
+            debug!("SRT epoll_wait returned error (treating as EOF): {err}");
+            ReadOutcome::Eof
+        }
     }
 }
 
@@ -390,212 +465,10 @@ fn wait_for_connection(listener: &SrtSocket, shutdown: &Arc<AtomicBool>) -> Opti
     }
 }
 
-fn timestamp_to_duration(ts: i64, time_base: AVRational) -> Duration {
-    let secs = f64::max(ts as f64, 0.0) * time_base.num as f64 / time_base.den as f64;
-    Duration::from_secs_f64(secs)
-}
-
-/// Opaque payload for the AVIO read callback.
-struct AvioSrtCtx {
-    socket: SrtSocket,
-    shutdown: Arc<AtomicBool>,
-    epoll: SrtEpoll,
-}
-
-extern "C" fn avio_read_cb(opaque: *mut c_void, buf: *mut u8, buf_size: c_int) -> c_int {
-    let ctx = unsafe { &mut *(opaque as *mut AvioSrtCtx) };
-    let mut events = [EpollEvent { sock: 0, events: 0 }; 1];
-    loop {
-        if ctx.shutdown.load(Ordering::Relaxed) {
-            return AVERROR_EOF;
-        }
-        match ctx.epoll.wait(&mut events, AVIO_POLL_TIMEOUT_MS) {
-            Ok(0) => continue,
-            Ok(_) => {
-                if events[0].events & EPOLL_ERR != 0 {
-                    return AVERROR_EOF;
-                }
-                let dst = unsafe { slice::from_raw_parts_mut(buf, buf_size as usize) };
-                match ctx.socket.recv(dst) {
-                    Ok(0) => return AVERROR_EOF,
-                    Ok(n) => return n as c_int,
-                    Err(err) => {
-                        debug!("SRT recv returned error (treating as EOF): {err}");
-                        return AVERROR_EOF;
-                    }
-                }
-            }
-            Err(err) => {
-                debug!("SRT epoll_wait returned error (treating as EOF): {err}");
-                return AVERROR_EOF;
-            }
-        }
-    }
-}
-
-/// RAII-wrapper for a custom-IO FFmpeg format context attached to an SRT
-/// socket. Owns the `AVIOContext`, the buffer handed to FFmpeg and the boxed
-/// opaque payload.
-struct MpegTsFormatContext {
-    fmt_ctx: *mut AVFormatContext,
-    avio: *mut AVIOContext,
-    opaque: *mut AvioSrtCtx,
-}
-
-impl MpegTsFormatContext {
-    fn open(opaque: Box<AvioSrtCtx>) -> Result<Self, ffmpeg_next::Error> {
-        unsafe {
-            let fmt_ctx = avformat_alloc_context();
-            if fmt_ctx.is_null() {
-                return Err(ffmpeg_next::Error::from(AVERROR_EOF));
-            }
-
-            let buf = av_malloc(AVIO_BUFFER_SIZE) as *mut u8;
-            if buf.is_null() {
-                avformat_close_input(&mut (fmt_ctx as *mut _));
-                return Err(ffmpeg_next::Error::from(AVERROR_EOF));
-            }
-
-            let opaque_ptr = Box::into_raw(opaque);
-            let avio = avio_alloc_context(
-                buf,
-                AVIO_BUFFER_SIZE as c_int,
-                0,
-                opaque_ptr as *mut c_void,
-                Some(avio_read_cb),
-                None,
-                None,
-            );
-            if avio.is_null() {
-                av_free(buf as *mut c_void);
-                drop(Box::from_raw(opaque_ptr));
-                avformat_close_input(&mut (fmt_ctx as *mut _));
-                return Err(ffmpeg_next::Error::from(AVERROR_EOF));
-            }
-
-            (*fmt_ctx).pb = avio;
-            (*fmt_ctx).flags |= AVFMT_FLAG_CUSTOM_IO as c_int;
-
-            let fmt_name = CString::new("mpegts").unwrap();
-            let input_fmt = av_find_input_format(fmt_name.as_ptr());
-
-            let mut fmt_ctx_mut = fmt_ctx;
-            let res =
-                avformat_open_input(&mut fmt_ctx_mut, ptr::null(), input_fmt, ptr::null_mut());
-            if res < 0 {
-                // On failure avformat_open_input frees fmt_ctx but not our avio/buf/opaque.
-                let avio_buf = (*avio).buffer;
-                avio_context_free(&mut (avio as *mut _));
-                av_free(avio_buf as *mut c_void);
-                drop(Box::from_raw(opaque_ptr));
-                return Err(ffmpeg_next::Error::from(res));
-            }
-
-            let res = avformat_find_stream_info(fmt_ctx_mut, ptr::null_mut());
-            if res < 0 {
-                let avio_buf = (*avio).buffer;
-                avformat_close_input(&mut fmt_ctx_mut);
-                avio_context_free(&mut (avio as *mut _));
-                av_free(avio_buf as *mut c_void);
-                drop(Box::from_raw(opaque_ptr));
-                return Err(ffmpeg_next::Error::from(res));
-            }
-
-            Ok(Self {
-                fmt_ctx: fmt_ctx_mut,
-                avio,
-                opaque: opaque_ptr,
-            })
-        }
-    }
-
-    fn find_stream(&self, media_type: AVMediaType) -> Option<i32> {
-        unsafe {
-            let nb = (*self.fmt_ctx).nb_streams as isize;
-            let streams = (*self.fmt_ctx).streams;
-            let mut best: Option<i32> = None;
-            for i in 0..nb {
-                let stream: *mut AVStream = *streams.offset(i);
-                if stream.is_null() {
-                    continue;
-                }
-                let codecpar = (*stream).codecpar;
-                if codecpar.is_null() {
-                    continue;
-                }
-                if (*codecpar).codec_type == media_type && best.is_none() {
-                    best = Some((*stream).index);
-                }
-            }
-            best
-        }
-    }
-
-    fn read_packet(&mut self) -> ReadResult {
-        unsafe {
-            let mut pkt: AVPacket = mem::zeroed();
-            av_init_packet(&mut pkt);
-            let res = av_read_frame(self.fmt_ctx, &mut pkt);
-            if res == AVERROR_EOF {
-                return ReadResult::Eof;
-            }
-            if res < 0 {
-                return ReadResult::Error(ffmpeg_next::Error::from(res));
-            }
-            let stream_index = pkt.stream_index;
-            let stream = *(*self.fmt_ctx).streams.offset(stream_index as isize);
-            let time_base = (*stream).time_base;
-            let pts = if pkt.pts == AV_NOPTS_VALUE {
-                None
-            } else {
-                Some(pkt.pts)
-            };
-            let dts = if pkt.dts == AV_NOPTS_VALUE {
-                None
-            } else {
-                Some(pkt.dts)
-            };
-            let data = if pkt.data.is_null() || pkt.size <= 0 {
-                Bytes::new()
-            } else {
-                Bytes::copy_from_slice(slice::from_raw_parts(pkt.data, pkt.size as usize))
-            };
-            av_packet_unref(&mut pkt);
-            ReadResult::Packet(RawPacket {
-                stream_index,
-                time_base,
-                pts,
-                dts,
-                data,
-            })
-        }
-    }
-}
-
-impl Drop for MpegTsFormatContext {
-    fn drop(&mut self) {
-        unsafe {
-            let avio_buf = (*self.avio).buffer;
-            let mut fmt = self.fmt_ctx;
-            avformat_close_input(&mut fmt);
-            let mut avio = self.avio;
-            avio_context_free(&mut avio);
-            av_free(avio_buf as *mut c_void);
-            drop(Box::from_raw(self.opaque));
-        }
-    }
-}
-
-enum ReadResult {
-    Packet(RawPacket),
-    Eof,
-    Error(ffmpeg_next::Error),
-}
-
-struct RawPacket {
-    stream_index: i32,
-    time_base: AVRational,
-    pts: Option<i64>,
-    dts: Option<i64>,
-    data: Bytes,
+fn ticks_to_duration(ticks: u64) -> Duration {
+    let secs = ticks / TS_CLOCK_HZ;
+    let rem = ticks % TS_CLOCK_HZ;
+    // rem < 90_000, so rem * 1_000_000_000 fits in u64 (< 9e13).
+    let nanos = (rem * 1_000_000_000) / TS_CLOCK_HZ;
+    Duration::new(secs, nanos as u32)
 }
