@@ -1,34 +1,35 @@
 mod serialize;
 mod server;
 
-use std::path::PathBuf;
+use std::{path::Path, sync::Arc};
 
 use crossbeam_channel::TrySendError;
-use smelter_render::Frame;
-use tracing::{debug, trace};
+use smelter_render::{Frame, InputId};
+use tracing::{debug, info};
 
-use crate::{prelude::InputAudioSamples, queue::queue_input::TrackOffset};
+use crate::{
+    pipeline::PipelineCtx, prelude::InputAudioSamples, queue::queue_input::TrackOffset, types::Ref,
+};
 
 use super::SharedPts;
 
-use self::{
-    serialize::{serialize_audio_batch, serialize_frame},
-    server::SideChannelServer,
-};
+use self::server::{AudioSideChannelServer, VideoSideChannelServer};
 
 #[derive(Clone)]
 pub struct VideoSideChannel {
     track_offset: TrackOffset,
     start_pts: SharedPts,
-    server: SideChannelServer,
+    server: VideoSideChannelServer,
 }
 
 impl VideoSideChannel {
-    pub fn new(socket_path: PathBuf, start_pts: SharedPts) -> Self {
+    pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, socket_dir: &Path) -> Self {
+        let path = socket_dir.join(format!("video_{}.sock", input_ref.id()));
+        info!(?path, "Starting video side channel");
         Self {
             track_offset: TrackOffset::default(),
-            start_pts,
-            server: SideChannelServer::new(socket_path, "video-sc", 1),
+            start_pts: ctx.queue_ctx.start_pts.clone(),
+            server: VideoSideChannelServer::new(path, input_ref.id(), ctx.wgpu_ctx.clone()),
         }
     }
 
@@ -47,11 +48,7 @@ impl VideoSideChannel {
         };
         let mut frame = frame.clone();
         frame.pts = frame.pts + offset - start_pts;
-        let Some(data) = serialize_frame(&frame) else {
-            trace!("Skipping side channel for GPU-only frame format");
-            return;
-        };
-        if let Err(TrySendError::Full(_)) = self.server.sender.try_send(data) {
+        if let Err(TrySendError::Full(_)) = self.server.sender.try_send(frame) {
             debug!("Video side channel: dropping frame, channel full");
         }
     }
@@ -61,15 +58,17 @@ impl VideoSideChannel {
 pub struct AudioSideChannel {
     track_offset: TrackOffset,
     start_pts: SharedPts,
-    server: SideChannelServer,
+    server: AudioSideChannelServer,
 }
 
 impl AudioSideChannel {
-    pub fn new(socket_path: PathBuf, start_pts: SharedPts) -> Self {
+    pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, socket_dir: &Path) -> Self {
+        let path = socket_dir.join(format!("audio_{}.sock", input_ref.id()));
+        info!(?path, "Starting audio side channel");
         Self {
             track_offset: TrackOffset::default(),
-            start_pts,
-            server: SideChannelServer::new(socket_path, "audio-sc", 10),
+            start_pts: ctx.queue_ctx.start_pts.clone(),
+            server: AudioSideChannelServer::new(path, input_ref.id()),
         }
     }
 
@@ -88,8 +87,7 @@ impl AudioSideChannel {
         };
         let mut batch = batch.clone();
         batch.start_pts = batch.start_pts + offset - start_pts;
-        let data = serialize_audio_batch(&batch);
-        if let Err(TrySendError::Full(_)) = self.server.sender.try_send(data) {
+        if let Err(TrySendError::Full(_)) = self.server.sender.try_send(batch) {
             debug!("Audio side channel: dropping samples, channel full");
         }
     }

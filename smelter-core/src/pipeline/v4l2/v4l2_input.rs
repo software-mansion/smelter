@@ -63,7 +63,7 @@ impl TryFrom<FourCC> for V4l2Format {
 ///   processed by the queue, but queue will wait and eventually stream will show up, with
 ///   the portion at the start cut off.
 /// - If queue is to slow (e.g. other input required and to slow), media will be delivered to
-///   queue to late and dropped
+///   queue too late and dropped
 pub struct V4l2Input {
     should_close: Arc<AtomicBool>,
 }

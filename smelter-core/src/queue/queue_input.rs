@@ -229,21 +229,13 @@ pub struct QueueInputOptions {
 
 impl QueueInput {
     pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, opts: QueueInputOptions) -> Self {
-        let socket_dir = &ctx.queue_ctx.side_channel_socket_dir;
+        let socket_dir = ctx.queue_ctx.side_channel_socket_dir.as_deref();
         let video_side_channel = match (opts.video_side_channel, socket_dir) {
-            (true, Some(dir)) => {
-                let path = dir.join(format!("video_{}.sock", input_ref.id()));
-                info!(?path, "Starting video side channel");
-                Some(VideoSideChannel::new(path, ctx.queue_ctx.start_pts.clone()))
-            }
+            (true, Some(dir)) => Some(VideoSideChannel::new(ctx, input_ref, dir)),
             _ => None,
         };
         let audio_side_channel = match (opts.audio_side_channel, socket_dir) {
-            (true, Some(dir)) => {
-                let path = dir.join(format!("audio_{}.sock", input_ref.id()));
-                info!(?path, "Starting audio side channel");
-                Some(AudioSideChannel::new(path, ctx.queue_ctx.start_pts.clone()))
-            }
+            (true, Some(dir)) => Some(AudioSideChannel::new(ctx, input_ref, dir)),
             _ => None,
         };
         Self(Arc::new(Mutex::new(InnerQueueInput {

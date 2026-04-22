@@ -1,5 +1,5 @@
 use crate::transformations::web_renderer::CreateWebRendererError;
-use crate::wgpu::CreateWgpuCtxError;
+pub use crate::wgpu::CreateWgpuCtxError;
 use crate::wgpu::common_pipeline::CreateShaderError;
 use crate::{OutputId, RendererId};
 use crate::{registry, scene::SceneError, transformations::image::ImageError};

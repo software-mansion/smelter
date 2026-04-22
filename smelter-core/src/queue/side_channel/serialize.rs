@@ -1,5 +1,7 @@
+use std::time::Duration;
+
 use bytes::Bytes;
-use smelter_render::Frame;
+use smelter_render::Resolution;
 
 use crate::{prelude::InputAudioSamples, types::AudioSamples};
 
@@ -12,78 +14,26 @@ use crate::{prelude::InputAudioSamples, types::AudioSamples};
 //     mono: [s0, s1, s2, ...]
 //     stereo: [l0, r0, l1, r1, ...]
 
-// Binary format for video frames:
+// Binary format for video frames (always RGBA):
 //   u32 width
 //   u32 height
 //   u64 pts_nanos
-//   u8  format (see FrameFormat constants below)
-//   u8  plane_count
-//   For each plane:
-//     u32 plane_len
-//     [u8; plane_len] plane_data
+//   [u8; width * height * 4] rgba_data
 
-mod frame_format {
-    pub const PLANAR_YUV_420: u8 = 0;
-    pub const PLANAR_YUV_422: u8 = 1;
-    pub const PLANAR_YUV_444: u8 = 2;
-    pub const PLANAR_YUVJ_420: u8 = 3;
-    pub const INTERLEAVED_UYVY_422: u8 = 4;
-    pub const INTERLEAVED_YUYV_422: u8 = 5;
-    pub const NV12: u8 = 6;
-    pub const BGRA: u8 = 7;
-    pub const ARGB: u8 = 8;
-}
+pub(super) fn serialize_rgba_frame(
+    resolution: Resolution,
+    pts: Duration,
+    rgba_data: Bytes,
+) -> Bytes {
+    // header: u32 + u32 + u64 = 16 bytes
+    let mut buf = Vec::with_capacity(16 + rgba_data.len());
 
-fn write_plane(buf: &mut Vec<u8>, plane: &[u8]) {
-    buf.extend_from_slice(&(plane.len() as u32).to_be_bytes());
-    buf.extend_from_slice(plane);
-}
+    buf.extend_from_slice(&(resolution.width as u32).to_be_bytes());
+    buf.extend_from_slice(&(resolution.height as u32).to_be_bytes());
+    buf.extend_from_slice(&(pts.as_nanos() as u64).to_be_bytes());
+    buf.extend_from_slice(&rgba_data);
 
-pub(super) fn serialize_frame(frame: &Frame) -> Option<Bytes> {
-    use smelter_render::FrameData;
-
-    let (format, planes): (u8, Vec<&[u8]>) = match &frame.data {
-        FrameData::PlanarYuv420(p) => (
-            frame_format::PLANAR_YUV_420,
-            vec![&p.y_plane, &p.u_plane, &p.v_plane],
-        ),
-        FrameData::PlanarYuv422(p) => (
-            frame_format::PLANAR_YUV_422,
-            vec![&p.y_plane, &p.u_plane, &p.v_plane],
-        ),
-        FrameData::PlanarYuv444(p) => (
-            frame_format::PLANAR_YUV_444,
-            vec![&p.y_plane, &p.u_plane, &p.v_plane],
-        ),
-        FrameData::PlanarYuvJ420(p) => (
-            frame_format::PLANAR_YUVJ_420,
-            vec![&p.y_plane, &p.u_plane, &p.v_plane],
-        ),
-        FrameData::InterleavedUyvy422(d) => (frame_format::INTERLEAVED_UYVY_422, vec![d]),
-        FrameData::InterleavedYuyv422(d) => (frame_format::INTERLEAVED_YUYV_422, vec![d]),
-        FrameData::Nv12(p) => (frame_format::NV12, vec![&p.y_plane, &p.uv_planes]),
-        FrameData::Bgra(d) => (frame_format::BGRA, vec![d]),
-        FrameData::Argb(d) => (frame_format::ARGB, vec![d]),
-        FrameData::Rgba8UnormWgpuTexture(_) | FrameData::Nv12WgpuTexture(_) => return None,
-    };
-
-    let data_size: usize = planes
-        .iter()
-        .map(|p| 4 + p.len()) // u32 len + data per plane
-        .sum();
-    // header: u32 + u32 + u64 + u8 + u8 = 18 bytes
-    let mut buf = Vec::with_capacity(18 + data_size);
-
-    buf.extend_from_slice(&(frame.resolution.width as u32).to_be_bytes());
-    buf.extend_from_slice(&(frame.resolution.height as u32).to_be_bytes());
-    buf.extend_from_slice(&(frame.pts.as_nanos() as u64).to_be_bytes());
-    buf.push(format);
-    buf.push(planes.len() as u8);
-    for plane in &planes {
-        write_plane(&mut buf, plane);
-    }
-
-    Some(Bytes::from(buf))
+    Bytes::from(buf)
 }
 
 pub(super) fn serialize_audio_batch(batch: &InputAudioSamples) -> Bytes {

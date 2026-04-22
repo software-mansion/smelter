@@ -24,14 +24,9 @@ class Detection:
     height: float
 
 
-def _yuv420_to_bgr(frame: VideoFrame) -> np.ndarray:
-    y_plane, u_plane, v_plane = frame.planes
-    h, w = frame.height, frame.width
-    y = np.frombuffer(y_plane, dtype=np.uint8).reshape(h, w)
-    u = np.frombuffer(u_plane, dtype=np.uint8).reshape(h // 2, w // 2)
-    v = np.frombuffer(v_plane, dtype=np.uint8).reshape(h // 2, w // 2)
-    yuv = np.concatenate([y.flatten(), u.flatten(), v.flatten()]).reshape(h * 3 // 2, w)
-    return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
+def _rgba_to_bgr(frame: VideoFrame) -> np.ndarray:
+    rgba = np.frombuffer(frame.data, dtype=np.uint8).reshape(frame.height, frame.width, 4)
+    return cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
 
 
 def _extract_detections(
@@ -96,19 +91,13 @@ def run_detection(
     class_filter: Iterable[str] | None = None,
     start_confidence: float = 0.6,
     keep_confidence: float = 0.4,
-    detect_interval_s: float = 0.2,
 ):
-    """Connect to video side channel and run YOLO detection.
-
-    Calls `on_detection(detections, pts_nanos)` each time a frame is processed.
-    Frames are throttled by `detect_interval_s` to limit inference load.
-    Assumes frames arrive as PlanarYuv420 — other formats are skipped.
-    """
+    """Connect to video side channel and run YOLO detection on every frame."""
     manager = SideChannelManager(socket_dir)
 
     print("Waiting for video side channel...")
     while True:
-        channels = manager.list()
+        channels = manager.list_channels()
         video_channels = [c for c in channels if c.kind == SideChannelKind.VIDEO]
         if video_channels:
             break
@@ -122,26 +111,17 @@ def run_detection(
     print("Detection ready.\n")
 
     filter_set = set(class_filter) if class_filter is not None else None
-    last_run = 0.0
     active_tracks: set[int] = set()
     # Tracked detections missing from the current frame are kept for up to
     # MAX_LINGER_FRAMES so a brief miss doesn't make the box flicker off.
     lingering: dict[int, tuple[Detection, int]] = {}
-    MAX_LINGER_FRAMES = 2
+    MAX_LINGER_FRAMES = 1
 
     with manager.connect(info) as conn:
         while True:
             frame = conn.recv()
 
-            now = time.monotonic()
-            if now - last_run < detect_interval_s:
-                continue
-            last_run = now
-
-            if frame.format != "PlanarYuv420":
-                continue
-
-            bgr = _yuv420_to_bgr(frame)
+            bgr = _rgba_to_bgr(frame)
             results = model.track(bgr, persist=True, verbose=False)
             if not results:
                 continue
@@ -173,4 +153,8 @@ def run_detection(
             active_tracks.update(lingering)
             output = list(detections)
             output.extend(det for tid, (det, age) in lingering.items() if age > 0)
-            on_detection(output, frame.pts_nanos)
+            # Report the update 100 ms before the frame's actual pts. Detection box
+            # views use a 200 ms transition (see _detection_box_view), so scheduling
+            # the scene half a transition early means the animation lands on the new
+            # position at the moment the frame itself is rendered.
+            on_detection(output, frame.pts_nanos - 100_000_000)

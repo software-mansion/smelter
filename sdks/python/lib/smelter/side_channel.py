@@ -5,15 +5,11 @@ Connects to a video or audio side channel and parses incoming messages.
 Wire format (both video and audio):
   Each message is prefixed with a 4-byte big-endian u32 length.
 
-Video frame payload:
+Video frame payload (always RGBA):
   u32  width
   u32  height
   u64  pts_nanos
-  u8   format
-  u8   plane_count
-  Per plane:
-    u32  plane_len
-    bytes[plane_len]
+  [u8; width * height * 4]  rgba_data
 
 Audio batch payload:
   u64  start_pts_nanos
@@ -30,18 +26,6 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-FRAME_FORMATS = {
-    0: "PlanarYuv420",
-    1: "PlanarYuv422",
-    2: "PlanarYuv444",
-    3: "PlanarYuvJ420",
-    4: "InterleavedUyvy422",
-    5: "InterleavedYuyv422",
-    6: "Nv12",
-    7: "Bgra",
-    8: "Argb",
-}
-
 
 class SideChannelKind(Enum):
     VIDEO = "video"
@@ -53,8 +37,7 @@ class VideoFrame:
     width: int
     height: int
     pts_nanos: int
-    format: str
-    planes: list[bytes]
+    data: bytes
 
 
 @dataclass
@@ -90,26 +73,16 @@ def _recv_message(sock: socket.socket) -> bytes:
 
 
 def _parse_video_frame(data: bytes) -> VideoFrame:
-    # u32 + u32 + u64 + u8 + u8 = 18 bytes header
+    # u32 + u32 + u64 = 16 bytes header, rest is RGBA data
     width, height = struct.unpack_from("!II", data, 0)
     (pts_nanos,) = struct.unpack_from("!Q", data, 8)
-    fmt = data[16]
-    plane_count = data[17]
-    offset = 18
-
-    planes = []
-    for _ in range(plane_count):
-        (plane_len,) = struct.unpack_from("!I", data, offset)
-        offset += 4
-        planes.append(data[offset : offset + plane_len])
-        offset += plane_len
+    rgba_data = data[16:]
 
     return VideoFrame(
         width=width,
         height=height,
         pts_nanos=pts_nanos,
-        format=FRAME_FORMATS.get(fmt, f"Unknown({fmt})"),
-        planes=planes,
+        data=rgba_data,
     )
 
 
@@ -184,7 +157,7 @@ class SideChannelManager:
     def __init__(self, socket_dir: str):
         self._socket_dir = socket_dir
 
-    def list(self) -> list[SideChannelInfo]:
+    def list_channels(self) -> list[SideChannelInfo]:
         results = []
         for name in os.listdir(self._socket_dir):
             if not name.endswith(".sock"):

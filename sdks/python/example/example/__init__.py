@@ -8,29 +8,12 @@ from example.detection import Detection, run_detection
 from example.smelter_server import (
     OUTPUT_ID,
     WHIP_WHEP_PORT,
+    UpdateCoordinator,
     setup_pipeline,
     start_server,
     stop_server,
-    update_scene,
 )
 from example.transcription import run_transcription
-
-
-class SceneState:
-    def __init__(self):
-        self._lock = threading.Lock()
-        self.text: str = ""
-        self.detections: list[Detection] = []
-
-    def set_text(self, text: str) -> tuple[str, list[Detection]]:
-        with self._lock:
-            self.text = text
-            return self.text, list(self.detections)
-
-    def set_detections(self, detections: list[Detection]) -> tuple[str, list[Detection]]:
-        with self._lock:
-            self.detections = detections
-            return self.text, list(self.detections)
 
 
 def main():
@@ -55,18 +38,20 @@ def main():
         else ["person"]
     )
 
-    state = SceneState()
+    coordinator = UpdateCoordinator()
     server, socket_dir = start_server()
 
-    def on_segment(text: str, pts_nanos: float):
-        pts_s = pts_nanos / 1e9
-        print(f"[{pts_s:.3f}s] {text}")
-        text, detections = state.set_text(text)
-        update_scene(text, detections, pts_nanos / 1e6)
+    # Instead of each callback posting its own update_scene, events are pushed to a
+    # coordinator that pairs audio+video entries in pts order once both ring buffers
+    # have settled, so smelter always receives merged, monotonic scene updates.
+    def on_segment(text: str, start_pts_nanos: float, end_pts_nanos: float):
+        start_pts_ms = start_pts_nanos / 1e6
+        end_pts_ms = end_pts_nanos / 1e6
+        print(f"[{start_pts_ms / 1000:.3f}s-{end_pts_ms / 1000:.3f}s] {text}")
+        coordinator.push_audio(start_pts_ms, end_pts_ms, text)
 
     def on_detection(detections: list[Detection], pts_nanos: int):
-        text, detections = state.set_detections(detections)
-        update_scene(text, detections, (pts_nanos / 1e6) - 250)
+        coordinator.push_video(pts_nanos / 1e6, detections)
 
     try:
         setup_pipeline(mp4_path)

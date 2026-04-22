@@ -338,7 +338,7 @@ impl Pipeline {
             return;
         }
         info!("Starting pipeline.");
-        let (video_sender, video_receiver) = bounded(1);
+        let (video_sender, video_receiver) = bounded(2);
         let (audio_sender, audio_receiver) = bounded(100);
         guard.queue.start(video_sender, audio_sender);
 
@@ -597,6 +597,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         stats_sender,
         tokio_rt: tokio_rt.clone(),
         graphics_context,
+        wgpu_ctx: renderer.wgpu_ctx(),
         whip_whep_state: match opts.whip_whep_server {
             PipelineWhipWhepServerOptions::Enable { port } => {
                 Some(WhipWhepPipelineState::new(port))
