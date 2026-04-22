@@ -4897,6 +4897,7 @@ dependencies = [
  "axum",
  "bytes",
  "crossbeam-channel",
+ "dirs",
  "ffmpeg-next",
  "fs_extra",
  "futures-util",

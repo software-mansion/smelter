@@ -101,6 +101,7 @@ tracing-subscriber = { workspace = true }
 libc = "0.2.151"
 webrtc-util = { workspace = true }
 rand = { workspace = true }
+dirs = "5.0"
 reqwest = { workspace = true }
 rubato = { workspace = true }
 tokio = { workspace = true }

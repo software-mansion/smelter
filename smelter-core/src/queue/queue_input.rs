@@ -231,11 +231,11 @@ impl QueueInput {
     pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, opts: QueueInputOptions) -> Self {
         let socket_dir = ctx.queue_ctx.side_channel_socket_dir.as_deref();
         let video_side_channel = match (opts.video_side_channel, socket_dir) {
-            (true, Some(dir)) => Some(VideoSideChannel::new(ctx, input_ref, dir)),
+            (true, Some(dir)) => VideoSideChannel::new(ctx, input_ref, dir),
             _ => None,
         };
         let audio_side_channel = match (opts.audio_side_channel, socket_dir) {
-            (true, Some(dir)) => Some(AudioSideChannel::new(ctx, input_ref, dir)),
+            (true, Some(dir)) => AudioSideChannel::new(ctx, input_ref, dir),
             _ => None,
         };
         Self(Arc::new(Mutex::new(InnerQueueInput {

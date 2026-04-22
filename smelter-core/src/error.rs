@@ -47,6 +47,9 @@ pub enum InitPipelineError {
     #[error("Failed to create a download directory.")]
     CreateDownloadDir(#[source] std::io::Error),
 
+    #[error("Side channel socket directory error: {0}")]
+    SideChannelSocketDir(String),
+
     #[error("Failed to create tokio::Runtime.")]
     CreateTokioRuntime(#[source] std::io::Error),
 
