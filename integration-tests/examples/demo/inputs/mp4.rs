@@ -68,10 +68,6 @@ impl Mp4Input {
             "decoder_map": {
                 "h264": decoder.to_string(),
             },
-            "side_channel": {
-                "video": true,
-                "audio": true,
-            }
         })
     }
 }
