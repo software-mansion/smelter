@@ -12,7 +12,7 @@ use crate::{
 };
 
 impl VulkanDevice {
-    pub fn create_wgpu_textures_decoder(
+    pub fn create_wgpu_textures_decoder_h264(
         self: &Arc<Self>,
         parameters: DecoderParameters,
     ) -> Result<WgpuTexturesDecoder, DecoderError> {

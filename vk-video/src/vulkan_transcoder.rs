@@ -5,9 +5,9 @@ use ash::vk;
 use crate::{
     DecoderError, EncodedInputChunk, EncodedOutputChunk, OutputFrame, VulkanCommonError,
     VulkanDevice, VulkanEncoderError,
-    codec::{EncodeCodec, h264::H264Codec},
+    codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
     device::{EncoderOutputParameters, Rational},
-    parameters::{H264Profile, ScalingAlgorithm},
+    parameters::{H264Profile, H265Profile, ScalingAlgorithm},
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
         h264::H264Parser,
@@ -44,11 +44,13 @@ pub enum TranscoderError {
 #[derive(Debug, Clone, Copy)]
 pub enum AnyEncoderParameters {
     H264(EncoderOutputParameters<H264Profile>),
+    H265(EncoderOutputParameters<H265Profile>),
 }
 
 #[derive(Debug, Clone, Copy)]
 enum AnyFullEncoderParameters {
     H264(FullEncoderParameters<H264Codec>),
+    H265(FullEncoderParameters<H265Codec>),
 }
 
 /// Configuration for a transcoder
@@ -128,6 +130,15 @@ impl Transcoder {
                         config.input_framerate,
                     )
                     .map(AnyFullEncoderParameters::H264),
+
+                AnyEncoderParameters::H265(params) => device
+                    .validate_and_fill_encoder_parameters(
+                        params,
+                        c.output_width,
+                        c.output_height,
+                        config.input_framerate,
+                    )
+                    .map(AnyFullEncoderParameters::H265),
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -136,6 +147,11 @@ impl Transcoder {
             .copied()
             .map(|p| match p {
                 AnyFullEncoderParameters::H264(p) => device
+                    .encoding_device()
+                    .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
+                    .map(|e| Box::new(e) as Box<dyn Encoder>),
+
+                AnyFullEncoderParameters::H265(p) => device
                     .encoding_device()
                     .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
                     .map(|e| Box::new(e) as Box<dyn Encoder>),
@@ -334,6 +350,13 @@ fn make_pipeline_output_configs(
                 width: p.width.get(),
                 height: p.height.get(),
                 profile: H264Codec::profile_info(p),
+                scaling_algorithm: scaling,
+            },
+
+            AnyFullEncoderParameters::H265(p) => OutputConfig {
+                width: p.width.get(),
+                height: p.height.get(),
+                profile: H265Codec::profile_info(p),
                 scaling_algorithm: scaling,
             },
         })

@@ -51,10 +51,7 @@ impl EncodeCodec for H264Codec {
 
         let h264_profile = Box::new(h264_profile);
 
-        let usage_info = vk::VideoEncodeUsageInfoKHR::default()
-            .video_usage_hints(params.usage_flags)
-            .tuning_mode(params.tuning_mode)
-            .video_content_hints(params.content_flags);
+        let usage_info: vk::VideoEncodeUsageInfoKHR = params.into();
 
         let usage_info = Box::new(usage_info);
 
@@ -63,6 +60,7 @@ impl EncodeCodec for H264Codec {
 
     fn codec_parameters(
         parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
     ) -> Result<Self::OwnedParameters, VulkanEncoderError> {
         let sps = VkH264SequenceParameterSet::new_encode(
             parameters.profile,
@@ -73,7 +71,7 @@ impl EncodeCodec for H264Codec {
             parameters.color_range,
             parameters.framerate,
         )?;
-        let pps = VkH264PictureParameterSet::new_encode();
+        let pps = VkH264PictureParameterSet::new_encode(codec_capabilities, parameters.profile);
 
         Ok(Self::OwnedParameters {
             sps: vec![sps],
@@ -89,7 +87,10 @@ impl EncodeCodec for H264Codec {
     }
 
     type BitstreamUnitData = vk::native::StdVideoEncodeH264SliceHeader;
-    fn bitstream_unit_data(is_idr: bool) -> Self::BitstreamUnitData {
+    fn bitstream_unit_data(
+        _codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
+        is_idr: bool,
+    ) -> Self::BitstreamUnitData {
         vk::native::StdVideoEncodeH264SliceHeader {
             flags: vk::native::StdVideoEncodeH264SliceHeaderFlags {
                 _bitfield_align_1: [],
@@ -107,10 +108,10 @@ impl EncodeCodec for H264Codec {
             }, // TODO: b-frames
             slice_alpha_c0_offset_div2: 0,
             slice_beta_offset_div2: 0,
-            slice_qp_delta: 0, // TODO: check whether this will be overwritten in the bitstream
+            slice_qp_delta: 0,
             reserved1: 0,
-            cabac_init_idc: vk::native::StdVideoH264CabacInitIdc_STD_VIDEO_H264_CABAC_INIT_IDC_0, // TODO: check whether this will be overwritten in the bitstream
-            disable_deblocking_filter_idc: 0, // TODO: enable for fast decoding?
+            cabac_init_idc: vk::native::StdVideoH264CabacInitIdc_STD_VIDEO_H264_CABAC_INIT_IDC_0,
+            disable_deblocking_filter_idc: 0,
             pWeightTable: std::ptr::null(),
         }
     }
@@ -144,6 +145,7 @@ impl EncodeCodec for H264Codec {
     type ReferenceInfo = vk::native::StdVideoEncodeH264ReferenceInfo;
     type ReferenceListInfo = vk::native::StdVideoEncodeH264ReferenceListsInfo;
     fn reference_list_info(
+        _counters: &Self::EncodingCounters,
         active_reference_slots: &VecDeque<(usize, Self::ReferenceInfo)>,
     ) -> Self::ReferenceListInfo {
         let mut ref_list0 = [0xff; 32];
@@ -192,6 +194,7 @@ impl EncodeCodec for H264Codec {
     type PictureInfoData = vk::native::StdVideoEncodeH264PictureInfo;
     fn picture_info_data(
         counters: &Self::EncodingCounters,
+        _codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
         is_idr: bool,
         ref_lists: &Self::ReferenceListInfo,
     ) -> Self::PictureInfoData {
@@ -200,8 +203,8 @@ impl EncodeCodec for H264Codec {
                 _bitfield_align_1: [],
                 _bitfield_1: vk::native::StdVideoEncodeH264PictureInfoFlags::new_bitfield_1(
                     is_idr as u32,
-                    1, // TODO
-                    is_idr as u32,
+                    1, // TODO: must be the same as nal_ref_idc != 0
+                    0,
                     0, // long term refs
                     0, // adaptive reference control
                     0,

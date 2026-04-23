@@ -36,7 +36,7 @@ fn main() {
         .unwrap();
 
     let mut decoder = vulkan_device
-        .create_wgpu_textures_decoder(DecoderParameters::default())
+        .create_wgpu_textures_decoder_h264(DecoderParameters::default())
         .unwrap();
 
     let mut output_file = std::fs::File::create("output.nv12").unwrap();

@@ -33,11 +33,15 @@ pub(crate) trait EncodeCodec: Codec {
     }
     fn codec_parameters(
         parameters: &FullEncoderParameters<Self>,
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
     ) -> Result<Self::OwnedParameters, VulkanEncoderError>;
     fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters) -> Self::VkParameters<'a>;
 
     type BitstreamUnitData;
-    fn bitstream_unit_data(is_idr: bool) -> Self::BitstreamUnitData;
+    fn bitstream_unit_data(
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
+        is_idr: bool,
+    ) -> Self::BitstreamUnitData;
     type BitstreamUnitInfo<'a>;
     fn bitstream_unit_info<'a>(
         data: &'a Self::BitstreamUnitData,
@@ -49,6 +53,7 @@ pub(crate) trait EncodeCodec: Codec {
     type ReferenceInfo: Copy + 'static;
     type ReferenceListInfo;
     fn reference_list_info(
+        counters: &Self::EncodingCounters,
         active_reference_slots: &VecDeque<(usize, Self::ReferenceInfo)>,
     ) -> Self::ReferenceListInfo;
     fn new_slot_reference_info(
@@ -59,6 +64,7 @@ pub(crate) trait EncodeCodec: Codec {
     type PictureInfoData;
     fn picture_info_data(
         counters: &Self::EncodingCounters,
+        codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
         is_idr: bool,
         ref_lists: &Self::ReferenceListInfo,
     ) -> Self::PictureInfoData;

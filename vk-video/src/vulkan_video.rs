@@ -67,6 +67,21 @@ pub mod parameters {
             }
         }
     }
+
+    #[derive(Debug, Clone, Copy)]
+    pub enum H265Profile {
+        Main,
+    }
+
+    impl H265Profile {
+        pub(crate) fn to_profile_idc(self) -> ash::vk::native::StdVideoH265ProfileIdc {
+            match self {
+                H265Profile::Main => {
+                    ash::vk::native::StdVideoH265ProfileIdc_STD_VIDEO_H265_PROFILE_IDC_MAIN
+                }
+            }
+        }
+    }
 }
 
 #[cfg(feature = "wgpu")]

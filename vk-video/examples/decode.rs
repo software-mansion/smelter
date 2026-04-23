@@ -30,7 +30,7 @@ fn main() {
         .unwrap();
 
     let mut decoder = vulkan_device
-        .create_bytes_decoder(DecoderParameters::default())
+        .create_bytes_decoder_h264(DecoderParameters::default())
         .unwrap();
 
     let mut output_file = std::fs::File::create("output.nv12").unwrap();

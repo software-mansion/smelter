@@ -53,10 +53,21 @@ fn main() {
         .create_device(&VulkanDeviceDescriptor::default())
         .unwrap();
 
-    let params = device
+    let average_bitrate = 1_000_000;
+    let max_bitrate = 1_200_000;
+
+    let params_h264 = device
         .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
-            average_bitrate: 10_000_000,
-            max_bitrate: 12_000_000,
+            average_bitrate,
+            max_bitrate,
+            virtual_buffer_size: Duration::from_secs(2),
+        })
+        .unwrap();
+
+    let params_h265 = device
+        .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
+            average_bitrate,
+            max_bitrate,
             virtual_buffer_size: Duration::from_secs(2),
         })
         .unwrap();
@@ -64,17 +75,26 @@ fn main() {
     let mut transcoder = device
         .create_transcoder(TranscoderParameters {
             input_framerate: 30.into(),
-            output_parameters: vec![TranscoderOutputParameters {
-                output_width,
-                output_height,
-                encoder_parameters: AnyEncoderParameters::H264(params),
-                scaling_algorithm,
-            }],
+            output_parameters: vec![
+                TranscoderOutputParameters {
+                    output_width,
+                    output_height,
+                    encoder_parameters: AnyEncoderParameters::H264(params_h264),
+                    scaling_algorithm,
+                },
+                TranscoderOutputParameters {
+                    output_width,
+                    output_height,
+                    encoder_parameters: AnyEncoderParameters::H265(params_h265),
+                    scaling_algorithm,
+                },
+            ],
         })
         .unwrap();
 
     let mut input_file = File::open(input_file).unwrap();
-    let mut output_file = File::create("output.h264").unwrap();
+    let mut output_file_h264 = File::create("output.h264").unwrap();
+    let mut output_file_h265 = File::create("output.h265").unwrap();
 
     let mut buffer = vec![0; 4096];
     while let Ok(n) = input_file.read(&mut buffer)
@@ -87,13 +107,15 @@ fn main() {
         let output = transcoder.transcode(input).unwrap();
 
         for output in output {
-            output_file.write_all(&output[0].data).unwrap();
+            output_file_h264.write_all(&output[0].data).unwrap();
+            output_file_h265.write_all(&output[1].data).unwrap();
         }
     }
 
     let flushed = transcoder.flush().unwrap();
     for output in flushed {
-        output_file.write_all(&output[0].data).unwrap();
+        output_file_h264.write_all(&output[0].data).unwrap();
+        output_file_h265.write_all(&output[1].data).unwrap();
     }
 }
 
