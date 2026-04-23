@@ -446,7 +446,7 @@ impl VulkanDevice {
         })
     }
 
-    pub fn create_bytes_decoder(
+    pub fn create_bytes_decoder_h264(
         self: &Arc<Self>,
         parameters: DecoderParameters,
     ) -> Result<BytesDecoder, DecoderError> {

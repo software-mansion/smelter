@@ -16,7 +16,7 @@ pub fn run_decoder(
     mut bytestream_reader: impl Read,
 ) {
     let mut decoder = vulkan_device
-        .create_wgpu_textures_decoder(DecoderParameters::default())
+        .create_wgpu_textures_decoder_h264(DecoderParameters::default())
         .unwrap();
     let frame_interval = 1.0 / (framerate as f64);
     let mut frame_number = 0u64;

@@ -29,7 +29,7 @@ impl VideoDecoder for VulkanH264Decoder {
             Some(vulkan_ctx) => {
                 info!("Initializing Vulkan H264 decoder");
                 let device = vulkan_ctx.device.clone();
-                let decoder = device.create_wgpu_textures_decoder(DecoderParameters {
+                let decoder = device.create_wgpu_textures_decoder_h264(DecoderParameters {
                     missed_frame_handling: MissedFrameHandling::Strict,
                     usage_flags: DecoderUsageFlags::DEFAULT,
                 })?;

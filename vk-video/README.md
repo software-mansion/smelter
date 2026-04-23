@@ -47,7 +47,7 @@ fn decode_video(
         .unwrap();
 
     let mut decoder = device
-        .create_wgpu_textures_decoder(
+        .create_wgpu_textures_decoder_h264(
             vk_video::parameters::DecoderParameters::default()
         ).unwrap();
 
