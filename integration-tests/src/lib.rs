@@ -13,6 +13,7 @@ pub mod examples;
 pub mod media;
 pub mod paths;
 pub mod test_input;
+pub mod tools;
 
 pub mod pipeline_tests;
 

@@ -12,6 +12,7 @@ use inquire::{InquireError, Select};
 use integration_tests::{
     paths::{failed_snapshots_dir_path, submodule_root_path},
     pipeline_tests::{PipelineTest, pipeline_tests},
+    tools::rtp_inspector,
 };
 use tracing::{error, info, warn};
 
@@ -29,6 +30,8 @@ enum FailureAction {
     PlayActual,
     #[strum(to_string = "Play expected dump")]
     PlayExpected,
+    #[strum(to_string = "Inspect dumps (compare actual vs expected)")]
+    Inspect,
     #[strum(to_string = "Update snapshot from actual")]
     UpdateSnapshot,
     #[strum(to_string = "Rerun test")]
@@ -202,6 +205,11 @@ fn handle_failure_loop(test: &PipelineTest, filter: &str) -> Result<ControlFlow<
                     error!("Failed to play expected dump: {e:#}");
                 }
             }
+            Some(FailureAction::Inspect) => {
+                if let Err(e) = inspect_dumps(test) {
+                    error!("Failed to inspect dumps: {e:#}");
+                }
+            }
             Some(FailureAction::UpdateSnapshot) => match update_snapshot(test) {
                 Ok(()) => return Ok(ControlFlow::Continue(())),
                 Err(e) => error!("Failed to update snapshot: {e:#}"),
@@ -258,8 +266,15 @@ fn prompt_failure_action(test: &PipelineTest) -> Result<Option<FailureAction>> {
     let actual_exists = failed_snapshots_dir_path()
         .join(format!("actual_dump_{}", test.snapshot_name))
         .exists();
+    let expected_exists = failed_snapshots_dir_path()
+        .join(format!("expected_dump_{}", test.snapshot_name))
+        .exists();
     let options: Vec<FailureAction> = FailureAction::iter()
-        .filter(|a| !matches!(a, FailureAction::UpdateSnapshot) || actual_exists)
+        .filter(|a| match a {
+            FailureAction::UpdateSnapshot => actual_exists,
+            FailureAction::Inspect => actual_exists && expected_exists,
+            _ => true,
+        })
         .collect();
     match Select::new("What next?", options)
         .with_page_size(10)
@@ -384,6 +399,14 @@ fn scrub_cargo_env(cmd: &mut Command) {
             cmd.env_remove(&key);
         }
     }
+}
+
+fn inspect_dumps(test: &PipelineTest) -> Result<()> {
+    let dir = failed_snapshots_dir_path();
+    let actual = dir.join(format!("actual_dump_{}", test.snapshot_name));
+    let expected = dir.join(format!("expected_dump_{}", test.snapshot_name));
+
+    rtp_inspector::run(&expected, &actual)
 }
 
 fn update_snapshot(test: &PipelineTest) -> Result<()> {
