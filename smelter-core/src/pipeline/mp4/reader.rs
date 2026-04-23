@@ -200,19 +200,12 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         // equal to the remaining black screen, which the pipeline fills with black.
         let track_seek = self.track_start_offset + user_seek;
 
-        match self.find_seek_start_sample(media_seek) {
-            Ok((start_index, present_index)) => TrackChunks {
-                track: self,
-                track_seek,
-                next_sample_index: start_index,
-                present_from_index: present_index,
-            },
-            Err(unpresentable) => TrackChunks {
-                track: self,
-                track_seek,
-                next_sample_index: unpresentable,
-                present_from_index: unpresentable,
-            },
+        let (start_index, present_index) = self.find_seek_start_sample(media_seek);
+        TrackChunks {
+            track: self,
+            track_seek,
+            next_sample_index: start_index,
+            present_from_index: present_index,
         }
     }
 
@@ -231,8 +224,8 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
     /// Returns `(start_index, present_from_index)` for the given seek position.
     /// `start_index` is the last sync sample before seek (for decoder warmup).
     /// `present_from_index` is the first sample at or after seek.
-    /// If seek is past the end, returns `Err` with index one past the last sample
-    fn find_seek_start_sample(&self, seek: Duration) -> Result<(u32, u32), u32> {
+    /// If seek is past the end returns index of last_sample_idx + 1 for both values.
+    fn find_seek_start_sample(&self, seek: Duration) -> (u32, u32) {
         let seek_timestamp = (seek.as_secs_f64() * self.timescale as f64) as u64;
         let track = &self.reader.tracks()[&self.track_id];
 
@@ -266,7 +259,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
 
         let present_from_index = match present_from_index {
             Some(pfi) => u32::max(pfi, 1),
-            None => return Err(samples_skipped + 1),
+            None => return (samples_skipped + 1, samples_skipped + 1),
         };
 
         let sync_index = match &stss {
@@ -281,7 +274,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
             None => present_from_index,
         };
 
-        Ok((sync_index, present_from_index))
+        (sync_index, present_from_index)
     }
 }
 
