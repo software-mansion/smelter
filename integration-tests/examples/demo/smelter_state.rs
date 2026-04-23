@@ -19,6 +19,7 @@ use crate::inputs::whip::WhipInputBuilder;
 
 use crate::outputs::hls::HlsOutputBuilder;
 use crate::outputs::mp4::Mp4OutputBuilder;
+use crate::outputs::srt::SrtOutputBuilder;
 use crate::outputs::whep::WhepOutputBuilder;
 use crate::outputs::whip::WhipOutputBuilder;
 use crate::utils::parse_json;
@@ -217,6 +218,11 @@ impl SmelterState {
                 let hls_output = HlsOutputBuilder::new().prompt(self.running_state)?.build();
                 let register_request = hls_output.serialize_register(&self.inputs);
                 (OutputHandle::Hls(hls_output), register_request)
+            }
+            OutputProtocol::Srt => {
+                let srt_output = SrtOutputBuilder::new().prompt()?.build();
+                let register_request = srt_output.serialize_register(&self.inputs);
+                (OutputHandle::Srt(srt_output), register_request)
             }
         };
 
