@@ -5,6 +5,7 @@ mod push_input_before_start;
 mod required_inputs;
 mod schedule_update;
 mod unregistering;
+pub mod validation;
 mod video_audio;
 
 pub struct PipelineTest {
