@@ -1,9 +1,11 @@
 use std::time::Duration;
 
+use tracing::warn;
+
 use crate::{
-    ExVideoFourCc, ExVideoPacket, ExVideoTag, FlvVideoData, LegacyFlvVideoCodec,
-    RtmpMessageParseError, RtmpMessageSerializeError, RtmpVideoCodec, TrackId, VideoConfig,
-    VideoData, VideoTag, VideoTagFrameType, VideoTagH264PacketType,
+    ExVideoPacket, ExVideoTag, FlvVideoData, LegacyFlvVideoCodec, RtmpMessageParseError,
+    RtmpMessageSerializeError, RtmpVideoCodec, TrackId, VideoConfig, VideoData, VideoTag,
+    VideoTagFrameType, VideoTagH264PacketType,
     message::VIDEO_CHUNK_STREAM_ID,
     protocol::{MessageType, RawMessage},
 };
@@ -26,20 +28,20 @@ impl VideoMessage {
     /// Parses an incoming RTMP video message.
     pub(super) fn from_raw(msg: RawMessage) -> Result<Self, RtmpMessageParseError> {
         match FlvVideoData::parse(msg.payload)? {
-            FlvVideoData::Legacy(tag) => Self::from_legacy(msg.timestamp, tag),
-            FlvVideoData::Enhanced(tag) => Ok(Self::from_enhanced(msg.timestamp, tag)?),
+            FlvVideoData::Legacy(tag) => Ok(Self::from_legacy(msg.timestamp, tag)),
+            FlvVideoData::Enhanced(tag) => Ok(Self::from_enhanced(msg.timestamp, tag)),
         }
     }
 
-    fn from_legacy(timestamp: u32, tag: VideoTag) -> Result<Self, RtmpMessageParseError> {
+    fn from_legacy(timestamp: u32, tag: VideoTag) -> Self {
         match (tag.codec, tag.h264_packet_type) {
             (LegacyFlvVideoCodec::H264, Some(VideoTagH264PacketType::Data)) => {
                 let is_keyframe = match tag.frame_type {
                     VideoTagFrameType::Keyframe => true,
                     VideoTagFrameType::Interframe => false,
-                    _ => return Ok(Self::Unknown),
+                    _ => return Self::Unknown,
                 };
-                Ok(Self::Data(VideoData {
+                Self::Data(VideoData {
                     track_id: TrackId::PRIMARY,
                     codec: RtmpVideoCodec::H264,
                     pts: Duration::from_millis(
@@ -48,41 +50,47 @@ impl VideoMessage {
                     dts: Duration::from_millis(timestamp.into()),
                     data: tag.data,
                     is_keyframe,
-                }))
+                })
             }
             (LegacyFlvVideoCodec::H264, Some(VideoTagH264PacketType::Config)) => {
-                Ok(Self::Config(VideoConfig {
+                Self::Config(VideoConfig {
                     track_id: TrackId::PRIMARY,
                     codec: RtmpVideoCodec::H264,
                     data: tag.data,
-                }))
+                })
             }
-            (_, _) => Ok(Self::Unknown),
+            (_, _) => Self::Unknown,
         }
     }
 
-    fn from_enhanced(timestamp: u32, tag: ExVideoTag) -> Result<Self, RtmpMessageParseError> {
-        let (four_cc, packet, frame_type, timestamp_offset_nanos) = match tag {
+    fn from_enhanced(timestamp: u32, tag: ExVideoTag) -> Self {
+        let (codec, packet, frame_type, timestamp_offset_nanos) = match tag {
             ExVideoTag::VideoBody {
                 four_cc,
                 packet,
                 frame_type,
                 timestamp_offset_nanos,
-            } => (four_cc, packet, frame_type, timestamp_offset_nanos),
-            ExVideoTag::StartSeek | ExVideoTag::EndSeek => return Ok(Self::Unknown),
+            } => {
+                let codec = match RtmpVideoCodec::try_from(four_cc) {
+                    Ok(codec) => codec,
+                    Err(err) => {
+                        warn!("{err}. Returning Unknown.");
+                        return Self::Unknown;
+                    }
+                };
+                (codec, packet, frame_type, timestamp_offset_nanos)
+            }
+            ExVideoTag::StartSeek | ExVideoTag::EndSeek => return Self::Unknown,
         };
-
-        let codec = video_codec_from_four_cc(four_cc);
-
         let nanos_offset = u64::from(timestamp_offset_nanos.unwrap_or(0));
         let dts = Duration::from_millis(timestamp.into()) + Duration::from_nanos(nanos_offset);
 
         match packet {
-            ExVideoPacket::SequenceStart(data) => Ok(Self::Config(VideoConfig {
+            ExVideoPacket::SequenceStart(data) => Self::Config(VideoConfig {
                 track_id: TrackId::PRIMARY,
                 codec,
                 data,
-            })),
+            }),
             ExVideoPacket::CodedFrames {
                 composition_time,
                 data,
@@ -90,23 +98,23 @@ impl VideoMessage {
                 let is_keyframe = match frame_type {
                     VideoTagFrameType::Keyframe => true,
                     VideoTagFrameType::Interframe => false,
-                    _ => return Ok(Self::Unknown),
+                    _ => return Self::Unknown,
                 };
                 let pts = Duration::from_millis(
                     (timestamp as i64 + composition_time as i64).max(0) as u64,
                 ) + Duration::from_nanos(nanos_offset);
-                Ok(Self::Data(VideoData {
+                Self::Data(VideoData {
                     track_id: TrackId::PRIMARY,
                     codec,
                     pts,
                     dts,
                     data,
                     is_keyframe,
-                }))
+                })
             }
             ExVideoPacket::SequenceEnd
             | ExVideoPacket::Metadata(_)
-            | ExVideoPacket::Mpeg2TsSequenceStart(_) => Ok(Self::Unknown),
+            | ExVideoPacket::Mpeg2TsSequenceStart(_) => Self::Unknown,
         }
     }
 
@@ -121,28 +129,6 @@ impl VideoMessage {
     }
 }
 
-fn video_codec_from_four_cc(four_cc: ExVideoFourCc) -> RtmpVideoCodec {
-    match four_cc {
-        ExVideoFourCc::Avc1 => RtmpVideoCodec::H264,
-        ExVideoFourCc::Hvc1 => RtmpVideoCodec::Hevc,
-        ExVideoFourCc::Vvc1 => RtmpVideoCodec::Vvc,
-        ExVideoFourCc::Vp08 => RtmpVideoCodec::Vp8,
-        ExVideoFourCc::Vp09 => RtmpVideoCodec::Vp9,
-        ExVideoFourCc::Av01 => RtmpVideoCodec::Av1,
-    }
-}
-
-fn four_cc_from_video_codec(codec: RtmpVideoCodec) -> ExVideoFourCc {
-    match codec {
-        RtmpVideoCodec::H264 => ExVideoFourCc::Avc1,
-        RtmpVideoCodec::Hevc => ExVideoFourCc::Hvc1,
-        RtmpVideoCodec::Vvc => ExVideoFourCc::Vvc1,
-        RtmpVideoCodec::Vp8 => ExVideoFourCc::Vp08,
-        RtmpVideoCodec::Vp9 => ExVideoFourCc::Vp09,
-        RtmpVideoCodec::Av1 => ExVideoFourCc::Av01,
-    }
-}
-
 fn video_into_raw(
     video: VideoData,
     stream_id: u32,
@@ -150,8 +136,9 @@ fn video_into_raw(
     let dts_nanos = video.dts.as_nanos();
     let timestamp = (dts_nanos / 1_000_000) as u32;
     let composition_time = (video.pts.as_millis() as i64 - video.dts.as_millis() as i64) as i32;
-    let payload = if video.codec == RtmpVideoCodec::H264 {
-        FlvVideoData::Legacy(VideoTag {
+
+    let payload = match video.codec {
+        RtmpVideoCodec::H264 => FlvVideoData::Legacy(VideoTag {
             h264_packet_type: Some(VideoTagH264PacketType::Data),
             codec: LegacyFlvVideoCodec::H264,
             composition_time: Some(composition_time),
@@ -161,25 +148,26 @@ fn video_into_raw(
             },
             data: video.data,
         })
-        .serialize()?
-    } else {
-        let timestamp_offset_nanos = match (dts_nanos % 1_000_000) as u32 {
-            0 => None,
-            offset => Some(offset),
-        };
-        FlvVideoData::Enhanced(ExVideoTag::VideoBody {
-            four_cc: four_cc_from_video_codec(video.codec),
-            packet: ExVideoPacket::CodedFrames {
-                composition_time,
-                data: video.data,
-            },
-            frame_type: match video.is_keyframe {
-                true => VideoTagFrameType::Keyframe,
-                false => VideoTagFrameType::Interframe,
-            },
-            timestamp_offset_nanos,
-        })
-        .serialize()?
+        .serialize()?,
+        RtmpVideoCodec::Av1 | RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
+            let timestamp_offset_nanos = match (dts_nanos % 1_000_000) as u32 {
+                0 => None,
+                offset => Some(offset),
+            };
+            FlvVideoData::Enhanced(ExVideoTag::VideoBody {
+                four_cc: video.codec.try_into()?,
+                packet: ExVideoPacket::CodedFrames {
+                    composition_time,
+                    data: video.data,
+                },
+                frame_type: match video.is_keyframe {
+                    true => VideoTagFrameType::Keyframe,
+                    false => VideoTagFrameType::Interframe,
+                },
+                timestamp_offset_nanos,
+            })
+            .serialize()?
+        }
     };
 
     Ok(RawMessage {
@@ -195,23 +183,24 @@ fn config_into_raw(
     config: VideoConfig,
     stream_id: u32,
 ) -> Result<RawMessage, RtmpMessageSerializeError> {
-    let payload = if config.codec == RtmpVideoCodec::H264 {
-        FlvVideoData::Legacy(VideoTag {
+    let payload = match config.codec {
+        RtmpVideoCodec::H264 => FlvVideoData::Legacy(VideoTag {
             h264_packet_type: Some(VideoTagH264PacketType::Config),
             codec: LegacyFlvVideoCodec::H264,
             composition_time: Some(0),
             frame_type: VideoTagFrameType::Keyframe,
             data: config.data,
         })
-        .serialize()?
-    } else {
-        FlvVideoData::Enhanced(ExVideoTag::VideoBody {
-            four_cc: four_cc_from_video_codec(config.codec),
-            packet: ExVideoPacket::SequenceStart(config.data),
-            frame_type: VideoTagFrameType::Keyframe,
-            timestamp_offset_nanos: None,
-        })
-        .serialize()?
+        .serialize()?,
+        RtmpVideoCodec::Av1 | RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
+            FlvVideoData::Enhanced(ExVideoTag::VideoBody {
+                four_cc: config.codec.try_into()?,
+                packet: ExVideoPacket::SequenceStart(config.data),
+                frame_type: VideoTagFrameType::Keyframe,
+                timestamp_offset_nanos: None,
+            })
+            .serialize()?
+        }
     };
 
     Ok(RawMessage {

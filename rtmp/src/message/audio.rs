@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use tracing::warn;
+
 use crate::{
     AacAudioConfig, AudioChannels, AudioConfig, AudioData, AudioTag, AudioTagAacPacketType,
     AudioTagSampleSize, AudioTagSoundRate, FlvAudioTagParseError, LegacyFlvAudioCodec,
@@ -30,13 +32,19 @@ impl AudioMessage {
             }
             Err(err) => return Err(err.into()),
         };
-        let pts = Duration::from_millis(msg.timestamp.into());
-        let sample_rate = sound_rate_to_hz(tag.sample_rate);
-        let sample_size = sample_size_to_bits(tag.sample_size);
-        let codec = audio_codec_from_legacy(tag.codec, sample_rate, sample_size);
 
-        let msg = match (tag.codec, tag.aac_packet_type) {
-            (LegacyFlvAudioCodec::Aac, Some(AudioTagAacPacketType::Config)) => {
+        let codec = match RtmpAudioCodec::try_from(tag.codec) {
+            Ok(codec) => codec,
+            Err(err) => {
+                warn!("{err}. Returning Unknown.");
+                return Ok(Self::Unknown);
+            }
+        };
+
+        let pts = Duration::from_millis(msg.timestamp.into());
+
+        let msg = match (codec, tag.aac_packet_type) {
+            (RtmpAudioCodec::Aac, Some(AudioTagAacPacketType::Config)) => {
                 Self::Config(AudioConfig {
                     track_id: TrackId::PRIMARY,
                     codec,
@@ -57,14 +65,7 @@ impl AudioMessage {
     pub(super) fn into_raw(self, stream_id: u32) -> Result<RawMessage, RtmpMessageSerializeError> {
         match self {
             Self::Data(audio) => {
-                let legacy_codec = legacy_from_audio_codec(audio.codec)?;
-                let (rate_hz, size_bits) = codec_rate_and_size(audio.codec);
-                let sample_rate = rate_hz
-                    .map(hz_to_sound_rate)
-                    .unwrap_or(AudioTagSoundRate::Rate44000);
-                let sample_size = size_bits
-                    .map(bits_to_sample_size)
-                    .unwrap_or(AudioTagSampleSize::Sample16Bit);
+                let legacy_codec: LegacyFlvAudioCodec = audio.codec.try_into()?;
                 let aac_packet_type = match legacy_codec {
                     LegacyFlvAudioCodec::Aac => Some(AudioTagAacPacketType::Data),
                     _ => None,
@@ -77,8 +78,8 @@ impl AudioMessage {
                     payload: AudioTag {
                         aac_packet_type,
                         codec: legacy_codec,
-                        sample_rate,
-                        sample_size,
+                        sample_rate: AudioTagSoundRate::Rate44000,
+                        sample_size: AudioTagSampleSize::Sample16Bit,
                         channels: audio.channels,
                         data: audio.data,
                     }
@@ -89,7 +90,7 @@ impl AudioMessage {
                 "Cannot serialize an unknown audio message".into(),
             )),
             Self::Config(config) => {
-                let legacy_codec = legacy_from_audio_codec(config.codec)?;
+                let legacy_codec: LegacyFlvAudioCodec = config.codec.try_into()?;
                 let (aac_packet_type, channels) = match legacy_codec {
                     LegacyFlvAudioCodec::Aac => {
                         let parsed =
@@ -119,152 +120,5 @@ impl AudioMessage {
                 })
             }
         }
-    }
-}
-
-fn audio_codec_from_legacy(
-    codec: LegacyFlvAudioCodec,
-    sample_rate: u32,
-    sample_size: u8,
-) -> RtmpAudioCodec {
-    match codec {
-        LegacyFlvAudioCodec::Aac => RtmpAudioCodec::Aac,
-        LegacyFlvAudioCodec::Mp3 => RtmpAudioCodec::Mp3 {
-            sample_rate,
-            sample_size,
-        },
-        LegacyFlvAudioCodec::Mp3_8k => RtmpAudioCodec::Mp3_8k { sample_size },
-        LegacyFlvAudioCodec::Pcm => RtmpAudioCodec::Pcm {
-            sample_rate,
-            sample_size,
-        },
-        LegacyFlvAudioCodec::Adpcm => RtmpAudioCodec::Adpcm {
-            sample_rate,
-            sample_size,
-        },
-        LegacyFlvAudioCodec::PcmLe => RtmpAudioCodec::PcmLe {
-            sample_rate,
-            sample_size,
-        },
-        LegacyFlvAudioCodec::Nellymoser => RtmpAudioCodec::Nellymoser {
-            sample_rate,
-            sample_size,
-        },
-        LegacyFlvAudioCodec::Nellymoser8kMono => RtmpAudioCodec::Nellymoser8kMono { sample_size },
-        LegacyFlvAudioCodec::Nellymoser16kMono => RtmpAudioCodec::Nellymoser16kMono { sample_size },
-        LegacyFlvAudioCodec::G711ALaw => RtmpAudioCodec::G711ALaw {
-            sample_rate,
-            sample_size,
-        },
-        LegacyFlvAudioCodec::G711MuLaw => RtmpAudioCodec::G711MuLaw {
-            sample_rate,
-            sample_size,
-        },
-        LegacyFlvAudioCodec::Speex => RtmpAudioCodec::Speex {
-            sample_rate,
-            sample_size,
-        },
-        LegacyFlvAudioCodec::DeviceSpecific => RtmpAudioCodec::DeviceSpecific {
-            sample_rate,
-            sample_size,
-        },
-    }
-}
-
-fn legacy_from_audio_codec(
-    codec: RtmpAudioCodec,
-) -> Result<LegacyFlvAudioCodec, RtmpMessageSerializeError> {
-    Ok(match codec {
-        RtmpAudioCodec::Aac => LegacyFlvAudioCodec::Aac,
-        RtmpAudioCodec::Mp3 { .. } => LegacyFlvAudioCodec::Mp3,
-        RtmpAudioCodec::Mp3_8k { .. } => LegacyFlvAudioCodec::Mp3_8k,
-        RtmpAudioCodec::Pcm { .. } => LegacyFlvAudioCodec::Pcm,
-        RtmpAudioCodec::Adpcm { .. } => LegacyFlvAudioCodec::Adpcm,
-        RtmpAudioCodec::PcmLe { .. } => LegacyFlvAudioCodec::PcmLe,
-        RtmpAudioCodec::Nellymoser { .. } => LegacyFlvAudioCodec::Nellymoser,
-        RtmpAudioCodec::Nellymoser8kMono { .. } => LegacyFlvAudioCodec::Nellymoser8kMono,
-        RtmpAudioCodec::Nellymoser16kMono { .. } => LegacyFlvAudioCodec::Nellymoser16kMono,
-        RtmpAudioCodec::G711ALaw { .. } => LegacyFlvAudioCodec::G711ALaw,
-        RtmpAudioCodec::G711MuLaw { .. } => LegacyFlvAudioCodec::G711MuLaw,
-        RtmpAudioCodec::Speex { .. } => LegacyFlvAudioCodec::Speex,
-        RtmpAudioCodec::DeviceSpecific { .. } => LegacyFlvAudioCodec::DeviceSpecific,
-    })
-}
-
-fn codec_rate_and_size(codec: RtmpAudioCodec) -> (Option<u32>, Option<u8>) {
-    match codec {
-        RtmpAudioCodec::Aac => (None, None),
-        RtmpAudioCodec::Mp3 {
-            sample_rate,
-            sample_size,
-        }
-        | RtmpAudioCodec::Pcm {
-            sample_rate,
-            sample_size,
-        }
-        | RtmpAudioCodec::Adpcm {
-            sample_rate,
-            sample_size,
-        }
-        | RtmpAudioCodec::PcmLe {
-            sample_rate,
-            sample_size,
-        }
-        | RtmpAudioCodec::Nellymoser {
-            sample_rate,
-            sample_size,
-        }
-        | RtmpAudioCodec::G711ALaw {
-            sample_rate,
-            sample_size,
-        }
-        | RtmpAudioCodec::G711MuLaw {
-            sample_rate,
-            sample_size,
-        }
-        | RtmpAudioCodec::Speex {
-            sample_rate,
-            sample_size,
-        }
-        | RtmpAudioCodec::DeviceSpecific {
-            sample_rate,
-            sample_size,
-        } => (Some(sample_rate), Some(sample_size)),
-        RtmpAudioCodec::Mp3_8k { sample_size } => (Some(8000), Some(sample_size)),
-        RtmpAudioCodec::Nellymoser8kMono { sample_size } => (Some(8000), Some(sample_size)),
-        RtmpAudioCodec::Nellymoser16kMono { sample_size } => (Some(16000), Some(sample_size)),
-    }
-}
-
-fn sound_rate_to_hz(rate: AudioTagSoundRate) -> u32 {
-    match rate {
-        AudioTagSoundRate::Rate5500 => 5500,
-        AudioTagSoundRate::Rate11000 => 11025,
-        AudioTagSoundRate::Rate22000 => 22050,
-        AudioTagSoundRate::Rate44000 => 44100,
-    }
-}
-
-fn hz_to_sound_rate(hz: u32) -> AudioTagSoundRate {
-    match hz {
-        0..=5500 => AudioTagSoundRate::Rate5500,
-        5501..=11025 => AudioTagSoundRate::Rate11000,
-        11026..=22050 => AudioTagSoundRate::Rate22000,
-        _ => AudioTagSoundRate::Rate44000,
-    }
-}
-
-fn sample_size_to_bits(size: AudioTagSampleSize) -> u8 {
-    match size {
-        AudioTagSampleSize::Sample8Bit => 8,
-        AudioTagSampleSize::Sample16Bit => 16,
-    }
-}
-
-fn bits_to_sample_size(bits: u8) -> AudioTagSampleSize {
-    if bits <= 8 {
-        AudioTagSampleSize::Sample8Bit
-    } else {
-        AudioTagSampleSize::Sample16Bit
     }
 }

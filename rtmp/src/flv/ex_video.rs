@@ -21,6 +21,7 @@ pub enum ExVideoTag {
     },
 }
 
+#[allow(unused)]
 impl ExVideoTag {
     pub fn frame_type(&self) -> VideoTagFrameType {
         match self {
@@ -33,7 +34,7 @@ impl ExVideoTag {
 }
 
 /// FourCC video codec identifiers for Enhanced RTMP.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExVideoFourCc {
     /// VP8 (`vp08`)
     Vp08,
@@ -73,8 +74,6 @@ impl ExVideoFourCc {
         }
     }
 
-    /// Returns true if this codec carries a 3-byte signed composition time
-    /// offset in CodedFrames packets. Per the spec: AVC, HEVC, and VVC.
     fn has_composition_time(self) -> bool {
         matches!(self, Self::Avc1 | Self::Hvc1 | Self::Vvc1)
     }

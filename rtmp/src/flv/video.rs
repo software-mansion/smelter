@@ -1,24 +1,24 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
+use crate::{RtmpMessageSerializeError, RtmpVideoCodec, error::FlvVideoTagParseError};
 
 /// Struct representing legacy flv VIDEODATA.
 /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
 #[derive(Debug, Clone)]
 pub struct VideoTag {
     /// FrameType 4bits
-    pub frame_type: VideoTagFrameType,
+    pub(crate) frame_type: VideoTagFrameType,
     /// CodecID 4bits
-    pub codec: LegacyFlvVideoCodec,
+    pub(crate) codec: LegacyFlvVideoCodec,
 
     /// AVCPacketType 8bits IF CodecID == 7
     /// H264 only
-    pub h264_packet_type: Option<VideoTagH264PacketType>,
+    pub(crate) h264_packet_type: Option<VideoTagH264PacketType>,
     /// CompositionTime 24bits IF CodecID == 7
     /// H264 only
-    pub composition_time: Option<i32>,
+    pub(crate) composition_time: Option<i32>,
 
-    pub data: Bytes,
+    pub(crate) data: Bytes,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,9 +53,8 @@ impl VideoTagFrameType {
     }
 }
 
-/// FLV legacy video codec id (4-bit CodecID on the wire).
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum LegacyFlvVideoCodec {
+pub(crate) enum LegacyFlvVideoCodec {
     SorensonH263,
     ScreenVideo,
     Vp6,
@@ -85,6 +84,24 @@ impl LegacyFlvVideoCodec {
             Self::Vp6WithAlpha => 5,
             Self::ScreenVideo2 => 6,
             Self::H264 => 7,
+        }
+    }
+}
+
+impl From<LegacyFlvVideoCodec> for Option<RtmpVideoCodec> {
+    fn from(codec: LegacyFlvVideoCodec) -> Self {
+        match codec {
+            LegacyFlvVideoCodec::H264 => Some(RtmpVideoCodec::H264),
+            _ => None,
+        }
+    }
+}
+
+impl From<RtmpVideoCodec> for Option<LegacyFlvVideoCodec> {
+    fn from(codec: RtmpVideoCodec) -> Self {
+        match codec {
+            RtmpVideoCodec::H264 => Some(LegacyFlvVideoCodec::H264),
+            _ => None,
         }
     }
 }

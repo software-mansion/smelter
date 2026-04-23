@@ -13,8 +13,10 @@ mod utils;
 pub use client::*;
 pub use error::*;
 pub use events::*;
-pub use flv::*;
+pub use flv::AudioChannels;
 pub use server::*;
+
+pub(crate) use flv::*;
 
 pub(crate) const VIDEO_FOURCC_LIST: [&str; 6] = ["av01", "vp09", "vp08", "hvc1", "vvc1", "avc1"];
 

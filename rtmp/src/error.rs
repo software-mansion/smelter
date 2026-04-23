@@ -74,6 +74,12 @@ pub enum RtmpMessageSerializeError {
     #[error("Error encoding amf0: {0}")]
     Amf0Encoding(#[from] AmfEncodingError),
 
+    #[error(transparent)]
+    AudioCodecConversion(#[from] crate::AudioCodecConversionError),
+
+    #[error(transparent)]
+    VideoCodecConversion(#[from] crate::VideoCodecConversionError),
+
     #[error("Failed to serialize message: {0}")]
     InternalError(String),
 }
