@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use smelter_render::{Frame, FrameData, Resolution};
 use tracing::{debug, info, trace, warn};
 use vk_video::{
-    DecoderError, ReferenceManagementError, WgpuTexturesDecoder,
+    DecoderError, H264DecoderEvent, ReferenceManagementError, WgpuTexturesDecoder,
     parameters::{DecoderParameters, DecoderUsageFlags, MissedFrameHandling},
 };
 
@@ -51,13 +51,13 @@ impl VideoDecoderInstance for VulkanH264Decoder {
         let decoder_event = match &event {
             EncodedInputEvent::Chunk(chunk) => {
                 self.drop_frames = !chunk.present;
-                vk_video::DecoderEvent::DecodeChunk(vk_video::EncodedInputChunk {
+                H264DecoderEvent::DecodeChunk(vk_video::EncodedInputChunk {
                     data: chunk.data.as_ref(),
                     pts: Some(chunk.pts.as_micros() as u64),
                 })
             }
-            EncodedInputEvent::LostData => vk_video::DecoderEvent::SignalDataLoss,
-            EncodedInputEvent::AuDelimiter => vk_video::DecoderEvent::SignalFrameEnd,
+            EncodedInputEvent::LostData => H264DecoderEvent::SignalDataLoss,
+            EncodedInputEvent::AuDelimiter => H264DecoderEvent::SignalFrameEnd,
         };
 
         let frames = match self.decoder.process_event(decoder_event) {
