@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### 💥 Breaking changes
+- All nalus returned by `H264Parser` now contain their own start codes (`001` or `0001` bytes at the beginning)
 
 ### ✨ New features
 

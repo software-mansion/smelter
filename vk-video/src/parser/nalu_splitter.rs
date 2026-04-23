@@ -25,10 +25,14 @@ fn find_start_of_next_nalu(buf: &[u8]) -> Option<usize> {
     // this could mean either that it's the longer 0, 0, 0, 1 code, or that there is one byte of
     // the previous nalu and the shorter code. This is what is checked here.
     if buf[0] != 0 && buf[1..4] == [0, 0, 1] {
-        return Some(5);
+        return Some(1);
     }
 
-    FINDER.find(&buf[2..]).map(|i| i + 5)
+    FINDER.find(&buf[2..]).map(|i| match buf[i + 1] {
+        // there's 0 before 0 0 1 so we have the longer start code
+        0 => i + 1,
+        _ => i + 2,
+    })
 }
 
 impl NALUSplitter {
@@ -55,7 +59,7 @@ impl NALUSplitter {
 
         // This will cause the whole start code to be reprocessed when the beginning of the next start code
         // is at the end of current buffer.
-        self.previous_search_end = self.buffer.len().saturating_sub(3);
+        self.previous_search_end = self.buffer.len().saturating_sub(4);
 
         self.pts = pts;
 
@@ -74,10 +78,7 @@ impl NALUSplitter {
             result.push((nalu.to_vec(), self.pts));
         }
 
-        result.push((
-            [self.buffer.to_vec(), [0, 0, 1].to_vec()].concat(),
-            self.pts,
-        ));
+        result.push((self.buffer.to_vec(), self.pts));
         self.buffer = BytesMut::new();
         self.previous_search_end = 0;
 

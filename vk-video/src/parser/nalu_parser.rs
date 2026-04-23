@@ -1,19 +1,37 @@
-use std::{
-    io::Read,
-    sync::{Arc, mpsc},
-};
+use std::{io::Read, sync::Arc};
 
 use h264_reader::{
-    Context,
+    annexb::AnnexBReader,
     nal::{Nal, RefNal, pps::PicParameterSet, slice::SliceHeader, sps::SeqParameterSet},
-    push::{AccumulatedNalHandler, NalInterest},
+    push::{AccumulatedNalHandler, NalAccumulator, NalInterest},
 };
 
 use super::h264::H264ParserError;
 
-pub(crate) struct NalReceiver {
+pub(crate) struct NalParser {
+    reader: AnnexBReader<NalAccumulator<NalReceiver>>,
+}
+
+impl Default for NalParser {
+    fn default() -> Self {
+        Self {
+            reader: AnnexBReader::accumulate(NalReceiver::default()),
+        }
+    }
+}
+
+impl NalParser {
+    pub fn parse_nalu(&mut self, nalu: &[u8]) -> Result<ParsedNalu, H264ParserError> {
+        self.reader.push(nalu);
+        self.reader.reset();
+        self.reader.nal_handler_mut().parsed_nalu.take().unwrap()
+    }
+}
+
+#[derive(Default)]
+struct NalReceiver {
     parser_ctx: h264_reader::Context,
-    sender: mpsc::Sender<Result<ParsedNalu, H264ParserError>>,
+    parsed_nalu: Option<Result<ParsedNalu, H264ParserError>>,
 }
 
 impl AccumulatedNalHandler for NalReceiver {
@@ -22,21 +40,13 @@ impl AccumulatedNalHandler for NalReceiver {
             return NalInterest::Buffer;
         }
 
-        let result = self.handle_nal(nal);
-        self.sender.send(result).unwrap();
+        self.parsed_nalu = Some(self.handle_nal(nal));
 
         NalInterest::Ignore
     }
 }
 
 impl NalReceiver {
-    pub(crate) fn new(sender: mpsc::Sender<Result<ParsedNalu, H264ParserError>>) -> Self {
-        Self {
-            sender,
-            parser_ctx: Context::default(),
-        }
-    }
-
     fn handle_nal(&mut self, nal: RefNal<'_>) -> Result<ParsedNalu, H264ParserError> {
         let nal_unit_type = nal
             .header()
