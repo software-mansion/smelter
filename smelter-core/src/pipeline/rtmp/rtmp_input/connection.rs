@@ -1,6 +1,8 @@
 use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
-use rtmp::{Audio, AudioConfig, RtmpAudioCodec, RtmpEvent, RtmpVideoCodec, Video, VideoConfig};
+use rtmp::{
+    AudioConfig, AudioData, RtmpAudioCodec, RtmpEvent, RtmpVideoCodec, VideoConfig, VideoData,
+};
 use smelter_render::{InputId, error::ErrorStack};
 use tracing::{Level, info, span, warn};
 
@@ -225,7 +227,7 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_video(&mut self, video: Video) -> Result<(), RtmpConnectionError> {
+    fn process_video(&mut self, video: VideoData) -> Result<(), RtmpConnectionError> {
         let sender = self
             .video_track_state
             .chunk_sender()
@@ -250,7 +252,7 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_audio(&mut self, audio: Audio) -> Result<(), RtmpConnectionError> {
+    fn process_audio(&mut self, audio: AudioData) -> Result<(), RtmpConnectionError> {
         let sender = self
             .audio_track_state
             .chunk_sender()

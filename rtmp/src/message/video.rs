@@ -2,16 +2,16 @@ use std::time::Duration;
 
 use crate::{
     ExVideoFourCc, ExVideoPacket, ExVideoTag, FlvVideoData, LegacyFlvVideoCodec,
-    RtmpMessageParseError, RtmpMessageSerializeError, RtmpVideoCodec, TrackId, Video, VideoConfig,
-    VideoTag, VideoTagFrameType, VideoTagH264PacketType,
-    error::FlvVideoTagParseError,
+    RtmpMessageParseError, RtmpMessageSerializeError, RtmpVideoCodec, TrackId, VideoConfig,
+    VideoData, VideoTag, VideoTagFrameType, VideoTagH264PacketType,
     message::VIDEO_CHUNK_STREAM_ID,
     protocol::{MessageType, RawMessage},
 };
 
+// TODO: Rethink if Unknown should remain in that form
 #[derive(Debug, Clone)]
 pub(crate) enum VideoMessage {
-    Data(Video),
+    Data(VideoData),
     Config(VideoConfig),
     /// Wire-level video packet types that carry no user-visible payload
     /// (seek commands, SequenceEnd, video-level metadata, MPEG2-TS sequence start).
@@ -37,13 +37,9 @@ impl VideoMessage {
                 let is_keyframe = match tag.frame_type {
                     VideoTagFrameType::Keyframe => true,
                     VideoTagFrameType::Interframe => false,
-                    _ => {
-                        return Err(
-                            FlvVideoTagParseError::InvalidFrameTypeForH264(tag.frame_type).into(),
-                        );
-                    }
+                    _ => return Ok(Self::Unknown),
                 };
-                Ok(Self::Data(Video {
+                Ok(Self::Data(VideoData {
                     track_id: TrackId::PRIMARY,
                     codec: RtmpVideoCodec::H264,
                     pts: Duration::from_millis(
@@ -61,9 +57,7 @@ impl VideoMessage {
                     data: tag.data,
                 }))
             }
-            (codec, _) => {
-                Err(FlvVideoTagParseError::UnsupportedLegacyVideoCodec(format!("{codec:?}")).into())
-            }
+            (_, _) => Ok(Self::Unknown),
         }
     }
 
@@ -96,16 +90,12 @@ impl VideoMessage {
                 let is_keyframe = match frame_type {
                     VideoTagFrameType::Keyframe => true,
                     VideoTagFrameType::Interframe => false,
-                    _ => {
-                        return Err(
-                            FlvVideoTagParseError::InvalidFrameTypeForH264(frame_type).into()
-                        );
-                    }
+                    _ => return Ok(Self::Unknown),
                 };
                 let pts = Duration::from_millis(
                     (timestamp as i64 + composition_time as i64).max(0) as u64,
                 ) + Duration::from_nanos(nanos_offset);
-                Ok(Self::Data(Video {
+                Ok(Self::Data(VideoData {
                     track_id: TrackId::PRIMARY,
                     codec,
                     pts,
@@ -153,15 +143,18 @@ fn four_cc_from_video_codec(codec: RtmpVideoCodec) -> ExVideoFourCc {
     }
 }
 
-fn video_into_raw(video: Video, stream_id: u32) -> Result<RawMessage, RtmpMessageSerializeError> {
-    let timestamp = video.dts.as_millis() as u32;
+fn video_into_raw(
+    video: VideoData,
+    stream_id: u32,
+) -> Result<RawMessage, RtmpMessageSerializeError> {
+    let dts_nanos = video.dts.as_nanos();
+    let timestamp = (dts_nanos / 1_000_000) as u32;
+    let composition_time = (video.pts.as_millis() as i64 - video.dts.as_millis() as i64) as i32;
     let payload = if video.codec == RtmpVideoCodec::H264 {
         FlvVideoData::Legacy(VideoTag {
             h264_packet_type: Some(VideoTagH264PacketType::Data),
             codec: LegacyFlvVideoCodec::H264,
-            composition_time: Some(
-                (video.pts.as_millis() as i64 - video.dts.as_millis() as i64) as i32,
-            ),
+            composition_time: Some(composition_time),
             frame_type: match video.is_keyframe {
                 true => VideoTagFrameType::Keyframe,
                 false => VideoTagFrameType::Interframe,
@@ -170,7 +163,10 @@ fn video_into_raw(video: Video, stream_id: u32) -> Result<RawMessage, RtmpMessag
         })
         .serialize()?
     } else {
-        let composition_time = (video.pts.as_millis() as i64 - video.dts.as_millis() as i64) as i32;
+        let timestamp_offset_nanos = match (dts_nanos % 1_000_000) as u32 {
+            0 => None,
+            offset => Some(offset),
+        };
         FlvVideoData::Enhanced(ExVideoTag::VideoBody {
             four_cc: four_cc_from_video_codec(video.codec),
             packet: ExVideoPacket::CodedFrames {
@@ -181,7 +177,7 @@ fn video_into_raw(video: Video, stream_id: u32) -> Result<RawMessage, RtmpMessag
                 true => VideoTagFrameType::Keyframe,
                 false => VideoTagFrameType::Interframe,
             },
-            timestamp_offset_nanos: None,
+            timestamp_offset_nanos,
         })
         .serialize()?
     };

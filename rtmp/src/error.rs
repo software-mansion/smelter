@@ -1,7 +1,5 @@
 use thiserror::Error;
 
-use crate::VideoTagFrameType;
-
 #[derive(Error, Debug)]
 pub enum RtmpConnectionError {
     #[error("Handshake failed: {0}")]
@@ -135,12 +133,6 @@ pub enum FlvVideoTagParseError {
 
     #[error("Unknown frame type header value: {0}")]
     UnknownFrameType(u8),
-
-    #[error("Invalid frame type for H264 packet: {0:?}")]
-    InvalidFrameTypeForH264(VideoTagFrameType),
-
-    #[error("Unsupported legacy video codec: {0}")]
-    UnsupportedLegacyVideoCodec(String),
 
     #[error("Unknown VideoFourCc: {0:?}")]
     UnknownVideoFourCc([u8; 4]),

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    AacAudioConfig, Audio, AudioChannels, AudioConfig, AudioTag, AudioTagAacPacketType,
+    AacAudioConfig, AudioChannels, AudioConfig, AudioData, AudioTag, AudioTagAacPacketType,
     AudioTagSampleSize, AudioTagSoundRate, FlvAudioTagParseError, LegacyFlvAudioCodec,
     RtmpAudioCodec, RtmpMessageParseError, RtmpMessageSerializeError, TrackId,
     message::AUDIO_CHUNK_STREAM_ID,
@@ -10,7 +10,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub(crate) enum AudioMessage {
-    Data(Audio),
+    Data(AudioData),
     Config(AudioConfig),
     /// Wire-level audio packet types that carry no user-visible payload
     /// (Enhanced RTMP ExHeader audio — parsing not yet implemented).
@@ -43,7 +43,7 @@ impl AudioMessage {
                     data: tag.data,
                 })
             }
-            _ => Self::Data(Audio {
+            _ => Self::Data(AudioData {
                 track_id: TrackId::PRIMARY,
                 codec,
                 pts,

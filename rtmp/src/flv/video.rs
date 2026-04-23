@@ -54,7 +54,6 @@ impl VideoTagFrameType {
 }
 
 /// FLV legacy video codec id (4-bit CodecID on the wire).
-/// Internal wire-layer type; users of the library should use [`crate::RtmpVideoCodec`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LegacyFlvVideoCodec {
     SorensonH263,

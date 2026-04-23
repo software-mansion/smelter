@@ -6,7 +6,8 @@ use smelter_render::error::ErrorStack;
 use tracing::{debug, warn};
 
 use rtmp::{
-    RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError, RtmpVideoCodec, TrackId,
+    AudioData, RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError, RtmpVideoCodec,
+    TrackId, VideoData,
 };
 
 use crate::{
@@ -242,8 +243,8 @@ impl Output for RtmpClientOutput {
     }
 }
 
-fn video_chunk_to_event(chunk: EncodedOutputChunk) -> rtmp::Video {
-    rtmp::Video {
+fn video_chunk_to_event(chunk: EncodedOutputChunk) -> VideoData {
+    VideoData {
         track_id: TrackId::PRIMARY,
         codec: RtmpVideoCodec::H264,
         pts: chunk.pts,
@@ -253,8 +254,8 @@ fn video_chunk_to_event(chunk: EncodedOutputChunk) -> rtmp::Video {
     }
 }
 
-fn audio_chunk_to_event(chunk: EncodedOutputChunk, channels: rtmp::AudioChannels) -> rtmp::Audio {
-    rtmp::Audio {
+fn audio_chunk_to_event(chunk: EncodedOutputChunk, channels: rtmp::AudioChannels) -> AudioData {
+    AudioData {
         track_id: TrackId::PRIMARY,
         codec: RtmpAudioCodec::Aac,
         pts: chunk.pts,

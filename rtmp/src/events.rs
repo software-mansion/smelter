@@ -56,15 +56,15 @@ pub enum RtmpAudioCodec {
 
 #[derive(Debug, Clone)]
 pub enum RtmpEvent {
-    VideoData(Video),
+    VideoData(VideoData),
     VideoConfig(VideoConfig),
-    AudioData(Audio),
+    AudioData(AudioData),
     AudioConfig(AudioConfig),
     Metadata(HashMap<String, AmfValue>),
 }
 
 #[derive(Clone)]
-pub struct Video {
+pub struct VideoData {
     pub track_id: TrackId,
     pub codec: RtmpVideoCodec,
     pub pts: Duration,
@@ -81,7 +81,7 @@ pub struct VideoConfig {
 }
 
 #[derive(Clone)]
-pub struct Audio {
+pub struct AudioData {
     pub track_id: TrackId,
     pub codec: RtmpAudioCodec,
     pub pts: Duration,
@@ -96,8 +96,8 @@ pub struct AudioConfig {
     pub data: Bytes,
 }
 
-impl From<Video> for RtmpEvent {
-    fn from(value: Video) -> Self {
+impl From<VideoData> for RtmpEvent {
+    fn from(value: VideoData) -> Self {
         RtmpEvent::VideoData(value)
     }
 }
@@ -108,8 +108,8 @@ impl From<VideoConfig> for RtmpEvent {
     }
 }
 
-impl From<Audio> for RtmpEvent {
-    fn from(value: Audio) -> Self {
+impl From<AudioData> for RtmpEvent {
+    fn from(value: AudioData) -> Self {
         RtmpEvent::AudioData(value)
     }
 }
@@ -120,7 +120,7 @@ impl From<AudioConfig> for RtmpEvent {
     }
 }
 
-impl std::fmt::Debug for Video {
+impl std::fmt::Debug for VideoData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Video")
             .field("track_id", &self.track_id)
@@ -143,7 +143,7 @@ impl std::fmt::Debug for VideoConfig {
     }
 }
 
-impl std::fmt::Debug for Audio {
+impl std::fmt::Debug for AudioData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Audio")
             .field("track_id", &self.track_id)
