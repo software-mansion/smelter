@@ -1,20 +1,38 @@
-use anyhow::Result;
-use serde_json::json;
 use std::{thread, time::Duration};
+
+use anyhow::Result;
+use integration_tests_macros::pipeline_test;
+use serde_json::json;
 
 use crate::{
     CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
     audio::{self, AudioAnalyzeTolerance, AudioValidationConfig},
     compare_audio_dumps, input_dump_from_disk,
     paths::submodule_root_path,
+    pipeline_tests::PipelineTest,
 };
 
-/// Two audio input streams mixed together with different volumes.
-///
-/// Play mixed audio for 20 seconds.
-#[test]
+#[allow(dead_code)]
+pub const TESTS: &[PipelineTest] = &[
+    AUDIO_MIXING_WITH_OFFSET,
+    AUDIO_MIXING_NO_OFFSET,
+    AUDIO_MIXING_TRACK_INSERTION_WITH_OFFSET,
+    SINGLE_INPUT_OPUS,
+    SINGLE_INPUT_AAC,
+    SINGLE_INPUT_AAC_MP4,
+    AUDIO_EARLY_STREAMING_WITH_OFFSET,
+    AUDIO_EARLY_STREAMING_NO_OFFSET,
+];
+
+#[pipeline_test(
+    description = "
+        Two audio input streams mixed together with different volumes.
+
+        Play mixed audio for 20 seconds.
+    ",
+    snapshot_name = "audio_mixing_with_offset_output.rtp"
+)]
 pub fn audio_mixing_with_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "audio_mixing_with_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let input_2_port = instance.get_port();
@@ -101,13 +119,16 @@ pub fn audio_mixing_with_offset() -> Result<()> {
     Ok(())
 }
 
-/// Two audio input streams mixed together with different volumes.
-/// No offset on inputs so it relies on race condition and might be flaky.
-///
-/// Play mixed audio for 20 seconds.
-#[test]
+#[pipeline_test(
+    description = "
+        Two audio input streams mixed together with different volumes.
+        No offset on inputs so it relies on race condition and might be flaky.
+
+        Play mixed audio for 20 seconds.
+    ",
+    snapshot_name = "audio_mixing_no_offset_output.rtp"
+)]
 pub fn audio_mixing_no_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "audio_mixing_no_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let input_2_port = instance.get_port();
@@ -207,13 +228,16 @@ pub fn audio_mixing_no_offset() -> Result<()> {
     Ok(())
 }
 
-/// Two audio input streams mixed together with the same volume after update request.
-/// Second one joins after 10 seconds of `thread::sleep`.
-///
-/// Play audio for 20 seconds.
-#[test]
+#[pipeline_test(
+    description = "
+        Two audio input streams mixed together with the same volume after update request.
+        Second one joins after 10 seconds of `thread::sleep`.
+
+        Play audio for 20 seconds.
+    ",
+    snapshot_name = "audio_mixing_track_insertion_with_offset_output.rtp"
+)]
 pub fn audio_mixing_track_insertion_with_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "audio_mixing_track_insertion_with_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let input_2_port = instance.get_port();
@@ -319,12 +343,15 @@ pub fn audio_mixing_track_insertion_with_offset() -> Result<()> {
     Ok(())
 }
 
-/// Single audio input with a 440 Hz tone.
-///
-/// Play audio for 20 seconds, the last few second should be silent
-#[test]
+#[pipeline_test(
+    description = "
+        Single audio input with a 440 Hz tone.
+
+        Play audio for 20 seconds, the last few seconds should be silent.
+    ",
+    snapshot_name = "single_input_opus_output.rtp"
+)]
 pub fn single_input_opus() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "single_input_opus_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
@@ -391,12 +418,15 @@ pub fn single_input_opus() -> Result<()> {
     Ok(())
 }
 
-/// An AAC audio input stream.
-///
-/// Play audio for 10 seconds.
-#[test]
+#[pipeline_test(
+    description = "
+        An AAC audio input stream.
+
+        Play audio for 10 seconds.
+    ",
+    snapshot_name = "single_input_aac_output.rtp"
+)]
 pub fn single_input_aac() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "single_input_aac_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
@@ -473,12 +503,15 @@ pub fn single_input_aac() -> Result<()> {
     Ok(())
 }
 
-/// Single mp4 audio input with a 440 Hz tone.
-///
-/// Play audio for 10 seconds.
-#[test]
+#[pipeline_test(
+    description = "
+        Single mp4 audio input with a 440 Hz tone.
+
+        Play audio for 10 seconds.
+    ",
+    snapshot_name = "single_input_aac_mp4_output.rtp"
+)]
 pub fn single_input_aac_mp4() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "single_input_aac_mp4_output.rtp";
     let instance = CompositorInstance::start(None);
     let output_port = instance.get_port();
 
@@ -541,13 +574,16 @@ pub fn single_input_aac_mp4() -> Result<()> {
     Ok(())
 }
 
-/// Single frequency input that changes after 5 seconds. Input starts streaming 2 seconds before
-/// start request with offset set to 2 seconds.
-///
-/// Play  2 seconds of silence, 5 seconds of lower frequency and higher frequency after that time.
-#[test]
+#[pipeline_test(
+    description = "
+        Single frequency input that changes after 5 seconds. Input starts streaming 2 seconds before
+        start request with offset set to 2 seconds.
+
+        Play 2 seconds of silence, 5 seconds of lower frequency and higher frequency after that time.
+    ",
+    snapshot_name = "audio_early_streaming_with_offset_output.rtp"
+)]
 fn audio_early_streaming_with_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "audio_early_streaming_with_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
@@ -619,13 +655,16 @@ fn audio_early_streaming_with_offset() -> Result<()> {
     Ok(())
 }
 
-/// Use input that changes frequency after 5 seconds. Input starts streaming 2 seconds before
-/// start request with no offset.
-///
-/// Play approx. 3 seconds of lower frequency and higher frequency after that.
-#[test]
+#[pipeline_test(
+    description = "
+        Use input that changes frequency after 5 seconds. Input starts streaming 2 seconds before
+        start request with no offset.
+
+        Play approx. 3 seconds of lower frequency and higher frequency after that.
+    ",
+    snapshot_name = "audio_early_streaming_no_offset_output.rtp"
+)]
 fn audio_early_streaming_no_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "audio_early_streaming_no_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();

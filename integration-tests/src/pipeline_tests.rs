@@ -6,6 +6,15 @@ mod schedule_update;
 mod unregistering;
 mod video_audio;
 
+#[allow(dead_code)]
+pub(crate) struct PipelineTest {
+    pub test_name: &'static str,
+    pub full_test_name: &'static str,
+    pub description: &'static str,
+    pub snapshot_name: &'static str,
+    pub test_fn: fn() -> anyhow::Result<()>,
+}
+
 use crossbeam_channel::Sender;
 use futures_util::{SinkExt as _, StreamExt as _};
 use tokio_tungstenite::tungstenite;

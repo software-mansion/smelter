@@ -1,24 +1,41 @@
 use std::{thread, time::Duration};
 
+use anyhow::Result;
+use integration_tests_macros::pipeline_test;
+use serde_json::json;
+
 use crate::{
     CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
     audio::{
         self, ArtificialFrequencyTolerance, AudioAnalyzeTolerance, AudioValidationConfig,
         FrequencyTolerance,
     },
-    compare_audio_dumps, compare_video_dumps, input_dump_from_disk, split_rtp_packet_dump,
+    compare_audio_dumps, compare_video_dumps, input_dump_from_disk,
+    pipeline_tests::PipelineTest,
+    split_rtp_packet_dump,
     video::VideoValidationConfig,
 };
-use anyhow::Result;
-use serde_json::json;
 
-/// Required inputs with some packets delayed.
-/// No offset (it might required adding _flaky suffix)
-///
-/// Show `input_1` and `input_2` side by side for 20 seconds.
-#[test]
+#[allow(dead_code)]
+pub const TESTS: &[PipelineTest] = &[
+    REQUIRED_VIDEO_INPUTS_NO_OFFSET,
+    REQUIRED_VIDEO_INPUTS_WITH_OFFSET,
+    REQUIRED_AUDIO_INPUTS_NO_OFFSET,
+    REQUIRED_AUDIO_INPUTS_WITH_OFFSET,
+    REQUIRED_AUDIO_INPUTS_WITH_OFFSET_MISSING_DATA,
+    OPTIONAL_INPUTS_NO_OFFSET_FLAKY,
+];
+
+#[pipeline_test(
+    description = "
+        Required inputs with some packets delayed.
+        No offset (it might require adding the _flaky suffix)
+
+        Show `input_1` and `input_2` side by side for 20 seconds.
+    ",
+    snapshot_name = "required_video_inputs_no_offset_output.rtp"
+)]
 pub fn required_video_inputs_no_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "required_video_inputs_no_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let input_2_port = instance.get_port();
@@ -130,12 +147,15 @@ pub fn required_video_inputs_no_offset() -> Result<()> {
     Ok(())
 }
 
-/// Required inputs with some packets delayed. Offset set to 0.
-///
-/// Show `input_1` and `input_2` side by side for 20 seconds.
-#[test]
+#[pipeline_test(
+    description = "
+        Required inputs with some packets delayed. Offset set to 0.
+
+        Show `input_1` and `input_2` side by side for 20 seconds.
+    ",
+    snapshot_name = "required_video_inputs_with_offset_output.rtp"
+)]
 pub fn required_video_inputs_with_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "required_video_inputs_with_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let input_2_port = instance.get_port();
@@ -249,12 +269,15 @@ pub fn required_video_inputs_with_offset() -> Result<()> {
     Ok(())
 }
 
-/// Required inputs with some packets delayed.
-///
-/// Countdown from 10 from the beginning
-#[test]
+#[pipeline_test(
+    description = "
+        Required inputs with some packets delayed.
+
+        Countdown from 10 from the beginning.
+    ",
+    snapshot_name = "required_audio_inputs_no_offset_output.rtp"
+)]
 pub fn required_audio_inputs_no_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "required_audio_inputs_no_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
@@ -339,12 +362,15 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
     Ok(())
 }
 
-/// Required inputs with some packets delayed. Offset set to 1000ms.
-///
-/// Countdown from 10 delayed by one second
-#[test]
+#[pipeline_test(
+    description = "
+        Required inputs with some packets delayed. Offset set to 1000ms.
+
+        Countdown from 10 delayed by one second.
+    ",
+    snapshot_name = "required_audio_inputs_with_offset_output.rtp"
+)]
 pub fn required_audio_inputs_with_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "required_audio_inputs_with_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
@@ -433,15 +459,18 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
     Ok(())
 }
 
-/// Required inputs with some packets delayed and some dropped. Offset set to 1000ms.
-///
-/// - 1 seconds of silence
-/// - 1 second of audio (from the start of the recording)
-/// - 2 seconds of silence
-/// - remaining part of audio (2 seconds from previous step are missing)
-#[test]
+#[pipeline_test(
+    description = "
+        Required inputs with some packets delayed and some dropped. Offset set to 1000ms.
+
+        - 1 second of silence
+        - 1 second of audio (from the start of the recording)
+        - 2 seconds of silence
+        - remaining part of audio (2 seconds from previous step are missing)
+    ",
+    snapshot_name = "required_audio_inputs_with_offset_missing_data_output.rtp"
+)]
 pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "required_audio_inputs_with_offset_missing_data_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
@@ -532,16 +561,19 @@ pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
     Ok(())
 }
 
-/// Optional inputs with some packets delayed in the middle
-/// No offset
-///
-/// Show `input_1` and `input_2` side by side for 1 second. `input_2` stops sending
-/// frames for 5 seconds and then returns back to showing both streams. On replay
-/// the gap should last for approx. 3 seconds as the renderer resorts to
-/// a blank fallback stream if there are no new frames received for 2 seconds.
-#[test]
+#[pipeline_test(
+    description = "
+        Optional inputs with some packets delayed in the middle.
+        No offset.
+
+        Show `input_1` and `input_2` side by side for 1 second. `input_2` stops sending
+        frames for 5 seconds and then returns back to showing both streams. On replay
+        the gap should last for approx. 3 seconds as the renderer resorts to
+        a blank fallback stream if there are no new frames received for 2 seconds.
+    ",
+    snapshot_name = "optional_inputs_no_offset_output.rtp"
+)]
 pub fn optional_inputs_no_offset_flaky() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "optional_inputs_no_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let input_2_port = instance.get_port();

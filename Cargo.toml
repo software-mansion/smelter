@@ -20,6 +20,7 @@ members = [
 
     # Tools/utils/tests
     "integration-tests",
+    "integration-tests/macros",
     "tools",
 ]
 resolver = "2"

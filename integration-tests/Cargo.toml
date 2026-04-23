@@ -48,5 +48,8 @@ inquire = "0.7.5"
 strum = { version = "0.27", features = ["derive"] }
 fuzzy-matcher = "0.3.7"
 
+[dev-dependencies]
+integration-tests-macros = { path = "macros" }
+
 [lints]
 workspace = true
