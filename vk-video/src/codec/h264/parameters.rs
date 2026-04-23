@@ -1,5 +1,3 @@
-use std::ptr::NonNull;
-
 use ash::vk;
 use h264_reader::nal::sps::{FrameMbsFlags, SeqParameterSet};
 
@@ -70,20 +68,12 @@ impl SeqParameterSetExt for SeqParameterSet {
     }
 }
 
+#[expect(unused)]
 pub(crate) struct VkH264SequenceParameterSet {
     pub(crate) sps: vk::native::StdVideoH264SequenceParameterSet,
-
-    /// # Safety
-    /// Do not modify this pointer or anything it points to
-    scaling_lists_ptr: Option<NonNull<H264ScalingLists>>,
-
-    /// # Safety
-    /// Do not modify this pointer or anything it points to
-    offset_for_ref_frame: Option<NonNull<[i32]>>,
-
-    /// # Safety
-    /// Do not modify this pointer or anything it points to
-    vui_ptr: Option<NonNull<vk::native::StdVideoH264SequenceParameterSetVui>>,
+    scaling_lists: Option<Box<H264ScalingLists>>,
+    offset_for_ref_frame: Option<Box<[i32]>>,
+    vui: Option<Box<vk::native::StdVideoH264SequenceParameterSetVui>>,
 }
 
 impl From<&'_ SeqParameterSet> for VkH264SequenceParameterSet {
@@ -188,29 +178,23 @@ impl From<&'_ SeqParameterSet> for VkH264SequenceParameterSet {
             | h264_reader::nal::sps::PicOrderCntType::TypeTwo => None,
         };
 
-        let offset_for_ref_frame = offset_for_ref_frame
-            .map(|o| o.into_boxed_slice())
-            .map(Box::leak);
+        let offset_for_ref_frame = offset_for_ref_frame.map(|o| o.into_boxed_slice());
 
         let pOffsetForRefFrame = match offset_for_ref_frame.as_ref() {
             Some(o) => o.as_ptr(),
             None => std::ptr::null(),
         };
 
-        let offset_for_ref_frame = offset_for_ref_frame.map(NonNull::from);
-
-        let scaling_lists: Option<&mut H264ScalingLists> = sps
+        let scaling_lists: Option<Box<H264ScalingLists>> = sps
             .chroma_info
             .scaling_matrix
             .as_ref()
-            .map(|matrix| Box::leak(Box::new(matrix.into())));
+            .map(|matrix| Box::new(matrix.into()));
 
         let pScalingLists = match scaling_lists.as_ref() {
             Some(l) => &l.list,
             None => std::ptr::null(),
         };
-
-        let scaling_lists_ptr = scaling_lists.map(NonNull::from);
 
         // TODO: this is not necessary to reconstruct samples. I don't know why the decoder would
         // need this. Maybe we can do this in the future.
@@ -244,22 +228,10 @@ impl From<&'_ SeqParameterSet> for VkH264SequenceParameterSet {
                 pScalingLists,
                 pSequenceParameterSetVui,
             },
-            scaling_lists_ptr,
+            scaling_lists,
             offset_for_ref_frame,
-            vui_ptr: None,
+            vui: None,
         }
-    }
-}
-
-impl Drop for VkH264SequenceParameterSet {
-    fn drop(&mut self) {
-        self.scaling_lists_ptr
-            .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
-
-        self.offset_for_ref_frame
-            .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
-
-        self.vui_ptr.map(|p| unsafe { Box::from_raw(p.as_ptr()) });
     }
 }
 
@@ -331,7 +303,6 @@ impl VkH264SequenceParameterSet {
             reserved1: 0,
             pHrdParameters: std::ptr::null(),
         });
-        let vui_ptr = NonNull::from(Box::leak(vui));
 
         let sps = vk::native::StdVideoH264SequenceParameterSet {
             flags: vk::native::StdVideoH264SpsFlags {
@@ -371,14 +342,14 @@ impl VkH264SequenceParameterSet {
             reserved2: 0,
             pOffsetForRefFrame: std::ptr::null(),
             pScalingLists: std::ptr::null(),
-            pSequenceParameterSetVui: vui_ptr.as_ptr(),
+            pSequenceParameterSetVui: vui.as_ref(),
         };
 
         Ok(Self {
             sps,
-            scaling_lists_ptr: None,
+            scaling_lists: None,
             offset_for_ref_frame: None,
-            vui_ptr: Some(vui_ptr),
+            vui: Some(vui),
         })
     }
 }
@@ -593,9 +564,10 @@ fn h264_profile_idc_to_vk(
     }
 }
 
+#[expect(unused)]
 pub(crate) struct VkH264PictureParameterSet {
     pub(crate) pps: vk::native::StdVideoH264PictureParameterSet,
-    scaling_list_ptr: Option<NonNull<H264ScalingLists>>,
+    scaling_list: Option<Box<H264ScalingLists>>,
 }
 
 impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkH264PictureParameterSet {
@@ -630,18 +602,16 @@ impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkH264PictureParameter
             .map(|ext| ext.second_chroma_qp_index_offset as i8)
             .unwrap_or(chroma_qp_index_offset);
 
-        let scaling_list: Option<&mut H264ScalingLists> = pps
+        let scaling_list: Option<Box<H264ScalingLists>> = pps
             .extension
             .as_ref()
             .and_then(|e| e.pic_scaling_matrix.as_ref())
-            .map(|matrix| Box::leak(Box::new(matrix.into())));
+            .map(|matrix| Box::new(matrix.into()));
 
         let pScalingLists = match scaling_list.as_ref() {
             Some(l) => &l.list,
             None => std::ptr::null(),
         };
-
-        let scaling_list_ptr = scaling_list.map(NonNull::from);
 
         Self {
             pps: vk::native::StdVideoH264PictureParameterSet {
@@ -659,20 +629,13 @@ impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkH264PictureParameter
                 second_chroma_qp_index_offset,
                 pScalingLists,
             },
-            scaling_list_ptr,
+            scaling_list,
         }
     }
 }
 
 unsafe impl Send for VkH264PictureParameterSet {}
 unsafe impl Sync for VkH264PictureParameterSet {}
-
-impl Drop for VkH264PictureParameterSet {
-    fn drop(&mut self) {
-        self.scaling_list_ptr
-            .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
-    }
-}
 
 impl VkH264PictureParameterSet {
     pub(crate) fn new_encode(
@@ -715,7 +678,7 @@ impl VkH264PictureParameterSet {
 
         Self {
             pps,
-            scaling_list_ptr: None,
+            scaling_list: None,
         }
     }
 }
