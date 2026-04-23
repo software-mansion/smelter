@@ -29,7 +29,7 @@ pub const TESTS: &[PipelineTest] = &[
 #[pipeline_test(
     description = "
         Required inputs with some packets delayed.
-        No offset (it might required adding _flaky suffix)
+        No offset (it might require adding the _flaky suffix)
 
         Show `input_1` and `input_2` side by side for 20 seconds.
     ",
@@ -463,7 +463,7 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
     description = "
         Required inputs with some packets delayed and some dropped. Offset set to 1000ms.
 
-        - 1 seconds of silence
+        - 1 second of silence
         - 1 second of audio (from the start of the recording)
         - 2 seconds of silence
         - remaining part of audio (2 seconds from previous step are missing)

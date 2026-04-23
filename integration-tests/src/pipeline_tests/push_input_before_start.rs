@@ -195,12 +195,12 @@ pub fn push_input_before_start_udp() -> Result<()> {
 
 #[pipeline_test(
     description = "
-        Check if the input stream is processed correctly if the stream is delivered few seconds before
+        Check if the input stream is processed correctly if the stream is delivered a few seconds before
         queue start. Test case where there is no offset defined. (TCP server)
 
         Output:
-        - Display input stream without initial 5 seconds from the beginning (11 seconds). Not black frames at the
-          beginning. Starts with a red color. Initial 5 second of input stream is missing.
+        - Display input stream without the initial 5 seconds from the beginning (11 seconds). No black frames at the
+          beginning. Starts with a red color. The initial 5 seconds of the input stream are missing.
         - Black screen for remaining 9 seconds.
     ",
     snapshot_name = "push_entire_input_before_start_tcp_without_offset.rtp"
@@ -284,7 +284,7 @@ pub fn push_input_before_start_tcp_no_offset() -> Result<()> {
 #[pipeline_test(
     description = "
         Check if the input stream is processed correctly if the stream is delivered few seconds before
-        queue start. Test case where there is no offset defined. (UPD)
+        queue start. Test case where there is no offset defined. (UDP)
 
         Output:
         - Display entire input stream from the beginning (16 seconds). No black frames at the

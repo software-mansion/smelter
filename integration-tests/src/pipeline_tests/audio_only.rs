@@ -347,7 +347,7 @@ pub fn audio_mixing_track_insertion_with_offset() -> Result<()> {
     description = "
         Single audio input with a 440 Hz tone.
 
-        Play audio for 20 seconds, the last few second should be silent.
+        Play audio for 20 seconds, the last few seconds should be silent.
     ",
     snapshot_name = "single_input_opus_output.rtp"
 )]
