@@ -1,15 +1,6 @@
-use std::process::Child;
-
 use anyhow::{Result, anyhow};
 use inquire::{Confirm, Select};
-use integration_tests::{
-    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_receive_vp8, start_ffmpeg_receive_vp9},
-    gstreamer::{
-        start_gst_receive_tcp_h264, start_gst_receive_tcp_vp8, start_gst_receive_tcp_vp9,
-        start_gst_receive_tcp_without_video, start_gst_receive_udp_h264, start_gst_receive_udp_vp8,
-        start_gst_receive_udp_vp9, start_gst_receive_udp_without_video,
-    },
-};
+use integration_tests::media::{Backend, MediaReceiver, ProcessHandle, Receive, VideoCodec};
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -52,7 +43,7 @@ pub struct RtpOutput {
     pub name: String,
     port: u16,
     options: RtpOutputOptions,
-    stream_handles: Vec<Child>,
+    stream_handles: Vec<ProcessHandle>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,28 +208,21 @@ impl RtpOutput {
         if video.is_none() && audio.is_none() {
             return Err(anyhow!("No stream specified, GStreamer not started!"));
         }
-        match video {
-            Some(v) => {
-                let a = audio.is_some();
-                match v.encoder {
-                    VideoEncoder::FfmpegH264
-                    | VideoEncoder::FfmpegH264LowLatency
-                    | VideoEncoder::VulkanH264 => self
-                        .stream_handles
-                        .push(start_gst_receive_tcp_h264(IP, self.port, a)?),
-                    VideoEncoder::FfmpegVp8 => self
-                        .stream_handles
-                        .push(start_gst_receive_tcp_vp8(IP, self.port, a)?),
-                    VideoEncoder::FfmpegVp9 => self
-                        .stream_handles
-                        .push(start_gst_receive_tcp_vp9(IP, self.port, a)?),
-                    _ => return Err(anyhow!("Invalid encoder for RTP output.")),
-                }
-            }
-            None => self
-                .stream_handles
-                .push(start_gst_receive_tcp_without_video(IP, self.port, true)?),
+        let video_codec = video
+            .as_ref()
+            .map(|v| video_codec_from_encoder(v.encoder))
+            .transpose()?;
+        let mut builder = Receive::rtp_tcp_client().ip(IP);
+        if let Some(c) = video_codec {
+            builder = builder.video(self.port, c);
         }
+        if audio.is_some() {
+            builder = builder.audio_port(self.port);
+        }
+        let handles = MediaReceiver::new(builder)
+            .backend(Backend::Gstreamer)
+            .spawn()?;
+        self.stream_handles.extend(handles);
         Ok(())
     }
 
@@ -247,32 +231,26 @@ impl RtpOutput {
         if video.is_none() && audio.is_none() {
             return Err(anyhow!("No stream specified, GStreamer not started!"));
         }
-        match video {
-            Some(v) => {
-                if audio.is_some() {
-                    return Err(anyhow!(
-                        "Receiving both audio and video on the same port is possible only over TCP!"
-                    ));
-                }
-                match v.encoder {
-                    VideoEncoder::FfmpegH264
-                    | VideoEncoder::FfmpegH264LowLatency
-                    | VideoEncoder::VulkanH264 => self
-                        .stream_handles
-                        .push(start_gst_receive_udp_h264(self.port, false)?),
-                    VideoEncoder::FfmpegVp8 => self
-                        .stream_handles
-                        .push(start_gst_receive_udp_vp8(self.port, false)?),
-                    VideoEncoder::FfmpegVp9 => self
-                        .stream_handles
-                        .push(start_gst_receive_udp_vp9(self.port, false)?),
-                    _ => return Err(anyhow!("Invalid encoder for RTP output.")),
-                }
-            }
-            None => self
-                .stream_handles
-                .push(start_gst_receive_udp_without_video(self.port, true)?),
+        if video.is_some() && audio.is_some() {
+            return Err(anyhow!(
+                "Receiving both audio and video on the same port is possible only over TCP!"
+            ));
         }
+        let video_codec = video
+            .as_ref()
+            .map(|v| video_codec_from_encoder(v.encoder))
+            .transpose()?;
+        let mut builder = Receive::rtp_udp_listener();
+        if let Some(c) = video_codec {
+            builder = builder.video(self.port, c);
+        }
+        if audio.is_some() {
+            builder = builder.audio_port(self.port);
+        }
+        let handles = MediaReceiver::new(builder)
+            .backend(Backend::Gstreamer)
+            .spawn()?;
+        self.stream_handles.extend(handles);
         Ok(())
     }
 
@@ -286,42 +264,38 @@ impl RtpOutput {
         if transport_protocol == TransportProtocol::TcpServer {
             return Err(anyhow!("FFmpeg cannot handle TCP connection."));
         }
-        match (video, audio) {
-            (Some(_), Some(_)) => {
-                return Err(anyhow!(
-                    "FFmpeg can't handle both audio and video on a single port over RTP."
-                ));
-            }
-            (Some(v), None) => match v.encoder {
-                VideoEncoder::FfmpegH264
-                | VideoEncoder::FfmpegH264LowLatency
-                | VideoEncoder::VulkanH264 => self
-                    .stream_handles
-                    .push(start_ffmpeg_receive_h264(Some(self.port), None)?),
-                VideoEncoder::FfmpegVp8 => self
-                    .stream_handles
-                    .push(start_ffmpeg_receive_vp8(Some(self.port), None)?),
-                VideoEncoder::FfmpegVp9 => self
-                    .stream_handles
-                    .push(start_ffmpeg_receive_vp9(Some(self.port), None)?),
-                _ => return Err(anyhow!("Invalid encoder for RTP output.")),
-            },
-            (None, Some(_)) => self
-                .stream_handles
-                .push(start_ffmpeg_receive_h264(None, Some(self.port))?),
-            (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
+        let video_codec = video
+            .as_ref()
+            .map(|v| video_codec_from_encoder(v.encoder))
+            .transpose()?;
+        let mut builder = Receive::rtp_udp_listener();
+        if let Some(c) = video_codec {
+            builder = builder.video(self.port, c);
         }
+        if audio.is_some() {
+            builder = builder.audio_port(self.port);
+        }
+        let handles = MediaReceiver::new(builder).spawn()?;
+        self.stream_handles.extend(handles);
         Ok(())
     }
 }
 
+fn video_codec_from_encoder(enc: VideoEncoder) -> Result<VideoCodec> {
+    Ok(match enc {
+        VideoEncoder::FfmpegH264
+        | VideoEncoder::FfmpegH264LowLatency
+        | VideoEncoder::VulkanH264 => VideoCodec::H264,
+        VideoEncoder::FfmpegVp8 => VideoCodec::Vp8,
+        VideoEncoder::FfmpegVp9 => VideoCodec::Vp9,
+        _ => return Err(anyhow!("Invalid encoder for RTP output.")),
+    })
+}
+
 impl Drop for RtpOutput {
     fn drop(&mut self) {
-        for stream_process in &mut self.stream_handles {
-            match stream_process.kill() {
-                Ok(_) => {}
-                Err(e) => error!("{e}"),
-            }
+        for stream_process in self.stream_handles.drain(..) {
+            stream_process.kill();
         }
     }
 }

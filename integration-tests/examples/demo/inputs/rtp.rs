@@ -1,31 +1,17 @@
 use std::{
     env,
     path::{Path, PathBuf},
-    process::Child,
 };
 
 use anyhow::{Result, anyhow};
 use inquire::{Select, Text};
-use integration_tests::{
-    assets::{
-        BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH,
-        BUNNY_VP9_URL,
-    },
-    examples::{AssetData, TestSample, download_asset},
-    ffmpeg::{start_ffmpeg_send, start_ffmpeg_send_rtp_from_file},
-    gstreamer::{
-        start_gst_send_from_file_tcp, start_gst_send_from_file_udp, start_gst_send_tcp,
-        start_gst_send_udp,
-    },
-    paths::integration_tests_root,
-};
+use integration_tests::media::{Asset, Backend, MediaSender, ProcessHandle, Send, TestSample};
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    IP,
     autocompletion::FilePathCompleter,
     inputs::{AudioDecoder, VideoDecoder},
     players::InputPlayer,
@@ -64,7 +50,7 @@ pub struct RtpInput {
     pub name: String,
     port: u16,
     options: RtpInputOptions,
-    stream_handles: Vec<Child>,
+    stream_handles: Vec<ProcessHandle>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,126 +141,60 @@ impl RtpInput {
         }
     }
 
-    fn download_asset(&self) -> Result<()> {
-        let asset = match self.options.video {
-            Some(RtpInputVideoOptions {
-                decoder: VideoDecoder::FfmpegH264,
-            })
-            | Some(RtpInputVideoOptions {
-                decoder: VideoDecoder::VulkanH264,
-            })
-            | None => AssetData {
-                url: BUNNY_H264_URL.to_string(),
-                path: integration_tests_root().join(BUNNY_H264_PATH),
-            },
-            Some(RtpInputVideoOptions {
-                decoder: VideoDecoder::FfmpegVp8,
-            }) => AssetData {
-                url: BUNNY_VP8_URL.to_string(),
-                path: integration_tests_root().join(BUNNY_VP8_PATH),
-            },
-            Some(RtpInputVideoOptions {
-                decoder: VideoDecoder::FfmpegVp9,
-            }) => AssetData {
-                url: BUNNY_VP9_URL.to_string(),
-                path: integration_tests_root().join(BUNNY_VP9_PATH),
-            },
-            _ => unreachable!(),
-        };
-
-        download_asset(&asset)
+    fn asset(&self) -> Asset {
+        match &self.options.path {
+            Some(p) => Asset::File(p.clone()),
+            None => Asset::Sample(self.test_sample()),
+        }
     }
 
-    fn gstreamer_transmit_tcp(&mut self) -> Result<()> {
-        let RtpInputOptions {
-            video, audio, path, ..
-        } = &self.options;
+    fn gstreamer_transmit(&mut self, tcp: bool) -> Result<()> {
+        let RtpInputOptions { video, audio, .. } = &self.options;
         let video_port = video.as_ref().map(|_| self.port);
         let audio_port = audio.as_ref().map(|_| self.port);
-        let video_codec = video.as_ref().map(|v| v.decoder.into());
-        let handle = match path {
-            Some(path) => {
-                start_gst_send_from_file_tcp(IP, video_port, audio_port, path.clone(), video_codec)?
-            }
-            None => {
-                if video.is_some() {
-                    self.download_asset()?;
-                }
-                start_gst_send_tcp(IP, video_port, audio_port, self.test_sample())?
-            }
+        let handles = if tcp {
+            MediaSender::new(
+                self.asset(),
+                Send::rtp_tcp_client()
+                    .video_port(video_port)
+                    .audio_port(audio_port),
+            )
+            .backend(Backend::Gstreamer)
+            .spawn()?
+        } else {
+            MediaSender::new(
+                self.asset(),
+                Send::rtp_udp_client()
+                    .video_port(video_port)
+                    .audio_port(audio_port),
+            )
+            .backend(Backend::Gstreamer)
+            .spawn()?
         };
-        self.stream_handles.push(handle);
-
-        Ok(())
-    }
-
-    fn gstreamer_transmit_udp(&mut self) -> Result<()> {
-        let RtpInputOptions {
-            video, audio, path, ..
-        } = &self.options;
-        let video_port = video.as_ref().map(|_| self.port);
-        let audio_port = audio.as_ref().map(|_| self.port);
-        let video_codec = video.as_ref().map(|v| v.decoder.into());
-        let handle = match path {
-            Some(path) => {
-                start_gst_send_from_file_udp(IP, video_port, audio_port, path.clone(), video_codec)?
-            }
-            None => {
-                if video.is_some() {
-                    self.download_asset()?;
-                }
-                start_gst_send_udp(IP, video_port, audio_port, self.test_sample())?
-            }
-        };
-        self.stream_handles.push(handle);
+        self.stream_handles.extend(handles);
         Ok(())
     }
 
     fn ffmpeg_transmit(&mut self) -> Result<()> {
-        let RtpInputOptions {
-            video, audio, path, ..
-        } = &self.options;
-        let (video_handle, audio_handle) = match (video, audio) {
+        let RtpInputOptions { video, audio, .. } = &self.options;
+        let (video_port, audio_port) = match (video, audio) {
             (Some(_), Some(_)) => {
                 return Err(anyhow!(
                     "FFmpeg can't handle both audio and video on a single port over RTP."
                 ));
             }
-            (Some(v), None) => {
-                let video_codec = v.decoder.into();
-                match path {
-                    Some(path) => start_ffmpeg_send_rtp_from_file(
-                        IP,
-                        Some(self.port),
-                        None,
-                        path.clone(),
-                        Some(video_codec),
-                    )?,
-                    None => {
-                        self.download_asset()?;
-                        start_ffmpeg_send(IP, Some(self.port), None, self.test_sample())?
-                    }
-                }
-            }
-            (None, Some(_audio)) => match path {
-                Some(path) => {
-                    start_ffmpeg_send_rtp_from_file(IP, None, Some(self.port), path.clone(), None)?
-                }
-                None => {
-                    self.download_asset()?;
-                    start_ffmpeg_send(IP, None, Some(self.port), self.test_sample())?
-                }
-            },
+            (Some(_), None) => (Some(self.port), None),
+            (None, Some(_)) => (None, Some(self.port)),
             (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
         };
-
-        if let Some(handle) = video_handle {
-            self.stream_handles.push(handle);
-        }
-        if let Some(handle) = audio_handle {
-            self.stream_handles.push(handle);
-        }
-
+        let handles = MediaSender::new(
+            self.asset(),
+            Send::rtp_udp_client()
+                .video_port(video_port)
+                .audio_port(audio_port),
+        )
+        .spawn()?;
+        self.stream_handles.extend(handles);
         Ok(())
     }
 
@@ -288,19 +208,20 @@ impl RtpInput {
         } = self.options;
         match player {
             InputPlayer::Ffmpeg => self.ffmpeg_transmit(),
-            InputPlayer::Gstreamer => self.gstreamer_transmit_udp(),
+            InputPlayer::Gstreamer => self.gstreamer_transmit(false),
             InputPlayer::Manual => {
                 let video_codec = video.as_ref().map(|opts| opts.decoder);
                 let has_audio = audio.is_some();
                 let file_path = match path {
-                    Some(p) => p,
-                    None => &integration_tests_root().join(match video_codec {
-                        Some(VideoDecoder::FfmpegVp9) => BUNNY_VP9_PATH,
-                        Some(VideoDecoder::FfmpegVp8) => BUNNY_VP8_PATH,
-                        _ => BUNNY_H264_PATH,
-                    }),
+                    Some(p) => p.clone(),
+                    None => match video_codec {
+                        Some(VideoDecoder::FfmpegVp9) => TestSample::BigBuckBunnyVP9Opus,
+                        Some(VideoDecoder::FfmpegVp8) => TestSample::BigBuckBunnyVP8Opus,
+                        _ => TestSample::BigBuckBunnyH264Opus,
+                    }
+                    .file(),
                 };
-                let cmd = build_gst_send_udp_cmd(video_codec, has_audio, self.port, file_path);
+                let cmd = build_gst_send_udp_cmd(video_codec, has_audio, self.port, &file_path);
                 match (video, audio) {
                     (Some(_), Some(_)) => {
                         println!("Start streaming H264 encoded video and OPUS encoded audio:");
@@ -333,19 +254,20 @@ impl RtpInput {
             ..
         } = self.options;
         match player {
-            InputPlayer::Gstreamer => self.gstreamer_transmit_tcp(),
+            InputPlayer::Gstreamer => self.gstreamer_transmit(true),
             InputPlayer::Manual => {
                 let video_codec = video.as_ref().map(|opts| opts.decoder);
                 let has_audio = audio.is_some();
                 let file_path = match path {
-                    Some(p) => p,
-                    None => &integration_tests_root().join(match video_codec {
-                        Some(VideoDecoder::FfmpegVp9) => BUNNY_VP9_PATH,
-                        Some(VideoDecoder::FfmpegVp8) => BUNNY_VP8_PATH,
-                        _ => BUNNY_H264_PATH,
-                    }),
+                    Some(p) => p.clone(),
+                    None => match video_codec {
+                        Some(VideoDecoder::FfmpegVp9) => TestSample::BigBuckBunnyVP9Opus,
+                        Some(VideoDecoder::FfmpegVp8) => TestSample::BigBuckBunnyVP8Opus,
+                        _ => TestSample::BigBuckBunnyH264Opus,
+                    }
+                    .file(),
                 };
-                let cmd = build_gst_send_tcp_cmd(video_codec, has_audio, self.port, file_path);
+                let cmd = build_gst_send_tcp_cmd(video_codec, has_audio, self.port, &file_path);
                 match (video, audio) {
                     (Some(_), Some(_)) => {
                         println!("Start streaming H264 encoded video and OPUS encoded audio:");
@@ -373,11 +295,8 @@ impl RtpInput {
 
 impl Drop for RtpInput {
     fn drop(&mut self) {
-        for stream_process in &mut self.stream_handles {
-            match stream_process.kill() {
-                Ok(_) => {}
-                Err(e) => error!("{e}"),
-            }
+        for stream_process in self.stream_handles.drain(..) {
+            stream_process.kill();
         }
     }
 }
@@ -427,7 +346,7 @@ impl RtpInputBuilder {
 
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(RTP_INPUT_PATH).unwrap_or_default();
-        let default_path = integration_tests_root().join(BUNNY_H264_PATH);
+        let default_path = TestSample::BigBuckBunnyH264Opus.file();
 
         loop {
             let path_input = Text::new(&format!(

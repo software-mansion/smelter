@@ -3,8 +3,8 @@ use serde_json::json;
 use smelter_api::Resolution;
 
 use integration_tests::{
-    examples::{self, TestSample, run_example},
-    ffmpeg::{start_ffmpeg_rtmp_receive, start_ffmpeg_send},
+    examples::{self, run_example},
+    media::{MediaReceiver, MediaSender, Receive, Send, TestSample},
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -12,7 +12,6 @@ const VIDEO_RESOLUTION: Resolution = Resolution {
     height: 720,
 };
 
-const IP: &str = "127.0.0.1";
 const INPUT_PORT: u16 = 8002;
 const OUTPUT_PORT: u16 = 8004;
 
@@ -21,7 +20,7 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
+    MediaReceiver::new(Receive::rtmp_listener(OUTPUT_PORT)).spawn()?;
 
     examples::post(
         "input/input_1/register",
@@ -61,6 +60,11 @@ fn client_code() -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::SampleLoopH264)?;
+    MediaSender::new(
+        TestSample::SampleH264,
+        Send::rtp_udp_client().video_port(INPUT_PORT),
+    )
+    .loop_input(true)
+    .spawn()?;
     Ok(())
 }

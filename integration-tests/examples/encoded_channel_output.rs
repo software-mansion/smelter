@@ -1,7 +1,7 @@
 use core::panic;
 use std::{fs::File, io::Write, sync::Arc, time::Duration};
 
-use integration_tests::{examples::download_file, paths::integration_tests_root};
+use integration_tests::{media::download_to, paths::integration_tests_root};
 use smelter::{config::read_config, logger, state::ApiState};
 use smelter_core::{codecs::*, protocols::*, *};
 use smelter_render::{
@@ -35,7 +35,7 @@ fn main() {
     let output_id = OutputId("output_1".into());
     let input_id = InputId("input_id".into());
 
-    download_file(BUNNY_FILE_URL, BUNNY_FILE_PATH).unwrap();
+    download_to(BUNNY_FILE_URL, BUNNY_FILE_PATH).unwrap();
 
     let output_options = RegisterEncodedDataOutputOptions {
         output_options: EncodedDataOutputOptions {

@@ -4,8 +4,8 @@ use smelter_api::Resolution;
 use std::env;
 
 use integration_tests::{
-    examples::{self, TestSample, run_example},
-    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
+    examples::{self, run_example},
+    media::{MediaReceiver, MediaSender, Receive, Send, TestSample, VideoCodec},
     paths::integration_tests_root,
 };
 
@@ -43,7 +43,7 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
+    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264)).spawn()?;
 
     let html_file_path = integration_tests_root()
         .join(HTML_FILE_PATH)
@@ -104,6 +104,11 @@ fn client_code() -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::SampleLoopH264)?;
+    MediaSender::new(
+        TestSample::SampleH264,
+        Send::rtp_udp_client().video_port(INPUT_PORT),
+    )
+    .loop_input(true)
+    .spawn()?;
     Ok(())
 }

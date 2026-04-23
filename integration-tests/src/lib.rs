@@ -9,10 +9,8 @@ mod texture;
 mod validation;
 mod video_decoder;
 
-pub mod assets;
 pub mod examples;
-pub mod ffmpeg;
-pub mod gstreamer;
+pub mod media;
 pub mod paths;
 pub mod test_input;
 

@@ -4,7 +4,7 @@ use smelter_api::Resolution;
 
 use integration_tests::{
     examples::{self, run_example},
-    ffmpeg::start_ffmpeg_rtmp_receive,
+    media::{MediaReceiver, Receive},
     paths::integration_tests_root,
 };
 
@@ -20,7 +20,7 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
+    MediaReceiver::new(Receive::rtmp_listener(OUTPUT_PORT)).spawn()?;
 
     examples::post(
         "image/example_gif/register",

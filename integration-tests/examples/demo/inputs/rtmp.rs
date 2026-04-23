@@ -1,18 +1,12 @@
 use std::{
     env,
     path::PathBuf,
-    process::Child,
     sync::{OnceLock, atomic::AtomicU32},
 };
 
 use anyhow::Result;
 use inquire::{Select, Text};
-use integration_tests::{
-    assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
-    examples::{AssetData, download_asset},
-    ffmpeg::start_ffmpeg_rtmp_send,
-    paths::integration_tests_root,
-};
+use integration_tests::media::{Asset, MediaSender, ProcessHandle, Send, TestSample};
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serde_json::json;
 use tracing::error;
@@ -28,7 +22,7 @@ const STREAM_KEY: &str = "example";
 pub struct RtmpInput {
     pub name: String,
     options: RtmpInputOptions,
-    stream_handles: Vec<Child>,
+    stream_handles: Vec<ProcessHandle>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,25 +67,17 @@ impl RtmpInput {
         true
     }
 
-    fn download_asset(&self) -> Result<PathBuf> {
-        let asset = AssetData {
-            url: String::from(BUNNY_H264_URL),
-            path: integration_tests_root().join(BUNNY_H264_PATH),
-        };
-
-        download_asset(&asset)?;
-        Ok(asset.path)
+    fn asset(&self) -> Asset {
+        match &self.options.path {
+            Some(p) => Asset::File(p.clone()),
+            None => Asset::Sample(TestSample::BigBuckBunnyH264Opus),
+        }
     }
 
     fn ffmpeg_transmit(&mut self) -> Result<()> {
-        let handle = match &self.options.path {
-            Some(path) => start_ffmpeg_rtmp_send(path, &self.name, STREAM_KEY)?,
-            None => {
-                let asset_path = self.download_asset()?;
-                start_ffmpeg_rtmp_send(&asset_path, &self.name, STREAM_KEY)?
-            }
-        };
-        self.stream_handles.push(handle);
+        let url = format!("rtmp://127.0.0.1:1935/{}/{STREAM_KEY}", self.name);
+        let handles = MediaSender::new(self.asset(), Send::rtmp_client(url)).spawn()?;
+        self.stream_handles.extend(handles);
         Ok(())
     }
 
@@ -102,8 +88,8 @@ impl RtmpInput {
             InputPlayer::Manual => {
                 let input_path = match &self.options.path {
                     Some(path) => path.to_str().unwrap().to_string(),
-                    None => integration_tests_root()
-                        .join(BUNNY_H264_PATH)
+                    None => TestSample::BigBuckBunnyH264Opus
+                        .file()
                         .to_str()
                         .unwrap()
                         .to_string(),
@@ -127,11 +113,8 @@ impl RtmpInput {
 
 impl Drop for RtmpInput {
     fn drop(&mut self) {
-        for stream_process in &mut self.stream_handles {
-            match stream_process.kill() {
-                Ok(_) => {}
-                Err(e) => error!("{e}"),
-            }
+        for stream_process in self.stream_handles.drain(..) {
+            stream_process.kill();
         }
     }
 }
@@ -166,7 +149,7 @@ impl RtmpInputBuilder {
 
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(RTMP_INPUT_PATH).unwrap_or_default();
-        let default_path = integration_tests_root().join(BUNNY_H264_PATH);
+        let default_path = TestSample::BigBuckBunnyH264Opus.file();
 
         loop {
             let path_input = Text::new(&format!(

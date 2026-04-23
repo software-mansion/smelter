@@ -7,7 +7,10 @@ use std::{
     time::Duration,
 };
 
-use integration_tests::{ffmpeg::start_ffmpeg_rtmp_receive, test_input::TestInput};
+use integration_tests::{
+    media::{MediaReceiver, Receive},
+    test_input::TestInput,
+};
 use smelter::{
     config::read_config,
     logger::{self},
@@ -56,7 +59,9 @@ fn main() {
     let input_id = InputId("input_1".into());
 
     #[allow(clippy::zombie_processes)]
-    let _ = start_ffmpeg_rtmp_receive(OUTPUT_PORT).unwrap();
+    let _ = MediaReceiver::new(Receive::rtmp_listener(OUTPUT_PORT))
+        .spawn()
+        .unwrap();
 
     let output_options = RegisterOutputOptions {
         output_options: ProtocolOutputOptions::Rtmp(RtmpOutputOptions {
