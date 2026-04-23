@@ -6,8 +6,7 @@ links = "srt"
 
 [dependencies]
 libc = "0.2"
-openssl-sys = "0.9"
 
 [build-dependencies]
 bindgen = "0.72"
-cmake = "0.1"
+pkg-config = "0.3"

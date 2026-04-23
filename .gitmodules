@@ -2,6 +2,3 @@
 	path = integration-tests/snapshots
 	url = git@github.com:smelter-labs/smelter-snapshot-tests.git
 	update = none
-[submodule "libsrt/libsrt-sys/srt"]
-	path = libsrt/libsrt-sys/srt
-	url = https://github.com/Haivision/srt
