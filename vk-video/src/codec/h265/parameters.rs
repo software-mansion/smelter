@@ -2,11 +2,10 @@ use ash::vk;
 
 use crate::{VulkanDecoderError, codec::h265::H265Codec, vulkan_encoder::FullEncoderParameters};
 
-#[expect(unused)]
 pub(crate) struct VkH265VideoParameterSet {
     pub(crate) vps: vk::native::StdVideoH265VideoParameterSet,
-    profile_tier_level: Option<Box<vk::native::StdVideoH265ProfileTierLevel>>,
-    dec_pic_buf_mgr: Option<Box<vk::native::StdVideoH265DecPicBufMgr>>,
+    _profile_tier_level: Option<Box<vk::native::StdVideoH265ProfileTierLevel>>,
+    _dec_pic_buf_mgr: Option<Box<vk::native::StdVideoH265DecPicBufMgr>>,
 }
 
 fn profile_tier_level(
@@ -65,17 +64,16 @@ impl VkH265VideoParameterSet {
                 pDecPicBufMgr: dec_pic_buf_mgr.as_ref(),
                 pProfileTierLevel: profile_tier_level.as_ref(),
             },
-            profile_tier_level: Some(profile_tier_level),
-            dec_pic_buf_mgr: Some(dec_pic_buf_mgr),
+            _profile_tier_level: Some(profile_tier_level),
+            _dec_pic_buf_mgr: Some(dec_pic_buf_mgr),
         }
     }
 }
 
-#[expect(unused)]
 pub(crate) struct VkH265SequenceParameterSet {
     pub(crate) sps: vk::native::StdVideoH265SequenceParameterSet,
-    profile_tier_level: Option<Box<vk::native::StdVideoH265ProfileTierLevel>>,
-    dec_pic_buf_mgr: Option<Box<vk::native::StdVideoH265DecPicBufMgr>>,
+    _profile_tier_level: Option<Box<vk::native::StdVideoH265ProfileTierLevel>>,
+    _dec_pic_buf_mgr: Option<Box<vk::native::StdVideoH265DecPicBufMgr>>,
 }
 
 impl VkH265SequenceParameterSet {
@@ -187,8 +185,8 @@ impl VkH265SequenceParameterSet {
                 pPredictorPaletteEntries: std::ptr::null(),
             },
 
-            profile_tier_level: Some(profile_tier_level),
-            dec_pic_buf_mgr: Some(dec_pic_buf_mgr),
+            _profile_tier_level: Some(profile_tier_level),
+            _dec_pic_buf_mgr: Some(dec_pic_buf_mgr),
         }
     }
 }

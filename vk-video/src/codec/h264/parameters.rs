@@ -68,12 +68,11 @@ impl SeqParameterSetExt for SeqParameterSet {
     }
 }
 
-#[expect(unused)]
 pub(crate) struct VkH264SequenceParameterSet {
     pub(crate) sps: vk::native::StdVideoH264SequenceParameterSet,
-    scaling_lists: Option<Box<H264ScalingLists>>,
-    offset_for_ref_frame: Option<Box<[i32]>>,
-    vui: Option<Box<vk::native::StdVideoH264SequenceParameterSetVui>>,
+    _scaling_lists: Option<Box<H264ScalingLists>>,
+    _offset_for_ref_frame: Option<Box<[i32]>>,
+    _vui: Option<Box<vk::native::StdVideoH264SequenceParameterSetVui>>,
 }
 
 impl From<&'_ SeqParameterSet> for VkH264SequenceParameterSet {
@@ -228,9 +227,9 @@ impl From<&'_ SeqParameterSet> for VkH264SequenceParameterSet {
                 pScalingLists,
                 pSequenceParameterSetVui,
             },
-            scaling_lists,
-            offset_for_ref_frame,
-            vui: None,
+            _scaling_lists: scaling_lists,
+            _offset_for_ref_frame: offset_for_ref_frame,
+            _vui: None,
         }
     }
 }
@@ -347,9 +346,9 @@ impl VkH264SequenceParameterSet {
 
         Ok(Self {
             sps,
-            scaling_lists: None,
-            offset_for_ref_frame: None,
-            vui: Some(vui),
+            _scaling_lists: None,
+            _offset_for_ref_frame: None,
+            _vui: Some(vui),
         })
     }
 }
@@ -564,10 +563,9 @@ fn h264_profile_idc_to_vk(
     }
 }
 
-#[expect(unused)]
 pub(crate) struct VkH264PictureParameterSet {
     pub(crate) pps: vk::native::StdVideoH264PictureParameterSet,
-    scaling_list: Option<Box<H264ScalingLists>>,
+    _scaling_list: Option<Box<H264ScalingLists>>,
 }
 
 impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkH264PictureParameterSet {
@@ -629,7 +627,7 @@ impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkH264PictureParameter
                 second_chroma_qp_index_offset,
                 pScalingLists,
             },
-            scaling_list,
+            _scaling_list: scaling_list,
         }
     }
 }
@@ -678,7 +676,7 @@ impl VkH264PictureParameterSet {
 
         Self {
             pps,
-            scaling_list: None,
+            _scaling_list: None,
         }
     }
 }
