@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -87,7 +86,7 @@ pub(crate) struct QueueIndices<'a> {
 }
 
 impl QueueIndices<'_> {
-    pub(crate) fn queue_create_infos(&self) -> Vec<QueueCreateInfo<'_>> {
+    pub(crate) fn queue_create_infos(&self) -> Vec<QueueCreateInfo> {
         [
             self.h264_decode
                 .as_ref()
@@ -112,29 +111,24 @@ impl QueueIndices<'_> {
     }
 }
 
-pub(crate) struct QueueCreateInfo<'a> {
-    pub(crate) info: vk::DeviceQueueCreateInfo<'a>,
-    priorities_ptr: NonNull<[f32]>,
+pub(crate) struct QueueCreateInfo {
+    family_idx: usize,
+    priorities: Box<[f32]>,
 }
 
-impl QueueCreateInfo<'_> {
+impl QueueCreateInfo {
     fn new(family_idx: usize, priorities: Vec<f32>) -> Self {
-        let priorities_ref = Box::leak(priorities.into_boxed_slice());
-        let priorities_ptr = NonNull::from(&mut *priorities_ref);
-        let info = vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(family_idx as u32)
-            .queue_priorities(priorities_ref);
+        let priorities = priorities.into_boxed_slice();
 
         Self {
-            info,
-            priorities_ptr,
+            family_idx,
+            priorities,
         }
     }
-}
-
-impl Drop for QueueCreateInfo<'_> {
-    fn drop(&mut self) {
-        let _ = unsafe { Box::from_raw(self.priorities_ptr.as_ptr()) };
+    pub(crate) fn info(&self) -> vk::DeviceQueueCreateInfo<'_> {
+        vk::DeviceQueueCreateInfo::default()
+            .queue_family_index(self.family_idx as u32)
+            .queue_priorities(&self.priorities)
     }
 }
 
