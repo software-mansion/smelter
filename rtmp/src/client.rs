@@ -1,9 +1,9 @@
 use tracing::{debug, warn};
 
 use crate::{
-    RtmpConnectionError, RtmpEvent, RtmpMessageSerializeError, RtmpVideoCodec,
+    RtmpConnectionError, RtmpEvent, RtmpVideoCodec, VideoCodecConversionError,
     client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
-    error::RtmpStreamError,
+    error::{RtmpMessageSerializeError, RtmpStreamError},
     message::{
         AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, DataMessage, RtmpMessage,
         UserControlMessage, VideoMessage,
@@ -86,8 +86,8 @@ impl RtmpClient {
         let event = match RtmpEvent::from(event) {
             RtmpEvent::VideoData(data) => {
                 if data.codec != RtmpVideoCodec::H264 && !self.state.peer_supports_enhanced {
-                    return Err(RtmpMessageSerializeError::InternalError(
-                        "Peer did not negotiate Enhanced RTMP video support".into(),
+                    return Err(RtmpMessageSerializeError::from(
+                        VideoCodecConversionError::UnsupportedLegacyRtmp(data.codec),
                     )
                     .into());
                 }
@@ -98,8 +98,8 @@ impl RtmpClient {
             }
             RtmpEvent::VideoConfig(config) => {
                 if config.codec != RtmpVideoCodec::H264 && !self.state.peer_supports_enhanced {
-                    return Err(RtmpMessageSerializeError::InternalError(
-                        "Peer did not negotiate Enhanced RTMP video support".into(),
+                    return Err(RtmpMessageSerializeError::from(
+                        VideoCodecConversionError::UnsupportedLegacyRtmp(config.codec),
                     )
                     .into());
                 }

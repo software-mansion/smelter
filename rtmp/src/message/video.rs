@@ -155,7 +155,7 @@ fn video_into_raw(
                 offset => Some(offset),
             };
             FlvVideoData::Enhanced(ExVideoTag::VideoBody {
-                four_cc: video.codec.try_into()?,
+                four_cc: video.codec.into(),
                 packet: ExVideoPacket::CodedFrames {
                     composition_time,
                     data: video.data,
@@ -194,7 +194,7 @@ fn config_into_raw(
         .serialize()?,
         RtmpVideoCodec::Av1 | RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
             FlvVideoData::Enhanced(ExVideoTag::VideoBody {
-                four_cc: config.codec.try_into()?,
+                four_cc: config.codec.into(),
                 packet: ExVideoPacket::SequenceStart(config.data),
                 frame_type: VideoTagFrameType::Keyframe,
                 timestamp_offset_nanos: None,

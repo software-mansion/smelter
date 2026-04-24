@@ -1,24 +1,27 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{RtmpMessageSerializeError, RtmpVideoCodec, error::FlvVideoTagParseError};
+use crate::{
+    RtmpMessageSerializeError, RtmpVideoCodec, VideoCodecConversionError,
+    error::FlvVideoTagParseError,
+};
 
 /// Struct representing legacy flv VIDEODATA.
 /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
 #[derive(Debug, Clone)]
 pub struct VideoTag {
     /// FrameType 4bits
-    pub(crate) frame_type: VideoTagFrameType,
+    pub frame_type: VideoTagFrameType,
     /// CodecID 4bits
-    pub(crate) codec: LegacyFlvVideoCodec,
+    pub codec: LegacyFlvVideoCodec,
 
     /// AVCPacketType 8bits IF CodecID == 7
     /// H264 only
-    pub(crate) h264_packet_type: Option<VideoTagH264PacketType>,
+    pub h264_packet_type: Option<VideoTagH264PacketType>,
     /// CompositionTime 24bits IF CodecID == 7
     /// H264 only
-    pub(crate) composition_time: Option<i32>,
+    pub composition_time: Option<i32>,
 
-    pub(crate) data: Bytes,
+    pub data: Bytes,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,8 +56,8 @@ impl VideoTagFrameType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum LegacyFlvVideoCodec {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegacyFlvVideoCodec {
     SorensonH263,
     ScreenVideo,
     Vp6,
@@ -88,20 +91,24 @@ impl LegacyFlvVideoCodec {
     }
 }
 
-impl From<LegacyFlvVideoCodec> for Option<RtmpVideoCodec> {
-    fn from(codec: LegacyFlvVideoCodec) -> Self {
+impl TryFrom<LegacyFlvVideoCodec> for RtmpVideoCodec {
+    type Error = VideoCodecConversionError;
+
+    fn try_from(codec: LegacyFlvVideoCodec) -> Result<Self, Self::Error> {
         match codec {
-            LegacyFlvVideoCodec::H264 => Some(RtmpVideoCodec::H264),
-            _ => None,
+            LegacyFlvVideoCodec::H264 => Ok(RtmpVideoCodec::H264),
+            _ => Err(VideoCodecConversionError::UnsupportedLegacyFlv(codec)),
         }
     }
 }
 
-impl From<RtmpVideoCodec> for Option<LegacyFlvVideoCodec> {
-    fn from(codec: RtmpVideoCodec) -> Self {
+impl TryFrom<RtmpVideoCodec> for LegacyFlvVideoCodec {
+    type Error = VideoCodecConversionError;
+
+    fn try_from(codec: RtmpVideoCodec) -> Result<Self, Self::Error> {
         match codec {
-            RtmpVideoCodec::H264 => Some(LegacyFlvVideoCodec::H264),
-            _ => None,
+            RtmpVideoCodec::H264 => Ok(LegacyFlvVideoCodec::H264),
+            _ => Err(VideoCodecConversionError::UnsupportedLegacyRtmp(codec)),
         }
     }
 }

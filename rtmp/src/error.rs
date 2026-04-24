@@ -1,5 +1,9 @@
 use thiserror::Error;
 
+use crate::{
+    ExVideoFourCc, LegacyFlvAudioCodec, LegacyFlvVideoCodec, RtmpAudioCodec, RtmpVideoCodec,
+};
+
 #[derive(Error, Debug)]
 pub enum RtmpConnectionError {
     #[error("Handshake failed: {0}")]
@@ -75,10 +79,10 @@ pub enum RtmpMessageSerializeError {
     Amf0Encoding(#[from] AmfEncodingError),
 
     #[error(transparent)]
-    AudioCodecConversion(#[from] crate::AudioCodecConversionError),
+    AudioCodecConversion(#[from] AudioCodecConversionError),
 
     #[error(transparent)]
-    VideoCodecConversion(#[from] crate::VideoCodecConversionError),
+    VideoCodecConversion(#[from] VideoCodecConversionError),
 
     #[error("Failed to serialize message: {0}")]
     InternalError(String),
@@ -217,4 +221,25 @@ pub enum AmfEncodingError {
 
     #[error("Long string too long: {0} bytes (max {}).", u32::MAX)]
     LongStringTooLong(usize),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum VideoCodecConversionError {
+    #[error("RTMP video codec {0:?} cannot be converted to legacy FLV video codec")]
+    UnsupportedLegacyRtmp(RtmpVideoCodec),
+
+    #[error("Legacy FLV video codec {0:?} is not supported")]
+    UnsupportedLegacyFlv(LegacyFlvVideoCodec),
+
+    #[error("Enhanced FLV video codec {0:?} is not supported")]
+    UnsupportedEnhancedFlv(ExVideoFourCc),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum AudioCodecConversionError {
+    #[error("RTMP audio codec {0:?} cannot be converted to legacy FLV audio codec")]
+    UnsupportedLegacyRtmp(RtmpAudioCodec),
+
+    #[error("Legacy FLV audio codec {0:?} is not supported")]
+    UnsupportedLegacyFlv(LegacyFlvAudioCodec),
 }

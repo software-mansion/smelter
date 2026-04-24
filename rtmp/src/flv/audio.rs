@@ -1,6 +1,9 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{RtmpMessageSerializeError, error::FlvAudioTagParseError};
+use crate::{
+    AudioCodecConversionError, RtmpAudioCodec, RtmpMessageSerializeError,
+    error::FlvAudioTagParseError,
+};
 
 /// Struct representing flv AUDIODATA.
 #[derive(Debug, Clone)]
@@ -23,7 +26,7 @@ pub struct AudioTag {
     pub data: Bytes,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LegacyFlvAudioCodec {
     Pcm,
     Adpcm,
@@ -76,6 +79,27 @@ impl LegacyFlvAudioCodec {
             Self::Speex => 11,
             Self::Mp3_8k => 14,
             Self::DeviceSpecific => 15,
+        }
+    }
+}
+
+impl TryFrom<RtmpAudioCodec> for LegacyFlvAudioCodec {
+    type Error = AudioCodecConversionError;
+
+    fn try_from(codec: RtmpAudioCodec) -> Result<Self, Self::Error> {
+        match codec {
+            RtmpAudioCodec::Aac => Ok(LegacyFlvAudioCodec::Aac),
+        }
+    }
+}
+
+impl TryFrom<LegacyFlvAudioCodec> for RtmpAudioCodec {
+    type Error = AudioCodecConversionError;
+
+    fn try_from(codec: LegacyFlvAudioCodec) -> Result<Self, Self::Error> {
+        match codec {
+            LegacyFlvAudioCodec::Aac => Ok(RtmpAudioCodec::Aac),
+            _ => Err(AudioCodecConversionError::UnsupportedLegacyFlv(codec)),
         }
     }
 }

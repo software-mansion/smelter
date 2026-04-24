@@ -2,9 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
 
-use crate::{
-    AudioChannels, ExVideoFourCc, LegacyFlvAudioCodec, LegacyFlvVideoCodec, amf0::AmfValue,
-};
+use crate::{AudioChannels, amf0::AmfValue};
 
 mod aac;
 pub use aac::AacAudioConfig;
@@ -36,87 +34,10 @@ pub enum RtmpVideoCodec {
     Av1,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum VideoCodecConversionError {
-    #[error("Codec {0:?} cannot be converted to LegacyFlvVideoCodec")]
-    UnsupportedLegacy(RtmpVideoCodec),
-
-    #[error("Unsupported enhanced video codec encountered: {0:?}")]
-    UnsupportedEnhanced(ExVideoFourCc),
-}
-
-impl TryFrom<RtmpVideoCodec> for LegacyFlvVideoCodec {
-    type Error = VideoCodecConversionError;
-
-    fn try_from(codec: RtmpVideoCodec) -> Result<Self, Self::Error> {
-        match codec {
-            RtmpVideoCodec::H264 => Ok(LegacyFlvVideoCodec::H264),
-            _ => Err(VideoCodecConversionError::UnsupportedLegacy(codec)),
-        }
-    }
-}
-
-impl TryFrom<RtmpVideoCodec> for ExVideoFourCc {
-    type Error = VideoCodecConversionError;
-
-    fn try_from(codec: RtmpVideoCodec) -> Result<Self, Self::Error> {
-        match codec {
-            RtmpVideoCodec::Vp8 => Ok(ExVideoFourCc::Vp08),
-            RtmpVideoCodec::Vp9 => Ok(ExVideoFourCc::Vp09),
-            RtmpVideoCodec::Av1 => Ok(ExVideoFourCc::Av01),
-            RtmpVideoCodec::H264 => Ok(ExVideoFourCc::Avc1),
-        }
-    }
-}
-
-impl TryFrom<ExVideoFourCc> for RtmpVideoCodec {
-    type Error = VideoCodecConversionError;
-
-    fn try_from(four_cc: ExVideoFourCc) -> Result<Self, Self::Error> {
-        match four_cc {
-            ExVideoFourCc::Vp08 => Ok(RtmpVideoCodec::Vp8),
-            ExVideoFourCc::Vp09 => Ok(RtmpVideoCodec::Vp9),
-            ExVideoFourCc::Av01 => Ok(RtmpVideoCodec::Av1),
-            ExVideoFourCc::Avc1 => Ok(RtmpVideoCodec::H264),
-            ExVideoFourCc::Hvc1 | ExVideoFourCc::Vvc1 => {
-                Err(VideoCodecConversionError::UnsupportedEnhanced(four_cc))
-            }
-        }
-    }
-}
-
 /// Public audio codec identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RtmpAudioCodec {
     Aac,
-}
-
-/// TODO: add enhanced audio conversion
-#[derive(Debug, Clone, PartialEq, thiserror::Error)]
-pub enum AudioCodecConversionError {
-    #[error("Unsupported legacy audio codec encountered: {0:?}")]
-    UnsupportedLegacy(LegacyFlvAudioCodec),
-}
-
-impl TryFrom<RtmpAudioCodec> for LegacyFlvAudioCodec {
-    type Error = AudioCodecConversionError;
-
-    fn try_from(codec: RtmpAudioCodec) -> Result<Self, Self::Error> {
-        match codec {
-            RtmpAudioCodec::Aac => Ok(LegacyFlvAudioCodec::Aac),
-        }
-    }
-}
-
-impl TryFrom<LegacyFlvAudioCodec> for RtmpAudioCodec {
-    type Error = AudioCodecConversionError;
-
-    fn try_from(codec: LegacyFlvAudioCodec) -> Result<Self, Self::Error> {
-        match codec {
-            LegacyFlvAudioCodec::Aac => Ok(RtmpAudioCodec::Aac),
-            _ => Err(AudioCodecConversionError::UnsupportedLegacy(codec)),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
