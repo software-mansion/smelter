@@ -51,3 +51,4 @@
 - H.264 Encoding ([#1215](https://github.com/software-mansion/smelter/pull/1215) by @noituri and @jerzywilczek)
 
 ### 🐛 Bug fixes
+- Use Box instead of NonNull in h264 & h265 codec parameters ([#1934](https://github.com/software-mansion/smelter/pull/1934) by @krakow10)
