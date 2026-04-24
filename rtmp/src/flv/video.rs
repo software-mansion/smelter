@@ -1,6 +1,9 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
+use crate::{
+    RtmpMessageSerializeError, RtmpVideoCodec, VideoCodecConversionError,
+    error::FlvVideoTagParseError,
+};
 
 /// Struct representing legacy flv VIDEODATA.
 /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
@@ -9,7 +12,7 @@ pub struct VideoTag {
     /// FrameType 4bits
     pub frame_type: VideoTagFrameType,
     /// CodecID 4bits
-    pub codec: VideoCodec,
+    pub codec: LegacyFlvVideoCodec,
 
     /// AVCPacketType 8bits IF CodecID == 7
     /// H264 only
@@ -53,8 +56,8 @@ impl VideoTagFrameType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum VideoCodec {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegacyFlvVideoCodec {
     SorensonH263,
     ScreenVideo,
     Vp6,
@@ -63,7 +66,7 @@ pub enum VideoCodec {
     H264,
 }
 
-impl VideoCodec {
+impl LegacyFlvVideoCodec {
     fn try_from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
         match value {
             2 => Ok(Self::SorensonH263),
@@ -84,6 +87,28 @@ impl VideoCodec {
             Self::Vp6WithAlpha => 5,
             Self::ScreenVideo2 => 6,
             Self::H264 => 7,
+        }
+    }
+}
+
+impl TryFrom<LegacyFlvVideoCodec> for RtmpVideoCodec {
+    type Error = VideoCodecConversionError;
+
+    fn try_from(codec: LegacyFlvVideoCodec) -> Result<Self, Self::Error> {
+        match codec {
+            LegacyFlvVideoCodec::H264 => Ok(RtmpVideoCodec::H264),
+            _ => Err(VideoCodecConversionError::UnsupportedLegacyFlv(codec)),
+        }
+    }
+}
+
+impl TryFrom<RtmpVideoCodec> for LegacyFlvVideoCodec {
+    type Error = VideoCodecConversionError;
+
+    fn try_from(codec: RtmpVideoCodec) -> Result<Self, Self::Error> {
+        match codec {
+            RtmpVideoCodec::H264 => Ok(LegacyFlvVideoCodec::H264),
+            _ => Err(VideoCodecConversionError::UnsupportedLegacyRtmp(codec)),
         }
     }
 }
@@ -141,9 +166,9 @@ impl VideoTag {
         let codec_id = data[0] & 0b00001111;
 
         let frame_type = VideoTagFrameType::from_raw(frame_type)?;
-        let codec = VideoCodec::try_from_raw(codec_id)?;
+        let codec = LegacyFlvVideoCodec::try_from_raw(codec_id)?;
         match codec {
-            VideoCodec::H264 => Self::parse_h264(data, frame_type),
+            LegacyFlvVideoCodec::H264 => Self::parse_h264(data, frame_type),
             _ => Ok(Self {
                 h264_packet_type: None,
                 composition_time: None,
@@ -166,7 +191,7 @@ impl VideoTag {
 
         Ok(Self {
             frame_type,
-            codec: VideoCodec::H264,
+            codec: LegacyFlvVideoCodec::H264,
             h264_packet_type: Some(avc_packet_type),
             composition_time: Some(composition_time),
             data: data.slice(5..),
@@ -179,7 +204,7 @@ impl VideoTag {
 
         let first_byte = (frame_type << 4) | codec_id;
         match self.codec {
-            VideoCodec::H264 => self.serialize_h264(first_byte),
+            LegacyFlvVideoCodec::H264 => self.serialize_h264(first_byte),
             _ => {
                 let mut data = BytesMut::with_capacity(self.data.len() + 1);
                 data.put_u8(first_byte);

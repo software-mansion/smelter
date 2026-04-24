@@ -1,6 +1,9 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
+use crate::{
+    RtmpMessageSerializeError, RtmpVideoCodec, VideoCodecConversionError,
+    error::FlvVideoTagParseError,
+};
 
 use super::{
     EX_HEADER_BIT,
@@ -21,6 +24,7 @@ pub enum ExVideoTag {
     },
 }
 
+#[allow(unused)]
 impl ExVideoTag {
     pub fn frame_type(&self) -> VideoTagFrameType {
         match self {
@@ -33,7 +37,7 @@ impl ExVideoTag {
 }
 
 /// FourCC video codec identifiers for Enhanced RTMP.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExVideoFourCc {
     /// VP8 (`vp08`)
     Vp08,
@@ -73,10 +77,35 @@ impl ExVideoFourCc {
         }
     }
 
-    /// Returns true if this codec carries a 3-byte signed composition time
-    /// offset in CodedFrames packets. Per the spec: AVC, HEVC, and VVC.
     fn has_composition_time(self) -> bool {
         matches!(self, Self::Avc1 | Self::Hvc1 | Self::Vvc1)
+    }
+}
+
+impl From<RtmpVideoCodec> for ExVideoFourCc {
+    fn from(codec: RtmpVideoCodec) -> Self {
+        match codec {
+            RtmpVideoCodec::Vp8 => ExVideoFourCc::Vp08,
+            RtmpVideoCodec::Vp9 => ExVideoFourCc::Vp09,
+            RtmpVideoCodec::Av1 => ExVideoFourCc::Av01,
+            RtmpVideoCodec::H264 => ExVideoFourCc::Avc1,
+        }
+    }
+}
+
+impl TryFrom<ExVideoFourCc> for RtmpVideoCodec {
+    type Error = VideoCodecConversionError;
+
+    fn try_from(four_cc: ExVideoFourCc) -> Result<Self, Self::Error> {
+        match four_cc {
+            ExVideoFourCc::Vp08 => Ok(RtmpVideoCodec::Vp8),
+            ExVideoFourCc::Vp09 => Ok(RtmpVideoCodec::Vp9),
+            ExVideoFourCc::Av01 => Ok(RtmpVideoCodec::Av1),
+            ExVideoFourCc::Avc1 => Ok(RtmpVideoCodec::H264),
+            ExVideoFourCc::Hvc1 | ExVideoFourCc::Vvc1 => {
+                Err(VideoCodecConversionError::UnsupportedEnhancedFlv(four_cc))
+            }
+        }
     }
 }
 

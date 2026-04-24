@@ -1,6 +1,8 @@
 use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
-use rtmp::{AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent};
+use rtmp::{
+    AudioConfig, AudioData, RtmpAudioCodec, RtmpEvent, RtmpVideoCodec, VideoConfig, VideoData,
+};
 use smelter_render::{InputId, error::ErrorStack};
 use tracing::{Level, info, span, warn};
 
@@ -149,17 +151,25 @@ struct RtmpConnectionState {
 impl RtmpConnectionState {
     fn handle_rtmp_event(&mut self, rtmp_event: RtmpEvent) -> Result<(), RtmpConnectionError> {
         match rtmp_event {
-            RtmpEvent::H264Config(config) => self.process_video_config(config)?,
-            RtmpEvent::AacConfig(config) => self.process_audio_config(config)?,
-            RtmpEvent::H264Data(data) => self.process_video(data)?,
-            RtmpEvent::AacData(data) => self.process_audio(data)?,
+            RtmpEvent::VideoConfig(config) if config.codec == RtmpVideoCodec::H264 => {
+                self.process_video_config(config)?
+            }
+            RtmpEvent::AudioConfig(config) if config.codec == RtmpAudioCodec::Aac => {
+                self.process_audio_config(config)?
+            }
+            RtmpEvent::VideoData(data) if data.codec == RtmpVideoCodec::H264 => {
+                self.process_video(data)?
+            }
+            RtmpEvent::AudioData(data) if data.codec == RtmpAudioCodec::Aac => {
+                self.process_audio(data)?
+            }
             RtmpEvent::Metadata(metadata) => info!(?metadata, "Received metadata"),
             _ => warn!(?rtmp_event, "Unsupported message"),
         }
         Ok(())
     }
 
-    fn process_video_config(&mut self, config: H264VideoConfig) -> Result<(), RtmpConnectionError> {
+    fn process_video_config(&mut self, config: VideoConfig) -> Result<(), RtmpConnectionError> {
         let Some(frame_sender) = self.video_sender.take() else {
             return Err(RtmpConnectionError::ReceivedSecondVideoTrack);
         };
@@ -198,14 +208,14 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_audio_config(&mut self, config: AacAudioConfig) -> Result<(), RtmpConnectionError> {
+    fn process_audio_config(&mut self, config: AudioConfig) -> Result<(), RtmpConnectionError> {
         let Some(samples_sender) = self.audio_sender.take() else {
             return Err(RtmpConnectionError::ReceivedSecondAudioTrack);
         };
         let options = AudioDecoderThreadOptions {
             ctx: self.ctx.clone(),
             decoder_options: FdkAacDecoderOptions {
-                asc: Some(config.data().clone()),
+                asc: Some(config.data.clone()),
             },
             samples_sender,
             input_buffer_size: RTMP_MAX_BUFFER,
@@ -217,7 +227,7 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_video(&mut self, video: H264VideoData) -> Result<(), RtmpConnectionError> {
+    fn process_video(&mut self, video: VideoData) -> Result<(), RtmpConnectionError> {
         let sender = self
             .video_track_state
             .chunk_sender()
@@ -242,7 +252,7 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_audio(&mut self, audio: AacAudioData) -> Result<(), RtmpConnectionError> {
+    fn process_audio(&mut self, audio: AudioData) -> Result<(), RtmpConnectionError> {
         let sender = self
             .audio_track_state
             .chunk_sender()

@@ -64,15 +64,14 @@ pub(super) fn run_connection_thread(
 
         let event = match msg {
             RtmpMessage::Audio { audio, .. } => match audio {
-                AudioMessage::AacData(data) => RtmpEvent::AacData(data),
-                AudioMessage::AacConfig(config) => RtmpEvent::AacConfig(config),
-                AudioMessage::Unknown(data) => RtmpEvent::UnknownAudioData(data),
+                AudioMessage::Data(data) => RtmpEvent::AudioData(data),
+                AudioMessage::Config(config) => RtmpEvent::AudioConfig(config),
+                AudioMessage::Unknown => continue,
             },
             RtmpMessage::Video { video, .. } => match video {
-                VideoMessage::H264Data(data) => RtmpEvent::H264Data(data),
-                VideoMessage::H264Config(config) => RtmpEvent::H264Config(config),
-                VideoMessage::Legacy(data) => RtmpEvent::LegacyVideoData(data),
-                VideoMessage::Enhanced(data) => RtmpEvent::EnhancedVideoData(data),
+                VideoMessage::Data(data) => RtmpEvent::VideoData(data),
+                VideoMessage::Config(config) => RtmpEvent::VideoConfig(config),
+                VideoMessage::Unknown => continue,
             },
             RtmpMessage::DataMessage {
                 data: DataMessage::OnMetaData(metadata),

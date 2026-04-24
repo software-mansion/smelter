@@ -1,12 +1,15 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{RtmpMessageSerializeError, error::FlvAudioTagParseError};
+use crate::{
+    AudioCodecConversionError, RtmpAudioCodec, RtmpMessageSerializeError,
+    error::FlvAudioTagParseError,
+};
 
 /// Struct representing flv AUDIODATA.
 #[derive(Debug, Clone)]
 pub struct AudioTag {
     /// SoundFormat 4bits
-    pub codec: AudioCodec,
+    pub codec: LegacyFlvAudioCodec,
     /// SoundRate 2bits
     /// Represents sample rate in header, does not always mean it is a real value
     pub sample_rate: AudioTagSoundRate,
@@ -23,8 +26,8 @@ pub struct AudioTag {
     pub data: Bytes,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AudioCodec {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegacyFlvAudioCodec {
     Pcm,
     Adpcm,
     Mp3,
@@ -41,7 +44,7 @@ pub enum AudioCodec {
     DeviceSpecific,
 }
 
-impl AudioCodec {
+impl LegacyFlvAudioCodec {
     fn from_raw(id: u8) -> Result<Self, FlvAudioTagParseError> {
         match id {
             0 => Ok(Self::Pcm),
@@ -76,6 +79,27 @@ impl AudioCodec {
             Self::Speex => 11,
             Self::Mp3_8k => 14,
             Self::DeviceSpecific => 15,
+        }
+    }
+}
+
+impl TryFrom<RtmpAudioCodec> for LegacyFlvAudioCodec {
+    type Error = AudioCodecConversionError;
+
+    fn try_from(codec: RtmpAudioCodec) -> Result<Self, Self::Error> {
+        match codec {
+            RtmpAudioCodec::Aac => Ok(LegacyFlvAudioCodec::Aac),
+        }
+    }
+}
+
+impl TryFrom<LegacyFlvAudioCodec> for RtmpAudioCodec {
+    type Error = AudioCodecConversionError;
+
+    fn try_from(codec: LegacyFlvAudioCodec) -> Result<Self, Self::Error> {
+        match codec {
+            LegacyFlvAudioCodec::Aac => Ok(RtmpAudioCodec::Aac),
+            _ => Err(AudioCodecConversionError::UnsupportedLegacyFlv(codec)),
         }
     }
 }
@@ -192,12 +216,12 @@ impl AudioTag {
         let sample_size = (data[0] & 0b00000010) >> 1;
         let sound_type = data[0] & 0b00000001;
 
-        let codec = AudioCodec::from_raw(sound_format)?;
+        let codec = LegacyFlvAudioCodec::from_raw(sound_format)?;
         let sample_rate = AudioTagSoundRate::from_raw(sample_rate);
         let sample_size = AudioTagSampleSize::from_raw(sample_size);
         let channels = AudioChannels::from_raw(sound_type);
         match codec {
-            AudioCodec::Aac => Ok(Self::parse_aac(data, channels)?),
+            LegacyFlvAudioCodec::Aac => Ok(Self::parse_aac(data, channels)?),
             _ => Ok(Self {
                 aac_packet_type: None,
                 codec,
@@ -217,7 +241,7 @@ impl AudioTag {
         let aac_packet_type = AudioTagAacPacketType::from_raw(data[1])?;
         let audio_data = data.slice(2..);
         Ok(Self {
-            codec: AudioCodec::Aac,
+            codec: LegacyFlvAudioCodec::Aac,
             sample_size: AudioTagSampleSize::Sample16Bit,
             sample_rate: AudioTagSoundRate::Rate44000,
             channels,
@@ -235,7 +259,7 @@ impl AudioTag {
         // 4 bits format, 2 bits sound rate, 1 bit sample size, 1 bit sound type
         let first_byte = (sound_format << 4) | (sound_rate << 2) | (sample_size << 1) | sound_type;
         match self.codec {
-            AudioCodec::Aac => Ok(self.serialize_aac(first_byte)?),
+            LegacyFlvAudioCodec::Aac => Ok(self.serialize_aac(first_byte)?),
             _ => {
                 let mut data = BytesMut::with_capacity(self.data.len() + 1);
                 data.put_u8(first_byte);

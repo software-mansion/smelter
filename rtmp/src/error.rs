@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-use crate::VideoTagFrameType;
+use crate::{
+    ExVideoFourCc, LegacyFlvAudioCodec, LegacyFlvVideoCodec, RtmpAudioCodec, RtmpVideoCodec,
+};
 
 #[derive(Error, Debug)]
 pub enum RtmpConnectionError {
@@ -76,6 +78,12 @@ pub enum RtmpMessageSerializeError {
     #[error("Error encoding amf0: {0}")]
     Amf0Encoding(#[from] AmfEncodingError),
 
+    #[error(transparent)]
+    AudioCodecConversion(#[from] AudioCodecConversionError),
+
+    #[error(transparent)]
+    VideoCodecConversion(#[from] VideoCodecConversionError),
+
     #[error("Failed to serialize message: {0}")]
     InternalError(String),
 }
@@ -135,9 +143,6 @@ pub enum FlvVideoTagParseError {
 
     #[error("Unknown frame type header value: {0}")]
     UnknownFrameType(u8),
-
-    #[error("Invalid frame type for H264 packet: {0:?}")]
-    InvalidFrameTypeForH264(VideoTagFrameType),
 
     #[error("Unknown VideoFourCc: {0:?}")]
     UnknownVideoFourCc([u8; 4]),
@@ -216,4 +221,25 @@ pub enum AmfEncodingError {
 
     #[error("Long string too long: {0} bytes (max {}).", u32::MAX)]
     LongStringTooLong(usize),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum VideoCodecConversionError {
+    #[error("RTMP video codec {0:?} cannot be converted to legacy FLV video codec")]
+    UnsupportedLegacyRtmp(RtmpVideoCodec),
+
+    #[error("Legacy FLV video codec {0:?} is not supported")]
+    UnsupportedLegacyFlv(LegacyFlvVideoCodec),
+
+    #[error("Enhanced FLV video codec {0:?} is not supported")]
+    UnsupportedEnhancedFlv(ExVideoFourCc),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum AudioCodecConversionError {
+    #[error("RTMP audio codec {0:?} cannot be converted to legacy FLV audio codec")]
+    UnsupportedLegacyRtmp(RtmpAudioCodec),
+
+    #[error("Legacy FLV audio codec {0:?} is not supported")]
+    UnsupportedLegacyFlv(LegacyFlvAudioCodec),
 }

@@ -2,56 +2,57 @@ use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
 
-use crate::{
-    AudioChannels, AudioCodec, AudioTagSampleSize, AudioTagSoundRate, VideoTag, amf0::AmfValue,
-    flv::ExVideoTag,
-};
+use crate::{AudioChannels, amf0::AmfValue};
 
 mod aac;
 pub use aac::AacAudioConfig;
 
+/// Identifier for a logical track within an RTMP stream.
+///
+/// For single-track streams (present case) [`TrackId::PRIMARY`] is used. When
+/// Enhanced RTMP multitrack parsing lands, non-primary ids will be populated
+/// from the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TrackId(pub u8);
+
+impl TrackId {
+    pub const PRIMARY: Self = Self(0);
+}
+
+impl Default for TrackId {
+    fn default() -> Self {
+        Self::PRIMARY
+    }
+}
+
+/// Public video codec identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RtmpVideoCodec {
+    H264,
+    Vp8,
+    Vp9,
+    Av1,
+}
+
+/// Public audio codec identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RtmpAudioCodec {
+    Aac,
+}
+
 #[derive(Debug, Clone)]
 pub enum RtmpEvent {
-    H264Data(H264VideoData),
-    /// H264 decoder config
-    H264Config(H264VideoConfig),
-    /// Raw legacy FLV video tag that is not mapped to a specialized event.
-    LegacyVideoData(LegacyVideoData),
-    /// Parsed Enhanced RTMP video tag payload.
-    EnhancedVideoData(EnhancedVideoData),
-
-    AacData(AacAudioData),
-    /// AAC decoder config
-    AacConfig(AacAudioConfig),
-    /// Raw RTMP message for codecs that we do not explicitly support.
-    UnknownAudioData(GenericAudioData),
-
+    VideoData(VideoData),
+    VideoConfig(VideoConfig),
+    AudioData(AudioData),
+    AudioConfig(AudioConfig),
     Metadata(HashMap<String, AmfValue>),
 }
 
 #[derive(Clone)]
-pub struct AacAudioData {
-    pub pts: Duration,
-    pub data: Bytes,
-    pub channels: AudioChannels,
-}
-
-// Raw RTMP message for codecs that we do not explicitly support.
-#[derive(Clone)]
-pub struct GenericAudioData {
-    pub timestamp: u32,
-
-    /// This value might not represent real sample rate for some codecs
-    pub sound_rate: AudioTagSoundRate,
-    // Only applies to PCM formats
-    pub sample_size: Option<AudioTagSampleSize>,
-    pub codec: AudioCodec,
-    pub channels: AudioChannels,
-    pub data: Bytes,
-}
-
-#[derive(Clone)]
-pub struct H264VideoData {
+pub struct VideoData {
+    pub track_id: TrackId,
+    pub codec: RtmpVideoCodec,
     pub pts: Duration,
     pub dts: Duration,
     pub data: Bytes,
@@ -59,62 +60,57 @@ pub struct H264VideoData {
 }
 
 #[derive(Clone)]
-pub struct H264VideoConfig {
+pub struct VideoConfig {
+    pub track_id: TrackId,
+    pub codec: RtmpVideoCodec,
     pub data: Bytes,
 }
 
-// Raw legacy FLV video tag that is not mapped to a specialized event.
 #[derive(Clone)]
-pub struct LegacyVideoData {
-    pub timestamp: u32,
-    pub tag: VideoTag,
+pub struct AudioData {
+    pub track_id: TrackId,
+    pub codec: RtmpAudioCodec,
+    pub pts: Duration,
+    pub data: Bytes,
+    pub channels: AudioChannels,
 }
 
 #[derive(Clone)]
-pub struct EnhancedVideoData {
-    pub timestamp: u32,
-    pub tag: ExVideoTag,
+pub struct AudioConfig {
+    pub track_id: TrackId,
+    pub codec: RtmpAudioCodec,
+    pub data: Bytes,
 }
 
-impl From<AacAudioConfig> for RtmpEvent {
-    fn from(value: AacAudioConfig) -> Self {
-        RtmpEvent::AacConfig(value)
+impl From<VideoData> for RtmpEvent {
+    fn from(value: VideoData) -> Self {
+        RtmpEvent::VideoData(value)
     }
 }
 
-impl From<AacAudioData> for RtmpEvent {
-    fn from(value: AacAudioData) -> Self {
-        RtmpEvent::AacData(value)
+impl From<VideoConfig> for RtmpEvent {
+    fn from(value: VideoConfig) -> Self {
+        RtmpEvent::VideoConfig(value)
     }
 }
 
-impl From<H264VideoConfig> for RtmpEvent {
-    fn from(value: H264VideoConfig) -> Self {
-        RtmpEvent::H264Config(value)
+impl From<AudioData> for RtmpEvent {
+    fn from(value: AudioData) -> Self {
+        RtmpEvent::AudioData(value)
     }
 }
 
-impl From<H264VideoData> for RtmpEvent {
-    fn from(value: H264VideoData) -> Self {
-        RtmpEvent::H264Data(value)
+impl From<AudioConfig> for RtmpEvent {
+    fn from(value: AudioConfig) -> Self {
+        RtmpEvent::AudioConfig(value)
     }
 }
 
-impl From<LegacyVideoData> for RtmpEvent {
-    fn from(value: LegacyVideoData) -> Self {
-        RtmpEvent::LegacyVideoData(value)
-    }
-}
-
-impl From<EnhancedVideoData> for RtmpEvent {
-    fn from(value: EnhancedVideoData) -> Self {
-        RtmpEvent::EnhancedVideoData(value)
-    }
-}
-
-impl std::fmt::Debug for H264VideoData {
+impl std::fmt::Debug for VideoData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("H264VideoData")
+        f.debug_struct("Video")
+            .field("track_id", &self.track_id)
+            .field("codec", &self.codec)
             .field("pts", &self.pts)
             .field("dts", &self.dts)
             .field("data", &bytes_debug(&self.data))
@@ -123,56 +119,39 @@ impl std::fmt::Debug for H264VideoData {
     }
 }
 
-impl std::fmt::Debug for H264VideoConfig {
+impl std::fmt::Debug for VideoConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("H264VideoConfig")
-            .field("data", &bytes_debug(&self.data))
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for AacAudioData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AacAudioData")
-            .field("pts", &self.pts)
-            .field("data", &bytes_debug(&self.data))
-            .field("channels", &self.channels)
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for GenericAudioData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GenericAudioData")
-            .field("timestamp", &self.timestamp)
-            .field("sound_rate", &self.sound_rate)
-            .field("sample_size", &self.sample_size)
+        f.debug_struct("VideoConfig")
+            .field("track_id", &self.track_id)
             .field("codec", &self.codec)
+            .field("data", &bytes_debug(&self.data))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for AudioData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Audio")
+            .field("track_id", &self.track_id)
+            .field("codec", &self.codec)
+            .field("pts", &self.pts)
             .field("channels", &self.channels)
             .field("data", &bytes_debug(&self.data))
             .finish()
     }
 }
 
-impl std::fmt::Debug for LegacyVideoData {
+impl std::fmt::Debug for AudioConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LegacyVideoData")
-            .field("timestamp", &self.timestamp)
-            .field("tag", &self.tag)
+        f.debug_struct("AudioConfig")
+            .field("track_id", &self.track_id)
+            .field("codec", &self.codec)
+            .field("data", &bytes_debug(&self.data))
             .finish()
     }
 }
 
-impl std::fmt::Debug for EnhancedVideoData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EnhancedVideoData")
-            .field("timestamp", &self.timestamp)
-            .field("tag", &self.tag)
-            .finish()
-    }
-}
-
-fn bytes_debug(data: &[u8]) -> String {
+pub(crate) fn bytes_debug(data: &[u8]) -> String {
     if data.len() <= 10 {
         format!("{data:?}")
     } else {
