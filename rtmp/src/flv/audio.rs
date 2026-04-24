@@ -37,7 +37,7 @@ pub enum LegacyFlvAudioCodec {
     Nellymoser,
     G711ALaw,
     G711MuLaw,
-    // ExHeader (10) - for enhanced RTMP
+    // ExHeader (9) is reserved for Enhanced RTMP and is parsed separately.
     Aac,
     Speex,
     Mp3_8k,

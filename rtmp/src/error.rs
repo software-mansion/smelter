@@ -1,7 +1,8 @@
 use thiserror::Error;
 
 use crate::{
-    ExVideoFourCc, LegacyFlvAudioCodec, LegacyFlvVideoCodec, RtmpAudioCodec, RtmpVideoCodec,
+    ExAudioFourCc, ExVideoFourCc, LegacyFlvAudioCodec, LegacyFlvVideoCodec, RtmpAudioCodec,
+    RtmpVideoCodec,
 };
 
 #[derive(Error, Debug)]
@@ -180,6 +181,21 @@ pub enum FlvAudioTagParseError {
     #[error("Unknown codec header value: {0}")]
     UnknownCodecId(u8),
 
+    #[error("Unknown AudioFourCc: {0:?}")]
+    UnknownAudioFourCc([u8; 4]),
+
+    #[error("Unknown ExAudioPacketType header value: {0}")]
+    UnknownExAudioPacketType(u8),
+
+    #[error("Unknown AudioPacketModExType header value: {0}")]
+    UnknownAudioPacketModExType(u8),
+
+    #[error("Invalid TimestampOffsetNano value: {0}")]
+    InvalidTimestampOffsetNanos(u32),
+
+    #[error("Unsupported audio packet type: {0}")]
+    UnsupportedPacketType(u8),
+
     #[error("Invalid audio tag, packet too short.")]
     TooShort,
 }
@@ -242,4 +258,7 @@ pub enum AudioCodecConversionError {
 
     #[error("Legacy FLV audio codec {0:?} is not supported")]
     UnsupportedLegacyFlv(LegacyFlvAudioCodec),
+
+    #[error("Enhanced FLV audio codec {0:?} is not supported")]
+    UnsupportedEnhancedFlv(ExAudioFourCc),
 }
