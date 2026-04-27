@@ -16,11 +16,13 @@ members = ["lib", "example"]
 dev = [
     "ruff>=0.15.11",
     "ty>=0.0.31",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
 ]
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py311"
 extend-exclude = ["**/__pycache__"]
 
 [tool.ruff.lint]
@@ -43,4 +45,8 @@ include = ["lib", "example"]
 exclude = ["**/__pycache__", "**/.venv"]
 
 [tool.ty.environment]
-python-version = "3.13"
+python-version = "3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["lib/tests"]
+asyncio_mode = "auto"

@@ -39,7 +39,7 @@ def main():
     )
 
     coordinator = UpdateCoordinator()
-    server, socket_dir = start_server()
+    server = start_server()
 
     # Instead of each callback posting its own update_scene, events are pushed to a
     # coordinator that pairs audio+video entries in pts order once both ring buffers
@@ -59,13 +59,13 @@ def main():
 
         detection_thread = threading.Thread(
             target=run_detection,
-            args=(socket_dir, model_path, on_detection),
+            args=(model_path, on_detection),
             kwargs={"class_filter": class_filter},
             daemon=True,
         )
         detection_thread.start()
 
-        run_transcription(socket_dir, on_segment)
+        run_transcription(on_segment)
     except KeyboardInterrupt:
         print("\nShutting down...")
     except ConnectionError:

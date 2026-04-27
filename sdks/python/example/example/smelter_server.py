@@ -455,13 +455,18 @@ class UpdateCoordinator:
         return best
 
 
-def start_server() -> tuple[subprocess.Popen, str]:
-    """Start smelter server. Returns (process, socket_dir)."""
+def start_server() -> subprocess.Popen:
+    """Start smelter server. Returns the subprocess.
+
+    Also exports SMELTER_SIDE_CHANNEL_SOCKET_DIR into the parent environment so
+    the SDK's default Context picks up the same directory without explicit
+    plumbing.
+    """
     socket_dir = tempfile.mkdtemp(prefix="smelter_sockets_")
+    os.environ["SMELTER_SIDE_CHANNEL_SOCKET_DIR"] = socket_dir
     env = {
         **os.environ,
         "SMELTER_API_PORT": str(SMELTER_PORT),
-        "SMELTER_SIDE_CHANNEL_SOCKET_DIR": socket_dir,
         "SMELTER_SIDE_CHANNEL_DELAY_MS": str(SIDE_CHANNEL_DELAY_MS),
     }
 
@@ -477,7 +482,7 @@ def start_server() -> tuple[subprocess.Popen, str]:
 
     wait_for_smelter()
     print("Smelter is ready.")
-    return server, socket_dir
+    return server
 
 
 def stop_server(server: subprocess.Popen):
