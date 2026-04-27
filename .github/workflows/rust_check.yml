@@ -1,157 +1,157 @@
-# name: Rust - check
-# on:
-#     workflow_dispatch: {}
-#     push:
-#         branches: [master]
-#     pull_request:
-#         types: [opened, synchronize]
+name: Rust - check
+on:
+    workflow_dispatch: {}
+    push:
+        branches: [master]
+    pull_request:
+        types: [opened, synchronize]
 
-# concurrency:
-#     group: ${{ github.workflow }}-${{ github.ref }}
-#     cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
-# jobs:
-#     build_and_test_linux:
-#         runs-on: gpu-gh-hosted-runner
-#         steps:
-#             - name: 🛠 Install system dependencies
-#               run: |
-#                   set -e
-#                   sudo apt-get update -y -qq
-#                   sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev pkg-config libssl-dev libclang-dev
-#                   sudo apt-get clean
-#                   sudo rm -rf /var/lib/apt/lists/*
+jobs:
+    build_and_test_linux:
+        runs-on: gpu-gh-hosted-runner
+        steps:
+            - name: 🛠 Install system dependencies
+              run: |
+                  set -e
+                  sudo apt-get update -y -qq
+                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev pkg-config libssl-dev libclang-dev
+                  sudo apt-get clean
+                  sudo rm -rf /var/lib/apt/lists/*
 
-#             - name: "Increase disk space"
-#               run: |
-#                   df -h && docker system prune -a -f && sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup && df -h
+            - name: "Increase disk space"
+              run: |
+                  df -h && docker system prune -a -f && sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup && df -h
 
-#             - name: 🔧 Install the rust toolchain
-#               uses: dtolnay/rust-toolchain@stable
-#               with:
-#                   toolchain: 1.94
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.94
 
-#             - name: 🔬 Install nextest
-#               uses: taiki-e/install-action@v2
-#               with:
-#                   tool: cargo-nextest
+            - name: 🔬 Install nextest
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-nextest
 
-#             - name: 📥 Checkout repo
-#               uses: actions/checkout@v6
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
 
-#             - name: 🧩 Git submodules update
-#               run: |
-#                   cat > .gitmodules << EOF
-#                   [submodule "snapshots"]
-#                           path = integration-tests/snapshots
-#                           url = https://github.com/smelter-labs/smelter-snapshot-tests.git
-#                   EOF
-#                   git submodule update --init
+            - name: 🧩 Git submodules update
+              run: |
+                  cat > .gitmodules << EOF
+                  [submodule "snapshots"]
+                          path = integration-tests/snapshots
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
+                  EOF
+                  git submodule update --init
 
-#             - name: 📁 Rust cache
-#               uses: Swatinem/rust-cache@v2
-#               with:
-#                   shared-key: "linux-build"
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "linux-build"
 
-#             - name: 🪢 Generate Chromium Embedded Framework bindings
-#               run: cargo build --package libcef
+            # - name: 🪢 Generate Chromium Embedded Framework bindings
+            #   run: cargo build --package libcef
 
-#             - name: 🛠 Cargo build
-#               run: |
-#                   cargo build --features decklink
-#                   cargo build --no-default-features
+            # - name: 🛠 Cargo build
+            #   run: |
+            #       cargo build --features decklink
+            #       cargo build --no-default-features
 
-#             - name: 🧪 Run tests
-#               run: |
-#                   cargo nextest run --workspace --profile ci
+            - name: 🧪 Run tests
+              run: |
+                  cargo nextest run --workspace --profile ci
 
-#             - name: 📦 Upload failed snapshot test artifacts
-#               if: failure()
-#               uses: actions/upload-artifact@v4
-#               with:
-#                   name: failed_snapshot_tests
-#                   path: integration-tests/failed_snapshot_tests
-#                   retention-days: 2
+            - name: 📦 Upload failed snapshot test artifacts
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: failed_snapshot_tests
+                  path: integration-tests/failed_snapshot_tests
+                  retention-days: 2
 
-#             - name: 📚 Run doctests
-#               run: cargo test --workspace --doc
+            - name: 📚 Run doctests
+              run: cargo test --workspace --doc
 
-#     build_macos:
-#         runs-on: macos-15
-#         steps:
-#             - name: 🛠 Install system dependencies
-#               run: brew install ffmpeg
+    build_macos:
+        runs-on: macos-15
+        steps:
+            - name: 🛠 Install system dependencies
+              run: brew install ffmpeg
 
-#             - name: 🔧 Install the rust toolchain
-#               uses: dtolnay/rust-toolchain@stable
-#               with:
-#                   toolchain: 1.94
-#                   components: rustfmt, clippy
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.94
+                  components: rustfmt, clippy
 
-#             - name: 📥 Checkout repo
-#               uses: actions/checkout@v6
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
 
-#             - name: 📁 Rust cache
-#               uses: Swatinem/rust-cache@v2
-#               with:
-#                   shared-key: "macos-build"
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "macos-build"
 
-#             - name: 🪢 Generate Chromium Embedded Framework bindings
-#               run: cargo build --package libcef
+            - name: 🪢 Generate Chromium Embedded Framework bindings
+              run: cargo build --package libcef
 
-#             - name: 📖 Check formatting
-#               run: cargo fmt --all --check
+            - name: 📖 Check formatting
+              run: cargo fmt --all --check
 
-#             - name: 📎 Run clippy
-#               run: cargo clippy --workspace --all-targets -- -D warnings
+            - name: 📎 Run clippy
+              run: cargo clippy --workspace --all-targets -- -D warnings
 
-#             - name: 📎 Run clippy (no-default-features)
-#               run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+            - name: 📎 Run clippy (no-default-features)
+              run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
-#     lint:
-#         runs-on: ubuntu-24.04
-#         steps:
-#             - name: 🛠 Install system dependencies
-#               run: |
-#                   sudo apt-get update -y -qq
-#                   sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
-#                   sudo apt-get clean
-#                   sudo rm -rf /var/lib/apt/lists/*
+    lint:
+        runs-on: ubuntu-24.04
+        steps:
+            - name: 🛠 Install system dependencies
+              run: |
+                  sudo apt-get update -y -qq
+                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+                  sudo apt-get clean
+                  sudo rm -rf /var/lib/apt/lists/*
 
-#             - name: 🔧 Install the rust toolchain
-#               uses: dtolnay/rust-toolchain@stable
-#               with:
-#                   toolchain: 1.94
-#                   components: rustfmt, clippy
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.94
+                  components: rustfmt, clippy
 
-#             - name: Install pnpm
-#               uses: pnpm/action-setup@v4
-#               with:
-#                   version: 9
+            - name: Install pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 9
 
-#             - name: 📥 Checkout repo
-#               uses: actions/checkout@v6
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
 
-#             - name: 📁 Rust cache
-#               uses: Swatinem/rust-cache@v2
-#               with:
-#                   shared-key: "linux-lint"
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "linux-lint"
 
-#             - name: 🪢 Generate Chromium Embedded Framework bindings
-#               run: cargo build --package libcef
+            - name: 🪢 Generate Chromium Embedded Framework bindings
+              run: cargo build --package libcef
 
-#             - name: 📖 Check formatting
-#               run: cargo fmt --all --check
+            - name: 📖 Check formatting
+              run: cargo fmt --all --check
 
-#             - name: 📎 Run clippy (all-features)
-#               run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+            - name: 📎 Run clippy (all-features)
+              run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-#             - name: 📎 Run clippy (no-default-features)
-#               run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+            - name: 📎 Run clippy (no-default-features)
+              run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
-#             - name: 📎 Run clippy (vk-video, no-default-features)
-#               run: cargo clippy --package vk-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
+            - name: 📎 Run clippy (vk-video, no-default-features)
+              run: cargo clippy --package vk-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
 
-#             - name: 📄 Generate JSON schema
-#               run: |
-#                   cargo run -p tools --bin generate_from_types -- --check
+            - name: 📄 Generate JSON schema
+              run: |
+                  cargo run -p tools --bin generate_from_types -- --check
