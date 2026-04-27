@@ -1,3 +1,9 @@
+# ⚠️ DEPRECATED ⚠️
+
+**This crate has been renamed to [gpu-video](https://crates.io/crates/gpu-video).**
+
+Please update your `Cargo.toml` to use the new crate. This crate is no longer maintained.
+
 # vk-video
 
 A library for hardware video decoding and encoding using Vulkan Video, with [wgpu] integration.

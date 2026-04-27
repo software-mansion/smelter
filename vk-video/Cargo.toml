@@ -1,13 +1,13 @@
 [package]
 name = "vk-video"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 authors = ["Software Mansion <contact@swmansion.com>"]
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/software-mansion/smelter"
 rust-version = "1.85"
-description = "A library for hardware video coding using Vulkan Video, with wgpu integration."
+description = "[DEPRECATED] Renamed to `gpu-video`"
 categories = [
   "multimedia::video",
   "multimedia::encoding",

@@ -1,3 +1,8 @@
+#![deprecated(
+    since = "0.3.1",
+    note = "This crate has been renamed. Please migrate to `gpu-video`."
+)]
+
 #![doc = include_str!("../README.md")]
 
 #[cfg(vulkan)]
