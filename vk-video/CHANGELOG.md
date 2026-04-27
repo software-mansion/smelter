@@ -12,6 +12,7 @@
 - Added an H.265 encoder ([#1919](https://github.com/software-mansion/smelter/pull/1919) by @jerzywilczek)
 
 ### 🐛 Bug fixes
+- Use Box in QueueCreateInfo ([#1938](https://github.com/software-mansion/smelter/pull/1938) by @krakow10)
 
 ## [v0.3.0](https://github.com/software-mansion/smelter/releases/tag/vk-video%2Fv0.3.0)
 
