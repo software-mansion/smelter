@@ -198,11 +198,16 @@ pub struct EncodedInputChunk<'a> {
     pub pts: Option<u64>,
 }
 
+pub type H264DecoderEvent<'a> = DecoderEvent<'a, AccessUnit>;
+
 /// Represents all events that can be sent to the decoder
 #[non_exhaustive]
-pub enum DecoderEvent<'a> {
+pub enum DecoderEvent<'a, ParsedFrame> {
     /// Submit encoded chunk for decoding
     DecodeChunk(EncodedInputChunk<'a>),
+
+    /// Submit parsed frame for decoding
+    DecodeParsedFrame(ParsedFrame),
 
     /// Signal the end of the current frame and flush any buffered bitstream units in the parser.
     ///
@@ -292,13 +297,14 @@ impl BytesDecoder {
     /// May return a sequence of decoded frames in the [NV12 format](https://en.wikipedia.org/wiki/YCbCr#4:2:0).
     pub fn process_event(
         &mut self,
-        event: DecoderEvent<'_>,
+        event: DecoderEvent<'_, AccessUnit>,
     ) -> Result<Vec<OutputFrame<RawFrameData>>, DecoderError> {
         match event {
             DecoderEvent::DecodeChunk(chunk) => {
                 let nalus = self.parser.parse(chunk.data, chunk.pts)?;
                 self.decode_access_units(nalus)
             }
+            DecoderEvent::DecodeParsedFrame(au) => self.decode_access_units(vec![au]),
             DecoderEvent::SignalFrameEnd => {
                 let access_units = self.parser.flush()?;
                 self.decode_access_units(access_units)
