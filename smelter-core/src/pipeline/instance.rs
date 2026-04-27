@@ -59,6 +59,8 @@ pub struct Pipeline {
     #[allow(dead_code)]
     // triggers cleanup on drop
     rtmp_server: Option<RtmpServer>,
+
+    threads: Vec<std::thread::JoinHandle<()>>,
 }
 
 impl Pipeline {
@@ -332,7 +334,7 @@ impl Pipeline {
     }
 
     pub fn start(pipeline: &Arc<Mutex<Self>>) {
-        let guard = pipeline.lock().unwrap();
+        let mut guard = pipeline.lock().unwrap();
         if guard.is_started {
             error!("Pipeline already started.");
             return;
@@ -343,10 +345,15 @@ impl Pipeline {
         guard.queue.start(video_sender, audio_sender);
 
         let weak_pipeline = Arc::downgrade(pipeline);
-        thread::spawn(move || run_renderer_thread(weak_pipeline, video_receiver));
+        let renderer_thread =
+            thread::spawn(move || run_renderer_thread(weak_pipeline, video_receiver));
 
         let weak_pipeline = Arc::downgrade(pipeline);
-        thread::spawn(move || run_audio_mixer_thread(weak_pipeline, audio_receiver));
+        let audio_mixer_thread =
+            thread::spawn(move || run_audio_mixer_thread(weak_pipeline, audio_receiver));
+
+        guard.threads.push(renderer_thread);
+        guard.threads.push(audio_mixer_thread);
     }
 
     pub fn inputs(&self) -> impl Iterator<Item = (&InputId, InputInfo)> {
@@ -390,8 +397,51 @@ impl Pipeline {
 impl Drop for Pipeline {
     fn drop(&mut self) {
         info!("Stopping pipeline");
+
+        // Order matters: we must guarantee that every worker thread holding a
+        // clone of `Arc<vk_video::VulkanDevice>`/`Arc<vk_video::VulkanInstance>`
+        // has fully exited before the last clone (held by `self.ctx`) is
+        // dropped. Otherwise `vkDestroy*` could fire on a worker thread and
+        // race with the NVIDIA libvulkan atexit handler, causing a segfault
+        // or deadlock.
+        //
+        // 1. Signal the queue thread to exit.
         self.queue.shutdown();
+        // 2. Stop the WebRTC setting engine background work.
         self.ctx.webrtc_setting_engine.close();
+
+        // 3. Drop inputs first: each input's Drop signals + joins the decoder
+        //    threads (and any reader/demuxer/manager threads) it owns.
+        self.inputs.clear();
+        // 4. Drop outputs: each output's Drop signals + joins the encoder
+        //    threads it owns.
+        self.outputs.clear();
+
+        // 5. Tear down the WHIP/WHEP server and RTMP server (their `Drop`
+        //    impls cancel the tokio tasks they spawned).
+        if let Some(handle) = self.whip_whep_handle.take() {
+            drop(handle);
+        }
+        if let Some(server) = self.rtmp_server.take() {
+            drop(server);
+        }
+
+        // 6. Join the queue thread.
+        self.queue.join();
+
+        // 7. Join the renderer + audio mixer threads stored on Pipeline.
+        for thread_handle in std::mem::take(&mut self.threads) {
+            info!("Joining the thread");
+            if let Err(err) = thread_handle.join() {
+                tracing::error!(?err, "Pipeline thread panicked during join");
+            }
+        }
+
+        // 8. After this method returns, `self.ctx` (the last `Arc<PipelineCtx>`
+        //    on the main thread) is dropped, taking `GraphicsContext` with it.
+        //    All workers above have already released their clones, so the
+        //    Vulkan refcount reaches zero on this thread and `vkDestroyDevice`
+        //    / `vkDestroyInstance` run on the main thread, before atexit.
     }
 }
 
@@ -630,6 +680,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         ctx,
         whip_whep_handle,
         rtmp_server,
+        threads: Vec::new(),
     };
 
     Ok(pipeline)

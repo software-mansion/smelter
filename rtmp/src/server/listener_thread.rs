@@ -27,7 +27,7 @@ pub(super) fn start_listener_thread(
     let (conn_sender, conn_receiver) = unbounded();
     let server = RtmpServer::new(config, conn_sender);
 
-    thread::Builder::new()
+    let on_connection_thread = thread::Builder::new()
         .name("RTMP on_connection processor".to_string())
         .spawn(move || {
             let mut on_connection = on_connection;
@@ -38,7 +38,7 @@ pub(super) fn start_listener_thread(
         .unwrap();
 
     let server_handle = server.handle();
-    thread::Builder::new()
+    let listener_thread = thread::Builder::new()
         .name("RTMP listener thread".to_string())
         .spawn(move || {
             loop {
@@ -69,6 +69,8 @@ pub(super) fn start_listener_thread(
             }
         })
         .unwrap();
+
+    server.set_threads(listener_thread, on_connection_thread);
 
     Ok(server)
 }

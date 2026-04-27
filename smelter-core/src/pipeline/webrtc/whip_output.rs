@@ -22,6 +22,7 @@ use crate::{
     pipeline::{
         output::{Output, OutputAudio, OutputVideo},
         rtp::RtpPacket,
+        utils::ThreadJoiner,
         webrtc::{
             http_client::WhipWhepHttpClient,
             whip_output::codec_preferences::{
@@ -54,6 +55,10 @@ mod track_task_video;
 pub(crate) struct WhipOutput {
     pub video: Option<WhipVideoTrackThreadHandle>,
     pub audio: Option<WhipAudioTrackThreadHandle>,
+    // Drop order: handle fields drop first (closing encoder senders), then
+    // these joiners wait. See `ThreadJoiner` doc.
+    _video_thread: Option<ThreadJoiner>,
+    _audio_thread: Option<ThreadJoiner>,
 }
 
 const WHIP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -148,19 +153,23 @@ impl WhipClientTask {
 
         pc.set_remote_description(answer).await?;
 
-        let (video_thread_handle, video_track) = match video_preferences {
+        let (video_thread_handle, video_thread, video_track) = match video_preferences {
             Some(encoder_preferences) => {
-                let (video_thread_handle, video) =
+                let (video_thread_handle, video_thread, video) =
                     setup_video_track(&ctx, &output_ref, video_rtc_sender, encoder_preferences)
                         .await?;
-                (Some(video_thread_handle), Some(video))
+                (
+                    Some(video_thread_handle),
+                    Some(video_thread),
+                    Some(video),
+                )
             }
-            None => (None, None),
+            None => (None, None, None),
         };
 
-        let (audio_thread_handle, audio_track) = match audio_preferences {
+        let (audio_thread_handle, audio_thread, audio_track) = match audio_preferences {
             Some(encoder_preferences) => {
-                let (audio_thread_handle, audio) = setup_audio_track(
+                let (audio_thread_handle, audio_thread, audio) = setup_audio_track(
                     &ctx,
                     &output_ref,
                     audio_rtc_sender,
@@ -168,9 +177,13 @@ impl WhipClientTask {
                     encoder_preferences,
                 )
                 .await?;
-                (Some(audio_thread_handle), Some(audio))
+                (
+                    Some(audio_thread_handle),
+                    Some(audio_thread),
+                    Some(audio),
+                )
             }
-            None => (None, None),
+            None => (None, None, None),
         };
 
         Ok((
@@ -186,6 +199,8 @@ impl WhipClientTask {
             WhipOutput {
                 video: video_thread_handle,
                 audio: audio_thread_handle,
+                _video_thread: video_thread,
+                _audio_thread: audio_thread,
             },
         ))
     }

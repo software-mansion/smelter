@@ -35,7 +35,7 @@ use crate::{
         },
     },
     queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
-    utils::{InitializableThread, channel::Sender},
+    utils::{InitializableThread, ThreadJoiner, channel::Sender},
 };
 
 use crate::prelude::*;
@@ -79,6 +79,10 @@ pub(super) mod rtcp_sync;
 ///     blank and streaming until the other inputs (and queue processing) catch up.
 pub struct RtpInput {
     should_close: Arc<AtomicBool>,
+    // Demuxer thread holds the decoder track joiners (and thus indirectly the
+    // decoder threads' `Arc<vk_video::*>`). Joined on Drop so all those
+    // threads have exited before pipeline shutdown.
+    demuxer_thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl RtpInput {
@@ -127,22 +131,25 @@ impl RtpInput {
             },
         });
 
-        let video_handle = Self::start_video_thread(&ctx, &input_ref, opts.video, video_sender)?;
-        let audio_handle = Self::start_audio_thread(&ctx, &input_ref, opts.audio, audio_sender)?;
+        let video = Self::start_video_thread(&ctx, &input_ref, opts.video, video_sender)?;
+        let audio = Self::start_audio_thread(&ctx, &input_ref, opts.audio, audio_sender)?;
 
         // TODO: this could ran on the same thread as tcp/udp socket
-        RtpDemuxerThread::spawn(
+        let demuxer_thread = RtpDemuxerThread::spawn(
             ctx,
             &input_ref,
             jitter_buffer_ctx,
             raw_packets_receiver,
-            video_handle,
-            audio_handle,
+            video,
+            audio,
             opts.offset.is_some(),
         );
 
         Ok((
-            Input::Rtp(Self { should_close }),
+            Input::Rtp(Self {
+                should_close,
+                demuxer_thread: Some(demuxer_thread),
+            }),
             InputInitInfo::Rtp { port: Some(port) },
             queue_input,
         ))
@@ -153,12 +160,12 @@ impl RtpInput {
         input_ref: &Ref<InputId>,
         options: Option<VideoDecoderOptions>,
         frame_sender: Option<QueueSender<Frame>>,
-    ) -> Result<Option<RtpVideoTrackThreadHandle>, DecoderInitError> {
+    ) -> Result<Option<(RtpVideoTrackThreadHandle, ThreadJoiner)>, DecoderInitError> {
         let (Some(options), Some(frame_sender)) = (options, frame_sender) else {
             return Ok(None);
         };
 
-        let handle = match options {
+        let (handle, thread) = match options {
             VideoDecoderOptions::FfmpegH264 => RtpVideoThread::<FfmpegH264Decoder>::spawn(
                 input_ref.clone(),
                 (ctx.clone(), DepayloaderOptions::H264, frame_sender),
@@ -181,7 +188,7 @@ impl RtpInput {
                 )?
             }
         };
-        Ok(Some(handle))
+        Ok(Some((handle, ThreadJoiner::new(thread))))
     }
 
     fn start_audio_thread(
@@ -189,12 +196,12 @@ impl RtpInput {
         input_ref: &Ref<InputId>,
         options: Option<RtpAudioOptions>,
         samples_sender: Option<QueueSender<InputAudioSamples>>,
-    ) -> Result<Option<RtpAudioTrackThreadHandle>, DecoderInitError> {
+    ) -> Result<Option<(RtpAudioTrackThreadHandle, ThreadJoiner)>, DecoderInitError> {
         let (Some(options), Some(samples_sender)) = (options, samples_sender) else {
             return Ok(None);
         };
 
-        let handle = match options {
+        let (handle, thread) = match options {
             RtpAudioOptions::Opus => RtpAudioThread::<OpusDecoder>::spawn(
                 input_ref,
                 RtpAudioThreadOptions {
@@ -220,7 +227,7 @@ impl RtpInput {
                 },
             )?,
         };
-        Ok(Some(handle))
+        Ok(Some((handle, ThreadJoiner::new(thread))))
     }
 }
 
@@ -228,6 +235,11 @@ impl Drop for RtpInput {
     fn drop(&mut self) {
         self.should_close
             .store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(handle) = self.demuxer_thread.take()
+            && let Err(err) = handle.join()
+        {
+            tracing::error!(?err, "RTP demuxer thread panicked during join");
+        }
     }
 }
 
@@ -244,6 +256,10 @@ struct TrackState {
     jitter_buffer: RtpJitterBuffer,
     rtp_packet_sender: Sender<PipelineEvent<RtpInputEvent>>,
     eos_sent: bool,
+    // Joiner for the underlying decoder thread. Declared after
+    // `rtp_packet_sender` so the sender drops first (signaling decoder to
+    // exit) before we wait for the thread.
+    _decoder_thread: ThreadJoiner,
 }
 
 impl RtpDemuxerThread {
@@ -252,13 +268,13 @@ impl RtpDemuxerThread {
         input_ref: &Ref<InputId>,
         jitter_buffer_ctx: RtpJitterBufferSharedContext,
         receiver: Receiver<bytes::Bytes>,
-        video_handle: Option<RtpVideoTrackThreadHandle>,
-        audio_handle: Option<RtpAudioTrackThreadHandle>,
+        video: Option<(RtpVideoTrackThreadHandle, ThreadJoiner)>,
+        audio: Option<(RtpAudioTrackThreadHandle, ThreadJoiner)>,
         has_offset: bool,
-    ) {
+    ) -> std::thread::JoinHandle<()> {
         let mut tracks: Vec<TrackState> = Vec::new();
 
-        if let Some(handle) = video_handle {
+        if let Some((handle, decoder_thread)) = video {
             let stats_sender = ctx.stats_sender.clone();
             let ref_clone = input_ref.clone();
             tracks.push(TrackState {
@@ -274,10 +290,11 @@ impl RtpDemuxerThread {
                 ),
                 rtp_packet_sender: handle.rtp_packet_sender,
                 eos_sent: false,
+                _decoder_thread: decoder_thread,
             });
         }
 
-        if let Some(handle) = audio_handle {
+        if let Some((handle, decoder_thread)) = audio {
             let stats_sender = ctx.stats_sender.clone();
             let ref_clone = input_ref.clone();
             let sample_rate = handle.sample_rate;
@@ -294,6 +311,7 @@ impl RtpDemuxerThread {
                 ),
                 rtp_packet_sender: handle.rtp_packet_sender,
                 eos_sent: false,
+                _decoder_thread: decoder_thread,
             });
         }
 
@@ -312,7 +330,7 @@ impl RtpDemuxerThread {
                     span!(Level::INFO, "RTP demuxer", input_id = input_ref.to_string()).entered();
                 thread.run();
             })
-            .unwrap();
+            .unwrap()
     }
 
     fn run(&mut self) {

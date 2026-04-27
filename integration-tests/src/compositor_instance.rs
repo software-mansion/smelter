@@ -23,11 +23,15 @@ pub struct CompositorInstance {
     pub api_port: u16,
     pub http_client: reqwest::blocking::Client,
     pub should_close_sender: Sender<()>,
+    pub thread_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl Drop for CompositorInstance {
     fn drop(&mut self) {
         self.should_close_sender.send(()).unwrap();
+        if let Some(handle) = self.thread_handle.take() {
+            handle.join().unwrap();
+        }
     }
 }
 
@@ -47,7 +51,7 @@ impl CompositorInstance {
         let runtime = Arc::new(Runtime::new().unwrap());
         let state = ApiState::new(config, runtime.clone()).unwrap();
 
-        thread::Builder::new()
+        let thread_handle = thread::Builder::new()
             .name("HTTP server startup thread".to_string())
             .spawn(move || {
                 run_api(state, runtime.clone(), should_close_receiver).unwrap();
@@ -58,6 +62,7 @@ impl CompositorInstance {
             api_port,
             http_client: reqwest::blocking::Client::new(),
             should_close_sender,
+            thread_handle: Some(thread_handle),
         };
         instance.wait_for_start(Duration::from_secs(30)).unwrap();
         instance

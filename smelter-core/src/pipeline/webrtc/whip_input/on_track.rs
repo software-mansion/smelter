@@ -82,7 +82,7 @@ async fn process_audio_track(
         ));
     };
 
-    let handle = AudioTrackThread::spawn(
+    let (handle, thread) = AudioTrackThread::spawn(
         format!("WHIP input audio, input_id: {input_ref}"),
         (ctx.pipeline_ctx.clone(), samples_sender),
     )?;
@@ -112,6 +112,13 @@ async fn process_audio_track(
             debug!("Failed to send audio RTP packet, Channel closed.");
             break;
         }
+    }
+
+    // Close the channel explicitly, then join the worker thread so any
+    // `Arc<vk_video::*>` it holds is released before this tokio task ends.
+    drop(handle);
+    if let Err(err) = thread.join() {
+        warn!(?err, "WHIP audio track thread panicked during join");
     }
 
     Ok(())
@@ -148,7 +155,7 @@ async fn process_video_track(
     );
     let keyframe_request_sender = rtp_reader.enable_pli().await;
 
-    let handle = VideoTrackThread::spawn(
+    let (handle, thread) = VideoTrackThread::spawn(
         format!("WHIP input video, input_id: {input_ref}"),
         (
             ctx.pipeline_ctx.clone(),
@@ -170,6 +177,11 @@ async fn process_video_track(
             debug!("Failed to send video RTP packet, Channel closed.");
             break;
         }
+    }
+
+    drop(handle);
+    if let Err(err) = thread.join() {
+        warn!(?err, "WHIP video track thread panicked during join");
     }
 
     Ok(())

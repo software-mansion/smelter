@@ -22,7 +22,7 @@ use crate::{
         ffmpeg_utils::{FfmpegOptions, StreamMutExt, write_extradata},
         output::{Output, OutputAudio, OutputVideo},
     },
-    utils::InitializableThread,
+    utils::{InitializableThread, ThreadJoiner},
 };
 
 use crate::prelude::*;
@@ -36,6 +36,9 @@ struct StreamState {
 pub struct Mp4Output {
     video: Option<VideoEncoderThreadHandle>,
     audio: Option<AudioEncoderThreadHandle>,
+    _video_thread: Option<ThreadJoiner>,
+    _audio_thread: Option<ThreadJoiner>,
+    _writer_thread: ThreadJoiner,
 }
 
 impl Mp4Output {
@@ -106,29 +109,31 @@ impl Mp4Output {
             .write_header_with(ffmpeg_options.into_dictionary())
             .map_err(OutputInitError::FfmpegError)?;
 
-        let (video_encoder, video_stream) = match video {
-            Some((encoder, index)) => (
+        let (video_encoder, video_thread, video_stream) = match video {
+            Some((encoder, thread, index)) => (
                 Some(encoder),
+                Some(thread),
                 Some(StreamState {
                     index,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
                 }),
             ),
-            None => (None, None),
+            None => (None, None, None),
         };
 
-        let (audio_encoder, audio_stream) = match audio {
-            Some((encoder, index)) => (
+        let (audio_encoder, audio_thread, audio_stream) = match audio {
+            Some((encoder, thread, index)) => (
                 Some(encoder),
+                Some(thread),
                 Some(StreamState {
                     index,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
                 }),
             ),
-            None => (None, None),
+            None => (None, None, None),
         };
 
-        std::thread::Builder::new()
+        let writer_thread = std::thread::Builder::new()
             .name(format!("MP4 writer thread for output {output_ref}"))
             .spawn(move || {
                 let _span =
@@ -151,6 +156,9 @@ impl Mp4Output {
         Ok(Mp4Output {
             video: video_encoder,
             audio: audio_encoder,
+            _video_thread: video_thread,
+            _audio_thread: audio_thread,
+            _writer_thread: ThreadJoiner::new(writer_thread),
         })
     }
 
@@ -160,10 +168,10 @@ impl Mp4Output {
         options: VideoEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
-    ) -> Result<(VideoEncoderThreadHandle, usize), OutputInitError> {
+    ) -> Result<(VideoEncoderThreadHandle, ThreadJoiner, usize), OutputInitError> {
         let resolution = options.resolution();
 
-        let encoder = match &options {
+        let (encoder, thread) = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 VideoEncoderThread::<FfmpegH264Encoder>::spawn(
                     output_ref.clone(),
@@ -213,7 +221,7 @@ impl Mp4Output {
             codecpar.height = resolution.height as i32;
         });
 
-        Ok((encoder, stream.index()))
+        Ok((encoder, ThreadJoiner::new(thread), stream.index()))
     }
 
     fn init_audio_track(
@@ -222,14 +230,14 @@ impl Mp4Output {
         options: AudioEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
-    ) -> Result<(AudioEncoderThreadHandle, usize), OutputInitError> {
+    ) -> Result<(AudioEncoderThreadHandle, ThreadJoiner, usize), OutputInitError> {
         let channel_count = match options.channels() {
             AudioChannels::Mono => 1,
             AudioChannels::Stereo => 2,
         };
         let sample_rate = options.sample_rate();
 
-        let encoder = match options {
+        let (encoder, thread) = match options {
             AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
                 output_ref.clone(),
                 AudioEncoderThreadOptions {
@@ -265,7 +273,7 @@ impl Mp4Output {
             };
         });
 
-        Ok((encoder, stream.index()))
+        Ok((encoder, ThreadJoiner::new(thread), stream.index()))
     }
 }
 

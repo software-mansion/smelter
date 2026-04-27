@@ -25,7 +25,7 @@ use crate::{
             },
         },
     },
-    utils::InitializableThread,
+    utils::{InitializableThread, ThreadJoiner},
 };
 
 use crate::prelude::*;
@@ -48,6 +48,12 @@ pub(crate) struct RtpOutput {
 
     audio: Option<RtpAudioTrackThreadHandle>,
     video: Option<RtpVideoTrackThreadHandle>,
+    // Drop order: `audio`/`video` handles drop first, closing senders so the
+    // encoder threads exit; then these joiners wait for them. The sender
+    // thread joiner waits for the RTP socket-writer thread.
+    _video_thread: Option<ThreadJoiner>,
+    _audio_thread: Option<ThreadJoiner>,
+    _sender_thread: ThreadJoiner,
 }
 
 #[derive(Debug)]
@@ -78,25 +84,21 @@ impl RtpOutput {
 
         let (rtp_sender, rtp_receiver) = bounded(1);
 
-        let video = match options.video {
-            Some(video) => Some(Self::init_video_thread(
-                &ctx,
-                &output_ref,
-                mtu,
-                video,
-                rtp_sender.clone(),
-            )?),
-            None => None,
+        let (video, video_thread) = match options.video {
+            Some(video) => {
+                let (handle, thread) =
+                    Self::init_video_thread(&ctx, &output_ref, mtu, video, rtp_sender.clone())?;
+                (Some(handle), Some(ThreadJoiner::new(thread)))
+            }
+            None => (None, None),
         };
-        let audio = match options.audio {
-            Some(audio) => Some(Self::init_audio_thread(
-                &ctx,
-                &output_ref,
-                mtu,
-                audio,
-                rtp_sender.clone(),
-            )?),
-            None => None,
+        let (audio, audio_thread) = match options.audio {
+            Some(audio) => {
+                let (handle, thread) =
+                    Self::init_audio_thread(&ctx, &output_ref, mtu, audio, rtp_sender.clone())?;
+                (Some(handle), Some(ThreadJoiner::new(thread)))
+            }
+            None => (None, None),
         };
 
         let rtp_stream = RtpBinaryPacketStream {
@@ -108,7 +110,7 @@ impl RtpOutput {
         let should_close = Arc::new(AtomicBool::new(false));
         let connection_options = options.connection_options;
         let should_close2 = should_close.clone();
-        std::thread::Builder::new()
+        let sender_thread = std::thread::Builder::new()
             .name(format!("RTP sender for output {output_ref}"))
             .spawn(move || {
                 let _span = span!(
@@ -136,6 +138,9 @@ impl RtpOutput {
                 should_close,
                 audio,
                 video,
+                _video_thread: video_thread,
+                _audio_thread: audio_thread,
+                _sender_thread: ThreadJoiner::new(sender_thread),
             },
             port,
         ))
@@ -147,7 +152,7 @@ impl RtpOutput {
         mtu: usize,
         options: VideoEncoderOptions,
         sender: Sender<RtpOutputEvent>,
-    ) -> Result<RtpVideoTrackThreadHandle, OutputInitError> {
+    ) -> Result<(RtpVideoTrackThreadHandle, std::thread::JoinHandle<()>), OutputInitError> {
         fn payloader_options(codec: PayloadedCodec, mtu: usize) -> PayloaderOptions {
             PayloaderOptions {
                 codec,
@@ -158,7 +163,7 @@ impl RtpOutput {
             }
         }
 
-        let thread_handle = match &options {
+        let pair = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 RtpVideoTrackThread::<FfmpegH264Encoder>::spawn(
                     output_ref.clone(),
@@ -213,7 +218,7 @@ impl RtpOutput {
                 )?
             }
         };
-        Ok(thread_handle)
+        Ok(pair)
     }
 
     fn init_audio_thread(
@@ -222,7 +227,7 @@ impl RtpOutput {
         mtu: usize,
         options: AudioEncoderOptions,
         sender: Sender<RtpOutputEvent>,
-    ) -> Result<RtpAudioTrackThreadHandle, OutputInitError> {
+    ) -> Result<(RtpAudioTrackThreadHandle, std::thread::JoinHandle<()>), OutputInitError> {
         fn payloader_options(
             codec: PayloadedCodec,
             sample_rate: u32,
@@ -237,7 +242,7 @@ impl RtpOutput {
             }
         }
 
-        let thread_handle = match options {
+        let pair = match options {
             AudioEncoderOptions::Opus(options) => RtpAudioTrackThread::<OpusEncoder>::spawn(
                 output_ref.clone(),
                 RtpAudioTrackThreadOptions {
@@ -252,7 +257,7 @@ impl RtpOutput {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac));
             }
         };
-        Ok(thread_handle)
+        Ok(pair)
     }
 }
 

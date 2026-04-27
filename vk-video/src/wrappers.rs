@@ -32,6 +32,7 @@ pub(crate) struct Instance {
 
 impl Drop for Instance {
     fn drop(&mut self) {
+        tracing::info!("DROP INSTANCE");
         unsafe { self.destroy_instance(None) };
     }
 }
@@ -108,6 +109,7 @@ impl std::ops::Deref for Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
+        tracing::info!("DROP DEVICE");
         unsafe { self.destroy_device(None) };
     }
 }

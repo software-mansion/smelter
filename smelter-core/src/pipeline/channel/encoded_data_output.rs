@@ -21,7 +21,7 @@ use crate::{
         },
         output::{Output, OutputAudio, OutputVideo},
     },
-    utils::InitializableThread,
+    utils::{InitializableThread, ThreadJoiner},
 };
 
 use crate::prelude::*;
@@ -29,6 +29,12 @@ use crate::prelude::*;
 pub struct EncodedDataOutput {
     pub audio: Option<AudioEncoderThreadHandle>,
     pub video: Option<VideoEncoderThreadHandle>,
+    // Drop order: encoder *Handle fields drop first (their senders close,
+    // encoder threads exit), then these joiners wait. Required so encoder
+    // threads holding `Arc<vk_video::VulkanDevice>` finish before pipeline
+    // shutdown — see ThreadJoiner doc.
+    _video_thread: Option<ThreadJoiner>,
+    _audio_thread: Option<ThreadJoiner>,
 }
 
 impl EncodedDataOutput {
@@ -38,7 +44,7 @@ impl EncodedDataOutput {
         options: EncodedDataOutputOptions,
     ) -> Result<(Self, EncodedDataOutputHandle), OutputInitError> {
         let (sender, encoded_chunks_receiver) = bounded(1);
-        let video = match &options.video {
+        let video_pair = match &options.video {
             Some(video) => match video {
                 VideoEncoderOptions::FfmpegH264(options) => {
                     Some(VideoEncoderThread::<FfmpegH264Encoder>::spawn(
@@ -84,7 +90,7 @@ impl EncodedDataOutput {
             None => None,
         };
 
-        let audio = match &options.audio {
+        let audio_pair = match &options.audio {
             Some(audio) => match audio {
                 AudioEncoderOptions::Opus(options) => {
                     Some(AudioEncoderThread::<OpusEncoder>::spawn(
@@ -110,6 +116,15 @@ impl EncodedDataOutput {
             None => None,
         };
 
+        let (video, video_thread) = match video_pair {
+            Some((handle, thread)) => (Some(handle), Some(ThreadJoiner::new(thread))),
+            None => (None, None),
+        };
+        let (audio, audio_thread) = match audio_pair {
+            Some((handle, thread)) => (Some(handle), Some(ThreadJoiner::new(thread))),
+            None => (None, None),
+        };
+
         let handle = EncodedDataOutputHandle {
             receiver: encoded_chunks_receiver,
             video: video.as_ref().map(|v| VideoEncoderInfo {
@@ -120,7 +135,15 @@ impl EncodedDataOutput {
                 extradata: a.config.extradata.clone(),
             }),
         };
-        Ok((Self { video, audio }, handle))
+        Ok((
+            Self {
+                video,
+                audio,
+                _video_thread: video_thread,
+                _audio_thread: audio_thread,
+            },
+            handle,
+        ))
     }
 }
 

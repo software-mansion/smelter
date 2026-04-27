@@ -69,6 +69,9 @@ const CHUNK_BUFFER_DURATION: Duration = Duration::from_secs(2);
 ///   the portion at the start cut off.
 pub struct Mp4Input {
     events_sender: crossbeam_channel::Sender<StateEvent>,
+    // Manager thread holds Arc<PipelineCtx>; must be joined on shutdown to
+    // satisfy the NVIDIA-atexit invariant.
+    manager_thread: Option<JoinHandle<()>>,
 }
 
 impl Mp4Input {
@@ -153,7 +156,7 @@ impl Mp4Input {
         if let (Some(track), Some(sender)) = (audio_track, audio_sender) {
             reader.spawn_audio(track, sender, initial_seek)?;
         }
-        std::thread::Builder::new()
+        let manager_thread = std::thread::Builder::new()
             .name("mp4 reader".to_string())
             .spawn(move || {
                 reader.run();
@@ -161,7 +164,10 @@ impl Mp4Input {
             .unwrap();
 
         Ok((
-            Input::Mp4(Self { events_sender }),
+            Input::Mp4(Self {
+                events_sender,
+                manager_thread: Some(manager_thread),
+            }),
             InputInitInfo::Mp4 {
                 video_duration,
                 audio_duration,
@@ -196,6 +202,11 @@ impl Drop for Mp4Input {
     fn drop(&mut self) {
         if self.events_sender.send(StateEvent::InputShutdown).is_err() {
             error!("Failed to send InputShutdown event. Channel closed")
+        }
+        if let Some(handle) = self.manager_thread.take()
+            && let Err(err) = handle.join()
+        {
+            error!(?err, "MP4 manager thread panicked during join");
         }
     }
 }
@@ -306,6 +317,20 @@ impl TrackManagerThread {
                 }
                 StateEvent::InputShutdown => {
                     self.input_shutdown_condition.mark_for_shutdown();
+                    // Join child reader threads (which in turn join the
+                    // decoder threads) before returning, so any
+                    // Arc<vk_video::*> they hold is released before the
+                    // pipeline tears down GraphicsContext.
+                    if let Some((handle, _)) = self.video_thread.take()
+                        && let Err(err) = handle.join()
+                    {
+                        tracing::error!(?err, "MP4 video reader thread panicked");
+                    }
+                    if let Some((handle, _)) = self.audio_thread.take()
+                        && let Err(err) = handle.join()
+                    {
+                        tracing::error!(?err, "MP4 audio reader thread panicked");
+                    }
                     return;
                 }
             }
@@ -374,7 +399,8 @@ impl TrackManagerThread {
         frame_sender: QueueSender<Frame>,
         seek: Option<Duration>,
     ) -> Result<(), InputInitError> {
-        let decoder_handle = self.spawn_video_decoder_thread(&track, frame_sender)?;
+        let (decoder_handle, decoder_join) =
+            self.spawn_video_decoder_thread(&track, frame_sender)?;
 
         let shutdown_condition = self.input_shutdown_condition.child_condition();
         let track_thread = TrackThread {
@@ -388,7 +414,15 @@ impl TrackManagerThread {
             .name("mp4 reader - video".to_string())
             .spawn(move || {
                 let _span = span!(Level::INFO, "MP4 video", input_id = input_id).entered();
-                track_thread.run_video_thread(decoder_handle)
+                let track = track_thread.run_video_thread(decoder_handle);
+                // decoder_handle was dropped above; the decoder thread will
+                // observe its receiver close and exit. Join it here so this
+                // reader thread doesn't return until the decoder thread (which
+                // may hold an Arc<vk_video::VulkanDevice>) is fully gone.
+                if let Err(err) = decoder_join.join() {
+                    tracing::error!(?err, "MP4 video decoder thread panicked");
+                }
+                track
             })
             .unwrap();
         self.video_thread = Some((handle, shutdown_condition));
@@ -401,7 +435,8 @@ impl TrackManagerThread {
         samples_sender: QueueSender<InputAudioSamples>,
         seek: Option<Duration>,
     ) -> Result<(), InputInitError> {
-        let decoder_handle = self.spawn_audio_decoder_thread(&track, samples_sender)?;
+        let (decoder_handle, decoder_join) =
+            self.spawn_audio_decoder_thread(&track, samples_sender)?;
 
         let shutdown_condition = self.input_shutdown_condition.child_condition();
         let track_thread = TrackThread {
@@ -415,7 +450,11 @@ impl TrackManagerThread {
             .name("mp4 reader - audio".to_string())
             .spawn(move || {
                 let _span = span!(Level::INFO, "MP4 audio", input_id = input_id).entered();
-                track_thread.run_audio_thread(decoder_handle)
+                let track = track_thread.run_audio_thread(decoder_handle);
+                if let Err(err) = decoder_join.join() {
+                    tracing::error!(?err, "MP4 audio decoder thread panicked");
+                }
+                track
             })
             .unwrap();
         self.audio_thread = Some((handle, shutdown_condition));
@@ -426,7 +465,7 @@ impl TrackManagerThread {
         &self,
         track: &Track<File>,
         frame_sender: QueueSender<Frame>,
-    ) -> Result<DecoderThreadHandle, InputInitError> {
+    ) -> Result<(DecoderThreadHandle, JoinHandle<()>), InputInitError> {
         let vulkan_supported = self.ctx.graphics_context.has_vulkan_decoder_support();
         let h264_decoder = self.options.video_decoders.h264.unwrap_or({
             match vulkan_supported {
@@ -434,7 +473,7 @@ impl TrackManagerThread {
                 false => VideoDecoderOptions::FfmpegH264,
             }
         });
-        let handle = match (track.decoder_options(), h264_decoder) {
+        let pair = match (track.decoder_options(), h264_decoder) {
             (DecoderOptions::H264(h264_config), VideoDecoderOptions::FfmpegH264) => {
                 VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
                     self.input_ref.clone(),
@@ -466,15 +505,15 @@ impl TrackManagerThread {
                 return Err(Mp4InputError::Unknown("Non H264 decoder options returned.").into());
             }
         };
-        Ok(handle)
+        Ok(pair)
     }
 
     fn spawn_audio_decoder_thread(
         &self,
         track: &Track<File>,
         samples_sender: QueueSender<InputAudioSamples>,
-    ) -> Result<DecoderThreadHandle, InputInitError> {
-        let handle = match track.decoder_options() {
+    ) -> Result<(DecoderThreadHandle, JoinHandle<()>), InputInitError> {
+        let pair = match track.decoder_options() {
             DecoderOptions::Aac(data) => AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
                 self.input_ref.clone(),
                 AudioDecoderThreadOptions {
@@ -490,7 +529,7 @@ impl TrackManagerThread {
                 return Err(Mp4InputError::Unknown("Non AAC decoder options returned.").into());
             }
         };
-        Ok(handle)
+        Ok(pair)
     }
 }
 

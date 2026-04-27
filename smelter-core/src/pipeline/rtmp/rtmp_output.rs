@@ -26,7 +26,7 @@ use crate::{
         },
         output::{Output, OutputAudio, OutputVideo},
     },
-    utils::InitializableThread,
+    utils::{InitializableThread, ThreadJoiner},
 };
 
 use crate::prelude::*;
@@ -34,6 +34,15 @@ use crate::prelude::*;
 pub struct RtmpClientOutput {
     video: Option<VideoEncoderThreadHandle>,
     audio: Option<AudioEncoderThreadHandle>,
+    // Drop order: the *Handle fields above hold the encoder input senders;
+    // dropping them closes the channel and signals the encoder thread to exit.
+    // These joiners are declared after, so they wait for the threads only after
+    // shutdown has been signaled.
+    _video_thread: Option<ThreadJoiner>,
+    _audio_thread: Option<ThreadJoiner>,
+    // RTMP sender thread (raw std::thread::spawn below) — owns no Vulkan Arcs
+    // directly but holds an Arc<PipelineCtx>, so we join it too.
+    _sender_thread: ThreadJoiner,
 }
 
 struct AudioConfig {
@@ -53,20 +62,22 @@ impl RtmpClientOutput {
         output_ref: Ref<OutputId>,
         options: RtmpOutputOptions,
     ) -> Result<Self, OutputInitError> {
-        let (video_encoder, video_config) = match &options.video {
+        let (video_encoder, video_thread, video_config) = match &options.video {
             Some(video) => {
-                let (encoder, config) = Self::init_video_encoder(&ctx, &output_ref, video.clone())?;
-                (Some(encoder), Some(config))
+                let (encoder, thread, config) =
+                    Self::init_video_encoder(&ctx, &output_ref, video.clone())?;
+                (Some(encoder), Some(thread), Some(config))
             }
-            None => (None, None),
+            None => (None, None, None),
         };
 
-        let (audio_encoder, audio_config) = match &options.audio {
+        let (audio_encoder, audio_thread, audio_config) = match &options.audio {
             Some(audio) => {
-                let (encoder, config) = Self::init_audio_encoder(&ctx, &output_ref, audio.clone())?;
-                (Some(encoder), Some(config))
+                let (encoder, thread, config) =
+                    Self::init_audio_encoder(&ctx, &output_ref, audio.clone())?;
+                (Some(encoder), Some(thread), Some(config))
             }
-            None => (None, None),
+            None => (None, None, None),
         };
 
         ctx.stats_sender.send(StatsEvent::NewOutput {
@@ -75,7 +86,7 @@ impl RtmpClientOutput {
         });
 
         let client = Self::establish_connection(options.connection, &video_config, &audio_config)?;
-        std::thread::Builder::new()
+        let sender_thread = std::thread::Builder::new()
             .name(format!("RTMP sender thread for output {output_ref}"))
             .spawn(move || {
                 let _span = tracing::info_span!("RTMP sender", output_id = output_ref.to_string())
@@ -100,6 +111,9 @@ impl RtmpClientOutput {
         Ok(Self {
             video: video_encoder,
             audio: audio_encoder,
+            _video_thread: video_thread,
+            _audio_thread: audio_thread,
+            _sender_thread: ThreadJoiner::new(sender_thread),
         })
     }
 
@@ -137,10 +151,10 @@ impl RtmpClientOutput {
         ctx: &Arc<PipelineCtx>,
         output_id: &Ref<OutputId>,
         options: VideoEncoderOptions,
-    ) -> Result<(VideoEncoderThreadHandle, VideoConfig), OutputInitError> {
+    ) -> Result<(VideoEncoderThreadHandle, ThreadJoiner, VideoConfig), OutputInitError> {
         let (chunks_sender, chunks_receiver) = bounded(1000);
 
-        let encoder = match &options {
+        let (encoder, thread_handle) = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 VideoEncoderThread::<FfmpegH264Encoder>::spawn(
                     output_id.clone(),
@@ -179,6 +193,7 @@ impl RtmpClientOutput {
         };
         Ok((
             encoder,
+            ThreadJoiner::new(thread_handle),
             VideoConfig {
                 extradata,
                 chunks_receiver,
@@ -190,11 +205,11 @@ impl RtmpClientOutput {
         ctx: &Arc<PipelineCtx>,
         output_id: &Ref<OutputId>,
         options: AudioEncoderOptions,
-    ) -> Result<(AudioEncoderThreadHandle, AudioConfig), OutputInitError> {
+    ) -> Result<(AudioEncoderThreadHandle, ThreadJoiner, AudioConfig), OutputInitError> {
         let channels = options.channels();
 
         let (chunks_sender, chunks_receiver) = bounded(1000);
-        let encoder = match options {
+        let (encoder, thread_handle) = match options {
             AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
                 output_id.clone(),
                 AudioEncoderThreadOptions {
@@ -213,6 +228,7 @@ impl RtmpClientOutput {
 
         Ok((
             encoder,
+            ThreadJoiner::new(thread_handle),
             AudioConfig {
                 extradata,
                 channels,

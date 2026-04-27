@@ -30,7 +30,7 @@ use crate::{
             fdk_aac, ffmpeg_h264, vulkan_h264,
         },
         input::Input,
-        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread},
+        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread, ThreadJoiner},
     },
     queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
 };
@@ -70,6 +70,10 @@ const DESIRED_MAX_BUFFER_SIZE: Duration = Duration::from_secs(24);
 ///   the portion at the start cut off.
 pub struct HlsInput {
     should_close: Arc<AtomicBool>,
+    // Demuxer thread holds an `Arc<PipelineCtx>` (and indirectly the decoder
+    // tracks). It must be joined before pipeline shutdown to satisfy the
+    // NVIDIA-atexit invariant.
+    _thread: Option<ThreadJoiner>,
 }
 
 impl HlsInput {
@@ -121,10 +125,13 @@ impl HlsInput {
             demuxer.spawn_video_decoder(sender)?;
         }
 
-        demuxer.spawn();
+        let demuxer_thread = demuxer.spawn();
 
         Ok((
-            Input::Hls(Self { should_close }),
+            Input::Hls(Self {
+                should_close,
+                _thread: Some(ThreadJoiner::new(demuxer_thread)),
+            }),
             InputInitInfo::Other,
             queue_input,
         ))
@@ -170,7 +177,7 @@ impl HlsDemuxerThread {
         }
     }
 
-    fn spawn(mut self) {
+    fn spawn(mut self) -> std::thread::JoinHandle<()> {
         std::thread::Builder::new()
             .name(format!("HLS thread for input {}", self.input_ref))
             .spawn(move || {
@@ -183,7 +190,7 @@ impl HlsDemuxerThread {
                 self.run();
                 info!("Playlist finished")
             })
-            .unwrap();
+            .unwrap()
     }
 
     fn start_audio_decoder(
@@ -201,7 +208,7 @@ impl HlsDemuxerThread {
             &self.ctx.stats_sender,
             TrackKind::Audio,
         );
-        let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
+        let (handle, thread) = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
             self.input_ref.clone(),
             AudioDecoderThreadOptions {
                 ctx: self.ctx.clone(),
@@ -217,6 +224,7 @@ impl HlsDemuxerThread {
             time_base: stream.time_base(),
             last_pts: None,
             stats_sender,
+            _thread: ThreadJoiner::new(thread),
         });
         Ok(())
     }
@@ -261,7 +269,7 @@ impl HlsDemuxerThread {
             }
         });
 
-        let handle = match h264_decoder {
+        let (handle, thread) = match h264_decoder {
             VideoDecoderOptions::FfmpegH264 => {
                 VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
                     &self.input_ref,
@@ -292,6 +300,7 @@ impl HlsDemuxerThread {
             time_base: stream.time_base(),
             last_pts: None,
             stats_sender,
+            _thread: ThreadJoiner::new(thread),
         });
         Ok(())
     }
@@ -433,6 +442,9 @@ struct Track {
     time_base: ffmpeg_next::Rational,
     last_pts: Option<Duration>,
     stats_sender: HlsInputTrackStatsSender,
+    // Declared after `handle` so the chunk_sender inside `handle` drops first,
+    // signaling the decoder thread to exit before we join it.
+    _thread: ThreadJoiner,
 }
 
 enum HandlePacketError {

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::sync::oneshot;
+use tokio::{runtime::Handle, sync::oneshot, task::JoinHandle};
 use tracing::{error, info};
 
 mod bearer_token;
@@ -62,7 +62,13 @@ impl WhipWhepPipelineState {
 
 #[derive(Debug)]
 pub struct WhipWhepServerHandle {
-    shutdown_sender: Option<oneshot::Sender<()>>,
+    pub(super) shutdown_sender: Option<oneshot::Sender<()>>,
+    /// Handle to the axum server task. Awaited on Drop so the task — which
+    /// holds an `Arc<PipelineCtx>` (and therefore a clone of every
+    /// `Arc<vk_video::*>`) — has fully exited before the pipeline tears down.
+    pub(super) server_task: Option<JoinHandle<()>>,
+    /// Tokio runtime handle, used to `block_on` the join in Drop.
+    pub(super) runtime: Handle,
 }
 
 impl Drop for WhipWhepServerHandle {
@@ -72,6 +78,14 @@ impl Drop for WhipWhepServerHandle {
             && sender.send(()).is_err()
         {
             error!("Cannot send shutdown signal to WHIP/WHEP server")
+        }
+        if let Some(handle) = self.server_task.take() {
+            // Wait for the WHIP/WHEP server's tokio task to finish so its
+            // `Arc<PipelineCtx>` is released before pipeline shutdown
+            // continues. We can't `await` here, so block on the runtime.
+            if let Err(err) = self.runtime.block_on(handle) {
+                error!(?err, "WHIP/WHEP server task panicked during join");
+            }
         }
     }
 }

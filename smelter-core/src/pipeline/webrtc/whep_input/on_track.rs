@@ -79,7 +79,7 @@ async fn process_audio_track(
         return Err(WebrtcClientError::NoAudioCodecNegotiated);
     };
 
-    let handle = AudioTrackThread::spawn(
+    let (handle, thread) = AudioTrackThread::spawn(
         "WHEP input audio",
         (ctx.pipeline_ctx.clone(), samples_sender),
     )?;
@@ -109,6 +109,11 @@ async fn process_audio_track(
             debug!("Failed to send audio RTP packet, Channel closed.");
             break;
         }
+    }
+
+    drop(handle);
+    if let Err(err) = thread.join() {
+        warn!(?err, "WHEP audio track thread panicked during join");
     }
 
     Ok(())
@@ -143,7 +148,7 @@ async fn process_video_track(
     );
     let keyframe_request_sender = rtp_reader.enable_pli().await;
 
-    let handle = VideoTrackThread::spawn(
+    let (handle, thread) = VideoTrackThread::spawn(
         "WHEP input video",
         (
             ctx.pipeline_ctx.clone(),
@@ -165,6 +170,11 @@ async fn process_video_track(
             debug!("Failed to send video RTP packet, Channel closed.");
             break;
         }
+    }
+
+    drop(handle);
+    if let Err(err) = thread.join() {
+        warn!(?err, "WHEP video track thread panicked during join");
     }
     Ok(())
 }

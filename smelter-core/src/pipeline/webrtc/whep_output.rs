@@ -22,7 +22,7 @@ use crate::{
             },
         },
     },
-    utils::InitializableThread,
+    utils::{InitializableThread, ThreadJoiner},
 };
 
 use crate::prelude::*;
@@ -49,6 +49,12 @@ pub struct WhepOutput {
     audio: Option<WhepAudioTrackThreadHandle>,
     output_ref: Ref<OutputId>,
     outputs_state: WhepOutputsState,
+    // Drop order matters: `outputs_state.remove_output` runs first in Drop;
+    // then `video`/`audio` Handle fields drop (closing the encoder senders);
+    // then these joiners wait. This guarantees encoder threads holding
+    // `Arc<vk_video::*>` exit before pipeline shutdown.
+    _video_thread: Option<ThreadJoiner>,
+    _audio_thread: Option<ThreadJoiner>,
 }
 
 impl WhepOutput {
@@ -68,17 +74,25 @@ impl WhepOutput {
             kind: OutputProtocolKind::Whep,
         });
 
-        let video_options = options
+        let video_pair = options
             .video
             .as_ref()
             .map(|video| Self::init_video_thread(&ctx, &output_ref, video.clone()))
             .transpose()?;
+        let (video_options, video_thread) = match video_pair {
+            Some((opts, thread)) => (Some(opts), Some(ThreadJoiner::new(thread))),
+            None => (None, None),
+        };
 
-        let audio_options = options
+        let audio_pair = options
             .audio
             .as_ref()
             .map(|audio| Self::init_audio_thread(&ctx, &output_ref, audio.clone()))
             .transpose()?;
+        let (audio_options, audio_thread) = match audio_pair {
+            Some((opts, thread)) => (Some(opts), Some(ThreadJoiner::new(thread))),
+            None => (None, None),
+        };
 
         state.outputs.add_output(
             &output_ref,
@@ -94,6 +108,8 @@ impl WhepOutput {
             video: video_options.map(|v| v.track_thread_handle),
             output_ref,
             outputs_state: state.outputs.clone(),
+            _video_thread: video_thread,
+            _audio_thread: audio_thread,
         })
     }
 
@@ -101,11 +117,11 @@ impl WhepOutput {
         ctx: &Arc<PipelineCtx>,
         output_ref: &Ref<OutputId>,
         options: VideoEncoderOptions,
-    ) -> Result<WhepVideoConnectionOptions, OutputInitError> {
+    ) -> Result<(WhepVideoConnectionOptions, std::thread::JoinHandle<()>), OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
         let stats_sender = WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
 
-        let thread_handle = match &options {
+        let (thread_handle, thread) = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 WhepVideoTrackThread::<FfmpegH264Encoder>::spawn(
                     output_ref.clone(),
@@ -157,22 +173,25 @@ impl WhepOutput {
             }
         };
 
-        Ok(WhepVideoConnectionOptions {
-            encoder: options,
-            receiver: receiver.into(),
-            track_thread_handle: thread_handle,
-        })
+        Ok((
+            WhepVideoConnectionOptions {
+                encoder: options,
+                receiver: receiver.into(),
+                track_thread_handle: thread_handle,
+            },
+            thread,
+        ))
     }
 
     fn init_audio_thread(
         ctx: &Arc<PipelineCtx>,
         output_ref: &Ref<OutputId>,
         options: AudioEncoderOptions,
-    ) -> Result<WhepAudioConnectionOptions, OutputInitError> {
+    ) -> Result<(WhepAudioConnectionOptions, std::thread::JoinHandle<()>), OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
         let stats_sender = WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
 
-        let thread_handle = match options.clone() {
+        let (thread_handle, thread) = match options.clone() {
             AudioEncoderOptions::Opus(options) => WhepAudioTrackThread::<OpusEncoder>::spawn(
                 output_ref.clone(),
                 WhepAudioTrackThreadOptions {
@@ -187,11 +206,14 @@ impl WhepOutput {
             }
         };
 
-        Ok(WhepAudioConnectionOptions {
-            encoder: options,
-            receiver: receiver.into(),
-            track_thread_handle: thread_handle,
-        })
+        Ok((
+            WhepAudioConnectionOptions {
+                encoder: options,
+                receiver: receiver.into(),
+                track_thread_handle: thread_handle,
+            },
+            thread,
+        ))
     }
 }
 

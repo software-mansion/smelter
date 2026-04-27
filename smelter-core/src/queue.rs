@@ -133,6 +133,12 @@ pub struct Queue {
     scheduled_event_sender: Sender<ScheduledEvent>,
 
     should_close: AtomicBool,
+
+    /// Handle to the queue thread. Taken and joined by `Queue::join` during
+    /// pipeline shutdown. Holding this ensures the queue thread exits before
+    /// the rest of the pipeline tears down — see `Pipeline::drop` and the
+    /// NVIDIA atexit notes in `vk_video::wrappers`.
+    thread: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -250,14 +256,16 @@ impl Queue {
             run_late_scheduled_events: opts.run_late_scheduled_events,
 
             should_close: AtomicBool::new(false),
+            thread: Mutex::new(None),
         });
 
-        QueueThread::new(
+        let handle = QueueThread::new(
             queue.clone(),
             queue_start_receiver,
             scheduled_event_receiver,
         )
         .spawn();
+        *queue.thread.lock().unwrap() = Some(handle);
 
         queue
     }
@@ -268,6 +276,17 @@ impl Queue {
 
     pub fn shutdown(&self) {
         self.should_close.store(true, Ordering::Relaxed)
+    }
+
+    /// Join the queue thread. Must be called after `shutdown()` so the thread
+    /// can observe `should_close` and return. Idempotent.
+    pub fn join(&self) {
+        let handle = self.thread.lock().unwrap().take();
+        if let Some(handle) = handle
+            && let Err(err) = handle.join()
+        {
+            tracing::error!(?err, "Queue thread panicked during join");
+        }
     }
 
     pub(crate) fn add_input(&self, input_id: &InputId, queue_input: QueueInput) {

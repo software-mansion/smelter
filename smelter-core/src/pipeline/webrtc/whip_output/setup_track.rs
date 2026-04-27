@@ -26,7 +26,7 @@ use crate::{
             },
         },
     },
-    utils::InitializableThread,
+    utils::{InitializableThread, ThreadJoiner},
 };
 
 use crate::prelude::*;
@@ -72,7 +72,7 @@ pub async fn setup_video_track(
     output_ref: &Ref<OutputId>,
     rtc_sender: Arc<RTCRtpSender>,
     encoder_preferences: Vec<VideoEncoderOptions>,
-) -> Result<(WhipVideoTrackThreadHandle, WhipClientTrack), WebrtcClientError> {
+) -> Result<(WhipVideoTrackThreadHandle, ThreadJoiner, WhipClientTrack), WebrtcClientError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
@@ -115,7 +115,7 @@ pub async fn setup_video_track(
     };
 
     let (sender, receiver) = mpsc::channel(1000);
-    let handle = match options {
+    let (handle, thread) = match options {
         VideoEncoderOptions::FfmpegH264(options) => {
             WhipVideoTrackThread::<FfmpegH264Encoder>::spawn(
                 output_ref.clone(),
@@ -184,7 +184,11 @@ pub async fn setup_video_track(
         handle.keyframe_request_sender.clone(),
     );
 
-    Ok((handle, WhipClientTrack { receiver, track }))
+    Ok((
+        handle,
+        ThreadJoiner::new(thread),
+        WhipClientTrack { receiver, track },
+    ))
 }
 
 pub async fn setup_audio_track(
@@ -193,7 +197,7 @@ pub async fn setup_audio_track(
     rtc_sender: Arc<RTCRtpSender>,
     pc: WeakPeerConnection,
     encoder_preferences: Vec<AudioEncoderOptions>,
-) -> Result<(WhipAudioTrackThreadHandle, WhipClientTrack), WebrtcClientError> {
+) -> Result<(WhipAudioTrackThreadHandle, ThreadJoiner, WhipClientTrack), WebrtcClientError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
@@ -236,7 +240,7 @@ pub async fn setup_audio_track(
     };
 
     let (sender, receiver) = mpsc::channel(1000);
-    let handle = match options {
+    let (handle, thread) = match options {
         AudioEncoderOptions::Opus(options) => WhipAudioTrackThread::<OpusEncoder>::spawn(
             output_id.clone(),
             WhipAudioTrackThreadOptions {
@@ -264,7 +268,11 @@ pub async fn setup_audio_track(
         ssrc,
     );
 
-    Ok((handle, WhipClientTrack { receiver, track }))
+    Ok((
+        handle,
+        ThreadJoiner::new(thread),
+        WhipClientTrack { receiver, track },
+    ))
 }
 
 // Identifiers used in stats HashMap returnet by RTCPeerConnection::get_stats()

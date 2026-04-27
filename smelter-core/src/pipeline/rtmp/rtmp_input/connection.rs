@@ -25,7 +25,7 @@ use crate::{
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
     },
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
-    utils::{InitializableThread, channel::Sender},
+    utils::{InitializableThread, ThreadJoiner, channel::Sender},
 };
 
 use crate::prelude::*;
@@ -89,13 +89,16 @@ enum TrackState {
     /// This state can be reached only if the first packet for the track is not a config.
     /// It is a separate state from BeforeFirstEvent to log a warning only once.
     ConfigMissing,
-    Ready(DecoderThreadHandle),
+    // The `ThreadJoiner` is declared after the handle so the chunk_sender
+    // inside `DecoderThreadHandle` drops first, signaling the decoder thread to
+    // exit before we wait for it on this state's drop.
+    Ready(DecoderThreadHandle, #[allow(dead_code)] ThreadJoiner),
 }
 
 impl TrackState {
     fn chunk_sender(&mut self) -> Option<Sender<PipelineEvent<EncodedInputChunk>>> {
         match self {
-            TrackState::Ready(handle) => Some(handle.chunk_sender.clone()),
+            TrackState::Ready(handle, _) => Some(handle.chunk_sender.clone()),
             TrackState::BeforeFirstEvent => {
                 *self = TrackState::ConfigMissing;
                 None
@@ -190,7 +193,7 @@ impl RtmpConnectionState {
         });
 
         let input_ref = self.input_ref.clone();
-        let handle = match h264_decoder {
+        let (handle, thread) = match h264_decoder {
             VideoDecoderOptions::FfmpegH264 => {
                 VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(input_ref, options)
                     .map_err(RtmpConnectionError::InitH264Decoder)?
@@ -204,7 +207,7 @@ impl RtmpConnectionState {
             }
         };
 
-        self.video_track_state = TrackState::Ready(handle);
+        self.video_track_state = TrackState::Ready(handle, ThreadJoiner::new(thread));
         Ok(())
     }
 
@@ -221,9 +224,9 @@ impl RtmpConnectionState {
             input_buffer_size: RTMP_MAX_BUFFER,
         };
         let input_ref = self.input_ref.clone();
-        let handle = AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref, options)
+        let (handle, thread) = AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref, options)
             .map_err(RtmpConnectionError::InitAacDecoder)?;
-        self.audio_track_state = TrackState::Ready(handle);
+        self.audio_track_state = TrackState::Ready(handle, ThreadJoiner::new(thread));
         Ok(())
     }
 
