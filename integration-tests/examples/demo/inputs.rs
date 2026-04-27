@@ -5,13 +5,15 @@ use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
 use crate::inputs::{
-    hls::HlsInput, mp4::Mp4Input, rtmp::RtmpInput, rtp::RtpInput, whep::WhepInput, whip::WhipInput,
+    hls::HlsInput, mp4::Mp4Input, rtmp::RtmpInput, rtp::RtpInput, srt::SrtInput, whep::WhepInput,
+    whip::WhipInput,
 };
 
 pub mod hls;
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
+pub mod srt;
 pub mod whep;
 pub mod whip;
 
@@ -24,6 +26,7 @@ pub enum InputHandle {
     Hls(HlsInput),
     Whip(WhipInput),
     Whep(WhepInput),
+    Srt(SrtInput),
 }
 
 impl InputHandle {
@@ -35,6 +38,7 @@ impl InputHandle {
             Self::Hls(i) => &i.name,
             Self::Whip(i) => &i.name,
             Self::Whep(i) => &i.name,
+            Self::Srt(i) => &i.name,
         }
     }
 
@@ -46,6 +50,7 @@ impl InputHandle {
             Self::Hls(i) => i.serialize_register(),
             Self::Whip(i) => i.serialize_register(),
             Self::Whep(i) => i.serialize_register(),
+            Self::Srt(i) => i.serialize_register(),
         }
     }
 
@@ -55,6 +60,7 @@ impl InputHandle {
             Self::Rtmp(i) => i.has_video(),
             Self::Whep(i) => i.has_video(),
             Self::Whip(i) => i.has_video(),
+            Self::Srt(i) => i.has_video(),
             _ => true,
         }
     }
@@ -62,6 +68,7 @@ impl InputHandle {
     pub fn has_audio(&self) -> bool {
         match self {
             Self::Rtp(i) => i.has_audio(),
+            Self::Srt(i) => i.has_audio(),
             _ => true,
         }
     }
@@ -78,6 +85,7 @@ impl InputHandle {
             Self::Rtp(i) => i.on_after_registration(),
             Self::Rtmp(i) => i.on_after_registration(),
             Self::Whip(i) => i.on_after_registration(),
+            Self::Srt(i) => i.on_after_registration(),
             _ => Ok(()),
         }
     }
@@ -108,6 +116,9 @@ pub enum InputProtocol {
 
     #[strum(to_string = "hls")]
     Hls,
+
+    #[strum(to_string = "srt")]
+    Srt,
 }
 
 #[derive(Debug, EnumIter, Display, PartialEq, Clone, Copy, Serialize, Deserialize)]
