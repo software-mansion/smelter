@@ -6,8 +6,8 @@ use smelter_render::{
     },
 };
 
-#[cfg(feature = "vk-video")]
-use vk_video::VulkanEncoderError;
+#[cfg(feature = "gpu-video")]
+use gpu_video::VulkanEncoderError;
 
 use crate::{graphics_context::CreateGraphicsContextError, prelude::*};
 
@@ -213,9 +213,9 @@ pub enum EncoderInitError {
     #[error(transparent)]
     ResamplerError(#[from] rubato::ResamplerConstructionError),
 
-    #[cfg(feature = "vk-video")]
+    #[cfg(feature = "gpu-video")]
     #[error(transparent)]
-    VulkanEncoderError(#[from] vk_video::VulkanEncoderError),
+    VulkanEncoderError(#[from] gpu_video::VulkanEncoderError),
 
     #[error(
         "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video encoder"
@@ -265,9 +265,9 @@ pub enum InputInitError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DecoderInitError {
-    #[cfg(feature = "vk-video")]
+    #[cfg(feature = "gpu-video")]
     #[error(transparent)]
-    VulkanDecoderError(#[from] vk_video::DecoderError),
+    VulkanDecoderError(#[from] gpu_video::DecoderError),
 
     #[error(
         "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video decoder"
@@ -390,7 +390,7 @@ const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
 const WHIP_BAD_STATUS: &str = "WHIP_BAD_STATUS";
 
 const SERVER_PATH_RESOLUTION_FAILED: &str = "SERVER_PATH_RESOLUTION_FAILED";
-#[cfg(feature = "vk-video")]
+#[cfg(feature = "gpu-video")]
 const INVALID_VULKAN_VIDEO_PARAMETERS: &str = "INVALID_VULKAN_VIDEO_PARAMETERS";
 
 impl From<&RegisterOutputError> for PipelineErrorInfo {
@@ -441,7 +441,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
             }
 
             // Vulkan
-            #[cfg(feature = "vk-video")]
+            #[cfg(feature = "gpu-video")]
             RegisterOutputError::OutputError(
                 _,
                 OutputInitError::EncoderError(EncoderInitError::VulkanEncoderError(

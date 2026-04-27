@@ -32,7 +32,7 @@ fn main() {
     let config = read_config();
     ffmpeg_next::format::network::init();
     let logger_config = LoggerConfig {
-        stdio_level: "smelter_core=error,vk-video=info,benchmark=info".into(),
+        stdio_level: "smelter_core=error,gpu-video=info,benchmark=info".into(),
         ..config.logger
     };
     logger::init_logger(logger_config);

@@ -5,6 +5,7 @@
 ### 💥 Breaking changes
 - Rename `var<push_constant>` to `var<immediate>` in user-provided shaders ([#1624](https://github.com/software-mansion/smelter/pull/1624) by [@noituri](https://github.com/noituri))
 - Replace `url` field with `app` and `stream_key` in RTMP input, port is now defined globally via `SMELTER_RTMP_SERVER_PORT` ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Rename `vk-video` feature to `gpu-video` ([#1942](https://github.com/software-mansion/smelter/pull/1942)) by [@jerzywilczek](https://github.com/jerzywilczek)
 
 ### ✨ New features
 - Add `bitrate` option to software encoders ([#1567](https://github.com/software-mansion/smelter/pull/1567) by [@JBRS307](https://github.com/JBRS307))

@@ -58,13 +58,13 @@ impl WgpuNv12ToRgbaConverter {
         let shader_module =
             device.create_shader_module(wgpu::include_wgsl!("../shaders/nv12_to_rgba.wgsl"));
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("vk-video nv12 to rgba converter pipeline layout"),
+            label: Some("gpu-video nv12 to rgba converter pipeline layout"),
             bind_group_layouts: &[Some(&nv12_planes_bgl), Some(&sampler.bgl)],
             immediate_size: 0,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("vk-video nv12 to rgba converter pipeline"),
+            label: Some("gpu-video nv12 to rgba converter pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader_module,
@@ -111,13 +111,13 @@ impl WgpuNv12ToRgbaConverter {
         }
 
         let y_plane_view = data.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("vk-video nv12 to rgba converter y plane view"),
+            label: Some("gpu-video nv12 to rgba converter y plane view"),
             format: Some(wgpu::TextureFormat::R8Unorm),
             aspect: wgpu::TextureAspect::Plane0,
             ..Default::default()
         });
         let uv_plane_view = data.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("vk-video nv12 to rgba converter uv plane view"),
+            label: Some("gpu-video nv12 to rgba converter uv plane view"),
             format: Some(wgpu::TextureFormat::Rg8Unorm),
             aspect: wgpu::TextureAspect::Plane1,
             ..Default::default()

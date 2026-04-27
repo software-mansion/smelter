@@ -29,9 +29,9 @@ With Smelter, you can:
 
 Check out our [Getting Started](https://smelter.dev/docs) section, or jump right into [the set of guides](https://www.smelter.dev/ts-sdk/guides/quick-start/) we've prepared.
 
-## Looking for `vk-video`?
+## Looking for `gpu-video`?
 
-Our open-source hardware video coding library, `vk-video` is located in the [`vk-video`](https://github.com/software-mansion/smelter/tree/master/vk-video) subfolder of this repository.
+Our open-source hardware video coding library, `gpu-video` is located in the [`gpu-video`](https://github.com/software-mansion/smelter/tree/master/gpu-video) subfolder of this repository.
 
 ## Smelter is created by Software Mansion
 

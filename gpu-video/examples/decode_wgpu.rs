@@ -2,7 +2,7 @@
 fn main() {
     use std::io::Write;
 
-    use vk_video::{
+    use gpu_video::{
         EncodedInputChunk, OutputFrame, VulkanInstance,
         parameters::{DecoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor},
     };
