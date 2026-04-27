@@ -74,5 +74,4 @@ pub enum OpusEncoderPreset {
     LowestLatency,
 }
 
-pub const NO_VULKAN_VIDEO: &str =
-    "Requested `vulkan_h264` encoder, but this binary was compiled without the `vk-video` feature.";
+pub const NO_VULKAN_VIDEO: &str = "Requested `vulkan_h264` encoder, but this binary was compiled without the `gpu-video` feature.";

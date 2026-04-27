@@ -1,6 +1,6 @@
 use std::sync::mpsc::Receiver;
 
-use vk_video::VulkanDevice;
+use gpu_video::VulkanDevice;
 use wgpu::util::DeviceExt;
 use winit::{
     dpi::PhysicalSize,
@@ -22,7 +22,7 @@ pub fn run_renderer<'a>(
     let mut current_frame = rx.recv().unwrap();
     let mut next_frame = None;
 
-    window.set_title("vk-video example player");
+    window.set_title("gpu-video example player");
     window.set_resizable(false);
     let _ = window.request_inner_size(PhysicalSize::new(
         current_frame.frame.size().width,

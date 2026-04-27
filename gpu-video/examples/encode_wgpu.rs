@@ -1,15 +1,15 @@
 #[cfg(vulkan)]
-use vk_video::{WgpuRgbaToNv12Converter, parameters::EncoderParameters};
+use gpu_video::{WgpuRgbaToNv12Converter, parameters::EncoderParameters};
 
 #[cfg(vulkan)]
 fn main() {
-    use std::{io::Write, num::NonZeroU32};
-    use vk_video::{
+    use gpu_video::{
         InputFrame, VulkanInstance,
         parameters::{
             RateControl, VideoParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
         },
     };
+    use std::{io::Write, num::NonZeroU32};
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
@@ -108,7 +108,7 @@ impl WgpuState {
         width: std::num::NonZeroU32,
         height: std::num::NonZeroU32,
     ) -> WgpuState {
-        use vk_video::parameters::{ColorRange, ColorSpace, WgpuConverterParameters};
+        use gpu_video::parameters::{ColorRange, ColorSpace, WgpuConverterParameters};
 
         let shader = wgpu::include_wgsl!("encode_wgpu.wgsl");
         let shader = device.create_shader_module(shader);

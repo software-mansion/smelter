@@ -34,6 +34,6 @@ pub enum HlsVideoDecoderOptions {
     FfmpegH264,
 
     /// Hardware decoder. Requires GPU that supports Vulkan Video decoding.
-    /// Requires vk-video feature.
+    /// Requires gpu-video feature.
     VulkanH264,
 }

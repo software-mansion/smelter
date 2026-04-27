@@ -1,11 +1,11 @@
 use std::{num::NonZero, ops::Deref, sync::Arc};
 
-use smelter_render::{FrameData, OutputFrameFormat};
-use tracing::{error, info};
-use vk_video::{
+use gpu_video::{
     WgpuTexturesEncoder,
     parameters::{EncoderParameters, RateControl, Rational, VideoParameters},
 };
+use smelter_render::{FrameData, OutputFrameFormat};
+use tracing::{error, info};
 
 use crate::{
     pipeline::encoder::utils::{bitrate_from_resolution_framerate, gop_size_from_ms_framerate},
@@ -87,9 +87,9 @@ impl VideoEncoder for VulkanH264Encoder {
 
         encoder_params.output_parameters.idr_period = Some(gop_size);
         encoder_params.output_parameters.color_space =
-            Some(vk_video::parameters::ColorSpace::BT709);
+            Some(gpu_video::parameters::ColorSpace::BT709);
         encoder_params.output_parameters.color_range =
-            Some(vk_video::parameters::ColorRange::Limited);
+            Some(gpu_video::parameters::ColorRange::Limited);
 
         if options.bitstream_format == H264BitstreamFormat::Avcc {
             encoder_params.output_parameters.inline_stream_params = Some(false);
@@ -123,7 +123,7 @@ impl VideoEncoder for VulkanH264Encoder {
         };
 
         let result = self.encoder.encode(
-            vk_video::InputFrame {
+            gpu_video::InputFrame {
                 data: texture.deref().clone(),
                 pts: None,
             },

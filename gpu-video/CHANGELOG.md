@@ -8,7 +8,7 @@
 
 ### 🐛 Bug fixes
 
-## [v0.3.0](https://github.com/software-mansion/smelter/releases/tag/vk-video%2Fv0.3.0)
+## [v0.3.0](https://github.com/software-mansion/smelter/releases/tag/gpu-video%2Fv0.3.0)
 
 ### 💥 Breaking changes
 - `EncoderParameters` had its structure changed, introducing `EncoderOutputParameters` as one of the fields

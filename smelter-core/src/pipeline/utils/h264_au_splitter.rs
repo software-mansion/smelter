@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use bytes::BytesMut;
-use tracing::debug;
-use vk_video::parser::h264::{
+use gpu_video::parser::h264::{
     AccessUnit, H264Parser, ParsedNalu, nal_types::slice::DecRefPicMarking,
 };
+use tracing::debug;
 
 use crate::prelude::*;
 
@@ -133,7 +133,7 @@ pub enum AuSplitterError {
     MissingReferenceFrame,
 
     #[error("Could not parse H264 chunk: {0}")]
-    ParserError(#[from] vk_video::parser::h264::H264ParserError),
+    ParserError(#[from] gpu_video::parser::h264::H264ParserError),
 
     #[error("Invalid access unit")]
     InvalidAccessUnit,

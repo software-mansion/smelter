@@ -1,6 +1,6 @@
 #[cfg(vulkan)]
 fn main() {
-    use vk_video::{
+    use gpu_video::{
         VulkanInstance,
         parameters::{VulkanAdapterDescriptor, VulkanDeviceDescriptor},
     };

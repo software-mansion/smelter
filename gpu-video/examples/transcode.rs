@@ -7,7 +7,7 @@ fn main() {
         time::Duration,
     };
 
-    use vk_video::{
+    use gpu_video::{
         EncodedInputChunk,
         parameters::{
             RateControl, ScalingAlgorithm, TranscoderOutputParameters, TranscoderParameters,
@@ -45,7 +45,7 @@ fn main() {
         ScalingAlgorithm::default()
     };
 
-    let instance = vk_video::VulkanInstance::new().unwrap();
+    let instance = gpu_video::VulkanInstance::new().unwrap();
     let adapter = instance
         .create_adapter(&VulkanAdapterDescriptor::default())
         .unwrap();

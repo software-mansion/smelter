@@ -9,7 +9,7 @@ license-file = "../LICENSE"
 default = []
 decklink = ["dep:decklink"]
 web-renderer = ["smelter-render/web-renderer"]
-vk-video = []
+gpu-video = []
 
 [dependencies]
 smelter-render = { workspace = true }
@@ -31,7 +31,7 @@ tracing-subscriber = { workspace = true }
 fdk-aac-sys = "0.5.0"
 rubato = { workspace = true }
 wgpu = { workspace = true }
-vk-video = { workspace = true }
+gpu-video = { workspace = true }
 glyphon = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }

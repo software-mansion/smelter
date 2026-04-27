@@ -1,7 +1,7 @@
+use gpu_video::{capabilities::VulkanDeviceType, parameters::VulkanDeviceDescriptor};
 use itertools::Itertools;
 use smelter_render::{required_wgpu_features, set_required_wgpu_limits};
 use tracing::info;
-use vk_video::{capabilities::VulkanDeviceType, parameters::VulkanDeviceDescriptor};
 
 use crate::graphics_context::{
     CreateGraphicsContextError, GraphicsContext, GraphicsContextOptions, VulkanCtx,
@@ -25,8 +25,8 @@ pub fn create_vulkan_graphics_ctx(
     let limits = set_required_wgpu_limits(limits);
 
     let instance = match libvulkan_path {
-        Some(path) => vk_video::VulkanInstance::new_from(path),
-        None => vk_video::VulkanInstance::new(),
+        Some(path) => gpu_video::VulkanInstance::new_from(path),
+        None => gpu_video::VulkanInstance::new(),
     }?;
 
     log_available_adapters(&instance)?;
@@ -85,7 +85,7 @@ pub fn create_vulkan_graphics_ctx(
 }
 
 fn log_available_adapters(
-    instance: &vk_video::VulkanInstance,
+    instance: &gpu_video::VulkanInstance,
 ) -> Result<(), CreateGraphicsContextError> {
     let adapters: Vec<_> = instance
         .iter_adapters()?
