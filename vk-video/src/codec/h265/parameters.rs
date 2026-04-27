@@ -4,8 +4,8 @@ use crate::{VulkanDecoderError, codec::h265::H265Codec, vulkan_encoder::FullEnco
 
 pub(crate) struct VkH265VideoParameterSet {
     pub(crate) vps: vk::native::StdVideoH265VideoParameterSet,
-    _profile_tier_level: Option<Box<vk::native::StdVideoH265ProfileTierLevel>>,
-    _dec_pic_buf_mgr: Option<Box<vk::native::StdVideoH265DecPicBufMgr>>,
+    _profile_tier_level: Box<vk::native::StdVideoH265ProfileTierLevel>,
+    _dec_pic_buf_mgr: Box<vk::native::StdVideoH265DecPicBufMgr>,
 }
 
 fn profile_tier_level(
@@ -64,8 +64,8 @@ impl VkH265VideoParameterSet {
                 pDecPicBufMgr: dec_pic_buf_mgr.as_ref(),
                 pProfileTierLevel: profile_tier_level.as_ref(),
             },
-            _profile_tier_level: Some(profile_tier_level),
-            _dec_pic_buf_mgr: Some(dec_pic_buf_mgr),
+            _profile_tier_level: profile_tier_level,
+            _dec_pic_buf_mgr: dec_pic_buf_mgr,
         }
     }
 }
