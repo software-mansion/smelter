@@ -148,13 +148,7 @@ struct Image {
 }
 
 impl Image {
-    fn from_side(
-        rgba: &[u8],
-        width: usize,
-        height: usize,
-        label: String,
-        caption: String,
-    ) -> Self {
+    fn from_side(rgba: &[u8], width: usize, height: usize, label: String, caption: String) -> Self {
         Self {
             pixels: rgba_to_minifb(rgba),
             width,
@@ -324,12 +318,12 @@ fn run(rx: Receiver<Pair>) {
         let avail_h = canvas_h - top;
         let scale = pick_scale(layout, &left, &right, canvas_w, avail_h);
         match layout {
-            Layout::SideBySide => render_side_by_side(
-                &mut canvas, canvas_w, canvas_h, top, &left, &right, scale,
-            ),
-            Layout::OverUnder => render_over_under(
-                &mut canvas, canvas_w, canvas_h, top, &left, &right, scale,
-            ),
+            Layout::SideBySide => {
+                render_side_by_side(&mut canvas, canvas_w, canvas_h, top, &left, &right, scale)
+            }
+            Layout::OverUnder => {
+                render_over_under(&mut canvas, canvas_w, canvas_h, top, &left, &right, scale)
+            }
             Layout::Slider => {
                 let max_w = left.width.max(right.width) * scale;
                 let mouse_x = window
@@ -338,7 +332,14 @@ fn run(rx: Receiver<Pair>) {
                     .unwrap_or(max_w / 2)
                     .min(max_w);
                 render_slider(
-                    &mut canvas, canvas_w, canvas_h, top, &left, &right, mouse_x, scale,
+                    &mut canvas,
+                    canvas_w,
+                    canvas_h,
+                    top,
+                    &left,
+                    &right,
+                    mouse_x,
+                    scale,
                 );
             }
             Layout::SliderV => {
@@ -350,7 +351,14 @@ fn run(rx: Receiver<Pair>) {
                     .saturating_sub(top)
                     .min(max_h);
                 render_slider_v(
-                    &mut canvas, canvas_w, canvas_h, top, &left, &right, mouse_y, scale,
+                    &mut canvas,
+                    canvas_w,
+                    canvas_h,
+                    top,
+                    &left,
+                    &right,
+                    mouse_y,
+                    scale,
                 );
             }
             Layout::Toggle => render_toggle(
@@ -379,7 +387,11 @@ fn initial_title() -> &'static str {
 fn title_for(layout: Layout, showing_right: bool, left: &Image, right: &Image) -> String {
     match layout {
         Layout::Toggle => {
-            let side = if showing_right { &right.label } else { &left.label };
+            let side = if showing_right {
+                &right.label
+            } else {
+                &left.label
+            };
             format!("frame_inspector — toggle: {side} (click to swap)")
         }
         _ => initial_title().to_string(),
@@ -439,7 +451,13 @@ fn draw_mse_bar(canvas: &mut [u32], canvas_w: usize, mse: Option<f64>) {
 /// when 2× frames still fit inside the canvas alongside the layout's
 /// fixed extras (gaps, labels). Frames are pixel-doubled — no
 /// resampling, no aliasing logic.
-fn pick_scale(layout: Layout, left: &Image, right: &Image, canvas_w: usize, avail_h: usize) -> usize {
+fn pick_scale(
+    layout: Layout,
+    left: &Image,
+    right: &Image,
+    canvas_w: usize,
+    avail_h: usize,
+) -> usize {
     let max_w = left.width.max(right.width);
     let max_h = left.height.max(right.height);
     let (need_w, need_h) = match layout {
@@ -477,7 +495,15 @@ fn render_side_by_side(
     blit_scaled(canvas, canvas_w, left, 0, top, scale);
     blit_scaled(canvas, canvas_w, right, lw + GAP, top, scale);
     let label_y = top + lh.max(rh) + LABEL_PAD;
-    draw_text(canvas, canvas_w, canvas_h, 0, label_y, &left.line(), LABEL_COLOR);
+    draw_text(
+        canvas,
+        canvas_w,
+        canvas_h,
+        0,
+        label_y,
+        &left.line(),
+        LABEL_COLOR,
+    );
     draw_text(
         canvas,
         canvas_w,
@@ -576,7 +602,15 @@ fn render_slider(
     let right_text_w = right_text.chars().count() * GLYPH_W;
     let label_area_w = max_w.max(left_text_w + GLYPH_W + right_text_w);
     let right_x = label_area_w.saturating_sub(right_text_w);
-    draw_text(canvas, canvas_w, canvas_h, 0, label_y, &left_text, LABEL_COLOR);
+    draw_text(
+        canvas,
+        canvas_w,
+        canvas_h,
+        0,
+        label_y,
+        &left_text,
+        LABEL_COLOR,
+    );
     draw_text(
         canvas,
         canvas_w,

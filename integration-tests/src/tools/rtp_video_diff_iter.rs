@@ -29,7 +29,7 @@ use webrtc::rtp;
 use crate::{unmarshal_packets, video_decoder::VideoDecoder};
 
 /// RTP payload type smelter uses for H.264 video.
-const VIDEO_PAYLOAD_TYPE: u8 = 96;
+pub(crate) const VIDEO_PAYLOAD_TYPE: u8 = 96;
 
 /// One step of the pairing iterator. A side is `None` only when that
 /// dump has no remaining frames at all — once a side is exhausted it
@@ -62,11 +62,14 @@ enum State {
 
 impl RtpVideoDiffIter {
     /// Read both dumps from disk, but do not decode anything yet.
-    /// Decoding runs lazily as the iterator is advanced.
+    /// Decoding runs lazily as the iterator is advanced. Either side
+    /// pointing at a non-existent file is treated as an empty stream
+    /// so the inspector can still surface the side that does exist —
+    /// useful when there is no committed snapshot to diff against yet.
     pub fn from_rtp_dumps(left: &Path, right: &Path) -> Result<Self> {
         Ok(Self {
-            left: LazyFrameStream::from_dump_path(left)?,
-            right: LazyFrameStream::from_dump_path(right)?,
+            left: LazyFrameStream::from_dump_path_or_empty(left)?,
+            right: LazyFrameStream::from_dump_path_or_empty(right)?,
             state: State::NotStarted,
         })
     }
@@ -156,6 +159,19 @@ struct LazyFrameStream {
 }
 
 impl LazyFrameStream {
+    /// Same as [`Self::from_dump_path`] but yields an empty (already
+    /// drained) stream instead of erroring when `path` doesn't exist.
+    fn from_dump_path_or_empty(path: &Path) -> Result<Self> {
+        if !path.exists() {
+            tracing::warn!(
+                "rtp_video_diff_iter: dump {} not found, treating as empty",
+                path.display()
+            );
+            return Ok(Self::from_frames(Vec::new()));
+        }
+        Self::from_dump_path(path)
+    }
+
     fn from_dump_path(path: &Path) -> Result<Self> {
         let bytes = Bytes::from(
             std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,

@@ -272,7 +272,11 @@ fn prompt_failure_action(test: &PipelineTest) -> Result<Option<FailureAction>> {
     let options: Vec<FailureAction> = FailureAction::iter()
         .filter(|a| match a {
             FailureAction::UpdateSnapshot => actual_exists,
-            FailureAction::Inspect => actual_exists && expected_exists,
+            // Inspector tolerates either side missing now, so as long
+            // as we have anything at all to look at, offer it.
+            FailureAction::Inspect => actual_exists || expected_exists,
+            FailureAction::PlayExpected => expected_exists,
+            FailureAction::PlayActual => actual_exists,
             _ => true,
         })
         .collect();

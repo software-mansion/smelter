@@ -94,6 +94,24 @@ pub fn save_failed_test_dumps<P: AsRef<Path>>(
     fs::write(path.join(format!("actual_dump_{file_name}")), actual_dump).unwrap();
 }
 
+/// Write only the `actual` dump to the failed-snapshots dir. Used
+/// when the expected snapshot is missing entirely (so there's nothing
+/// to pair it with) or in any other path that produced an `actual`
+/// without a corresponding `expected` to diff against.
+pub fn save_failed_actual_dump<P: AsRef<Path>>(actual_dump: &Bytes, snapshot_filename: P) {
+    let path = failed_snapshots_dir_path();
+    let _ = fs::create_dir_all(&path);
+    let file_name = snapshot_filename
+        .as_ref()
+        .file_name()
+        .unwrap()
+        .to_string_lossy();
+    let dest = path.join(format!("actual_dump_{file_name}"));
+    if let Err(e) = fs::write(&dest, actual_dump) {
+        tracing::warn!("Failed to write actual dump to {}: {e}", dest.display());
+    }
+}
+
 pub fn find_packets_for_payload_type(
     packets: &[rtp::packet::Packet],
     payload_type: u8,

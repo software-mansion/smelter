@@ -9,20 +9,32 @@
 //! every time the playhead advances.
 
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use anyhow::{Context, Result};
+use bytes::Bytes;
 use inquire::{InquireError, Select};
 use smelter_render::{Frame, FrameData, YuvPlanes};
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{info, warn};
 
-use crate::tools::{
-    frame_inspector::{self, FrameInspector},
-    rtp_video_diff_iter::{FramePair, RtpVideoDiffIter},
+use crate::{
+    audio_decoder::{AudioChannels, AudioDecoder, AudioSampleBatch},
+    tools::{
+        frame_inspector::{self, FrameInspector},
+        rtp_video_diff_iter::{FramePair, RtpVideoDiffIter, VIDEO_PAYLOAD_TYPE},
+        waveform_inspector,
+    },
+    unmarshal_packets,
 };
+
+/// RTP payload type smelter uses for OPUS audio.
+const AUDIO_PAYLOAD_TYPE: u8 = 97;
+/// OPUS clock rate used everywhere in this crate.
+const AUDIO_SAMPLE_RATE: u32 = 48_000;
 
 /// Launch the interactive inspect tool. Diffs `actual` (the dump
 /// just produced by a test run) against `expected` (the committed
@@ -31,6 +43,68 @@ pub fn run(expected: &Path, actual: &Path) -> Result<()> {
     info!("rtp_inspector: expected = {}", expected.display());
     info!("rtp_inspector: actual = {}", actual.display());
 
+    let types = scan_payload_types(&[expected, actual])?;
+    let mut options = Vec::new();
+    if types.contains(&VIDEO_PAYLOAD_TYPE) {
+        options.push(MediaKind::Video);
+    }
+    if types.contains(&AUDIO_PAYLOAD_TYPE) {
+        options.push(MediaKind::Audio);
+    }
+    let kind = match options.len() {
+        0 => anyhow::bail!(
+            "no video (pt={VIDEO_PAYLOAD_TYPE}) or audio (pt={AUDIO_PAYLOAD_TYPE}) packets in either dump"
+        ),
+        1 => {
+            info!("rtp_inspector: only {} found, skipping prompt", options[0]);
+            options[0]
+        }
+        _ => match Select::new("rtp_inspector — what to inspect?", options).prompt() {
+            Ok(k) => k,
+            Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
+                return Ok(());
+            }
+            Err(e) => return Err(e.into()),
+        },
+    };
+    match kind {
+        MediaKind::Video => run_video(expected, actual),
+        MediaKind::Audio => run_audio(expected, actual),
+    }
+}
+
+/// Read each dump once and collect the set of RTP payload types
+/// present, used to gate the Video / Audio prompt. Missing files are
+/// skipped with a warning so the inspector can still launch when one
+/// side (typically the committed `expected` snapshot) doesn't exist.
+fn scan_payload_types(paths: &[&Path]) -> Result<HashSet<u8>> {
+    let mut types = HashSet::new();
+    for path in paths {
+        if !path.exists() {
+            warn!("rtp_inspector: dump {} not found, skipping", path.display());
+            continue;
+        }
+        let bytes = Bytes::from(
+            std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
+        );
+        let packets = unmarshal_packets(&bytes)
+            .with_context(|| format!("Failed to parse RTP dump {}", path.display()))?;
+        for packet in packets {
+            types.insert(packet.header.payload_type);
+        }
+    }
+    Ok(types)
+}
+
+#[derive(Debug, Clone, Copy, Display, EnumIter)]
+enum MediaKind {
+    #[strum(to_string = "Video")]
+    Video,
+    #[strum(to_string = "Audio")]
+    Audio,
+}
+
+fn run_video(expected: &Path, actual: &Path) -> Result<()> {
     let output_dir = expected
         .parent()
         .map(Path::to_path_buf)
@@ -60,6 +134,44 @@ pub fn run(expected: &Path, actual: &Path) -> Result<()> {
             Action::Exit => return Ok(()),
         }
     }
+}
+
+fn run_audio(expected: &Path, actual: &Path) -> Result<()> {
+    let expected_chunks = decode_audio_dump(expected)?;
+    let actual_chunks = decode_audio_dump(actual)?;
+    waveform_inspector::run(expected_chunks, actual_chunks)
+}
+
+/// Read an RTP dump from disk, keep only the OPUS audio packets, and
+/// run them all through a fresh decoder. Each decoder output chunk is
+/// returned with its original presentation timestamp; chunks are
+/// intentionally not flattened so the waveform inspector can show
+/// per-chunk boundaries. A missing file yields an empty chunk list
+/// rather than an error so the inspector can still surface the other
+/// side.
+fn decode_audio_dump(path: &Path) -> Result<Vec<AudioSampleBatch>> {
+    if !path.exists() {
+        warn!(
+            "rtp_inspector: audio dump {} not found, treating as empty",
+            path.display()
+        );
+        return Ok(Vec::new());
+    }
+    let bytes = Bytes::from(
+        std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
+    );
+    let packets = unmarshal_packets(&bytes)
+        .with_context(|| format!("Failed to parse RTP dump {}", path.display()))?
+        .into_iter()
+        .filter(|p| p.header.payload_type == AUDIO_PAYLOAD_TYPE);
+    let mut decoder = AudioDecoder::new(AUDIO_SAMPLE_RATE, AudioChannels::Stereo)
+        .with_context(|| format!("Failed to initialize OPUS decoder for {}", path.display()))?;
+    for packet in packets {
+        decoder
+            .decode(packet)
+            .with_context(|| format!("Failed to decode audio packet from {}", path.display()))?;
+    }
+    Ok(decoder.take_samples())
 }
 
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
@@ -338,4 +450,3 @@ fn mean_square_error(expected: &Frame, actual: &Frame) -> Option<f64> {
     }
     Some(sum_sq as f64 / count as f64)
 }
-
