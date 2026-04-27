@@ -15,7 +15,7 @@ use super::{
 pub(super) fn spawn_send(
     asset: &ResolvedAsset,
     to: &Send,
-    loop_input: bool,
+    looped_input: bool,
     stdio: bool,
 ) -> Result<Vec<ProcessHandle>> {
     match to {
@@ -23,7 +23,7 @@ pub(super) fn spawn_send(
             ip,
             video_port,
             audio_port,
-        } => send_rtp_udp(asset, ip, *video_port, *audio_port, loop_input, stdio),
+        } => send_rtp_udp(asset, ip, *video_port, *audio_port, looped_input, stdio),
         Send::RtpTcpClient { .. } => Err(anyhow!(
             "FFmpeg backend does not support RTP TCP send; use Backend::Gstreamer"
         )),
@@ -61,7 +61,7 @@ fn send_rtp_udp(
     ip: &str,
     video_port: Option<u16>,
     audio_port: Option<u16>,
-    loop_input: bool,
+    looped_input: bool,
     stdio: bool,
 ) -> Result<Vec<ProcessHandle>> {
     if video_port.is_none() && audio_port.is_none() {
@@ -78,7 +78,12 @@ fn send_rtp_udp(
                     )
                 })?;
                 handles.push(send_video_from_file(
-                    ip, port, path, codec, loop_input, stdio,
+                    ip,
+                    port,
+                    path,
+                    codec,
+                    looped_input,
+                    stdio,
                 )?);
             }
             if let Some(port) = audio_port {
@@ -113,10 +118,10 @@ fn send_video_from_file(
     port: u16,
     path: &Path,
     codec: VideoCodec,
-    loop_input: bool,
+    looped_input: bool,
     stdio: bool,
 ) -> Result<ProcessHandle> {
-    info!("[media] ffmpeg: sending video to {ip}:{port} (loop={loop_input})");
+    info!("[media] ffmpeg: sending video to {ip}:{port} (loop={looped_input})");
 
     let codec_args: &[&str] = match codec {
         VideoCodec::H264 => &["-bsf:v", "h264_mp4toannexb"],
@@ -126,7 +131,7 @@ fn send_video_from_file(
 
     let (out, err) = stdio_for(stdio);
     let mut cmd = Command::new("ffmpeg");
-    if loop_input {
+    if looped_input {
         cmd.args(["-stream_loop", "-1"]);
     }
     cmd.args(["-re", "-i"])

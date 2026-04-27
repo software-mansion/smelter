@@ -220,7 +220,7 @@ impl RtpOutput {
             builder = builder.audio_port(self.port);
         }
         let handles = MediaReceiver::new(builder)
-            .backend(Backend::Gstreamer)
+            .with_backend(Backend::Gstreamer)
             .spawn()?;
         self.stream_handles.extend(handles);
         Ok(())
@@ -248,7 +248,7 @@ impl RtpOutput {
             builder = builder.audio_port(self.port);
         }
         let handles = MediaReceiver::new(builder)
-            .backend(Backend::Gstreamer)
+            .with_backend(Backend::Gstreamer)
             .spawn()?;
         self.stream_handles.extend(handles);
         Ok(())

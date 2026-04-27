@@ -105,10 +105,10 @@ fn client_code() -> Result<()> {
     examples::post("start", &json!({}))?;
 
     MediaSender::new(
-        TestSample::SampleH264,
+        TestSample::OceanSampleH264,
         Send::rtp_udp_client().video_port(INPUT_PORT),
     )
-    .loop_input(true)
+    .with_looped_input(true)
     .spawn()?;
     Ok(())
 }

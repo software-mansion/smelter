@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use std::{
     path::Path,
     process::{Command, Stdio},
@@ -14,13 +14,11 @@ use super::{
 pub(super) fn spawn_send(
     asset: &ResolvedAsset,
     to: &Send,
-    loop_input: bool,
+    looped_input: bool,
     stdio: bool,
 ) -> Result<Vec<ProcessHandle>> {
-    if loop_input {
-        return Err(anyhow!(
-            "GStreamer backend doesn't support loop_input; use Backend::Ffmpeg"
-        ));
+    if looped_input {
+        bail!("GStreamer backend doesn't support looped input; use Backend::Ffmpeg");
     }
     match to {
         Send::RtpUdpClient {
@@ -99,7 +97,7 @@ fn send_rtp(
     stdio: bool,
 ) -> Result<Vec<ProcessHandle>> {
     if video_port.is_none() && audio_port.is_none() {
-        return Err(anyhow!("At least one of video_port/audio_port must be set"));
+        bail!("At least one of video_port/audio_port must be set");
     }
 
     let pipeline = match &asset.kind {
@@ -209,9 +207,7 @@ fn receive_rtp_udp(
     stdio: bool,
 ) -> Result<Vec<ProcessHandle>> {
     if video.is_none() && !audio {
-        return Err(anyhow!(
-            "At least one of: video, audio_port has to be specified."
-        ));
+        bail!("At least one of: video, audio_port has to be specified.");
     }
 
     // Legacy behavior: single udpsrc feeds the demux (video and audio must share a port).
@@ -260,9 +256,7 @@ fn receive_rtp_tcp(
         .ok_or_else(|| anyhow!("gstreamer TCP receive requires video port"))?;
 
     if !audio && video.is_none() {
-        return Err(anyhow!(
-            "At least one of: video, audio has to be specified."
-        ));
+        bail!("At least one of: video, audio has to be specified.");
     }
 
     let mut cmd = format!(

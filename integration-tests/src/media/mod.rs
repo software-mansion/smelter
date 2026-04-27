@@ -23,9 +23,9 @@
 //!     "path/to/file.mp4",
 //!     Send::rtp_udp_client().video_port(5000),
 //! )
-//! .backend(Backend::Gstreamer)
-//! .loop_input(true)
-//! .stdio(true)
+//! .with_backend(Backend::Gstreamer)
+//! .with_looped_input(true)
+//! .with_stdio(true)
 //! .spawn()?;
 //! ```
 
@@ -85,9 +85,9 @@ pub enum TestSample {
     ElephantsDreamH264Opus,
     ElephantsDreamVP8Opus,
     ElephantsDreamVP9Opus,
-    SampleH264,
-    SampleVP8,
-    SampleVP9,
+    OceanSampleH264,
+    OceanSampleVP8,
+    OceanSampleVP9,
 }
 
 struct SampleInfo {
@@ -164,7 +164,7 @@ const SAMPLES: &[(TestSample, SampleInfo)] = &[
         },
     ),
     (
-        TestSample::SampleH264,
+        TestSample::OceanSampleH264,
         SampleInfo {
             url: "https://filesamples.com/samples/video/mp4/sample_1280x720.mp4",
             path: "examples/assets/OceanSample720p24fps28s.mp4",
@@ -173,7 +173,7 @@ const SAMPLES: &[(TestSample, SampleInfo)] = &[
         },
     ),
     (
-        TestSample::SampleVP8,
+        TestSample::OceanSampleVP8,
         SampleInfo {
             url: "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/OceanSample720p24fps28s.vp8.webm",
             path: "examples/assets/OceanSample720p24fps28s.vp8.webm",
@@ -182,7 +182,7 @@ const SAMPLES: &[(TestSample, SampleInfo)] = &[
         },
     ),
     (
-        TestSample::SampleVP9,
+        TestSample::OceanSampleVP9,
         SampleInfo {
             url: "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/OceanSample720p24fps28s.vp9.webm",
             path: "examples/assets/OceanSample720p24fps28s.vp9.webm",
@@ -197,10 +197,6 @@ fn sample_info(sample: TestSample) -> &'static SampleInfo {
         .iter()
         .find_map(|(s, info)| (*s == sample).then_some(info))
         .expect("all TestSample variants have an entry in SAMPLES")
-}
-
-fn sample_path(sample: TestSample) -> PathBuf {
-    integration_tests_root().join(sample_info(sample).path)
 }
 
 /// Eagerly download every built-in sample. Useful to warm the cache at startup.
@@ -369,7 +365,7 @@ impl TestSample {
     /// [`download_all_samples`]); senders/receivers also download on demand via
     /// [`Asset::resolve`].
     pub fn file(self) -> PathBuf {
-        sample_path(self)
+        integration_tests_root().join(sample_info(self).path)
     }
 
     /// Video codec of the sample.
@@ -627,9 +623,10 @@ impl From<ReceiveRtpTcp> for Receive {
 
 pub struct MediaSender {
     asset: Asset,
+    /// Destination this sender writes to (RTP UDP/TCP, RTMP, …).
     to: Send,
     backend: Backend,
-    loop_input: bool,
+    looped_input: bool,
     stdio: bool,
 }
 
@@ -639,29 +636,31 @@ impl MediaSender {
             asset: src.into(),
             to: to.into(),
             backend: Backend::default(),
-            loop_input: false,
+            looped_input: false,
             stdio: false,
         }
     }
-    pub fn backend(mut self, backend: Backend) -> Self {
+    pub fn with_backend(mut self, backend: Backend) -> Self {
         self.backend = backend;
         self
     }
-    pub fn loop_input(mut self, loop_input: bool) -> Self {
-        self.loop_input = loop_input;
+    pub fn with_looped_input(mut self, looped_input: bool) -> Self {
+        self.looped_input = looped_input;
         self
     }
     /// Inherit stdout/stderr from the parent process. Default: false (piped to /dev/null).
-    pub fn stdio(mut self, stdio: bool) -> Self {
+    pub fn with_stdio(mut self, stdio: bool) -> Self {
         self.stdio = stdio;
         self
     }
     pub fn spawn(self) -> Result<Vec<ProcessHandle>> {
         let resolved = self.asset.resolve()?;
         match self.backend {
-            Backend::Ffmpeg => ffmpeg::spawn_send(&resolved, &self.to, self.loop_input, self.stdio),
+            Backend::Ffmpeg => {
+                ffmpeg::spawn_send(&resolved, &self.to, self.looped_input, self.stdio)
+            }
             Backend::Gstreamer => {
-                gstreamer::spawn_send(&resolved, &self.to, self.loop_input, self.stdio)
+                gstreamer::spawn_send(&resolved, &self.to, self.looped_input, self.stdio)
             }
         }
     }
@@ -681,12 +680,12 @@ impl MediaReceiver {
             stdio: false,
         }
     }
-    pub fn backend(mut self, backend: Backend) -> Self {
+    pub fn with_backend(mut self, backend: Backend) -> Self {
         self.backend = backend;
         self
     }
     /// Inherit stdout/stderr from the parent process. Default: false (piped to /dev/null).
-    pub fn stdio(mut self, stdio: bool) -> Self {
+    pub fn with_stdio(mut self, stdio: bool) -> Self {
         self.stdio = stdio;
         self
     }

@@ -159,7 +159,7 @@ impl RtpInput {
                     .video_port(video_port)
                     .audio_port(audio_port),
             )
-            .backend(Backend::Gstreamer)
+            .with_backend(Backend::Gstreamer)
             .spawn()?
         } else {
             MediaSender::new(
@@ -168,7 +168,7 @@ impl RtpInput {
                     .video_port(video_port)
                     .audio_port(audio_port),
             )
-            .backend(Backend::Gstreamer)
+            .with_backend(Backend::Gstreamer)
             .spawn()?
         };
         self.stream_handles.extend(handles);
