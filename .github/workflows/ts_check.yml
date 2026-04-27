@@ -22,7 +22,7 @@ jobs:
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
-                  toolchain: 1.94
+                  toolchain: 1.95
 
             - name: Install pnpm
               uses: pnpm/action-setup@v4

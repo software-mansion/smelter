@@ -1,6 +1,6 @@
 // https://github.com/mikaelmello/inquire/blob/main/inquire/examples/complex_autocompletion.rs
 
-use std::{env, io::ErrorKind};
+use std::{cmp, env, io::ErrorKind};
 
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
@@ -83,8 +83,7 @@ impl FilePathCompleter {
                     .map(|score| (path.clone(), score))
             })
             .collect();
-
-        matches.sort_by(|a, b| b.1.cmp(&a.1));
+        matches.sort_by_key(|b| cmp::Reverse(b.1));
         matches
     }
 }
