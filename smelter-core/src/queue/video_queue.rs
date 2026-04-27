@@ -72,8 +72,8 @@ impl VideoQueue {
 
         let input_status: Vec<_> = self
             .inputs
-            .iter()
-            .filter_map(|(_, weak)| {
+            .values()
+            .filter_map(|weak| {
                 weak.video(|input| {
                     let is_ready = input.is_ready_for_pts(next_pts, queue_start_pts);
                     let is_required = input.required();
