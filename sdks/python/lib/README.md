@@ -129,6 +129,22 @@ All exceptions inherit from `smelter.SmelterError`:
 
 `ChannelNotFound` and `RecvTimeout` also inherit from the built-in `TimeoutError`.
 
+## Stability
+
+The SDK is alpha — minor releases (0.x) may break compatibility. The public
+surface, governed by semver once 1.0 ships, is:
+
+- Everything re-exported from the top-level `smelter` package (see
+  `smelter.__all__`) and `smelter.aio` (`smelter.aio.__all__`).
+- The synchronous building blocks in `smelter.sync` (`connect_video`,
+  `connect_audio`, `wait_for_channel`, the `VideoConnection` / `AudioConnection`
+  classes) and their `smelter.aio` equivalents.
+- The data types in `smelter.types` (`VideoFrame`, `AudioBatch`,
+  `SideChannelInfo`, `SideChannelKind`) and the exceptions in `smelter.errors`.
+
+Anything starting with an underscore (`smelter._protocol`, `smelter._discovery`)
+is internal and may change without notice.
+
 ## What's not in the SDK (yet)
 
 - A typed client for the Smelter HTTP API. To send scene updates back to

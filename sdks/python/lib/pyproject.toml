@@ -22,15 +22,7 @@ keywords = [
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Multimedia :: Video",
-    "Topic :: Multimedia :: Sound/Audio",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -42,12 +34,22 @@ Homepage = "https://smelter.dev"
 Documentation = "https://smelter.dev/docs"
 Repository = "https://github.com/software-mansion/smelter"
 Issues = "https://github.com/software-mansion/smelter/issues"
+Changelog = "https://github.com/software-mansion/smelter/blob/master/sdks/python/lib/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["smelter"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "smelter",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.29,<2"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
