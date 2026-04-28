@@ -42,7 +42,7 @@ def parse_length_prefix(buf: bytes | bytearray | memoryview) -> int:
     """Decode a 4-byte big-endian u32 length prefix."""
     if len(buf) < LENGTH_PREFIX_SIZE:
         raise ProtocolError(f"length prefix truncated: got {len(buf)} bytes, expected 4")
-    return int.from_bytes(bytes(buf[:LENGTH_PREFIX_SIZE]), "big", signed=False)
+    return int.from_bytes(memoryview(buf)[:LENGTH_PREFIX_SIZE], "big", signed=False)
 
 
 def parse_video(payload: bytes | bytearray) -> VideoFrame:
@@ -98,7 +98,7 @@ def parse_audio(
 
     total = sample_count * channel_count
     expected_body_bytes = total * 8
-    body = payload[AUDIO_HEADER_SIZE:]
+    body = memoryview(payload)[AUDIO_HEADER_SIZE:]
     if len(body) != expected_body_bytes:
         raise ProtocolError(
             f"audio payload size mismatch: header says {sample_count} samples x "
@@ -108,7 +108,7 @@ def parse_audio(
     target_dtype = np.dtype(dtype)
     # frombuffer over the raw big-endian f64 then cast in one pass. astype(copy=False)
     # is a no-op when target == >f8, otherwise it allocates exactly once.
-    flat = np.frombuffer(bytes(body), dtype=_BE_F64).astype(target_dtype, copy=False)
+    flat = np.frombuffer(body, dtype=_BE_F64).astype(target_dtype, copy=False)
     samples = flat.reshape(sample_count, channel_count)
     return AudioBatch(
         samples=samples,
