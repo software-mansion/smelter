@@ -4,7 +4,7 @@ use std::{fmt, path::Path};
 use tracing::info;
 
 use crate::{
-    output_dump_from_disk, save_failed_test_dumps, update_dump_on_disk,
+    output_dump_from_disk, save_failed_actual_dump, save_failed_test_dumps, update_dump_on_disk,
     validation::audio::AudioValidationConfig, video::VideoValidationConfig,
 };
 
@@ -74,6 +74,12 @@ fn handle_error<P: AsRef<Path> + fmt::Debug>(
         update_dump_on_disk(&snapshot_filename, actual).unwrap();
         return Ok(());
     };
+
+    // Even without `update-snapshots`, drop the actual dump in the
+    // failed-snapshots dir so the inspector has something to look at —
+    // particularly important when the expected snapshot is missing
+    // entirely and `save_failed_test_dumps` was never called above.
+    save_failed_actual_dump(actual, &snapshot_filename);
 
     Err(err)
 }

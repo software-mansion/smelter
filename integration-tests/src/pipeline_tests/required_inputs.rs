@@ -271,9 +271,10 @@ pub fn required_video_inputs_with_offset() -> Result<()> {
 
 #[pipeline_test(
     description = "
-        Required inputs with some packets delayed.
+        Required audio input with some packets delayed in the middle (1s sent,
+        3s pause, then the rest). No offset.
 
-        Countdown from 10 from the beginning.
+        Continuous 440 Hz tone for 10 seconds.
     ",
     snapshot_name = "required_audio_inputs_no_offset_output.rtp"
 )]
@@ -364,9 +365,10 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
 
 #[pipeline_test(
     description = "
-        Required inputs with some packets delayed. Offset set to 1000ms.
+        Required audio input with some packets delayed in the middle (1s sent,
+        3s pause, then the rest). Offset set to 1000ms.
 
-        Countdown from 10 delayed by one second.
+        1 second of silence, then a continuous 440 Hz tone for the remaining 9 seconds.
     ",
     snapshot_name = "required_audio_inputs_with_offset_output.rtp"
 )]
