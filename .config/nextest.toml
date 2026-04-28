@@ -15,3 +15,9 @@ retries = 4
 filter = 'package(/^integration-tests/)'
 threads-required = 2
 retries = 2
+
+[profile.audit]
+retries = 0
+slow-timeout = "60s"
+threads-required = 8
+fail-fast = false
