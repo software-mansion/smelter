@@ -11,6 +11,7 @@
 - Added an H.265 encoder ([#1919](https://github.com/software-mansion/smelter/pull/1919) by @jerzywilczek)
 
 ### 🐛 Bug fixes
+- Use Box instead of NonNull in h264 & h265 codec parameters ([#1934](https://github.com/software-mansion/smelter/pull/1934) by @krakow10)
 
 ## [v0.3.0](https://github.com/software-mansion/smelter/releases/tag/vk-video%2Fv0.3.0)
 
