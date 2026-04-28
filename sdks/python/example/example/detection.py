@@ -1,12 +1,10 @@
 """Generic object detection over the smelter video side channel using YOLO."""
 
-import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 import cv2
-import numpy as np
-from smelter import SideChannelKind, SideChannelManager, VideoFrame
+from smelter import subscribe_video_channel
 from ultralytics import YOLO
 
 
@@ -22,11 +20,6 @@ class Detection:
     y: float
     width: float
     height: float
-
-
-def _rgba_to_bgr(frame: VideoFrame) -> np.ndarray:
-    rgba = np.frombuffer(frame.data, dtype=np.uint8).reshape(frame.height, frame.width, 4)
-    return cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
 
 
 def _extract_detections(
@@ -85,7 +78,6 @@ def _extract_detections(
 
 
 def run_detection(
-    socket_dir: str,
     model_path: str,
     on_detection: Callable[[list[Detection], int], None],
     class_filter: Iterable[str] | None = None,
@@ -93,18 +85,7 @@ def run_detection(
     keep_confidence: float = 0.4,
 ):
     """Connect to video side channel and run YOLO detection on every frame."""
-    manager = SideChannelManager(socket_dir)
-
     print("Waiting for video side channel...")
-    while True:
-        channels = manager.list_channels()
-        video_channels = [c for c in channels if c.kind == SideChannelKind.VIDEO]
-        if video_channels:
-            break
-        time.sleep(0.2)
-
-    info = video_channels[0]
-    print(f"Connecting to video channel for input '{info.input_id}'...")
 
     print(f"Loading YOLO model from {model_path}...")
     model = YOLO(model_path)
@@ -117,44 +98,41 @@ def run_detection(
     lingering: dict[int, tuple[Detection, int]] = {}
     MAX_LINGER_FRAMES = 1
 
-    with manager.connect(info) as conn:
-        while True:
-            frame = conn.recv()
-
-            bgr = _rgba_to_bgr(frame)
-            results = model.track(bgr, persist=True, verbose=False)
-            if not results:
+    for frame in subscribe_video_channel("input"):
+        bgr = cv2.cvtColor(frame.rgba, cv2.COLOR_RGBA2BGR)
+        results = model.track(bgr, persist=True, verbose=False)
+        if not results:
+            continue
+        detections = _extract_detections(
+            results[0],
+            frame.width,
+            frame.height,
+            filter_set,
+            start_confidence,
+            keep_confidence,
+            active_tracks,
+        )
+        seen_ids: set[int] = set()
+        for d in detections:
+            if d.track_id is not None:
+                seen_ids.add(d.track_id)
+                lingering[d.track_id] = (d, 0)
+        for tid in list(lingering):
+            det, age = lingering[tid]
+            if tid in seen_ids:
                 continue
-            detections = _extract_detections(
-                results[0],
-                frame.width,
-                frame.height,
-                filter_set,
-                start_confidence,
-                keep_confidence,
-                active_tracks,
-            )
-            seen_ids: set[int] = set()
-            for d in detections:
-                if d.track_id is not None:
-                    seen_ids.add(d.track_id)
-                    lingering[d.track_id] = (d, 0)
-            for tid in list(lingering):
-                det, age = lingering[tid]
-                if tid in seen_ids:
-                    continue
-                age += 1
-                if age > MAX_LINGER_FRAMES:
-                    del lingering[tid]
-                else:
-                    lingering[tid] = (det, age)
-            # Keep lingering tracks in the hysteresis set so a reappearance at
-            # low confidence still clears `keep_confidence`.
-            active_tracks.update(lingering)
-            output = list(detections)
-            output.extend(det for tid, (det, age) in lingering.items() if age > 0)
-            # Report the update 100 ms before the frame's actual pts. Detection box
-            # views use a 200 ms transition (see _detection_box_view), so scheduling
-            # the scene half a transition early means the animation lands on the new
-            # position at the moment the frame itself is rendered.
-            on_detection(output, frame.pts_nanos - 100_000_000)
+            age += 1
+            if age > MAX_LINGER_FRAMES:
+                del lingering[tid]
+            else:
+                lingering[tid] = (det, age)
+        # Keep lingering tracks in the hysteresis set so a reappearance at
+        # low confidence still clears `keep_confidence`.
+        active_tracks.update(lingering)
+        output = list(detections)
+        output.extend(det for tid, (det, age) in lingering.items() if age > 0)
+        # Report the update 100 ms before the frame's actual pts. Detection box
+        # views use a 200 ms transition (see _detection_box_view), so scheduling
+        # the scene half a transition early means the animation lands on the new
+        # position at the moment the frame itself is rendered.
+        on_detection(output, frame.pts_nanos - 100_000_000)

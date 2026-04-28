@@ -8,6 +8,7 @@ dependencies = [
     "numpy",
     "ultralytics>=8.4.40",
     "opencv-python-headless>=4.13.0.92",
+    "lap>=0.5.12",
 ]
 
 [project.scripts]

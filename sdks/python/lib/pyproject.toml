@@ -1,15 +1,63 @@
 [project]
 name = "smelter-sdk"
 version = "0.1.0"
-requires-python = ">=3.13"
+description = "Python client for Smelter — a real-time, low-latency, programmable video and audio composition toolkit."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [
+    { name = "Software Mansion S.A." },
+]
+keywords = [
+    "smelter",
+    "video",
+    "audio",
+    "streaming",
+    "rtmp",
+    "webrtc",
+    "compositor",
+    "real-time",
+    "media",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Typing :: Typed",
+]
+dependencies = [
+    "numpy>=1.26",
+]
 
-[project.scripts]
-check = "smelter._scripts:check"
-fix = "smelter._scripts:fix"
+[project.urls]
+Homepage = "https://smelter.dev"
+Documentation = "https://smelter.dev/docs"
+Repository = "https://github.com/software-mansion/smelter"
+Issues = "https://github.com/software-mansion/smelter/issues"
+Changelog = "https://github.com/software-mansion/smelter/blob/master/sdks/python/lib/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["smelter"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "smelter",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.29,<2"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
