@@ -17,7 +17,7 @@ mod main_module {
         time::Duration,
     };
 
-    use integration_tests::ffmpeg::start_ffmpeg_rtmp_receive;
+    use integration_tests::media::{MediaReceiver, Receive};
     use smelter::{
         config::{Config, read_config},
         logger,
@@ -44,7 +44,9 @@ mod main_module {
         logger::init_logger(config.logger.clone());
 
         #[allow(clippy::zombie_processes)]
-        start_ffmpeg_rtmp_receive(PORT).unwrap();
+        MediaReceiver::new(Receive::rtmp_listener(PORT))
+            .spawn()
+            .unwrap();
 
         let pipeline = pipeline(&config);
         let output_id = OutputId("output_1".into());

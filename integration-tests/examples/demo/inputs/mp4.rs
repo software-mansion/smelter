@@ -2,11 +2,7 @@ use std::{env, path::PathBuf, str::FromStr};
 
 use anyhow::Result;
 use inquire::{Confirm, Select, Text};
-use integration_tests::{
-    assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
-    examples::{AssetData, download_asset},
-    paths::integration_tests_root,
-};
+use integration_tests::media::TestSample;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -121,7 +117,7 @@ impl Mp4InputBuilder {
     pub fn new() -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("mp4_input_{suffix}");
-        let source = Mp4InputSource::Path(integration_tests_root().join(BUNNY_H264_PATH));
+        let source = Mp4InputSource::Path(TestSample::BigBuckBunnyH264Opus.file());
         Self {
             name,
             source,
@@ -164,10 +160,6 @@ impl Mp4InputBuilder {
                         "Using default asset at \"{}\"",
                         self.source.path().unwrap().to_str().unwrap(),
                     );
-                    download_asset(&AssetData {
-                        url: BUNNY_H264_URL.to_string(),
-                        path: self.source.path().unwrap(),
-                    })?;
                     break Ok(self);
                 }
             }

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use integration_tests::{
     examples::{self, run_example},
-    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
+    media::{MediaReceiver, MediaSender, Receive, Send, TestSample, VideoCodec},
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -24,7 +24,12 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_receive_h264(Some(OUTPUT_VIDEO_PORT), Some(OUTPUT_AUDIO_PORT))?;
+    MediaReceiver::new(
+        Receive::rtp_udp_listener()
+            .video(OUTPUT_VIDEO_PORT, VideoCodec::H264)
+            .audio_port(OUTPUT_AUDIO_PORT),
+    )
+    .spawn()?;
 
     examples::post(
         "input/input_1/register",
@@ -104,12 +109,13 @@ fn client_code() -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(
-        IP,
-        Some(INPUT_1_PORT),
-        Some(INPUT_2_PORT),
-        examples::TestSample::BigBuckBunnyH264AAC,
-    )?;
+    MediaSender::new(
+        TestSample::BigBuckBunnyH264AAC,
+        Send::rtp_udp_client()
+            .video_port(INPUT_1_PORT)
+            .audio_port(INPUT_2_PORT),
+    )
+    .spawn()?;
 
     Ok(())
 }
