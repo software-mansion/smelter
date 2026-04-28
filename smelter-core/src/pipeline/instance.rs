@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    path::Path,
     sync::{Arc, Mutex, Weak},
     thread,
     time::Duration,
@@ -564,6 +565,10 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         .into();
     std::fs::create_dir_all(&download_dir).map_err(InitPipelineError::CreateDownloadDir)?;
 
+    if let Some(dir) = opts.side_channel_socket_dir.as_deref() {
+        prepare_side_channel_socket_dir(dir)?;
+    }
+
     let tokio_rt = match opts.tokio_rt {
         Some(tokio_rt) => tokio_rt,
         None => Arc::new(Runtime::new().map_err(InitPipelineError::CreateTokioRuntime)?),
@@ -633,4 +638,38 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     };
 
     Ok(pipeline)
+}
+
+fn prepare_side_channel_socket_dir(dir: &Path) -> Result<(), InitPipelineError> {
+    if !dir.exists() {
+        return std::fs::create_dir_all(dir).map_err(|e| {
+            InitPipelineError::SideChannelSocketDir(format!(
+                "failed to create \"{}\": {e}",
+                dir.display()
+            ))
+        });
+    }
+    if !dir.is_dir() {
+        return Err(InitPipelineError::SideChannelSocketDir(format!(
+            "\"{}\" exists but is not a directory",
+            dir.display()
+        )));
+    }
+    let is_empty = dir
+        .read_dir()
+        .map_err(|e| {
+            InitPipelineError::SideChannelSocketDir(format!(
+                "failed to read \"{}\": {e}",
+                dir.display()
+            ))
+        })?
+        .next()
+        .is_none();
+    if !is_empty {
+        return Err(InitPipelineError::SideChannelSocketDir(format!(
+            "\"{}\" is not empty",
+            dir.display()
+        )));
+    }
+    Ok(())
 }

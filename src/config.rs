@@ -257,7 +257,7 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => DEFAULT_SIDE_CHANNEL_DELAY,
     };
 
-    let side_channel_socket_dir = read_side_channel_socket_dir()?;
+    let side_channel_socket_dir = Some(read_side_channel_socket_dir());
 
     let load_system_fonts = match env::var("SMELTER_LOAD_SYSTEM_FONTS") {
         Ok(enable) => bool_env_from_str(&enable).unwrap_or(true),
@@ -410,48 +410,23 @@ fn try_read_config() -> Result<Config, String> {
     Ok(config)
 }
 
-fn read_side_channel_socket_dir() -> Result<Option<Arc<Path>>, String> {
+fn read_side_channel_socket_dir() -> Arc<Path> {
     let dir = match env::var("SMELTER_SIDE_CHANNEL_SOCKET_DIR") {
         Ok(path) => PathBuf::from(path),
         Err(_) => {
             let name = format!("smelter_side_channel_{}", rand::rng().random::<u64>());
-            env::temp_dir().join(name)
+            // Prefer the XDG runtime dir when available. On macOS `env::temp_dir()`
+            // resolves to a per-user `/var/folders/...` path that is long enough to
+            // overflow the 104-byte `sun_path` limit once socket filenames are
+            // appended, so fall back to `/tmp` there instead.
+            let tmp_root = dirs::runtime_dir().unwrap_or_else(|| match cfg!(target_os = "macos") {
+                true => PathBuf::from("/tmp"),
+                false => env::temp_dir(),
+            });
+            tmp_root.join(name)
         }
     };
-
-    if dir.exists() {
-        if !dir.is_dir() {
-            return Err(format!(
-                "SMELTER_SIDE_CHANNEL_SOCKET_DIR: \"{}\" exists but is not a directory",
-                dir.display()
-            ));
-        }
-        let is_empty = dir
-            .read_dir()
-            .map_err(|e| {
-                format!(
-                    "SMELTER_SIDE_CHANNEL_SOCKET_DIR: failed to read \"{}\": {e}",
-                    dir.display()
-                )
-            })?
-            .next()
-            .is_none();
-        if !is_empty {
-            return Err(format!(
-                "SMELTER_SIDE_CHANNEL_SOCKET_DIR: \"{}\" is not empty",
-                dir.display()
-            ));
-        }
-    } else {
-        std::fs::create_dir_all(&dir).map_err(|e| {
-            format!(
-                "SMELTER_SIDE_CHANNEL_SOCKET_DIR: failed to create \"{}\": {e}",
-                dir.display()
-            )
-        })?;
-    }
-
-    Ok(Some(Arc::from(dir)))
+    Arc::from(dir)
 }
 
 fn framerate_from_str(s: &str) -> Result<Framerate, &'static str> {

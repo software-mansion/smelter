@@ -13,7 +13,7 @@ use std::{
 use bytes::Bytes;
 use crossbeam_channel::{Sender, TrySendError};
 use smelter_render::{Frame, FramePreProcessor, InputId, WgpuCtx};
-use tracing::{Span, debug, info_span};
+use tracing::{Span, debug, error, info_span};
 
 use crate::prelude::InputAudioSamples;
 
@@ -42,14 +42,14 @@ pub(super) struct VideoSideChannelServer {
 }
 
 impl VideoSideChannelServer {
-    pub fn new(socket_path: PathBuf, input_id: &InputId, wgpu_ctx: Arc<WgpuCtx>) -> Self {
+    pub fn new(socket_path: PathBuf, input_id: &InputId, wgpu_ctx: Arc<WgpuCtx>) -> Option<Self> {
         let span = info_span!("side_channel", kind = "video", input_id = %input_id);
         let (clients, cleanup) = bind_and_spawn_accept(
             socket_path,
             "video-sc",
             VIDEO_CHANNEL_CAPACITY,
             span.clone(),
-        );
+        )?;
 
         let (sender, receiver) = crossbeam_channel::bounded::<Frame>(VIDEO_CHANNEL_CAPACITY);
         thread::Builder::new()
@@ -68,10 +68,10 @@ impl VideoSideChannelServer {
             })
             .expect("Failed to spawn video side channel send thread");
 
-        Self {
+        Some(Self {
             sender,
             _cleanup: cleanup,
-        }
+        })
     }
 }
 
@@ -82,14 +82,14 @@ pub(super) struct AudioSideChannelServer {
 }
 
 impl AudioSideChannelServer {
-    pub fn new(socket_path: PathBuf, input_id: &InputId) -> Self {
+    pub fn new(socket_path: PathBuf, input_id: &InputId) -> Option<Self> {
         let span = info_span!("side_channel", kind = "audio", input_id = %input_id);
         let (clients, cleanup) = bind_and_spawn_accept(
             socket_path,
             "audio-sc",
             AUDIO_CHANNEL_CAPACITY,
             span.clone(),
-        );
+        )?;
 
         let (sender, receiver) =
             crossbeam_channel::bounded::<InputAudioSamples>(AUDIO_CHANNEL_CAPACITY);
@@ -105,10 +105,10 @@ impl AudioSideChannelServer {
             })
             .expect("Failed to spawn audio side channel send thread");
 
-        Self {
+        Some(Self {
             sender,
             _cleanup: cleanup,
-        }
+        })
     }
 }
 
@@ -119,10 +119,18 @@ fn bind_and_spawn_accept(
     name_prefix: &'static str,
     client_channel_capacity: usize,
     span: Span,
-) -> (Clients, Arc<ServerCleanup>) {
+) -> Option<(Clients, Arc<ServerCleanup>)> {
     let _ = std::fs::remove_file(&socket_path);
-    let listener =
-        UnixListener::bind(&socket_path).expect("Failed to bind side channel unix socket");
+    let listener = match UnixListener::bind(&socket_path) {
+        Ok(listener) => listener,
+        Err(e) => {
+            error!(
+                path = %socket_path.display(),
+                "Failed to bind side channel unix socket: {e}"
+            );
+            return None;
+        }
+    };
     listener
         .set_nonblocking(true)
         .expect("Failed to set side channel listener to non-blocking");
@@ -149,7 +157,7 @@ fn bind_and_spawn_accept(
         socket_path,
         should_close,
     });
-    (clients, cleanup)
+    Some((clients, cleanup))
 }
 
 fn run_accept_clients_thread(
