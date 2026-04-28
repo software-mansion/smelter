@@ -1,0 +1,52 @@
+name: Python SDK - publish
+
+on:
+  push:
+    tags:
+      - "python-sdk/v*"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Verify tag matches package version
+        working-directory: ./sdks/python/lib
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#python-sdk/v}"
+          PKG_VERSION=$(uv run --no-project --with toml python -c \
+              "import toml; print(toml.load('pyproject.toml')['project']['version'])")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+              echo "Tag version ($TAG_VERSION) does not match pyproject.toml version ($PKG_VERSION)"
+              exit 1
+          fi
+          echo "Publishing smelter-sdk $PKG_VERSION"
+
+      - name: Build smelter-sdk
+        working-directory: ./sdks/python
+        run: uv build --package smelter-sdk
+
+      - name: Validate artifacts
+        working-directory: ./sdks/python
+        run: uvx twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./sdks/python/dist
+          skip-existing: true
