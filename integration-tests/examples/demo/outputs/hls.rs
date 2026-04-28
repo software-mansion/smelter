@@ -1,8 +1,11 @@
-use std::{fs, path::PathBuf, process::Child};
+use std::{fs, path::PathBuf};
 
 use anyhow::Result;
 use inquire::Select;
-use integration_tests::{ffmpeg::start_ffmpeg_receive_hls, paths::integration_tests_root};
+use integration_tests::{
+    media::{MediaReceiver, ProcessHandle, Receive},
+    paths::integration_tests_root,
+};
 use rand::RngCore;
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serde_json::json;
@@ -34,7 +37,7 @@ pub struct HlsOutput {
     pub name: String,
     path: PathBuf,
     options: HlsOutputOptions,
-    stream_handles: Vec<Child>,
+    stream_handles: Vec<ProcessHandle>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,8 +110,8 @@ impl HlsOutput {
     }
 
     fn start_ffmpeg_receiver(&mut self) -> Result<()> {
-        let stream_handle = start_ffmpeg_receive_hls(&self.path)?;
-        self.stream_handles.push(stream_handle);
+        let handles = MediaReceiver::new(Receive::hls_player(self.path.clone())).spawn()?;
+        self.stream_handles.extend(handles);
         Ok(())
     }
 }
@@ -116,12 +119,12 @@ impl HlsOutput {
 impl Drop for HlsOutput {
     fn drop(&mut self) {
         let dir_path = self.path.parent().unwrap();
-        fs::remove_dir_all(dir_path).unwrap();
+        if let Err(e) = fs::remove_dir_all(dir_path) {
+            error!("{e}");
+        }
 
-        for stream in &mut self.stream_handles {
-            if let Err(e) = stream.kill() {
-                error!("{e}");
-            }
+        for stream in self.stream_handles.drain(..) {
+            stream.kill();
         }
     }
 }

@@ -1,7 +1,6 @@
 use anyhow::{Result, anyhow};
-use integration_tests::ffmpeg::start_ffmpeg_rtmp_receive;
+use integration_tests::media::{MediaReceiver, ProcessHandle, Receive};
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
-use std::process::Child;
 
 use inquire::{Confirm, Select, Text};
 use serde_json::json;
@@ -34,7 +33,7 @@ pub struct RtmpOutput {
     pub name: String,
     port: u16,
     options: RtmpOutputOptions,
-    stream_handles: Vec<Child>,
+    stream_handles: Vec<ProcessHandle>,
 }
 
 // URL and name fields of `RtmpOutput` depend on the port field which has to be calculated
@@ -122,19 +121,16 @@ impl RtmpOutput {
     }
 
     fn start_ffmpeg_recv(&mut self) -> Result<()> {
-        let player_handle = start_ffmpeg_rtmp_receive(self.port)?;
-        self.stream_handles.push(player_handle);
+        let handles = MediaReceiver::new(Receive::rtmp_listener(self.port)).spawn()?;
+        self.stream_handles.extend(handles);
         Ok(())
     }
 }
 
 impl Drop for RtmpOutput {
     fn drop(&mut self) {
-        for stream_process in &mut self.stream_handles {
-            match stream_process.kill() {
-                Ok(_) => {}
-                Err(e) => error!("{e}"),
-            }
+        for stream_process in self.stream_handles.drain(..) {
+            stream_process.kill();
         }
     }
 }

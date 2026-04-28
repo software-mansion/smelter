@@ -4,8 +4,8 @@ use smelter_api::Resolution;
 use std::{thread, time::Duration};
 
 use integration_tests::{
-    examples::{self, TestSample, run_example},
-    ffmpeg::{start_ffmpeg_rtmp_receive, start_ffmpeg_send},
+    examples::{self, run_example},
+    media::{Asset, MediaReceiver, MediaSender, Receive, Send, VideoCodec},
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -13,7 +13,6 @@ const VIDEO_RESOLUTION: Resolution = Resolution {
     height: 1080,
 };
 
-const IP: &str = "127.0.0.1";
 const INPUT_PORT: u16 = 8002;
 const OUTPUT_PORT: u16 = 8004;
 
@@ -22,7 +21,7 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
+    MediaReceiver::new(Receive::rtmp_listener(OUTPUT_PORT)).spawn()?;
 
     examples::post(
         "input/input_1/register",
@@ -166,7 +165,11 @@ fn client_code() -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::TestPatternH264)?;
+    MediaSender::new(
+        Asset::pattern(VideoCodec::H264, VIDEO_RESOLUTION),
+        Send::rtp_udp_client().video_port(INPUT_PORT),
+    )
+    .spawn()?;
 
     thread::sleep(Duration::from_secs(5));
 

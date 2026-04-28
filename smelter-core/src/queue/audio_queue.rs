@@ -68,8 +68,8 @@ impl AudioQueue {
 
         let input_status: Vec<_> = self
             .inputs
-            .iter()
-            .filter_map(|(_, weak)| {
+            .values()
+            .filter_map(|weak| {
                 weak.audio(|input| {
                     let is_ready = input.is_ready_for_pts(pts_range, queue_start_pts);
                     let is_required = input.required();

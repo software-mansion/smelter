@@ -9,15 +9,12 @@ mod texture;
 mod validation;
 mod video_decoder;
 
-pub mod assets;
 pub mod examples;
-pub mod ffmpeg;
-pub mod gstreamer;
+pub mod media;
 pub mod paths;
 pub mod test_input;
 
-#[cfg(test)]
-mod pipeline_tests;
+pub mod pipeline_tests;
 
 #[cfg(test)]
 mod render_tests;

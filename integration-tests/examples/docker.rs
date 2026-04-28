@@ -7,8 +7,8 @@ use std::{env, process::Command, thread, time::Duration};
 use tracing::{error, info, warn};
 
 use integration_tests::{
-    examples::{self, TestSample, start_server_msg_listener},
-    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
+    examples::{self, start_server_msg_listener},
+    media::{Asset, MediaReceiver, MediaSender, Receive, Send, VideoCodec},
     paths::integration_tests_root,
 };
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -16,7 +16,6 @@ const VIDEO_RESOLUTION: Resolution = Resolution {
     height: 1080,
 };
 
-const IP: &str = "127.0.0.1";
 const INPUT_PORT: u16 = 8002;
 const OUTPUT_PORT: u16 = 8004;
 
@@ -105,7 +104,7 @@ fn build_and_start_docker(skip_build: bool) -> Result<()> {
 fn start_example_client_code(host_ip: String) -> Result<()> {
     thread::sleep(Duration::from_secs(5));
 
-    start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
+    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264)).spawn()?;
     start_server_msg_listener();
 
     examples::post(
@@ -161,7 +160,11 @@ fn start_example_client_code(host_ip: String) -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::TestPatternH264)?;
+    MediaSender::new(
+        Asset::pattern(VideoCodec::H264, VIDEO_RESOLUTION),
+        Send::rtp_udp_client().video_port(INPUT_PORT),
+    )
+    .spawn()?;
 
     Ok(())
 }

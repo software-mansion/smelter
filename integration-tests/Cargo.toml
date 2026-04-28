@@ -34,21 +34,22 @@ webrtc = {workspace = true }
 webrtc-util = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 opus = { workspace = true }
 spectrum-analyzer = "1.7.0"
 rand = { workspace = true }
 futures-util = { workspace = true }
 tokio = { workspace = true }
 signal-hook = { workspace = true }
+libc = "0.2"
 tokio-tungstenite = "0.21.0"
 wgpu = { workspace = true }
 image = { workspace = true }
 regex = { workspace = true }
 inquire = "0.7.5"
+crossterm = "0.25"
 strum = { version = "0.27", features = ["derive"] }
 fuzzy-matcher = "0.3.7"
-
-[dev-dependencies]
 integration-tests-macros = { path = "macros" }
 
 [lints]

@@ -11,9 +11,7 @@ use smelter::config::read_config;
 use tokio_tungstenite::tungstenite;
 use tracing::info;
 
-use crate::{
-    CompositorInstance, assets::BUNNY_H264_URL, pipeline_tests::start_server_msg_listener,
-};
+use crate::{CompositorInstance, media::TestSample, pipeline_tests::start_server_msg_listener};
 
 #[test]
 pub fn offline_processing() -> Result<()> {
@@ -33,7 +31,7 @@ pub fn offline_processing() -> Result<()> {
         "input/input_1/register",
         json!({
             "type": "mp4",
-            "url": BUNNY_H264_URL,
+            "url": TestSample::BigBuckBunnyH264Opus.url(),
             "offset_ms": 0,
             "required": true
         }),

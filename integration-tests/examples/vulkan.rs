@@ -16,8 +16,8 @@ fn client_code() -> Result<()> {
     use smelter_api::Resolution;
 
     use integration_tests::{
-        examples::{self, TestSample},
-        ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
+        examples,
+        media::{MediaReceiver, MediaSender, Receive, Send, TestSample, VideoCodec},
     };
 
     const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -30,7 +30,7 @@ fn client_code() -> Result<()> {
     const OUTPUT_PORT: u16 = 8004;
 
     const VIDEOS: u16 = 6;
-    start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
+    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264)).spawn()?;
 
     let mut children = Vec::new();
 
@@ -87,12 +87,11 @@ fn client_code() -> Result<()> {
     examples::post("start", &json!({}))?;
 
     for i in 0..VIDEOS {
-        start_ffmpeg_send(
-            IP,
-            Some(INPUT_PORT + 2 * i),
-            None,
+        MediaSender::new(
             TestSample::BigBuckBunnyH264Opus,
-        )?;
+            Send::rtp_udp_client().video_port(INPUT_PORT + 2 * i),
+        )
+        .spawn()?;
     }
 
     Ok(())

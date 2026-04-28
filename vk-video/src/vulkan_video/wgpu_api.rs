@@ -41,13 +41,14 @@ impl WgpuTexturesDecoder {
     /// May return a sequence of decoded frames in the [NV12 format](https://en.wikipedia.org/wiki/YCbCr#4:2:0).
     pub fn process_event(
         &mut self,
-        event: DecoderEvent<'_>,
+        event: DecoderEvent<'_, AccessUnit>,
     ) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
         match event {
             DecoderEvent::DecodeChunk(chunk) => {
                 let nalus = self.parser.parse(chunk.data, chunk.pts)?;
                 self.decode_access_units(nalus)
             }
+            DecoderEvent::DecodeParsedFrame(au) => self.decode_access_units(vec![au]),
             DecoderEvent::SignalFrameEnd => {
                 let access_units = self.parser.flush()?;
                 self.decode_access_units(access_units)

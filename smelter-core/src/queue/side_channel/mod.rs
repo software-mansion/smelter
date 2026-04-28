@@ -23,14 +23,19 @@ pub struct VideoSideChannel {
 }
 
 impl VideoSideChannel {
-    pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, socket_dir: &Path) -> Self {
+    pub fn new(
+        ctx: &Arc<PipelineCtx>,
+        input_ref: &Ref<InputId>,
+        socket_dir: &Path,
+    ) -> Option<Self> {
         let path = socket_dir.join(format!("video_{}.sock", input_ref.id()));
         info!(?path, "Starting video side channel");
-        Self {
+        let server = VideoSideChannelServer::new(path, input_ref.id(), ctx.wgpu_ctx.clone())?;
+        Some(Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            server: VideoSideChannelServer::new(path, input_ref.id(), ctx.wgpu_ctx.clone()),
-        }
+            server,
+        })
     }
 
     pub(super) fn with_track_offset(&self, track_offset: &TrackOffset) -> Self {
@@ -62,14 +67,19 @@ pub struct AudioSideChannel {
 }
 
 impl AudioSideChannel {
-    pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, socket_dir: &Path) -> Self {
+    pub fn new(
+        ctx: &Arc<PipelineCtx>,
+        input_ref: &Ref<InputId>,
+        socket_dir: &Path,
+    ) -> Option<Self> {
         let path = socket_dir.join(format!("audio_{}.sock", input_ref.id()));
         info!(?path, "Starting audio side channel");
-        Self {
+        let server = AudioSideChannelServer::new(path, input_ref.id())?;
+        Some(Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            server: AudioSideChannelServer::new(path, input_ref.id()),
-        }
+            server,
+        })
     }
 
     pub(super) fn with_track_offset(&self, track_offset: &TrackOffset) -> Self {

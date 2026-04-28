@@ -1,4 +1,5 @@
 mod audio_only;
+#[cfg(test)]
 mod offline_processing;
 mod push_input_before_start;
 mod required_inputs;
@@ -6,13 +7,26 @@ mod schedule_update;
 mod unregistering;
 mod video_audio;
 
-#[allow(dead_code)]
-pub(crate) struct PipelineTest {
+pub struct PipelineTest {
     pub test_name: &'static str,
     pub full_test_name: &'static str,
     pub description: &'static str,
     pub snapshot_name: &'static str,
     pub test_fn: fn() -> anyhow::Result<()>,
+}
+
+pub fn pipeline_tests() -> Vec<&'static PipelineTest> {
+    [
+        audio_only::TESTS,
+        push_input_before_start::TESTS,
+        required_inputs::TESTS,
+        schedule_update::TESTS,
+        unregistering::TESTS,
+        video_audio::TESTS,
+    ]
+    .iter()
+    .flat_map(|tests| tests.iter())
+    .collect()
 }
 
 use crossbeam_channel::Sender;

@@ -3,8 +3,8 @@ use serde_json::json;
 use smelter_api::Resolution;
 
 use integration_tests::{
-    examples::{self, TestSample, download_all_assets, get_asset_path, run_example},
-    ffmpeg::start_ffmpeg_rtmp_receive,
+    examples::{self, run_example},
+    media::{MediaReceiver, Receive, TestSample, download_all_samples},
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -19,14 +19,14 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    download_all_assets()?;
-    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
+    download_all_samples()?;
+    MediaReceiver::new(Receive::rtmp_listener(OUTPUT_PORT)).spawn()?;
 
     examples::post(
         "input/input_1/register",
         &json!({
             "type": "mp4",
-            "path": get_asset_path(TestSample::BigBuckBunnyH264AAC)?
+            "path": TestSample::BigBuckBunnyH264AAC.file()
         }),
     )?;
 

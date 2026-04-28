@@ -9,9 +9,7 @@ use std::{
 
 use crossbeam_channel::bounded;
 use image::{ColorType, ImageEncoder, codecs::png::PngEncoder};
-use integration_tests::{
-    examples::download_file, paths::integration_tests_root, read_rgba_texture,
-};
+use integration_tests::{media::download_to, paths::integration_tests_root, read_rgba_texture};
 use smelter::{
     config::read_config,
     logger::{self},
@@ -58,7 +56,7 @@ fn main() {
     let output_id = OutputId("output_1".into());
     let input_id = InputId("input_id".into());
 
-    download_file(BUNNY_FILE_URL, BUNNY_FILE_PATH).unwrap();
+    download_to(BUNNY_FILE_URL, BUNNY_FILE_PATH).unwrap();
 
     let output_options = RegisterRawDataOutputOptions {
         output_options: RawDataOutputOptions {

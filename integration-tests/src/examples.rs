@@ -4,27 +4,15 @@ use futures_util::{SinkExt, StreamExt};
 use reqwest::{StatusCode, blocking::Response};
 use smelter::{config::read_config, server};
 use std::{
-    env,
-    fs::{self, File},
-    io,
-    path::PathBuf,
     process, thread,
     time::{Duration, Instant},
 };
 use tokio_tungstenite::tungstenite;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use serde::Serialize;
 
-use crate::{
-    assets::{
-        BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH,
-        BUNNY_VP9_URL, ELEPHANT_H264_PATH, ELEPHANT_H264_URL, ELEPHANT_VP8_PATH, ELEPHANT_VP8_URL,
-        ELEPHANT_VP9_PATH, ELEPHANT_VP9_URL, OCEAN_H264_PATH, OCEAN_H264_URL, OCEAN_VP8_PATH,
-        OCEAN_VP8_URL, OCEAN_VP9_PATH, OCEAN_VP9_URL,
-    },
-    paths::integration_tests_root,
-};
+use crate::media::download_all_samples;
 
 pub fn post<T: Serialize + ?Sized>(route: &str, json: &T) -> Result<Response> {
     info!("[example] Sent post request to `{route}`.");
@@ -57,7 +45,7 @@ pub fn run_example(client_code: fn() -> Result<()>) {
     thread::spawn(move || {
         ffmpeg_next::format::network::init();
 
-        download_all_assets().unwrap();
+        download_all_samples().unwrap();
 
         if let Err(err) = wait_for_server_ready(Duration::from_secs(10)) {
             error!("{err}");
@@ -79,6 +67,8 @@ pub fn run_example(client_code: fn() -> Result<()>) {
 pub fn run_example_server() {
     thread::spawn(move || {
         ffmpeg_next::format::network::init();
+
+        download_all_samples().unwrap();
 
         if let Err(err) = wait_for_server_ready(Duration::from_secs(10)) {
             error!("{err}");
@@ -207,169 +197,4 @@ fn get_formated_body(body_str: &str) -> String {
         serde_json::to_string_pretty(&body_map).unwrap(),
         msg_string,
     )
-}
-
-pub enum TestSample {
-    /// 10 minute animated video with sound
-    BigBuckBunnyH264Opus,
-    /// 10 minute animated video with ACC encoded sound
-    BigBuckBunnyH264AAC,
-    /// 10 minute animated VP8 video with sound
-    BigBuckBunnyVP8Opus,
-    /// 10 minute animated VP9 video with sound
-    BigBuckBunnyVP9Opus,
-    /// 11 minute animated video with sound
-    ElephantsDreamH264Opus,
-    /// 11 minute animated VP8 video with sound
-    ElephantsDreamVP8Opus,
-    /// 11 minute animated VP9 video with sound
-    ElephantsDreamVP9Opus,
-    /// 28 sec video with no sound
-    SampleH264,
-    /// 28 sec VP8 video with no sound
-    SampleVP8,
-    /// 28 sec VP9 video with no sound
-    SampleVP9,
-    /// looped 28 sec video with no sound
-    SampleLoopH264,
-    /// generated sample video with no sound (also with second timer when using ffmpeg)
-    TestPatternH264,
-    /// generated sample VP8 video with no sound (also with second timer when using ffmpeg)
-    TestPatternVP8,
-    /// generated sample VP9 video with no sound (also with second timer when using ffmpeg)
-    TestPatternVP9,
-}
-
-#[derive(Debug)]
-pub struct AssetData {
-    pub url: String,
-    pub path: PathBuf,
-}
-
-pub fn download_all_assets() -> Result<()> {
-    let assets = [
-        AssetData {
-            url: String::from(BUNNY_H264_URL),
-            path: integration_tests_root().join(BUNNY_H264_PATH),
-        },
-        AssetData {
-            url: String::from(ELEPHANT_H264_URL),
-            path: integration_tests_root().join(ELEPHANT_H264_PATH),
-        },
-        AssetData {
-            url: String::from(OCEAN_H264_URL),
-            path: integration_tests_root().join(OCEAN_H264_PATH),
-        },
-        AssetData {
-            url: String::from(BUNNY_VP8_URL),
-            path: integration_tests_root().join(BUNNY_VP8_PATH),
-        },
-        AssetData {
-            url: String::from(BUNNY_VP9_URL),
-            path: integration_tests_root().join(BUNNY_VP9_PATH),
-        },
-        AssetData {
-            url: String::from(ELEPHANT_VP8_URL),
-            path: integration_tests_root().join(ELEPHANT_VP8_PATH),
-        },
-        AssetData {
-            url: String::from(ELEPHANT_VP9_URL),
-            path: integration_tests_root().join(ELEPHANT_VP9_PATH),
-        },
-        AssetData {
-            url: String::from(OCEAN_VP8_URL),
-            path: integration_tests_root().join(OCEAN_VP8_PATH),
-        },
-        AssetData {
-            url: String::from(OCEAN_VP9_URL),
-            path: integration_tests_root().join(OCEAN_VP9_PATH),
-        },
-    ];
-
-    for asset in assets {
-        if let Err(err) = download_asset(&asset) {
-            warn!(?asset, "Error while downloading asset: {err}");
-        }
-    }
-
-    Ok(())
-}
-
-fn map_asset_to_path(asset: &TestSample) -> Option<PathBuf> {
-    match asset {
-        TestSample::BigBuckBunnyH264Opus | TestSample::BigBuckBunnyH264AAC => {
-            Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps490s.mp4"))
-        }
-        TestSample::BigBuckBunnyVP8Opus => {
-            Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps60s.vp8.webm"))
-        }
-        TestSample::BigBuckBunnyVP9Opus => {
-            Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps60s.vp9.webm"))
-        }
-        TestSample::ElephantsDreamH264Opus => {
-            Some(integration_tests_root().join("examples/assets/ElephantsDream720p24fps60s.mp4"))
-        }
-        TestSample::ElephantsDreamVP8Opus => Some(
-            integration_tests_root().join("examples/assets/ElephantsDream720p24fps60s.vp8.webm"),
-        ),
-        TestSample::ElephantsDreamVP9Opus => Some(
-            integration_tests_root().join("examples/assets/ElephantsDream720p24fps60s.vp9.webm"),
-        ),
-        TestSample::SampleH264 | TestSample::SampleLoopH264 => {
-            Some(integration_tests_root().join("examples/assets/OceanSample720p24fps28s.mp4"))
-        }
-        TestSample::SampleVP8 => {
-            Some(integration_tests_root().join("examples/assets/OceanSample720p24fps28s.vp8.webm"))
-        }
-        TestSample::SampleVP9 => {
-            Some(integration_tests_root().join("examples/assets/OceanSample720p24fps28s.vp9.webm"))
-        }
-        TestSample::TestPatternH264 | TestSample::TestPatternVP8 | TestSample::TestPatternVP9 => {
-            None
-        }
-    }
-}
-
-pub fn get_asset_path(asset: TestSample) -> Result<PathBuf> {
-    let path = map_asset_to_path(&asset).unwrap();
-    match ensure_asset_available(&path) {
-        Ok(()) => Ok(path),
-        Err(e) => Err(e),
-    }
-}
-
-fn ensure_asset_available(asset_path: &PathBuf) -> Result<()> {
-    if !asset_path.exists() {
-        return Err(anyhow!(
-            "asset under path {:?} does not exist, try downloading it again",
-            asset_path
-        ));
-    }
-    Ok(())
-}
-
-pub fn download_file(url: &str, path: &str) -> Result<PathBuf> {
-    let sample_path = env::current_dir()?.join(path);
-    fs::create_dir_all(sample_path.parent().unwrap())?;
-
-    if sample_path.exists() {
-        return Ok(sample_path);
-    }
-
-    let mut resp = reqwest::blocking::get(url)?;
-    let mut out = File::create(sample_path.clone())?;
-    io::copy(&mut resp, &mut out)?;
-    Ok(sample_path)
-}
-
-pub fn download_asset(asset: &AssetData) -> Result<()> {
-    fs::create_dir_all(asset.path.parent().unwrap())?;
-    if !asset.path.exists() {
-        let file = asset.path.file_name().unwrap().to_str().unwrap();
-        info!("Asset \"{file}\" not found and will be downloaded.");
-        let mut resp = reqwest::blocking::get(&asset.url)?;
-        let mut out = File::create(asset.path.clone())?;
-        io::copy(&mut resp, &mut out)?;
-    }
-    Ok(())
 }

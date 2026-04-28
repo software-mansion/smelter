@@ -4,15 +4,15 @@
 
 ### 💥 Breaking changes
 - All nalus returned by `H264Parser` now contain their own start codes (`001` or `0001` bytes at the beginning) ([#1921](https://github.com/software-mansion/smelter/pull/1921) by @noituri)
-
 - Decoders, encoders and encoder parameters are now created using codec-specific methods, e. g. `Device::encoder_output_parameters_low_latency` -> `Device::encoder_output_parameters_h264_low_latency`, `Device::create_bytes_encoder` -> `Device::create_bytes_encoder_h264` ([#1871](https://github.com/software-mansion/smelter/pull/1871) by @jerzywilczek)
+- Added `DecoderEvent::DecodeParsedFrame` event for decoding already parsed frames (needs `expose-parsers` feature enabled). The type of the frame is provided as a generic type of `DecoderEvent`. Users using H.264 decoders should switch to `H264DecoderEvent` alias ([#1936](https://github.com/software-mansion/smelter/pull/1936) by @noituri)
 
 ### ✨ New features
-
 - Added an H.265 encoder ([#1919](https://github.com/software-mansion/smelter/pull/1919) by @jerzywilczek)
 
 ### 🐛 Bug fixes
 - Use Box in QueueCreateInfo ([#1938](https://github.com/software-mansion/smelter/pull/1938) by @krakow10)
+- Use Box instead of NonNull in h264 & h265 codec parameters ([#1934](https://github.com/software-mansion/smelter/pull/1934) by @krakow10)
 
 ## [v0.3.0](https://github.com/software-mansion/smelter/releases/tag/vk-video%2Fv0.3.0)
 
