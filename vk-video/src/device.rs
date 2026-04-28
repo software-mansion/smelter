@@ -289,7 +289,7 @@ impl VulkanDevice {
         let queue_create_infos = queue_indices.queue_create_infos();
         let queue_create_infos = queue_create_infos
             .iter()
-            .map(|q| q.info)
+            .map(|q| q.info())
             .collect::<Vec<_>>();
 
         let mut vk_synch_2_feature =
