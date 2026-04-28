@@ -104,10 +104,10 @@ impl FrameInspector {
     }
 
     pub fn update(&self, pair: Pair) {
-        if let Some(tx) = &self.tx {
-            if tx.send(pair).is_err() {
-                warn!("frame_inspector thread closed; updates will be ignored");
-            }
+        if let Some(tx) = &self.tx
+            && tx.send(pair).is_err()
+        {
+            warn!("frame_inspector thread closed; updates will be ignored");
         }
     }
 }
@@ -552,6 +552,7 @@ fn render_over_under(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_slider(
     canvas: &mut [u32],
     canvas_w: usize,
@@ -622,6 +623,7 @@ fn render_slider(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_slider_v(
     canvas: &mut [u32],
     canvas_w: usize,
@@ -685,6 +687,7 @@ fn render_slider_v(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_toggle(
     canvas: &mut [u32],
     canvas_w: usize,
@@ -767,6 +770,7 @@ fn draw_text(
 /// Stamp `text` onto the canvas at `(x, y)` using the 8×8 bitmap
 /// font scaled by `scale`. Glyphs that fall outside the canvas are
 /// clipped silently.
+#[allow(clippy::too_many_arguments)]
 fn draw_text_scaled(
     canvas: &mut [u32],
     canvas_w: usize,

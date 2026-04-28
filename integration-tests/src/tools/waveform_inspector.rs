@@ -460,8 +460,8 @@ fn sliding_mean(values: &[f32], radius: usize) -> Vec<f32> {
     let mut out = vec![0.0_f32; n];
     let mut sum = 0.0_f64;
     let mut count = 0usize;
-    for i in 0..=radius.min(n - 1) {
-        sum += values[i] as f64;
+    for v in values.iter().take(radius.min(n - 1) + 1) {
+        sum += *v as f64;
         count += 1;
     }
     out[0] = (sum / count as f64) as f32;
@@ -519,11 +519,11 @@ fn intervals_from_flags(flagged: &[bool], merge_gap: usize) -> Vec<(usize, usize
 fn merge_overlapping(intervals: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
     let mut out: Vec<(usize, usize)> = Vec::new();
     for (s, e) in intervals {
-        if let Some(last) = out.last_mut() {
-            if s <= last.1 {
-                last.1 = last.1.max(e);
-                continue;
-            }
+        if let Some(last) = out.last_mut()
+            && s <= last.1
+        {
+            last.1 = last.1.max(e);
+            continue;
         }
         out.push((s, e));
     }
@@ -949,6 +949,7 @@ fn draw_header(
     draw_text(canvas, w, h, 6, 6, &line, TEXT);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_envelope_lane(
     canvas: &mut [u32],
     w: usize,
@@ -990,6 +991,7 @@ fn draw_envelope_lane(
 /// for both gap lanes (`COLOR_GAP`) and artifact lanes
 /// (`COLOR_ARTIFACT`). Intervals fully outside the current view are
 /// skipped, partial overlaps are clipped.
+#[allow(clippy::too_many_arguments)]
 fn draw_interval_lane(
     canvas: &mut [u32],
     w: usize,
@@ -1042,6 +1044,7 @@ fn draw_cursor(canvas: &mut [u32], w: usize, h: usize, x: usize, top: usize, bot
 /// single channel, overlaid in their respective colours so phase /
 /// sample-level differences are directly visible. `cursor_t` is in
 /// seconds and already accounts for the current envelope zoom.
+#[allow(clippy::too_many_arguments)]
 fn draw_zoom_strip(
     canvas: &mut [u32],
     w: usize,
@@ -1125,6 +1128,7 @@ fn draw_zoom_strip(
 /// Render the primary-frequency lane: two lines (expected / actual)
 /// over the full visible time range showing the frequency of the
 /// strongest STFT bin at each frame. Y axis is linear 0 → fs/2.
+#[allow(clippy::too_many_arguments)]
 fn draw_primary_freq_lane(
     canvas: &mut [u32],
     w: usize,
@@ -1187,7 +1191,7 @@ fn draw_primary_freq_lane(
 
     let label_with_cursor = match cursor_t {
         Some(t) => {
-            let cursor_sample = (t * SAMPLE_RATE as f64) as f64;
+            let cursor_sample = t * SAMPLE_RATE as f64;
             let frame_f = (cursor_sample - center_offset) / STFT_HOP as f64;
             let frame = if frame_f < 0.0 { 0 } else { frame_f as usize };
             let exp = primary_freq_expected
@@ -1301,15 +1305,17 @@ fn draw_spectrum_strip(
         if let (Some(py), Some(y)) = (prev_a, ya) {
             draw_vline(canvas, w, h, col as i32, py, y, COLOR_ACTUAL);
         }
-        if let Some(y) = ye {
-            if y >= 0 && (y as usize) < h {
-                canvas[y as usize * w + col] = COLOR_EXPECTED;
-            }
+        if let Some(y) = ye
+            && y >= 0
+            && (y as usize) < h
+        {
+            canvas[y as usize * w + col] = COLOR_EXPECTED;
         }
-        if let Some(y) = ya {
-            if y >= 0 && (y as usize) < h {
-                canvas[y as usize * w + col] = COLOR_ACTUAL;
-            }
+        if let Some(y) = ya
+            && y >= 0
+            && (y as usize) < h
+        {
+            canvas[y as usize * w + col] = COLOR_ACTUAL;
         }
         prev_e = ye;
         prev_a = ya;

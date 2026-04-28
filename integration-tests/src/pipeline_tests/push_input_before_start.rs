@@ -287,9 +287,9 @@ pub fn push_input_before_start_tcp_no_offset() -> Result<()> {
         queue start. Test case where there is no offset defined. (UDP)
 
         Output:
-        - Display entire input stream from the beginning (16 seconds). No black frames at the
-          beginning. Starts with a red color. Initial 5 second of input stream is missing.
-        - Black screen for remaining 19 seconds.
+        - Display input stream without the initial 5 seconds from the beginning (11 seconds). No black frames at the
+          beginning. Starts with a red color. The initial 5 seconds of the input stream are missing.
+        - Black screen for remaining 9 seconds.
     ",
     snapshot_name = "push_entire_input_before_start_udp_without_offset.rtp"
 )]
