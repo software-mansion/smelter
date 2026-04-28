@@ -1,11 +1,75 @@
+//! Queue subsystem: synchronizes per-input frames/samples against a shared
+//! timeline and drives output to the renderer/mixer.
+//!
+//! - Always read time through [`QueueContext::clock`] (a `SharedClock`). Never call
+//!   `Instant::now()` or `Instant::elapsed()` directly — tests swap in a virtual clock to
+//!   drive pacing and late-drop deterministically, and any direct read of the wall clock
+//!   bypasses that and reintroduces flakiness.
+//! - Queue PTS values are measured from `sync_point` (an `Instant` captured at Queue
+//!   construction).
+//! - `start_pts` is the duration from `sync_point` to the moment `start` is called.
+//! - Inputs produce per-track PTS relative to the track's own zero. Moving those into the
+//!   queue's frame of reference is the job of `VideoQueueInput` / `AudioQueueInput`.
+//!   - `QueueTrackOffset::Pts(Duration::ZERO)` means the track's zero should line up with
+//!     the queue's `sync_point` — i.e. the track produces timestamps in sync with wall clock
+//!     (used by realtime protocols like WebRTC, V4L2, DeckLink).
+//!   - `QueueTrackOffset::Pts(d)` shifts the track so its zero maps to `sync_point + d`
+//!     (RTMP uses `effective_last_pts + RTMP_BUFFER` to leave room for decoding).
+//!   - `QueueTrackOffset::FromStart(d)` places the track's zero at `start_pts + d`.
+//!   - `QueueTrackOffset::None` defers: the offset is fixed on the first received packet.
+//! - `TrackOffset` is shared between a track's video and audio so their synchronization
+//!   from the input side is preserved.
+//! - Multiple tracks can be queued back-to-back via `queue_new_track`; the next one starts
+//!   once the current one is done. Callers can force an early swap with `abort_old_track`.
+//!
+//! # Offset initialization
+//!
+//! - `Pts(d)`: `track_offset` is set to `d` at construction; it never changes.
+//! - `FromStart(d)`: `track_offset` is initialized to `start_pts + d` when the first
+//!   packet is received after queue start.
+//! - `None`: `track_offset` is initialized on the first packet — before queue start to
+//!   `sync_point.elapsed()` at that moment (via `drop_old_frames_before_start`), after
+//!   queue start to the current queue PTS at which the packet is observed.
+//!
+//! # Side channel (`side_channel_delay`)
+//!
+//! - Every input receiver (both with and without a side channel) shifts incoming PTS
+//!   by `side_channel_delay`, so the whole pipeline runs that far behind the inputs.
+//! - Inputs with a side channel additionally allow their receiver buffer to grow up to
+//!   `side_channel_delay` worth of data, so the side-channel subscriber receives frames
+//!   ahead of when the queue consumes them — leaving the subscriber roughly
+//!   `side_channel_delay` time to process before the frame is due.
+//!
+//! # Example usage scenarios
+//!
+//! - MP4 input:
+//!   - On seek, create a new track with `queue_new_track`, start new reader threads, then
+//!     call `abort_old_track` to switch immediately.
+//!   - On loop, create a new track; `abort_old_track` is optional. Skipping it may leak a
+//!     few extra frames from the previous iteration depending on buffer size.
+//! - RTMP server input:
+//!   - Read `effective_last_pts` (valid before and after start).
+//!   - Register a track with `QueueTrackOffset::Pts(effective_last_pts + RTMP_BUFFER)`
+//!     (`RTMP_BUFFER` is currently 2s) so decoded data has time to land.
+//!   - Create the track with both audio and video senders; drop the unused one if no
+//!     config arrives within 5s.
+//! - WHIP / WHEP / V4L2 / DeckLink:
+//!   - Register a track with `QueueTrackOffset::Pts(Duration::ZERO)` so input PTS is
+//!     aligned to `sync_point`.
+
 mod audio_input;
 mod audio_queue;
+mod clock;
 mod queue_input;
 mod queue_thread;
 mod side_channel;
+mod ticker;
 mod utils;
 mod video_input;
 mod video_queue;
+
+#[cfg(test)]
+mod tests;
 
 use std::{
     collections::HashMap,
@@ -32,7 +96,9 @@ pub(crate) use self::queue_input::{
 
 use self::{
     audio_queue::AudioQueue,
+    clock::{RealClock, SharedClock},
     queue_thread::{QueueStartEvent, QueueThread},
+    ticker::{RealTicker, SharedTicker},
     video_queue::VideoQueue,
 };
 
@@ -62,54 +128,6 @@ impl From<&PipelineOptions> for QueueOptions {
     }
 }
 
-/// - Queue PTS values are measured from `sync_point` (an `Instant` captured at Queue
-///   construction).
-/// - `start_pts` is the duration from `sync_point` to the moment `start` is called.
-/// - Inputs produce per-track PTS relative to the track's own zero. Moving those into the
-///   queue's frame of reference is the job of `VideoQueueInput` / `AudioQueueInput`.
-///   - `QueueTrackOffset::Pts(Duration::ZERO)` means the track's zero should line up with
-///     the queue's `sync_point` — i.e. the track produces timestamps in sync with wall clock
-///     (used by realtime protocols like WebRTC, V4L2, DeckLink).
-///   - `QueueTrackOffset::Pts(d)` shifts the track so its zero maps to `sync_point + d`
-///     (RTMP uses `effective_last_pts + RTMP_BUFFER` to leave room for decoding).
-///   - `QueueTrackOffset::FromStart(d)` places the track's zero at `start_pts + d`.
-///   - `QueueTrackOffset::None` defers: the offset is fixed on the first received packet.
-/// - `TrackOffset` is shared between a track's video and audio so their synchronization
-///   from the input side is preserved.
-/// - Multiple tracks can be queued back-to-back via `queue_new_track`; the next one starts
-///   once the current one is done. Callers can force an early swap with `abort_old_track`.
-///
-/// - Offset initialization:
-///   - `Pts(d)`: `track_offset` is set to `d` at construction; it never changes.
-///   - `FromStart(d)`: `track_offset` is initialized to `start_pts + d` when the first
-///     packet is received after queue start.
-///   - `None`: `track_offset` is initialized on the first packet — before queue start to
-///     `sync_point.elapsed()` at that moment (via `drop_old_frames_before_start`), after
-///     queue start to the current queue PTS at which the packet is observed.
-///
-/// - Side channel (`side_channel_delay`):
-///   - Every input receiver (both with and without a side channel) shifts incoming PTS
-///     by `side_channel_delay`, so the whole pipeline runs that far behind the inputs.
-///   - Inputs with a side channel additionally allow their receiver buffer to grow up to
-///     `side_channel_delay` worth of data, so the side-channel subscriber receives frames
-///     ahead of when the queue consumes them — leaving the subscriber roughly
-///     `side_channel_delay` time to process before the frame is due.
-///
-/// - Example usage scenarios:
-///   - MP4 input:
-///     - On seek, create a new track with `queue_new_track`, start new reader threads, then
-///       call `abort_old_track` to switch immediately.
-///     - On loop, create a new track; `abort_old_track` is optional. Skipping it may leak a
-///       few extra frames from the previous iteration depending on buffer size.
-///   - RTMP server input:
-///     - Read `effective_last_pts` (valid before and after start).
-///     - Register a track with `QueueTrackOffset::Pts(effective_last_pts + RTMP_BUFFER)`
-///       (`RTMP_BUFFER` is currently 2s) so decoded data has time to land.
-///     - Create the track with both audio and video senders; drop the unused one if no
-///       config arrives within 5s.
-///   - WHIP / WHEP / V4L2 / DeckLink:
-///     - Register a track with `QueueTrackOffset::Pts(Duration::ZERO)` so input PTS is
-///       aligned to `sync_point`.
 pub struct Queue {
     queue_ctx: QueueContext,
     video_queue: Mutex<VideoQueue>,
@@ -135,7 +153,7 @@ pub struct Queue {
     should_close: AtomicBool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct QueueContext {
     pub sync_point: Instant,
     /// Duration since sync point, represents time of
@@ -144,17 +162,27 @@ pub struct QueueContext {
     last_pts: SharedPts,
     side_channel_delay: Duration,
     pub(crate) side_channel_socket_dir: Option<Arc<Path>>,
+    pub(crate) clock: SharedClock,
 }
 
 impl QueueContext {
     pub(crate) fn effective_last_pts(&self) -> Duration {
         self.last_pts
             .value()
-            .unwrap_or_else(|| self.sync_point.elapsed())
+            .unwrap_or_else(|| self.clock.elapsed_since(self.sync_point))
     }
 }
 
-#[derive(Debug)]
+impl Debug for QueueContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QueueContext")
+            .field("sync_point", &self.sync_point)
+            .field("side_channel_delay", &self.side_channel_delay)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub(super) struct QueueVideoOutput {
     // If required this batch can't be dropped even if processing is behind
     pub(super) required: bool,
@@ -178,7 +206,7 @@ impl From<QueueVideoOutput> for FrameSet<InputId> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct QueueAudioOutput {
     pub samples: HashMap<InputId, PipelineEvent<Vec<InputAudioSamples>>>,
     pub start_pts: Duration,
@@ -220,23 +248,39 @@ impl<T: Clone> Clone for PipelineEvent<T> {
 
 impl Queue {
     pub(crate) fn new(opts: QueueOptions) -> Arc<Self> {
+        let clock: SharedClock = Arc::new(RealClock);
+        // Production uses a 5ms tick: that matches the post-start scheduling
+        // cadence of the original code. The pre-start cleanup phase will run
+        // cleanup at 5ms instead of the output frame interval, which is fine
+        // (cleanup is idempotent and cheap).
+        let ticker: SharedTicker = Arc::new(RealTicker::new(Duration::from_millis(5)));
+        Self::new_inner(opts, clock, ticker)
+    }
+
+    pub(in crate::queue) fn new_inner(
+        opts: QueueOptions,
+        clock: SharedClock,
+        ticker: SharedTicker,
+    ) -> Arc<Self> {
+        let sync_point = clock.now();
         let queue_ctx = QueueContext {
-            sync_point: Instant::now(),
+            sync_point,
             start_pts: Default::default(),
             last_pts: Default::default(),
             side_channel_delay: opts.side_channel_delay,
             side_channel_socket_dir: opts.side_channel_socket_dir,
+            clock: clock.clone(),
         };
         let (queue_start_sender, queue_start_receiver) = bounded(0);
         let (scheduled_event_sender, scheduled_event_receiver) = bounded(0);
         let queue = Arc::new(Queue {
             queue_ctx: queue_ctx.clone(),
             video_queue: Mutex::new(VideoQueue::new(
-                queue_ctx.sync_point,
+                queue_ctx.clone(),
                 opts.ahead_of_time_processing,
             )),
             audio_queue: Mutex::new(AudioQueue::new(
-                queue_ctx.sync_point,
+                queue_ctx.clone(),
                 opts.ahead_of_time_processing,
             )),
             inputs: Mutex::new(HashMap::new()),
@@ -256,6 +300,7 @@ impl Queue {
             queue.clone(),
             queue_start_receiver,
             scheduled_event_receiver,
+            ticker,
         )
         .spawn();
 
@@ -297,7 +342,10 @@ impl Queue {
         audio_sender: Sender<QueueAudioOutput>,
     ) {
         if let Some(sender) = self.start_sender.lock().unwrap().take() {
-            let queue_start_pts = self.queue_ctx.sync_point.elapsed();
+            let queue_start_pts = self
+                .queue_ctx
+                .clock
+                .elapsed_since(self.queue_ctx.sync_point);
             self.queue_ctx.start_pts.update(queue_start_pts);
             sender
                 .send(QueueStartEvent {

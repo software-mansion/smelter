@@ -1,24 +1,21 @@
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, time::Duration};
 
 use smelter_render::InputId;
 use tracing::debug;
 
-use crate::queue::{QueueAudioOutput, WeakQueueInput};
+use crate::queue::{QueueAudioOutput, QueueContext, WeakQueueInput};
 
 pub struct AudioQueue {
-    sync_point: Instant,
+    queue_ctx: QueueContext,
     inputs: HashMap<InputId, WeakQueueInput>,
     ahead_of_time_processing: bool,
 }
 
 impl AudioQueue {
-    pub fn new(sync_point: Instant, ahead_of_time_processing: bool) -> Self {
+    pub fn new(queue_ctx: QueueContext, ahead_of_time_processing: bool) -> Self {
         AudioQueue {
             inputs: HashMap::new(),
-            sync_point,
+            queue_ctx,
             ahead_of_time_processing,
         }
     }
@@ -78,7 +75,9 @@ impl AudioQueue {
             })
             .collect();
 
-        if !self.ahead_of_time_processing && self.sync_point + pts_range.0 > Instant::now() {
+        if !self.ahead_of_time_processing
+            && self.queue_ctx.sync_point + pts_range.0 > self.queue_ctx.clock.now()
+        {
             return false;
         }
 
@@ -95,7 +94,7 @@ impl AudioQueue {
             return false;
         }
 
-        if self.sync_point + pts_range.0 < Instant::now() {
+        if self.queue_ctx.sync_point + pts_range.0 < self.queue_ctx.clock.now() {
             debug!("Pushing audio samples while some inputs are not ready.");
             return true;
         }
