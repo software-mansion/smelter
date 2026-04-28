@@ -12,7 +12,9 @@ dependencies = [
 ]
 
 [project.scripts]
-example = "example:main"
+example-yolo-whisper = "example.yolo_whisper:main"
+example-simple-sync = "example.simple_sync:main"
+example-simple-async = "example.simple_async:main"
 
 [tool.uv.sources]
 smelter-sdk = { workspace = true }

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release.
 
-- Side-channel client: subscribe to per-input video (RGBA) and audio (PCM) streams over unix sockets.
+- Side-channel client: subscribe to per-input video (RGBA) and audio (PCM) streams over Unix sockets.
 - Synchronous API (`smelter.subscribe_video_channel`, `smelter.subscribe_audio_channel`, `smelter.list_channels`).
 - Asyncio API (`smelter.aio`).
 - `Context` for explicit socket-directory configuration.

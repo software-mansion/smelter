@@ -25,7 +25,7 @@ server itself is a separate Rust binary — see the
 The SDK reads its socket directory from the
 `SMELTER_SIDE_CHANNEL_SOCKET_DIR` environment variable (the same one the
 server publishes), falling back to the current working directory. With that
-exported, the API is one positional arg — the smelter input id:
+exported, the API takes one positional argument — the Smelter input id:
 
 ```python
 from smelter import subscribe_video_channel
@@ -131,8 +131,8 @@ All exceptions inherit from `smelter.SmelterError`:
 
 ## Stability
 
-The SDK is alpha — minor releases (0.x) may break compatibility. The public
-surface, governed by semver once 1.0 ships, is:
+The SDK is alpha — any 0.x release may break compatibility. Once 1.0 ships,
+the following surface will be governed by semver:
 
 - Everything re-exported from the top-level `smelter` package (see
   `smelter.__all__`) and `smelter.aio` (`smelter.aio.__all__`).
