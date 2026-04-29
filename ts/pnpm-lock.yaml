@@ -526,8 +526,8 @@ importers:
         specifier: ^7.5.11
         version: 7.5.11
       uuid:
-        specifier: ^10.0.0
-        version: 10.0.0
+        specifier: ^14.0.0
+        version: 14.0.0
       ws:
         specifier: ^8.18.0
         version: 8.18.0
@@ -3852,8 +3852,8 @@ packages:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
 
-  uuid@10.0.0:
-    resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
+  uuid@14.0.0:
+    resolution: {integrity: sha512-Qo+uWgilfSmAhXCMav1uYFynlQO7fMFiMVZsQqZRMIXp0O7rR7qjkj+cPvBHLgBqi960QCoo/PH2/6ZtVqKvrg==}
     hasBin: true
 
   v8-compile-cache-lib@3.0.1:
@@ -7604,7 +7604,7 @@ snapshots:
 
   utils-merge@1.0.1: {}
 
-  uuid@10.0.0: {}
+  uuid@14.0.0: {}
 
   v8-compile-cache-lib@3.0.1: {}
 
