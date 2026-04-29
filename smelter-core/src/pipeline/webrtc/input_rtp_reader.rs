@@ -84,7 +84,7 @@ impl WebrtcRtpReader {
                 return Some(packet);
             }
 
-            if let Ok(report) = self.rtcp_listeners.sender_report_receiver.try_recv() {
+            while let Ok(report) = self.rtcp_listeners.sender_report_receiver.try_recv() {
                 self.jitter_buffer
                     .on_sender_report(report.ntp_time, report.rtp_time);
             }
