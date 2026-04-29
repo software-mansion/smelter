@@ -83,9 +83,13 @@ pub(crate) async fn create_new_whip_session(
             state.ctx.queue_ctx.sync_point,
         );
 
+        let video = !offer_codecs.h264.is_empty()
+            || !offer_codecs.vp8.is_empty()
+            || !offer_codecs.vp9.is_empty();
+        let audio = !offer_codecs.opus.is_empty();
         let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: true,
-            audio: true,
+            video,
+            audio,
             offset: QueueTrackOffset::Pts(Duration::ZERO),
         });
 
