@@ -4,4 +4,5 @@ export interface Logger {
   info(...params: any[]): void;
   debug(...params: any[]): void;
   trace(...params: any[]): void;
+  child(bindings: Record<string, any>): Logger;
 }

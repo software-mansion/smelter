@@ -34,13 +34,14 @@ export type SmelterOutputContext = {
   unregisterImage: (imageId: number) => Promise<void>;
 };
 
-const noopLogger = {
+const noopLogger: Logger = {
   error: () => null,
   warn: () => null,
   info: () => null,
   debug: () => null,
   trace: () => null,
-} as const;
+  child: () => noopLogger,
+};
 
 export const SmelterContext = createContext<SmelterOutputContext>({
   globalInputStreamStore: new LiveInputStreamStore(noopLogger),

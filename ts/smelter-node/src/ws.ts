@@ -1,4 +1,4 @@
-import { type Logger } from 'pino';
+import type { Logger } from '@swmansion/smelter-core';
 import WebSocket from 'ws';
 
 export class WebSocketConnection {

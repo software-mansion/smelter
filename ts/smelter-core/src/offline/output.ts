@@ -9,7 +9,7 @@ import { intoAudioInputsConfiguration } from '../api/output';
 import { sleep } from '../utils';
 import { OFFLINE_OUTPUT_ID } from './compositor';
 import { OutputRootComponent } from '../rootComponent';
-import type { Logger } from 'pino';
+import type { Logger } from '../logger';
 import type { ImageRef } from '../api/image';
 
 type AudioContext = _smelterInternals.AudioContext;
