@@ -18,7 +18,7 @@ pub struct H264AuSplitter {
 impl H264AuSplitter {
     pub fn put_chunk(
         &mut self,
-        chunk: EncodedInputChunk,
+        chunk: &EncodedInputChunk,
     ) -> Result<Vec<EncodedInputChunk>, AuSplitterError> {
         if MediaKind::Video(VideoCodec::H264) != chunk.kind {
             return Err(AuSplitterError::UnsupportedMediaKind(chunk.kind));

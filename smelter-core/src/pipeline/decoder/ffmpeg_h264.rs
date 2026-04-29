@@ -73,15 +73,7 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
                 if !self.use_au_splitter {
                     vec![chunk]
                 } else {
-                    let fallback_chunk = EncodedInputChunk {
-                        data: chunk.data.clone(),
-                        pts: chunk.pts,
-                        dts: chunk.dts,
-                        kind: chunk.kind,
-                        present: chunk.present,
-                    };
-
-                    match self.au_splitter.put_chunk(chunk) {
+                    match self.au_splitter.put_chunk(&chunk) {
                         Ok(chunks) => chunks,
                         Err(err) => {
                             if let Some(s) = self.keyframe_request_sender.as_ref() {
@@ -96,7 +88,7 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
                                 debug!(
                                     "H264 AU splitter failed: {err}. Disabling AU splitter and falling back to direct chunk decode."
                                 );
-                                vec![fallback_chunk]
+                                vec![chunk]
                             } else {
                                 debug!(
                                     "H264 AU splitter reported transient stream issue: {err}. Keeping AU splitter enabled and waiting for keyframe recovery."
