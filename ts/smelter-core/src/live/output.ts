@@ -8,7 +8,7 @@ import type { RegisterOutput } from '../api/output';
 import { intoAudioInputsConfiguration } from '../api/output';
 import { ThrottledFunction } from '../utils';
 import { OutputRootComponent } from '../rootComponent';
-import type { Logger } from 'pino';
+import type { Logger } from '../logger';
 import type { ImageRef } from '../api/image';
 
 type AudioContext = _smelterInternals.AudioContext;

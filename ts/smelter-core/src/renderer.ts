@@ -4,7 +4,7 @@ import { DefaultEventPriority, LegacyRoot } from 'react-reconciler/constants';
 import type { Api } from './api';
 import type { _smelterInternals } from '@swmansion/smelter';
 import type React from 'react';
-import type { Logger } from 'pino';
+import type { Logger } from './logger';
 
 type SceneBuilder<P> = _smelterInternals.SceneBuilder<P>;
 type SceneComponent = _smelterInternals.SceneComponent;

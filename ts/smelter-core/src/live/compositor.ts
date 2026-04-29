@@ -12,7 +12,7 @@ import { parseEvent } from '../event';
 import { intoRegisterImage, intoRegisterWebRenderer } from '../api/renderer';
 import { handleEvent } from './event';
 import type { ReactElement } from 'react';
-import type { Logger } from 'pino';
+import type { Logger } from '../logger';
 import type { ImageRef } from '../api/image';
 import type { InputHandle } from '../inputHandle';
 import { newInputHandle } from '../inputHandle';

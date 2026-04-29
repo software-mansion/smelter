@@ -11,7 +11,7 @@ import { intoRegisterImage } from '../api/renderer';
 import OfflineOutput from './output';
 import { SmelterEventType, parseEvent } from '../event';
 import type { ReactElement } from 'react';
-import type { Logger } from 'pino';
+import type { Logger } from '../logger';
 import type { ImageRef } from '../api/image';
 
 /**

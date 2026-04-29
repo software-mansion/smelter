@@ -39,7 +39,6 @@
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/react": "^18.3.3",
     "@types/react-reconciler": "0.28.8",
-    "pino": "^9.5.0",
     "rollup": "^4.59.0",
     "rollup-plugin-dts": "^6.1.1"
   },

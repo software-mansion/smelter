@@ -1,4 +1,4 @@
-import type { Logger } from 'pino';
+import type { Logger } from './logger';
 import type { ApiRequest, MultipartRequest } from './api';
 
 export interface SetupInstanceOptions {

@@ -1,6 +1,6 @@
 import { _smelterInternals } from '@swmansion/smelter';
 import { parseInputRef } from './api/input';
-import type { Logger } from 'pino';
+import type { Logger } from './logger';
 
 export type SmelterEvent = _smelterInternals.SmelterEvent;
 export const SmelterEventType = _smelterInternals.SmelterEventType;
