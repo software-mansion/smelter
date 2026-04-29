@@ -1,27 +1,24 @@
 use tracing::debug;
 
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, time::Duration};
 
-use crate::queue::QueueVideoOutput;
+use crate::queue::{QueueContext, QueueVideoOutput};
 
 use crate::prelude::*;
 
 use super::queue_input::WeakQueueInput;
 
 pub struct VideoQueue {
-    sync_point: Instant,
+    queue_ctx: QueueContext,
     inputs: HashMap<InputId, WeakQueueInput>,
     ahead_of_time_processing: bool,
 }
 
 impl VideoQueue {
-    pub fn new(sync_point: Instant, ahead_of_time_processing: bool) -> Self {
+    pub fn new(queue_ctx: QueueContext, ahead_of_time_processing: bool) -> Self {
         VideoQueue {
             inputs: HashMap::new(),
-            sync_point,
+            queue_ctx,
             ahead_of_time_processing,
         }
     }
@@ -82,7 +79,9 @@ impl VideoQueue {
             })
             .collect();
 
-        if !self.ahead_of_time_processing && self.sync_point + next_pts > Instant::now() {
+        if !self.ahead_of_time_processing
+            && self.queue_ctx.sync_point + next_pts > self.queue_ctx.clock.now()
+        {
             return false;
         }
 
@@ -99,7 +98,7 @@ impl VideoQueue {
             return false;
         }
 
-        if self.sync_point + next_pts < Instant::now() {
+        if self.queue_ctx.sync_point + next_pts < self.queue_ctx.clock.now() {
             debug!("Pushing video frames while some inputs are not ready.");
             return true;
         }

@@ -5,7 +5,7 @@ use smelter_render::InputId;
 use tracing::{debug, trace, warn};
 
 use crate::{
-    PipelineCtx, PipelineEvent, Ref,
+    PipelineEvent, Ref,
     event::{Event, EventEmitter},
     queue::{
         QueueContext, queue_input::TrackOffset, side_channel::AudioSideChannel,
@@ -47,7 +47,8 @@ pub(crate) struct AudioQueueInput {
 
 impl AudioQueueInput {
     pub(super) fn new(
-        ctx: &Arc<PipelineCtx>,
+        queue_ctx: &QueueContext,
+        event_emitter: &Arc<EventEmitter>,
         input_ref: &Ref<InputId>,
         required: bool,
         offset: Option<Duration>,
@@ -55,9 +56,9 @@ impl AudioQueueInput {
         side_channel: Option<AudioSideChannel>,
     ) -> (Self, Sender<InputAudioSamples>) {
         let (receiver, sender) =
-            AudioInputReceiver::new(ctx.queue_ctx.side_channel_delay, side_channel);
+            AudioInputReceiver::new(queue_ctx.side_channel_delay, side_channel);
         let input = Self {
-            queue_ctx: ctx.queue_ctx.clone(),
+            queue_ctx: queue_ctx.clone(),
             required,
             offset_from_start: offset,
             receiver,
@@ -65,17 +66,17 @@ impl AudioQueueInput {
             paused: false,
             event_delivered_guard: EmitOnceGuard::new(
                 Event::AudioInputStreamDelivered(input_ref.id().clone()),
-                &ctx.event_emitter,
+                event_emitter,
             ),
             event_playing_guard: EmitOnceGuard::new(
                 Event::AudioInputStreamPlaying(input_ref.id().clone()),
-                &ctx.event_emitter,
+                event_emitter,
             ),
             event_eos_guard: EmitOnceGuard::new(
                 Event::AudioInputStreamEos(input_ref.id().clone()),
-                &ctx.event_emitter,
+                event_emitter,
             ),
-            event_emitter: ctx.event_emitter.clone(),
+            event_emitter: event_emitter.clone(),
             input_id: input_ref.id().clone(),
         };
         (input, sender)
@@ -221,7 +222,10 @@ impl AudioQueueInput {
 
         self.event_delivered_guard.emit();
         if self.offset_from_start.is_none() {
-            let now = self.queue_ctx.sync_point.elapsed();
+            let now = self
+                .queue_ctx
+                .clock
+                .elapsed_since(self.queue_ctx.sync_point);
             let offset = self.track_offset.get_or_init(now);
             let _ = self.receiver.pop_before_pts(now.saturating_sub(offset));
         }

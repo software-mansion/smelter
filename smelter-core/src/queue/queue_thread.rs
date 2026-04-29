@@ -6,9 +6,10 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::{Receiver, Sender, select, tick};
+use crossbeam_channel::{Receiver, Sender, select};
 use tracing::{debug, info, info_span, trace, warn};
 
+use super::ticker::SharedTicker;
 use super::{Queue, QueueAudioOutput, QueueVideoOutput, ScheduledEvent};
 
 pub(super) struct QueueThread {
@@ -16,6 +17,7 @@ pub(super) struct QueueThread {
     start_receiver: Receiver<QueueStartEvent>,
     scheduled_event_receiver: Receiver<ScheduledEvent>,
     scheduled_events: BTreeMap<Duration, Vec<Box<dyn FnOnce() + Send>>>,
+    ticker: SharedTicker,
 }
 
 pub(super) struct QueueStartEvent {
@@ -29,12 +31,14 @@ impl QueueThread {
         queue: Arc<Queue>,
         start_receiver: Receiver<QueueStartEvent>,
         scheduled_event_receiver: Receiver<ScheduledEvent>,
+        ticker: SharedTicker,
     ) -> Self {
         Self {
             queue,
             start_receiver,
             scheduled_event_receiver,
             scheduled_events: BTreeMap::new(),
+            ticker,
         }
     }
 
@@ -47,10 +51,10 @@ impl QueueThread {
 
     fn run(mut self) {
         let _span = info_span!("Queue").entered();
-        let ticker = tick(self.queue.output_framerate.get_interval_duration());
+        let tick_recv = self.ticker.receiver();
         while !self.queue.should_close.load(Ordering::Relaxed) {
             select! {
-                recv(ticker) -> _ => {
+                recv(tick_recv) -> _ => {
                     self.cleanup_old_data()
                 },
                 recv(self.scheduled_event_receiver) -> event => {
@@ -65,7 +69,8 @@ impl QueueThread {
                     }
                 }
                 recv(self.start_receiver) -> start_event => {
-                    QueueThreadAfterStart::new(self, start_event.unwrap()).run();
+                    let after = QueueThreadAfterStart::new(self, start_event.unwrap());
+                    after.run(tick_recv);
                     return;
                 },
             };
@@ -118,12 +123,10 @@ impl QueueThreadAfterStart {
         }
     }
 
-    fn run(mut self) {
-        let ticker = tick(Duration::from_millis(5));
-
+    fn run(mut self, tick_recv: Receiver<()>) {
         while !self.queue.should_close.load(Ordering::Relaxed) {
             select! {
-                recv(ticker) -> _ => {
+                recv(tick_recv) -> _ => {
                     self.on_handle_tick()
                 },
                 recv(self.scheduled_event_receiver) -> event => {
