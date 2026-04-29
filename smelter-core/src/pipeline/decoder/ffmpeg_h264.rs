@@ -5,13 +5,14 @@ use crate::pipeline::{
         EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
         ffmpeg_utils::{create_av_packet, from_av_frame},
     },
-    utils::H264AuSplitter,
+    utils::{AuSplitterError, H264AuSplitter},
 };
 use crate::prelude::*;
 
 use ffmpeg_next::{
     Rational,
     codec::{Context, Id},
+    ffi::AV_CODEC_FLAG2_CHUNKS,
     media::Type,
 };
 use smelter_render::Frame;
@@ -24,6 +25,7 @@ pub struct FfmpegH264Decoder {
     keyframe_request_sender: Option<KeyframeRequestSender>,
     av_frame: ffmpeg_next::frame::Video,
     au_splitter: H264AuSplitter,
+    use_au_splitter: bool,
     drop_frames: bool,
 }
 
@@ -45,6 +47,7 @@ impl VideoDecoder for FfmpegH264Decoder {
 
         let mut decoder = Context::from_parameters(parameters)?;
         unsafe {
+            (*decoder.as_mut_ptr()).flags2 |= AV_CODEC_FLAG2_CHUNKS;
             (*decoder.as_mut_ptr()).pkt_timebase = Rational::new(1, TIME_BASE).into();
         }
 
@@ -55,6 +58,7 @@ impl VideoDecoder for FfmpegH264Decoder {
             keyframe_request_sender,
             av_frame: ffmpeg_next::frame::Video::empty(),
             au_splitter: H264AuSplitter::default(),
+            use_au_splitter: true,
             drop_frames: false,
         })
     }
@@ -66,31 +70,78 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
         let au_chunks = match event {
             EncodedInputEvent::Chunk(chunk) => {
                 self.drop_frames = !chunk.present;
-                match self.au_splitter.put_chunk(chunk) {
-                    Ok(chunks) => chunks,
-                    Err(err) => {
-                        if let Some(s) = self.keyframe_request_sender.as_ref() {
-                            s.send()
+                if !self.use_au_splitter {
+                    vec![chunk]
+                } else {
+                    let fallback_chunk = EncodedInputChunk {
+                        data: chunk.data.clone(),
+                        pts: chunk.pts,
+                        dts: chunk.dts,
+                        kind: chunk.kind,
+                        present: chunk.present,
+                    };
+
+                    match self.au_splitter.put_chunk(chunk) {
+                        Ok(chunks) => chunks,
+                        Err(err) => {
+                            if let Some(s) = self.keyframe_request_sender.as_ref() {
+                                s.send()
+                            }
+
+                            if should_disable_au_splitter(&err) {
+                                // If AU splitting is incompatible with this incoming packetization,
+                                // keep decoding in chunk mode instead of stalling on repeated errors.
+                                self.use_au_splitter = false;
+                                self.au_splitter = H264AuSplitter::default();
+                                debug!(
+                                    "H264 AU splitter failed: {err}. Disabling AU splitter and falling back to direct chunk decode."
+                                );
+                                vec![fallback_chunk]
+                            } else {
+                                debug!(
+                                    "H264 AU splitter reported transient stream issue: {err}. Keeping AU splitter enabled and waiting for keyframe recovery."
+                                );
+                                Vec::new()
+                            }
                         }
-                        debug!("H264 AU splitter could not process the chunks: {err}");
-                        return Vec::new();
                     }
                 }
             }
             EncodedInputEvent::LostData => {
-                self.au_splitter.mark_missing_data();
+                if self.use_au_splitter {
+                    self.au_splitter.mark_missing_data();
+                }
+                if let Some(s) = self.keyframe_request_sender.as_ref() {
+                    s.send()
+                }
                 return vec![];
             }
-            EncodedInputEvent::AuDelimiter => match self.au_splitter.flush() {
-                Ok(chunks) => chunks,
-                Err(err) => {
-                    if let Some(s) = self.keyframe_request_sender.as_ref() {
-                        s.send()
+            EncodedInputEvent::AuDelimiter => {
+                if !self.use_au_splitter {
+                    Vec::new()
+                } else {
+                    match self.au_splitter.flush() {
+                        Ok(chunks) => chunks,
+                        Err(err) => {
+                            if let Some(s) = self.keyframe_request_sender.as_ref() {
+                                s.send()
+                            }
+                            if should_disable_au_splitter(&err) {
+                                self.use_au_splitter = false;
+                                self.au_splitter = H264AuSplitter::default();
+                                debug!(
+                                    "H264 AU splitter flush failed: {err}. Disabling AU splitter and continuing in direct chunk mode."
+                                );
+                            } else {
+                                debug!(
+                                    "H264 AU splitter flush reported transient stream issue: {err}. Keeping AU splitter enabled."
+                                );
+                            }
+                            Vec::new()
+                        }
                     }
-                    debug!("H264 AU splitter could not process the chunks: {err}");
-                    return Vec::new();
                 }
-            },
+            }
         };
 
         for chunk in au_chunks {
@@ -119,6 +170,15 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
         self.decoder.flush();
         self.read_all_frames()
     }
+}
+
+fn should_disable_au_splitter(err: &AuSplitterError) -> bool {
+    matches!(
+        err,
+        AuSplitterError::ParserError(_)
+            | AuSplitterError::InvalidAccessUnit
+            | AuSplitterError::UnsupportedMediaKind(_)
+    )
 }
 
 impl FfmpegH264Decoder {
