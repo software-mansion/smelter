@@ -4,7 +4,7 @@ use std::{fs, path::Path, time::Duration};
 use webrtc::rtp;
 use webrtc_util::Unmarshal;
 
-use crate::paths::{failed_snapshots_dir_path, submodule_root_path};
+use crate::paths::{pipeline_tests_workdir, submodule_root_path};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommunicationProtocol {
@@ -30,16 +30,6 @@ pub fn output_dump_from_disk<P: AsRef<Path>>(path: P) -> Result<Bytes> {
 
     let bytes = fs::read(output_path).context("Failed to read output dump")?;
     Ok(Bytes::from(bytes))
-}
-
-pub fn update_dump_on_disk<P: AsRef<Path>>(path: P, content: &Bytes) -> Result<()> {
-    let output_path = submodule_root_path()
-        .join("rtp_packet_dumps")
-        .join("outputs")
-        .join(path);
-
-    fs::write(output_path, content).context("Failed to read output dump")?;
-    Ok(())
 }
 
 pub fn split_rtp_packet_dump(dump: Bytes, split_at_pts: Duration) -> Result<(Bytes, Bytes)> {
@@ -76,7 +66,7 @@ pub fn save_failed_test_dumps<P: AsRef<Path>>(
     actual_dump: &Bytes,
     snapshot_filename: P,
 ) {
-    let path = failed_snapshots_dir_path();
+    let path = pipeline_tests_workdir();
 
     let _ = fs::create_dir_all(&path);
 
@@ -99,7 +89,7 @@ pub fn save_failed_test_dumps<P: AsRef<Path>>(
 /// to pair it with) or in any other path that produced an `actual`
 /// without a corresponding `expected` to diff against.
 pub fn save_failed_actual_dump<P: AsRef<Path>>(actual_dump: &Bytes, snapshot_filename: P) {
-    let path = failed_snapshots_dir_path();
+    let path = pipeline_tests_workdir();
     let _ = fs::create_dir_all(&path);
     let file_name = snapshot_filename
         .as_ref()

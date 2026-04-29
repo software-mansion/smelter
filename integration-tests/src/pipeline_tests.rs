@@ -1,4 +1,5 @@
 mod audio_only;
+pub mod harness;
 #[cfg(test)]
 mod offline_processing;
 mod push_input_before_start;

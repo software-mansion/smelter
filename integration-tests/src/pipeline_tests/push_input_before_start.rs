@@ -1,8 +1,11 @@
 use std::{thread, time::Duration};
 
 use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, compare_video_dumps,
-    input_dump_from_disk, pipeline_tests::PipelineTest, video::VideoValidationConfig,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, input_dump_from_disk,
+    pipeline_tests::{
+        PipelineTest,
+        harness::{VideoCompareConfig, compare_video_dumps},
+    },
 };
 
 use anyhow::Result;
@@ -96,7 +99,7 @@ pub fn push_input_before_start_tcp() -> Result<()> {
     compare_video_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        VideoValidationConfig {
+        VideoCompareConfig {
             validation_intervals: vec![Duration::ZERO..Duration::from_secs(20)],
             ..Default::default()
         },
@@ -184,7 +187,7 @@ pub fn push_input_before_start_udp() -> Result<()> {
     compare_video_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        VideoValidationConfig {
+        VideoCompareConfig {
             validation_intervals: vec![Duration::ZERO..Duration::from_secs(20)],
             ..Default::default()
         },
@@ -271,9 +274,9 @@ pub fn push_input_before_start_tcp_no_offset() -> Result<()> {
     compare_video_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        VideoValidationConfig {
+        VideoCompareConfig {
             validation_intervals: vec![Duration::ZERO..Duration::from_secs(20)],
-            allowed_invalid_frames: 10,
+            max_failed_pairs: 10,
             ..Default::default()
         },
     )?;
@@ -359,9 +362,9 @@ pub fn push_input_before_start_udp_no_offset() -> Result<()> {
     compare_video_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        VideoValidationConfig {
+        VideoCompareConfig {
             validation_intervals: vec![Duration::ZERO..Duration::from_secs(18)],
-            allowed_invalid_frames: 10,
+            max_failed_pairs: 10,
             ..Default::default()
         },
     )?;

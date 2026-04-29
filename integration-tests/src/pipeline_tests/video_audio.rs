@@ -4,11 +4,15 @@ use serde_json::json;
 use std::time::Duration;
 
 use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
-    audio::{self, AudioAnalyzeTolerance, AudioValidationConfig, RealFrequencyTolerance},
-    compare_audio_dumps, compare_video_dumps, input_dump_from_disk,
-    pipeline_tests::PipelineTest,
-    video::VideoValidationConfig,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, input_dump_from_disk,
+    pipeline_tests::{
+        PipelineTest,
+        harness::{
+            AudioCompareConfig, FftCompareConfig, VideoCompareConfig, compare_audio_dumps,
+            compare_video_dumps,
+            fft::{Mode, RealTolerance},
+        },
+    },
 };
 
 #[allow(dead_code)]
@@ -103,33 +107,28 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
     compare_video_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        VideoValidationConfig {
+        VideoCompareConfig {
             validation_intervals: vec![Duration::ZERO..Duration::from_secs(18)],
             ..Default::default()
         },
     )?;
 
-    let audio_validation_tolerance = RealFrequencyTolerance {
+    let mut fft_cfg = FftCompareConfig::real(vec![Duration::ZERO..Duration::from_secs(10)]);
+    fft_cfg.mode = Mode::Real(RealTolerance {
         max_frequency_level: 5.0,
         average_level: 15.0,
         median_level: 15.0,
         general_level: 5.0,
         ..Default::default()
-    };
-
-    let audio_validation_config = AudioValidationConfig {
-        tolerance: AudioAnalyzeTolerance {
-            frequency_tolerance: audio::FrequencyTolerance::Real(audio_validation_tolerance),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    });
 
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Real,
-        audio_validation_config,
+        AudioCompareConfig {
+            fft: Some(fft_cfg),
+            ..Default::default()
+        },
     )?;
 
     Ok(())

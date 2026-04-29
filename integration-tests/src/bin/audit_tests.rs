@@ -1,18 +1,17 @@
 use std::{
     fs,
     ops::ControlFlow,
-    os::unix::process::CommandExt,
     process::{Command, Stdio},
     time::Duration,
 };
 
 use anyhow::{Context, Result};
 use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
-use inquire::{InquireError, Select};
+use inquire::{Confirm, InquireError, Select};
 use integration_tests::{
-    paths::{failed_snapshots_dir_path, submodule_root_path},
-    pipeline_tests::{PipelineTest, pipeline_tests},
-    tools::rtp_inspector,
+    paths::{pipeline_tests_workdir, submodule_root_path, test_workdir},
+    pipeline_tests::{PipelineTest, harness::SAVE_DUMPS_ENV, pipeline_tests},
+    tools::{rtp_inspector, rtp_player},
 };
 use tracing::{error, info, warn};
 
@@ -22,42 +21,32 @@ enum Action {
     RunAll,
     #[strum(to_string = "Run specific pipeline test")]
     RunSpecific,
+    #[strum(to_string = "Audit existing test results (no rerun)")]
+    InspectExisting,
+    #[strum(to_string = "Restore test_workdir: from GitHub Actions (build_and_test_linux)")]
+    DownloadCiArtifacts,
+    #[strum(to_string = "Restore test_workdir: from snapshot submodule diff")]
+    DiffSnapshotSubmodule,
 }
 
+/// Things you can do once a test has produced (or already had on disk)
+/// a pair of dumps in the workdir. The dumps don't necessarily come
+/// from a failed run — `inspect_existing` or `SMELTER_SAVE_DUMPS=1`
+/// also surface dumps for passing tests.
 #[derive(Debug, Clone, Copy, strum::Display, strum::EnumIter)]
-enum FailureAction {
-    #[strum(to_string = "Play actual dump")]
+enum TestResultAction {
+    #[strum(to_string = "Compare (launch inspector)")]
+    Compare,
+    #[strum(to_string = "Play actual")]
     PlayActual,
-    #[strum(to_string = "Play expected dump")]
+    #[strum(to_string = "Play expected")]
     PlayExpected,
-    #[strum(to_string = "Inspect dumps (compare actual vs expected)")]
-    Inspect,
     #[strum(to_string = "Update snapshot from actual")]
     UpdateSnapshot,
     #[strum(to_string = "Rerun test")]
     Rerun,
     #[strum(to_string = "Skip")]
     Skip,
-}
-
-#[derive(Debug, Clone, Copy, strum::Display, strum::EnumIter)]
-enum StreamKind {
-    #[strum(to_string = "video")]
-    Video,
-    #[strum(to_string = "audio")]
-    Audio,
-    #[strum(to_string = "av (audio + video)")]
-    Av,
-}
-
-impl StreamKind {
-    fn as_arg(self) -> &'static str {
-        match self {
-            Self::Video => "video",
-            Self::Audio => "audio",
-            Self::Av => "av",
-        }
-    }
 }
 
 fn main() -> Result<()> {
@@ -78,6 +67,9 @@ fn main() -> Result<()> {
         let result = match choice {
             Action::RunAll => run_all(),
             Action::RunSpecific => run_specific(),
+            Action::InspectExisting => inspect_existing(),
+            Action::DownloadCiArtifacts => download_ci_artifacts(),
+            Action::DiffSnapshotSubmodule => diff_snapshot_submodule(),
         };
         if let Err(e) = result {
             error!("{e:#}");
@@ -110,39 +102,38 @@ fn run_specific() -> Result<()> {
     };
     let test = tests[selected_idx];
     let filter = test_filter(test);
-    let status = run_nextest(&[&filter])?;
+    // Single-test runs always preserve dumps so the inspector is
+    // available regardless of pass/fail — the user explicitly asked
+    // to look at this one.
+    let status = run_nextest(&[&filter], RunOptions { save_dumps: true })?;
     if !status.success() {
-        let _ = handle_failure_loop(test, &filter)?;
+        let _ = test_result_action_loop(test, &filter)?;
     }
     Ok(())
 }
 
-fn run_all() -> Result<()> {
-    let failed_dir = failed_snapshots_dir_path();
-    if failed_dir.exists() {
-        fs::remove_dir_all(&failed_dir)
-            .with_context(|| format!("Failed to clean {}", failed_dir.display()))?;
-    }
-
-    let status = run_nextest(&["pipeline_tests"])?;
-    if status.success() {
+/// Walk every test result already sitting in the work directory and
+/// hand each one to the audit UI. Lets the user re-open the inspector
+/// after a previous `audit_tests` session, or browse results produced
+/// by a separate `cargo nextest` invocation, without having to re-run
+/// the (possibly long) test. Inside each iteration the user can
+/// `Skip` to advance to the next result; cancelling out of the audit
+/// prompt stops the walk.
+fn inspect_existing() -> Result<()> {
+    let mut tests = discover_tests_with_dumps()?;
+    if tests.is_empty() {
+        warn!(
+            "No test results found in {}",
+            pipeline_tests_workdir().display()
+        );
         return Ok(());
     }
-
-    let failed_tests = discover_failed_tests()?;
-    if failed_tests.is_empty() {
-        warn!("Test run failed but no failed snapshot dumps were produced");
-        return Ok(());
-    }
-
-    info!(
-        "{} test(s) produced failed snapshot dumps",
-        failed_tests.len()
-    );
-    for test in failed_tests {
+    tests.sort_by_key(|t| t.full_test_name);
+    info!("{} test result(s) to audit", tests.len());
+    for test in tests {
         let filter = test_filter(test);
-        info!("Handling failed test: {}", test.full_test_name);
-        match handle_failure_loop(test, &filter)? {
+        info!("Auditing test result: {}", test.full_test_name);
+        match test_result_action_loop(test, &filter)? {
             ControlFlow::Continue(()) => {}
             ControlFlow::Break(()) => break,
         }
@@ -150,15 +141,516 @@ fn run_all() -> Result<()> {
     Ok(())
 }
 
-fn discover_failed_tests() -> Result<Vec<&'static PipelineTest>> {
-    let failed_dir = failed_snapshots_dir_path();
-    let mut failed: Vec<&'static PipelineTest> = Vec::new();
-    if !failed_dir.exists() {
-        return Ok(failed);
+/// Replace `test_workdir/` with the `test_workdir` artifact attached
+/// to a chosen CI run. Useful for triaging CI failures locally
+/// without having to wait for the test to fail again on this machine.
+///
+/// Shells out to `gh` (must be installed and authenticated). Listing
+/// uses the artifacts API filtered by name (so only runs that
+/// actually have a downloadable `test_workdir` artifact appear);
+/// downloading uses `gh run download`.
+fn download_ci_artifacts() -> Result<()> {
+    if !gh_available() {
+        anyhow::bail!(
+            "`gh` not found in PATH. Install GitHub CLI and `gh auth login` to download CI artifacts."
+        );
+    }
+
+    let runs = list_recent_runs()?;
+    if runs.is_empty() {
+        warn!("No CI runs with a `test_workdir` artifact were found");
+        return Ok(());
+    }
+
+    let labels: Vec<String> = runs.iter().map(ArtifactRun::label).collect();
+    let selected_idx = match Select::new("Select a CI run to pull dumps from:", labels)
+        .with_page_size(15)
+        .raw_prompt()
+    {
+        Ok(s) => s.index,
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    let run = &runs[selected_idx];
+
+    let dest = test_workdir();
+    info!(
+        "Replacing {} with artifact `test_workdir` from run #{}",
+        dest.display(),
+        run.run_id
+    );
+
+    if !confirm_wipe(
+        &dest,
+        &format!("Wipe {} and overwrite with CI artifact?", dest.display()),
+    )? {
+        return Ok(());
+    }
+
+    if dest.exists() {
+        fs::remove_dir_all(&dest).with_context(|| format!("Failed to clear {}", dest.display()))?;
+    }
+    fs::create_dir_all(&dest).with_context(|| format!("Failed to create {}", dest.display()))?;
+
+    let mut cmd = Command::new("gh");
+    cmd.args([
+        "run",
+        "download",
+        &run.run_id.to_string(),
+        "-n",
+        "test_workdir",
+        "-D",
+    ])
+    .arg(&dest);
+    info!("> {cmd:?}");
+    let status = cmd.status().context("Failed to spawn `gh run download`")?;
+    if !status.success() {
+        anyhow::bail!("`gh run download` exited with {status}");
+    }
+    info!("Downloaded artifact into {}", dest.display());
+    Ok(())
+}
+
+/// Populate `pipeline_tests/` workdir from a `git diff` between the
+/// snapshot submodule's current working tree (treated as `actual`) and
+/// a chosen past commit (treated as `expected`). Only files that
+/// changed bit-for-bit are written, so the audit UI lists exactly the
+/// snapshots that need a re-look after a snapshot update.
+fn diff_snapshot_submodule() -> Result<()> {
+    let submodule = submodule_root_path();
+    if !submodule.exists() {
+        anyhow::bail!(
+            "Snapshot submodule not initialized at {}. Run `git submodule update --init --checkout integration-tests/snapshots`.",
+            submodule.display()
+        );
+    }
+
+    // Refresh remote refs first so `origin/main` (and the rest of the
+    // picker) reflects the latest upstream state. `--quiet` keeps the
+    // output clean; `--tags --prune` makes sure deleted refs disappear.
+    info!("Fetching {} ...", submodule.display());
+    fetch_origin(&submodule)?;
+
+    let commits = list_snapshot_commits(&submodule)?;
+    if commits.is_empty() {
+        warn!("No commits found in {}", submodule.display());
+        return Ok(());
+    }
+
+    let labels: Vec<String> = commits.iter().map(SnapshotCommit::label).collect();
+    let selected_idx = match Select::new(
+        "Select a past commit to diff current snapshots against:",
+        labels,
+    )
+    .with_page_size(15)
+    .raw_prompt()
+    {
+        Ok(s) => s.index,
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    let commit = &commits[selected_idx];
+
+    let dest = pipeline_tests_workdir();
+    if !confirm_wipe(
+        &dest,
+        &format!(
+            "Wipe {} and populate from snapshots that differ from {}?",
+            dest.display(),
+            commit.short_sha()
+        ),
+    )? {
+        return Ok(());
+    }
+
+    if dest.exists() {
+        fs::remove_dir_all(&dest).with_context(|| format!("Failed to clear {}", dest.display()))?;
+    }
+    fs::create_dir_all(&dest).with_context(|| format!("Failed to create {}", dest.display()))?;
+
+    let mut written = 0usize;
+    let mut skipped_missing_current = 0usize;
+    let mut skipped_missing_old = 0usize;
+    let mut skipped_identical = 0usize;
+    for test in pipeline_tests() {
+        let rel = format!("rtp_packet_dumps/outputs/{}", test.snapshot_name);
+        let current_path = submodule.join(&rel);
+        let current = match fs::read(&current_path) {
+            Ok(b) => b,
+            Err(_) => {
+                skipped_missing_current += 1;
+                continue;
+            }
+        };
+        let old = match read_blob_at(&submodule, &commit.sha, &rel) {
+            Some(b) => b,
+            None => {
+                skipped_missing_old += 1;
+                continue;
+            }
+        };
+        if current == old {
+            skipped_identical += 1;
+            continue;
+        }
+        fs::write(
+            dest.join(format!("actual_dump_{}", test.snapshot_name)),
+            &current,
+        )?;
+        fs::write(
+            dest.join(format!("expected_dump_{}", test.snapshot_name)),
+            &old,
+        )?;
+        written += 1;
+    }
+
+    info!(
+        "Wrote {written} differing snapshot(s) into {} \
+         (identical: {skipped_identical}, missing current: {skipped_missing_current}, \
+         missing at {}: {skipped_missing_old})",
+        dest.display(),
+        commit.short_sha(),
+    );
+    Ok(())
+}
+
+#[derive(Debug)]
+struct SnapshotCommit {
+    sha: String,
+    date: String,
+    subject: String,
+    /// When `Some`, the picker shows this in place of the short sha
+    /// — used to surface the synthetic `origin/main` entry that
+    /// resolves to whatever the remote points at.
+    ref_name: Option<String>,
+}
+
+impl SnapshotCommit {
+    fn short_sha(&self) -> &str {
+        self.sha.get(..7).unwrap_or(&self.sha)
+    }
+
+    fn label(&self) -> String {
+        let date = self.date.get(..16).unwrap_or(&self.date);
+        let head = match &self.ref_name {
+            Some(name) => format!("{name} ({})", self.short_sha()),
+            None => self.short_sha().to_string(),
+        };
+        format!("{head} | {date} | {}", truncate(&self.subject, 70))
+    }
+}
+
+fn list_snapshot_commits(submodule: &std::path::Path) -> Result<Vec<SnapshotCommit>> {
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &submodule.display().to_string(),
+            "log",
+            "-30",
+            "--pretty=format:%H%x09%cI%x09%s",
+        ])
+        .output()
+        .context("Failed to spawn `git log`")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("`git log` exited with {}: {stderr}", output.status);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let log_commits: Vec<SnapshotCommit> = stdout
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.splitn(3, '\t');
+            let sha = parts.next()?.to_string();
+            let date = parts.next()?.to_string();
+            let subject = parts.next().unwrap_or("").to_string();
+            Some(SnapshotCommit {
+                sha,
+                date,
+                subject,
+                ref_name: None,
+            })
+        })
+        .collect();
+
+    // Build the picker top: the most-frequently-used revisions, in
+    // priority order. `git log -30` provides the rest. Pinned entries
+    // shadow themselves out of the log to avoid duplicates.
+    let mut pinned: Vec<SnapshotCommit> = Vec::new();
+    let mut push_pinned = |commit: Option<SnapshotCommit>| {
+        if let Some(c) = commit
+            && !pinned.iter().any(|p| p.sha == c.sha)
+        {
+            pinned.push(c);
+        }
+    };
+    push_pinned(resolve_remote_default(submodule));
+    push_pinned(resolve_named(submodule, "HEAD"));
+    push_pinned(resolve_named(submodule, "HEAD~1"));
+
+    let pinned_shas: std::collections::HashSet<String> =
+        pinned.iter().map(|c| c.sha.clone()).collect();
+    let mut result = pinned;
+    result.extend(log_commits.into_iter().filter(|c| !pinned_shas.contains(&c.sha)));
+    Ok(result)
+}
+
+/// Try `origin/main` then `origin/master`; return the first that
+/// resolves to a commit, with metadata fetched via `git log -1`.
+fn resolve_remote_default(submodule: &std::path::Path) -> Option<SnapshotCommit> {
+    for name in ["origin/main", "origin/master"] {
+        if let Some(commit) = resolve_named(submodule, name) {
+            return Some(commit);
+        }
+    }
+    None
+}
+
+fn fetch_origin(submodule: &std::path::Path) -> Result<()> {
+    let status = Command::new("git")
+        .args([
+            "-C",
+            &submodule.display().to_string(),
+            "fetch",
+            "--quiet",
+            "--tags",
+            "--prune",
+            "origin",
+        ])
+        .status()
+        .context("Failed to spawn `git fetch`")?;
+    if !status.success() {
+        // A failed fetch is usually transient (offline, auth);
+        // surface it as a warning and let the user pick from
+        // whatever's already on disk rather than abort the flow.
+        warn!(
+            "`git fetch origin` exited with {status} — picker will show pre-fetch state of {}",
+            submodule.display()
+        );
+    }
+    Ok(())
+}
+
+/// Resolve a single named revision (e.g. `HEAD`, `HEAD~1`,
+/// `origin/main`) and tag the resulting commit with `name` so the
+/// picker shows `name (sha7)` instead of just the short sha.
+fn resolve_named(submodule: &std::path::Path, name: &str) -> Option<SnapshotCommit> {
+    let commit = log_one(submodule, name)?;
+    Some(SnapshotCommit {
+        ref_name: Some(name.to_string()),
+        ..commit
+    })
+}
+
+fn log_one(submodule: &std::path::Path, revision: &str) -> Option<SnapshotCommit> {
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &submodule.display().to_string(),
+            "log",
+            "-1",
+            "--pretty=format:%H%x09%cI%x09%s",
+            revision,
+            "--",
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let line = String::from_utf8_lossy(&output.stdout);
+    let line = line.trim_end_matches('\n');
+    let mut parts = line.splitn(3, '\t');
+    Some(SnapshotCommit {
+        sha: parts.next()?.to_string(),
+        date: parts.next()?.to_string(),
+        subject: parts.next().unwrap_or("").to_string(),
+        ref_name: None,
+    })
+}
+
+/// Read a single file at `relative_path` as it existed at `sha` in
+/// the submodule's history. Returns `None` if the file didn't exist
+/// at that revision (or `git show` failed for any other reason).
+fn read_blob_at(submodule: &std::path::Path, sha: &str, relative_path: &str) -> Option<Vec<u8>> {
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &submodule.display().to_string(),
+            "show",
+            &format!("{sha}:{relative_path}"),
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(output.stdout)
+}
+
+/// Confirm overwriting `dir`. Skips the prompt entirely when there's
+/// nothing to wipe (dir doesn't exist or is empty). Otherwise asks
+/// `message` with a "yes" default — these wipes are launched
+/// intentionally, so a single Enter is enough. Cancelling (Esc /
+/// Ctrl-C) is treated as "no".
+fn confirm_wipe(dir: &std::path::Path, message: &str) -> Result<bool> {
+    if !dir_has_content(dir) {
+        return Ok(true);
+    }
+    match Confirm::new(message).with_default(true).prompt() {
+        Ok(b) => Ok(b),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => Ok(false),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn dir_has_content(dir: &std::path::Path) -> bool {
+    match fs::read_dir(dir) {
+        Ok(mut entries) => entries.next().is_some(),
+        Err(_) => false,
+    }
+}
+
+fn gh_available() -> bool {
+    Command::new("gh")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// One row of the run picker, derived from a single `test_workdir`
+/// artifact entry returned by the GitHub artifacts API. Filtering at
+/// the artifact level (rather than listing failed runs and hoping
+/// they have an artifact) guarantees every entry is downloadable.
+#[derive(Debug)]
+struct ArtifactRun {
+    run_id: u64,
+    head_branch: String,
+    head_sha: String,
+    created_at: String,
+}
+
+impl ArtifactRun {
+    fn label(&self) -> String {
+        // 'createdAt' is RFC3339; first 16 chars = "YYYY-MM-DDTHH:MM".
+        let created = self.created_at.get(..16).unwrap_or(&self.created_at);
+        let short_sha = self.head_sha.get(..7).unwrap_or(&self.head_sha);
+        format!(
+            "{created} | {:<20} | {short_sha} [#{}]",
+            truncate(&self.head_branch, 20),
+            self.run_id,
+        )
+    }
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+    out.push('…');
+    out
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ArtifactsResponse {
+    artifacts: Vec<ArtifactEntry>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ArtifactEntry {
+    expired: bool,
+    created_at: String,
+    workflow_run: ArtifactWorkflowRun,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ArtifactWorkflowRun {
+    id: u64,
+    head_branch: String,
+    head_sha: String,
+}
+
+/// Returns the most recent `test_workdir` artifacts attached to runs
+/// of this repo, newest first. Hits the artifacts API directly with a
+/// name filter so we never surface a run whose artifact doesn't
+/// actually exist (or has expired retention).
+fn list_recent_runs() -> Result<Vec<ArtifactRun>> {
+    let mut cmd = Command::new("gh");
+    cmd.args([
+        "api",
+        "-X",
+        "GET",
+        "repos/{owner}/{repo}/actions/artifacts",
+        "-F",
+        "name=test_workdir",
+        "-F",
+        "per_page=30",
+    ]);
+    let output = cmd.output().context("Failed to spawn `gh api`")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("`gh api` exited with {}: {stderr}", output.status);
+    }
+    let response: ArtifactsResponse =
+        serde_json::from_slice(&output.stdout).context("Failed to parse `gh api` output")?;
+    // The API already returns newest first; filter expired artifacts
+    // last so the list order matches what the user sees on GitHub.
+    let runs = response
+        .artifacts
+        .into_iter()
+        .filter(|a| !a.expired)
+        .map(|a| ArtifactRun {
+            run_id: a.workflow_run.id,
+            head_branch: a.workflow_run.head_branch,
+            head_sha: a.workflow_run.head_sha,
+            created_at: a.created_at,
+        })
+        .collect();
+    Ok(runs)
+}
+
+fn run_all() -> Result<()> {
+    let workdir = pipeline_tests_workdir();
+    if workdir.exists() {
+        fs::remove_dir_all(&workdir)
+            .with_context(|| format!("Failed to clean {}", workdir.display()))?;
+    }
+
+    let status = run_nextest(&["pipeline_tests"], RunOptions::default())?;
+    if status.success() {
+        return Ok(());
+    }
+
+    let tests_with_dumps = discover_tests_with_dumps()?;
+    if tests_with_dumps.is_empty() {
+        warn!("Test run failed but no test results were left in the workdir");
+        return Ok(());
+    }
+
+    info!("{} test result(s) to audit", tests_with_dumps.len());
+    for test in tests_with_dumps {
+        let filter = test_filter(test);
+        info!("Auditing test result: {}", test.full_test_name);
+        match test_result_action_loop(test, &filter)? {
+            ControlFlow::Continue(()) => {}
+            ControlFlow::Break(()) => break,
+        }
+    }
+    Ok(())
+}
+
+fn discover_tests_with_dumps() -> Result<Vec<&'static PipelineTest>> {
+    let workdir = pipeline_tests_workdir();
+    let mut found: Vec<&'static PipelineTest> = Vec::new();
+    if !workdir.exists() {
+        return Ok(found);
     }
     let tests = pipeline_tests();
-    for entry in fs::read_dir(&failed_dir)
-        .with_context(|| format!("Failed to read {}", failed_dir.display()))?
+    for entry in
+        fs::read_dir(&workdir).with_context(|| format!("Failed to read {}", workdir.display()))?
     {
         let entry = entry?;
         let file_name = entry.file_name();
@@ -178,11 +670,11 @@ fn discover_failed_tests() -> Result<Vec<&'static PipelineTest>> {
             warn!("No registered PipelineTest matches snapshot {snapshot}");
             continue;
         };
-        if !failed.iter().any(|t| std::ptr::eq(*t, test)) {
-            failed.push(test);
+        if !found.iter().any(|t| std::ptr::eq(*t, test)) {
+            found.push(test);
         }
     }
-    Ok(failed)
+    Ok(found)
 }
 
 fn test_filter(test: &PipelineTest) -> String {
@@ -192,33 +684,35 @@ fn test_filter(test: &PipelineTest) -> String {
         .to_string()
 }
 
-fn handle_failure_loop(test: &PipelineTest, filter: &str) -> Result<ControlFlow<()>> {
+fn test_result_action_loop(test: &PipelineTest, filter: &str) -> Result<ControlFlow<()>> {
     loop {
-        match prompt_failure_action(test)? {
-            Some(FailureAction::PlayActual) => {
+        match prompt_test_result_action(test)? {
+            Some(TestResultAction::PlayActual) => {
                 if let Err(e) = play_dump(test, DumpKind::Actual) {
                     error!("Failed to play actual dump: {e:#}");
                 }
             }
-            Some(FailureAction::PlayExpected) => {
+            Some(TestResultAction::PlayExpected) => {
                 if let Err(e) = play_dump(test, DumpKind::Expected) {
                     error!("Failed to play expected dump: {e:#}");
                 }
             }
-            Some(FailureAction::Inspect) => {
+            Some(TestResultAction::Compare) => {
                 if let Err(e) = inspect_dumps(test) {
                     error!("Failed to inspect dumps: {e:#}");
                 }
             }
-            Some(FailureAction::UpdateSnapshot) => match update_snapshot(test) {
+            Some(TestResultAction::UpdateSnapshot) => match update_snapshot(test) {
                 Ok(()) => return Ok(ControlFlow::Continue(())),
                 Err(e) => error!("Failed to update snapshot: {e:#}"),
             },
-            Some(FailureAction::Rerun) => {
-                if let Err(e) = clear_failed_dumps(test) {
-                    error!("Failed to clear previous failed dumps: {e:#}");
+            Some(TestResultAction::Rerun) => {
+                if let Err(e) = clear_test_dumps(test) {
+                    error!("Failed to clear previous test dumps: {e:#}");
                 }
-                match run_nextest(&[filter]) {
+                // A rerun targets a single test, so always preserve
+                // its dumps for the inspector regardless of pass/fail.
+                match run_nextest(&[filter], RunOptions { save_dumps: true }) {
                     Ok(s) if s.success() => {
                         info!("Test passed on rerun. Choose Skip to move on, or rerun again.");
                     }
@@ -226,7 +720,7 @@ fn handle_failure_loop(test: &PipelineTest, filter: &str) -> Result<ControlFlow<
                     Err(e) => error!("Failed to rerun test: {e:#}"),
                 }
             }
-            Some(FailureAction::Skip) => return Ok(ControlFlow::Continue(())),
+            Some(TestResultAction::Skip) => return Ok(ControlFlow::Continue(())),
             None => return Ok(ControlFlow::Break(())),
         }
     }
@@ -247,7 +741,7 @@ impl DumpKind {
     }
 }
 
-fn prompt_failure_action(test: &PipelineTest) -> Result<Option<FailureAction>> {
+fn prompt_test_result_action(test: &PipelineTest) -> Result<Option<TestResultAction>> {
     use strum::IntoEnumIterator;
     const BOLD: &str = "\x1b[1m";
     const CYAN: &str = "\x1b[36m";
@@ -255,7 +749,7 @@ fn prompt_failure_action(test: &PipelineTest) -> Result<Option<FailureAction>> {
     const RESET: &str = "\x1b[0m";
 
     println!();
-    println!("{BOLD}{YELLOW}── Failed test ──────────────────────────────────────{RESET}");
+    println!("{BOLD}{YELLOW}── Test result ──────────────────────────────────────{RESET}");
     println!("{BOLD}{CYAN}{}{RESET}", test.full_test_name);
     if !test.description.is_empty() {
         println!("{}", test.description);
@@ -263,20 +757,20 @@ fn prompt_failure_action(test: &PipelineTest) -> Result<Option<FailureAction>> {
     println!("{BOLD}{YELLOW}─────────────────────────────────────────────────────{RESET}");
     println!();
 
-    let actual_exists = failed_snapshots_dir_path()
+    let actual_exists = pipeline_tests_workdir()
         .join(format!("actual_dump_{}", test.snapshot_name))
         .exists();
-    let expected_exists = failed_snapshots_dir_path()
+    let expected_exists = pipeline_tests_workdir()
         .join(format!("expected_dump_{}", test.snapshot_name))
         .exists();
-    let options: Vec<FailureAction> = FailureAction::iter()
+    let options: Vec<TestResultAction> = TestResultAction::iter()
         .filter(|a| match a {
-            FailureAction::UpdateSnapshot => actual_exists,
+            TestResultAction::UpdateSnapshot => actual_exists,
             // Inspector tolerates either side missing now, so as long
             // as we have anything at all to look at, offer it.
-            FailureAction::Inspect => actual_exists || expected_exists,
-            FailureAction::PlayExpected => expected_exists,
-            FailureAction::PlayActual => actual_exists,
+            TestResultAction::Compare => actual_exists || expected_exists,
+            TestResultAction::PlayExpected => expected_exists,
+            TestResultAction::PlayActual => actual_exists,
             _ => true,
         })
         .collect();
@@ -290,8 +784,8 @@ fn prompt_failure_action(test: &PipelineTest) -> Result<Option<FailureAction>> {
     }
 }
 
-fn clear_failed_dumps(test: &PipelineTest) -> Result<()> {
-    let dir = failed_snapshots_dir_path();
+fn clear_test_dumps(test: &PipelineTest) -> Result<()> {
+    let dir = pipeline_tests_workdir();
     for prefix in ["actual_dump_", "expected_dump_"] {
         let path = dir.join(format!("{prefix}{}", test.snapshot_name));
         if path.exists() {
@@ -304,51 +798,22 @@ fn clear_failed_dumps(test: &PipelineTest) -> Result<()> {
 
 fn play_dump(test: &PipelineTest, kind: DumpKind) -> Result<()> {
     let path =
-        failed_snapshots_dir_path().join(format!("{}{}", kind.file_prefix(), test.snapshot_name));
+        pipeline_tests_workdir().join(format!("{}{}", kind.file_prefix(), test.snapshot_name));
     if !path.exists() {
         warn!("Dump not found: {}", path.display());
         return Ok(());
     }
-
-    use strum::IntoEnumIterator;
-    let options: Vec<StreamKind> = StreamKind::iter().collect();
-    let stream_kind = match Select::new("Select stream kind:", options).prompt() {
-        Ok(k) => k,
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => return Ok(()),
-        Err(e) => return Err(e.into()),
-    };
-
-    let mut cmd = Command::new("cargo");
-    scrub_cargo_env(&mut cmd);
-    cmd.args([
-        "run",
-        "-p",
-        "integration-tests",
-        "--bin",
-        "play_rtp_dump",
-        "--",
-        stream_kind.as_arg(),
-    ])
-    .arg(&path)
-    // Child doesn't read stdin; we own stdin exclusively so our raw-mode
-    // key watcher can detect Esc/q without racing the child.
-    .stdin(Stdio::null())
-    // Child (cargo) and all its descendants get a fresh process group so we
-    // can kill them all at once by signalling the group.
-    .process_group(0);
-
     info!("Press Esc or q to stop playback");
-    run_with_kill_on_key(cmd)
+    run_with_kill_on_key(rtp_player::spawn(&path)?)
 }
 
-/// Runs `cmd` while watching our own stdin in raw mode for Esc or `q`. On
-/// either key, sends SIGINT to the child's process group so the whole
-/// subtree (cargo → play_rtp_dump → bash → gst-launch) shuts down, then
-/// reaps the child.
-fn run_with_kill_on_key(mut cmd: Command) -> Result<()> {
+/// Watches our own stdin in raw mode for Esc or `q`. On either key,
+/// sends SIGINT to the child's process group so the whole subtree
+/// (bash → gst-launch and any of its workers) shuts down, then reaps
+/// the child.
+fn run_with_kill_on_key(mut child: std::process::Child) -> Result<()> {
     use crossterm::event::{self, Event, KeyCode};
 
-    let mut child = cmd.spawn()?;
     let child_pgid = child.id() as libc::pid_t;
 
     crossterm::terminal::enable_raw_mode()?;
@@ -406,7 +871,7 @@ fn scrub_cargo_env(cmd: &mut Command) {
 }
 
 fn inspect_dumps(test: &PipelineTest) -> Result<()> {
-    let dir = failed_snapshots_dir_path();
+    let dir = pipeline_tests_workdir();
     let actual = dir.join(format!("actual_dump_{}", test.snapshot_name));
     let expected = dir.join(format!("expected_dump_{}", test.snapshot_name));
 
@@ -414,7 +879,7 @@ fn inspect_dumps(test: &PipelineTest) -> Result<()> {
 }
 
 fn update_snapshot(test: &PipelineTest) -> Result<()> {
-    let src = failed_snapshots_dir_path().join(format!("actual_dump_{}", test.snapshot_name));
+    let src = pipeline_tests_workdir().join(format!("actual_dump_{}", test.snapshot_name));
     if !src.exists() {
         anyhow::bail!("No actual dump at {}", src.display());
     }
@@ -428,7 +893,15 @@ fn update_snapshot(test: &PipelineTest) -> Result<()> {
     Ok(())
 }
 
-fn run_nextest(filters: &[&str]) -> Result<std::process::ExitStatus> {
+#[derive(Debug, Clone, Copy, Default)]
+struct RunOptions {
+    /// Set [`SAVE_DUMPS_ENV`] in the child process so the harness
+    /// always writes both expected/actual dumps to the workdir, even
+    /// for tests that pass.
+    save_dumps: bool,
+}
+
+fn run_nextest(filters: &[&str], options: RunOptions) -> Result<std::process::ExitStatus> {
     let mut cmd = Command::new("cargo");
     scrub_cargo_env(&mut cmd);
     cmd.args([
@@ -441,6 +914,9 @@ fn run_nextest(filters: &[&str]) -> Result<std::process::ExitStatus> {
         "--no-fail-fast",
     ])
     .args(filters);
+    if options.save_dumps {
+        cmd.env(SAVE_DUMPS_ENV, "1");
+    }
     info!("> {cmd:?}");
     let status = cmd.status()?;
     if !status.success() {

@@ -8,16 +8,21 @@
 //!
 //! ## Pairing strategy
 //!
-//! Each side has an independent playhead. On every step the playhead
-//! whose *next* frame has the earlier presentation timestamp advances
-//! by one; the other side's playhead stays put. The yielded pair is
-//! always `(left_at_playhead, right_at_playhead)`.
+//! Each side has an independent playhead. On every step we look at
+//! three candidate next pairs — advance left only, advance right
+//! only, or advance both — and pick the one whose `|left.pts -
+//! right.pts|` is smallest. Ties prefer "advance both" so the
+//! iterator doesn't stall on one side. The yielded pair is always
+//! `(left_at_playhead, right_at_playhead)`.
 //!
-//! As a consequence, when both dumps share a framerate the iterator
-//! tends to alternate sides — each step changes only one frame —
-//! which lines up well with frame-by-frame visual diffing. When the
-//! framerates differ, the faster side advances proportionally more
-//! often.
+//! Effect: when both dumps share a framerate, both sides advance
+//! together and the iterator produces one pair per pair of input
+//! frames (rather than zig-zagging through each side independently).
+//! When framerates differ, the faster side advances on its own until
+//! the slow side catches up, at which point both sides advance.
+//!
+//! Example — left `[1, 6, 11]`, right `[2, 7, 12]`. Only three pairs:
+//! `(1, 2)`, `(6, 7)`, `(11, 12)`.
 
 use std::{collections::VecDeque, path::Path};
 
@@ -74,6 +79,17 @@ impl RtpVideoDiffIter {
         })
     }
 
+    /// Same as [`Self::from_rtp_dumps`] but consumes already-loaded
+    /// dumps instead of paths. Used by the test harness, which has the
+    /// `actual` dump in memory and only the `expected` on disk.
+    pub fn from_bytes(left: &Bytes, right: &Bytes) -> Result<Self> {
+        Ok(Self {
+            left: LazyFrameStream::from_bytes(left)?,
+            right: LazyFrameStream::from_bytes(right)?,
+            state: State::NotStarted,
+        })
+    }
+
     /// Build directly from already-decoded frames. Useful for tests.
     /// Inputs must be sorted by `pts` ascending.
     pub fn from_frames(left: Vec<Frame>, right: Vec<Frame>) -> Self {
@@ -125,9 +141,22 @@ impl RtpVideoDiffIter {
                     }
                     (Some(_), None) => self.left.advance()?,
                     (None, Some(_)) => self.right.advance()?,
-                    (Some(lpts), Some(rpts)) => {
-                        // Tie → advance left, arbitrarily but deterministically.
-                        if lpts <= rpts {
+                    (Some(lp), Some(rp)) => {
+                        // Both currents are guaranteed Some here:
+                        // peek_next can only be Some after the first
+                        // advance, and `NotStarted` advances both.
+                        let cur_l = self.left.current().expect("active state").pts;
+                        let cur_r = self.right.current().expect("active state").pts;
+                        let dist_left = pts_distance(lp, cur_r);
+                        let dist_right = pts_distance(cur_l, rp);
+                        let dist_both = pts_distance(lp, rp);
+                        let min = dist_both.min(dist_left).min(dist_right);
+                        // Prefer "advance both" on ties so the
+                        // iterator doesn't stall on one side.
+                        if dist_both == min {
+                            self.left.advance()?;
+                            self.right.advance()?;
+                        } else if dist_left <= dist_right {
                             self.left.advance()?;
                         } else {
                             self.right.advance()?;
@@ -145,6 +174,10 @@ impl RtpVideoDiffIter {
             right: self.right.current().cloned(),
         }
     }
+}
+
+fn pts_distance(a: std::time::Duration, b: std::time::Duration) -> std::time::Duration {
+    if a >= b { a - b } else { b - a }
 }
 
 /// One side's lazy decode pipeline: a queue of pending RTP packets, a
@@ -176,14 +209,17 @@ impl LazyFrameStream {
         let bytes = Bytes::from(
             std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
         );
-        let packets = unmarshal_packets(&bytes)
-            .with_context(|| format!("Failed to parse RTP dump {}", path.display()))?
+        Self::from_bytes(&bytes)
+            .with_context(|| format!("Failed to build frame stream from {}", path.display()))
+    }
+
+    fn from_bytes(bytes: &Bytes) -> Result<Self> {
+        let packets = unmarshal_packets(bytes)
+            .context("Failed to parse RTP dump")?
             .into_iter()
             .filter(|p| p.header.payload_type == VIDEO_PAYLOAD_TYPE)
             .collect::<Vec<_>>();
-        let decoder = VideoDecoder::new().with_context(|| {
-            format!("Failed to initialize H.264 decoder for {}", path.display())
-        })?;
+        let decoder = VideoDecoder::new().context("Failed to initialize H.264 decoder")?;
         Ok(Self {
             decoder: Some(decoder),
             packets: packets.into_iter(),
@@ -285,16 +321,32 @@ mod tests {
     }
 
     #[test]
-    fn equal_framerate_alternates_sides() {
+    fn equal_framerate_advances_both_sides() {
+        // Both streams run at the same cadence with a fixed offset; the
+        // iterator should pair frame-for-frame instead of zig-zagging.
+        let left = vec![frame(1), frame(6), frame(11)];
+        let right = vec![frame(2), frame(7), frame(12)];
+        assert_eq!(
+            collect_pairs(RtpVideoDiffIter::from_frames(left, right)),
+            vec![
+                (Some(1), Some(2)),
+                (Some(6), Some(7)),
+                (Some(11), Some(12)),
+            ],
+        );
+    }
+
+    #[test]
+    fn equal_framerate_with_extra_left_frame() {
+        // Left has one frame past the right's tail — that frame pairs
+        // with the last right frame (only candidate).
         let left = vec![frame(0), frame(33), frame(66), frame(99)];
         let right = vec![frame(5), frame(38), frame(71)];
         assert_eq!(
             collect_pairs(RtpVideoDiffIter::from_frames(left, right)),
             vec![
                 (Some(0), Some(5)),
-                (Some(33), Some(5)),
                 (Some(33), Some(38)),
-                (Some(66), Some(38)),
                 (Some(66), Some(71)),
                 (Some(99), Some(71)),
             ],
@@ -303,15 +355,21 @@ mod tests {
 
     #[test]
     fn faster_side_advances_more_often() {
+        // Right runs at twice the framerate of left. Where the two
+        // align (0, 33, 66) we advance both; in between, only right
+        // advances.
         let left = vec![frame(0), frame(33), frame(66)];
         let right = vec![frame(0), frame(16), frame(33), frame(50), frame(66)];
-        let left_len = left.len();
-        let right_len = right.len();
-        let pairs = collect_pairs(RtpVideoDiffIter::from_frames(left, right));
-
-        assert_eq!(pairs.first(), Some(&(Some(0), Some(0))));
-        assert_eq!(pairs.last(), Some(&(Some(66), Some(66))));
-        assert_eq!(pairs.len(), left_len + right_len - 1);
+        assert_eq!(
+            collect_pairs(RtpVideoDiffIter::from_frames(left, right)),
+            vec![
+                (Some(0), Some(0)),
+                (Some(0), Some(16)),
+                (Some(33), Some(33)),
+                (Some(66), Some(50)),
+                (Some(66), Some(66)),
+            ],
+        );
     }
 
     #[test]
