@@ -5,7 +5,7 @@ fn main() {
         num::NonZeroU32,
     };
 
-    use vk_video::{
+    use gpu_video::{
         InputFrame, RawFrameData, VulkanInstance,
         parameters::{
             EncoderParameters, RateControl, VideoParameters, VulkanAdapterDescriptor,

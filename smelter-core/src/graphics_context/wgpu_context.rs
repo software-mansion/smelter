@@ -94,7 +94,7 @@ pub fn create_wgpu_graphics_ctx(
         queue: queue.into(),
         adapter: adapter.into(),
         instance: instance.into(),
-        #[cfg(feature = "vk-video")]
+        #[cfg(feature = "gpu-video")]
         vulkan_ctx: None,
     })
 }

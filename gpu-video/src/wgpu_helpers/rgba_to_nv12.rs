@@ -46,7 +46,7 @@ impl WgpuRgbaToNv12Converter {
         let shader_module =
             device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_nv12.wgsl"));
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("vk-video rgba to nv12 converter pipeline layout"),
+            label: Some("gpu-video rgba to nv12 converter pipeline layout"),
             bind_group_layouts: &[Some(&rgba_view_bgl), Some(&sampler.bgl)],
             immediate_size: 0,
         });
@@ -128,7 +128,7 @@ impl PlaneRenderer {
             aspect => unreachable!("Not a NV12 plane: {aspect:?}"),
         };
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("vk-video nv12 plane renderer"),
+            label: Some("gpu-video nv12 plane renderer"),
             layout: Some(pipeline_layout),
             vertex: wgpu::VertexState {
                 module: shader_module,

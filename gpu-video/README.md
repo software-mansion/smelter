@@ -1,4 +1,4 @@
-# vk-video
+# gpu-video
 
 A library for hardware video decoding and encoding using Vulkan Video, with [wgpu] integration.
 
@@ -6,12 +6,12 @@ A library for hardware video decoding and encoding using Vulkan Video, with [wgp
 [![docs.rs][docs-badge]][docs-url]
 [![MIT licensed][mit-badge]][mit-url]
 
-[crates-badge]: https://img.shields.io/crates/v/vk-video
-[crates-url]: https://crates.io/crates/vk-video
+[crates-badge]: https://img.shields.io/crates/v/gpu-video
+[crates-url]: https://crates.io/crates/gpu-video
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/software-mansion/smelter/blob/master/vk-video/LICENSE
-[docs-badge]: https://img.shields.io/docsrs/vk-video
-[docs-url]: https://docs.rs/vk-video/latest/vk_video/
+[mit-url]: https://github.com/software-mansion/smelter/blob/master/gpu-video/LICENSE
+[docs-badge]: https://img.shields.io/docsrs/gpu-video
+[docs-url]: https://docs.rs/gpu-video/latest/gpu_video/
 
 ## Overview
 
@@ -36,19 +36,19 @@ fn decode_video(
     window: &winit::window::Window,
     mut encoded_video_reader: impl std::io::Read,
 ) {
-    let instance = vk_video::VulkanInstance::new().unwrap();
+    let instance = gpu_video::VulkanInstance::new().unwrap();
     let surface = instance.wgpu_instance().create_surface(window).unwrap();
-    let adapter = instance.create_adapter(&vk_video::parameters::VulkanAdapterDescriptor {
+    let adapter = instance.create_adapter(&gpu_video::parameters::VulkanAdapterDescriptor {
         compatible_surface: Some(&surface),
         ..Default::default()
     }).unwrap();
     let device = adapter
-        .create_device(&vk_video::parameters::VulkanDeviceDescriptor::default())
+        .create_device(&gpu_video::parameters::VulkanDeviceDescriptor::default())
         .unwrap();
 
     let mut decoder = device
         .create_wgpu_textures_decoder_h264(
-            vk_video::parameters::DecoderParameters::default()
+            gpu_video::parameters::DecoderParameters::default()
         ).unwrap();
 
     let mut buffer = vec![0; 4096];
@@ -58,7 +58,7 @@ fn decode_video(
             return;
         }
 
-        let decoded_frames = decoder.decode(vk_video::EncodedInputChunk {
+        let decoded_frames = decoder.decode(gpu_video::EncodedInputChunk {
             data: &buffer[..n],
             pts: None
         }).unwrap();
@@ -81,31 +81,31 @@ fn encode_video(
 ) {
     use std::num::NonZeroU32;
 
-    let instance = vk_video::VulkanInstance::new().unwrap();
+    let instance = gpu_video::VulkanInstance::new().unwrap();
     let surface = instance.wgpu_instance().create_surface(window).unwrap();
     let adapter = instance
-        .create_adapter(&vk_video::parameters::VulkanAdapterDescriptor {
+        .create_adapter(&gpu_video::parameters::VulkanAdapterDescriptor {
             compatible_surface: Some(&surface),
             ..Default::default()
         })
         .unwrap();
     let device = adapter
-        .create_device(&vk_video::parameters::VulkanDeviceDescriptor::default())
+        .create_device(&gpu_video::parameters::VulkanDeviceDescriptor::default())
         .unwrap();
 
     let mut encoder = device
         .create_wgpu_textures_encoder_h264(
-            vk_video::parameters::EncoderParameters {
+            gpu_video::parameters::EncoderParameters {
                 output_parameters: device
                     .encoder_output_parameters_h264_high_quality(
-                        vk_video::parameters::RateControl::VariableBitrate {
+                        gpu_video::parameters::RateControl::VariableBitrate {
                             average_bitrate: 500_000,
                             max_bitrate: 2_000_000,
                             virtual_buffer_size: std::time::Duration::from_secs(2),
                         },
                     )
                     .unwrap(),
-                input_parameters: vk_video::parameters::VideoParameters {
+                input_parameters: gpu_video::parameters::VideoParameters {
                     width: NonZeroU32::new(1920).unwrap(),
                     height: NonZeroU32::new(1080).unwrap(),
                     target_framerate: 30.into(),
@@ -118,7 +118,7 @@ fn encode_video(
         // Encodes NV12 texture and returns encoded frame bytes
         let encoded_frame = encoder
             .encode(
-                vk_video::InputFrame {
+                gpu_video::InputFrame {
                     data: frame,
                     pts: None,
                 },
@@ -139,7 +139,7 @@ Then you can run the example with:
 
 ```sh
 git clone https://github.com/software-mansion/smelter.git
-cd smelter/vk-video
+cd smelter/gpu-video
 cargo run --example player -- output.h264 FRAMERATE
 ```
 
@@ -156,8 +156,8 @@ It should work on Windows with recent drivers out of the box. Be sure to submit 
 [wgpu]: https://wgpu.rs/
 [`wgpu::Texture`]: https://docs.rs/wgpu/latest/wgpu/struct.Texture.html
 
-## vk-video is created by Software Mansion
+## gpu-video is created by Software Mansion
 
-[![swm](https://logo.swmansion.com/logo?color=white&variant=desktop&width=150&tag=smelter-vk-video 'Software Mansion')](https://swmansion.com)
+[![swm](https://logo.swmansion.com/logo?color=white&variant=desktop&width=150&tag=smelter-gpu-video 'Software Mansion')](https://swmansion.com)
 
-Since 2012 [Software Mansion](https://swmansion.com) is a software agency with experience in building web and mobile apps as well as complex multimedia solutions. We are Core React Native Contributors and experts in live streaming and broadcasting technologies. We can help you build your next dream product – [Hire us](https://swmansion.com/contact/projects?utm_source=smelter-vk-video&utm_medium=readme).
+Since 2012 [Software Mansion](https://swmansion.com) is a software agency with experience in building web and mobile apps as well as complex multimedia solutions. We are Core React Native Contributors and experts in live streaming and broadcasting technologies. We can help you build your next dream product – [Hire us](https://swmansion.com/contact/projects?utm_source=smelter-gpu-video&utm_medium=readme).

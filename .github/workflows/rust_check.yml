@@ -150,7 +150,7 @@ jobs:
               run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
             - name: 📎 Run clippy (vk-video, no-default-features)
-              run: cargo clippy --package vk-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
+              run: cargo clippy --package gpu-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
 
             - name: 📄 Generate JSON schema
               run: |

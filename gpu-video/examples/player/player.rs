@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 
 use clap::Parser;
-use vk_video::VulkanInstance;
+use gpu_video::VulkanInstance;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 mod decoder;
@@ -46,13 +46,13 @@ pub fn run() {
         .unwrap();
 
     let vulkan_adapter = vulkan_instance
-        .create_adapter(&vk_video::parameters::VulkanAdapterDescriptor {
+        .create_adapter(&gpu_video::parameters::VulkanAdapterDescriptor {
             compatible_surface: Some(&surface),
             ..Default::default()
         })
         .unwrap();
     let vulkan_device = vulkan_adapter
-        .create_device(&vk_video::parameters::VulkanDeviceDescriptor::default())
+        .create_device(&gpu_video::parameters::VulkanDeviceDescriptor::default())
         .unwrap();
 
     let (tx, rx) = mpsc::sync_channel(FRAMES_BUFFER_LEN);

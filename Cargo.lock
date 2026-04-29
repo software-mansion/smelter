@@ -2061,6 +2061,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpu-video"
+version = "0.3.0"
+dependencies = [
+ "ash",
+ "bytemuck",
+ "bytes",
+ "cfg_aliases 0.2.1",
+ "clap",
+ "derivative",
+ "h264-reader",
+ "memchr",
+ "naga",
+ "rustc-hash 2.1.1",
+ "thiserror 1.0.69",
+ "tracing",
+ "tracing-subscriber",
+ "vk-mem",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5060,6 +5082,7 @@ dependencies = [
  "fdk-aac-sys",
  "ffmpeg-next",
  "glyphon",
+ "gpu-video",
  "itertools 0.14.0",
  "mp4",
  "opus",
@@ -5083,7 +5106,6 @@ dependencies = [
  "utoipa",
  "uuid",
  "v4l",
- "vk-video",
  "webrtc",
  "webrtc-util",
  "wgpu",
@@ -6274,28 +6296,6 @@ dependencies = [
  "ash",
  "bitflags 2.11.0",
  "cc",
-]
-
-[[package]]
-name = "vk-video"
-version = "0.3.0"
-dependencies = [
- "ash",
- "bytemuck",
- "bytes",
- "cfg_aliases 0.2.1",
- "clap",
- "derivative",
- "h264-reader",
- "memchr",
- "naga",
- "rustc-hash 2.1.1",
- "thiserror 1.0.69",
- "tracing",
- "tracing-subscriber",
- "vk-mem",
- "wgpu",
- "winit",
 ]
 
 [[package]]

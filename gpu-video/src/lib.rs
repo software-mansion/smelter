@@ -31,4 +31,4 @@ pub(crate) mod parser;
 
 // If vulkan is unsupported and parsers are not exposed
 #[cfg(not(any(vulkan, feature = "expose-parsers")))]
-compile_error!("vk-video can be only compiled on platforms supported by vulkan.");
+compile_error!("gpu-video can be only compiled on platforms supported by vulkan.");

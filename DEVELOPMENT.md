@@ -7,7 +7,7 @@
     - [`smelter-core`](#smelter-core)
     - [`smelter-render`](#smelter-render)
     - [`smelter-render-wasm`](#smelter-render-wasm)
-    - [`vk-video`](#vk-video)
+    - [`gpu-video`](#gpu-video)
     - [`libcef`](#libcef)
     - [`decklink`](#decklink)
     - [`tools`](#tools)
@@ -88,7 +88,7 @@ It is used in TypeScript SDK:
 - `./ts/smelter-browser-render` - to build WASM binary and expose rendering API as JS library.
 - (in directly) `./ts/smelter-web-wasm` - to run Smelter in the browser
 
-### `vk-video`
+### `gpu-video`
 
 A library for hardware video decoding (and soon encoding) using Vulkan Video, with [wgpu] integration.
 
