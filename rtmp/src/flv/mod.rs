@@ -1,16 +1,47 @@
 mod audio;
+mod ex_audio;
 mod ex_video;
-mod mod_ex;
+mod mod_ex_audio;
+mod mod_ex_video;
 mod video;
 
 pub use audio::*;
 use bytes::Bytes;
+pub use ex_audio::*;
 pub use ex_video::*;
 pub use video::*;
 
-use crate::{FlvVideoTagParseError, RtmpMessageSerializeError};
+use crate::{FlvAudioTagParseError, FlvVideoTagParseError, RtmpMessageSerializeError};
 
 pub(super) const EX_HEADER_BIT: u8 = 0b10000000;
+const EX_AUDIO_SOUND_FORMAT: u8 = 9;
+
+/// Top-level FLV audio data, supporting both legacy and Enhanced RTMP formats.
+///
+/// Legacy format: <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=75>
+/// Enhanced RTMP: <https://veovera.org/docs/enhanced/enhanced-rtmp-v2.pdf>
+#[derive(Debug, Clone)]
+pub enum FlvAudioData {
+    Legacy(AudioTag),
+    Enhanced(ExAudioTag),
+}
+
+impl FlvAudioData {
+    /// Parses flv `AUDIODATA`. Checks SoundFormat in the first byte and
+    /// dispatches to either legacy or Enhanced RTMP parsing.
+    pub fn parse(data: Bytes) -> Result<Self, FlvAudioTagParseError> {
+        if data.is_empty() {
+            return Err(FlvAudioTagParseError::TooShort);
+        }
+
+        let sound_format = (data[0] & 0b11110000) >> 4;
+        if sound_format == EX_AUDIO_SOUND_FORMAT {
+            ExAudioTag::parse(data).map(FlvAudioData::Enhanced)
+        } else {
+            AudioTag::parse(data).map(FlvAudioData::Legacy)
+        }
+    }
+}
 
 /// Top-level FLV video data, supporting both legacy and Enhanced RTMP formats.
 ///

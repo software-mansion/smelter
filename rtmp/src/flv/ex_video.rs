@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     EX_HEADER_BIT,
-    mod_ex::{VideoPacketModExType, resolve_mod_ex, serialize_mod_ex},
+    mod_ex_video::{VideoPacketModExType, resolve_mod_ex, serialize_mod_ex},
     video::{VideoTagFrameType, parse_composition_time, serialize_composition_time},
 };
 
