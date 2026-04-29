@@ -4,6 +4,7 @@ import * as Image from './api/image';
 
 export { Output, Input, Image };
 export {
+  Api,
   ApiClient,
   ApiRequest,
   MultipartRequest,
