@@ -34,9 +34,13 @@ use spectrum_analyzer::{
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{error, info};
 
-use crate::audio_decoder::AudioSampleBatch;
-
-const SAMPLE_RATE: u32 = 48_000;
+use crate::{
+    audio_decoder::AudioSampleBatch,
+    pipeline_tests::harness::audio_analysis::{
+        GAP_THRESHOLD, SAMPLE_RATE, chunks_to_stereo, compute_gaps, detect_artifacts, mix_to_mono,
+        peak_abs,
+    },
+};
 
 /// Width of the window when first opened. After that the buffer
 /// tracks the window size on every frame so resizing the window grows
@@ -69,27 +73,6 @@ const LABEL_BAND_H: usize = 8 * FONT_SCALE + 6;
 const NUM_LANES: usize = 4;
 const NUM_GAP_LANES: usize = 2;
 const NUM_ARTIFACT_LANES: usize = 2;
-/// Gaps shorter than this are ignored — they're well within the noise
-/// of decoder timing jitter and would just clutter the display.
-const GAP_THRESHOLD: Duration = Duration::from_micros(50);
-/// Half-window (in samples) over which the artifact detector averages
-/// `|d1|` to form the local baseline. ~1.3 ms at 48 kHz — small
-/// enough that the baseline tracks fast dynamic changes (so loud
-/// transients don't generate false positives because the surrounding
-/// audio still looks quiet).
-const ARTIFACT_WINDOW_RADIUS: usize = 64;
-/// Multiplier on the local mean of `|d1|` above which a sample is
-/// flagged as a step (C0 discontinuity). Real decoder glitches
-/// usually produce ratios well into double digits; values just above
-/// this threshold tend to be sharp-but-legitimate transients.
-const ARTIFACT_D1_MULT: f32 = 7.0;
-/// Absolute floor (as fraction of global peak) below which a candidate
-/// is ignored even if the relative threshold fires. Keeps quantisation
-/// noise in silent regions from generating endless false positives.
-const ARTIFACT_D1_FLOOR_FRAC: f32 = 0.05;
-/// Flagged samples within this many samples of each other are merged
-/// into a single interval (so a 1–3 sample click reads as one bar).
-const ARTIFACT_MERGE_GAP: usize = 64;
 /// Logical height of the laid-out content. The buffer can be taller
 /// (extra space at the bottom is just background) or shorter (content
 /// past the bottom edge is clipped — the layout itself is fixed).
@@ -346,17 +329,6 @@ impl ViewerState {
     }
 }
 
-fn mix_to_mono(left: &[f32], right: &[f32]) -> Vec<f32> {
-    let n = left.len().max(right.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        let l = left.get(i).copied().unwrap_or(0.0);
-        let r = right.get(i).copied().unwrap_or(0.0);
-        out.push((l + r) * 0.5);
-    }
-    out
-}
-
 /// Run an STFT over `samples` with a Hann window, returning the
 /// frequency of the strongest bin per frame. Failed FFTs (vanishingly
 /// rare with a fixed power-of-two window) yield 0 Hz.
@@ -398,160 +370,6 @@ fn primary_frequency(spec: &FrequencySpectrum) -> f32 {
     if best_val > 0.0 { best_freq } else { 0.0 }
 }
 
-/// Run the discontinuity detector on each chunk independently (so
-/// chunk-boundary zeros from `chunks_to_stereo` don't generate false
-/// positives), once per channel, then merge all flagged intervals on
-/// the global timeline.
-fn detect_artifacts(chunks: &[AudioSampleBatch], peak: f32) -> Vec<(usize, usize)> {
-    let mut all = Vec::new();
-    let mut chunk_l: Vec<f32> = Vec::new();
-    let mut chunk_r: Vec<f32> = Vec::new();
-    for c in chunks {
-        let frames = c.samples.len() / 2;
-        chunk_l.clear();
-        chunk_r.clear();
-        chunk_l.reserve(frames);
-        chunk_r.reserve(frames);
-        for pair in c.samples.chunks_exact(2) {
-            chunk_l.push(pair[0]);
-            chunk_r.push(pair[1]);
-        }
-        let start = pts_to_sample(c.pts);
-        for (s, e) in detect_artifacts_one(&chunk_l, peak) {
-            all.push((start + s, start + e));
-        }
-        for (s, e) in detect_artifacts_one(&chunk_r, peak) {
-            all.push((start + s, start + e));
-        }
-    }
-    all.sort_by_key(|x| x.0);
-    merge_overlapping(all)
-}
-
-/// Detector for a single contiguous mono buffer. Flags samples where
-/// `|d1|` exceeds its sliding-window mean by a configured multiple
-/// AND clears an absolute floor. Returns `[start, end)` sample-index
-/// intervals on the input's local coordinate system.
-fn detect_artifacts_one(samples: &[f32], peak: f32) -> Vec<(usize, usize)> {
-    let n = samples.len();
-    if n < 2 {
-        return Vec::new();
-    }
-    let mut d1 = vec![0.0_f32; n];
-    for i in 1..n {
-        d1[i] = (samples[i] - samples[i - 1]).abs();
-    }
-    let mean_d1 = sliding_mean(&d1, ARTIFACT_WINDOW_RADIUS);
-    let floor_d1 = peak * ARTIFACT_D1_FLOOR_FRAC;
-    let mut flagged = vec![false; n];
-    for i in 1..n {
-        if d1[i] > floor_d1 && d1[i] > ARTIFACT_D1_MULT * mean_d1[i].max(1.0) {
-            flagged[i] = true;
-        }
-    }
-    intervals_from_flags(&flagged, ARTIFACT_MERGE_GAP)
-}
-
-fn sliding_mean(values: &[f32], radius: usize) -> Vec<f32> {
-    let n = values.len();
-    if n == 0 {
-        return Vec::new();
-    }
-    let mut out = vec![0.0_f32; n];
-    let mut sum = 0.0_f64;
-    let mut count = 0usize;
-    for v in values.iter().take(radius.min(n - 1) + 1) {
-        sum += *v as f64;
-        count += 1;
-    }
-    out[0] = (sum / count as f64) as f32;
-    for i in 1..n {
-        if i + radius < n {
-            sum += values[i + radius] as f64;
-            count += 1;
-        }
-        if let Some(rem) = i.checked_sub(radius + 1) {
-            sum -= values[rem] as f64;
-            count = count.saturating_sub(1);
-        }
-        out[i] = if count > 0 {
-            (sum / count as f64) as f32
-        } else {
-            0.0
-        };
-    }
-    out
-}
-
-/// Walk a `flagged` boolean array and produce contiguous intervals.
-/// Adjacent flagged regions separated by fewer than `merge_gap`
-/// non-flagged samples are coalesced into one interval.
-fn intervals_from_flags(flagged: &[bool], merge_gap: usize) -> Vec<(usize, usize)> {
-    let mut out = Vec::new();
-    let n = flagged.len();
-    let mut i = 0;
-    while i < n {
-        if !flagged[i] {
-            i += 1;
-            continue;
-        }
-        let start = i;
-        let mut end = i + 1;
-        i += 1;
-        while i < n {
-            if flagged[i] {
-                end = i + 1;
-                i += 1;
-            } else {
-                let bound = (i + merge_gap).min(n);
-                if (i..bound).any(|k| flagged[k]) {
-                    i += 1;
-                } else {
-                    break;
-                }
-            }
-        }
-        out.push((start, end));
-    }
-    out
-}
-
-fn merge_overlapping(intervals: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
-    let mut out: Vec<(usize, usize)> = Vec::new();
-    for (s, e) in intervals {
-        if let Some(last) = out.last_mut()
-            && s <= last.1
-        {
-            last.1 = last.1.max(e);
-            continue;
-        }
-        out.push((s, e));
-    }
-    out
-}
-
-/// Walk the chunk list (assumed in pts order) and return the
-/// `[start_sample, end_sample)` ranges where the next chunk starts at
-/// least [`GAP_THRESHOLD`] after the previous one ended. Overlaps and
-/// sub-threshold jitter are ignored.
-fn compute_gaps(chunks: &[AudioSampleBatch]) -> Vec<(usize, usize)> {
-    let mut out = Vec::new();
-    for pair in chunks.windows(2) {
-        let prev_dur =
-            Duration::from_secs_f64((pair[0].samples.len() / 2) as f64 / SAMPLE_RATE as f64);
-        let prev_end = pair[0].pts + prev_dur;
-        let next_start = pair[1].pts;
-        if next_start <= prev_end {
-            continue;
-        }
-        if next_start - prev_end < GAP_THRESHOLD {
-            continue;
-        }
-        out.push((pts_to_sample(prev_end), pts_to_sample(next_start)));
-    }
-    out
-}
-
 impl Envelope {
     /// Compute a min/max envelope of `samples[view_start..view_end]`
     /// distributed across `width` pixel columns.
@@ -582,43 +400,6 @@ impl Envelope {
         }
         Self { min, max }
     }
-}
-
-fn peak_abs(samples: &[f32]) -> f32 {
-    samples.iter().map(|s| s.abs()).fold(0.0_f32, f32::max)
-}
-
-/// Demultiplex interleaved stereo chunks into two contiguous mono
-/// buffers indexed by sample number — `[L, R]`. Each chunk's samples
-/// are placed starting at `pts * SAMPLE_RATE`, so gaps in the input
-/// become silence and reordered chunks still land at the right place.
-fn chunks_to_stereo(chunks: &[AudioSampleBatch]) -> [Vec<f32>; 2] {
-    if chunks.is_empty() {
-        return [Vec::new(), Vec::new()];
-    }
-    let mut max_end_sample = 0_usize;
-    for c in chunks {
-        let start = pts_to_sample(c.pts);
-        let end = start + c.samples.len() / 2;
-        max_end_sample = max_end_sample.max(end);
-    }
-    let mut l = vec![0.0_f32; max_end_sample];
-    let mut r = vec![0.0_f32; max_end_sample];
-    for c in chunks {
-        let start = pts_to_sample(c.pts);
-        for (i, pair) in c.samples.chunks_exact(2).enumerate() {
-            let idx = start + i;
-            if idx < l.len() {
-                l[idx] = pair[0];
-                r[idx] = pair[1];
-            }
-        }
-    }
-    [l, r]
-}
-
-fn pts_to_sample(pts: Duration) -> usize {
-    (pts.as_secs_f64() * SAMPLE_RATE as f64) as usize
 }
 
 /// Minimum visible window in samples — guards against runaway zoom-in.

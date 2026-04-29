@@ -6,7 +6,7 @@ use std::{
 
 use smelter_render::Resolution;
 
-use crate::paths::failed_snapshots_dir_path;
+use crate::paths::render_tests_workdir;
 
 use super::snapshot_save_path;
 
@@ -48,7 +48,7 @@ impl Snapshot {
     }
 
     pub(super) fn write_as_failed_snapshot(&self) {
-        let failed_snapshot_path = failed_snapshots_dir_path();
+        let failed_snapshot_path = render_tests_workdir();
         create_dir_all(&failed_snapshot_path).unwrap();
 
         let snapshot_name = self

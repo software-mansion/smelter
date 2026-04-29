@@ -11,6 +11,7 @@ pub struct AudioSampleBatch {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub enum AudioChannels {
     Mono,
     Stereo,
