@@ -5,7 +5,7 @@ services:
       SMELTER_API_PORT: "9091"
       SMELTER_WHIP_WHEP_SERVER_PORT: "9092"
       SMELTER_LOGGER_FORMAT: compact
-      SMELTER_LOGGER_LEVEL: "debug,smelter_core=info,naga=info,cosmic_text=info,wgpu_hal=trace"
+      SMELTER_STDIO_LOGGER_LEVEL: "info,smelter_core::pipeline::decoder=trace,smelter_core::pipeline::webrtc=debug,smelter_core::pipeline::webrtc::whip_input=trace,smelter_core::pipeline::rtp::rtp_input=trace"
       ENVIRONMENT: production
     ports:
       # Smelter API
