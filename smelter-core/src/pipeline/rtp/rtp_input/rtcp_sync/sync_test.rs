@@ -476,33 +476,27 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_second_stream() {
     );
 }
 
-/// Test that mismatched SR and media RTP timestamps (common with SFUs in WHEP)
-/// don't produce negative PTS when the pipeline has been running for a while.
+/// When an SR implies an offset more than 2s away from the current best-effort
+/// estimate (e.g. SFU mangling timestamps, or audio resuming after a long
+/// pause), `sync_offset_secs` snaps to the new target instead of slewing.
+/// After the snap, consecutive packets must still advance by their RTP-time
+/// delta — i.e. the timeline stays self-consistent past the discontinuity.
 #[test]
-fn test_rtcp_sync_rejects_mismatched_sr_timestamps() {
+fn test_rtcp_sync_snaps_on_large_offset_diff() {
     let queue_sync_point = Instant::now();
     let sync_point = RtpNtpSyncPoint::new();
 
     let mut stream_1 = RtpTimestampSync::new(queue_sync_point, sync_point.clone(), 48_000);
     let mut stream_2 = RtpTimestampSync::new(queue_sync_point, sync_point.clone(), 90_000);
 
-    // Simulate pipeline running for ~20000 seconds before WHEP input starts
-    // by using a large initial offset in NTP calculations.
-    // First packets arrive "now" (sync_offset ≈ 0 since queue_sync_point = Instant::now())
     let stream_1_first_pts = stream_1.pts_from_timestamp(100_000_000);
     let stream_2_first_pts = stream_2.pts_from_timestamp(200_000_000);
-
-    // Both should have PTS near 0 (since queue_sync_point is "now")
     assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
     assert_duration_eq(stream_2_first_pts, Duration::ZERO, PREC_RUNTIME);
 
-    // Simulate mismatched SR: SFU forwards original sender's SR with rtp_time
-    // from a completely different timeline (sender running for hours).
-    // Media rtp_ts=100M but SR rtp_time=2.1B (huge mismatch)
+    // Stream 1 SR builds the shared NTP anchor — by construction the SR-derived
+    // offset matches the current best-effort, so no snap happens here.
     stream_1.on_sender_report(REFERENCE_NTP_TIME, 2_100_000_000);
-
-    // After the mismatched sync, subsequent packets should still have reasonable PTS
-    // (the bad NTP offset should be rejected)
     let stream_1_second_pts = stream_1.pts_from_timestamp(100_048_000); // +1 second
     assert_duration_eq(
         stream_1_second_pts,
@@ -510,12 +504,20 @@ fn test_rtcp_sync_rejects_mismatched_sr_timestamps() {
         PREC_RUNTIME,
     );
 
-    // Stream 2 should also not be affected
+    // Stream 2 SR runs against the already-fixed anchor. Its (sr_rtp, ref_rtp)
+    // pairing implies an offset ~58000s away from current → snap.
     stream_2.on_sender_report(REFERENCE_NTP_TIME, 3_000_000_000);
-    let stream_2_second_pts = stream_2.pts_from_timestamp(200_090_000); // +1 second
+    let stream_2_post_snap_pts = stream_2.pts_from_timestamp(200_090_000); // +1 second
+    let stream_2_next_pts = stream_2.pts_from_timestamp(200_180_000); // +2 seconds
+    // Snap moved the timeline far away, but consecutive packets still differ
+    // by the expected 1s.
+    assert!(
+        stream_2_post_snap_pts > stream_2_first_pts + Duration::from_secs(1000),
+        "expected stream_2 to snap to a far-away offset, got {stream_2_post_snap_pts:?}"
+    );
     assert_duration_eq(
-        stream_2_second_pts,
-        stream_2_first_pts + Duration::from_secs(1),
+        stream_2_next_pts - stream_2_post_snap_pts,
+        Duration::from_secs(1),
         PREC_RUNTIME,
     );
 }

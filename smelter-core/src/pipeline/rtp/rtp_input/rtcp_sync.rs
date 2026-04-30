@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::pipeline::rtp::rtp_input::rollover_state::RolloverState;
 
@@ -211,10 +211,12 @@ impl RtpTimestampSync {
         // - BroadcastBox if you connect to server over WHEP before starting stream
         let offset_diff_secs = new_offset_secs - self.sync_offset_secs.unwrap_or(0.0);
         if offset_diff_secs.abs() > 2.0 {
-            error!(
+            warn!(
                 offset_diff_secs,
-                "NTP sync offset differs too much from initial estimate, ignoring."
+                "NTP sync offset differs too much from initial estimate, snapping offset."
             );
+            self.target_offset_secs = Some(new_offset_secs);
+            self.sync_offset_secs = Some(new_offset_secs);
         } else {
             debug!(
                 offset_diff_secs,
