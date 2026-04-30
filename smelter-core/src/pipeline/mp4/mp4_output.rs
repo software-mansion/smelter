@@ -128,9 +128,9 @@ impl Mp4Output {
             None => (None, None),
         };
 
-        std::thread::Builder::new()
-            .name(format!("MP4 writer thread for output {output_ref}"))
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            format!("MP4 writer thread for output {output_ref}"),
+            move || {
                 let _span =
                     tracing::info_span!("MP4 writer", output_id = output_ref.to_string()).entered();
 
@@ -145,8 +145,8 @@ impl Mp4Output {
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing MP4 writer thread.");
-            })
-            .unwrap();
+            },
+        );
 
         Ok(Mp4Output {
             video: video_encoder,

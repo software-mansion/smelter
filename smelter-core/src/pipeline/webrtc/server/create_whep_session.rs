@@ -109,7 +109,7 @@ pub async fn handle_create_whep_session(
 
     outputs.add_session(&output_ref, &session_id, peer_connection)?;
 
-    tokio::spawn(stream_media_to_peer(
+    ctx.spawn_tracked(stream_media_to_peer(
         ctx.clone(),
         output_ref,
         video_media_stream,

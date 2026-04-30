@@ -41,9 +41,9 @@ pub(super) fn start_tcp_server_thread(
     let socket = std::net::TcpListener::from(socket);
 
     let input_ref = input_ref.clone();
-    thread::Builder::new()
-        .name(format!("RTP TCP server receiver {input_ref}"))
-        .spawn(move || {
+    smelter_render::thread::ThreadRegistry::get().spawn(
+        format!("RTP TCP server receiver {input_ref}"),
+        move || {
             let _span = span!(
                 Level::INFO,
                 "RTP TCP server",
@@ -52,8 +52,8 @@ pub(super) fn start_tcp_server_thread(
             .entered();
             run_tcp_server_thread(socket, packets_tx, should_close);
             debug!("Closing RTP receiver thread (TCP server).");
-        })
-        .unwrap();
+        },
+    );
 
     Ok((port, packets_rx))
 }

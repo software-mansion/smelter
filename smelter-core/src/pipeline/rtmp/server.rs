@@ -67,8 +67,7 @@ fn handle_incoming_connection(
     let input_ref = inputs.find_by_app_stream_key(conn.app(), conn.stream_key())?;
     inputs.get_mut_with(&input_ref, |input| {
         input.ensure_no_active_connection(&input_ref)?;
-        let handle = start_connection_thread(ctx, &input_ref, input, conn);
-        input.connection_handle = handle;
+        start_connection_thread(ctx, &input_ref, input, conn);
         Ok(())
     })
 }

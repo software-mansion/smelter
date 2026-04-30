@@ -54,7 +54,7 @@ impl WhipWhepServer {
 
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
         let (init_result_sender, init_result_receiver) = oneshot::channel();
-        ctx.tokio_rt.spawn(async move {
+        ctx.spawn_tracked(async move {
             info!("Starting HTTP server for WHIP/WHEP on port {port}");
             match WhipWhepServer::new(port).await {
                 Ok(server) => {

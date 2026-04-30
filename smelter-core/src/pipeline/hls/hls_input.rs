@@ -171,9 +171,9 @@ impl HlsDemuxerThread {
     }
 
     fn spawn(mut self) {
-        std::thread::Builder::new()
-            .name(format!("HLS thread for input {}", self.input_ref))
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            format!("HLS thread for input {}", self.input_ref),
+            move || {
                 let _span = span!(
                     Level::INFO,
                     "HLS thread",
@@ -182,8 +182,8 @@ impl HlsDemuxerThread {
                 .entered();
                 self.run();
                 info!("Playlist finished")
-            })
-            .unwrap();
+            },
+        );
     }
 
     fn start_audio_decoder(

@@ -1,7 +1,9 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
-    thread::JoinHandle,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use tracing::error;
@@ -19,7 +21,7 @@ pub(crate) struct RtmpInputState {
     pub stream_key: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: RtmpServerInputDecoders,
-    pub connection_handle: Option<JoinHandle<()>>,
+    pub connection_active: Arc<AtomicBool>,
 }
 
 pub(crate) struct RtmpInputStateOptions {
@@ -36,7 +38,7 @@ impl RtmpInputState {
             stream_key: options.stream_key,
             queue_input: options.queue_input,
             decoders: options.decoders,
-            connection_handle: None,
+            connection_active: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -98,11 +100,12 @@ impl RtmpInputState {
         &self,
         input_ref: &Ref<InputId>,
     ) -> Result<(), RtmpServerError> {
-        match &self.connection_handle {
-            Some(handle) if !handle.is_finished() => Err(RtmpServerError::ConnectionAlreadyActive(
+        if self.connection_active.load(Ordering::Relaxed) {
+            Err(RtmpServerError::ConnectionAlreadyActive(
                 input_ref.id().clone(),
-            )),
-            _ => Ok(()),
+            ))
+        } else {
+            Ok(())
         }
     }
 }

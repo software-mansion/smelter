@@ -68,6 +68,16 @@ struct InnerRenderer {
     wgpu_ctx: Arc<WgpuCtx>,
 }
 
+impl Drop for InnerRenderer {
+    fn drop(&mut self) {
+        tracing::error!(
+            wgpu_ctx_strong = Arc::strong_count(&self.wgpu_ctx),
+            wgpu_device_strong = Arc::strong_count(&self.wgpu_ctx.device),
+            "DROP InnerRenderer"
+        );
+    }
+}
+
 pub(crate) struct RenderCtx<'a> {
     pub(crate) wgpu_ctx: &'a Arc<WgpuCtx>,
     pub(crate) text_renderer_ctx: &'a TextRendererCtx,

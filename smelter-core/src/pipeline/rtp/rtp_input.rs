@@ -305,14 +305,14 @@ impl RtpDemuxerThread {
         };
 
         let input_ref = input_ref.clone();
-        std::thread::Builder::new()
-            .name(format!("Depayloading thread for input: {input_ref}"))
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            format!("Depayloading thread for input: {input_ref}"),
+            move || {
                 let _span =
                     span!(Level::INFO, "RTP demuxer", input_id = input_ref.to_string()).entered();
                 thread.run();
-            })
-            .unwrap();
+            },
+        );
     }
 
     fn run(&mut self) {

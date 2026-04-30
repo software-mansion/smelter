@@ -267,7 +267,13 @@ impl Queue {
     }
 
     pub fn shutdown(&self) {
-        self.should_close.store(true, Ordering::Relaxed)
+        self.should_close.store(true, Ordering::Relaxed);
+        // Drop all input receivers so any decoder/depayloader thread blocked on
+        // QueueSender::send() unblocks with SendError and can exit. Without this,
+        // the senders sit in QueueInput inside the HashMap, the HashMap doesn't
+        // drop until Pipeline.queue drops (after Pipeline::drop returns), and
+        // join_all in Pipeline::drop deadlocks waiting for those threads.
+        self.inputs.lock().unwrap().clear();
     }
 
     pub(crate) fn add_input(&self, input_id: &InputId, queue_input: QueueInput) {

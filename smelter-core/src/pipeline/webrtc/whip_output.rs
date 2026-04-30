@@ -76,8 +76,7 @@ impl WhipOutput {
             "WHIP client task",
             output_id = output_ref.to_string()
         );
-        let rt = ctx.tokio_rt.clone();
-        rt.spawn(
+        ctx.clone().spawn_tracked(
             async {
                 let result = WhipClientTask::new(ctx, output_ref, options).await;
                 match result {

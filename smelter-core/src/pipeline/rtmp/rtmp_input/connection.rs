@@ -1,4 +1,7 @@
-use std::{sync::Arc, thread::JoinHandle, time::Duration};
+use std::{
+    sync::{Arc, atomic::Ordering},
+    time::Duration,
+};
 
 use rtmp::{
     AudioConfig, AudioData, RtmpAudioCodec, RtmpEvent, RtmpVideoCodec, VideoConfig, VideoData,
@@ -38,7 +41,7 @@ pub(crate) fn start_connection_thread(
     input_ref: &Ref<InputId>,
     input: &RtmpInputState,
     conn: rtmp::RtmpServerConnection,
-) -> Option<JoinHandle<()>> {
+) -> Option<()> {
     let input_id = input_ref.to_string();
     let queue_input = input.queue_input.upgrade()?;
     let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
@@ -58,9 +61,11 @@ pub(crate) fn start_connection_thread(
         first_pts: None,
     };
 
-    let handle = std::thread::Builder::new()
-        .name(format!("RTMP thread for input {input_id}"))
-        .spawn(move || {
+    let connection_active = input.connection_active.clone();
+    connection_active.store(true, Ordering::Relaxed);
+    smelter_render::thread::ThreadRegistry::get().spawn(
+        format!("RTMP thread for input {input_id}"),
+        move || {
             let _span = span!(Level::INFO, "RTMP thread", input_id = input_id).entered();
 
             let app: &str = conn.app();
@@ -79,9 +84,10 @@ pub(crate) fn start_connection_thread(
             }
 
             info!("RTMP stream connection closed");
-        })
-        .unwrap();
-    Some(handle)
+            connection_active.store(false, Ordering::Relaxed);
+        },
+    );
+    Some(())
 }
 
 enum TrackState {

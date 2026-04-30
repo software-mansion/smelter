@@ -53,6 +53,20 @@ pub struct ApiState {
     pub runtime: Arc<Runtime>,
 }
 
+impl Drop for ApiState {
+    fn drop(&mut self) {
+        let thread = std::thread::current();
+        tracing::error!(
+            thread_name = thread.name().unwrap_or("unnamed"),
+            thread_id = ?thread.id(),
+            "DROP ApiState"
+        );
+        if let Some(pipeline_arc) = self.pipeline.lock().unwrap().take() {
+            Pipeline::shutdown(pipeline_arc);
+        }
+    }
+}
+
 impl ApiState {
     pub fn new(config: Config, runtime: Arc<Runtime>) -> Result<Arc<ApiState>, ApiStateInitError> {
         let chromium_context = match config.web_renderer_enable && cfg!(feature = "web-renderer") {

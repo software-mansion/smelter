@@ -23,11 +23,16 @@ pub struct CompositorInstance {
     pub api_port: u16,
     pub http_client: reqwest::blocking::Client,
     pub should_close_sender: Sender<()>,
+    pub thread_handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Drop for CompositorInstance {
     fn drop(&mut self) {
         self.should_close_sender.send(()).unwrap();
+        tracing::error!("JOINING THREAD");
+        if let Some(handle) = self.thread_handle.take() {
+            handle.join().unwrap();
+        }
     }
 }
 
@@ -47,10 +52,21 @@ impl CompositorInstance {
         let runtime = Arc::new(Runtime::new().unwrap());
         let state = ApiState::new(config, runtime.clone()).unwrap();
 
-        thread::Builder::new()
+        let thread_handle = thread::Builder::new()
             .name("HTTP server startup thread".to_string())
             .spawn(move || {
+                // Hold a clone of `state` on this thread that is independent of
+                // the one moved into the axum router. After `run_api` returns,
+                // axum + every request task have released their `Arc<ApiState>`
+                // clones, so this clone is the last strong reference. We drive
+                // pipeline shutdown synchronously here, on the thread the test
+                // joins — avoiding ApiState::drop landing on a tokio worker.
+                let state_for_shutdown = state.clone();
                 run_api(state, runtime.clone(), should_close_receiver).unwrap();
+                if let Some(pipeline_arc) = state_for_shutdown.pipeline.lock().unwrap().take() {
+                    smelter_core::Pipeline::shutdown(pipeline_arc);
+                }
+                drop(state_for_shutdown);
             })
             .unwrap();
 
@@ -58,6 +74,7 @@ impl CompositorInstance {
             api_port,
             http_client: reqwest::blocking::Client::new(),
             should_close_sender,
+            thread_handle: Some(thread_handle),
         };
         instance.wait_for_start(Duration::from_secs(30)).unwrap();
         instance

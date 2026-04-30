@@ -14,9 +14,9 @@ pub(super) fn start_input_thread(
     input_receiver: Receiver<AudioMixerInputEvent>,
     result_sender: Sender<AudioMixerInputResult>,
 ) {
-    std::thread::Builder::new()
-        .name("audio mixer input".to_string())
-        .spawn(move || {
+    smelter_render::thread::ThreadRegistry::get().spawn(
+        "audio mixer input".to_string(),
+        move || {
             let mut processor = InputProcessor::new(mixing_sample_rate);
 
             for event in input_receiver {
@@ -35,8 +35,8 @@ pub(super) fn start_input_thread(
                     return;
                 }
             }
-        })
-        .unwrap();
+        },
+    );
 }
 
 struct InputProcessor {

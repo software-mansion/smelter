@@ -1,7 +1,4 @@
-use std::{
-    sync::{Arc, atomic::AtomicBool},
-    thread,
-};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use bytes::{Bytes, BytesMut};
 use crossbeam_channel::{Receiver, Sender, unbounded};
@@ -49,9 +46,9 @@ pub(super) fn start_udp_reader_thread(
     let socket = std::net::UdpSocket::from(socket);
 
     let input_ref = input_ref.clone();
-    thread::Builder::new()
-        .name(format!("RTP UDP receiver {input_ref}"))
-        .spawn(move || {
+    smelter_render::thread::ThreadRegistry::get().spawn(
+        format!("RTP UDP receiver {input_ref}"),
+        move || {
             let _span = span!(
                 Level::INFO,
                 "RTP UDP Receiver",
@@ -60,8 +57,8 @@ pub(super) fn start_udp_reader_thread(
             .entered();
             run_udp_receiver_thread(socket, packets_tx, should_close);
             debug!("Closing RTP receiver thread (UDP).");
-        })
-        .unwrap();
+        },
+    );
 
     Ok((port, packets_rx))
 }

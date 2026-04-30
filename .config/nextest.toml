@@ -5,6 +5,8 @@ retries = 0
 retries = 1
 slow-timeout = { period = "60s", terminate-after = 3 }
 fail-fast = false
+success-output = "immediate"
+failure-output = "immediate"
 
 [[profile.ci.overrides]]
 filter = 'package(/^integration-tests/) and test(/_flaky$/)'

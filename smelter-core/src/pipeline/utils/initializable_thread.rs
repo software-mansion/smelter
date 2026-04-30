@@ -20,9 +20,9 @@ pub(crate) trait InitializableThread: Sized {
 
         let instance_id = thread_instance_id.to_string();
         let metadata = Self::metadata();
-        std::thread::Builder::new()
-            .name(metadata.thread_name.to_string())
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            metadata.thread_name.to_string(),
+            move || {
                 let _span = span!(
                     Level::INFO,
                     "Thread",
@@ -41,8 +41,8 @@ pub(crate) trait InitializableThread: Sized {
                     }
                 };
                 Self::run(state);
-            })
-            .unwrap();
+            },
+        );
 
         result_receiver.recv().unwrap()
     }

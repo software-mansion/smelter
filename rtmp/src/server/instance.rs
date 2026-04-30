@@ -19,7 +19,24 @@ impl RtmpServer {
             config,
             shutdown_condition: ShutdownCondition::default(),
             conn_sender,
+            listener_handle: None,
+            on_connection_handle: None,
+            connection_handles: Vec::new(),
         })))
+    }
+
+    pub(super) fn register_listener_handles(
+        &self,
+        listener: JoinHandle<()>,
+        on_connection: JoinHandle<()>,
+    ) {
+        let mut guard = self.0.lock().unwrap();
+        guard.listener_handle = Some(listener);
+        guard.on_connection_handle = Some(on_connection);
+    }
+
+    pub(super) fn register_connection_handle(&self, handle: JoinHandle<()>) {
+        self.0.lock().unwrap().connection_handles.push(handle);
     }
 
     pub fn config(&self) -> RtmpServerConfig {
@@ -62,18 +79,29 @@ struct ServerInstance {
     config: RtmpServerConfig,
     conn_sender: Sender<RtmpServerConnection>,
     shutdown_condition: ShutdownCondition,
+    listener_handle: Option<JoinHandle<()>>,
+    on_connection_handle: Option<JoinHandle<()>>,
+    connection_handles: Vec<JoinHandle<()>>,
 }
 
 impl Drop for ServerInstance {
     fn drop(&mut self) {
         self.shutdown_condition.mark_for_shutdown();
+        if let Some(handle) = self.listener_handle.take() {
+            let _ = handle.join();
+        }
+        if let Some(handle) = self.on_connection_handle.take() {
+            let _ = handle.join();
+        }
+        for handle in self.connection_handles.drain(..) {
+            let _ = handle.join();
+        }
     }
 }
 
 pub(super) struct ServerConnectionCtx {
     pub shutdown_condition: ShutdownCondition,
     pub conn_sender: Sender<RtmpServerConnection>,
-    pub thread_handle: Option<JoinHandle<()>>,
 }
 
 impl ServerConnectionCtx {
@@ -82,7 +110,6 @@ impl ServerConnectionCtx {
         Arc::new(Mutex::new(Self {
             shutdown_condition: guard.shutdown_condition.child_condition(),
             conn_sender: guard.conn_sender.clone(),
-            thread_handle: None,
         }))
     }
 

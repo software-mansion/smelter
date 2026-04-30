@@ -16,7 +16,7 @@ pub(super) struct RtcpListeners {
 impl RtcpListeners {
     pub(super) fn start(ctx: &Arc<PipelineCtx>, rtc_receiver: Arc<RTCRtpReceiver>) -> Self {
         let (sender_report_sender, sender_report_receiver) = oneshot::channel();
-        ctx.tokio_rt.spawn(async move {
+        ctx.spawn_tracked(async move {
             let mut sender = Some(sender_report_sender);
             loop {
                 match rtc_receiver.read_rtcp().await {

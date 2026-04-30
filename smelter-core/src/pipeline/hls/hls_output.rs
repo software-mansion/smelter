@@ -113,9 +113,9 @@ impl HlsOutput {
             None => (None, None),
         };
 
-        std::thread::Builder::new()
-            .name(format!("HLS writer thread for output {output_ref}"))
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            format!("HLS writer thread for output {output_ref}"),
+            move || {
                 let _span =
                     tracing::info_span!("HLS writer", output_id = output_ref.to_string()).entered();
 
@@ -134,8 +134,8 @@ impl HlsOutput {
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing HLS writer thread.");
-            })
-            .unwrap();
+            },
+        );
 
         Ok(HlsOutput {
             video: video_encoder,

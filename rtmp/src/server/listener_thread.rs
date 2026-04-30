@@ -27,7 +27,7 @@ pub(super) fn start_listener_thread(
     let (conn_sender, conn_receiver) = unbounded();
     let server = RtmpServer::new(config, conn_sender);
 
-    thread::Builder::new()
+    let on_connection_handle = thread::Builder::new()
         .name("RTMP on_connection processor".to_string())
         .spawn(move || {
             let mut on_connection = on_connection;
@@ -38,7 +38,7 @@ pub(super) fn start_listener_thread(
         .unwrap();
 
     let server_handle = server.handle();
-    thread::Builder::new()
+    let listener_handle = thread::Builder::new()
         .name("RTMP listener thread".to_string())
         .spawn(move || {
             loop {
@@ -70,6 +70,8 @@ pub(super) fn start_listener_thread(
         })
         .unwrap();
 
+    server.register_listener_handles(listener_handle, on_connection_handle);
+
     Ok(server)
 }
 
@@ -83,16 +85,15 @@ fn start_connection_thread(
         None => RtmpTransport::tcp_server_stream(socket),
     };
 
-    let ctx_clone = ctx.clone();
     let thread_handle = thread::Builder::new()
         .name("RTMP connection thread".to_string())
         .spawn(move || {
-            if let Err(err) = run_connection_thread(&ctx_clone, transport) {
+            if let Err(err) = run_connection_thread(&ctx, transport) {
                 error!(?err, "Connection terminated with an error");
             }
         })
         .unwrap();
 
-    ctx.lock().unwrap().thread_handle = Some(thread_handle);
+    server.register_connection_handle(thread_handle);
     Ok(())
 }

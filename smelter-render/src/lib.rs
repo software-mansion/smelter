@@ -1,6 +1,7 @@
 pub mod error;
 pub mod event_handler;
 pub mod scene;
+pub mod thread;
 
 pub(crate) mod registry;
 pub(crate) mod transformations;

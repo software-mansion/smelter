@@ -41,19 +41,21 @@ pub(super) fn handle_on_track(
                 warn!("Audio track already started");
                 return;
             };
+            let pipeline_ctx = ctx.pipeline_ctx.clone();
             let task = async move {
                 if let Err(err) = process_audio_track(ctx, input_ref, audio_sender).await {
                     // TODO: address after WhipWhepServerError rework
                     warn!(?err, "On track handler failed")
                 }
             };
-            tokio::spawn(task.instrument(span));
+            pipeline_ctx.spawn_tracked(task.instrument(span));
         }
         RTPCodecType::Video => {
             let Some(video_sender) = video_sender.take() else {
                 warn!("Audio track already started");
                 return;
             };
+            let pipeline_ctx = ctx.pipeline_ctx.clone();
             let task = async move {
                 if let Err(err) =
                     process_video_track(ctx, input_ref, video_preferences, video_sender).await
@@ -62,7 +64,7 @@ pub(super) fn handle_on_track(
                     warn!(?err, "On track handler failed")
                 }
             };
-            tokio::spawn(task.instrument(span));
+            pipeline_ctx.spawn_tracked(task.instrument(span));
         }
         RTPCodecType::Unspecified => {
             warn!("Unknown track kind");

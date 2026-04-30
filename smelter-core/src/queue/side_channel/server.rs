@@ -52,9 +52,9 @@ impl VideoSideChannelServer {
         );
 
         let (sender, receiver) = crossbeam_channel::bounded::<Frame>(VIDEO_CHANNEL_CAPACITY);
-        thread::Builder::new()
-            .name("video-sc-send".to_string())
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            "video-sc-send".to_string(),
+            move || {
                 let _enter = span.entered();
                 let mut pre_processor = FramePreProcessor::new(wgpu_ctx);
                 while let Ok(frame) = receiver.recv() {
@@ -65,8 +65,8 @@ impl VideoSideChannelServer {
                     broadcast_to_client_threads(&clients, data);
                 }
                 debug!("video-sc-send thread finished");
-            })
-            .expect("Failed to spawn video side channel send thread");
+            },
+        );
 
         Self {
             sender,
@@ -93,17 +93,17 @@ impl AudioSideChannelServer {
 
         let (sender, receiver) =
             crossbeam_channel::bounded::<InputAudioSamples>(AUDIO_CHANNEL_CAPACITY);
-        thread::Builder::new()
-            .name("audio-sc-send".to_string())
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            "audio-sc-send".to_string(),
+            move || {
                 let _enter = span.entered();
                 while let Ok(batch) = receiver.recv() {
                     let data = serialize_audio_batch(&batch);
                     broadcast_to_client_threads(&clients, data);
                 }
                 debug!("audio-sc-send thread finished");
-            })
-            .expect("Failed to spawn audio side channel send thread");
+            },
+        );
 
         Self {
             sender,
@@ -131,9 +131,9 @@ fn bind_and_spawn_accept(
     let clients: Clients = Arc::new(Mutex::new(Vec::new()));
     let clients_accept = clients.clone();
     let should_close_clone = should_close.clone();
-    thread::Builder::new()
-        .name(format!("{name_prefix}-accept"))
-        .spawn(move || {
+    smelter_render::thread::ThreadRegistry::get().spawn(
+        format!("{name_prefix}-accept"),
+        move || {
             let _enter = span.entered();
             run_accept_clients_thread(
                 listener,
@@ -142,8 +142,8 @@ fn bind_and_spawn_accept(
                 name_prefix,
                 client_channel_capacity,
             )
-        })
-        .expect("Failed to spawn side channel accept thread");
+        },
+    );
 
     let cleanup = Arc::new(ServerCleanup {
         socket_path,
@@ -166,13 +166,13 @@ fn run_accept_clients_thread(
                 let (sender, receiver) =
                     crossbeam_channel::bounded::<Bytes>(client_channel_capacity);
                 let client_span = Span::current();
-                thread::Builder::new()
-                    .name(format!("{name_prefix}-client"))
-                    .spawn(move || {
+                smelter_render::thread::ThreadRegistry::get().spawn(
+                    format!("{name_prefix}-client"),
+                    move || {
                         let _enter = client_span.entered();
                         run_client_sender_thread(stream, receiver);
-                    })
-                    .expect("Failed to spawn side channel client thread");
+                    },
+                );
                 clients.lock().unwrap().push(sender);
             }
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {

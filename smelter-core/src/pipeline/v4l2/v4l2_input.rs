@@ -103,14 +103,14 @@ impl V4l2Input {
             stream,
         };
 
-        std::thread::Builder::new()
-            .name(format!("V4L2 reader thread for input {input_ref}"))
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            format!("V4L2 reader thread for input {input_ref}"),
+            move || {
                 let _span = span!(Level::INFO, "V4L2", input_id = input_ref.to_string()).entered();
                 state.run();
                 info!("Stopping input.");
-            })
-            .unwrap();
+            },
+        );
 
         Ok((
             Input::V4l2(Self { should_close }),

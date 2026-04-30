@@ -1,10 +1,13 @@
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex, Weak},
-    thread,
+    sync::{
+        Arc, Mutex, Weak,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
 };
 
-use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TrySendError, bounded};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -34,31 +37,48 @@ pub struct StatsReport {
     pub outputs: BTreeMap<String, OutputStatsReport>,
 }
 
-pub(crate) struct StatsMonitor(Arc<Mutex<StatsState>>);
+pub(crate) struct StatsMonitor {
+    state: Arc<Mutex<StatsState>>,
+    should_close: Arc<AtomicBool>,
+}
+
+impl StatsMonitor {
+    pub fn shutdown(&self) {
+        self.should_close.store(true, Ordering::Relaxed);
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct StatsSender(Sender<Vec<StatsEvent>>);
 
 impl StatsMonitor {
     pub fn new() -> (Self, StatsSender) {
-        let monitor = Self(Arc::new(Mutex::new(StatsState::new())));
+        let state = Arc::new(Mutex::new(StatsState::new()));
+        let should_close = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = bounded(10000);
 
         {
-            let monitor = Arc::downgrade(&monitor.0);
-            thread::Builder::new()
-                .name("Stats processor".to_string())
-                .spawn(move || {
-                    run_event_loop(monitor, receiver);
-                })
-                .unwrap();
+            let monitor = Arc::downgrade(&state);
+            let should_close = should_close.clone();
+            smelter_render::thread::ThreadRegistry::get().spawn(
+                "Stats processor".to_string(),
+                move || {
+                    run_event_loop(monitor, receiver, should_close);
+                },
+            );
         }
 
-        (monitor, StatsSender(sender))
+        (
+            Self {
+                state,
+                should_close,
+            },
+            StatsSender(sender),
+        )
     }
 
     pub fn report(&self) -> StatsReport {
-        let mut guard = self.0.lock().unwrap();
+        let mut guard = self.state.lock().unwrap();
         StatsReport {
             inputs: guard
                 .inputs
@@ -82,8 +102,20 @@ impl StatsSender {
     }
 }
 
-fn run_event_loop(monitor: Weak<Mutex<StatsState>>, receiver: Receiver<Vec<StatsEvent>>) {
-    for events in receiver.into_iter() {
+fn run_event_loop(
+    monitor: Weak<Mutex<StatsState>>,
+    receiver: Receiver<Vec<StatsEvent>>,
+    should_close: Arc<AtomicBool>,
+) {
+    loop {
+        if should_close.load(Ordering::Relaxed) {
+            return;
+        }
+        let events = match receiver.recv_timeout(Duration::from_millis(100)) {
+            Ok(events) => events,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => return,
+        };
         let Some(monitor) = monitor.upgrade() else {
             return;
         };

@@ -75,9 +75,9 @@ impl RtmpClientOutput {
         });
 
         let client = Self::establish_connection(options.connection, &video_config, &audio_config)?;
-        std::thread::Builder::new()
-            .name(format!("RTMP sender thread for output {output_ref}"))
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            format!("RTMP sender thread for output {output_ref}"),
+            move || {
                 let _span = tracing::info_span!("RTMP sender", output_id = output_ref.to_string())
                     .entered();
 
@@ -94,8 +94,8 @@ impl RtmpClientOutput {
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing RTMP sender thread.");
-            })
-            .unwrap();
+            },
+        );
 
         Ok(Self {
             video: video_encoder,

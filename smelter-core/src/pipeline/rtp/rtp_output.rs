@@ -108,9 +108,9 @@ impl RtpOutput {
         let should_close = Arc::new(AtomicBool::new(false));
         let connection_options = options.connection_options;
         let should_close2 = should_close.clone();
-        std::thread::Builder::new()
-            .name(format!("RTP sender for output {output_ref}"))
-            .spawn(move || {
+        smelter_render::thread::ThreadRegistry::get().spawn(
+            format!("RTP sender for output {output_ref}"),
+            move || {
                 let _span = span!(
                     Level::INFO,
                     "RTP sender",
@@ -128,8 +128,8 @@ impl RtpOutput {
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing RTP sender thread.")
-            })
-            .unwrap();
+            },
+        );
 
         Ok((
             Self {

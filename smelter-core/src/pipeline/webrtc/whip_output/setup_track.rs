@@ -283,7 +283,7 @@ fn handle_packet_loss_requests(
 
     let span = span!(Level::DEBUG, "Packet loss handle");
 
-    ctx.tokio_rt.spawn(
+    ctx.spawn_tracked(
         async move {
             loop {
                 if let Err(e) = rtc_sender.read_rtcp().await {
@@ -295,7 +295,7 @@ fn handle_packet_loss_requests(
         .instrument(span.clone()),
     );
 
-    ctx.tokio_rt.spawn(
+    ctx.spawn_tracked(
         async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(10)).await;

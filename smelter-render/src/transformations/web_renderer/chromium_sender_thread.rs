@@ -1,8 +1,5 @@
 use std::path::PathBuf;
-use std::{
-    sync::Arc,
-    thread::{self, JoinHandle},
-};
+use std::sync::Arc;
 
 use crossbeam_channel::{Receiver, Sender};
 use tracing::error;
@@ -49,8 +46,9 @@ impl ChromiumSenderThread {
         }
     }
 
-    pub fn spawn(mut self) -> JoinHandle<()> {
-        thread::spawn(move || self.run())
+    pub fn spawn(mut self) {
+        crate::thread::ThreadRegistry::get()
+            .spawn("chromium sender".to_string(), move || self.run());
     }
 
     fn run(&mut self) {

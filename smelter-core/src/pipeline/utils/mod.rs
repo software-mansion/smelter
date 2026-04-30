@@ -1,3 +1,4 @@
+pub(crate) mod async_task;
 pub(crate) mod channel;
 pub(crate) mod input_buffer;
 

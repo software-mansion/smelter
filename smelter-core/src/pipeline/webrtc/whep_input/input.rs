@@ -86,7 +86,7 @@ impl WhepInput {
             input_id = input_ref.to_string()
         );
         let ctx_clone = ctx.clone();
-        ctx.tokio_rt.spawn(
+        ctx.spawn_tracked(
             async {
                 let result = init_whep_client(input_ref, ctx_clone, options).await;
                 match result {
@@ -105,7 +105,7 @@ impl Drop for WhepInput {
     fn drop(&mut self) {
         let session_url = self.session_url.clone();
         let client = self.client.clone();
-        self.ctx.tokio_rt.spawn(async move {
+        self.ctx.spawn_tracked(async move {
             client.delete_session(session_url).await;
         });
     }

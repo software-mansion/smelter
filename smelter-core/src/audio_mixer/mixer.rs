@@ -79,6 +79,17 @@ impl AudioMixer {
         self.0.lock().unwrap().inputs.remove(input_id);
     }
 
+    /// Drop all per-input state (and its `input_sender`s) so the per-input mixer
+    /// threads unblock from `for event in input_receiver` and exit. Must be called
+    /// during Pipeline::drop, otherwise `join_all` deadlocks if Pipeline::drop
+    /// happens to run on `run_audio_mixer_thread`, which holds an Arc clone of
+    /// this AudioMixer on its stack and would otherwise keep the senders alive.
+    pub fn shutdown(&self) {
+        let mut guard = self.0.lock().unwrap();
+        guard.inputs.clear();
+        guard.outputs.clear();
+    }
+
     pub fn update_output(
         &self,
         output_id: &OutputId,

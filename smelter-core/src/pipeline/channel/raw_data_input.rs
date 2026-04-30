@@ -1,6 +1,5 @@
 use std::{
     sync::{Arc, Mutex},
-    thread,
     time::Duration,
 };
 
@@ -104,11 +103,9 @@ fn spawn_video_repacking_thread(
 ) -> Sender<PipelineEvent<Frame>> {
     let (input_sender, input_receiver) = bounded::<PipelineEvent<Frame>>(1000);
 
-    thread::Builder::new()
-        .name(format!(
-            "Raw channel video synchronization thread for input {input_ref}"
-        ))
-        .spawn(move || {
+    smelter_render::thread::ThreadRegistry::get().spawn(
+        format!("Raw channel video synchronization thread for input {input_ref}"),
+        move || {
             for event in input_receiver.into_iter() {
                 match event {
                     PipelineEvent::Data(frame) => buffer.write(frame),
@@ -129,8 +126,8 @@ fn spawn_video_repacking_thread(
                     break;
                 }
             }
-        })
-        .unwrap();
+        },
+    );
 
     input_sender
 }
@@ -143,11 +140,9 @@ fn spawn_audio_repacking_thread(
 ) -> Sender<PipelineEvent<InputAudioSamples>> {
     let (input_sender, input_receiver) = bounded::<PipelineEvent<InputAudioSamples>>(1000);
 
-    thread::Builder::new()
-        .name(format!(
-            "Raw channel audio synchronization thread for input {input_ref}"
-        ))
-        .spawn(move || {
+    smelter_render::thread::ThreadRegistry::get().spawn(
+        format!("Raw channel audio synchronization thread for input {input_ref}"),
+        move || {
             for event in input_receiver.into_iter() {
                 match event {
                     PipelineEvent::Data(frame) => buffer.write(frame),
@@ -168,8 +163,8 @@ fn spawn_audio_repacking_thread(
                     break;
                 }
             }
-        })
-        .unwrap();
+        },
+    );
 
     input_sender
 }

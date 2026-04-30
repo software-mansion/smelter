@@ -2,7 +2,6 @@ use std::{
     collections::BTreeMap,
     ops::Add,
     sync::{Arc, atomic::Ordering},
-    thread::{self, JoinHandle},
     time::Duration,
 };
 
@@ -38,11 +37,9 @@ impl QueueThread {
         }
     }
 
-    pub fn spawn(self) -> JoinHandle<()> {
-        thread::Builder::new()
-            .name("Queue thread".to_string())
-            .spawn(move || self.run())
-            .unwrap()
+    pub fn spawn(self) {
+        smelter_render::thread::ThreadRegistry::get()
+            .spawn("Queue thread".to_string(), move || self.run());
     }
 
     fn run(mut self) {

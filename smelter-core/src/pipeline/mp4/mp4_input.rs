@@ -153,12 +153,9 @@ impl Mp4Input {
         if let (Some(track), Some(sender)) = (audio_track, audio_sender) {
             reader.spawn_audio(track, sender, initial_seek)?;
         }
-        std::thread::Builder::new()
-            .name("mp4 reader".to_string())
-            .spawn(move || {
-                reader.run();
-            })
-            .unwrap();
+        smelter_render::thread::ThreadRegistry::get().spawn("mp4 reader".to_string(), move || {
+            reader.run();
+        });
 
         Ok((
             Input::Mp4(Self { events_sender }),
@@ -306,6 +303,12 @@ impl TrackManagerThread {
                 }
                 StateEvent::InputShutdown => {
                     self.input_shutdown_condition.mark_for_shutdown();
+                    if let Some((handle, _)) = self.video_thread.take() {
+                        let _ = handle.join();
+                    }
+                    if let Some((handle, _)) = self.audio_thread.take() {
+                        let _ = handle.join();
+                    }
                     return;
                 }
             }
