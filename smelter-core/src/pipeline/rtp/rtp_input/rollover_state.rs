@@ -7,8 +7,13 @@ pub(crate) struct RolloverState {
 impl RolloverState {
     pub fn timestamp(&mut self, current_timestamp: u32) -> u64 {
         let Some(previous_timestamp) = self.previous_timestamp else {
+            // Anchor the first packet one rollover into the rolled u64 space.
+            // This leaves room for later packets that fall *before* the first
+            // one (e.g. a SenderReport whose RTP timestamp predates the first
+            // media packet) to still produce a non-negative rolled value.
             self.previous_timestamp = Some(current_timestamp);
-            return current_timestamp as u64;
+            self.rollover_count = 1;
+            return (u32::MAX as u64 + 1) + current_timestamp as u64;
         };
 
         let timestamp_diff = u32::abs_diff(previous_timestamp, current_timestamp);
@@ -35,10 +40,12 @@ mod tests {
     fn timestamp_rollover() {
         let mut rollover_state = RolloverState::default();
 
+        // First packet is anchored one rollover into the rolled u64 space, so
+        // packets older than it still resolve to a positive rolled value.
         let current_timestamp = 1;
         assert_eq!(
             rollover_state.timestamp(current_timestamp),
-            current_timestamp as u64
+            (u32::MAX as u64 + 1) + current_timestamp as u64
         );
 
         let current_timestamp = u32::MAX / 2 + 1;
