@@ -9,6 +9,7 @@ use crate::{
         mp4::Mp4Input,
         rtmp::RtmpServerInput,
         rtp::RtpInput,
+        srt::SrtInput,
         webrtc::{WhepInput, WhipInput},
     },
     queue::QueueInput,
@@ -34,6 +35,7 @@ pub enum Input {
     Whip(WhipInput),
     Whep(WhepInput),
     Hls(HlsInput),
+    Srt(SrtInput),
     #[cfg(target_os = "linux")]
     V4l2(super::v4l2::V4l2Input),
     #[cfg(feature = "decklink")]
@@ -50,6 +52,7 @@ impl Input {
             Input::Whip(_input) => InputProtocolKind::Whip,
             Input::Whep(_input) => InputProtocolKind::Whep,
             Input::Hls(_input) => InputProtocolKind::Hls,
+            Input::Srt(_input) => InputProtocolKind::Srt,
             #[cfg(target_os = "linux")]
             Input::V4l2(_input) => InputProtocolKind::V4l2,
             #[cfg(feature = "decklink")]
@@ -99,6 +102,7 @@ pub(super) fn new_external_input(
         RegisterInputOptions::RtmpServer(opts) => RtmpServerInput::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::Srt(opts) => SrtInput::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Whep(opts) => WhepInput::new_input(ctx, input_ref, opts),
         #[cfg(target_os = "linux")]

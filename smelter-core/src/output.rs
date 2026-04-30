@@ -33,6 +33,7 @@ pub enum ProtocolOutputOptions {
     Hls(HlsOutputOptions),
     Whip(WhipOutputOptions),
     Whep(WhepOutputOptions),
+    Srt(SrtOutputOptions),
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +108,7 @@ pub enum OutputProtocolKind {
     Whep,
     Mp4,
     Hls,
+    Srt,
     EncodedDataChannel,
     RawDataChannel,
 }

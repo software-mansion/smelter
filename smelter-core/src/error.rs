@@ -59,6 +59,9 @@ pub enum InitPipelineError {
     #[error("Failed to initialize RTMP server.")]
     RtmpServerInitError(#[source] std::io::Error),
 
+    #[error("Failed to initialize SRT server: {0}")]
+    SrtServerInitError(#[source] libsrt::Error),
+
     #[error("Failed to bind UDP socket for WebRTC mux on port {0}.")]
     BindUdpMuxSocket(u16, #[source] std::io::Error),
 }
@@ -170,6 +173,12 @@ pub enum OutputInitError {
 
     #[error(transparent)]
     RtmpError(#[from] RtmpClientError),
+
+    #[error(transparent)]
+    SrtError(#[from] SrtOutputError),
+
+    #[error(transparent)]
+    SrtServer(#[from] SrtServerError),
 }
 
 /// Error that can happen after registration
@@ -239,6 +248,12 @@ pub enum InputInitError {
 
     #[error(transparent)]
     Rtmp(#[from] RtmpServerError),
+
+    #[error(transparent)]
+    Srt(#[from] SrtInputError),
+
+    #[error(transparent)]
+    SrtServer(#[from] SrtServerError),
 
     #[cfg(feature = "decklink")]
     #[error(transparent)]

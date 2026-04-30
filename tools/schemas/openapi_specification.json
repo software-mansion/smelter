@@ -2146,6 +2146,18 @@
         },
         "additionalProperties": false
       },
+      "InputSrtVideoOptions": {
+        "type": "object",
+        "required": [
+          "decoder"
+        ],
+        "properties": {
+          "decoder": {
+            "$ref": "#/components/schemas/SrtVideoDecoderOptions"
+          }
+        },
+        "additionalProperties": false
+      },
       "InputStatsReport": {
         "oneOf": [
           {
@@ -3178,6 +3190,91 @@
         },
         "additionalProperties": false
       },
+      "OutputSrtAudioOptions": {
+        "type": "object",
+        "required": [
+          "encoder",
+          "initial"
+        ],
+        "properties": {
+          "mixing_strategy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AudioMixingStrategy",
+                "description": "(**default=\"sum_clip\"**) Specifies how audio should be mixed."
+              }
+            ]
+          },
+          "send_eos_when": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutputEndCondition",
+                "description": "Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+              }
+            ]
+          },
+          "encoder": {
+            "$ref": "#/components/schemas/SrtAudioEncoderOptions",
+            "description": "Audio encoder options."
+          },
+          "channels": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AudioChannels",
+                "description": "Channels configuration."
+              }
+            ]
+          },
+          "initial": {
+            "$ref": "#/components/schemas/AudioScene",
+            "description": "Initial audio mixer configuration for output."
+          }
+        },
+        "additionalProperties": false
+      },
+      "OutputSrtVideoOptions": {
+        "type": "object",
+        "required": [
+          "resolution",
+          "encoder",
+          "initial"
+        ],
+        "properties": {
+          "resolution": {
+            "$ref": "#/components/schemas/Resolution",
+            "description": "Output resolution in pixels."
+          },
+          "send_eos_when": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutputEndCondition",
+                "description": "Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+              }
+            ]
+          },
+          "encoder": {
+            "$ref": "#/components/schemas/SrtVideoEncoderOptions",
+            "description": "Video encoder options."
+          },
+          "initial": {
+            "$ref": "#/components/schemas/VideoScene",
+            "description": "Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md)."
+          }
+        },
+        "additionalProperties": false
+      },
       "OutputStatsReport": {
         "oneOf": [
           {
@@ -3664,6 +3761,27 @@
           {
             "allOf": [
               {
+                "$ref": "#/components/schemas/SrtInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "srt"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/V4l2Input"
               },
               {
@@ -3827,6 +3945,27 @@
                     "type": "string",
                     "enum": [
                       "hls"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SrtOutput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "srt"
                     ]
                   }
                 }
@@ -5145,6 +5284,291 @@
           }
         },
         "additionalProperties": false
+      },
+      "SrtAudioEncoderOptions": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "sample_rate": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "description": "(**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "aac"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SrtEncryption": {
+        "type": "string",
+        "enum": [
+          "aes128",
+          "aes192",
+          "aes256"
+        ]
+      },
+      "SrtInput": {
+        "type": "object",
+        "description": "Parameters for an input stream received over SRT.\nExpects an MPEG-TS stream carrying H.264 video and/or AAC audio.\nAt least one of `video` and `audio` has to be defined.\n\nThe input id is used as the SRT `streamid`. Senders must provide a matching\n`streamid=...` query parameter (or `SRTO_STREAMID` socket option) when\nconnecting to the compositor's shared SRT server.",
+        "properties": {
+          "video": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSrtVideoOptions",
+                "description": "Parameters of the video track carried in the MPEG-TS stream."
+              }
+            ]
+          },
+          "audio": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether an AAC audio track is present in the MPEG-TS stream."
+          },
+          "required": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+          },
+          "offset_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Offset in milliseconds relative to the pipeline start (start request). If the offset is\nnot defined then the stream will be synchronized based on the delivery time of the initial\nframes."
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
+          },
+          "encryption": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SrtInputEncryption",
+                "description": "Enable AES encryption on the incoming SRT stream. The sender must\nconnect with the matching `passphrase`."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SrtInputEncryption": {
+        "type": "object",
+        "required": [
+          "passphrase",
+          "encryption"
+        ],
+        "properties": {
+          "passphrase": {
+            "type": "string",
+            "description": "Passphrase used to derive the AES key. Must be 10–79 characters long."
+          },
+          "encryption": {
+            "$ref": "#/components/schemas/SrtEncryption",
+            "description": "AES key length used for the stream."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SrtOutput": {
+        "type": "object",
+        "description": "Parameters for an output stream sent over SRT in listener mode.\n\nThe output is registered on Smelter's shared SRT server (configured via\n`SMELTER_SRT_SERVER_PORT`). The output id is used as the SRT `streamid`;\na caller connects to that port using `streamid=<output_id>` to pull the\nstream. While a caller is connected, further callers using the same id\nare refused; when the active caller disconnects, the next caller is\naccepted.\n\nThe produced stream is MPEG-TS carrying H.264 video and/or AAC audio.",
+        "properties": {
+          "video": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutputSrtVideoOptions",
+                "description": "Video stream configuration."
+              }
+            ]
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutputSrtAudioOptions",
+                "description": "Audio stream configuration."
+              }
+            ]
+          },
+          "encryption": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SrtOutputEncryption",
+                "description": "Enable AES encryption on the outgoing SRT stream. The caller must\nconnect with the matching `passphrase`."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SrtOutputEncryption": {
+        "type": "object",
+        "required": [
+          "passphrase",
+          "encryption"
+        ],
+        "properties": {
+          "passphrase": {
+            "type": "string",
+            "description": "Passphrase used to derive the AES key. Must be 10–79 characters long."
+          },
+          "encryption": {
+            "$ref": "#/components/schemas/SrtEncryption",
+            "description": "AES key length used for the stream."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SrtVideoDecoderOptions": {
+        "type": "string",
+        "enum": [
+          "ffmpeg_h264",
+          "vulkan_h264"
+        ]
+      },
+      "SrtVideoEncoderOptions": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "preset": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/H264EncoderPreset",
+                    "description": "(**default=`\"fast\"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more."
+                  }
+                ]
+              },
+              "bitrate": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/VideoEncoderBitrate",
+                    "description": "Encoding bitrate. Default value depends on chosen encoder."
+                  }
+                ]
+              },
+              "keyframe_interval_ms": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double",
+                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+              },
+              "pixel_format": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PixelFormat",
+                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format"
+                  }
+                ]
+              },
+              "ffmpeg_options": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ffmpeg_h264"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "bitrate": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/VideoEncoderBitrate",
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                  }
+                ]
+              },
+              "keyframe_interval_ms": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double",
+                "description": "(**default=`5000`**) Interval between keyframes, in milliseconds."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "vulkan_h264"
+                ]
+              }
+            }
+          }
+        ]
       },
       "StatsReport": {
         "type": "object",

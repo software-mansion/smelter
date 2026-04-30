@@ -13,11 +13,13 @@ use crate::inputs::InputHandle;
 use crate::inputs::hls::HlsInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::rtmp::RtmpInputBuilder;
+use crate::inputs::srt::SrtInputBuilder;
 use crate::inputs::whep::WhepInputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
 
 use crate::outputs::hls::HlsOutputBuilder;
 use crate::outputs::mp4::Mp4OutputBuilder;
+use crate::outputs::srt::SrtOutputBuilder;
 use crate::outputs::whep::WhepOutputBuilder;
 use crate::outputs::whip::WhipOutputBuilder;
 use crate::utils::parse_json;
@@ -151,6 +153,11 @@ impl SmelterState {
                 let register_request = hls_input.serialize_register();
                 (InputHandle::Hls(hls_input), register_request)
             }
+            InputProtocol::Srt => {
+                let srt_input = SrtInputBuilder::new().prompt()?.build();
+                let register_request = srt_input.serialize_register();
+                (InputHandle::Srt(srt_input), register_request)
+            }
         };
 
         let input_route = format!("input/{}/register", input_handle.name());
@@ -211,6 +218,11 @@ impl SmelterState {
                 let hls_output = HlsOutputBuilder::new().prompt(self.running_state)?.build();
                 let register_request = hls_output.serialize_register(&self.inputs);
                 (OutputHandle::Hls(hls_output), register_request)
+            }
+            OutputProtocol::Srt => {
+                let srt_output = SrtOutputBuilder::new().prompt()?.build();
+                let register_request = srt_output.serialize_register(&self.inputs);
+                (OutputHandle::Srt(srt_output), register_request)
             }
         };
 

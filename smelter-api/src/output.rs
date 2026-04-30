@@ -8,6 +8,8 @@ mod rtmp;
 mod rtmp_into;
 mod rtp;
 mod rtp_into;
+mod srt;
+mod srt_into;
 mod whep;
 mod whep_into;
 mod whip;
@@ -18,6 +20,7 @@ pub use hls::*;
 pub use mp4::*;
 pub use rtmp::*;
 pub use rtp::*;
+pub use srt::*;
 pub use whep::*;
 pub use whip::*;
 

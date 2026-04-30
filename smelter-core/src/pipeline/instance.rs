@@ -30,6 +30,7 @@ use crate::{
         input::{PipelineInput, new_external_input, register_pipeline_input},
         output::{OutputSender, PipelineOutput, new_external_output, register_pipeline_output},
         rtmp::spawn_rtmp_server,
+        srt::{SrtPipelineState, SrtServer, spawn_srt_server},
         webrtc::{
             WebrtcSettingEngineCtx, WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle,
         },
@@ -60,6 +61,10 @@ pub struct Pipeline {
     #[allow(dead_code)]
     // triggers cleanup on drop
     rtmp_server: Option<RtmpServer>,
+
+    #[allow(dead_code)]
+    // triggers cleanup on drop
+    srt_server: Option<SrtServer>,
 }
 
 impl Pipeline {
@@ -583,6 +588,11 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         PipelineRtmpServerOptions::Disable => None,
     };
 
+    let srt_state = match opts.srt_server {
+        PipelineSrtServerOptions::Enable { port } => Some(SrtPipelineState::new(port)),
+        PipelineSrtServerOptions::Disable => None,
+    };
+
     let webrtc_setting_engine = WebrtcSettingEngineCtx::new(
         opts.webrtc_nat_1to1_ips,
         opts.webrtc_udp_port_strategy,
@@ -612,6 +622,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         webrtc_stun_servers: opts.webrtc_stun_servers.clone(),
         webrtc_setting_engine,
         rtmp_state: rtmp_state.clone(),
+        srt_state: srt_state.clone(),
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {
@@ -621,6 +632,11 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
 
     let rtmp_server = match rtmp_state.as_ref() {
         Some(state) => Some(spawn_rtmp_server(ctx.clone(), state)?),
+        None => None,
+    };
+
+    let srt_server = match srt_state.as_ref() {
+        Some(state) => Some(spawn_srt_server(ctx.clone(), state)?),
         None => None,
     };
 
@@ -635,6 +651,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         ctx,
         whip_whep_handle,
         rtmp_server,
+        srt_server,
     };
 
     Ok(pipeline)
