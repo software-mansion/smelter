@@ -6,8 +6,8 @@ use smelter_render::error::ErrorStack;
 use tracing::{debug, warn};
 
 use rtmp::{
-    AudioData, RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError, RtmpVideoCodec,
-    TrackId, VideoData,
+    AudioData, AudioTrackState, RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError,
+    RtmpVideoCodec, TrackId, VideoData,
 };
 
 use crate::{
@@ -128,6 +128,12 @@ impl RtmpClientOutput {
                 track_id: TrackId::PRIMARY,
                 codec: RtmpAudioCodec::Aac,
                 data: config.extradata.clone(),
+                state: AudioTrackState {
+                    channels: match config.channels {
+                        AudioChannels::Mono => rtmp::AudioChannels::Mono,
+                        AudioChannels::Stereo => rtmp::AudioChannels::Stereo,
+                    },
+                },
             })?;
         }
         Ok(client)
@@ -254,12 +260,11 @@ fn video_chunk_to_event(chunk: EncodedOutputChunk) -> VideoData {
     }
 }
 
-fn audio_chunk_to_event(chunk: EncodedOutputChunk, channels: rtmp::AudioChannels) -> AudioData {
+fn audio_chunk_to_event(chunk: EncodedOutputChunk) -> AudioData {
     AudioData {
         track_id: TrackId::PRIMARY,
         codec: RtmpAudioCodec::Aac,
         pts: chunk.pts,
-        channels,
         data: chunk.data,
     }
 }
@@ -270,15 +275,9 @@ fn run_rtmp_output_thread(
     audio_config: Option<AudioConfig>,
     stats_sender: RtmpOutputStatsSender,
 ) -> Result<(), RtmpStreamError> {
-    let channels = match audio_config.as_ref().map(|config| config.channels) {
-        Some(AudioChannels::Mono) => rtmp::AudioChannels::Mono,
-        Some(AudioChannels::Stereo) | None => rtmp::AudioChannels::Stereo,
-    };
-
     match (video_config, audio_config) {
         (Some(video), Some(audio)) => run_synced_av(
             &mut client,
-            channels,
             &video.chunks_receiver,
             &audio.chunks_receiver,
             stats_sender,
@@ -293,7 +292,7 @@ fn run_rtmp_output_thread(
         (None, Some(audio)) => {
             while let Ok(EncodedOutputEvent::Data(chunk)) = audio.chunks_receiver.recv() {
                 stats_sender.bytes_sent_event(chunk.data.len(), StatsTrackKind::Audio);
-                client.send(audio_chunk_to_event(chunk, channels))?;
+                client.send(audio_chunk_to_event(chunk))?;
             }
             Ok(())
         }
@@ -303,7 +302,6 @@ fn run_rtmp_output_thread(
 
 fn run_synced_av(
     client: &mut RtmpClient,
-    channels: rtmp::AudioChannels,
     video_rx: &Receiver<EncodedOutputEvent>,
     audio_rx: &Receiver<EncodedOutputEvent>,
     rtmp_stats_sender: RtmpOutputStatsSender,
@@ -358,10 +356,7 @@ fn run_synced_av(
                         client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
                     } else {
                         rtmp_stats_sender.bytes_sent_event(audio.data.len(), StatsTrackKind::Audio);
-                        client.send(audio_chunk_to_event(
-                            pending_audio.take().unwrap(),
-                            channels,
-                        ))?;
+                        client.send(audio_chunk_to_event(pending_audio.take().unwrap()))?;
                     }
                 }
                 (Some(video), None) => {
@@ -370,10 +365,7 @@ fn run_synced_av(
                 }
                 (None, Some(audio)) => {
                     rtmp_stats_sender.bytes_sent_event(audio.data.len(), StatsTrackKind::Audio);
-                    client.send(audio_chunk_to_event(
-                        pending_audio.take().unwrap(),
-                        channels,
-                    ))?;
+                    client.send(audio_chunk_to_event(pending_audio.take().unwrap()))?;
                 }
                 (None, None) => break,
             },

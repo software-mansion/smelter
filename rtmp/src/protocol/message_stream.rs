@@ -9,7 +9,7 @@ use tracing::{debug, trace};
 use crate::{
     RtmpMessageSerializeError,
     error::RtmpStreamError,
-    message::RtmpMessage,
+    message::{RtmpMessage, RtmpMessageState},
     protocol::{
         RawMessage,
         byte_stream::RtmpByteStream,
@@ -67,6 +67,7 @@ impl RtmpMessageStream {
 struct RtmpMessageReader {
     context: HashMap<u32, ReaderChunkStreamContext>,
     chunk_size: usize,
+    message_state: RtmpMessageState,
 }
 
 impl RtmpMessageReader {
@@ -74,6 +75,7 @@ impl RtmpMessageReader {
         Self {
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
+            message_state: RtmpMessageState::default(),
         }
     }
 
@@ -103,7 +105,7 @@ impl RtmpMessageReader {
         loop {
             match self.try_parse_msg(stream.get_read_buffer_mut()) {
                 Ok(Some(msg)) => {
-                    let msg = RtmpMessage::from_raw(msg)?;
+                    let msg = RtmpMessage::from_raw(msg, &mut self.message_state)?;
                     match msg.is_media_packet() {
                         true => trace!(?msg, "Received RTMP message"),
                         false => debug!(?msg, "Received RTMP message"),
@@ -243,6 +245,7 @@ impl ReaderChunkStreamContext {
 struct RtmpMessageWriter {
     context: HashMap<u32, WriterChunkStreamContext>,
     chunk_size: usize,
+    message_state: RtmpMessageState,
 }
 
 impl RtmpMessageWriter {
@@ -250,6 +253,7 @@ impl RtmpMessageWriter {
         Self {
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
+            message_state: RtmpMessageState::default(),
         }
     }
 
@@ -263,7 +267,7 @@ impl RtmpMessageWriter {
             false => debug!(?msg, "Sending RTMP message"),
         }
 
-        let msg = msg.into_raw()?;
+        let msg = msg.into_raw(&mut self.message_state)?;
         let cs_id = msg.chunk_stream_id;
 
         let context = self.context.entry(cs_id).or_default();
