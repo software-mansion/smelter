@@ -5,12 +5,19 @@ use integration_tests_macros::pipeline_test;
 use serde_json::json;
 
 use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
-    audio::{self, AudioAnalyzeTolerance, AudioValidationConfig},
-    compare_audio_dumps, input_dump_from_disk,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, input_dump_from_disk,
     paths::submodule_root_path,
-    pipeline_tests::PipelineTest,
+    pipeline_tests::{
+        PipelineTest,
+        harness::{AudioCompareConfig, FftCompareConfig, compare_audio_dumps},
+    },
 };
+
+fn artificial_fft(allowed_failed_batches: u32) -> FftCompareConfig {
+    let mut cfg = FftCompareConfig::artificial(vec![Duration::ZERO..Duration::from_secs(10)]);
+    cfg.allowed_failed_batches = allowed_failed_batches;
+    cfg
+}
 
 #[allow(dead_code)]
 pub const TESTS: &[PipelineTest] = &[
@@ -112,8 +119,10 @@ pub fn audio_mixing_with_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        AudioValidationConfig::default(),
+        AudioCompareConfig {
+            fft: Some(artificial_fft(0)),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -210,19 +219,13 @@ pub fn audio_mixing_no_offset() -> Result<()> {
 
     // This test is flaky due to no_offset being set so we allow 1 failed batch per channel
     // (usually fails first batch)
-    let audio_validation_config = AudioValidationConfig {
-        tolerance: AudioAnalyzeTolerance {
-            allowed_failed_batches: 2,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        audio_validation_config,
+        AudioCompareConfig {
+            fft: Some(artificial_fft(2)),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -336,8 +339,10 @@ pub fn audio_mixing_track_insertion_with_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        AudioValidationConfig::default(),
+        AudioCompareConfig {
+            fft: Some(artificial_fft(0)),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -411,8 +416,10 @@ pub fn single_input_opus() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        AudioValidationConfig::default(),
+        AudioCompareConfig {
+            fft: Some(artificial_fft(0)),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -485,19 +492,15 @@ pub fn single_input_aac() -> Result<()> {
 
     let new_output_dump = output_receiver.wait_for_output()?;
 
-    let audio_validation_config = AudioValidationConfig {
-        tolerance: AudioAnalyzeTolerance {
-            frequency_tolerance: audio::FrequencyTolerance::Real(Default::default()),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Real,
-        audio_validation_config,
+        AudioCompareConfig {
+            fft: Some(FftCompareConfig::real(vec![
+                Duration::ZERO..Duration::from_secs(10),
+            ])),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -567,8 +570,10 @@ pub fn single_input_aac_mp4() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        AudioValidationConfig::default(),
+        AudioCompareConfig {
+            fft: Some(artificial_fft(0)),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -648,8 +653,10 @@ fn audio_early_streaming_with_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        AudioValidationConfig::default(),
+        AudioCompareConfig {
+            fft: Some(artificial_fft(0)),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -728,12 +735,8 @@ fn audio_early_streaming_no_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        AudioValidationConfig {
-            tolerance: AudioAnalyzeTolerance {
-                allowed_failed_batches: 2,
-                ..Default::default()
-            },
+        AudioCompareConfig {
+            fft: Some(artificial_fft(2)),
             ..Default::default()
         },
     )?;
