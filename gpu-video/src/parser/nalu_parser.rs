@@ -58,18 +58,8 @@ impl NalReceiver {
                 let parsed = h264_reader::nal::sps::SeqParameterSet::from_bits(nal.rbsp_bits())
                     .map_err(H264ParserError::SpsParseError)?;
 
-                // Perhaps this shouldn't be here, but this is the only place we process sps
-                // before sending them to the decoder. It also seems that this is the only thing we
-                // need to check about the sps.
-                if parsed.gaps_in_frame_num_value_allowed_flag {
-                    // TODO: what else to do here? sure we'll throw an error, but shouldn't we also
-                    // terminate the parser somehow?
-                    // perhaps this should be considered in other places we throw errors too
-                    Err(H264ParserError::GapsInFrameNumNotSupported)
-                } else {
-                    self.parser_ctx.put_seq_param_set(parsed.clone());
-                    Ok(ParsedNalu::Sps(parsed.clone()))
-                }
+                self.parser_ctx.put_seq_param_set(parsed.clone());
+                Ok(ParsedNalu::Sps(parsed.clone()))
             }
 
             h264_reader::nal::UnitType::PicParameterSet => {

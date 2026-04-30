@@ -29,6 +29,9 @@ pub enum ReferenceManagementError {
 
     #[error("Missing frame. Decoder is in a corrupted state. Waiting for IDR frame")]
     MissingFrame,
+
+    #[error("Bitstreams that allow gaps in frame_num are not supported")]
+    GapsInFrameNumNotSupported,
 }
 
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]

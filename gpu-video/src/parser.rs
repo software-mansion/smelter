@@ -19,9 +19,6 @@ pub mod h264 {
 
     #[derive(Debug, thiserror::Error)]
     pub enum H264ParserError {
-        #[error("Bitstreams that allow gaps in frame_num are not supported")]
-        GapsInFrameNumNotSupported,
-
         #[error("Streams containing fields instead of frames are not supported")]
         FieldsNotSupported,
 

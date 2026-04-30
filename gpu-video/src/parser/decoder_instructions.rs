@@ -37,6 +37,9 @@ pub(crate) fn compile_to_decoder_instructions(
         for nalu in nalus {
             match nalu.parsed {
                 ParsedNalu::Sps(seq_parameter_set) => {
+                    if seq_parameter_set.gaps_in_frame_num_value_allowed_flag {
+                        return Err(ReferenceManagementError::GapsInFrameNumNotSupported);
+                    }
                     instructions.push(DecoderInstruction::Sps(seq_parameter_set))
                 }
                 ParsedNalu::Pps(pic_parameter_set) => {
