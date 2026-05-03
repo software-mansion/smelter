@@ -91,10 +91,11 @@ impl OpusDecoder {
         self.last_decoded_pts = Some(decoded_samples.start_pts + chunk_duration);
     }
 
-    fn should_use_fec(&self, stream_gap: Duration) -> bool {
+    fn should_use_fec(&self, _stream_gap: Duration) -> bool {
         // If stream gap is one second or larger there it doesn't matter if FEC is used,
         // there will be a gap
-        (stream_gap > Duration::from_millis(1)) && (stream_gap < Duration::from_millis(1000))
+        // (stream_gap > Duration::from_millis(1)) && (stream_gap < Duration::from_millis(1000))
+        false
     }
 
     fn calculate_stream_gap(&self, current_start: Duration) -> Duration {
