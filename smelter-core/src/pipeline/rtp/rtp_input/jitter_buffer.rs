@@ -105,7 +105,7 @@ pub(crate) struct RtpJitterBuffer {
 /// We are assuming here that it is enough time to decode. Might be
 /// problematic in case of B-frames, because it would require processing multiple
 /// frames before
-const MIN_DECODE_TIME: Duration = Duration::from_millis(30);
+const MIN_DECODE_TIME: Duration = Duration::from_millis(60);
 
 impl RtpJitterBuffer {
     pub fn new(
@@ -340,7 +340,7 @@ impl LatencyOptimizedBuffer {
         const FAST_INCREMENT_RATE: f64 = 0.045; // 4.5% / s
         const SMALL_DECREMENT_RATE: f64 = 0.010; // 1% / s
         const LARGE_DECREMENT_RATE: f64 = 0.025; // 2.5% / s
-        const AGGRESSIVE_SHRINK_RATE: f64 = 0.05; // 5% / s of current buffer
+        const AGGRESSIVE_SHRINK_RATE: f64 = 0.04; // 4% / s of current buffer
 
         // Duration that defines at what point we can consider state stable enough
         // to consider shrinking the buffer

@@ -9,7 +9,7 @@ use tracing::{debug, error, trace, warn};
 
 use crate::{AudioChannels, AudioSamples, prelude::InputAudioSamples, utils::AudioSamplesBuffer};
 
-const MAX_STRETCH_FACTOR: f64 = 1.05;
+const MAX_STRETCH_FACTOR: f64 = 0.04;
 
 /// Data flow:
 /// Initial data is appended to `resampler_input_buffer`. When we need to get samples for specific
@@ -82,10 +82,14 @@ const CONTINUITY_THRESHOLD: Duration = Duration::from_millis(80);
 /// the timestamps and number of samples is out of sync.
 const SHIFT_THRESHOLD: Duration = Duration::from_millis(2);
 
-/// This threshold defines at what point we should still try stretch audio
-/// and when to just drop packets. Consequence of that is also that this
-/// value defines de-sync between audio and video tracks.
-const STRETCH_THRESHOLD: Duration = Duration::from_millis(500);
+/// This threshold defines at what point we should still try shrink audio
+/// and when to just drop packets.
+const SHRINK_THRESHOLD: Duration = Duration::from_millis(500);
+
+/// This threshold defines at what point we should still try shrink audio
+/// and when to just fill gap with zeros. It is so small because that is
+/// how much queue is producing samples ahead of time.
+const STRETCH_THRESHOLD: Duration = Duration::from_millis(40);
 
 impl InputResampler {
     pub fn new(
@@ -105,7 +109,7 @@ impl InputResampler {
         let original_resampler_ratio = output_sample_rate as f64 / input_sample_rate as f64;
         let resampler = rubato::Async::<f64>::new_sinc(
             original_resampler_ratio,
-            MAX_STRETCH_FACTOR,
+            1.0 + MAX_STRETCH_FACTOR,
             Self::interpolation_params(input_sample_rate, output_sample_rate),
             samples_in_batch,
             match channels {
@@ -167,7 +171,7 @@ impl InputResampler {
     }
 
     fn set_resample_ratio_relative(&mut self, rel_ratio: f64) {
-        let rel_ratio = rel_ratio.clamp(1.0 / MAX_STRETCH_FACTOR, MAX_STRETCH_FACTOR);
+        let rel_ratio = rel_ratio.clamp(1.0 / (1.0 + MAX_STRETCH_FACTOR), 1.0 + MAX_STRETCH_FACTOR);
         let desired = self.original_resampler_ratio * rel_ratio;
         let current = self.resampler.resample_ratio();
         let should_update = (current == 1.0 && desired != 1.0) || (desired - current).abs() > 0.01;
@@ -220,6 +224,15 @@ impl InputResampler {
             * self.output_sample_rate as f64)
             .round() as usize;
 
+        trace!(
+            input=?self.resampler_input_buffer,
+            start=?self.input_buffer_start_pts(),
+            end=?self.input_buffer_end_pts,
+            ?pts_range,
+            alread_resampled=self.output_buffer.frames(),
+            "resampling",
+        );
+
         while self.output_buffer.frames() < batch_size {
             let requested_start_pts = pts_range.0
                 + Duration::from_secs_f64(
@@ -232,6 +245,8 @@ impl InputResampler {
             let input_start_pts = self
                 .input_buffer_start_pts()
                 .saturating_sub(self.original_output_delay);
+
+            trace!(?input_start_pts, orgg=?self.original_output_delay, ?requested_start_pts);
 
             if input_start_pts > requested_start_pts + STRETCH_THRESHOLD {
                 // write full buffer of zeros (go through resampler)
@@ -255,17 +270,17 @@ impl InputResampler {
                 // stretch
                 let drift = input_start_pts.saturating_sub(requested_start_pts);
                 let ratio = drift.as_secs_f64() / STRETCH_THRESHOLD.as_secs_f64();
-                self.set_resample_ratio_relative(1.0 + (0.1 * ratio));
+                self.set_resample_ratio_relative(1.0 + (MAX_STRETCH_FACTOR * ratio));
                 trace!(ratio, ?drift, "Input buffer behind, stretching");
             } else if input_start_pts + SHIFT_THRESHOLD > requested_start_pts {
                 // no squashing/stretching
                 self.set_resample_ratio_relative(1.0);
                 trace!("Input buffer on time");
-            } else if input_start_pts + STRETCH_THRESHOLD > requested_start_pts {
+            } else if input_start_pts + SHRINK_THRESHOLD > requested_start_pts {
                 // squash
                 let drift = requested_start_pts.saturating_sub(input_start_pts);
-                let ratio = drift.as_secs_f64() / STRETCH_THRESHOLD.as_secs_f64();
-                self.set_resample_ratio_relative(1.0 - (0.1 * ratio));
+                let ratio = drift.as_secs_f64() / SHRINK_THRESHOLD.as_secs_f64();
+                self.set_resample_ratio_relative(1.0 - (2.0 * MAX_STRETCH_FACTOR * ratio));
                 trace!(ratio, ?drift, "Input buffer ahead, squashing");
             } else {
                 // drop data
