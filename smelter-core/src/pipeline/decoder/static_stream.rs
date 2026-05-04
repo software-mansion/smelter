@@ -81,21 +81,16 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk))) => {
-                let result = self.decoder.decode(chunk);
-                let chunks = match result {
-                    Ok(chunks) => chunks,
-                    Err(err) => {
-                        warn!(
-                            "Audio decoder error: {}",
-                            ErrorStack::new(&err).into_string()
-                        );
-                        return Some(vec![]);
-                    }
-                };
-                Some(chunks)
-            }
-            Some(PipelineEvent::Data(_)) => Some(vec![]),
+            Some(PipelineEvent::Data(event)) => match self.decoder.decode(event) {
+                Ok(chunks) => Some(chunks),
+                Err(err) => {
+                    warn!(
+                        "Audio decoder error: {}",
+                        ErrorStack::new(&err).into_string()
+                    );
+                    Some(vec![])
+                }
+            },
             Some(PipelineEvent::EOS) | None => {
                 let chunks = self.decoder.flush();
                 match chunks.is_empty() {
