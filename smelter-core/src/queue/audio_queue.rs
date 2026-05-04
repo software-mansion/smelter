@@ -224,7 +224,7 @@ impl AudioQueueInput {
 
         let mut popped_samples = vec![];
         while let Some(batch) = self.queue.front()
-            && batch.start_pts <= end_pts + Duration::from_millis(40)
+            && batch.start_pts <= end_pts + Duration::from_millis(120)
         {
             popped_samples.push(self.queue.pop_front().unwrap());
         }
@@ -270,7 +270,7 @@ impl AudioQueueInput {
             range_end_pts: Duration,
         ) -> bool {
             match queue.back() {
-                Some(batch) => batch.end_pts() >= range_end_pts + Duration::from_millis(40),
+                Some(batch) => batch.end_pts() >= range_end_pts + Duration::from_millis(120),
                 None => false,
             }
         }

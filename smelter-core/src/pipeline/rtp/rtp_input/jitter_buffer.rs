@@ -54,7 +54,7 @@ pub(crate) struct RtpJitterBuffer {
 /// We are assuming here that it is enough time to decode. Might be
 /// problematic in case of B-frames, because it would require processing multiple
 /// frames before
-const MIN_DECODE_TIME: Duration = Duration::from_millis(30);
+const MIN_DECODE_TIME: Duration = Duration::from_millis(60);
 
 impl RtpJitterBuffer {
     pub fn new(

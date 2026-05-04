@@ -97,9 +97,9 @@ impl LatencyOptimizedBuffer {
         // adjustment/optimization will be triggered
         let grow_threshold = ctx.default_buffer_duration;
         let min_desired_buffer = grow_threshold + ctx.default_buffer_duration;
-        let max_desired_buffer = min_desired_buffer + ctx.default_buffer_duration;
+        let max_desired_buffer = min_desired_buffer + Duration::from_millis(200);
         let shrink_threshold_2 = max_desired_buffer + Duration::from_millis(400);
-        let shrink_threshold_1 = shrink_threshold_2 + Duration::from_millis(400);
+        let shrink_threshold_1 = shrink_threshold_2 + Duration::from_millis(800);
         Self {
             sync_point: ctx.queue_sync_point,
             dynamic_buffer: ctx.default_buffer_duration,
@@ -116,9 +116,9 @@ impl LatencyOptimizedBuffer {
     fn recalculate_buffer(&mut self, pts: Duration) {
         // Increment duration is larger than decrement, because when buffer is too small
         // we don't have much time to adjust to a difference.
-        const INCREMENT_DURATION: Duration = Duration::from_micros(500);
-        const SMALL_DECREMENT_DURATION: Duration = Duration::from_micros(200);
-        const LARGE_DECREMENT_DURATION: Duration = Duration::from_micros(500);
+        const INCREMENT_DURATION: Duration = Duration::from_micros(100);
+        const SMALL_DECREMENT_DURATION: Duration = Duration::from_micros(40);
+        const LARGE_DECREMENT_DURATION: Duration = Duration::from_micros(100);
 
         // Duration that defines at what point we can consider state stable enough
         // to consider shrinking the buffer
