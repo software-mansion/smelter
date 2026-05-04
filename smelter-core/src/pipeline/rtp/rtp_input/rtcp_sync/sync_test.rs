@@ -53,6 +53,11 @@ fn test_rtcp_sync_pts_from_zero() {
         sync_point_ntp_time
     );
 
+    // SR sets the target offset; per-packet slew converges sync_offset toward
+    // it. Drain so we observe the converged state.
+    drain_slew(&mut stream_1, 1_000);
+    drain_slew(&mut stream_2, 1_000);
+
     let stream_1_second_pts_old = stream_1_second_pts;
     let stream_2_second_pts_old = stream_2_second_pts;
     let stream_1_second_pts = stream_1.pts_from_timestamp(1_000);
@@ -113,6 +118,9 @@ fn test_rtcp_sync_pts_from_non_zero() {
         sync_point_ntp_time
     );
 
+    drain_slew(&mut stream_1, 61_000);
+    drain_slew(&mut stream_2, 91_000);
+
     let stream_1_second_pts_old = stream_1_second_pts;
     let stream_2_second_pts_old = stream_2_second_pts;
     let stream_1_second_pts = stream_1.pts_from_timestamp(61_000);
@@ -172,6 +180,9 @@ fn test_rtcp_sync_pts_from_non_zero_different_clocks() {
         sync_point.ntp_time.read().unwrap().unwrap(),
         sync_point_ntp_time
     );
+
+    drain_slew(&mut stream_1, 61_000);
+    drain_slew(&mut stream_2, 91_000 * 3);
 
     let stream_1_second_pts_old = stream_1_second_pts;
     let stream_2_second_pts_old = stream_2_second_pts;
@@ -239,6 +250,9 @@ fn test_rtcp_sync_pts_with_rollover_before_sender_report_first_stream() {
         sync_point_ntp_time
     );
 
+    drain_slew(&mut stream_1, 5_000);
+    drain_slew(&mut stream_2, stream_2_first_rtp_timestamp + 10_000);
+
     let stream_1_second_pts_old = stream_1_second_pts;
     let stream_2_second_pts_old = stream_2_second_pts;
     let stream_1_second_pts = stream_1.pts_from_timestamp(5_000);
@@ -304,6 +318,9 @@ fn test_rtcp_sync_pts_with_rollover_before_sender_report_second_stream() {
         sync_point.ntp_time.read().unwrap().unwrap(),
         sync_point_ntp_time
     );
+
+    drain_slew(&mut stream_1, stream_1_first_rtp_timestamp + 10_000);
+    drain_slew(&mut stream_2, 5_000);
 
     let stream_1_second_pts_old = stream_1_second_pts;
     let stream_2_second_pts_old = stream_2_second_pts;
@@ -371,6 +388,9 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_first_stream() {
         sync_point_ntp_time
     );
 
+    drain_slew(&mut stream_1, 15_000);
+    drain_slew(&mut stream_2, stream_2_first_rtp_timestamp + 10_000);
+
     let stream_1_second_pts_old = stream_1_second_pts;
     let stream_2_second_pts_old = stream_2_second_pts;
     let stream_2_second_pts = stream_1.pts_from_timestamp(15_000);
@@ -437,6 +457,9 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_second_stream() {
         sync_point_ntp_time
     );
 
+    drain_slew(&mut stream_1, stream_1_first_rtp_timestamp + 10_000);
+    drain_slew(&mut stream_2, 15_000);
+
     let stream_1_second_pts_old = stream_1_second_pts;
     let stream_2_second_pts_old = stream_2_second_pts;
     let stream_1_second_pts = stream_1.pts_from_timestamp(stream_1_first_rtp_timestamp + 10_000);
@@ -453,33 +476,27 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_second_stream() {
     );
 }
 
-/// Test that mismatched SR and media RTP timestamps (common with SFUs in WHEP)
-/// don't produce negative PTS when the pipeline has been running for a while.
+/// When an SR implies an offset more than 2s away from the current best-effort
+/// estimate (e.g. SFU mangling timestamps, or audio resuming after a long
+/// pause), `sync_offset_secs` snaps to the new target instead of slewing.
+/// After the snap, consecutive packets must still advance by their RTP-time
+/// delta — i.e. the timeline stays self-consistent past the discontinuity.
 #[test]
-fn test_rtcp_sync_rejects_mismatched_sr_timestamps() {
+fn test_rtcp_sync_snaps_on_large_offset_diff() {
     let queue_sync_point = Instant::now();
     let sync_point = RtpNtpSyncPoint::new();
 
     let mut stream_1 = RtpTimestampSync::new(queue_sync_point, sync_point.clone(), 48_000);
     let mut stream_2 = RtpTimestampSync::new(queue_sync_point, sync_point.clone(), 90_000);
 
-    // Simulate pipeline running for ~20000 seconds before WHEP input starts
-    // by using a large initial offset in NTP calculations.
-    // First packets arrive "now" (sync_offset ≈ 0 since queue_sync_point = Instant::now())
     let stream_1_first_pts = stream_1.pts_from_timestamp(100_000_000);
     let stream_2_first_pts = stream_2.pts_from_timestamp(200_000_000);
-
-    // Both should have PTS near 0 (since queue_sync_point is "now")
     assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
     assert_duration_eq(stream_2_first_pts, Duration::ZERO, PREC_RUNTIME);
 
-    // Simulate mismatched SR: SFU forwards original sender's SR with rtp_time
-    // from a completely different timeline (sender running for hours).
-    // Media rtp_ts=100M but SR rtp_time=2.1B (huge mismatch)
+    // Stream 1 SR builds the shared NTP anchor — by construction the SR-derived
+    // offset matches the current best-effort, so no snap happens here.
     stream_1.on_sender_report(REFERENCE_NTP_TIME, 2_100_000_000);
-
-    // After the mismatched sync, subsequent packets should still have reasonable PTS
-    // (the bad NTP offset should be rejected)
     let stream_1_second_pts = stream_1.pts_from_timestamp(100_048_000); // +1 second
     assert_duration_eq(
         stream_1_second_pts,
@@ -487,13 +504,78 @@ fn test_rtcp_sync_rejects_mismatched_sr_timestamps() {
         PREC_RUNTIME,
     );
 
-    // Stream 2 should also not be affected
+    // Stream 2 SR runs against the already-fixed anchor. Its (sr_rtp, ref_rtp)
+    // pairing implies an offset ~58000s away from current → snap.
     stream_2.on_sender_report(REFERENCE_NTP_TIME, 3_000_000_000);
-    let stream_2_second_pts = stream_2.pts_from_timestamp(200_090_000); // +1 second
+    let stream_2_post_snap_pts = stream_2.pts_from_timestamp(200_090_000); // +1 second
+    let stream_2_next_pts = stream_2.pts_from_timestamp(200_180_000); // +2 seconds
+    // Snap moved the timeline far away, but consecutive packets still differ
+    // by the expected 1s.
+    assert!(
+        stream_2_post_snap_pts > stream_2_first_pts + Duration::from_secs(1000),
+        "expected stream_2 to snap to a far-away offset, got {stream_2_post_snap_pts:?}"
+    );
     assert_duration_eq(
-        stream_2_second_pts,
-        stream_2_first_pts + Duration::from_secs(1),
+        stream_2_next_pts - stream_2_post_snap_pts,
+        Duration::from_secs(1),
         PREC_RUNTIME,
+    );
+}
+
+/// SR sets `target_offset_secs`; `pts_from_timestamp` then slews
+/// `sync_offset_secs` toward it by ≤100µs per packet. To assert the converged
+/// state (rather than the per-packet step), pump enough packets to drain any
+/// outstanding diff. 1500 packets × 100µs = 150ms — covers any drift in these
+/// tests. Once `current == target`, further calls clamp to a 0-step.
+fn drain_slew(stream: &mut RtpTimestampSync, rtp_timestamp: u32) {
+    for _ in 0..1500 {
+        stream.pts_from_timestamp(rtp_timestamp);
+    }
+}
+
+/// Verifies the slew mechanism itself: an SR sets a non-trivial target, after
+/// which each `pts_from_timestamp` shifts the offset by exactly one step until
+/// convergence.
+///
+/// Note: the FIRST SR ever can't produce a non-trivial diff — `ensure_sync_info`
+/// builds the shared anchor from that SR + the first packet, which makes the
+/// SR-derived offset equal to the current best-effort offset by construction.
+/// We need a SECOND SR (after the anchor is fixed) with a different NTP/RTP
+/// pairing for `target_offset_secs` to actually move.
+#[test]
+fn test_rtcp_sync_offset_slews_per_packet() {
+    let queue_sync_point = Instant::now();
+    let sync_point = RtpNtpSyncPoint::new();
+    let mut stream = RtpTimestampSync::new(queue_sync_point, sync_point.clone(), 1_000);
+
+    stream.pts_from_timestamp(0);
+    stream.pts_from_timestamp(1_000);
+    let pts_pre_sr = stream.pts_from_timestamp(2_000);
+
+    // First SR — establishes the shared anchor; target ends up matching current.
+    stream.on_sender_report(REFERENCE_NTP_TIME, 0);
+
+    // Second SR at the same RTP timestamp but with NTP shifted +50ms (sender
+    // clock has drifted forward). `ensure_sync_info` is a no-op now, so the
+    // +50ms lands in `target_offset_secs`.
+    let shifted_ntp = REFERENCE_NTP_TIME + (POW_2_32 / 20); // +50 ms
+    stream.on_sender_report(shifted_ntp, 0);
+
+    // First packet after the second SR: shifts by exactly one slew step.
+    let pts_after_one = stream.pts_from_timestamp(2_000);
+    assert_duration_eq(
+        pts_after_one - pts_pre_sr,
+        Duration::from_micros(100),
+        Duration::from_micros(10),
+    );
+
+    // After draining: full +50ms target reached.
+    drain_slew(&mut stream, 2_000);
+    let pts_after_drain = stream.pts_from_timestamp(2_000);
+    assert_duration_eq(
+        pts_after_drain - pts_pre_sr,
+        Duration::from_millis(50),
+        Duration::from_micros(200),
     );
 }
 

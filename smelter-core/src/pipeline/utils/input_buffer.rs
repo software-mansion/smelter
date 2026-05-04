@@ -159,16 +159,20 @@ impl LatencyOptimizedBuffer {
             self.state.set_too_small();
             self.dynamic_buffer += INCREMENT_DURATION;
         } else {
-            let new_buffer =
+            const MAX_FORCE_INCREMENT: Duration = Duration::from_millis(30);
+            let target_buffer =
                 (self.sync_point.elapsed() + self.max_desired_buffer).saturating_sub(pts);
+            let new_buffer =
+                Duration::min(target_buffer, self.dynamic_buffer + MAX_FORCE_INCREMENT);
             debug!(
                 old=?self.dynamic_buffer,
                 new=?new_buffer,
                 "Increase latency optimized buffer (force)"
             );
             self.state.set_too_small();
-            // adjust buffer so:
+            // adjust buffer toward:
             // pts + self.dynamic_buffer == self.sync_point.elapsed() + self.max_desired_buffer
+            // capped at MAX_FORCE_INCREMENT per packet to avoid large jumps.
             self.dynamic_buffer = new_buffer
         }
     }
