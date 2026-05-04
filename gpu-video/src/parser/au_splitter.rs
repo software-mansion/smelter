@@ -1,5 +1,3 @@
-use std::mem;
-
 use h264_reader::nal::slice::PicOrderCountLsb;
 
 use crate::parser::nalu_parser::{Nalu, ParsedNalu};
@@ -13,38 +11,39 @@ pub(crate) struct AUSplitter {
 
 impl AUSplitter {
     pub(crate) fn put_nalu(&mut self, nalu: Nalu) -> Option<AccessUnit> {
-        if self.is_new_au(&nalu) {
-            // retain frames at the back until you hit the previous slice
-            let i = self
-                .buffered_nals
-                .iter()
-                .enumerate()
-                .rev()
-                .find(|(_, nalu)| matches!(nalu.parsed, ParsedNalu::Slice(_)))
-                .map(|(i, _)| i);
-            let au = match i {
-                Some(i) => self.buffered_nals.drain(..=i).collect::<Vec<_>>(),
-                None => Vec::new(),
-            };
-            self.buffered_nals.push(nalu);
-            if !au.is_empty() {
-                Some(AccessUnit(au.into_boxed_slice()))
-            } else {
-                None
-            }
-        } else {
-            self.buffered_nals.push(nalu);
-            None
-        }
+        let result = match self.is_new_au(&nalu) {
+            true => self.take_until_last_slice(),
+            false => None,
+        };
+
+        self.buffered_nals.push(nalu);
+        result
     }
 
     pub(crate) fn flush(&mut self) -> Option<AccessUnit> {
-        if self.buffered_nals.is_empty() {
-            return None;
+        // TODO: this is not the correct way to do this, since it assumes the user calls this method
+        // in the wrong way. Only a temporary fix.
+        self.take_until_last_slice()
+    }
+
+    fn take_until_last_slice(&mut self) -> Option<AccessUnit> {
+        // if there are any slice NALUs, the last one is the end of the AU
+        let i = self
+            .buffered_nals
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, nalu)| matches!(nalu.parsed, ParsedNalu::Slice(_)))
+            .map(|(i, _)| i);
+        let au = match i {
+            Some(i) => self.buffered_nals.drain(..=i).collect::<Vec<_>>(),
+            None => Vec::new(),
+        };
+        if !au.is_empty() {
+            Some(AccessUnit(au.into_boxed_slice()))
+        } else {
+            None
         }
-        Some(AccessUnit(
-            mem::take(&mut self.buffered_nals).into_boxed_slice(),
-        ))
     }
 
     /// returns `true` if `slice` is a first slice in an Access Unit
