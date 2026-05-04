@@ -274,6 +274,15 @@ pub(crate) struct LatencyOptimizedBuffer {
     state: LatencyOptimizedBufferState,
     dynamic_buffer: Duration,
 
+    /// Highest PTS observed across all tracks sharing this buffer. Drives
+    /// adjustment magnitude by media-time progress rather than packet count, so
+    /// gain is independent of bitrate/packetization, and backward-PTS packets
+    /// (B-frames, fragments, retransmissions) don't trigger spurious changes.
+    last_processed_pts: Option<Duration>,
+    /// PTS at which the most recent late-packet jump was applied. Used to
+    /// rate-limit jumps so a burst of late packets doesn't stack.
+    last_jump_pts: Option<Duration>,
+
     /// effective_buffer = next_pts - queue_sync_point.elapsed()
     /// Estimates how much time packet has to reach the queue.
 
@@ -305,6 +314,9 @@ impl LatencyOptimizedBuffer {
             dynamic_buffer: ctx.default_buffer_duration,
             state: LatencyOptimizedBufferState::Ok,
 
+            last_processed_pts: None,
+            last_jump_pts: None,
+
             grow_threshold,
             min_desired_buffer,
             max_desired_buffer,
@@ -316,63 +328,94 @@ impl LatencyOptimizedBuffer {
     /// pts is a value relative to time elapsed from reference_time.
     /// If `reference_time.elapsed() == pts` that means that effective buffer is zero
     fn on_new_packet(&mut self, pts: Duration) {
-        // Increment duration is larger than decrement, because when buffer is too small
-        // we don't have much time to adjust to a difference.
-        const INCREMENT_DURATION: Duration = Duration::from_micros(500);
-        const SMALL_DECREMENT_DURATION: Duration = Duration::from_micros(200);
-        const LARGE_DECREMENT_DURATION: Duration = Duration::from_micros(500);
+        // Per-call clamp on media-time delta. Prevents large PTS jumps (stream
+        // restart, long idle, first frame after gap) from translating into
+        // oversized adjustments.
+        const MAX_STEP: Duration = Duration::from_millis(50);
+
+        // Adjustment rates expressed per second of forward media time. Capped
+        // by the audio mixer's ~5% stretch tolerance — sustained growth above
+        // that would produce continuous audible artifacts.
+        const INCREMENT_RATE: f64 = 0.025; // 2.5% / s
+        const FAST_INCREMENT_RATE: f64 = 0.045; // 4.5% / s
+        const SMALL_DECREMENT_RATE: f64 = 0.010; // 1% / s
+        const LARGE_DECREMENT_RATE: f64 = 0.025; // 2.5% / s
+        const AGGRESSIVE_SHRINK_RATE: f64 = 0.05; // 5% / s of current buffer
 
         // Duration that defines at what point we can consider state stable enough
         // to consider shrinking the buffer
         const STABLE_STATE_DURATION: Duration = Duration::from_secs(10);
+
+        // When effective buffer is non-positive (packet effectively late),
+        // smooth grow at >5%/s would exceed audio stretch budget, so apply a
+        // discrete jump instead. Throttle so a burst of late packets doesn't
+        // stack into a multi-second buffer step.
+        const JUMP_SIZE: Duration = Duration::from_millis(500);
+        const JUMP_COOLDOWN: Duration = Duration::from_secs(2);
+
+        // Advance the high-water mark and derive a forward-only media-time
+        // delta. Backward-PTS packets contribute zero delta — threshold checks
+        // and state transitions still run, but adjustments are skipped.
+        let prev = self.last_processed_pts;
+        self.last_processed_pts = Some(prev.map_or(pts, |last| Duration::max(last, pts)));
+        let delta = match prev {
+            Some(last) if pts > last => Duration::min(pts - last, MAX_STEP),
+            _ => Duration::ZERO,
+        };
+        let scale = delta.as_secs_f64();
 
         let reference_time = self.reference_time;
         let next_pts = pts + self.dynamic_buffer;
         trace!(
             effective_buffer=?next_pts.saturating_sub(reference_time.elapsed()),
             dynamic_buffer=?self.dynamic_buffer,
-            ?pts
+            ?pts,
+            ?delta,
         );
 
         if next_pts > reference_time.elapsed() + self.shrink_threshold_1 {
             let first_pts = self.state.set_too_large(next_pts);
             if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
-                self.dynamic_buffer = self
-                    .dynamic_buffer
-                    .saturating_sub(self.dynamic_buffer / 1000);
+                let step = self.dynamic_buffer.mul_f64(AGGRESSIVE_SHRINK_RATE * scale);
+                self.dynamic_buffer = self.dynamic_buffer.saturating_sub(step);
             }
         } else if next_pts > reference_time.elapsed() + self.shrink_threshold_2 {
             let first_pts = self.state.set_too_large(next_pts);
             if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
-                self.dynamic_buffer = self.dynamic_buffer.saturating_sub(LARGE_DECREMENT_DURATION);
+                self.dynamic_buffer = self
+                    .dynamic_buffer
+                    .saturating_sub(Duration::from_secs_f64(LARGE_DECREMENT_RATE * scale));
             }
         } else if next_pts > reference_time.elapsed() + self.max_desired_buffer {
             let first_pts = self.state.set_too_large(next_pts);
             if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
-                self.dynamic_buffer = self.dynamic_buffer.saturating_sub(SMALL_DECREMENT_DURATION);
+                self.dynamic_buffer = self
+                    .dynamic_buffer
+                    .saturating_sub(Duration::from_secs_f64(SMALL_DECREMENT_RATE * scale));
             }
         } else if next_pts > reference_time.elapsed() + self.min_desired_buffer {
             self.state.set_ok();
         } else if next_pts > reference_time.elapsed() + self.grow_threshold {
-            trace!(
-                old=?self.dynamic_buffer,
-                new=?self.dynamic_buffer + INCREMENT_DURATION,
-                "Increase latency optimized buffer"
-            );
             self.state.set_too_small();
-            self.dynamic_buffer += INCREMENT_DURATION;
+            self.dynamic_buffer += Duration::from_secs_f64(INCREMENT_RATE * scale);
+        } else if next_pts > reference_time.elapsed() {
+            self.state.set_too_small();
+            self.dynamic_buffer += Duration::from_secs_f64(FAST_INCREMENT_RATE * scale);
         } else {
-            let new_buffer =
-                (reference_time.elapsed() + self.max_desired_buffer).saturating_sub(pts);
-            debug!(
-                old=?self.dynamic_buffer,
-                new=?new_buffer,
-                "Increase latency optimized buffer (force)"
-            );
-            self.state.set_too_small();
-            // adjust buffer so:
-            // pts + self.dynamic_buffer == self.sync_point.elapsed() + self.max_desired_buffer
-            self.dynamic_buffer = new_buffer
+            // Effectively late: discrete jump, throttled in media time.
+            let allow_jump = self
+                .last_jump_pts
+                .is_none_or(|last| pts.saturating_sub(last) >= JUMP_COOLDOWN);
+            if allow_jump {
+                debug!(
+                    old=?self.dynamic_buffer,
+                    new=?self.dynamic_buffer + JUMP_SIZE,
+                    "Latency optimized buffer: late-packet jump"
+                );
+                self.state.set_too_small();
+                self.dynamic_buffer += JUMP_SIZE;
+                self.last_jump_pts = Some(pts);
+            }
         }
     }
 }
