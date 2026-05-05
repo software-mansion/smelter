@@ -2,7 +2,7 @@ use fdk_aac_sys as fdk;
 use std::sync::Arc;
 use tracing::{error, info};
 
-use crate::pipeline::decoder::AudioDecoder;
+use crate::pipeline::decoder::{AudioDecoder, EncodedInputEvent};
 
 use crate::prelude::*;
 
@@ -26,8 +26,12 @@ impl AudioDecoder for FdkAacDecoder {
 
     fn decode(
         &mut self,
-        chunk: EncodedInputChunk,
+        event: EncodedInputEvent,
     ) -> Result<Vec<InputAudioSamples>, DecodingError> {
+        let chunk = match event {
+            EncodedInputEvent::Chunk(chunk) => chunk,
+            EncodedInputEvent::LostData | EncodedInputEvent::AuDelimiter => return Ok(vec![]),
+        };
         match &mut self.decoder {
             Some(decoder) => Ok(decoder.decode(chunk)?),
             None => {

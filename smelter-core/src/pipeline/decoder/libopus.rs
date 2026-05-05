@@ -1,16 +1,23 @@
 use std::{sync::Arc, time::Duration};
 use tracing::{debug, info, trace};
 
-use crate::pipeline::decoder::AudioDecoder;
+use crate::pipeline::decoder::{AudioDecoder, EncodedInputEvent};
 use crate::prelude::*;
+
+/// Opus's hard cap for a single decode call (see `opus_decoder.c`: `opus_int16 size[48];`,
+/// 48 × 2.5 ms). We won't ask for more than this in one shot — for longer gaps the older
+/// audio is dropped instead of stretched into low-quality concealment.
+const MAX_DECODE_DURATION: Duration = Duration::from_millis(120);
 
 pub(crate) struct OpusDecoder {
     decoder: opus::Decoder,
     decoded_samples_buffer: Vec<i16>,
     decoded_sample_rate: u32,
 
-    /// PTS of the end of the last decoded batch
-    last_decoded_pts: Option<Duration>,
+    /// Number of consecutive `LostData` events received since the last successful
+    /// chunk. On the next `Chunk`, opus's FEC path reconstructs the immediately
+    /// preceding frame and PLC-fills the older ones in the same call.
+    unhandled_lost_packets: u32,
 }
 
 impl AudioDecoder for OpusDecoder {
@@ -36,34 +43,40 @@ impl AudioDecoder for OpusDecoder {
             decoder,
             decoded_samples_buffer,
             decoded_sample_rate,
-            last_decoded_pts: None,
+            unhandled_lost_packets: 0,
         })
     }
 
     fn decode(
         &mut self,
-        encoded_chunk: EncodedInputChunk,
+        event: EncodedInputEvent,
     ) -> Result<Vec<InputAudioSamples>, DecodingError> {
-        trace!(?encoded_chunk, "libopus decoder received a chunk.");
-        let stream_gap = self.calculate_stream_gap(encoded_chunk.pts);
-        let use_fec = self.should_use_fec(stream_gap);
-
-        let fec_samples = match use_fec {
-            true => Some(self.decode_chunk_fec(&encoded_chunk, stream_gap)?),
-            false => None,
+        let encoded_chunk = match event {
+            EncodedInputEvent::Chunk(chunk) => chunk,
+            EncodedInputEvent::LostData => {
+                self.unhandled_lost_packets = self.unhandled_lost_packets.saturating_add(1);
+                return Ok(vec![]);
+            }
+            EncodedInputEvent::AuDelimiter => return Ok(vec![]),
         };
+
+        trace!(?encoded_chunk, "libopus decoder received a chunk.");
+
+        let recovered = match self.unhandled_lost_packets {
+            0 => None,
+            n => self.decode_chunk_fec(&encoded_chunk, n)?,
+        };
+        self.unhandled_lost_packets = 0;
 
         let decoded_samples = self.decode_chunk(&encoded_chunk)?;
 
-        self.set_end_pts(&decoded_samples);
-
-        let samples = match fec_samples {
-            Some(samples) => Ok(vec![samples, decoded_samples]),
-            None => Ok(vec![decoded_samples]),
+        let samples = match recovered {
+            Some(samples) => vec![samples, decoded_samples],
+            None => vec![decoded_samples],
         };
 
         trace!(?samples, "libopus decoder produced samples.");
-        samples
+        Ok(samples)
     }
 
     fn flush(&mut self) -> Vec<InputAudioSamples> {
@@ -82,42 +95,6 @@ impl OpusDecoder {
         )
     }
 
-    /// Calculates PTS of the last sample in the chunk and sets `last_decoded_pts` field to it
-    fn set_end_pts(&mut self, decoded_samples: &InputAudioSamples) {
-        let samples_len = decoded_samples.samples.sample_count();
-        let sample_rate = decoded_samples.sample_rate;
-
-        let chunk_duration = Duration::from_secs_f64(samples_len as f64 / sample_rate as f64);
-        self.last_decoded_pts = Some(decoded_samples.start_pts + chunk_duration);
-    }
-
-    fn should_use_fec(&self, stream_gap: Duration) -> bool {
-        // If stream gap is one second or larger there it doesn't matter if FEC is used,
-        // there will be a gap
-        (stream_gap > Duration::from_millis(1)) && (stream_gap < Duration::from_millis(1000))
-    }
-
-    fn calculate_stream_gap(&self, current_start: Duration) -> Duration {
-        let stream_gap = match self.last_decoded_pts {
-            Some(pts) => current_start.saturating_sub(pts),
-            None => Duration::ZERO,
-        };
-        if stream_gap != Duration::ZERO {
-            trace!("Calculated stream gap {stream_gap:?}");
-        }
-        stream_gap
-    }
-
-    fn calculate_fec_buf_size(&self, stream_gap: Duration) -> usize {
-        // 120 samples is 2.5 ms with 48kHz sample rate. For FEC it is mandatory that buffer size
-        // is a multiple of 2.5 ms and of the same size (or at least as close as possible) to the
-        // size of lost chunks.
-        let lost_samples = stream_gap.as_secs_f64() * self.decoded_sample_rate as f64;
-        let fec_buf_size = 120 * (lost_samples / 120.0f64).round() as usize;
-
-        2 * fec_buf_size // Multiplication by the number of channels
-    }
-
     fn decode_chunk(
         &mut self,
         encoded_chunk: &EncodedInputChunk,
@@ -134,28 +111,64 @@ impl OpusDecoder {
         })
     }
 
+    /// Reconstruct the run of `lost_packets` lost frames preceding `encoded_chunk`.
+    ///
+    /// Inside libopus's `decode_fec=1` path (see `opus_decoder.c:672–696`), only the
+    /// trailing `packet_frame_size` of the requested span is real FEC — the prefix is
+    /// PLC (concealment synthesised from decoder state). So this call recovers one
+    /// preceding frame faithfully and fills the older losses with PLC.
+    ///
+    /// We assume each lost packet had the same duration as the current one; that's
+    /// the convention recommended by the opus reference and holds for typical
+    /// constant-duration streams.
     fn decode_chunk_fec(
         &mut self,
         encoded_chunk: &EncodedInputChunk,
-        stream_gap: Duration,
-    ) -> Result<InputAudioSamples, DecodingError> {
-        debug!("FEC used!");
+        lost_packets: u32,
+    ) -> Result<Option<InputAudioSamples>, DecodingError> {
+        let Ok(samples_per_packet) = self.decoder.get_nb_samples(&encoded_chunk.data) else {
+            debug!("Failed to read opus packet duration; skipping FEC.");
+            return Ok(None);
+        };
+        let packet_duration =
+            Duration::from_secs_f64(samples_per_packet as f64 / self.decoded_sample_rate as f64);
 
-        let fec_buf_size = self.calculate_fec_buf_size(stream_gap);
-        debug!("Expected FEC chunk size: {fec_buf_size}");
+        // Cap how much we ask opus to synthesise. Beyond ~60–80 ms PLC degrades to
+        // noise, and opus itself rejects more than 120 ms per call.
+        let max_packets =
+            (MAX_DECODE_DURATION.as_secs_f64() / packet_duration.as_secs_f64()) as u32;
+        let recovered_packets = u32::min(lost_packets, max_packets);
+        if recovered_packets == 0 {
+            return Ok(None);
+        }
+
+        let samples_per_channel = samples_per_packet * recovered_packets as usize;
+        let fec_buf_size = 2 * samples_per_channel;
 
         let decoded_samples_count = self.decoder.decode(
             &encoded_chunk.data,
             &mut self.decoded_samples_buffer[..fec_buf_size],
             true,
         )?;
-        debug!("Decoded FEC samples: {decoded_samples_count}");
+        debug!(
+            lost_packets,
+            dropped_packets = lost_packets - recovered_packets,
+            recovered_packets,
+            decoded_samples_count,
+            "FEC + PLC used"
+        );
+
+        // The recovered span (PLC prefix + FEC tail) is `recovered_packets` long
+        // and ends immediately before the current chunk. Older dropped packets
+        // stay as a gap in the timeline.
+        let recovered_duration = packet_duration * recovered_packets;
+        let start_pts = encoded_chunk.pts.saturating_sub(recovered_duration);
 
         let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
-        Ok(InputAudioSamples {
+        Ok(Some(InputAudioSamples {
             samples,
-            start_pts: encoded_chunk.pts - stream_gap,
+            start_pts,
             sample_rate: self.decoded_sample_rate,
-        })
+        }))
     }
 }
