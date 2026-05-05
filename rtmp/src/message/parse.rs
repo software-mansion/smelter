@@ -2,7 +2,7 @@ use crate::{
     RtmpMessageParseError,
     amf0::decode_amf_values,
     message::{
-        DataMessage, RtmpMessage, RtmpMessageState, audio::AudioMessage, command::CommandMessage,
+        DataMessage, RtmpMessage, RtmpStreamState, audio::AudioMessage, command::CommandMessage,
         user_control::UserControlMessage, video::VideoMessage,
     },
     protocol::{MessageType, RawMessage},
@@ -11,7 +11,7 @@ use crate::{
 impl RtmpMessage {
     pub fn from_raw(
         msg: RawMessage,
-        state: &mut RtmpMessageState,
+        state: &mut RtmpStreamState,
     ) -> Result<Self, RtmpMessageParseError> {
         let p = &msg.payload;
         let msg_type = MessageType::try_from_raw(msg.msg_type)?;

@@ -9,7 +9,7 @@ use tracing::{debug, trace};
 use crate::{
     RtmpMessageSerializeError,
     error::RtmpStreamError,
-    message::{RtmpMessage, RtmpMessageState},
+    message::{RtmpMessage, RtmpStreamState},
     protocol::{
         RawMessage,
         byte_stream::RtmpByteStream,
@@ -67,7 +67,7 @@ impl RtmpMessageStream {
 struct RtmpMessageReader {
     context: HashMap<u32, ReaderChunkStreamContext>,
     chunk_size: usize,
-    message_state: RtmpMessageState,
+    message_state: RtmpStreamState,
 }
 
 impl RtmpMessageReader {
@@ -75,7 +75,7 @@ impl RtmpMessageReader {
         Self {
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
-            message_state: RtmpMessageState::default(),
+            message_state: RtmpStreamState::default(),
         }
     }
 
@@ -245,7 +245,7 @@ impl ReaderChunkStreamContext {
 struct RtmpMessageWriter {
     context: HashMap<u32, WriterChunkStreamContext>,
     chunk_size: usize,
-    message_state: RtmpMessageState,
+    message_state: RtmpStreamState,
 }
 
 impl RtmpMessageWriter {
@@ -253,7 +253,7 @@ impl RtmpMessageWriter {
         Self {
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
-            message_state: RtmpMessageState::default(),
+            message_state: RtmpStreamState::default(),
         }
     }
 

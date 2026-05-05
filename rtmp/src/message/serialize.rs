@@ -5,7 +5,7 @@ use crate::{
     amf0::encode_amf_values,
     message::{
         CONTROL_MESSAGE_STREAM_ID, MAIN_CHUNK_STREAM_ID, PROTOCOL_CHUNK_STREAM_ID, RtmpMessage,
-        RtmpMessageState,
+        RtmpStreamState,
     },
     protocol::{MessageType, RawMessage},
 };
@@ -13,7 +13,7 @@ use crate::{
 impl RtmpMessage {
     pub fn into_raw(
         self,
-        state: &mut RtmpMessageState,
+        state: &mut RtmpStreamState,
     ) -> Result<RawMessage, RtmpMessageSerializeError> {
         let result = match self {
             RtmpMessage::WindowAckSize { window_size } => RawMessage {

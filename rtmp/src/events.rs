@@ -79,11 +79,6 @@ pub struct AudioConfig {
     pub track_id: TrackId,
     pub codec: RtmpAudioCodec,
     pub data: Bytes,
-    pub state: AudioTrackState,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AudioTrackState {
     pub channels: AudioChannels,
 }
 
@@ -150,7 +145,7 @@ impl std::fmt::Debug for AudioConfig {
         f.debug_struct("AudioConfig")
             .field("track_id", &self.track_id)
             .field("codec", &self.codec)
-            .field("state", &self.state)
+            .field("channels", &self.channels)
             .field("data", &bytes_debug(&self.data))
             .finish()
     }

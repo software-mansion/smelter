@@ -6,8 +6,8 @@ use smelter_render::error::ErrorStack;
 use tracing::{debug, warn};
 
 use rtmp::{
-    AudioData, AudioTrackState, RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError,
-    RtmpVideoCodec, TrackId, VideoData,
+    AudioData, RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError, RtmpVideoCodec,
+    TrackId, VideoData,
 };
 
 use crate::{
@@ -128,11 +128,9 @@ impl RtmpClientOutput {
                 track_id: TrackId::PRIMARY,
                 codec: RtmpAudioCodec::Aac,
                 data: config.extradata.clone(),
-                state: AudioTrackState {
-                    channels: match config.channels {
-                        AudioChannels::Mono => rtmp::AudioChannels::Mono,
-                        AudioChannels::Stereo => rtmp::AudioChannels::Stereo,
-                    },
+                channels: match config.channels {
+                    AudioChannels::Mono => rtmp::AudioChannels::Mono,
+                    AudioChannels::Stereo => rtmp::AudioChannels::Stereo,
                 },
             })?;
         }

@@ -3,6 +3,7 @@ mod command;
 mod data;
 mod parse;
 mod serialize;
+mod state;
 mod user_control;
 mod video;
 
@@ -12,13 +13,9 @@ pub(crate) use command::{
     CommandMessageOk, CommandMessageResultExt,
 };
 pub(crate) use data::DataMessage;
+pub(crate) use state::{AudioTrackState, RtmpStreamState, TrackKey};
 pub(crate) use user_control::UserControlMessage;
 pub(crate) use video::VideoMessage;
-
-use crate::AudioTrackState;
-use std::collections::HashMap;
-
-use crate::TrackId;
 
 //
 // Chunk stream ids
@@ -37,25 +34,6 @@ const AUDIO_CHUNK_STREAM_ID: u32 = 4;
 //
 
 pub(crate) const CONTROL_MESSAGE_STREAM_ID: u32 = 0;
-
-#[derive(Debug, Default, Clone)]
-pub(crate) struct RtmpMessageState {
-    pub audio: HashMap<(u32, TrackId), AudioTrackState>,
-}
-
-impl RtmpMessageState {
-    pub(crate) fn audio(&self, stream_id: u32, track_id: TrackId) -> Option<AudioTrackState> {
-        self.audio.get(&(stream_id, track_id)).copied()
-    }
-
-    pub(crate) fn audio_channels(&self, stream_id: u32, track_id: TrackId) -> Option<crate::AudioChannels> {
-        self.audio(stream_id, track_id).map(|state| state.channels)
-    }
-
-    pub(crate) fn set_audio(&mut self, stream_id: u32, track_id: TrackId, state: AudioTrackState) {
-        self.audio.insert((stream_id, track_id), state);
-    }
-}
 
 #[derive(Debug, Clone)]
 pub(crate) enum RtmpMessage {
