@@ -15,10 +15,16 @@ pub(crate) struct RtmpStreamState {
     session: SessionState,
 }
 
+/// Connection-wide state. A field belongs here only when one site writes it
+/// and a different site later reads it; same-site use stays a local.
+///
+/// `chunk_size` lives on the chunk layer, not here.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct SessionState {
-    // Reserved for connection-wide state: peer chunk size, negotiated capsEx,
-    // fourCcList caps, cached onMetaData, ...
+    /// Peer-advertised ack window (`WindowAckSize`). `None` until announced.
+    pub peer_window_ack_size: Option<u64>,
+    /// `bytes_read` snapshot at last emitted `Acknowledgement`.
+    pub bytes_at_last_ack: u64,
 }
 
 #[derive(Debug, Default, Clone, Copy, Hash, Eq, PartialEq)]

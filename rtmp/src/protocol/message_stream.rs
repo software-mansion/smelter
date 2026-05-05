@@ -37,10 +37,6 @@ impl RtmpMessageStream {
         }
     }
 
-    pub fn bytes_read(&self) -> u64 {
-        self.stream.bytes_read()
-    }
-
     pub fn set_reader_chunk_size(&mut self, size: usize) {
         self.reader.chunk_size = size;
     }
@@ -59,6 +55,30 @@ impl RtmpMessageStream {
 
     pub fn write_msg(&mut self, msg: RtmpMessage) -> Result<(), RtmpStreamError> {
         self.writer.write_msg(&mut self.stream, msg)
+    }
+
+    /// Updates the peer-advertised ack window after parsing a `WindowAckSize`.
+    pub fn set_peer_window_ack_size(&mut self, size: u64) {
+        self.reader.message_state.session_mut().peer_window_ack_size = Some(size);
+    }
+
+    /// If the peer announced an ack window and we've read more than half of it
+    /// since the last ack, send an `Acknowledgement` and update the marker.
+    /// Spec §5.4.3 — emit ack after receiving `WindowAckSize` bytes; sending at
+    /// half-window matches typical implementations to amortize roundtrips.
+    pub fn maybe_send_ack(&mut self) -> Result<(), RtmpStreamError> {
+        let session = self.reader.message_state.session();
+        let Some(window_size) = session.peer_window_ack_size else {
+            return Ok(());
+        };
+        let bytes_received = self.stream.bytes_read();
+        if bytes_received.saturating_sub(session.bytes_at_last_ack) > window_size / 2 {
+            self.write_msg(RtmpMessage::Acknowledgement {
+                bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
+            })?;
+            self.reader.message_state.session_mut().bytes_at_last_ack = bytes_received;
+        }
+        Ok(())
     }
 }
 

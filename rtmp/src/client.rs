@@ -40,11 +40,6 @@ pub struct RtmpClient {
 
 struct RtmpClientState {
     stream: RtmpMessageStream,
-
-    /// window size for data incoming from the server
-    window_size: Option<u64>,
-    /// last ack sent to client
-    last_ack: u64,
     peer_supports_enhanced: bool,
 }
 
@@ -64,8 +59,6 @@ impl RtmpClient {
 
         let mut state = RtmpClientState {
             stream: RtmpMessageStream::new(socket),
-            window_size: None,
-            last_ack: 0,
             peer_supports_enhanced: false,
         };
 
@@ -198,14 +191,14 @@ impl RtmpClientState {
             RtmpMessage::WindowAckSize { window_size } => {
                 // Client does not receive much data, so sending ACKs
                 // will be very rare.
-                self.window_size = Some(window_size as u64);
+                self.stream.set_peer_window_ack_size(window_size as u64);
             }
             RtmpMessage::Acknowledgement { .. } => {
                 // TODO: throttle sending based on acks
             }
             RtmpMessage::SetPeerBandwidth { bandwidth, .. } => {
-                // It configures how often client will be sending ACKs,
-                // it is different that self.window_size
+                // Configures how often the peer will send ACKs to us — distinct
+                // from our own incoming ack window tracked in session state.
                 self.stream.write_msg(RtmpMessage::WindowAckSize {
                     window_size: bandwidth,
                 })?;
@@ -219,23 +212,8 @@ impl RtmpClientState {
             }
         }
 
-        // not sure if it is necessary for client
-        self.maybe_send_ack()?;
+        self.stream.maybe_send_ack()?;
 
-        Ok(())
-    }
-
-    fn maybe_send_ack(&mut self) -> Result<(), RtmpStreamError> {
-        let Some(window_size) = self.window_size else {
-            return Ok(());
-        };
-        let bytes_received = self.stream.bytes_read();
-        if bytes_received.saturating_sub(self.last_ack) > window_size / 2 {
-            self.stream.write_msg(RtmpMessage::Acknowledgement {
-                bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
-            })?;
-            self.last_ack = bytes_received;
-        }
         Ok(())
     }
 }
