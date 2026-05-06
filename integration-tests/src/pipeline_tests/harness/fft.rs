@@ -13,9 +13,6 @@
 //!   - [`Mode::Real`] — for general signals (music, speech). Compares
 //!     summary statistics of each batch's spectrum (average level,
 //!     median level, max-bin level, overall loudness).
-//!
-//! Ported from the legacy `validation::audio` validator; the legacy
-//! module is on its way out.
 
 use std::{ops::Range, time::Duration};
 
@@ -200,20 +197,20 @@ pub fn compare(
     let actual_samples: Vec<f32> = actual.iter().flat_map(|s| s.samples.clone()).collect();
 
     match &config.mode {
-        Mode::Real(tol) => real::validate(
+        Mode::Real(tolerance) => real::validate(
             expected_samples,
             actual_samples,
             config.sample_rate,
             intervals,
-            tol,
+            tolerance,
             config.allowed_failed_batches,
         ),
-        Mode::Artificial(tol) => artificial::validate(
+        Mode::Artificial(tolerance) => artificial::validate(
             expected_samples,
             actual_samples,
             config.sample_rate,
             intervals,
-            tol,
+            tolerance,
             config.allowed_failed_batches,
         ),
     }
