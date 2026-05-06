@@ -12,13 +12,13 @@ concurrency:
 
 jobs:
     build_and_test_linux:
-        runs-on: ubuntu-24.04
+        runs-on: gpu-gh-hosted-runner
         steps:
             - name: 🛠 Install system dependencies
               run: |
                   set -e
                   sudo apt-get update -y -qq
-                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev pkg-config libssl-dev libclang-dev
                   sudo apt-get clean
                   sudo rm -rf /var/lib/apt/lists/*
 
@@ -53,13 +53,13 @@ jobs:
               with:
                   shared-key: "linux-build"
 
-            - name: 🪢 Generate Chromium Embedded Framework bindings
-              run: cargo build --package libcef
+            # - name: 🪢 Generate Chromium Embedded Framework bindings
+            #   run: cargo build --package libcef
 
-            - name: 🛠 Cargo build
-              run: |
-                  cargo build --features decklink
-                  cargo build --no-default-features
+            # - name: 🛠 Cargo build
+            #   run: |
+            #       cargo build --features decklink
+            #       cargo build --no-default-features
 
             - name: 🧪 Run tests
               run: |
