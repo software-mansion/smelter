@@ -30,16 +30,6 @@ pub struct WgpuCtx {
     pub queue: Arc<wgpu::Queue>,
 }
 
-impl Drop for WgpuCtx {
-    fn drop(&mut self) {
-        tracing::error!(
-            device_strong = Arc::strong_count(&self.device),
-            queue_strong = Arc::strong_count(&self.queue),
-            "DROP WgpuCtx"
-        );
-    }
-}
-
 impl WgpuCtx {
     pub fn new(
         device: Arc<wgpu::Device>,

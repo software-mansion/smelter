@@ -50,7 +50,6 @@ pub struct Pipeline {
     pub(super) ctx: Arc<PipelineCtx>,
     pub(super) audio_mixer: AudioMixer,
     pub(super) is_started: bool,
-    pub(super) is_shutdown: bool,
 
     #[allow(dead_code)]
     // triggers cleanup on drop
@@ -392,19 +391,13 @@ impl Pipeline {
 }
 
 impl Pipeline {
-    /// Signal-only shutdown. Drops resources that pin background threads alive
-    /// (queue inputs, audio mixer inputs, pipeline inputs/outputs, etc.) so those
-    /// threads can finish their last iteration and exit. Idempotent — safe to
-    /// call multiple times.
-    ///
-    /// This intentionally does NOT join threads — the caller must release the
-    /// Pipeline mutex before joining, because background threads (audio mixer /
-    /// renderer) lock the same mutex during EOS handling and would deadlock.
-    pub(crate) fn signal_shutdown(&mut self) {
-        if self.is_shutdown {
-            return;
-        }
-        self.is_shutdown = true;
+    /// Drop everything that pins a background thread alive (queue inputs, audio
+    /// mixer inputs, pipeline inputs/outputs, server handles, etc.) so those
+    /// threads can finish their last iteration and exit. Does NOT join threads —
+    /// the caller must release the Pipeline mutex before joining, because
+    /// background threads (audio mixer / renderer) lock the same mutex during
+    /// EOS handling and would deadlock.
+    fn signal_shutdown(&mut self) {
         self.queue.shutdown();
         self.audio_mixer.shutdown();
         self.stats_monitor.shutdown();
@@ -415,47 +408,36 @@ impl Pipeline {
         self.rtmp_server.take();
     }
 
-    /// Deterministic shutdown: signal threads, release the Pipeline mutex, then
-    /// join every registered background thread, then drop the supplied `Arc`.
+    /// Deterministic shutdown: signal background threads to exit, release the
+    /// Pipeline mutex, then join every registered thread, then drop `arc`.
     ///
-    /// After this returns, all background threads owned by the Pipeline have
-    /// exited and released any `Weak<Mutex<Pipeline>>` upgrades. If the supplied
-    /// `Arc` was the last strong reference, `Pipeline::drop` runs synchronously
-    /// on the calling thread — so destruction logs (`DROP PipelineCtx`,
-    /// `WgpuDropProbe`) are emitted on a thread the caller is already
-    /// guaranteed to be on, instead of on whichever background thread happened
-    /// to release the last upgrade.
+    /// Pipeline::drop runs whenever the last `Arc<Mutex<Pipeline>>` is dropped.
+    /// Without this method, that drop can land on whatever background thread
+    /// happened to release the last `Weak::upgrade` — a thread the caller does
+    /// not necessarily wait for. Calling `shutdown` first joins those threads
+    /// while we still hold the last `Arc`, so when we then drop it, Pipeline::drop
+    /// runs synchronously on the calling thread.
     pub fn shutdown(arc: Arc<Mutex<Pipeline>>) {
         let rt_handle = {
             let mut guard = arc.lock().unwrap();
             guard.signal_shutdown();
             guard.ctx.tokio_rt.handle().clone()
         };
-        // Lock released. Background threads can now lock briefly to finish
-        // their current iteration, observe their channels are closed, and exit.
         crate::pipeline::utils::async_task::AsyncTaskRegistry::get().abort_and_join(&rt_handle);
         smelter_render::thread::ThreadRegistry::get().join_all();
-        // `arc` drops here. If it was the last strong reference, Pipeline::drop
-        // runs on this thread, deterministically.
     }
 }
 
 impl Drop for Pipeline {
     fn drop(&mut self) {
-        error!("DROP Pipeline: begin");
-        // Idempotent: if `Pipeline::shutdown` was called, this is a no-op.
-        // Otherwise — fallback path — we do the work here. Note that the
-        // fallback can run on a registered background thread; the test process
-        // may exit before field destruction completes. Use `Pipeline::shutdown`
-        // before dropping the last `Arc` for deterministic teardown.
+        info!("Stopping pipeline");
+        // Fallback for callers that drop the last `Arc<Mutex<Pipeline>>` without
+        // going through `Pipeline::shutdown`. Idempotent — `shutdown` already
+        // performed this work if it was called.
         self.signal_shutdown();
         let rt_handle = self.ctx.tokio_rt.handle().clone();
         crate::pipeline::utils::async_task::AsyncTaskRegistry::get().abort_and_join(&rt_handle);
         smelter_render::thread::ThreadRegistry::get().join_all();
-        error!(
-            "DROP Pipeline: end. ctx Arc strong_count={}",
-            Arc::strong_count(&self.ctx)
-        );
     }
 }
 
@@ -649,12 +631,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     )?;
 
     let queue = Queue::new(queue_options);
-    let wgpu_ctx_arc = renderer.wgpu_ctx();
-    let wgpu_drop_probe = crate::pipeline::WgpuDropProbe {
-        device: Arc::downgrade(&graphics_context.device),
-        instance: Arc::downgrade(&graphics_context.instance),
-        wgpu_ctx: Arc::downgrade(&wgpu_ctx_arc),
-    };
     let ctx = Arc::new(PipelineCtx {
         queue_ctx: queue.ctx(),
         default_buffer_duration: opts.default_buffer_duration,
@@ -667,7 +643,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         stats_sender,
         tokio_rt: tokio_rt.clone(),
         graphics_context,
-        wgpu_ctx: wgpu_ctx_arc,
+        wgpu_ctx: renderer.wgpu_ctx(),
         whip_whep_state: match opts.whip_whep_server {
             PipelineWhipWhepServerOptions::Enable { port } => {
                 Some(WhipWhepPipelineState::new(port))
@@ -677,7 +653,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         webrtc_stun_servers: opts.webrtc_stun_servers.clone(),
         webrtc_setting_engine,
         rtmp_state: rtmp_state.clone(),
-        wgpu_drop_probe,
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {
@@ -698,7 +673,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         stats_monitor,
         audio_mixer: AudioMixer::new(opts.mixing_sample_rate),
         is_started: false,
-        is_shutdown: false,
         ctx,
         whip_whep_handle,
         rtmp_server,

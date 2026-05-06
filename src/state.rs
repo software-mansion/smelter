@@ -55,12 +55,10 @@ pub struct ApiState {
 
 impl Drop for ApiState {
     fn drop(&mut self) {
-        let thread = std::thread::current();
-        tracing::error!(
-            thread_name = thread.name().unwrap_or("unnamed"),
-            thread_id = ?thread.id(),
-            "DROP ApiState"
-        );
+        // Fallback for callers (e.g. the production server binary) that don't
+        // drive `Pipeline::shutdown` explicitly. Tests already take the pipeline
+        // out and call `Pipeline::shutdown` on the HTTP server thread, so this
+        // is a no-op there.
         if let Some(pipeline_arc) = self.pipeline.lock().unwrap().take() {
             Pipeline::shutdown(pipeline_arc);
         }

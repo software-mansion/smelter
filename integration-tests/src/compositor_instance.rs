@@ -29,7 +29,6 @@ pub struct CompositorInstance {
 impl Drop for CompositorInstance {
     fn drop(&mut self) {
         self.should_close_sender.send(()).unwrap();
-        tracing::error!("JOINING THREAD");
         if let Some(handle) = self.thread_handle.take() {
             handle.join().unwrap();
         }
@@ -55,18 +54,20 @@ impl CompositorInstance {
         let thread_handle = thread::Builder::new()
             .name("HTTP server startup thread".to_string())
             .spawn(move || {
-                // Hold a clone of `state` on this thread that is independent of
-                // the one moved into the axum router. After `run_api` returns,
-                // axum + every request task have released their `Arc<ApiState>`
-                // clones, so this clone is the last strong reference. We drive
-                // pipeline shutdown synchronously here, on the thread the test
-                // joins — avoiding ApiState::drop landing on a tokio worker.
+                // Keep a clone of `state` here so we own a strong `Arc<ApiState>`
+                // independently of the one moved into the axum router. Once
+                // `run_api` returns, axum and every request task have released
+                // their clones, so we hold the last strong reference and can
+                // drive `Pipeline::shutdown` synchronously on this thread —
+                // which is the one the test thread joins. Without this, the
+                // last `Arc<ApiState>` can drop on a tokio worker thread, where
+                // `ApiState::drop`'s shutdown would happen off the thread the
+                // test waits for.
                 let state_for_shutdown = state.clone();
                 run_api(state, runtime.clone(), should_close_receiver).unwrap();
                 if let Some(pipeline_arc) = state_for_shutdown.pipeline.lock().unwrap().take() {
                     smelter_core::Pipeline::shutdown(pipeline_arc);
                 }
-                drop(state_for_shutdown);
             })
             .unwrap();
 

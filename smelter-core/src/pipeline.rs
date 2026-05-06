@@ -1,8 +1,4 @@
-use std::{
-    path::Path,
-    sync::{Arc, Weak},
-    time::Duration,
-};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use ::rtmp::TlsConfig;
 use smelter_render::{
@@ -130,49 +126,6 @@ pub(crate) struct PipelineCtx {
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
     rtmp_state: Option<Arc<RtmpPipelineState>>,
-
-    // Must remain the LAST field. Rust drops fields in declaration order, so this
-    // probe runs AFTER `graphics_context` and `wgpu_ctx` have destructed — at which
-    // point the wgpu device/instance Arcs should have reached refcount 0 if nothing
-    // else is holding them.
-    #[allow(dead_code)]
-    pub(crate) wgpu_drop_probe: WgpuDropProbe,
-}
-
-#[derive(Clone)]
-pub(crate) struct WgpuDropProbe {
-    pub device: Weak<wgpu::Device>,
-    pub instance: Weak<wgpu::Instance>,
-    pub wgpu_ctx: Weak<WgpuCtx>,
-}
-
-impl Drop for WgpuDropProbe {
-    fn drop(&mut self) {
-        let device_strong = self.device.strong_count();
-        let instance_strong = self.instance.strong_count();
-        let wgpu_ctx_strong = self.wgpu_ctx.strong_count();
-        if device_strong == 0 {
-            tracing::error!("DROP wgpu::Device released");
-        } else {
-            tracing::error!(
-                strong = device_strong,
-                "WGPU LEAK: wgpu::Device still alive"
-            );
-        }
-        if instance_strong == 0 {
-            tracing::error!("DROP wgpu::Instance released");
-        } else {
-            tracing::error!(
-                strong = instance_strong,
-                "WGPU LEAK: wgpu::Instance still alive"
-            );
-        }
-        if wgpu_ctx_strong == 0 {
-            tracing::error!("DROP WgpuCtx released");
-        } else {
-            tracing::error!(strong = wgpu_ctx_strong, "WGPU LEAK: WgpuCtx still alive");
-        }
-    }
 }
 
 impl PipelineCtx {
@@ -185,17 +138,6 @@ impl PipelineCtx {
             let _ = future.await;
         });
         crate::pipeline::utils::async_task::AsyncTaskRegistry::get().register(handle);
-    }
-}
-
-impl Drop for PipelineCtx {
-    fn drop(&mut self) {
-        tracing::error!(
-            wgpu_device_strong = Arc::strong_count(&self.graphics_context.device),
-            wgpu_instance_strong = Arc::strong_count(&self.graphics_context.instance),
-            wgpu_ctx_strong = Arc::strong_count(&self.wgpu_ctx),
-            "DROP PipelineCtx"
-        );
     }
 }
 
