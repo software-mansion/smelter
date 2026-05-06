@@ -11,7 +11,7 @@ use crate::{AudioChannels, AudioSamples, prelude::InputAudioSamples, utils::Audi
 
 // Extra 0.001 is just to account for inputs that have dynamic buffer
 // and are configured to shift by max 4%
-const MAX_STRETCH_FACTOR: f64 = 0.041;
+const MAX_STRETCH_RATIO: f64 = 0.04 + 0.001;
 
 /// Data flow:
 /// Initial data is appended to `resampler_input_buffer`. When we need to get samples for specific
@@ -84,12 +84,12 @@ const CONTINUITY_THRESHOLD: Duration = Duration::from_millis(80);
 /// the timestamps and number of samples is out of sync.
 const SHIFT_THRESHOLD: Duration = Duration::from_millis(2);
 
-/// This threshold defines at what point we should still try stretch audio
-/// and when to just drop packets. Consequence of that is also that this
-/// value defines de-sync between audio and video tracks.
+/// Upper limit for drift size where we still attempt to squash audio.
+/// Above that limit, resampler should force reset.
 const SQUASH_THRESHOLD: Duration = Duration::from_millis(500);
 
-// stretch needs to be more aggressive because we might not have enough buffer
+/// Upper limit for drift size where we still attempt to stretch audio.
+/// Above that limit, resampler should force reset.
 const STRETCH_THRESHOLD: Duration = Duration::from_millis(40);
 
 impl InputResampler {
@@ -110,7 +110,7 @@ impl InputResampler {
         let original_resampler_ratio = output_sample_rate as f64 / input_sample_rate as f64;
         let resampler = rubato::Async::<f64>::new_sinc(
             original_resampler_ratio,
-            1.0 + MAX_STRETCH_FACTOR,
+            1.0 + MAX_STRETCH_RATIO,
             Self::interpolation_params(input_sample_rate, output_sample_rate),
             samples_in_batch,
             match channels {
@@ -172,7 +172,7 @@ impl InputResampler {
     }
 
     fn set_resample_ratio_relative(&mut self, rel_ratio: f64) {
-        let rel_ratio = rel_ratio.clamp(1.0 / (1.0 + MAX_STRETCH_FACTOR), 1.0 + MAX_STRETCH_FACTOR);
+        let rel_ratio = rel_ratio.clamp(1.0 / (1.0 + MAX_STRETCH_RATIO), 1.0 + MAX_STRETCH_RATIO);
         let desired = self.original_resampler_ratio * rel_ratio;
         let current = self.resampler.resample_ratio();
         let should_update = (current == 1.0 && desired != 1.0) || (desired - current).abs() > 0.01;
@@ -263,7 +263,7 @@ impl InputResampler {
 
                 // multiply by 2.0 so max resampling is reached at the half point
                 // of the stretch limit
-                self.set_resample_ratio_relative(1.0 + (2.0 * MAX_STRETCH_FACTOR * ratio));
+                self.set_resample_ratio_relative(1.0 + (2.0 * MAX_STRETCH_RATIO * ratio));
                 trace!(ratio, ?drift, "Input buffer behind, stretching");
             } else if input_start_pts + SHIFT_THRESHOLD > requested_start_pts {
                 // no squashing/stretching
@@ -276,7 +276,7 @@ impl InputResampler {
 
                 // multiply by 2.0 so max resampling is reached at the half point
                 // of the squash limit
-                self.set_resample_ratio_relative(1.0 - (2.0 * MAX_STRETCH_FACTOR * ratio));
+                self.set_resample_ratio_relative(1.0 - (2.0 * MAX_STRETCH_RATIO * ratio));
                 trace!(ratio, ?drift, "Input buffer ahead, squashing");
             } else {
                 // drop data
