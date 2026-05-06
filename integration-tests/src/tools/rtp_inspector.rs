@@ -113,6 +113,11 @@ fn run_video(expected: &Path, actual: &Path) -> Result<()> {
     let mut state = SessionState::default();
     let viewer = FrameInspector::spawn();
 
+    // Pull the first pair eagerly so the viewer window opens with
+    // something on screen, rather than waiting for the user to pick
+    // an action just to see anything at all.
+    advance_one(&mut iter, &mut state, &viewer)?;
+
     loop {
         let prompt = format!("rtp_inspector [t = {:.3}s]", state.position.as_secs_f64());
         let action = match Select::new(&prompt, Action::iter().collect()).prompt() {
@@ -130,6 +135,7 @@ fn run_video(expected: &Path, actual: &Path) -> Result<()> {
             Action::Skip5s => {
                 advance_until(&mut iter, &mut state, Duration::from_secs(5), &viewer)?
             }
+            Action::NextHighMse => advance_until_high_mse(&mut iter, &mut state, &viewer)?,
             Action::SaveLastPair => save_last_pair(&state, &output_dir)?,
             Action::Exit => return Ok(()),
         }
@@ -174,6 +180,11 @@ fn decode_audio_dump(path: &Path) -> Result<Vec<AudioSampleBatch>> {
     Ok(decoder.take_samples())
 }
 
+/// MSE threshold used by [`Action::NextHighMse`]. Anything below this
+/// is small enough to be encoder noise; anything above is a visible
+/// difference worth showing.
+const HIGH_MSE_THRESHOLD: f64 = 1.0;
+
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
 enum Action {
     #[strum(to_string = "Next frame")]
@@ -182,6 +193,8 @@ enum Action {
     Skip1s,
     #[strum(to_string = "Skip 5 seconds")]
     Skip5s,
+    #[strum(to_string = "Next frame with mse > 1")]
+    NextHighMse,
     #[strum(to_string = "Save last pair as PNG")]
     SaveLastPair,
     #[strum(to_string = "Exit")]
@@ -273,6 +286,53 @@ fn advance_until(
         warn!("end of stream");
     }
     Ok(())
+}
+
+/// Pull pairs until one has both sides present and an MSE above
+/// [`HIGH_MSE_THRESHOLD`], then surface that pair. Skipped pairs are
+/// silently consumed — only the landing pair is logged and shown.
+fn advance_until_high_mse(
+    iter: &mut RtpVideoDiffIter,
+    state: &mut SessionState,
+    viewer: &FrameInspector,
+) -> Result<()> {
+    if state.exhausted {
+        warn!("end of stream");
+        return Ok(());
+    }
+    let mut skipped: usize = 0;
+    loop {
+        match iter.next() {
+            Some(pair) => {
+                let pair = pair?;
+                let mse = pair_mse(&pair);
+                state.ingest(pair);
+                if mse.is_some_and(|v| v > HIGH_MSE_THRESHOLD) {
+                    if skipped > 0 {
+                        info!("skipped {skipped} low-mse pair(s)");
+                    }
+                    if let Some(pair) = &state.last_pair {
+                        log_pair(pair, mse);
+                    }
+                    push_to_viewer(state, viewer, mse);
+                    return Ok(());
+                }
+                skipped += 1;
+            }
+            None => {
+                state.exhausted = true;
+                if skipped > 0 {
+                    warn!(
+                        "end of stream — no pair with mse > {HIGH_MSE_THRESHOLD} found in \
+                         the remaining {skipped} pair(s)"
+                    );
+                } else {
+                    warn!("end of stream");
+                }
+                return Ok(());
+            }
+        }
+    }
 }
 
 /// Convert the most recent pair to RGBA and push it to the viewer

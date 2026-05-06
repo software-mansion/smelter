@@ -67,11 +67,6 @@ impl VideoDecoder {
         self.receive_decoded_frames()
     }
 
-    pub fn take_frames(mut self) -> Result<Vec<Frame>> {
-        self.receive_decoded_frames()?;
-        Ok(self.decoded_frames)
-    }
-
     /// Take frames decoded so far without consuming the decoder.
     /// Lets callers pump packets and pull frames incrementally.
     pub fn drain_frames(&mut self) -> Result<Vec<Frame>> {

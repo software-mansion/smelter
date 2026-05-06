@@ -5,16 +5,29 @@ use integration_tests_macros::pipeline_test;
 use serde_json::json;
 
 use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
-    audio::{
-        self, ArtificialFrequencyTolerance, AudioAnalyzeTolerance, AudioValidationConfig,
-        FrequencyTolerance,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, input_dump_from_disk,
+    pipeline_tests::{
+        PipelineTest,
+        harness::{
+            AudioCompareConfig, FftCompareConfig, VideoCompareConfig, compare_audio_dumps,
+            compare_video_dumps,
+            fft::{ArtificialTolerance, Mode},
+        },
     },
-    compare_audio_dumps, compare_video_dumps, input_dump_from_disk,
-    pipeline_tests::PipelineTest,
     split_rtp_packet_dump,
-    video::VideoValidationConfig,
 };
+
+fn artificial_fft(
+    tolerance: Option<ArtificialTolerance>,
+    allowed_failed_batches: u32,
+) -> FftCompareConfig {
+    let mut cfg = FftCompareConfig::artificial(vec![Duration::ZERO..Duration::from_secs(10)]);
+    if let Some(t) = tolerance {
+        cfg.mode = Mode::Artificial(t);
+    }
+    cfg.allowed_failed_batches = allowed_failed_batches;
+    cfg
+}
 
 #[allow(dead_code)]
 pub const TESTS: &[PipelineTest] = &[
@@ -137,9 +150,9 @@ pub fn required_video_inputs_no_offset() -> Result<()> {
     compare_video_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        VideoValidationConfig {
+        VideoCompareConfig {
             validation_intervals: vec![Duration::ZERO..Duration::from_secs(18)],
-            allowed_invalid_frames: 10,
+            max_failed_pairs: 10,
             ..Default::default()
         },
     )?;
@@ -259,9 +272,9 @@ pub fn required_video_inputs_with_offset() -> Result<()> {
     compare_video_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        VideoValidationConfig {
+        VideoCompareConfig {
             validation_intervals: vec![Duration::ZERO..Duration::from_secs(18)],
-            allowed_invalid_frames: 1,
+            max_failed_pairs: 1,
             ..Default::default()
         },
     )?;
@@ -345,19 +358,13 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
 
     // Because no offset is set and http request take nondeterministic time starting frames may
     // fail as they arrive at slightly different timestamps for each test.
-    let audio_validation_config = AudioValidationConfig {
-        tolerance: AudioAnalyzeTolerance {
-            allowed_failed_batches: 2,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        audio_validation_config,
+        AudioCompareConfig {
+            fft: Some(artificial_fft(None, 2)),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -441,21 +448,18 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
 
     // This test is a bit flaky when it comes to frequency level fluctuations so less strict
     // tolerance is set.
-    let audio_validation_config = AudioValidationConfig {
-        tolerance: AudioAnalyzeTolerance {
-            frequency_tolerance: FrequencyTolerance::Artificial(ArtificialFrequencyTolerance {
-                frequency_level: 100.0,
-            }),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        audio_validation_config,
+        AudioCompareConfig {
+            fft: Some(artificial_fft(
+                Some(ArtificialTolerance {
+                    frequency_level: 100.0,
+                }),
+                0,
+            )),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -543,21 +547,18 @@ pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
 
     // This test is a bit flaky when it comes to frequency level fluctuations so less strict
     // tolerance is set.
-    let audio_validation_config = AudioValidationConfig {
-        tolerance: AudioAnalyzeTolerance {
-            frequency_tolerance: FrequencyTolerance::Artificial(ArtificialFrequencyTolerance {
-                frequency_level: 100.0,
-            }),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        audio::ValidationMode::Artificial,
-        audio_validation_config,
+        AudioCompareConfig {
+            fft: Some(artificial_fft(
+                Some(ArtificialTolerance {
+                    frequency_level: 100.0,
+                }),
+                0,
+            )),
+            ..Default::default()
+        },
     )?;
 
     Ok(())
@@ -675,9 +676,9 @@ pub fn optional_inputs_no_offset_flaky() -> Result<()> {
     compare_video_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        VideoValidationConfig {
+        VideoCompareConfig {
             validation_intervals: vec![Duration::ZERO..Duration::from_secs(18)],
-            allowed_invalid_frames: 15,
+            max_failed_pairs: 15,
             ..Default::default()
         },
     )?;

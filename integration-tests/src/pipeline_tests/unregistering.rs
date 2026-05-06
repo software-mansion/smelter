@@ -5,9 +5,12 @@ use integration_tests_macros::pipeline_test;
 use serde_json::json;
 
 use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, compare_video_dumps,
-    input_dump_from_disk, paths::integration_tests_root, pipeline_tests::PipelineTest,
-    video::VideoValidationConfig,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, input_dump_from_disk,
+    paths::integration_tests_root,
+    pipeline_tests::{
+        PipelineTest,
+        harness::{VideoCompareConfig, compare_video_dumps},
+    },
 };
 
 #[allow(dead_code)]
@@ -80,9 +83,9 @@ pub fn unregistering_flaky() -> Result<()> {
     compare_video_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        VideoValidationConfig {
+        VideoCompareConfig {
             validation_intervals: vec![Duration::from_secs(0)..Duration::from_secs(10)],
-            allowed_invalid_frames: 1,
+            max_failed_pairs: 1,
             ..Default::default()
         },
     )?;
