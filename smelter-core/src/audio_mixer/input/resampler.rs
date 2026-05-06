@@ -196,7 +196,12 @@ impl InputResampler {
             "Resampler received a new batch"
         );
 
-        if start_pts > self.input_buffer_end_pts + CONTINUITY_THRESHOLD {
+        // Only zero-fill when there is still pending data in the buffer that needs
+        // an accurate time anchor relative to the new batch. With an empty buffer,
+        // `input_buffer_start_pts` resolves to `batch.start_pts` automatically.
+        if start_pts > self.input_buffer_end_pts + CONTINUITY_THRESHOLD
+            && self.resampler_input_buffer.frames() > 0
+        {
             let gap_duration = start_pts.saturating_sub(self.input_buffer_end_pts);
             let zero_samples =
                 f64::floor(gap_duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
