@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### 💥 Breaking changes
+- Removed `ReferenceManagementError::GapsInFrameNumNotSupported`. H.264 streams with `gaps_in_frame_num_value_allowed_flag = 1` should decode correctly now, unless they include non-existing references in the reference list after the modification process. Then they hit the newly added `ReferenceManagementError::NonExistingReferenceInActiveList`.
 - Moved `GapsInFrameNumNotSupported` error from `H264ParserError` to `ReferenceManagementError` ([#1957](https://github.com/software-mansion/smelter/pull/1957) by @jerzywilczek)
 - All nalus returned by `H264Parser` now contain their own start codes (`001` or `0001` bytes at the beginning) ([#1921](https://github.com/software-mansion/smelter/pull/1921) by @noituri)
 - Decoders, encoders and encoder parameters are now created using codec-specific methods, e. g. `Device::encoder_output_parameters_low_latency` -> `Device::encoder_output_parameters_h264_low_latency`, `Device::create_bytes_encoder` -> `Device::create_bytes_encoder_h264` ([#1871](https://github.com/software-mansion/smelter/pull/1871) by @jerzywilczek)
