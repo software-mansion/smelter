@@ -22,52 +22,46 @@ use crate::{
 
 use crate::prelude::*;
 
-pub(super) fn handle_on_track(
+pub(super) fn handle_video_track(
     ctx: WhipTrackContext,
     input_ref: Ref<InputId>,
     video_preferences: Vec<VideoDecoderOptions>,
-    video_sender: &mut Option<QueueSender<Frame>>,
-    audio_sender: &mut Option<QueueSender<InputAudioSamples>>,
+    video_sender: QueueSender<Frame>,
 ) {
-    let kind = ctx.track.kind();
+    let kind = RTPCodecType::Video;
     let span = info_span!("WHIP input track", ?kind, input_id=%input_ref);
     {
         let _span = span.enter();
-        debug!("on_track called");
+        debug!("starting video track processing");
     }
-    match kind {
-        RTPCodecType::Audio => {
-            let Some(audio_sender) = audio_sender.take() else {
-                warn!("Audio track already started");
-                return;
-            };
-            let task = async move {
-                if let Err(err) = process_audio_track(ctx, input_ref, audio_sender).await {
-                    // TODO: address after WhipWhepServerError rework
-                    warn!(?err, "On track handler failed")
-                }
-            };
-            tokio::spawn(task.instrument(span));
-        }
-        RTPCodecType::Video => {
-            let Some(video_sender) = video_sender.take() else {
-                warn!("Audio track already started");
-                return;
-            };
-            let task = async move {
-                if let Err(err) =
-                    process_video_track(ctx, input_ref, video_preferences, video_sender).await
-                {
-                    // TODO: address after WhipWhepServerError rework
-                    warn!(?err, "On track handler failed")
-                }
-            };
-            tokio::spawn(task.instrument(span));
-        }
-        RTPCodecType::Unspecified => {
-            warn!("Unknown track kind");
+    let task = async move {
+        if let Err(err) = process_video_track(ctx, input_ref, video_preferences, video_sender).await
+        {
+            // TODO: address after WhipWhepServerError rework
+            warn!(?err, "On track handler failed")
         }
     };
+    tokio::spawn(task.instrument(span));
+}
+
+pub(super) fn handle_audio_track(
+    ctx: WhipTrackContext,
+    input_ref: Ref<InputId>,
+    audio_sender: QueueSender<InputAudioSamples>,
+) {
+    let kind = RTPCodecType::Audio;
+    let span = info_span!("WHIP input track", ?kind, input_id=%input_ref);
+    {
+        let _span = span.enter();
+        debug!("starting audio track processing");
+    }
+    let task = async move {
+        if let Err(err) = process_audio_track(ctx, input_ref, audio_sender).await {
+            // TODO: address after WhipWhepServerError rework
+            warn!(?err, "On track handler failed")
+        }
+    };
+    tokio::spawn(task.instrument(span));
 }
 
 async fn process_audio_track(

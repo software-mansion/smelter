@@ -40,6 +40,7 @@ impl WhipInput {
             "type": "whip_server",
             "bearer_token": self.bearer_token,
             "video": self.video.as_ref().map(|v| v.serialize_register()),
+            "required": true,
         })
     }
 

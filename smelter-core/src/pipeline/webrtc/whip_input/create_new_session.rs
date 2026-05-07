@@ -1,10 +1,17 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
-use tracing::debug;
+use tracing::{debug, warn};
 use uuid::Uuid;
-use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::{
+    peer_connection::sdp::session_description::RTCSessionDescription,
+    rtp_transceiver::rtp_codec::RTPCodecType,
+};
 
 use crate::{
+    codecs::VideoDecoderOptions,
     pipeline::{
         rtp::{RtpJitterBufferMode, RtpJitterBufferSharedContext},
         webrtc::{
@@ -13,15 +20,63 @@ use crate::{
             offer_codec_filter::codecs_from_offer,
             peer_connection_recvonly::RecvonlyPeerConnection,
             whip_input::{
-                WhipTrackContext, on_track::handle_on_track, state::WhipInputSession,
+                WhipTrackContext,
+                on_track::{handle_audio_track, handle_video_track},
+                state::WhipInputSession,
                 video_preferences::video_params_compliant_with_offer,
             },
         },
     },
-    queue::{QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueInput, QueueTrackOffset, QueueTrackOptions},
 };
 
 use crate::prelude::*;
+
+/// Tracks which media tracks have arrived and defers queue creation
+/// until we know exactly which track types the WHIP client sends.
+struct DeferredTrackState {
+    queue_input: QueueInput,
+    resolved: bool,
+    video_track: Option<(WhipTrackContext, Ref<InputId>, Vec<VideoDecoderOptions>)>,
+    audio_track: Option<(WhipTrackContext, Ref<InputId>)>,
+}
+
+impl DeferredTrackState {
+    /// Resolve the deferred state: create the queue track with only the arrived
+    /// track types and start processing all buffered tracks.
+    fn resolve(&mut self) {
+        if self.resolved {
+            return;
+        }
+        self.resolved = true;
+
+        let has_video = self.video_track.is_some();
+        let has_audio = self.audio_track.is_some();
+
+        if !has_video && !has_audio {
+            warn!("Deferred track state resolved with no tracks");
+            return;
+        }
+
+        let (video_sender, audio_sender) = self.queue_input.queue_new_track(QueueTrackOptions {
+            video: has_video,
+            audio: has_audio,
+            offset: QueueTrackOffset::Pts(Duration::ZERO),
+        });
+
+        if let Some((ctx, input_ref, video_preferences)) = self.video_track.take()
+            && let Some(sender) = video_sender
+        {
+            handle_video_track(ctx, input_ref, video_preferences, sender);
+        }
+
+        if let Some((ctx, input_ref)) = self.audio_track.take()
+            && let Some(sender) = audio_sender
+        {
+            handle_audio_track(ctx, input_ref, sender);
+        }
+    }
+}
 
 pub(crate) async fn create_new_whip_session(
     state: WhipWhepServerState,
@@ -83,21 +138,57 @@ pub(crate) async fn create_new_whip_session(
             state.ctx.queue_ctx.sync_point,
         );
 
-        let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: true,
-            audio: true,
-            offset: QueueTrackOffset::Pts(Duration::ZERO),
-        });
+        let deferred_state = Arc::new(Mutex::new(DeferredTrackState {
+            queue_input,
+            resolved: false,
+            video_track: None,
+            audio_track: None,
+        }));
+
+        // Timeout: if the second track hasn't arrived within 2 seconds,
+        // resolve with whatever tracks we have so far. This prevents
+        // indefinite waiting when a client only sends audio or only video.
+        {
+            let deferred_state = deferred_state.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                deferred_state.lock().unwrap().resolve();
+            });
+        }
 
         peer_connection.on_track(move |track_ctx| {
             let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);
-            handle_on_track(
-                ctx,
-                input_ref.clone(),
-                video_preferences.clone(),
-                &mut video_sender,
-                &mut audio_sender,
-            );
+            let kind = ctx.track.kind();
+            debug!(?kind, input_id=%input_ref, "on_track called");
+
+            let mut deferred = deferred_state.lock().unwrap();
+            match kind {
+                RTPCodecType::Video => {
+                    if deferred.video_track.is_some() {
+                        warn!("Video track already registered");
+                        return;
+                    }
+                    deferred.video_track =
+                        Some((ctx, input_ref.clone(), video_preferences.clone()));
+                }
+                RTPCodecType::Audio => {
+                    if deferred.audio_track.is_some() {
+                        warn!("Audio track already registered");
+                        return;
+                    }
+                    deferred.audio_track = Some((ctx, input_ref.clone()));
+                }
+                RTPCodecType::Unspecified => {
+                    warn!("Unknown track kind");
+                    return;
+                }
+            }
+
+            // If both tracks have arrived, resolve immediately without
+            // waiting for the timeout.
+            if deferred.video_track.is_some() && deferred.audio_track.is_some() {
+                deferred.resolve();
+            }
         })
     };
 
