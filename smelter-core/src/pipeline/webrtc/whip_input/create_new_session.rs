@@ -145,13 +145,13 @@ pub(crate) async fn create_new_whip_session(
             audio_track: None,
         }));
 
-        // Timeout: if the second track hasn't arrived within 3 seconds,
+        // Timeout: if the second track hasn't arrived within 2 seconds,
         // resolve with whatever tracks we have so far. This prevents
         // indefinite waiting when a client only sends audio or only video.
         {
             let deferred_state = deferred_state.clone();
             tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_secs(3)).await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
                 deferred_state.lock().unwrap().resolve();
             });
         }
