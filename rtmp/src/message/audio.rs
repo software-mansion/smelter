@@ -6,7 +6,7 @@ use crate::{
     AacAudioConfig, AudioChannels, AudioConfig, AudioData, AudioTag, AudioTagAacPacketType,
     AudioTagSampleSize, AudioTagSoundRate, ExAudioPacket, ExAudioTag, FlvAudioData,
     LegacyFlvAudioCodec, RtmpAudioCodec, RtmpMessageParseError, RtmpMessageSerializeError, TrackId,
-    message::AUDIO_CHUNK_STREAM_ID,
+    message::{AUDIO_CHUNK_STREAM_ID, SenderState, TrackKey},
     protocol::{MessageType, RawMessage},
 };
 
@@ -25,71 +25,82 @@ impl AudioMessage {
 
     pub(super) fn from_raw(msg: RawMessage) -> Result<Self, RtmpMessageParseError> {
         match FlvAudioData::parse(msg.payload)? {
-            FlvAudioData::Legacy(tag) => Ok(Self::from_legacy(msg.timestamp, tag)),
-            FlvAudioData::Enhanced(tag) => Ok(Self::from_enhanced(msg.timestamp, tag)),
+            FlvAudioData::Legacy(tag) => Self::from_legacy(msg.timestamp, tag),
+            FlvAudioData::Enhanced(tag) => Self::from_enhanced(msg.timestamp, tag),
         }
     }
 
-    fn from_legacy(timestamp: u32, tag: AudioTag) -> Self {
+    fn from_legacy(timestamp: u32, tag: AudioTag) -> Result<Self, RtmpMessageParseError> {
         let codec = match RtmpAudioCodec::try_from(tag.codec) {
             Ok(codec) => codec,
             Err(err) => {
                 warn!("{err}. Returning Unknown.");
-                return Self::Unknown;
+                return Ok(Self::Unknown);
             }
         };
 
-        let pts = Duration::from_millis(timestamp.into());
-
         match (codec, tag.aac_packet_type) {
             (RtmpAudioCodec::Aac, Some(AudioTagAacPacketType::Config)) => {
-                Self::Config(AudioConfig {
+                let channels = AacAudioConfig::try_from(tag.data.clone())?.channels();
+                Ok(Self::Config(AudioConfig {
                     track_id: TrackId::PRIMARY,
                     codec,
                     data: tag.data,
-                })
+                    channels,
+                }))
             }
-            _ => Self::Data(AudioData {
-                track_id: TrackId::PRIMARY,
-                codec,
-                pts,
-                channels: tag.channels,
-                data: tag.data,
-            }),
+            _ => {
+                // Data-class messages carry no channel info on the wire. For AAC the
+                // legacy SoundType bit must be ignored (FLV v10.1 §E.4.2.1 line 3364:
+                // "Flash Player ignores SoundRate/SoundType for AAC and uses values
+                // from AudioSpecificConfig"). Channels flow out via AudioConfig.channels.
+                Ok(Self::Data(AudioData {
+                    track_id: TrackId::PRIMARY,
+                    codec,
+                    pts: Duration::from_millis(timestamp.into()),
+                    data: tag.data,
+                }))
+            }
         }
     }
 
-    fn from_enhanced(timestamp: u32, tag: ExAudioTag) -> Self {
+    fn from_enhanced(timestamp: u32, tag: ExAudioTag) -> Result<Self, RtmpMessageParseError> {
         let codec = match RtmpAudioCodec::try_from(tag.four_cc) {
             Ok(codec) => codec,
             Err(err) => {
                 warn!("{err}. Returning Unknown.");
-                return Self::Unknown;
+                return Ok(Self::Unknown);
             }
         };
 
-        let nanos_offset = u64::from(tag.timestamp_offset_nanos.unwrap_or(0));
-        let pts = Duration::from_millis(timestamp.into()) + Duration::from_nanos(nanos_offset);
-
         match tag.packet {
-            ExAudioPacket::SequenceStart(data) => Self::Config(AudioConfig {
+            ExAudioPacket::SequenceStart(data) => {
+                let channels = match codec {
+                    RtmpAudioCodec::Aac => AacAudioConfig::try_from(data.clone())?.channels(),
+                };
+                Ok(Self::Config(AudioConfig {
+                    track_id: TrackId::PRIMARY,
+                    codec,
+                    data,
+                    channels,
+                }))
+            }
+            ExAudioPacket::CodedFrames(data) => Ok(Self::Data(AudioData {
                 track_id: TrackId::PRIMARY,
                 codec,
+                pts: Duration::from_millis(timestamp.into())
+                    + Duration::from_nanos(u64::from(tag.timestamp_offset_nanos.unwrap_or(0))),
                 data,
-            }),
-            ExAudioPacket::CodedFrames(data) => Self::Data(AudioData {
-                track_id: TrackId::PRIMARY,
-                codec,
-                pts,
-                // ExAudio coded frames do not carry channel flags in the packet header.
-                channels: AudioChannels::Stereo,
-                data,
-            }),
-            ExAudioPacket::SequenceEnd | ExAudioPacket::MultichannelConfig(_) => Self::Unknown,
+            })),
+            ExAudioPacket::SequenceEnd | ExAudioPacket::MultichannelConfig(_) => Ok(Self::Unknown),
         }
     }
 
-    pub(super) fn into_raw(self, stream_id: u32) -> Result<RawMessage, RtmpMessageSerializeError> {
+    pub(super) fn into_raw(
+        self,
+        stream_id: u32,
+        state: &mut SenderState,
+    ) -> Result<RawMessage, RtmpMessageSerializeError> {
         match self {
             Self::Data(audio) => {
                 let legacy_codec: LegacyFlvAudioCodec = audio.codec.try_into()?;
@@ -97,6 +108,11 @@ impl AudioMessage {
                     LegacyFlvAudioCodec::Aac => Some(AudioTagAacPacketType::Data),
                     _ => None,
                 };
+                let channels = state
+                    .audio_channels
+                    .get(&TrackKey::new(stream_id, audio.track_id))
+                    .copied()
+                    .unwrap_or(AudioChannels::Stereo);
                 Ok(RawMessage {
                     msg_type: MessageType::Audio.into_raw(),
                     stream_id,
@@ -107,7 +123,7 @@ impl AudioMessage {
                         codec: legacy_codec,
                         sample_rate: AudioTagSoundRate::Rate44000,
                         sample_size: AudioTagSampleSize::Sample16Bit,
-                        channels: audio.channels,
+                        channels,
                         data: audio.data,
                     }
                     .serialize()?,
@@ -117,16 +133,13 @@ impl AudioMessage {
                 "Cannot serialize an unknown audio message".into(),
             )),
             Self::Config(config) => {
+                state
+                    .audio_channels
+                    .insert(TrackKey::new(stream_id, config.track_id), config.channels);
                 let legacy_codec: LegacyFlvAudioCodec = config.codec.try_into()?;
                 let (aac_packet_type, channels) = match legacy_codec {
                     LegacyFlvAudioCodec::Aac => {
-                        let parsed =
-                            AacAudioConfig::try_from(config.data.clone()).map_err(|err| {
-                                RtmpMessageSerializeError::InternalError(format!(
-                                    "Failed to parse AAC config: {err}"
-                                ))
-                            })?;
-                        (Some(AudioTagAacPacketType::Config), parsed.channels())
+                        (Some(AudioTagAacPacketType::Config), config.channels)
                     }
                     _ => (None, AudioChannels::Stereo),
                 };
@@ -152,11 +165,14 @@ impl AudioMessage {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use bytes::Bytes;
 
     use super::AudioMessage;
     use crate::{
-        AudioChannels, RtmpAudioCodec,
+        AudioChannels, AudioConfig, AudioData, RtmpAudioCodec, TrackId,
+        message::SenderState,
         protocol::{MessageType, RawMessage},
     };
 
@@ -180,6 +196,7 @@ mod tests {
             AudioMessage::Config(config) => {
                 assert_eq!(config.codec, RtmpAudioCodec::Aac);
                 assert_eq!(config.data, Bytes::from_static(&[0x12, 0x10]));
+                assert_eq!(config.channels, AudioChannels::Stereo);
             }
             other => panic!("expected Config, got {other:?}"),
         }
@@ -206,7 +223,6 @@ mod tests {
         match message {
             AudioMessage::Data(data) => {
                 assert_eq!(data.codec, RtmpAudioCodec::Aac);
-                assert_eq!(data.channels, AudioChannels::Stereo);
                 assert_eq!(data.pts.as_nanos(), 123_000_100);
                 assert_eq!(data.data, Bytes::from_static(b"frame"));
             }
@@ -250,5 +266,50 @@ mod tests {
         .unwrap();
 
         assert!(matches!(message, AudioMessage::Unknown));
+    }
+
+    #[test]
+    fn serializes_legacy_audio_data_using_stream_and_track_specific_state() {
+        let mut state = SenderState::default();
+
+        AudioMessage::Config(AudioConfig {
+            track_id: TrackId(1),
+            codec: RtmpAudioCodec::Aac,
+            data: Bytes::from_static(&[0x12, 0x10]),
+            channels: AudioChannels::Mono,
+        })
+        .into_raw(1, &mut state)
+        .unwrap();
+
+        AudioMessage::Config(AudioConfig {
+            track_id: TrackId(1),
+            codec: RtmpAudioCodec::Aac,
+            data: Bytes::from_static(&[0x12, 0x10]),
+            channels: AudioChannels::Stereo,
+        })
+        .into_raw(2, &mut state)
+        .unwrap();
+
+        let raw = AudioMessage::Data(AudioData {
+            track_id: TrackId(1),
+            codec: RtmpAudioCodec::Aac,
+            pts: Duration::from_millis(33),
+            data: Bytes::from_static(b"frame"),
+        })
+        .into_raw(1, &mut state)
+        .unwrap();
+
+        assert_eq!(raw.payload[0] & 0b0000_0001, 0);
+
+        let raw = AudioMessage::Data(AudioData {
+            track_id: TrackId(1),
+            codec: RtmpAudioCodec::Aac,
+            pts: Duration::from_millis(33),
+            data: Bytes::from_static(b"frame"),
+        })
+        .into_raw(2, &mut state)
+        .unwrap();
+
+        assert_eq!(raw.payload[0] & 0b0000_0001, 1);
     }
 }

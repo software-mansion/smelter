@@ -46,8 +46,6 @@ pub(super) fn run_connection_thread(
 
     let mut state = RtmpServerConnectionState {
         stream: RtmpMessageStream::new(stream),
-        window_size: None,
-        last_ack: 0,
     };
 
     let NegotiationResult { app, stream_key } = state.negotiate_connection()?;
@@ -98,11 +96,6 @@ pub(super) fn run_connection_thread(
 
 struct RtmpServerConnectionState {
     stream: RtmpMessageStream,
-
-    /// window size for data incoming from the client
-    window_size: Option<u64>,
-    /// last ack sent to client
-    last_ack: u64,
 }
 
 impl RtmpServerConnectionState {
@@ -260,15 +253,15 @@ impl RtmpServerConnectionState {
                 self.stream.set_reader_chunk_size(chunk_size as usize);
             }
             RtmpMessage::WindowAckSize { window_size } => {
-                self.window_size = Some(window_size as u64);
+                self.stream.set_peer_window_ack_size(window_size as u64);
             }
             RtmpMessage::Acknowledgement { .. } => {
                 // Server does not send much data, so receiving ACK will
                 // be very rare
             }
             RtmpMessage::SetPeerBandwidth { bandwidth, .. } => {
-                // It configures how often client will be sending ACKs,
-                // it is different that self.window_size
+                // Configures how often the peer will send ACKs to us — distinct
+                // from our own incoming ack window tracked in session state.
                 self.stream.write_msg(RtmpMessage::WindowAckSize {
                     window_size: bandwidth,
                 })?;
@@ -282,22 +275,8 @@ impl RtmpServerConnectionState {
             }
         }
 
-        self.maybe_send_ack()?;
+        self.stream.maybe_send_ack()?;
 
-        Ok(())
-    }
-
-    fn maybe_send_ack(&mut self) -> Result<(), RtmpStreamError> {
-        let Some(window_size) = self.window_size else {
-            return Ok(());
-        };
-        let bytes_received = self.stream.bytes_read();
-        if bytes_received.saturating_sub(self.last_ack) > window_size / 2 {
-            self.stream.write_msg(RtmpMessage::Acknowledgement {
-                bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
-            })?;
-            self.last_ack = bytes_received;
-        }
         Ok(())
     }
 }

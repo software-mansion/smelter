@@ -3,6 +3,7 @@ mod command;
 mod data;
 mod parse;
 mod serialize;
+mod state;
 mod user_control;
 mod video;
 
@@ -12,6 +13,7 @@ pub(crate) use command::{
     CommandMessageOk, CommandMessageResultExt,
 };
 pub(crate) use data::DataMessage;
+pub(crate) use state::{ReceiverState, SenderState, TrackKey};
 pub(crate) use user_control::UserControlMessage;
 pub(crate) use video::VideoMessage;
 

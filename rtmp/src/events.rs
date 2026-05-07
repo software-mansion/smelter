@@ -72,7 +72,6 @@ pub struct AudioData {
     pub codec: RtmpAudioCodec,
     pub pts: Duration,
     pub data: Bytes,
-    pub channels: AudioChannels,
 }
 
 #[derive(Clone)]
@@ -80,6 +79,7 @@ pub struct AudioConfig {
     pub track_id: TrackId,
     pub codec: RtmpAudioCodec,
     pub data: Bytes,
+    pub channels: AudioChannels,
 }
 
 impl From<VideoData> for RtmpEvent {
@@ -135,7 +135,6 @@ impl std::fmt::Debug for AudioData {
             .field("track_id", &self.track_id)
             .field("codec", &self.codec)
             .field("pts", &self.pts)
-            .field("channels", &self.channels)
             .field("data", &bytes_debug(&self.data))
             .finish()
     }
@@ -146,6 +145,7 @@ impl std::fmt::Debug for AudioConfig {
         f.debug_struct("AudioConfig")
             .field("track_id", &self.track_id)
             .field("codec", &self.codec)
+            .field("channels", &self.channels)
             .field("data", &bytes_debug(&self.data))
             .finish()
     }
