@@ -51,8 +51,9 @@ const MAX_STRETCH_RATIO: f64 = 0.04 + 0.001;
 ///   `output_buffer`.
 /// - `input_start_pts` — the mixing-clock PTS that the *next* output sample
 ///   would actually have if we ran rubato right now. Derived from
-///   `input_buffer_start_pts()` minus `original_output_delay` (the
-///   compensation for warmup samples discarded above).
+///   `input_buffer_start_pts()` minus `original_output_delay` (the FIR
+///   filter delay expressed in input-sample time — see the field doc on
+///   `original_output_delay` for why the unit matters).
 ///
 /// Their difference (the "drift") selects one of five branches:
 /// gap-fill / stretch / on-time / squash / drop (see `get_samples`).
@@ -80,11 +81,11 @@ pub(super) struct InputResampler {
     output_buffer: AudioSamplesBuffer,
 
     resampler: rubato::Async<f64>,
-    /// Duration of the resampler's filter warmup at construction time —
-    /// frames produced before the filter has been fully "fed" with input.
-    /// Used to shift `input_start_pts` so it matches the PTS of the *first
-    /// non-warmup* output sample (i.e. the sample that survives
-    /// `ResamplerOutputBuffer::samples_to_drop`).
+    /// FIR filter delay of the resampler at construction time, as a
+    /// Duration. Computed from `rubato.output_delay()` (a count of
+    /// *output* frames) divided by `output_sample_rate`. Subtracted from
+    /// `input_buffer_start_pts()` to get the PTS of the first warmup
+    /// output sample in the input timeline.
     original_output_delay: Duration,
     /// Nominal ratio = `output_sample_rate / input_sample_rate`. We multiply
     /// it by a "relative" factor in [1/(1+MAX), 1+MAX] when correcting drift.
@@ -195,6 +196,10 @@ impl InputResampler {
         // against zero-padded history; we drop them via
         // `resampler_output_buffer.samples_to_drop` below.
         let output_delay = resampler.output_delay();
+        // rubato reports `output_delay` as a count of *output* frames, so
+        // we divide by `output_sample_rate` to get the physical delay in
+        // seconds. (Dividing by `input_sample_rate` would over-shift by a
+        // factor of `ratio` whenever the rates differ.)
         let default_output_delay =
             Duration::from_secs_f64(output_delay as f64 / output_sample_rate as f64);
 
@@ -355,18 +360,21 @@ impl InputResampler {
                     self.output_buffer.frames() as f64 / self.output_sample_rate as f64,
                 );
 
-            // PTS of the first timestamp that would be produced from resampler
-            // if current input buffer was resampled. It takes into account
-            // that something is already in the internal buffer.
+            // PTS of the first timestamp that would be produced from
+            // resampler if current input buffer was resampled. It takes
+            // into account that something is already in the internal
+            // buffer.
             //
-            // The `- original_output_delay` shift compensates for the warmup
-            // samples that `ResamplerOutputBuffer::samples_to_drop` will
-            // discard on the very first read: after that drop, the first
-            // *kept* output sample's PTS equals the first input sample's PTS
-            // (= `input_buffer_start_pts()`). Once the warmup is over, this
-            // shift is still applied — assuming filter latency stays roughly
-            // constant. (Inaccurate when the filter ratio changes a lot, see
-            // FIXME on `original_output_delay`.)
+            // The `- original_output_delay` shift moves
+            // `input_buffer_start_pts()` back by the FIR filter delay,
+            // so the resulting PTS matches the *first* output sample the
+            // resampler will produce — including the leading warmup
+            // samples that `ResamplerOutputBuffer::samples_to_drop`
+            // discards on the next read. After that discard the first
+            // *kept* output sample's PTS equals
+            // `input_buffer_start_pts()` again. The shift remains in
+            // effect after warmup, on the assumption filter latency is
+            // approximately constant.
             let input_start_pts = self
                 .input_buffer_start_pts()
                 .saturating_sub(self.original_output_delay);
@@ -683,6 +691,6 @@ impl Adapter<'_, f64> for ResamplerOutputBuffer {
 }
 
 #[cfg(test)]
-mod test_utils;
+mod equal_sample_rate_tests;
 #[cfg(test)]
-mod resampler_tests;
+mod test_utils;

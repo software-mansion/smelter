@@ -1,5 +1,3 @@
-use tracing_subscriber::EnvFilter;
-
 use crate::audio_mixer::mix::*;
 
 const VOL_DOWN_THRESHOLD: f64 = 0.8;
@@ -9,9 +7,6 @@ const VOL_UP_INCREMENT: f64 = 0.005;
 
 #[test]
 fn sum_scaler_no_scaling_test() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
     let mut mixer = SampleMixer::new(
         VOL_DOWN_THRESHOLD,
         VOL_UP_THRESHOLD,
