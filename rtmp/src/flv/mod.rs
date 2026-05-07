@@ -27,6 +27,14 @@ pub enum FlvAudioData {
 }
 
 impl FlvAudioData {
+    #[allow(dead_code)]
+    pub fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
+        match self {
+            FlvAudioData::Legacy(tag) => tag.serialize(),
+            FlvAudioData::Enhanced(tag) => tag.serialize(),
+        }
+    }
+
     /// Parses flv `AUDIODATA`. Checks SoundFormat in the first byte and
     /// dispatches to either legacy or Enhanced RTMP parsing.
     pub fn parse(data: Bytes) -> Result<Self, FlvAudioTagParseError> {
