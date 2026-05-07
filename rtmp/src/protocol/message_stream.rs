@@ -9,7 +9,7 @@ use tracing::{debug, trace};
 use crate::{
     RtmpMessageSerializeError,
     error::RtmpStreamError,
-    message::{RtmpMessage, RtmpStreamState},
+    message::{ReceiverState, RtmpMessage, SenderState},
     protocol::{
         RawMessage,
         byte_stream::RtmpByteStream,
@@ -26,6 +26,8 @@ pub(crate) struct RtmpMessageStream {
     stream: RtmpByteStream,
     reader: RtmpMessageReader,
     writer: RtmpMessageWriter,
+    pub receiver_state: ReceiverState,
+    pub sender_state: SenderState,
 }
 
 impl RtmpMessageStream {
@@ -34,6 +36,8 @@ impl RtmpMessageStream {
             stream: socket,
             reader: RtmpMessageReader::new(),
             writer: RtmpMessageWriter::new(),
+            receiver_state: ReceiverState::default(),
+            sender_state: SenderState::default(),
         }
     }
 
@@ -54,12 +58,12 @@ impl RtmpMessageStream {
     }
 
     pub fn write_msg(&mut self, msg: RtmpMessage) -> Result<(), RtmpStreamError> {
-        self.writer.write_msg(&mut self.stream, msg)
+        self.writer
+            .write_msg(&mut self.stream, msg, &mut self.sender_state)
     }
 
-    /// Updates the peer-advertised ack window after parsing a `WindowAckSize`.
     pub fn set_peer_window_ack_size(&mut self, size: u64) {
-        self.reader.message_state.session_mut().peer_window_ack_size = Some(size);
+        self.receiver_state.peer_window_ack_size = Some(size);
     }
 
     /// If the peer announced an ack window and we've read more than half of it
@@ -67,16 +71,16 @@ impl RtmpMessageStream {
     /// Spec §5.4.3 — emit ack after receiving `WindowAckSize` bytes; sending at
     /// half-window matches typical implementations to amortize roundtrips.
     pub fn maybe_send_ack(&mut self) -> Result<(), RtmpStreamError> {
-        let session = self.reader.message_state.session();
-        let Some(window_size) = session.peer_window_ack_size else {
+        let Some(window_size) = self.receiver_state.peer_window_ack_size else {
             return Ok(());
         };
+        let bytes_at_last_ack = self.receiver_state.bytes_at_last_ack;
         let bytes_received = self.stream.bytes_read();
-        if bytes_received.saturating_sub(session.bytes_at_last_ack) > window_size / 2 {
+        if bytes_received.saturating_sub(bytes_at_last_ack) > window_size / 2 {
             self.write_msg(RtmpMessage::Acknowledgement {
                 bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
             })?;
-            self.reader.message_state.session_mut().bytes_at_last_ack = bytes_received;
+            self.receiver_state.bytes_at_last_ack = bytes_received;
         }
         Ok(())
     }
@@ -87,7 +91,6 @@ impl RtmpMessageStream {
 struct RtmpMessageReader {
     context: HashMap<u32, ReaderChunkStreamContext>,
     chunk_size: usize,
-    message_state: RtmpStreamState,
 }
 
 impl RtmpMessageReader {
@@ -95,7 +98,6 @@ impl RtmpMessageReader {
         Self {
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
-            message_state: RtmpStreamState::default(),
         }
     }
 
@@ -125,7 +127,7 @@ impl RtmpMessageReader {
         loop {
             match self.try_parse_msg(stream.get_read_buffer_mut()) {
                 Ok(Some(msg)) => {
-                    let msg = RtmpMessage::from_raw(msg, &mut self.message_state)?;
+                    let msg = RtmpMessage::from_raw(msg)?;
                     match msg.is_media_packet() {
                         true => trace!(?msg, "Received RTMP message"),
                         false => debug!(?msg, "Received RTMP message"),
@@ -265,7 +267,6 @@ impl ReaderChunkStreamContext {
 struct RtmpMessageWriter {
     context: HashMap<u32, WriterChunkStreamContext>,
     chunk_size: usize,
-    message_state: RtmpStreamState,
 }
 
 impl RtmpMessageWriter {
@@ -273,7 +274,6 @@ impl RtmpMessageWriter {
         Self {
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
-            message_state: RtmpStreamState::default(),
         }
     }
 
@@ -281,13 +281,14 @@ impl RtmpMessageWriter {
         &mut self,
         stream: &mut RtmpByteStream,
         msg: RtmpMessage,
+        state: &mut SenderState,
     ) -> Result<(), RtmpStreamError> {
         match msg.is_media_packet() {
             true => trace!(?msg, "Sending RTMP message"),
             false => debug!(?msg, "Sending RTMP message"),
         }
 
-        let msg = msg.into_raw(&mut self.message_state)?;
+        let msg = msg.into_raw(state)?;
         let cs_id = msg.chunk_stream_id;
 
         let context = self.context.entry(cs_id).or_default();

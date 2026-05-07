@@ -13,7 +13,7 @@ pub(crate) use command::{
     CommandMessageOk, CommandMessageResultExt,
 };
 pub(crate) use data::DataMessage;
-pub(crate) use state::{AudioTrackState, RtmpStreamState, TrackKey};
+pub(crate) use state::{ReceiverState, SenderState, TrackKey};
 pub(crate) use user_control::UserControlMessage;
 pub(crate) use video::VideoMessage;
 
