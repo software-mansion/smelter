@@ -26,8 +26,8 @@ pub(crate) struct RtmpMessageStream {
     stream: RtmpByteStream,
     reader: RtmpMessageReader,
     writer: RtmpMessageWriter,
-    pub receiver_state: ReceiverState,
-    pub sender_state: SenderState,
+    receiver_state: ReceiverState,
+    sender_state: SenderState,
 }
 
 impl RtmpMessageStream {
