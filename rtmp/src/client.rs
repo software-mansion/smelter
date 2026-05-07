@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use tracing::{debug, warn};
 
 use crate::{
-    RtmpConnectionError, RtmpEvent, RtmpVideoCodec, VideoCodecConversionError,
+    AudioChannels, RtmpConnectionError, RtmpEvent, RtmpVideoCodec, TrackKey,
+    VideoCodecConversionError,
     client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
     error::{RtmpMessageSerializeError, RtmpStreamError},
     message::{
@@ -41,6 +44,11 @@ pub struct RtmpClient {
 struct RtmpClientState {
     stream: RtmpMessageStream,
     peer_supports_enhanced: bool,
+    audio_channels: HashMap<TrackKey, AudioChannels>,
+    /// window size for data incoming from the server
+    window_size: Option<u64>,
+    /// last ack sent to client
+    last_ack: u64,
 }
 
 impl RtmpClient {
@@ -60,6 +68,9 @@ impl RtmpClient {
         let mut state = RtmpClientState {
             stream: RtmpMessageStream::new(socket),
             peer_supports_enhanced: false,
+            audio_channels: HashMap::new(),
+            window_size: None,
+            last_ack: 0,
         };
 
         let stream_id = state.negotiate_connection(&config)?;
@@ -101,14 +112,30 @@ impl RtmpClient {
                     stream_id: self.stream_id,
                 }
             }
-            RtmpEvent::AudioData(data) => RtmpMessage::Audio {
-                audio: AudioMessage::Data(data),
-                stream_id: self.stream_id,
-            },
-            RtmpEvent::AudioConfig(config) => RtmpMessage::Audio {
-                audio: AudioMessage::Config(config),
-                stream_id: self.stream_id,
-            },
+            RtmpEvent::AudioData(data) => {
+                let channels = self
+                    .state
+                    .audio_channels
+                    .get(&TrackKey::new(self.stream_id, data.track_id))
+                    .copied()
+                    .unwrap_or(AudioChannels::Stereo);
+                RtmpMessage::Audio {
+                    audio: AudioMessage::Data(data),
+                    stream_id: self.stream_id,
+                    channels,
+                }
+            }
+            RtmpEvent::AudioConfig(config) => {
+                let channels = config.channels;
+                self.state
+                    .audio_channels
+                    .insert(TrackKey::new(self.stream_id, config.track_id), channels);
+                RtmpMessage::Audio {
+                    audio: AudioMessage::Config(config),
+                    stream_id: self.stream_id,
+                    channels,
+                }
+            }
             RtmpEvent::Metadata(metadata) => RtmpMessage::DataMessage {
                 data: DataMessage::OnMetaData(metadata),
                 stream_id: self.stream_id,
@@ -191,14 +218,14 @@ impl RtmpClientState {
             RtmpMessage::WindowAckSize { window_size } => {
                 // Client does not receive much data, so sending ACKs
                 // will be very rare.
-                self.stream.set_peer_window_ack_size(window_size as u64);
+                self.window_size = Some(window_size as u64);
             }
             RtmpMessage::Acknowledgement { .. } => {
                 // TODO: throttle sending based on acks
             }
             RtmpMessage::SetPeerBandwidth { bandwidth, .. } => {
-                // Configures how often the peer will send ACKs to us — distinct
-                // from our own incoming ack window tracked in session state.
+                // It configures how often client will be sending ACKs,
+                // it is different that self.window_size
                 self.stream.write_msg(RtmpMessage::WindowAckSize {
                     window_size: bandwidth,
                 })?;
@@ -212,8 +239,23 @@ impl RtmpClientState {
             }
         }
 
-        self.stream.maybe_send_ack()?;
+        // not sure if it is necessary for client
+        self.maybe_send_ack()?;
 
+        Ok(())
+    }
+
+    fn maybe_send_ack(&mut self) -> Result<(), RtmpStreamError> {
+        let Some(window_size) = self.window_size else {
+            return Ok(());
+        };
+        let bytes_received = self.stream.bytes_read();
+        if bytes_received.saturating_sub(self.last_ack) > window_size / 2 {
+            self.stream.write_msg(RtmpMessage::Acknowledgement {
+                bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
+            })?;
+            self.last_ack = bytes_received;
+        }
         Ok(())
     }
 }

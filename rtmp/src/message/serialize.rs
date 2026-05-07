@@ -5,16 +5,12 @@ use crate::{
     amf0::encode_amf_values,
     message::{
         CONTROL_MESSAGE_STREAM_ID, MAIN_CHUNK_STREAM_ID, PROTOCOL_CHUNK_STREAM_ID, RtmpMessage,
-        SenderState,
     },
     protocol::{MessageType, RawMessage},
 };
 
 impl RtmpMessage {
-    pub fn into_raw(
-        self,
-        state: &mut SenderState,
-    ) -> Result<RawMessage, RtmpMessageSerializeError> {
+    pub fn into_raw(self) -> Result<RawMessage, RtmpMessageSerializeError> {
         let result = match self {
             RtmpMessage::WindowAckSize { window_size } => RawMessage {
                 msg_type: MessageType::WindowAckSize.into_raw(),
@@ -75,7 +71,8 @@ impl RtmpMessage {
             RtmpMessage::Audio {
                 audio: msg,
                 stream_id,
-            } => msg.into_raw(stream_id, state)?,
+                channels,
+            } => msg.into_raw(stream_id, channels)?,
         };
         Ok(result)
     }
