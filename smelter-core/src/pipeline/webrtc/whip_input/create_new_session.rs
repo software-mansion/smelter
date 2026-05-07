@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use tracing::debug;
 use uuid::Uuid;
@@ -83,11 +86,24 @@ pub(crate) async fn create_new_whip_session(
             state.ctx.queue_ctx.sync_point,
         );
 
-        let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
             audio: true,
             offset: QueueTrackOffset::Pts(Duration::ZERO),
         });
+
+        let video_sender = Arc::new(Mutex::new(video_sender));
+        let audio_sender = Arc::new(Mutex::new(audio_sender));
+
+        {
+            let video_sender = video_sender.clone();
+            let audio_sender = audio_sender.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                video_sender.lock().unwrap().take();
+                audio_sender.lock().unwrap().take();
+            });
+        }
 
         peer_connection.on_track(move |track_ctx| {
             let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);
@@ -95,8 +111,8 @@ pub(crate) async fn create_new_whip_session(
                 ctx,
                 input_ref.clone(),
                 video_preferences.clone(),
-                &mut video_sender,
-                &mut audio_sender,
+                &video_sender,
+                &audio_sender,
             );
         })
     };

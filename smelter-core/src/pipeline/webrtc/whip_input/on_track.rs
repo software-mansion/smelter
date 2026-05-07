@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use tracing::{Instrument, debug, info_span, trace, warn};
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
@@ -26,8 +28,8 @@ pub(super) fn handle_on_track(
     ctx: WhipTrackContext,
     input_ref: Ref<InputId>,
     video_preferences: Vec<VideoDecoderOptions>,
-    video_sender: &mut Option<QueueSender<Frame>>,
-    audio_sender: &mut Option<QueueSender<InputAudioSamples>>,
+    video_sender: &Arc<Mutex<Option<QueueSender<Frame>>>>,
+    audio_sender: &Arc<Mutex<Option<QueueSender<InputAudioSamples>>>>,
 ) {
     let kind = ctx.track.kind();
     let span = info_span!("WHIP input track", ?kind, input_id=%input_ref);
@@ -37,7 +39,7 @@ pub(super) fn handle_on_track(
     }
     match kind {
         RTPCodecType::Audio => {
-            let Some(audio_sender) = audio_sender.take() else {
+            let Some(audio_sender) = audio_sender.lock().unwrap().take() else {
                 warn!("Audio track already started");
                 return;
             };
@@ -50,8 +52,8 @@ pub(super) fn handle_on_track(
             tokio::spawn(task.instrument(span));
         }
         RTPCodecType::Video => {
-            let Some(video_sender) = video_sender.take() else {
-                warn!("Audio track already started");
+            let Some(video_sender) = video_sender.lock().unwrap().take() else {
+                warn!("Video track already started");
                 return;
             };
             let task = async move {
