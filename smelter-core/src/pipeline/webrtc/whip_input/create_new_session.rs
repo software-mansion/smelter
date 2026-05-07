@@ -100,8 +100,16 @@ pub(crate) async fn create_new_whip_session(
             let audio_sender = audio_sender.clone();
             tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_secs(2)).await;
-                video_sender.lock().unwrap().take();
-                audio_sender.lock().unwrap().take();
+                let mut video_sender = video_sender.lock().unwrap();
+                let mut audio_sender = audio_sender.lock().unwrap();
+                if video_sender.is_some() {
+                    video_sender.take();
+                    debug!("Video track not started, sender dropped!");
+                }
+                if audio_sender.is_some() {
+                    audio_sender.take();
+                    debug!("Audio track not started, sender dropped!");
+                }
             });
         }
 
