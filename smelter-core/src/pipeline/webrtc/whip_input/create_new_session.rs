@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use tracing::debug;
 use uuid::Uuid;
@@ -18,7 +21,7 @@ use crate::{
             },
         },
     },
-    queue::{QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
 };
 
 use crate::prelude::*;
@@ -92,11 +95,17 @@ pub(crate) async fn create_new_whip_session(
             state.ctx.queue_ctx.sync_point,
         );
 
-        let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
             audio: true,
             offset: QueueTrackOffset::Pts(Duration::ZERO),
         });
+
+        let video_sender = Arc::new(Mutex::new(video_sender));
+        let audio_sender = Arc::new(Mutex::new(audio_sender));
+
+        // Drop senders if appropriate tracks do not come within 2 seconds.
+        wait_for_tracks(video_sender.clone(), audio_sender.clone());
 
         peer_connection.on_track(move |track_ctx| {
             let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);
@@ -104,11 +113,31 @@ pub(crate) async fn create_new_whip_session(
                 ctx,
                 input_ref.clone(),
                 video_preferences.clone(),
-                &mut video_sender,
-                &mut audio_sender,
+                &video_sender,
+                &audio_sender,
             );
         })
     };
 
     Ok((session_id, answer))
+}
+
+/// This function prevents queue lock if there is only one video or audio track and input is
+/// required. If track is not received within 2 seconds from connection start, the sender is dropped
+/// and the queue is unblocked.
+fn wait_for_tracks(
+    video_sender: Arc<Mutex<Option<QueueSender<Frame>>>>,
+    audio_sender: Arc<Mutex<Option<QueueSender<InputAudioSamples>>>>,
+) {
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        let mut video_sender = video_sender.lock().unwrap();
+        let mut audio_sender = audio_sender.lock().unwrap();
+        if video_sender.take().is_some() {
+            debug!("Video track not started, sender dropped!");
+        }
+        if audio_sender.take().is_some() {
+            debug!("Audio track not started, sender dropped!");
+        }
+    });
 }
