@@ -99,7 +99,7 @@ pub(crate) async fn create_new_whip_session(
             let video_sender = video_sender.clone();
             let audio_sender = audio_sender.clone();
             tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_secs(3)).await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
                 video_sender.lock().unwrap().take();
                 audio_sender.lock().unwrap().take();
             });
