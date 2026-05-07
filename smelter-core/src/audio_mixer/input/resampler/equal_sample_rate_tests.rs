@@ -512,3 +512,192 @@ mod running {
         let _ = source;
     }
 }
+
+/// Third `get_samples` call on a resampler that has been driven through
+/// **two** prior requests. The common setup writes [10, 50)+D and calls
+/// `get_samples((20, 40)+D)` and `get_samples((40, 60)+D)`, after which:
+/// - the input buffer is fully drained (0 frames, `end_pts = 50+D`),
+/// - the second `get_samples` over-produced into the squash branch and
+///   left ~80 zero frames in `output_buffer` for the next call.
+///
+/// Each test then writes a *single* batch and calls
+/// `get_samples((60, 80)+D)`. The concatenated output of all three
+/// `get_samples` calls is dumped to a WAV file for inspection.
+///
+/// The first ~80 output samples of every test are the leftover zeros
+/// from the second init `get_samples` — they appear before the new
+/// write's signal can reach the output. Test assertions are deferred
+/// (visually verify the dumped WAVs first).
+mod drained {
+    use super::*;
+
+    /// Common init: [10, 50)+D input, then `get_samples((20, 40)+D)` and
+    /// `get_samples((40, 60)+D)`.
+    fn primed() -> (SignalSource, InputResampler, Vec<f64>) {
+        try_init_logger();
+        let source = SignalSource::new(RATE, test_signal());
+        let mut r =
+            InputResampler::new(RATE, RATE, AudioChannels::Mono, Duration::from_millis(10) + D)
+                .unwrap();
+        r.write_batch(source.batch(Duration::from_millis(10) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(Duration::from_millis(30) + D, Duration::from_millis(20)));
+        let first = mono(
+            r.get_samples((Duration::from_millis(20) + D, Duration::from_millis(40) + D)),
+        );
+        let second = mono(
+            r.get_samples((Duration::from_millis(40) + D, Duration::from_millis(60) + D)),
+        );
+        let mut prev = Vec::with_capacity(first.len() + second.len());
+        prev.extend_from_slice(&first);
+        prev.extend_from_slice(&second);
+        (source, r, prev)
+    }
+
+    /// Run the third `get_samples((60, 80)+D)` and dump the concatenated
+    /// [20ms, 80ms) output to `drained_<name>` for inspection.
+    fn run_and_dump(r: &mut InputResampler, prev: &[f64], name: &str) -> Vec<f64> {
+        let third = mono(
+            r.get_samples((Duration::from_millis(60) + D, Duration::from_millis(80) + D)),
+        );
+        assert_eq!(third.len(), 960);
+        let mut combined = Vec::with_capacity(prev.len() + third.len());
+        combined.extend_from_slice(prev);
+        combined.extend_from_slice(&third);
+        dump_wav(&combined, RATE, &format!("drained_{name}"));
+        third
+    }
+
+    /// Write a stale batch [40ms, 50ms)+D — entirely before the request.
+    /// Buffer covers [40, 50)+D when get_samples is called. Analogous to
+    /// `fresh::input_before_request`.
+    #[test]
+    fn input_before_request() {
+        let (source, mut r, prev) = primed();
+        r.write_batch(source.batch(Duration::from_millis(40) + D, Duration::from_millis(10)));
+
+        let _third = run_and_dump(&mut r, &prev, "input_before_request.wav");
+        let _ = source;
+    }
+
+    /// Write [50ms, 65ms)+D — buffer ends inside the request. Analogous
+    /// to `fresh::input_overlaps_request_start`.
+    #[test]
+    fn input_overlaps_request_start() {
+        let (source, mut r, prev) = primed();
+        r.write_batch(source.batch(Duration::from_millis(50) + D, Duration::from_millis(15)));
+
+        let _third = run_and_dump(&mut r, &prev, "input_overlaps_request_start.wav");
+        let _ = source;
+    }
+
+    /// Write [50ms, 90ms)+D — buffer fully covers the request with prefix
+    /// and suffix. Analogous to `fresh::input_covers_request`.
+    #[test]
+    fn input_covers_request() {
+        let (source, mut r, prev) = primed();
+        r.write_batch(source.batch(Duration::from_millis(50) + D, Duration::from_millis(40)));
+
+        let _third = run_and_dump(&mut r, &prev, "input_covers_request.wav");
+        let _ = source;
+    }
+
+    /// Write three contiguous batches on the request grid: [40, 60),
+    /// [60, 80), [80, 100)+D. Analogous to
+    /// `fresh::input_covers_request_grid_aligned`.
+    #[test]
+    fn input_covers_request_grid_aligned() {
+        let (source, mut r, prev) = primed();
+        r.write_batch(source.batch(Duration::from_millis(40) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(Duration::from_millis(60) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(Duration::from_millis(80) + D, Duration::from_millis(20)));
+
+        let _third = run_and_dump(&mut r, &prev, "input_covers_request_grid_aligned.wav");
+        let _ = source;
+    }
+
+    /// Write [59.5ms, 79.5ms)+D — buffer starts 0.5ms *before* the request
+    /// (sub-`SHIFT_THRESHOLD`). Analogous to
+    /// `fresh::input_shifted_backward_within_threshold`.
+    #[test]
+    fn input_shifted_backward_within_threshold() {
+        let (source, mut r, prev) = primed();
+        let shift = Duration::from_micros(500);
+        r.write_batch(source.batch(
+            Duration::from_millis(60) - shift + D,
+            Duration::from_millis(20),
+        ));
+
+        let _third = run_and_dump(
+            &mut r,
+            &prev,
+            "input_shifted_backward_within_threshold.wav",
+        );
+        let _ = source;
+    }
+
+    /// Write [60ms, 80ms)+D — buffer starts exactly at the request.
+    /// Analogous to `fresh::input_starts_at_request_start`.
+    #[test]
+    fn input_starts_at_request_start() {
+        let (source, mut r, prev) = primed();
+        r.write_batch(source.batch(Duration::from_millis(60) + D, Duration::from_millis(20)));
+
+        let _third = run_and_dump(&mut r, &prev, "input_starts_at_request_start.wav");
+        let _ = source;
+    }
+
+    /// Write [60.5ms, 80.5ms)+D — buffer starts 0.5ms *after* the request
+    /// (sub-`SHIFT_THRESHOLD`). Analogous to
+    /// `fresh::input_shifted_forward_within_threshold`.
+    #[test]
+    fn input_shifted_forward_within_threshold() {
+        let (source, mut r, prev) = primed();
+        let shift = Duration::from_micros(500);
+        r.write_batch(source.batch(
+            Duration::from_millis(60) + shift + D,
+            Duration::from_millis(20),
+        ));
+
+        let _third = run_and_dump(
+            &mut r,
+            &prev,
+            "input_shifted_forward_within_threshold.wav",
+        );
+        let _ = source;
+    }
+
+    /// Write [70ms, 90ms)+D — buffer overlaps only the back of the
+    /// request. Analogous to `fresh::input_overlaps_request_end`.
+    #[test]
+    fn input_overlaps_request_end() {
+        let (source, mut r, prev) = primed();
+        r.write_batch(source.batch(Duration::from_millis(70) + D, Duration::from_millis(20)));
+
+        let _third = run_and_dump(&mut r, &prev, "input_overlaps_request_end.wav");
+        let _ = source;
+    }
+
+    /// Write [85ms, 100ms)+D — buffer entirely after the request.
+    /// Analogous to `fresh::input_after_request`.
+    #[test]
+    fn input_after_request() {
+        let (source, mut r, prev) = primed();
+        r.write_batch(source.batch(Duration::from_millis(85) + D, Duration::from_millis(15)));
+
+        let _third = run_and_dump(&mut r, &prev, "input_after_request.wav");
+        let _ = source;
+    }
+
+    /// Two writes with a > 80ms gap between them: the first establishes
+    /// the buffer non-empty, the second triggers the zero-fill branch in
+    /// `write_batch`. No fresh analog.
+    #[test]
+    fn large_gap_append() {
+        let (source, mut r, prev) = primed();
+        r.write_batch(source.batch(Duration::from_millis(55) + D, Duration::from_millis(5)));
+        r.write_batch(source.batch(Duration::from_millis(150) + D, Duration::from_millis(20)));
+
+        let _third = run_and_dump(&mut r, &prev, "large_gap_append.wav");
+        let _ = source;
+    }
+}
