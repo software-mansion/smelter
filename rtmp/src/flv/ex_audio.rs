@@ -1,8 +1,14 @@
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{AudioCodecConversionError, RtmpAudioCodec, error::FlvAudioTagParseError};
+use crate::{
+    AudioCodecConversionError, RtmpAudioCodec, RtmpMessageSerializeError,
+    error::FlvAudioTagParseError,
+};
 
-use super::{EX_AUDIO_SOUND_FORMAT, mod_ex_audio::resolve_mod_ex};
+use super::{
+    EX_AUDIO_SOUND_FORMAT,
+    mod_ex_audio::{AudioPacketModExType, resolve_mod_ex, serialize_mod_ex},
+};
 
 // TODO: This is a struct while ExVideoTag is an enum. Rethink if audio might require multiple tag variants as well
 /// Parsed Enhanced RTMP audio tag.
@@ -40,6 +46,17 @@ impl ExAudioFourCc {
             b"fLaC" => Ok(Self::Flac),
             b"mp4a" => Ok(Self::Aac),
             _ => Err(FlvAudioTagParseError::UnknownAudioFourCc(bytes)),
+        }
+    }
+
+    fn into_raw(self) -> [u8; 4] {
+        match self {
+            Self::Ac3 => *b"ac-3",
+            Self::Eac3 => *b"ec-3",
+            Self::Opus => *b"Opus",
+            Self::Mp3 => *b".mp3",
+            Self::Flac => *b"fLaC",
+            Self::Aac => *b"mp4a",
         }
     }
 }
@@ -165,13 +182,70 @@ impl ExAudioTag {
             timestamp_offset_nanos,
         })
     }
+
+    pub(super) fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
+        let wire_packet_type = match &self.packet {
+            ExAudioPacket::SequenceStart(_) => ExAudioPacketType::SequenceStart,
+            ExAudioPacket::CodedFrames(_) => ExAudioPacketType::CodedFrames,
+            ExAudioPacket::SequenceEnd => ExAudioPacketType::SequenceEnd,
+            ExAudioPacket::MultichannelConfig(_) => ExAudioPacketType::MultichannelConfig,
+        };
+
+        let has_mod_ex = self.timestamp_offset_nanos.is_some();
+        let header_packet_type = if has_mod_ex {
+            ExAudioPacketType::ModEx
+        } else {
+            wire_packet_type
+        };
+
+        let first_byte = (EX_AUDIO_SOUND_FORMAT << 4) | header_packet_type.into_raw();
+
+        let body_data = match &self.packet {
+            ExAudioPacket::SequenceStart(data) => &data[..],
+            ExAudioPacket::CodedFrames(data) => &data[..],
+            ExAudioPacket::SequenceEnd => &[][..],
+            ExAudioPacket::MultichannelConfig(data) => &data[..],
+        };
+
+        let mod_ex_data: Option<[u8; 3]> = match self.timestamp_offset_nanos {
+            Some(nanos) if nanos > 999_999 => {
+                return Err(RtmpMessageSerializeError::InternalError(format!(
+                    "timestamp_offset_nanos {nanos} exceeds max 999999"
+                )));
+            }
+            Some(nanos) => {
+                let bytes = nanos.to_be_bytes();
+                Some([bytes[1], bytes[2], bytes[3]])
+            }
+            None => None,
+        };
+
+        let mod_ex_size = mod_ex_data.as_ref().map_or(0, |data| data.len() + 2);
+        let capacity = 1 + mod_ex_size + 4 + body_data.len();
+
+        let mut buf = BytesMut::with_capacity(capacity);
+        buf.put_u8(first_byte);
+
+        if let Some(data) = &mod_ex_data {
+            serialize_mod_ex(
+                &mut buf,
+                AudioPacketModExType::TimestampOffsetNano,
+                data,
+                wire_packet_type,
+            )?;
+        }
+
+        buf.put(&self.four_cc.into_raw()[..]);
+        buf.put(body_data);
+        Ok(buf.freeze())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
 
-    use super::{ExAudioPacket, ExAudioTag};
+    use super::{ExAudioFourCc, ExAudioPacket, ExAudioTag};
     use crate::error::FlvAudioTagParseError;
 
     #[test]
@@ -222,5 +296,90 @@ mod tests {
             err,
             FlvAudioTagParseError::UnsupportedPacketType(5)
         ));
+    }
+
+    #[test]
+    fn round_trip_sequence_start() {
+        let tag = ExAudioTag {
+            four_cc: ExAudioFourCc::Aac,
+            packet: ExAudioPacket::SequenceStart(Bytes::from_static(&[0x12, 0x10])),
+            timestamp_offset_nanos: None,
+        };
+        let parsed = ExAudioTag::parse(tag.serialize().unwrap()).unwrap();
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn round_trip_coded_frames() {
+        let tag = ExAudioTag {
+            four_cc: ExAudioFourCc::Opus,
+            packet: ExAudioPacket::CodedFrames(Bytes::from_static(b"opus_frame")),
+            timestamp_offset_nanos: None,
+        };
+        let parsed = ExAudioTag::parse(tag.serialize().unwrap()).unwrap();
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn round_trip_sequence_end() {
+        let tag = ExAudioTag {
+            four_cc: ExAudioFourCc::Flac,
+            packet: ExAudioPacket::SequenceEnd,
+            timestamp_offset_nanos: None,
+        };
+        let parsed = ExAudioTag::parse(tag.serialize().unwrap()).unwrap();
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn round_trip_multichannel_config() {
+        let tag = ExAudioTag {
+            four_cc: ExAudioFourCc::Aac,
+            packet: ExAudioPacket::MultichannelConfig(Bytes::from_static(&[0x00, 0x02])),
+            timestamp_offset_nanos: None,
+        };
+        let parsed = ExAudioTag::parse(tag.serialize().unwrap()).unwrap();
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn round_trip_with_timestamp_offset() {
+        let tag = ExAudioTag {
+            four_cc: ExAudioFourCc::Aac,
+            packet: ExAudioPacket::CodedFrames(Bytes::from_static(b"aac")),
+            timestamp_offset_nanos: Some(999_999),
+        };
+        let parsed = ExAudioTag::parse(tag.serialize().unwrap()).unwrap();
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn round_trip_all_fourcc_variants() {
+        for four_cc in [
+            ExAudioFourCc::Ac3,
+            ExAudioFourCc::Eac3,
+            ExAudioFourCc::Opus,
+            ExAudioFourCc::Mp3,
+            ExAudioFourCc::Flac,
+            ExAudioFourCc::Aac,
+        ] {
+            let tag = ExAudioTag {
+                four_cc,
+                packet: ExAudioPacket::CodedFrames(Bytes::from_static(b"data")),
+                timestamp_offset_nanos: None,
+            };
+            let parsed = ExAudioTag::parse(tag.serialize().unwrap()).unwrap();
+            assert_eq!(parsed, tag);
+        }
+    }
+
+    #[test]
+    fn serialize_rejects_timestamp_offset_above_max() {
+        let tag = ExAudioTag {
+            four_cc: ExAudioFourCc::Aac,
+            packet: ExAudioPacket::CodedFrames(Bytes::from_static(b"data")),
+            timestamp_offset_nanos: Some(1_000_000),
+        };
+        assert!(tag.serialize().is_err());
     }
 }
