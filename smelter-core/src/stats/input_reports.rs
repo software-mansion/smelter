@@ -69,15 +69,28 @@ pub struct RtpJitterBufferSlidingWindowStatsReport {
     /// Count of packets received during the given time window.
     pub packets_received: u64,
 
+    /// Measured when packet enters jitter buffer. This value represents how
+    /// much time packet has to reach the queue to be processed, before
+    /// jitter-buffer reorder/wait is applied.
+    pub effective_buffer_on_write_avg_seconds: f64,
+    /// Measured when packet enters jitter buffer. This value represents how
+    /// much time packet has to reach the queue to be processed, before
+    /// jitter-buffer reorder/wait is applied.
+    pub effective_buffer_on_write_max_seconds: f64,
+    /// Measured when packet enters jitter buffer. This value represents how
+    /// much time packet has to reach the queue to be processed, before
+    /// jitter-buffer reorder/wait is applied.
+    pub effective_buffer_on_write_min_seconds: f64,
+
     /// Measured when packet leaves jitter buffer. This value represents
     /// how much time packet has to reach the queue to be processed.
-    pub effective_buffer_avg_seconds: f64,
+    pub effective_buffer_on_pop_avg_seconds: f64,
     /// Measured when packet leaves jitter buffer. This value represents
     /// how much time packet has to reach the queue to be processed.
-    pub effective_buffer_max_seconds: f64,
+    pub effective_buffer_on_pop_max_seconds: f64,
     /// Measured when packet leaves jitter buffer. This value represents
     /// how much time packet has to reach the queue to be processed.
-    pub effective_buffer_min_seconds: f64,
+    pub effective_buffer_on_pop_min_seconds: f64,
 
     /// Size of the input buffer.
     pub input_buffer_avg_seconds: f64,

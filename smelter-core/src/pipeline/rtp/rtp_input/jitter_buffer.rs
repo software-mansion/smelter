@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     fmt,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -125,7 +125,10 @@ impl RtpJitterBuffer {
             ntp_sync_point,
             input_buffer,
         } = shared_ctx;
-        let timestamp_sync = RtpTimestampSync::new(ntp_sync_point.clone(), clock_rate);
+        // Real-time mode treats RTP timestamps as wall-clock-aligned and
+        // enables synchronization features better for that use case.
+        let real_time = matches!(mode, RtpJitterBufferMode::RealTime { .. });
+        let timestamp_sync = RtpTimestampSync::new(ntp_sync_point.clone(), clock_rate, real_time);
 
         Self {
             mode,
@@ -175,6 +178,16 @@ impl RtpJitterBuffer {
         // reorders and minimize large jumps
         //
         self.input_buffer.on_new_packet(pts);
+
+        // Receive-time margin: how far in the future this packet's output
+        // PTS sits compared to wall clock the moment it lands. The pop-side
+        // counterpart is emitted in `read_packet` after `apply_offset` runs.
+        let reference_time = self.ntp_sync_point.reference_time;
+        let effective_buffer =
+            (pts + self.input_buffer.size()).saturating_sub(reference_time.elapsed());
+        (self.on_stats_event)(RtpJitterBufferStatsEvent::EffectiveBufferOnWrite(
+            effective_buffer,
+        ));
 
         trace!(packet=?packet.header, ?pts, buffer_size=self.packets.len(), "Writing packet to jitter buffer");
         self.packets
@@ -231,7 +244,7 @@ impl RtpJitterBuffer {
         let timestamp = self.input_buffer.apply_offset(packet.pts);
 
         let reference_time = self.ntp_sync_point.reference_time;
-        (self.on_stats_event)(RtpJitterBufferStatsEvent::EffectiveBuffer(
+        (self.on_stats_event)(RtpJitterBufferStatsEvent::EffectiveBufferOnPop(
             timestamp.saturating_sub(reference_time.elapsed()),
         ));
         (self.on_stats_event)(RtpJitterBufferStatsEvent::InputBufferSize(
@@ -312,10 +325,11 @@ pub(crate) struct LatencyOptimizedBuffer {
 }
 
 impl LatencyOptimizedBuffer {
-    /// Linear convergence rate. The per-track `size` moves toward `target_size` by at
-    /// most `stream_delta * CONVERGENCE_RATE` per call (~50 ms per second of stream
-    /// time). Slow enough that target jumps don't translate into per-track jolts.
-    const CONVERGENCE_RATE: f64 = 0.04;
+    const MAX_CONVERGENCE_RATE: f64 = 0.04;
+    /// Below this threshold, convergence rate scales linearly from 0 to
+    /// `MAX_CONVERGENCE_RATE` based on `|size - target|`. Prevents burst
+    /// catch-up after a hold from exceeding the inner buffer's actual rate.
+    const LINEAR_THRESHOLD: Duration = Duration::from_millis(50);
     /// If the target diverges from the per-track size by more than this, snap
     /// directly to the target instead of rate-limiting. Avoids long catch-up
     /// after a `JumpGrow` or any other large target shift.
@@ -350,15 +364,20 @@ impl LatencyOptimizedBuffer {
                 Duration::ZERO
             }
         };
-        if target_size.abs_diff(self.size) > Self::SNAP_THRESHOLD {
+        let diff = target_size.abs_diff(self.size);
+        if diff > Self::SNAP_THRESHOLD {
             self.size = target_size;
         } else {
-            let max_step = stream_delta.mul_f64(Self::CONVERGENCE_RATE);
-            self.size = if target_size > self.size {
-                Duration::min(self.size + max_step, target_size)
-            } else {
-                Duration::max(self.size.saturating_sub(max_step), target_size)
-            };
+            let rate = Self::MAX_CONVERGENCE_RATE
+                * f64::min(
+                    1.0,
+                    diff.as_secs_f64() / Self::LINEAR_THRESHOLD.as_secs_f64(),
+                );
+            let max_step = stream_delta.mul_f64(rate);
+            self.size = target_size.clamp(
+                self.size.saturating_sub(max_step),
+                self.size.saturating_add(max_step),
+            );
         }
         pts + self.size
     }
@@ -390,9 +409,15 @@ struct InnerLatencyOptimizedBuffer {
 
     /// Largest PTS observed so far. Target-size changes only run when a new packet exceeds it.
     max_pts: Option<Duration>,
-    /// PTS at which the last `+GROW_JUMP` was applied. Drives the rate-limit on
-    /// jumps; not used as a zone observation.
-    last_jump_pts: Option<Duration>,
+    /// PTS at which the last `+GROW_JUMP` was applied. Drives the rate-limit
+    /// on jumps; not used as a zone observation. Initialized to `ZERO` and
+    /// re-anchored to the first observed PTS in `on_new_packet` so the same
+    /// `GROW_JUMP_INTERVAL` throttle also blocks an early jump in the first
+    /// `GROW_JUMP_INTERVAL` of stream — startup transients (initial SR
+    /// slew, NTP-snap, fill-buffer bursts) routinely produce a low
+    /// effective_buffer that would otherwise instantly inflate the target
+    /// before the proportional grow rates have a chance to react.
+    last_jump_pts: Duration,
 
     /// Largest PTS observed with each grow-side zone classification. The effective
     /// `trend` returns the most-grow-leaning zone whose timestamp still lies within
@@ -413,20 +438,15 @@ struct InnerLatencyOptimizedBuffer {
     /// alive; a plain Shrink (or any grow-side observation) clears it.
     shrink_fast_streak_start: Option<Duration>,
 
-    thresholds: LatencyThresholds,
-}
+    /// Stream-time PTS of recent successful grow jumps within the last
+    /// `JUMP_RECURRENCE_WINDOW`. Once the count exceeds
+    /// `JUMP_RECURRENCE_THRESHOLD` we treat the spikes as a recurring pattern,
+    /// shift every threshold (except `grow_jump`) up by `THRESHOLD_BUMP` to
+    /// raise the comfort zone, and clear the deque so the next bump requires
+    /// a fresh window of recurrence.
+    recent_jump_pts: VecDeque<Duration>,
 
-struct LatencyThresholds {
-    /// Above this effective_buffer the buffer shrinks at the fast rate.
-    shrink_fast: Duration,
-    /// Above this effective_buffer the buffer shrinks at the slow rate.
-    shrink: Duration,
-    /// Below this effective_buffer the buffer grows proportionally at the slow rate.
-    grow: Duration,
-    /// Below this effective_buffer the buffer grows proportionally at the fast rate.
-    grow_fast: Duration,
-    /// Below this effective_buffer the buffer must jump up immediately.
-    grow_jump: Duration,
+    thresholds: LatencyThresholds,
 }
 
 impl InnerLatencyOptimizedBuffer {
@@ -441,11 +461,22 @@ impl InnerLatencyOptimizedBuffer {
     /// Fixed amount applied when the effective buffer drops below `grow_jump`.
     const GROW_JUMP: Duration = Duration::from_millis(1000);
     /// Minimum stream-time spacing between two grow jumps.
-    const GROW_JUMP_INTERVAL: Duration = Duration::from_millis(3000);
+    const GROW_JUMP_INTERVAL: Duration = Duration::from_millis(4000);
     /// Stream-time window during which a per-zone observation still influences the
     /// effective trend. Equivalent to "no contradicting trend in N seconds" — when this
     /// window expires for a zone its observation is forgotten.
     const TREND_WINDOW: Duration = Duration::from_secs(10);
+    /// Sliding stream-time window over which grow jumps are counted to
+    /// detect recurring spike patterns.
+    const JUMP_RECURRENCE_WINDOW: Duration = Duration::from_secs(240);
+    /// Strictly-greater-than this many grow jumps within the window flips the
+    /// thresholds up by `THRESHOLD_BUMP` and resets the count.
+    const JUMP_RECURRENCE_THRESHOLD: usize = 5;
+    /// Amount each non-`grow_jump` threshold is raised by when the recurrence
+    /// trigger fires. Shifts the stable / shrink / grow zones up while
+    /// leaving the JumpGrow trigger pinned, so the buffer biases toward a
+    /// larger steady-state size after seeing enough spikes.
+    const THRESHOLD_BUMP: Duration = Duration::from_millis(100);
 
     fn new(reference_time: Instant, desired_size: (Duration, Duration)) -> Self {
         // Thresholds are anchored to the configured stable band:
@@ -464,19 +495,21 @@ impl InnerLatencyOptimizedBuffer {
             ),
             grow,
             shrink,
-            shrink_fast: shrink.saturating_add(Duration::from_millis(1500)),
+            shrink_fast: shrink.saturating_add(Duration::from_millis(2000)),
+            bump_count: 0,
         };
         Self {
             reference_time,
             target_size: shrink,
             max_pts: None,
-            last_jump_pts: None,
+            last_jump_pts: Duration::ZERO,
             last_jump_grow_pts: None,
             last_grow_fast_pts: None,
             last_grow_pts: None,
             last_stable_pts: None,
             shrink_streak_start: None,
             shrink_fast_streak_start: None,
+            recent_jump_pts: VecDeque::new(),
             thresholds,
         }
     }
@@ -506,6 +539,8 @@ impl InnerLatencyOptimizedBuffer {
             }
             None => {
                 self.max_pts = Some(pts);
+                // Block grow jumps in initial `GROW_JUMP_INTERVAL`
+                self.last_jump_pts = pts;
                 Duration::ZERO
             }
         };
@@ -516,7 +551,7 @@ impl InnerLatencyOptimizedBuffer {
             LatencyTrend::Stable => {}
             LatencyTrend::Grow => self.scale_target(Self::GROW_RATE, stream_delta),
             LatencyTrend::GrowFast => self.scale_target(Self::GROW_FAST_RATE, stream_delta),
-            LatencyTrend::JumpGrow => self.try_grow_jump(pts),
+            LatencyTrend::JumpGrow => self.try_grow_jump(pts, stream_delta),
         }
     }
 
@@ -599,18 +634,35 @@ impl InnerLatencyOptimizedBuffer {
         self.reset_grow_observations();
     }
 
-    fn try_grow_jump(&mut self, pts: Duration) {
+    fn try_grow_jump(&mut self, pts: Duration, stream_delta: Duration) {
         self.reset_grow_observations();
-        if let Some(last) = self.last_jump_pts
-            && pts.saturating_sub(last) < Self::GROW_JUMP_INTERVAL
-        {
+        if pts.saturating_sub(self.last_jump_pts) < Self::GROW_JUMP_INTERVAL {
+            // Fallback to regular buffer growth if jumps are throttled
+            self.scale_target(Self::GROW_FAST_RATE, stream_delta);
             return;
         }
 
-        self.last_jump_pts = Some(pts);
+        self.last_jump_pts = pts;
         let new_size = self.target_size + Self::GROW_JUMP;
         debug!(?new_size, "Grow latency optimized target (jump)");
         self.target_size = new_size;
+        self.record_jump_grow_event(pts);
+    }
+
+    /// Track grow jumps in a sliding stream-time window. Once the count
+    /// exceeds the recurrence threshold, raise every non-`grow_jump`
+    /// threshold by `THRESHOLD_BUMP` and reset the window so the next bump
+    /// only fires after a fresh round of recurrence.
+    fn record_jump_grow_event(&mut self, pts: Duration) {
+        self.recent_jump_pts.push_back(pts);
+        let cutoff = pts.saturating_sub(Self::JUMP_RECURRENCE_WINDOW);
+        while self.recent_jump_pts.front().is_some_and(|p| *p < cutoff) {
+            self.recent_jump_pts.pop_front();
+        }
+        if self.recent_jump_pts.len() > Self::JUMP_RECURRENCE_THRESHOLD {
+            self.recent_jump_pts.clear();
+            self.thresholds.bump(Self::THRESHOLD_BUMP);
+        }
     }
 
     /// All grow-side observations were measured against the old target
@@ -624,6 +676,49 @@ impl InnerLatencyOptimizedBuffer {
         self.last_jump_grow_pts = None;
         self.last_grow_fast_pts = None;
         self.last_grow_pts = None;
+    }
+}
+
+struct LatencyThresholds {
+    /// Above this effective_buffer the buffer shrinks at the fast rate.
+    shrink_fast: Duration,
+    /// Above this effective_buffer the buffer shrinks at the slow rate.
+    shrink: Duration,
+    /// Below this effective_buffer the buffer grows proportionally at the slow rate.
+    grow: Duration,
+    /// Below this effective_buffer the buffer grows proportionally at the fast rate.
+    grow_fast: Duration,
+    /// Below this effective_buffer the buffer must jump up immediately.
+    grow_jump: Duration,
+    /// How many times `bump()` has applied its shift. Capped at `MAX_BUMPS`
+    /// so the cumulative shift stays bounded.
+    bump_count: usize,
+}
+
+impl LatencyThresholds {
+    /// Cap on how many cumulative bumps `bump()` will apply. With the
+    /// caller's `THRESHOLD_BUMP = 100ms`, bounds total shift to 2s.
+    const MAX_BUMPS: usize = 20;
+
+    /// Raise every threshold except `grow_jump` by `by`. Silently no-ops
+    /// once `MAX_BUMPS` bumps have already been applied.
+    fn bump(&mut self, by: Duration) {
+        if self.bump_count >= Self::MAX_BUMPS {
+            return;
+        }
+        self.shrink_fast += by;
+        self.shrink += by;
+        self.grow += by;
+        self.grow_fast += by;
+        self.bump_count += 1;
+        debug!(
+            shrink_fast = ?self.shrink_fast,
+            shrink = ?self.shrink,
+            grow = ?self.grow,
+            grow_fast = ?self.grow_fast,
+            bump_count = self.bump_count,
+            "Latency thresholds raised"
+        );
     }
 }
 

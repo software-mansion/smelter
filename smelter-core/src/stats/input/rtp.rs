@@ -65,7 +65,14 @@ pub(crate) enum RtpJitterBufferStatsEvent {
     RtpPacketLost,
     RtpPacketReceived,
     BytesReceived(usize),
-    EffectiveBuffer(Duration),
+    /// Effective buffer measured at write time — how much margin a packet has
+    /// between its output PTS and wall clock the moment it lands in the
+    /// jitter buffer. Reflects the network-side picture (jitter, RTT).
+    EffectiveBufferOnWrite(Duration),
+    /// Effective buffer measured at pop time — same metric, but observed when
+    /// the packet leaves the jitter buffer toward the queue. Reflects how
+    /// much slack is left after waiting for reorder/buffering.
+    EffectiveBufferOnPop(Duration),
     InputBufferSize(Duration),
 }
 
@@ -75,7 +82,8 @@ pub struct RtpJitterBufferState {
     pub packets_lost_10_secs: SlidingWindowValue<u64>,
     pub packets_received: u64,
     pub packets_received_10_secs: SlidingWindowValue<u64>,
-    pub effective_buffer_10_secs: SlidingWindowValue<Duration>,
+    pub effective_buffer_on_write_10_secs: SlidingWindowValue<Duration>,
+    pub effective_buffer_on_pop_10_secs: SlidingWindowValue<Duration>,
     pub input_buffer_10_secs: SlidingWindowValue<Duration>,
 
     pub bitrate_1_sec: SlidingWindowValue<u64>,
@@ -89,7 +97,8 @@ impl RtpJitterBufferState {
             packets_lost_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             packets_received: 0,
             packets_received_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
-            effective_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
+            effective_buffer_on_write_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
+            effective_buffer_on_pop_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             input_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
             bitrate_1_min: SlidingWindowValue::new(Duration::from_mins(1)),
@@ -106,8 +115,11 @@ impl RtpJitterBufferState {
                 self.packets_received += 1;
                 self.packets_received_10_secs.push(1);
             }
-            RtpJitterBufferStatsEvent::EffectiveBuffer(duration) => {
-                self.effective_buffer_10_secs.push(duration);
+            RtpJitterBufferStatsEvent::EffectiveBufferOnWrite(duration) => {
+                self.effective_buffer_on_write_10_secs.push(duration);
+            }
+            RtpJitterBufferStatsEvent::EffectiveBufferOnPop(duration) => {
+                self.effective_buffer_on_pop_10_secs.push(duration);
             }
             RtpJitterBufferStatsEvent::InputBufferSize(duration) => {
                 self.input_buffer_10_secs.push(duration);
@@ -132,9 +144,30 @@ impl RtpJitterBufferState {
             last_10_seconds: RtpJitterBufferSlidingWindowStatsReport {
                 packets_lost: self.packets_lost_10_secs.sum(),
                 packets_received: self.packets_received_10_secs.sum(),
-                effective_buffer_avg_seconds: self.effective_buffer_10_secs.avg().as_secs_f64(),
-                effective_buffer_max_seconds: self.effective_buffer_10_secs.max().as_secs_f64(),
-                effective_buffer_min_seconds: self.effective_buffer_10_secs.min().as_secs_f64(),
+                effective_buffer_on_write_avg_seconds: self
+                    .effective_buffer_on_write_10_secs
+                    .avg()
+                    .as_secs_f64(),
+                effective_buffer_on_write_max_seconds: self
+                    .effective_buffer_on_write_10_secs
+                    .max()
+                    .as_secs_f64(),
+                effective_buffer_on_write_min_seconds: self
+                    .effective_buffer_on_write_10_secs
+                    .min()
+                    .as_secs_f64(),
+                effective_buffer_on_pop_avg_seconds: self
+                    .effective_buffer_on_pop_10_secs
+                    .avg()
+                    .as_secs_f64(),
+                effective_buffer_on_pop_max_seconds: self
+                    .effective_buffer_on_pop_10_secs
+                    .max()
+                    .as_secs_f64(),
+                effective_buffer_on_pop_min_seconds: self
+                    .effective_buffer_on_pop_10_secs
+                    .min()
+                    .as_secs_f64(),
                 input_buffer_avg_seconds: self.input_buffer_10_secs.avg().as_secs_f64(),
                 input_buffer_max_seconds: self.input_buffer_10_secs.max().as_secs_f64(),
                 input_buffer_min_seconds: self.input_buffer_10_secs.min().as_secs_f64(),
