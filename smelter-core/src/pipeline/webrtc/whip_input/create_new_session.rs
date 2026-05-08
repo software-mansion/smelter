@@ -104,8 +104,11 @@ pub(crate) async fn create_new_whip_session(
         let video_sender = Arc::new(Mutex::new(video_sender));
         let audio_sender = Arc::new(Mutex::new(audio_sender));
 
-        // Drop senders if appropriate tracks do not come within 2 seconds.
-        wait_for_tracks(video_sender.clone(), audio_sender.clone());
+        // If the input is required, drop senders if appropriate tracks do not
+        // come within 2 seconds.
+        if queue_input.required() {
+            wait_for_tracks(video_sender.clone(), audio_sender.clone());
+        }
 
         peer_connection.on_track(move |track_ctx| {
             let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);
