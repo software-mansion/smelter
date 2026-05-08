@@ -17,6 +17,12 @@ const POW_2_32: f64 = (1i64 << 32) as f64;
 /// continuously instead of stepping on each SenderReport.
 const MAX_OFFSET_INCREMENT: Duration = Duration::from_micros(100);
 
+/// Diff at which `sync_offset_secs` snaps directly to the SR-derived target
+/// instead of slewing toward it. Sized to catch hundreds-of-ms startup
+/// mispairings (observed ~800ms on initial WHIP/SFU SRs) — slewing those at
+/// `MAX_OFFSET_INCREMENT` per packet would take a minute or more to converge.
+const OFFSET_SNAP_THRESHOLD: Duration = Duration::from_millis(100);
+
 #[derive(Debug)]
 /// State that should be shared between different RTP tracks to use for synchronization.
 pub(crate) struct RtpNtpSyncPoint {
@@ -210,7 +216,7 @@ impl RtpTimestampSync {
         // - receiving stream from SFU that modifies RTP packet but not RTCP packets.
         // - BroadcastBox if you connect to server over WHEP before starting stream
         let offset_diff_secs = new_offset_secs - self.sync_offset_secs.unwrap_or(0.0);
-        if offset_diff_secs.abs() > 2.0 {
+        if offset_diff_secs.abs() > OFFSET_SNAP_THRESHOLD.as_secs_f64() {
             warn!(
                 offset_diff_secs,
                 "NTP sync offset differs too much from initial estimate, snapping offset."
