@@ -476,11 +476,12 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_second_stream() {
     );
 }
 
-/// When an SR implies an offset more than 2s away from the current best-effort
-/// estimate (e.g. SFU mangling timestamps, or audio resuming after a long
-/// pause), `sync_offset_secs` snaps to the new target instead of slewing.
-/// After the snap, consecutive packets must still advance by their RTP-time
-/// delta — i.e. the timeline stays self-consistent past the discontinuity.
+/// When an SR implies an offset farther than `OFFSET_SNAP_THRESHOLD` from the
+/// current best-effort estimate (e.g. SFU mangling timestamps, or audio
+/// resuming after a long pause), `sync_offset_secs` snaps to the new target
+/// instead of slewing. After the snap, consecutive packets must still advance
+/// by their RTP-time delta — i.e. the timeline stays self-consistent past the
+/// discontinuity.
 #[test]
 fn test_rtcp_sync_snaps_on_large_offset_diff() {
     let queue_sync_point = Instant::now();
@@ -577,6 +578,59 @@ fn test_rtcp_sync_offset_slews_per_packet() {
         Duration::from_millis(50),
         Duration::from_micros(200),
     );
+}
+
+/// Pins the `OFFSET_SNAP_THRESHOLD` (100ms) boundary: a sub-threshold diff
+/// only updates `target_offset_secs` and the next packet moves by one slew
+/// step, while a super-threshold diff snaps `sync_offset_secs` so the next
+/// packet's PTS jumps by ~the full diff. Same setup as
+/// `test_rtcp_sync_offset_slews_per_packet`: first SR establishes the anchor,
+/// second SR carries the actual offset diff.
+#[test]
+fn test_rtcp_sync_snap_threshold_boundary() {
+    let queue_sync_point = Instant::now();
+
+    // Sub-threshold (90ms): slew, not snap.
+    {
+        let sync_point = RtpNtpSyncPoint::new();
+        let mut stream = RtpTimestampSync::new(queue_sync_point, sync_point.clone(), 1_000);
+
+        stream.pts_from_timestamp(0);
+        stream.pts_from_timestamp(1_000);
+        let pts_pre_sr = stream.pts_from_timestamp(2_000);
+
+        stream.on_sender_report(REFERENCE_NTP_TIME, 0);
+        let shifted_ntp = REFERENCE_NTP_TIME + (POW_2_32 * 90 / 1000); // +90 ms
+        stream.on_sender_report(shifted_ntp, 0);
+
+        let pts_after_one = stream.pts_from_timestamp(2_000);
+        assert_duration_eq(
+            pts_after_one - pts_pre_sr,
+            Duration::from_micros(100),
+            Duration::from_micros(10),
+        );
+    }
+
+    // Above-threshold (150ms): snap, not slew.
+    {
+        let sync_point = RtpNtpSyncPoint::new();
+        let mut stream = RtpTimestampSync::new(queue_sync_point, sync_point.clone(), 1_000);
+
+        stream.pts_from_timestamp(0);
+        stream.pts_from_timestamp(1_000);
+        let pts_pre_sr = stream.pts_from_timestamp(2_000);
+
+        stream.on_sender_report(REFERENCE_NTP_TIME, 0);
+        let shifted_ntp = REFERENCE_NTP_TIME + (POW_2_32 * 150 / 1000); // +150 ms
+        stream.on_sender_report(shifted_ntp, 0);
+
+        let pts_after_one = stream.pts_from_timestamp(2_000);
+        assert_duration_eq(
+            pts_after_one - pts_pre_sr,
+            Duration::from_millis(150),
+            Duration::from_millis(2),
+        );
+    }
 }
 
 fn assert_duration_eq(left: Duration, right: Duration, precision: Duration) {
