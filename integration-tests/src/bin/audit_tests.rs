@@ -23,7 +23,7 @@ enum Action {
     RunSpecific,
     #[strum(to_string = "Audit existing test results (no rerun)")]
     InspectExisting,
-    #[strum(to_string = "Restore test_workdir: from GitHub Actions (build_and_test_linux)")]
+    #[strum(to_string = "Restore test_workdir: from GitHub Actions (test_linux)")]
     DownloadCiArtifacts,
     #[strum(to_string = "Restore test_workdir: from snapshot submodule diff")]
     DiffSnapshotSubmodule,

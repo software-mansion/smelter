@@ -11,7 +11,7 @@ concurrency:
     cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-    build_and_test_linux:
+    build_linux:
         runs-on: ubuntu-24.04
         steps:
             - name: 🛠 Install system dependencies
@@ -31,22 +31,8 @@ jobs:
               with:
                   toolchain: 1.95
 
-            - name: 🔬 Install nextest
-              uses: taiki-e/install-action@v2
-              with:
-                  tool: cargo-nextest
-
             - name: 📥 Checkout repo
               uses: actions/checkout@v6
-
-            - name: 🧩 Git submodules update
-              run: |
-                  cat > .gitmodules << EOF
-                  [submodule "snapshots"]
-                          path = integration-tests/snapshots
-                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
-                  EOF
-                  git submodule update --init
 
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
@@ -60,21 +46,6 @@ jobs:
               run: |
                   cargo build --features decklink
                   cargo build --no-default-features
-
-            - name: 🧪 Run tests
-              run: |
-                  cargo nextest run --workspace --profile ci
-
-            - name: 📦 Upload failed snapshot test artifacts
-              if: failure()
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test_workdir
-                  path: integration-tests/test_workdir
-                  retention-days: 2
-
-            - name: 📚 Run doctests
-              run: cargo test --workspace --doc
 
     build_macos:
         runs-on: macos-15
@@ -155,3 +126,61 @@ jobs:
             - name: 📄 Generate JSON schema
               run: |
                   cargo run -p tools --bin generate_from_types -- --check
+
+    test_linux:
+        needs: [build_linux, lint]
+        runs-on: gpu-gh-hosted-runner
+        steps:
+            - name: 🛠 Install system dependencies
+              run: |
+                  set -e
+                  sudo apt-get update -y -qq
+                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev pkg-config libssl-dev libclang-dev
+                  sudo apt-get clean
+                  sudo rm -rf /var/lib/apt/lists/*
+
+            - name: "Increase disk space"
+              run: |
+                  df -h && docker system prune -a -f && sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup && df -h
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.95
+
+            - name: 🔬 Install nextest
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-nextest
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 🧩 Git submodules update
+              run: |
+                  cat > .gitmodules << EOF
+                  [submodule "snapshots"]
+                          path = integration-tests/snapshots
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
+                  EOF
+                  git submodule update --init
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "linux-build"
+                  
+            - name: 🧪 Run tests
+              run: |
+                  cargo nextest run --workspace --profile ci
+
+            - name: 📦 Upload failed snapshot test artifacts
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test_workdir
+                  path: integration-tests/test_workdir
+                  retention-days: 2
+
+            - name: 📚 Run doctests
+              run: cargo test --workspace --doc
