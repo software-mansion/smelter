@@ -210,7 +210,7 @@ impl RtpTimestampSync {
         // - receiving stream from SFU that modifies RTP packet but not RTCP packets.
         // - BroadcastBox if you connect to server over WHEP before starting stream
         let offset_diff_secs = new_offset_secs - self.sync_offset_secs.unwrap_or(0.0);
-        if offset_diff_secs.abs() > 2.0 {
+        if offset_diff_secs.abs() > 0.1 {
             warn!(
                 offset_diff_secs,
                 "NTP sync offset differs too much from initial estimate, snapping offset."
