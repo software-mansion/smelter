@@ -83,8 +83,8 @@ impl RtpJitterBufferSharedContext {
 ///    - If `sequence_number` are continuous: return oldest
 ///    - If first packet or there are gaps in `sequence_number`:
 ///      - `FixedWindow { size }`: release when PTS span of buffered packets exceeds `size`.
-///      - `RealTime`: release when `reference_time.elapsed()` is close enough to the packet's
-///        output PTS (PTS + buffer). Used for latency-sensitive paths.
+///      - `RealTime { desired_size }`: release when `reference_time.elapsed()` is close enough
+///        to the packet's output PTS (PTS + buffer). Used for latency-sensitive paths.
 ///
 /// ## Timestamps
 ///
