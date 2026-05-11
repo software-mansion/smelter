@@ -40,15 +40,12 @@ impl EmitOnceGuard {
 pub struct PauseState {
     /// Internal PTS (relative to sync_point) when input was paused.
     paused_at_pts: Option<Duration>,
-    /// Accumulated pause duration to add to frame/sample PTS after resume.
-    pts_offset: Duration,
 }
 
 impl PauseState {
     pub fn new() -> Self {
         Self {
             paused_at_pts: None,
-            pts_offset: Duration::ZERO,
         }
     }
 
@@ -76,7 +73,6 @@ impl PauseState {
     }
 
     pub fn reset(&mut self, pts: Duration) {
-        self.pts_offset = Duration::ZERO;
         self.paused_at_pts = Some(pts);
     }
 }

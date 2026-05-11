@@ -52,7 +52,7 @@ impl VideoSideChannel {
             return;
         };
         let mut frame = frame.clone();
-        frame.pts = frame.pts + offset - start_pts;
+        frame.pts = (frame.pts + offset).saturating_sub(start_pts);
         if let Err(TrySendError::Full(_)) = self.server.sender.try_send(frame) {
             debug!("Video side channel: dropping frame, channel full");
         }
@@ -96,7 +96,7 @@ impl AudioSideChannel {
             return;
         };
         let mut batch = batch.clone();
-        batch.start_pts = batch.start_pts + offset - start_pts;
+        batch.start_pts = (batch.start_pts + offset).saturating_sub(start_pts);
         if let Err(TrySendError::Full(_)) = self.server.sender.try_send(batch) {
             debug!("Audio side channel: dropping samples, channel full");
         }
