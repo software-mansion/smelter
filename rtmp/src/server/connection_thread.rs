@@ -11,7 +11,7 @@ use crate::{
     amf0::AmfValue,
     message::{
         AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageOk, DataMessage,
-        RtmpMessage, UserControlMessage, VideoMessage,
+        RtmpMessageIncoming, RtmpMessageOutgoing, UserControlMessage, VideoMessage,
     },
     protocol::{
         byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
@@ -63,21 +63,21 @@ pub(super) fn run_connection_thread(
         let msg = state.next_msg()?;
 
         let event = match msg {
-            RtmpMessage::Audio { audio, .. } => match audio {
+            RtmpMessageIncoming::Audio { audio, .. } => match audio {
                 AudioMessage::Data(data) => RtmpEvent::AudioData(data),
                 AudioMessage::Config(config) => RtmpEvent::AudioConfig(config),
                 AudioMessage::Unknown => continue,
             },
-            RtmpMessage::Video { video, .. } => match video {
+            RtmpMessageIncoming::Video { video, .. } => match video {
                 VideoMessage::Data(data) => RtmpEvent::VideoData(data),
                 VideoMessage::Config(config) => RtmpEvent::VideoConfig(config),
                 VideoMessage::Unknown => continue,
             },
-            RtmpMessage::DataMessage {
+            RtmpMessageIncoming::DataMessage {
                 data: DataMessage::OnMetaData(metadata),
                 ..
             } => RtmpEvent::Metadata(metadata),
-            RtmpMessage::CommandMessage {
+            RtmpMessageIncoming::CommandMessage {
                 msg: CommandMessage::DeleteStream { .. },
                 ..
             } => {
@@ -106,7 +106,7 @@ struct RtmpServerConnectionState {
 }
 
 impl RtmpServerConnectionState {
-    fn next_msg(&mut self) -> Result<RtmpMessage, RtmpServerConnectionError> {
+    fn next_msg(&mut self) -> Result<RtmpMessageIncoming, RtmpServerConnectionError> {
         loop {
             match self.stream.read_msg() {
                 // should catch unknown messages or parsing error that
@@ -136,7 +136,7 @@ impl RtmpServerConnectionState {
             if let Some((transaction_id, app)) = state.try_match_create_stream(&msg) {
                 state = NegotiationProgress::WaitingForPublish { app };
 
-                self.stream.write_msg(RtmpMessage::CommandMessage {
+                self.stream.write_msg(RtmpMessageOutgoing::CommandMessage {
                     msg: CommandMessageOk {
                         transaction_id,
                         command_object: AmfValue::Null,
@@ -166,7 +166,7 @@ impl RtmpServerConnectionState {
                     .map(|(k, v)| (k.into(), v)),
                 );
 
-                self.stream.write_msg(RtmpMessage::CommandMessage {
+                self.stream.write_msg(RtmpMessageOutgoing::CommandMessage {
                     msg: CommandMessage::OnStatus(AmfValue::Object(status_info)),
                     stream_id: PUBLISHED_MESSAGE_STREAM_ID,
                 })?;
@@ -178,13 +178,14 @@ impl RtmpServerConnectionState {
     }
 
     fn on_connect(&mut self, transaction_id: u32) -> Result<(), RtmpServerConnectionError> {
-        self.stream.write_msg(RtmpMessage::WindowAckSize {
+        self.stream.write_msg(RtmpMessageOutgoing::WindowAckSize {
             window_size: WINDOW_ACK_SIZE,
         })?;
-        self.stream.write_msg(RtmpMessage::SetPeerBandwidth {
-            bandwidth: PEER_BANDWIDTH,
-            limit_type: 0, // 0 - Hard, 1 - Soft, 2 - Dynamic
-        })?;
+        self.stream
+            .write_msg(RtmpMessageOutgoing::SetPeerBandwidth {
+                bandwidth: PEER_BANDWIDTH,
+                limit_type: 0, // 0 - Hard, 1 - Soft, 2 - Dynamic
+            })?;
 
         self.stream
             .write_msg(UserControlMessage::StreamBegin { stream_id: 0 }.into())?;
@@ -241,7 +242,7 @@ impl RtmpServerConnectionState {
             .into_iter()
             .map(|(k, v)| (k.into(), v)),
         );
-        self.stream.write_msg(RtmpMessage::CommandMessage {
+        self.stream.write_msg(RtmpMessageOutgoing::CommandMessage {
             msg: CommandMessageOk {
                 transaction_id,
                 command_object: AmfValue::Object(props),
@@ -254,26 +255,26 @@ impl RtmpServerConnectionState {
     }
 
     /// Message handler for messages not related to life cycle
-    fn default_msg_handler(&mut self, msg: RtmpMessage) -> Result<(), RtmpStreamError> {
+    fn default_msg_handler(&mut self, msg: RtmpMessageIncoming) -> Result<(), RtmpStreamError> {
         match msg {
-            RtmpMessage::SetChunkSize { chunk_size } => {
+            RtmpMessageIncoming::SetChunkSize { chunk_size } => {
                 self.stream.set_reader_chunk_size(chunk_size as usize);
             }
-            RtmpMessage::WindowAckSize { window_size } => {
+            RtmpMessageIncoming::WindowAckSize { window_size } => {
                 self.window_size = Some(window_size as u64);
             }
-            RtmpMessage::Acknowledgement { .. } => {
+            RtmpMessageIncoming::Acknowledgement { .. } => {
                 // Server does not send much data, so receiving ACK will
                 // be very rare
             }
-            RtmpMessage::SetPeerBandwidth { bandwidth, .. } => {
+            RtmpMessageIncoming::SetPeerBandwidth { bandwidth, .. } => {
                 // It configures how often client will be sending ACKs,
                 // it is different that self.window_size
-                self.stream.write_msg(RtmpMessage::WindowAckSize {
+                self.stream.write_msg(RtmpMessageOutgoing::WindowAckSize {
                     window_size: bandwidth,
                 })?;
             }
-            RtmpMessage::UserControl(UserControlMessage::PingRequest { timestamp }) => {
+            RtmpMessageIncoming::UserControl(UserControlMessage::PingRequest { timestamp }) => {
                 let msg = UserControlMessage::PingResponse { timestamp };
                 self.stream.write_msg(msg.into())?;
             }
@@ -293,9 +294,10 @@ impl RtmpServerConnectionState {
         };
         let bytes_received = self.stream.bytes_read();
         if bytes_received.saturating_sub(self.last_ack) > window_size / 2 {
-            self.stream.write_msg(RtmpMessage::Acknowledgement {
-                bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
-            })?;
+            self.stream
+                .write_msg(RtmpMessageOutgoing::Acknowledgement {
+                    bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
+                })?;
             self.last_ack = bytes_received;
         }
         Ok(())

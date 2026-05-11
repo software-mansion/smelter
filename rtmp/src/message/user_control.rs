@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{RtmpMessageParseError, message::RtmpMessage};
+use crate::{RtmpMessageParseError, message::RtmpMessageOutgoing};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UserControlMessage {
@@ -30,7 +30,7 @@ pub(crate) enum UserControlMessage {
     PingResponse { timestamp: u32 },
 }
 
-impl From<UserControlMessage> for RtmpMessage {
+impl From<UserControlMessage> for RtmpMessageOutgoing {
     fn from(value: UserControlMessage) -> Self {
         Self::UserControl(value)
     }

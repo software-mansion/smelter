@@ -6,7 +6,8 @@ use crate::{
     error::RtmpStreamError,
     message::{
         CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageConnectSuccess,
-        CommandMessageCreateStreamSuccess, CommandMessageResultExt, RtmpMessage,
+        CommandMessageCreateStreamSuccess, CommandMessageResultExt, RtmpMessageIncoming,
+        RtmpMessageOutgoing,
     },
     protocol::message_stream::RtmpMessageStream,
 };
@@ -50,13 +51,13 @@ pub(super) enum NegotiationProgress {
 impl NegotiationProgress {
     pub(super) fn try_match_connect_response(
         &self,
-        msg: &RtmpMessage,
+        msg: &RtmpMessageIncoming,
     ) -> Result<Option<(CommandMessageConnectSuccess, bool)>, RtmpConnectionError> {
         let NegotiationProgress::WaitingForConnectResult = self else {
             return Ok(None);
         };
 
-        let RtmpMessage::CommandMessage { msg, .. } = msg else {
+        let RtmpMessageIncoming::CommandMessage { msg, .. } = msg else {
             return Ok(None);
         };
         let CommandMessage::Result(result) = msg else {
@@ -85,13 +86,13 @@ impl NegotiationProgress {
 
     pub(super) fn try_match_create_stream_response(
         &self,
-        msg: &RtmpMessage,
+        msg: &RtmpMessageIncoming,
     ) -> Result<Option<CommandMessageCreateStreamSuccess>, RtmpConnectionError> {
         let NegotiationProgress::WaitingForCreateStreamResult = self else {
             return Ok(None);
         };
 
-        let RtmpMessage::CommandMessage { msg, .. } = msg else {
+        let RtmpMessageIncoming::CommandMessage { msg, .. } = msg else {
             return Ok(None);
         };
         let CommandMessage::Result(result) = msg else {
@@ -114,12 +115,12 @@ impl NegotiationProgress {
         }
     }
 
-    pub(super) fn try_match_on_status(&self, msg: &RtmpMessage) -> Option<(AmfValue, u32)> {
+    pub(super) fn try_match_on_status(&self, msg: &RtmpMessageIncoming) -> Option<(AmfValue, u32)> {
         let NegotiationProgress::WaitingForOnStatus { stream_id } = self else {
             return None;
         };
 
-        let RtmpMessage::CommandMessage {
+        let RtmpMessageIncoming::CommandMessage {
             msg: CommandMessage::OnStatus(status),
             stream_id: on_status_stream_id,
         } = msg
@@ -188,7 +189,7 @@ pub(super) fn send_connect(
         .map(|(k, v)| (k.into(), v)),
     );
 
-    stream.write_msg(RtmpMessage::CommandMessage {
+    stream.write_msg(RtmpMessageOutgoing::CommandMessage {
         msg: CommandMessage::Connect {
             transaction_id: CONNECT_TRANSACTION_ID,
             command_object: props,
@@ -202,7 +203,7 @@ pub(super) fn send_connect(
 pub(super) fn send_create_stream(
     stream: &mut RtmpMessageStream,
 ) -> Result<(), RtmpConnectionError> {
-    stream.write_msg(RtmpMessage::CommandMessage {
+    stream.write_msg(RtmpMessageOutgoing::CommandMessage {
         msg: CommandMessage::CreateStream {
             transaction_id: CREATE_STREAM_TRANSACTION_ID,
             command_object: AmfValue::Null,
@@ -217,7 +218,7 @@ pub(super) fn send_publish(
     stream_key: &str,
     stream_id: u32,
 ) -> Result<(), RtmpConnectionError> {
-    stream.write_msg(RtmpMessage::CommandMessage {
+    stream.write_msg(RtmpMessageOutgoing::CommandMessage {
         msg: CommandMessage::Publish {
             stream_key: stream_key.to_string(),
             publishing_type: "live".to_string(),

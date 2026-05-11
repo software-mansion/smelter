@@ -9,7 +9,7 @@ use tracing::{debug, trace};
 use crate::{
     RtmpMessageSerializeError,
     error::RtmpStreamError,
-    message::RtmpMessage,
+    message::{RtmpMessageIncoming, RtmpMessageOutgoing},
     protocol::{
         RawMessage,
         byte_stream::RtmpByteStream,
@@ -49,15 +49,15 @@ impl RtmpMessageStream {
         self.writer.chunk_size = size;
     }
 
-    pub fn read_msg(&mut self) -> Result<RtmpMessage, RtmpStreamError> {
+    pub fn read_msg(&mut self) -> Result<RtmpMessageIncoming, RtmpStreamError> {
         self.reader.read_msg(&mut self.stream)
     }
 
-    pub fn try_read_msg(&mut self) -> Result<Option<RtmpMessage>, RtmpStreamError> {
+    pub fn try_read_msg(&mut self) -> Result<Option<RtmpMessageIncoming>, RtmpStreamError> {
         self.reader.try_read_msg(&mut self.stream)
     }
 
-    pub fn write_msg(&mut self, msg: RtmpMessage) -> Result<(), RtmpStreamError> {
+    pub fn write_msg(&mut self, msg: RtmpMessageOutgoing) -> Result<(), RtmpStreamError> {
         self.writer.write_msg(&mut self.stream, msg)
     }
 }
@@ -77,14 +77,17 @@ impl RtmpMessageReader {
         }
     }
 
-    fn read_msg(&mut self, socket: &mut RtmpByteStream) -> Result<RtmpMessage, RtmpStreamError> {
+    fn read_msg(
+        &mut self,
+        socket: &mut RtmpByteStream,
+    ) -> Result<RtmpMessageIncoming, RtmpStreamError> {
         self.next_chunk(socket, true)
     }
 
     fn try_read_msg(
         &mut self,
         socket: &mut RtmpByteStream,
-    ) -> Result<Option<RtmpMessage>, RtmpStreamError> {
+    ) -> Result<Option<RtmpMessageIncoming>, RtmpStreamError> {
         match self.next_chunk(socket, false) {
             Ok(msg) => Ok(Some(msg)),
             Err(RtmpStreamError::TcpError(err)) => match err.kind() {
@@ -99,11 +102,11 @@ impl RtmpMessageReader {
         &mut self,
         stream: &mut RtmpByteStream,
         force: bool,
-    ) -> Result<RtmpMessage, RtmpStreamError> {
+    ) -> Result<RtmpMessageIncoming, RtmpStreamError> {
         loop {
             match self.try_parse_msg(stream.get_read_buffer_mut()) {
                 Ok(Some(msg)) => {
-                    let msg = RtmpMessage::from_raw(msg)?;
+                    let msg = RtmpMessageIncoming::from_raw(msg)?;
                     match msg.is_media_packet() {
                         true => trace!(?msg, "Received RTMP message"),
                         false => debug!(?msg, "Received RTMP message"),
@@ -256,7 +259,7 @@ impl RtmpMessageWriter {
     fn write_msg(
         &mut self,
         stream: &mut RtmpByteStream,
-        msg: RtmpMessage,
+        msg: RtmpMessageOutgoing,
     ) -> Result<(), RtmpStreamError> {
         match msg.is_media_packet() {
             true => trace!(?msg, "Sending RTMP message"),

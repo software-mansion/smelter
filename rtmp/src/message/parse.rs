@@ -1,64 +1,49 @@
 use crate::{
-    AudioChannels, RtmpMessageParseError,
+    RtmpMessageParseError,
     amf0::decode_amf_values,
     message::{
-        DataMessage, RtmpMessage, audio::AudioMessage, command::CommandMessage,
+        DataMessage, RtmpMessageIncoming, audio::AudioMessage, command::CommandMessage,
         user_control::UserControlMessage, video::VideoMessage,
     },
     protocol::{MessageType, RawMessage},
 };
 
-impl RtmpMessage {
+impl RtmpMessageIncoming {
     pub fn from_raw(msg: RawMessage) -> Result<Self, RtmpMessageParseError> {
         let p = &msg.payload;
         let msg_type = MessageType::try_from_raw(msg.msg_type)?;
         let result = match msg_type {
-            MessageType::Audio => RtmpMessage::Audio {
-                stream_id: msg.stream_id,
+            MessageType::Audio => RtmpMessageIncoming::Audio {
                 audio: AudioMessage::from_raw(msg)?,
-                // `channels` only matters when re-serializing an inbound message,
-                // which we never do — the receive side emits `RtmpEvent` and stops.
-                // The value also has no authoritative source on the wire here:
-                //   - Legacy AAC: the 1-bit `SoundType` in AudioTagHeader is
-                //     explicitly ignored by decoders (FLV v10.1 §E.4.2.1: "Flash
-                //     Player ignores SoundRate/SoundType for AAC and uses values
-                //     from AudioSpecificConfig"). Real channel count comes from
-                //     the AAC sequence header → surfaced via `AudioConfig.channels`.
-                //   - Enhanced (E-RTMPv2 §Enhanced Audio): per-frame
-                //     `CodedFrames` packets carry no channel info at all; layout
-                //     is set once by `SequenceStart` (and optionally
-                //     `MultichannelConfig`).
-                // So `Stereo` here is a harmless placeholder for an unused field.
-                channels: AudioChannels::Stereo,
             },
-            MessageType::Video => RtmpMessage::Video {
-                stream_id: msg.stream_id,
+            MessageType::Video => RtmpMessageIncoming::Video {
                 video: VideoMessage::from_raw(msg)?,
             },
 
-            MessageType::DataMessageAmf0 => RtmpMessage::DataMessage {
+            MessageType::DataMessageAmf0 => RtmpMessageIncoming::DataMessage {
                 data: DataMessage::from_amf_values(decode_amf_values(msg.payload)?),
-                stream_id: msg.stream_id,
             },
 
             MessageType::SetChunkSize if msg.payload.len() >= 4 => {
                 let chunk_size = u32::from_be_bytes([p[0] & 0x7F, p[1], p[2], p[3]]);
                 // TODO: double check p[0] or p[3]
-                RtmpMessage::SetChunkSize { chunk_size }
+                RtmpMessageIncoming::SetChunkSize { chunk_size }
             }
             MessageType::SetChunkSize => {
                 return Err(RtmpMessageParseError::PayloadTooShort);
             }
 
-            MessageType::WindowAckSize if msg.payload.len() >= 4 => RtmpMessage::WindowAckSize {
-                window_size: u32::from_be_bytes([p[0], p[1], p[2], p[3]]),
-            },
+            MessageType::WindowAckSize if msg.payload.len() >= 4 => {
+                RtmpMessageIncoming::WindowAckSize {
+                    window_size: u32::from_be_bytes([p[0], p[1], p[2], p[3]]),
+                }
+            }
             MessageType::WindowAckSize => {
                 return Err(RtmpMessageParseError::PayloadTooShort);
             }
 
             MessageType::SetPeerBandwidth if msg.payload.len() >= 5 => {
-                RtmpMessage::SetPeerBandwidth {
+                RtmpMessageIncoming::SetPeerBandwidth {
                     bandwidth: u32::from_be_bytes([p[0], p[1], p[2], p[3]]),
                     limit_type: p[4],
                 }
@@ -67,12 +52,12 @@ impl RtmpMessage {
                 return Err(RtmpMessageParseError::PayloadTooShort);
             }
 
-            MessageType::CommandMessageAmf0 => RtmpMessage::CommandMessage {
+            MessageType::CommandMessageAmf0 => RtmpMessageIncoming::CommandMessage {
                 msg: CommandMessage::from_amf0_bytes(msg.payload)?,
                 stream_id: msg.stream_id,
             },
 
-            MessageType::Acknowledgement if p.len() >= 4 => RtmpMessage::Acknowledgement {
+            MessageType::Acknowledgement if p.len() >= 4 => RtmpMessageIncoming::Acknowledgement {
                 bytes_received: u32::from_be_bytes([p[0], p[1], p[2], p[3]]),
             },
             MessageType::Acknowledgement => {
@@ -84,7 +69,9 @@ impl RtmpMessage {
                     "{msg_type:?}",
                 )));
             }
-            MessageType::UserControl => RtmpMessage::UserControl(UserControlMessage::from_raw(p)?),
+            MessageType::UserControl => {
+                RtmpMessageIncoming::UserControl(UserControlMessage::from_raw(p)?)
+            }
         };
         Ok(result)
     }
