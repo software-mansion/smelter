@@ -50,6 +50,10 @@ pub struct Config {
     pub rtmp_server_port: u16,
     pub rtmp_enable: bool,
     pub rtmp_tls_config: Option<TlsConfig>,
+
+    pub moq_server_port: u16,
+    pub moq_enable: bool,
+    pub moq_tls_config: Option<moq_native::ServerTlsConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -343,6 +347,21 @@ fn try_read_config() -> Result<Config, String> {
         _ => None,
     };
 
+    let moq_server_port = match env::var("SMELTER_MOQ_SERVER_PORT") {
+        Ok(moq_port) => moq_port
+            .parse::<u16>()
+            .map_err(|_| "SMELTER_MOQ_SERVER_PORT has to be valid port number")?,
+        Err(_) => 4443,
+    };
+
+    let moq_tls_config = moq_tls_config();
+
+    let moq_enable_default = moq_tls_config.is_some();
+    let moq_enable = match env::var("SMELTER_START_MOQ_SERVER") {
+        Ok(enable) => bool_env_from_str(&enable).unwrap_or(moq_enable_default),
+        Err(_) => moq_enable_default,
+    };
+
     let log_file = match env::var("SMELTER_LOG_FILE") {
         Ok(path) => Some(Arc::from(PathBuf::from(path))),
         Err(_) => None,
@@ -390,9 +409,40 @@ fn try_read_config() -> Result<Config, String> {
         rtmp_server_port,
         rtmp_enable,
         rtmp_tls_config,
+        moq_server_port,
+        moq_enable,
+        moq_tls_config,
         rendering_mode,
     };
     Ok(config)
+}
+
+fn moq_tls_config() -> Option<moq_native::ServerTlsConfig> {
+    let moq_tls_cert_file = env::var("SMELTER_MOQ_TLS_CERT_FILE")
+        .ok()
+        .map(PathBuf::from);
+    let moq_tls_key_file = env::var("SMELTER_MOQ_TLS_KEY_FILE").ok().map(PathBuf::from);
+
+    match (moq_tls_cert_file, moq_tls_key_file) {
+        (Some(cert), Some(key)) => {
+            let mut tls = moq_native::ServerTlsConfig::default();
+            tls.cert = vec![cert];
+            tls.key = vec![key];
+            Some(tls)
+        }
+        (Some(_), None) | (None, Some(_)) => {
+            println!(
+                "CONFIG ERROR: Both \"SMELTER_MOQ_TLS_CERT_FILE\" and \"SMELTER_MOQ_TLS_KEY_FILE\" must be set. Falling back to auto-generated certs. Make sure to use properly configured certs in production."
+            );
+            None
+        }
+        _ => {
+            // No cert/key configured. smelter-core will fall back to a persisted,
+            // insecure self-signed certificate (dev/test only) and log a warning
+            // with its SHA-256 fingerprint.
+            None
+        }
+    }
 }
 
 fn read_side_channel_socket_dir() -> Arc<Path> {
