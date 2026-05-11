@@ -48,6 +48,13 @@ pollster = { workspace = true }
 audioadapter-buffers = "2.0.0"
 audioadapter = "2.0.0"
 async-trait = "0.1.89"
+hang = "0.16"
+moq-lite = "0.16"
+moq-msf = "0.1"
+moq-mux = "0.4"
+mp4-atom = "0.10"
+moq-native = { workspace = true }
+data-encoding = "2"
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 decklink = { path = "../decklink", optional = true }

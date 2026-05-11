@@ -59,6 +59,9 @@ pub enum InitPipelineError {
     #[error("Failed to initialize RTMP server.")]
     RtmpServerInitError(#[source] std::io::Error),
 
+    #[error("Failed to initialize MoQ server.")]
+    MoqServerInitError(#[source] anyhow::Error),
+
     #[error("Failed to bind UDP socket for WebRTC mux on port {0}.")]
     BindUdpMuxSocket(u16, #[source] std::io::Error),
 }
@@ -239,6 +242,9 @@ pub enum InputInitError {
 
     #[error(transparent)]
     Rtmp(#[from] RtmpServerError),
+
+    #[error(transparent)]
+    Moq(#[from] MoqServerError),
 
     #[cfg(feature = "decklink")]
     #[error(transparent)]
