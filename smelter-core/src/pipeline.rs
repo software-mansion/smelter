@@ -10,6 +10,7 @@ use crate::{
     event::EventEmitter,
     graphics_context::GraphicsContext,
     pipeline::{
+        moq::MoqPipelineState,
         rtmp::RtmpPipelineState,
         webrtc::{WebrtcSettingEngineCtx, WhipWhepPipelineState},
     },
@@ -32,6 +33,7 @@ mod v4l2;
 
 mod channel;
 mod hls;
+mod moq;
 mod mp4;
 mod rtmp;
 mod rtp;
@@ -77,6 +79,7 @@ pub struct PipelineOptions {
     pub webrtc_nat_1to1_ips: Arc<Vec<String>>,
 
     pub rtmp_server: PipelineRtmpServerOptions,
+    pub moq_server: PipelineMoqServerOptions,
 }
 
 #[derive(Debug)]
@@ -105,6 +108,15 @@ pub enum PipelineRtmpServerOptions {
     Disable,
 }
 
+#[derive(Debug)]
+pub enum PipelineMoqServerOptions {
+    Enable {
+        port: u16,
+        tls_config: moq_native::ServerTlsConfig,
+    },
+    Disable,
+}
+
 pub const DEFAULT_BUFFER_DURATION: Duration = Duration::from_millis(16 * 5); // about 5 frames at 60 fps
 
 #[derive(Clone)]
@@ -125,6 +137,7 @@ pub(crate) struct PipelineCtx {
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
     rtmp_state: Option<Arc<RtmpPipelineState>>,
+    moq_state: Option<Arc<MoqPipelineState>>,
 }
 
 impl std::fmt::Debug for PipelineCtx {
