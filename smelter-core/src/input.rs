@@ -6,6 +6,7 @@ use crate::prelude::*;
 pub enum RegisterInputOptions {
     Rtp(RtpInputOptions),
     RtmpServer(RtmpServerInputOptions),
+    MoqServer(MoqServerInputOptions),
     Mp4(Mp4InputOptions),
     Hls(HlsInputOptions),
     Whip(WhipInputOptions),
@@ -40,6 +41,7 @@ pub struct InputInfo {
 pub enum InputProtocolKind {
     Rtp,
     Rtmp,
+    Moq,
     Mp4,
     Hls,
     Whip,
@@ -54,6 +56,7 @@ impl fmt::Display for InputProtocolKind {
         match self {
             InputProtocolKind::Rtp => write!(f, "rtp"),
             InputProtocolKind::Rtmp => write!(f, "rtmp"),
+            InputProtocolKind::Moq => write!(f, "moq"),
             InputProtocolKind::Mp4 => write!(f, "mp4"),
             InputProtocolKind::Hls => write!(f, "hls"),
             InputProtocolKind::Whip => write!(f, "whip"),
