@@ -6,6 +6,7 @@ use std::{
 use crate::{
     pipeline::{
         hls::HlsInput,
+        moq::MoqServerInput,
         mp4::Mp4Input,
         rtmp::RtmpServerInput,
         rtp::RtpInput,
@@ -30,6 +31,7 @@ pub struct PipelineInput {
 pub enum Input {
     Rtp(RtpInput),
     RtmpServer(RtmpServerInput),
+    MoqServer(MoqServerInput),
     Mp4(Mp4Input),
     Whip(WhipInput),
     Whep(WhepInput),
@@ -46,6 +48,7 @@ impl Input {
         match self {
             Input::Rtp(_input) => InputProtocolKind::Rtp,
             Input::RtmpServer(_input) => InputProtocolKind::Rtmp,
+            Input::MoqServer(_input) => InputProtocolKind::Moq,
             Input::Mp4(_input) => InputProtocolKind::Mp4,
             Input::Whip(_input) => InputProtocolKind::Whip,
             Input::Whep(_input) => InputProtocolKind::Whep,
@@ -97,6 +100,7 @@ pub(super) fn new_external_input(
     match options {
         RegisterInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_ref, opts),
         RegisterInputOptions::RtmpServer(opts) => RtmpServerInput::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::MoqServer(opts) => MoqServerInput::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_ref, opts),
