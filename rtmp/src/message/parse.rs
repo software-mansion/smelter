@@ -1,5 +1,5 @@
 use crate::{
-    RtmpMessageParseError,
+    AudioChannels, RtmpMessageParseError,
     amf0::decode_amf_values,
     message::{
         DataMessage, RtmpMessage, audio::AudioMessage, command::CommandMessage,
@@ -16,6 +16,20 @@ impl RtmpMessage {
             MessageType::Audio => RtmpMessage::Audio {
                 stream_id: msg.stream_id,
                 audio: AudioMessage::from_raw(msg)?,
+                // `channels` only matters when re-serializing an inbound message,
+                // which we never do — the receive side emits `RtmpEvent` and stops.
+                // The value also has no authoritative source on the wire here:
+                //   - Legacy AAC: the 1-bit `SoundType` in AudioTagHeader is
+                //     explicitly ignored by decoders (FLV v10.1 §E.4.2.1: "Flash
+                //     Player ignores SoundRate/SoundType for AAC and uses values
+                //     from AudioSpecificConfig"). Real channel count comes from
+                //     the AAC sequence header → surfaced via `AudioConfig.channels`.
+                //   - Enhanced (E-RTMPv2 §Enhanced Audio): per-frame
+                //     `CodedFrames` packets carry no channel info at all; layout
+                //     is set once by `SequenceStart` (and optionally
+                //     `MultichannelConfig`).
+                // So `Stereo` here is a harmless placeholder for an unused field.
+                channels: AudioChannels::Stereo,
             },
             MessageType::Video => RtmpMessage::Video {
                 stream_id: msg.stream_id,

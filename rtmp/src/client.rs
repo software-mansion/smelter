@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use tracing::{debug, warn};
 
 use crate::{
-    RtmpConnectionError, RtmpEvent, RtmpVideoCodec, VideoCodecConversionError,
+    AudioChannels, RtmpConnectionError, RtmpEvent, RtmpVideoCodec, TrackKey,
+    VideoCodecConversionError,
     client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
     error::{RtmpMessageSerializeError, RtmpStreamError},
     message::{
@@ -40,12 +43,12 @@ pub struct RtmpClient {
 
 struct RtmpClientState {
     stream: RtmpMessageStream,
-
+    peer_supports_enhanced: bool,
+    audio_channels: HashMap<TrackKey, AudioChannels>,
     /// window size for data incoming from the server
     window_size: Option<u64>,
     /// last ack sent to client
     last_ack: u64,
-    peer_supports_enhanced: bool,
 }
 
 impl RtmpClient {
@@ -64,9 +67,10 @@ impl RtmpClient {
 
         let mut state = RtmpClientState {
             stream: RtmpMessageStream::new(socket),
+            peer_supports_enhanced: false,
+            audio_channels: HashMap::new(),
             window_size: None,
             last_ack: 0,
-            peer_supports_enhanced: false,
         };
 
         let stream_id = state.negotiate_connection(&config)?;
@@ -108,14 +112,30 @@ impl RtmpClient {
                     stream_id: self.stream_id,
                 }
             }
-            RtmpEvent::AudioData(data) => RtmpMessage::Audio {
-                audio: AudioMessage::Data(data),
-                stream_id: self.stream_id,
-            },
-            RtmpEvent::AudioConfig(config) => RtmpMessage::Audio {
-                audio: AudioMessage::Config(config),
-                stream_id: self.stream_id,
-            },
+            RtmpEvent::AudioData(data) => {
+                let channels = self
+                    .state
+                    .audio_channels
+                    .get(&TrackKey::new(self.stream_id, data.track_id))
+                    .copied()
+                    .unwrap_or(AudioChannels::Stereo);
+                RtmpMessage::Audio {
+                    audio: AudioMessage::Data(data),
+                    stream_id: self.stream_id,
+                    channels,
+                }
+            }
+            RtmpEvent::AudioConfig(config) => {
+                let channels = config.channels;
+                self.state
+                    .audio_channels
+                    .insert(TrackKey::new(self.stream_id, config.track_id), channels);
+                RtmpMessage::Audio {
+                    audio: AudioMessage::Config(config),
+                    stream_id: self.stream_id,
+                    channels,
+                }
+            }
             RtmpEvent::Metadata(metadata) => RtmpMessage::DataMessage {
                 data: DataMessage::OnMetaData(metadata),
                 stream_id: self.stream_id,

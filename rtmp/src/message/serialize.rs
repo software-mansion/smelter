@@ -71,7 +71,8 @@ impl RtmpMessage {
             RtmpMessage::Audio {
                 audio: msg,
                 stream_id,
-            } => msg.into_raw(stream_id)?,
+                channels,
+            } => msg.into_raw(stream_id, channels)?,
         };
         Ok(result)
     }

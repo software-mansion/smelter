@@ -7,23 +7,7 @@ use crate::{AudioChannels, amf0::AmfValue};
 mod aac;
 pub use aac::AacAudioConfig;
 
-/// Identifier for a logical track within an RTMP stream.
-///
-/// For single-track streams (present case) [`TrackId::PRIMARY`] is used. When
-/// Enhanced RTMP multitrack parsing lands, non-primary ids will be populated
-/// from the wire.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TrackId(pub u8);
-
-impl TrackId {
-    pub const PRIMARY: Self = Self(0);
-}
-
-impl Default for TrackId {
-    fn default() -> Self {
-        Self::PRIMARY
-    }
-}
+use crate::TrackId;
 
 /// Public video codec identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -72,7 +56,6 @@ pub struct AudioData {
     pub codec: RtmpAudioCodec,
     pub pts: Duration,
     pub data: Bytes,
-    pub channels: AudioChannels,
 }
 
 #[derive(Clone)]
@@ -80,6 +63,7 @@ pub struct AudioConfig {
     pub track_id: TrackId,
     pub codec: RtmpAudioCodec,
     pub data: Bytes,
+    pub channels: AudioChannels,
 }
 
 impl From<VideoData> for RtmpEvent {
@@ -135,7 +119,6 @@ impl std::fmt::Debug for AudioData {
             .field("track_id", &self.track_id)
             .field("codec", &self.codec)
             .field("pts", &self.pts)
-            .field("channels", &self.channels)
             .field("data", &bytes_debug(&self.data))
             .finish()
     }
@@ -146,6 +129,7 @@ impl std::fmt::Debug for AudioConfig {
         f.debug_struct("AudioConfig")
             .field("track_id", &self.track_id)
             .field("codec", &self.codec)
+            .field("channels", &self.channels)
             .field("data", &bytes_debug(&self.data))
             .finish()
     }

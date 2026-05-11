@@ -7,6 +7,7 @@ mod flv;
 mod message;
 mod protocol;
 mod server;
+mod track;
 mod transport;
 mod utils;
 
@@ -15,8 +16,10 @@ pub use error::*;
 pub use events::*;
 pub use flv::AudioChannels;
 pub use server::*;
+pub use track::TrackId;
 
 pub(crate) use flv::*;
+pub(crate) use track::TrackKey;
 
 pub(crate) const VIDEO_FOURCC_LIST: [&str; 6] = ["av01", "vp09", "vp08", "hvc1", "vvc1", "avc1"];
 
