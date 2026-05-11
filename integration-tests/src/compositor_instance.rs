@@ -46,6 +46,7 @@ impl CompositorInstance {
         config.api_port = api_port;
         config.whip_whep_enable = false;
         config.rtmp_enable = false;
+        config.moq_enable = false;
 
         info!("Starting Smelter Integration Test with config:\n{config:#?}",);
 
