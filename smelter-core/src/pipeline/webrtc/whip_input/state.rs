@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use axum::http::HeaderMap;
@@ -136,6 +137,7 @@ pub(crate) struct WhipInputStateOptions {
     pub bearer_token: Arc<str>,
     pub endpoint_id: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
+    pub jitter_buffer_size: Option<Duration>,
     pub queue_input: WeakQueueInput,
 }
 
@@ -144,6 +146,7 @@ pub(crate) struct WhipInputState {
     pub bearer_token: Arc<str>,
     pub endpoint_id: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
+    pub jitter_buffer_size: Option<Duration>,
     pub queue_input: WeakQueueInput,
     pub session: Option<WhipInputSession>,
 }
@@ -160,6 +163,7 @@ impl WhipInputState {
             bearer_token: options.bearer_token,
             endpoint_id: options.endpoint_id,
             video_preferences: options.video_preferences,
+            jitter_buffer_size: options.jitter_buffer_size,
             queue_input: options.queue_input,
             session: None,
         }

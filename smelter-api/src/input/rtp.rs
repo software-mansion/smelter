@@ -26,6 +26,10 @@ pub struct RtpInput {
     /// not defined then the stream will be synchronized based on the delivery time of the initial
     /// frames.
     pub offset_ms: Option<f64>,
+    /// Size of the jitter buffer in milliseconds. Controls how long packets are held to
+    /// absorb network jitter and reorder out-of-order packets. Higher values increase
+    /// latency but improve resilience to packet loss and reordering.
+    pub buffer_size_ms: Option<f64>,
     /// Enable side channel for video and/or audio track.
     pub side_channel: Option<SideChannel>,
 }

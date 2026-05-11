@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use smelter_render::error::ErrorStack;
 
 use bytes::Bytes;
@@ -17,6 +19,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             audio,
             required,
             offset_ms,
+            buffer_size_ms,
             transport_protocol,
             side_channel,
         } = value;
@@ -25,6 +28,11 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
         let side_channel = side_channel.unwrap_or_default();
 
         let transport_protocol = transport_protocol.unwrap_or(TransportProtocol::Udp).into();
+
+        let buffer_duration = buffer_size_ms
+            .map(|ms| Duration::try_from_secs_f64(ms / 1000.0))
+            .transpose()
+            .map_err(|err| TypeError::new(format!("Invalid buffer_size_ms. {err}")))?;
 
         const NO_VIDEO_AUDIO_SPEC: &str =
             "At least one of `video` and `audio` has to be specified in `register_input` request.";
@@ -49,7 +57,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
                 .transpose()?,
             audio: audio.map(TryFrom::try_from).transpose()?,
             transport_protocol,
-            buffer_duration: None,
+            buffer_duration,
             queue_options: core::QueueInputOptions {
                 required,
                 video_side_channel: side_channel.video.unwrap_or(false),

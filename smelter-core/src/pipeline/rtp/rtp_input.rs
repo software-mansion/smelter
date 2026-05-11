@@ -112,7 +112,7 @@ impl RtpInput {
         //   would be enough, but delay is the same so buffer is fine.
         let jitter_buffer_ctx = RtpJitterBufferSharedContext::new(
             &ctx,
-            RtpJitterBufferMode::FixedWindow(buffer),
+            RtpJitterBufferMode::FixedWindow { size: buffer },
             // PTS will be relative to this value, they need to normalized
             // for case where offset is defined
             ctx.queue_ctx.sync_point,

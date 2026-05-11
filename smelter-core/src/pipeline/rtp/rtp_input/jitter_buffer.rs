@@ -24,12 +24,14 @@ struct JitterBufferPacket {
 
 #[derive(Debug, Clone, Copy)]
 pub enum RtpJitterBufferMode {
-    /// Release packets once the PTS span of buffered packets exceeds the window.
+    /// Release packets once the PTS span of buffered packets exceeds `size`.
     /// Wall clock is not consulted.
-    FixedWindow(Duration),
+    FixedWindow { size: Duration },
     /// Release packets when their output PTS (PTS + dynamic buffer size) is about
     /// to be reached on the wall clock, with `MIN_DECODE_TIME` of slack.
-    RealTime,
+    ///
+    /// `desired_size` is the `(min, max)` range of permitted buffer sizes.
+    RealTime { desired_size: (Duration, Duration) },
 }
 
 // Value shared between both video and audio track, while actual RtpJitterBuffer
@@ -48,7 +50,7 @@ impl RtpJitterBufferSharedContext {
             mode,
             ntp_sync_point,
             input_buffer: match mode {
-                RtpJitterBufferMode::FixedWindow(window_size) => {
+                RtpJitterBufferMode::FixedWindow { size } => {
                     // PTS are synced on first packet, so if jitter buffer is the same as an
                     // input buffer then, at the worst case it would produce PTS at the time
                     // where queue already needs it, We are adding 80ms (`default_buffer_duration`)
@@ -57,11 +59,14 @@ impl RtpJitterBufferSharedContext {
                     // If input has an offset then above does not apply, however PTS should be
                     // normalized to zero, so adding a constant value should not affect anything
                     BufferingStrategy::FixedOffset {
-                        offset: window_size + ctx.default_buffer_duration,
+                        offset: size + ctx.default_buffer_duration,
                     }
                 }
-                RtpJitterBufferMode::RealTime => {
-                    BufferingStrategy::LatencyOptimized(LatencyOptimizedBuffer::new(reference_time))
+                RtpJitterBufferMode::RealTime { desired_size } => {
+                    BufferingStrategy::LatencyOptimized(LatencyOptimizedBuffer::new(
+                        reference_time,
+                        desired_size,
+                    ))
                 }
             },
         }
@@ -77,7 +82,7 @@ impl RtpJitterBufferSharedContext {
 /// 2. `try_read_packet`
 ///    - If `sequence_number` are continuous: return oldest
 ///    - If first packet or there are gaps in `sequence_number`:
-///      - `FixedWindow(window)`: release when PTS span of buffered packets exceeds `window`.
+///      - `FixedWindow { size }`: release when PTS span of buffered packets exceeds `size`.
 ///      - `RealTime`: release when `reference_time.elapsed()` is close enough to the packet's
 ///        output PTS (PTS + buffer). Used for latency-sensitive paths.
 ///
@@ -184,12 +189,12 @@ impl RtpJitterBuffer {
         }
 
         let wait_for_next_packet = match self.mode {
-            RtpJitterBufferMode::FixedWindow(window_size) => {
+            RtpJitterBufferMode::FixedWindow { size } => {
                 let lowest_pts = self.packets.values().map(|packet| packet.pts).min()?;
                 let highest_pts = self.packets.values().map(|packet| packet.pts).max()?;
-                highest_pts.saturating_sub(lowest_pts) < window_size
+                highest_pts.saturating_sub(lowest_pts) < size
             }
-            RtpJitterBufferMode::RealTime => {
+            RtpJitterBufferMode::RealTime { .. } => {
                 let lowest_pts = self.packets.values().map(|packet| packet.pts).min()?;
 
                 // TODO: if lowest pts is not first it means that we have B-frames
@@ -316,8 +321,8 @@ impl LatencyOptimizedBuffer {
     /// after a `JumpGrow` or any other large target shift.
     const SNAP_THRESHOLD: Duration = Duration::from_millis(200);
 
-    fn new(reference_time: Instant) -> Self {
-        let inner = InnerLatencyOptimizedBuffer::new(reference_time);
+    fn new(reference_time: Instant, desired_size: (Duration, Duration)) -> Self {
+        let inner = InnerLatencyOptimizedBuffer::new(reference_time, desired_size);
         let size = inner.target_size;
         Self {
             inner: Arc::new(Mutex::new(inner)),
@@ -442,18 +447,28 @@ impl InnerLatencyOptimizedBuffer {
     /// window expires for a zone its observation is forgotten.
     const TREND_WINDOW: Duration = Duration::from_secs(10);
 
-    fn new(reference_time: Instant) -> Self {
-        // Stable zone spans grow..shrink (240..320ms).
+    fn new(reference_time: Instant, desired_size: (Duration, Duration)) -> Self {
+        // Thresholds are anchored to the configured stable band:
+        //   grow_jump   = 80ms (absolute floor, unaffected by desired_size)
+        //   grow_fast   = min_desired - 80ms (saturating)
+        //   grow        = min_desired
+        //   shrink      = max_desired
+        //   shrink_fast = max_desired + 1680ms
+        let (grow, shrink) = desired_size;
+        let shrink = Duration::max(shrink, grow + Duration::from_millis(80));
         let thresholds = LatencyThresholds {
             grow_jump: Duration::from_millis(80),
-            grow_fast: Duration::from_millis(160),
-            grow: Duration::from_millis(240),
-            shrink: Duration::from_millis(320),
-            shrink_fast: Duration::from_millis(2000),
+            grow_fast: Duration::max(
+                grow.saturating_sub(Duration::from_millis(80)),
+                Duration::from_millis(80),
+            ),
+            grow,
+            shrink,
+            shrink_fast: shrink.saturating_add(Duration::from_millis(1500)),
         };
         Self {
             reference_time,
-            target_size: Duration::from_millis(600),
+            target_size: shrink,
             max_pts: None,
             last_jump_pts: None,
             last_jump_grow_pts: None,

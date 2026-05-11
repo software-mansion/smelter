@@ -45,6 +45,10 @@ export type RegisterInput =
        */
       offset_ms?: number | null;
       /**
+       * Size of the jitter buffer in milliseconds. Controls how long packets are held to absorb network jitter and reorder out-of-order packets. Higher values increase latency but improve resilience to packet loss and reordering.
+       */
+      buffer_size_ms?: number | null;
+      /**
        * Enable side channel for video and/or audio track.
        */
       side_channel?: SideChannel | null;
@@ -130,6 +134,10 @@ export type RegisterInput =
        */
       required?: boolean | null;
       /**
+       * Minimum and starting size of the jitter buffer in milliseconds. The buffer adapts dynamically based on observed network jitter but will not shrink below this value. Higher values trade latency for resilience.
+       */
+      buffer_size_ms?: number | null;
+      /**
        * Enable side channel for video and/or audio track.
        */
       side_channel?: SideChannel | null;
@@ -152,6 +160,10 @@ export type RegisterInput =
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
+      /**
+       * Minimum and starting size of the jitter buffer in milliseconds. The buffer adapts dynamically based on observed network jitter but will not shrink below this value. Higher values trade latency for resilience.
+       */
+      buffer_size_ms?: number | null;
       /**
        * Enable side channel for video and/or audio track.
        */

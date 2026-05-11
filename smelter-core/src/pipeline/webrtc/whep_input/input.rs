@@ -174,9 +174,13 @@ async fn init_whep_client(
     {
         let input_ref = input_ref.clone();
         let ctx = ctx.clone();
+        let desired_size = match options.jitter_buffer_size {
+            Some(v) => (v, v),
+            None => (Duration::from_millis(240), Duration::from_millis(320)),
+        };
         let buffer = RtpJitterBufferSharedContext::new(
             &ctx,
-            RtpJitterBufferMode::RealTime,
+            RtpJitterBufferMode::RealTime { desired_size },
             ctx.queue_ctx.sync_point,
         );
 
