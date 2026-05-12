@@ -8,8 +8,8 @@ fn main() {
     use gpu_video::{
         InputFrame, RawFrameData, VulkanInstance,
         parameters::{
-            EncoderParameters, RateControl, VideoParameters, VulkanAdapterDescriptor,
-            VulkanDeviceDescriptor,
+            EncoderParametersH264, EncoderParametersH265, RateControl, VideoParameters,
+            VulkanAdapterDescriptor, VulkanDeviceDescriptor,
         },
     };
 
@@ -38,8 +38,8 @@ fn main() {
         .create_device(&VulkanDeviceDescriptor::default())
         .unwrap();
 
-    let mut encoder = vulkan_device
-        .create_bytes_encoder_h264(EncoderParameters {
+    let mut encoder_h264 = vulkan_device
+        .create_bytes_encoder_h264(EncoderParametersH264 {
             input_parameters: VideoParameters {
                 width,
                 height,
@@ -55,7 +55,25 @@ fn main() {
         })
         .expect("create encoder");
 
-    let mut output_file = std::fs::File::create("output.h264").unwrap();
+    let mut encoder_h265 = vulkan_device
+        .create_bytes_encoder_h265(EncoderParametersH265 {
+            input_parameters: VideoParameters {
+                width,
+                height,
+                target_framerate: 24.into(),
+            },
+            output_parameters: vulkan_device
+                .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
+                    average_bitrate: 1_000_000,
+                    max_bitrate: 2_000_000,
+                    virtual_buffer_size: std::time::Duration::from_secs(2),
+                })
+                .unwrap(),
+        })
+        .expect("create encoder");
+
+    let mut output_file_h264 = std::fs::File::create("output.h264").unwrap();
+    let mut output_file_h265 = std::fs::File::create("output.h265").unwrap();
 
     let mut frame = InputFrame {
         data: RawFrameData {
@@ -67,8 +85,10 @@ fn main() {
     };
 
     while let Ok(()) = nv12.read_exact(&mut frame.data.frame) {
-        let h264 = encoder.encode(&frame, false).expect("encode");
-        output_file.write_all(&h264.data).expect("write");
+        let h264 = encoder_h264.encode(&frame, false).expect("encode");
+        output_file_h264.write_all(&h264.data).expect("write");
+        let h265 = encoder_h265.encode(&frame, false).expect("encode");
+        output_file_h265.write_all(&h265.data).expect("write");
     }
 }
 

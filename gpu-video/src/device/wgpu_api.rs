@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use crate::{
     DecoderError, VulkanAdapter, VulkanDevice, VulkanEncoderError, VulkanInstance, WgpuInitError,
-    WgpuTexturesDecoder, WgpuTexturesEncoderH264,
-    device::EncoderParameters,
-    device::{DecoderParameters, VulkanDeviceDescriptor},
+    WgpuTexturesDecoder, WgpuTexturesEncoderH264, WgpuTexturesEncoderH265,
+    device::{
+        DecoderParameters, EncoderParametersH264, EncoderParametersH265, VulkanDeviceDescriptor,
+    },
     parser::{h264::H264Parser, reference_manager::ReferenceContext},
     vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder},
     vulkan_encoder::VulkanEncoder,
@@ -40,7 +41,7 @@ impl VulkanDevice {
 
     pub fn create_wgpu_textures_encoder_h264(
         self: &Arc<Self>,
-        parameters: EncoderParameters,
+        parameters: EncoderParametersH264,
     ) -> Result<WgpuTexturesEncoderH264, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
             parameters.output_parameters,
@@ -50,6 +51,22 @@ impl VulkanDevice {
         )?;
         let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
         Ok(WgpuTexturesEncoderH264 {
+            vulkan_encoder: encoder,
+        })
+    }
+
+    pub fn create_wgpu_textures_encoder_h265(
+        self: &Arc<Self>,
+        parameters: EncoderParametersH265,
+    ) -> Result<WgpuTexturesEncoderH265, VulkanEncoderError> {
+        let parameters = self.validate_and_fill_encoder_parameters(
+            parameters.output_parameters,
+            parameters.input_parameters.width,
+            parameters.input_parameters.height,
+            parameters.input_parameters.target_framerate,
+        )?;
+        let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
+        Ok(WgpuTexturesEncoderH265 {
             vulkan_encoder: encoder,
         })
     }

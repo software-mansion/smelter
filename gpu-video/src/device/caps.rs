@@ -67,6 +67,8 @@ pub struct EncodeCapabilities {
 }
 
 /// The device capabilities for H265 encoding.
+///
+/// See [`H265Profile`] for information about what profiles are.
 #[derive(Debug, Clone, Copy)]
 pub struct EncodeH265Capabilities {
     pub main_profile: Option<EncodeProfileCapabilities>,
@@ -448,6 +450,8 @@ pub struct DecodeCapabilities {
 }
 
 /// The device capabilities for H265 decoding.
+///
+/// See [`H265Profile`] for information about what profiles are.
 #[derive(Debug, Clone, Copy)]
 pub struct DecodeH265Capabilities {
     pub main_profile: Option<DecodeH265ProfileCapabilities>,

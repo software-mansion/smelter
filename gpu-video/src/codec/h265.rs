@@ -14,7 +14,7 @@ use crate::{
     parameters::H265Profile,
 };
 
-mod encode;
+pub(crate) mod encode;
 pub(crate) mod parameters;
 
 pub(crate) struct H265CodecParameters {

@@ -12,8 +12,9 @@ pub mod capabilities {
 pub mod parameters {
     pub use crate::adapter::VulkanAdapterDescriptor;
     pub use crate::device::{
-        ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParameters,
-        MissedFrameHandling, Rational, VideoParameters, VulkanDeviceDescriptor,
+        ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
+        EncoderParametersH265, MissedFrameHandling, Rational, VideoParameters,
+        VulkanDeviceDescriptor,
     };
 
     pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<H264Profile>;
@@ -43,7 +44,7 @@ pub mod parameters {
         Lanczos3,
     }
 
-    /// A profile in H264 is a set of codec features used while encoding a specific video.
+    /// A profile in H.264 is a set of codec features used while encoding a specific video.
     /// Baseline uses the fewest features, Main can use more and High even more than Main.
     #[derive(Debug, Clone, Copy)]
     pub enum H264Profile {
@@ -68,6 +69,8 @@ pub mod parameters {
         }
     }
 
+    /// A profile in H.265 is a set of codec features used while encoding a specific video.
+    /// Right now, only Main is available.
     #[derive(Debug, Clone, Copy)]
     pub enum H265Profile {
         Main,
@@ -91,6 +94,8 @@ pub use wgpu_api::*;
 
 use crate::codec::h264::H264Codec;
 use crate::codec::h264::encode::H264WriteParametersInfo;
+use crate::codec::h265::H265Codec;
+use crate::codec::h265::encode::H265WriteParametersInfo;
 use crate::device::{ColorRange, ColorSpace};
 use crate::parser::h264::AccessUnit;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
@@ -333,13 +338,72 @@ impl BytesDecoder {
     }
 }
 
-/// An encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
+/// An H.265 (HEVC) encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
+pub struct BytesEncoderH265 {
+    pub(crate) vulkan_encoder: VulkanEncoder<'static, H265Codec>,
+}
+
+impl BytesEncoderH265 {
+    /// The result is a chunk of H265 bitstream.
+    ///
+    /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
+    /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
+    /// Otherwise, the encoder will decide which frames should be coded this way.
+    pub fn encode(
+        &mut self,
+        frame: &InputFrame<RawFrameData>,
+        force_keyframe: bool,
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
+        self.vulkan_encoder.encode_bytes(frame, force_keyframe)
+    }
+
+    /// Retrieve encoded VPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn vps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder
+            .stream_parameters(H265WriteParametersInfo {
+                write_vps: true,
+                write_sps: false,
+                write_pps: false,
+            })
+    }
+
+    /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder
+            .stream_parameters(H265WriteParametersInfo {
+                write_vps: false,
+                write_sps: true,
+                write_pps: false,
+            })
+    }
+
+    /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder
+            .stream_parameters(H265WriteParametersInfo {
+                write_vps: false,
+                write_sps: false,
+                write_pps: true,
+            })
+    }
+}
+
+/// An H.264 (AVC) encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
 pub struct BytesEncoderH264 {
     pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
 }
 
 impl BytesEncoderH264 {
-    /// The result is a chunk of H264 bytecode.
+    /// The result is a chunk of H264 bitstream.
     ///
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
     /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
