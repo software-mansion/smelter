@@ -3,7 +3,8 @@ retries = 0
 
 [profile.ci]
 retries = 1
-slow-timeout = "60s"
+global-timeout = "30m"
+slow-timeout = { period = "60s", terminate-after = 2 }
 fail-fast = false
 
 [[profile.ci.overrides]]
