@@ -11,7 +11,7 @@ concurrency:
     cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-    build_linux:
+    build_and_lint_linux:
         runs-on: ubuntu-24.04
         steps:
             - name: 🛠 Install system dependencies
@@ -30,6 +30,7 @@ jobs:
               uses: dtolnay/rust-toolchain@stable
               with:
                   toolchain: 1.95
+                  components: rustfmt, clippy
 
             - name: 📥 Checkout repo
               uses: actions/checkout@v6
@@ -46,6 +47,22 @@ jobs:
               run: |
                   cargo build --features decklink
                   cargo build --no-default-features
+
+            - name: 📖 Check formatting
+              run: cargo fmt --all --check
+
+            - name: 📎 Run clippy (all-features)
+              run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+            - name: 📎 Run clippy (no-default-features)
+              run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+
+            - name: 📎 Run clippy (vk-video, no-default-features)
+              run: cargo clippy --package gpu-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
+
+            - name: 📄 Generate JSON schema
+              run: |
+                  cargo run -p tools --bin generate_from_types -- --check
 
     build_macos:
         runs-on: macos-15
@@ -79,56 +96,8 @@ jobs:
             - name: 📎 Run clippy (no-default-features)
               run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
-    lint:
-        runs-on: ubuntu-24.04
-        steps:
-            - name: 🛠 Install system dependencies
-              run: |
-                  sudo apt-get update -y -qq
-                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
-                  sudo apt-get clean
-                  sudo rm -rf /var/lib/apt/lists/*
-
-            - name: 🔧 Install the rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  toolchain: 1.95
-                  components: rustfmt, clippy
-
-            - name: Install pnpm
-              uses: pnpm/action-setup@v4
-              with:
-                  version: 9
-
-            - name: 📥 Checkout repo
-              uses: actions/checkout@v6
-
-            - name: 📁 Rust cache
-              uses: Swatinem/rust-cache@v2
-              with:
-                  shared-key: "linux-lint"
-
-            - name: 🪢 Generate Chromium Embedded Framework bindings
-              run: cargo build --package libcef
-
-            - name: 📖 Check formatting
-              run: cargo fmt --all --check
-
-            - name: 📎 Run clippy (all-features)
-              run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-            - name: 📎 Run clippy (no-default-features)
-              run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
-
-            - name: 📎 Run clippy (vk-video, no-default-features)
-              run: cargo clippy --package gpu-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
-
-            - name: 📄 Generate JSON schema
-              run: |
-                  cargo run -p tools --bin generate_from_types -- --check
-
     test_linux:
-        needs: [build_linux, lint]
+        needs: build_and_lint_linux
         runs-on: gpu-gh-hosted-runner
         steps:
             - name: 🛠 Install system dependencies
