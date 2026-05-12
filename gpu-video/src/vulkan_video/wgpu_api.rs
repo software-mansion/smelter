@@ -1,7 +1,10 @@
 use crate::{
     DecoderError, DecoderEvent, EncodedInputChunk, EncodedOutputChunk, InputFrame, OutputFrame,
     VulkanEncoderError,
-    codec::h264::{H264Codec, encode::H264WriteParametersInfo},
+    codec::{
+        h264::{H264Codec, encode::H264WriteParametersInfo},
+        h265::{H265Codec, encode::H265WriteParametersInfo},
+    },
     parser::{
         decoder_instructions::compile_to_decoder_instructions,
         h264::{AccessUnit, H264Parser},
@@ -77,13 +80,72 @@ impl WgpuTexturesDecoder {
     }
 }
 
-/// An encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
+/// An H.265 (HEVC) encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
+pub struct WgpuTexturesEncoderH265 {
+    pub(crate) vulkan_encoder: VulkanEncoder<'static, H265Codec>,
+}
+
+impl WgpuTexturesEncoderH265 {
+    /// The result is a chunk of H265 bitstream.
+    ///
+    /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
+    /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
+    /// Otherwise, the encoder will decide which frames should be coded this way.
+    pub fn encode(
+        &mut self,
+        frame: InputFrame<wgpu::Texture>,
+        force_keyframe: bool,
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
+        self.vulkan_encoder.encode_texture(frame, force_keyframe)
+    }
+
+    /// Retrieve encoded VPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn vps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder
+            .stream_parameters(H265WriteParametersInfo {
+                write_vps: true,
+                write_sps: false,
+                write_pps: false,
+            })
+    }
+
+    /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder
+            .stream_parameters(H265WriteParametersInfo {
+                write_vps: false,
+                write_sps: true,
+                write_pps: false,
+            })
+    }
+
+    /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder
+            .stream_parameters(H265WriteParametersInfo {
+                write_vps: false,
+                write_sps: false,
+                write_pps: true,
+            })
+    }
+}
+
+/// An H.264 (AVC) encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
 pub struct WgpuTexturesEncoderH264 {
     pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
 }
 
 impl WgpuTexturesEncoderH264 {
-    /// The result is a chunk of H264 bytecode.
+    /// The result is a chunk of H264 bitstream.
     ///
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
     /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).

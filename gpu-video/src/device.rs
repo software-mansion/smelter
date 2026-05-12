@@ -24,8 +24,8 @@ use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 #[cfg(feature = "transcoder")]
 use crate::vulkan_transcoder::TranscoderParameters;
 use crate::{
-    BytesDecoder, BytesEncoderH264, DecoderError, RawFrameData, VulkanDecoderError,
-    VulkanEncoderError, VulkanInitError, VulkanInstance, wrappers::*,
+    BytesDecoder, BytesEncoderH264, BytesEncoderH265, DecoderError, RawFrameData,
+    VulkanDecoderError, VulkanEncoderError, VulkanInitError, VulkanInstance, wrappers::*,
 };
 
 pub(crate) mod caps;
@@ -217,11 +217,18 @@ pub struct EncoderOutputParameters<P> {
     pub color_range: Option<ColorRange>,
 }
 
-/// Parameters for encoder creation
+/// Parameters for H.264 encoder creation
 #[derive(Debug, Clone, Copy)]
-pub struct EncoderParameters {
+pub struct EncoderParametersH264 {
     pub input_parameters: VideoParameters,
     pub output_parameters: EncoderOutputParameters<H264Profile>,
+}
+
+/// Parameters for H.265 encoder creation
+#[derive(Debug, Clone, Copy)]
+pub struct EncoderParametersH265 {
+    pub input_parameters: VideoParameters,
+    pub output_parameters: EncoderOutputParameters<H265Profile>,
 }
 
 /// Open connection to a coding-capable device. Also contains a [`wgpu::Device`], a [`wgpu::Queue`] and
@@ -500,7 +507,7 @@ impl VulkanDevice {
 
     pub fn create_bytes_encoder_h264(
         self: &Arc<Self>,
-        parameters: EncoderParameters,
+        parameters: EncoderParametersH264,
     ) -> Result<BytesEncoderH264, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
             parameters.output_parameters,
@@ -511,6 +518,23 @@ impl VulkanDevice {
         let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
 
         Ok(BytesEncoderH264 {
+            vulkan_encoder: encoder,
+        })
+    }
+
+    pub fn create_bytes_encoder_h265(
+        self: &Arc<Self>,
+        parameters: EncoderParametersH265,
+    ) -> Result<BytesEncoderH265, VulkanEncoderError> {
+        let parameters = self.validate_and_fill_encoder_parameters(
+            parameters.output_parameters,
+            parameters.input_parameters.width,
+            parameters.input_parameters.height,
+            parameters.input_parameters.target_framerate,
+        )?;
+        let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
+
+        Ok(BytesEncoderH265 {
             vulkan_encoder: encoder,
         })
     }

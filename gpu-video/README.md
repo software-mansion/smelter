@@ -15,7 +15,17 @@ A library for hardware video decoding and encoding using Vulkan Video, with [wgp
 
 ## Overview
 
-The goal of this library is to provide easy access to hardware video coding. You can use it to decode and encode a video frame to/from `Vec<u8>` with pixel data, or [`wgpu::Texture`]. Currently, we only support H.264 (aka AVC or MPEG 4 Part 10) but we plan to support other codecs supported by Vulkan Video.
+The goal of this library is to provide easy access to hardware video coding. You can use it to decode and encode a video frame to/from `Vec<u8>` with pixel data, or [`wgpu::Texture`]. Currently, we support the following codecs:
+
+|            | Decode | Encode |
+|:----------:|:------:|:------:|
+| H.264/AVC  | ✅      | ✅      |
+| H.265/HEVC | ❌      | ✅      |
+| AV1        | ❌      | 🚧     |
+
+- ✅ - should work, file issues if there are problems
+- 🚧 - working on this currently
+- ❌ - not supported yet, but support is planned
 
 An advantage of using this library with wgpu is that decoded video frames never leave the GPU memory. There's no copying the frames to RAM and back to the GPU, so it should be quite fast if you want to use them for rendering.
 
@@ -95,7 +105,7 @@ fn encode_video(
 
     let mut encoder = device
         .create_wgpu_textures_encoder_h264(
-            gpu_video::parameters::EncoderParameters {
+            gpu_video::parameters::EncoderParametersH264 {
                 output_parameters: device
                     .encoder_output_parameters_h264_high_quality(
                         gpu_video::parameters::RateControl::VariableBitrate {

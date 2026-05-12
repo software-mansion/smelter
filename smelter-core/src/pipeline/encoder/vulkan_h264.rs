@@ -2,7 +2,7 @@ use std::{num::NonZero, ops::Deref, sync::Arc};
 
 use gpu_video::{
     WgpuTexturesEncoderH264,
-    parameters::{EncoderParameters, RateControl, Rational, VideoParameters},
+    parameters::{EncoderParametersH264, RateControl, Rational, VideoParameters},
 };
 use smelter_render::{FrameData, OutputFrameFormat};
 use tracing::{error, info};
@@ -72,12 +72,12 @@ impl VideoEncoder for VulkanH264Encoder {
         };
 
         let mut encoder_params = match options.preset {
-            VulkanH264EncoderPreset::HighQuality => EncoderParameters {
+            VulkanH264EncoderPreset::HighQuality => EncoderParametersH264 {
                 input_parameters: video_params,
                 output_parameters: device
                     .encoder_output_parameters_h264_high_quality(rate_control)?,
             },
-            VulkanH264EncoderPreset::LowLatency => EncoderParameters {
+            VulkanH264EncoderPreset::LowLatency => EncoderParametersH264 {
                 input_parameters: video_params,
                 output_parameters: device
                     .encoder_output_parameters_h264_low_latency(rate_control)?,

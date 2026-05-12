@@ -32,7 +32,7 @@ pub enum VulkanEncoderError {
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
 
-    #[error("The device does not support vulkan h264 encoding")]
+    #[error("The device does not support Vulkan Video encoding")]
     VulkanEncoderUnsupported,
 
     #[error(
@@ -63,7 +63,7 @@ pub enum VulkanEncoderError {
 
     #[cfg(feature = "wgpu")]
     #[error(transparent)]
-    WgpuTextureEcoderError(#[from] WgpuTextureEncoderError),
+    WgpuTextureEncoderError(#[from] WgpuTextureEncoderError),
 }
 
 #[cfg(feature = "wgpu")]
@@ -1062,7 +1062,7 @@ impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
         // between I and IDR is invented in the vulkan spec, in h264 the values are equivalent.
         //
         // bug2: when rate control is disabled, you have to specify the temporal layer count to 0.
-        // You pass a table length and a pointer to a bable with temporal layer descriptions. Even
+        // You pass a table length and a pointer to a table with temporal layer descriptions. Even
         // when the length is set to 0, the pointer will be dereferenced. If you set it to NULL,
         // the program will (obviously) segfault.
         //
