@@ -44,6 +44,12 @@ export type RegisterRtpInput = {
    */
   offsetMs?: number | null;
   /**
+   * Size of the jitter buffer in milliseconds. Controls how long packets are held to
+   * absorb network jitter and reorder out-of-order packets. Higher values increase
+   * latency but improve resilience to packet loss and reordering.
+   */
+  bufferSizeMs?: number | null;
+  /**
    * Enable side channel for video and/or audio track.
    */
   sideChannel?: SideChannel;
@@ -138,6 +144,12 @@ export type RegisterWhipServerInput = {
    */
   offsetMs?: number | null;
   /**
+   * Reference/desired jitter buffer size in milliseconds. The adaptive buffer converges
+   * toward this value in steady state; it shifts as conditions change. Higher values
+   * trade latency for resilience.
+   */
+  bufferSizeMs?: number | null;
+  /**
    * Enable side channel for video and/or audio track.
    */
   sideChannel?: SideChannel;
@@ -167,6 +179,12 @@ export type RegisterWhepClientInput = {
    * frames.
    */
   offsetMs?: number | null;
+  /**
+   * Reference/desired jitter buffer size in milliseconds. The adaptive buffer converges
+   * toward this value in steady state; it shifts as conditions change. Higher values
+   * trade latency for resilience.
+   */
+  bufferSizeMs?: number | null;
   /**
    * Enable side channel for video and/or audio track.
    */

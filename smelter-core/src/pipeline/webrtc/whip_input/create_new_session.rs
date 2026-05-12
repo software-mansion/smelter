@@ -30,9 +30,14 @@ pub(crate) async fn create_new_whip_session(
 ) -> Result<(Arc<str>, RTCSessionDescription), WhipWhepServerError> {
     let inputs = state.inputs.clone();
 
-    let (queue_input, video_preferences) = inputs.get_with(&input_ref, |input| {
-        Ok((input.queue_input.upgrade(), input.video_preferences.clone()))
-    })?;
+    let (queue_input, video_preferences, jitter_buffer_size) =
+        inputs.get_with(&input_ref, |input| {
+            Ok((
+                input.queue_input.upgrade(),
+                input.video_preferences.clone(),
+                input.jitter_buffer_size,
+            ))
+        })?;
     let Some(queue_input) = queue_input else {
         return Err(WhipWhepServerError::NotFound(format!(
             "Input {input_ref} not found"
@@ -77,9 +82,13 @@ pub(crate) async fn create_new_whip_session(
 
     if let Some(peer_connection) = weak_pear_connection.upgrade() {
         let input_ref = input_ref.clone();
+        let desired_size = match jitter_buffer_size {
+            Some(v) => (v, v + Duration::from_millis(80)),
+            None => (Duration::from_millis(240), Duration::from_millis(320)),
+        };
         let buffer = RtpJitterBufferSharedContext::new(
             &state.ctx,
-            RtpJitterBufferMode::RealTime,
+            RtpJitterBufferMode::RealTime { desired_size },
             state.ctx.queue_ctx.sync_point,
         );
 

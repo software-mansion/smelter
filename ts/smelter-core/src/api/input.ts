@@ -125,6 +125,7 @@ function intoRtpRegisterInput(input: Inputs.RegisterRtpInput): RegisterInputRequ
     audio: input.audio && intoInputAudio(input.audio),
     required: input.required,
     offset_ms: input.offsetMs,
+    buffer_size_ms: input.bufferSizeMs,
     side_channel: input.sideChannel,
   };
 }
@@ -139,6 +140,7 @@ function intoWhipRegisterInput(
     bearer_token: input.bearerToken,
     endpoint_override: inputId,
     required: input.required,
+    buffer_size_ms: input.bufferSizeMs,
     side_channel: input.sideChannel,
   };
 }
@@ -150,6 +152,7 @@ function intoWhepRegisterInput(input: Inputs.RegisterWhepClientInput): RegisterI
     bearer_token: input.bearerToken,
     video: input.video && intoInputWhepVideoOptions(input.video),
     required: input.required,
+    buffer_size_ms: input.bufferSizeMs,
     side_channel: input.sideChannel,
   };
 }

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::common_core::prelude as core;
 use crate::*;
 
@@ -10,6 +12,7 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
             required,
             bearer_token,
             endpoint_override,
+            buffer_size_ms,
             side_channel,
         } = value;
 
@@ -23,10 +26,16 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
             None => vec![core::WebrtcVideoDecoderOptions::Any],
         };
 
+        let jitter_buffer_size = buffer_size_ms
+            .map(|ms| Duration::try_from_secs_f64(ms / 1000.0))
+            .transpose()
+            .map_err(|err| TypeError::new(format!("Invalid buffer_size_ms. {err}")))?;
+
         let whip_options = core::WhipInputOptions {
             video_preferences,
             bearer_token,
             endpoint_override,
+            jitter_buffer_size,
             queue_options: core::QueueInputOptions {
                 required: required.unwrap_or(false),
                 video_side_channel: side_channel.video.unwrap_or(false),

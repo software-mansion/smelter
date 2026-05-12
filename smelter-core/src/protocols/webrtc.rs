@@ -1,6 +1,6 @@
 use reqwest::{Method, StatusCode};
 use smelter_render::Resolution;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use url::{ParseError, Url};
 
 use crate::{
@@ -18,6 +18,10 @@ pub struct WhipInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
+    /// Reference/desired jitter buffer size. Sets the lower edge of the adaptive
+    /// buffer's stable band; the buffer converges toward this value when network
+    /// conditions allow.
+    pub jitter_buffer_size: Option<Duration>,
     pub queue_options: QueueInputOptions,
 }
 
@@ -26,6 +30,10 @@ pub struct WhepInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_url: Arc<str>,
+    /// Reference/desired jitter buffer size. Sets the lower edge of the adaptive
+    /// buffer's stable band; the buffer converges toward this value when network
+    /// conditions allow.
+    pub jitter_buffer_size: Option<Duration>,
     pub queue_options: QueueInputOptions,
 }
 

@@ -18,6 +18,10 @@ pub struct WhepInput {
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,
+    /// Minimum and starting size of the jitter buffer in milliseconds. The buffer
+    /// adapts dynamically based on observed network jitter but will not shrink
+    /// below this value. Higher values trade latency for resilience.
+    pub buffer_size_ms: Option<f64>,
     /// Enable side channel for video and/or audio track.
     pub side_channel: Option<SideChannel>,
 }

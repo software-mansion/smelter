@@ -79,6 +79,7 @@ impl WhipInput {
                 bearer_token: bearer_token.clone(),
                 endpoint_id,
                 video_preferences,
+                jitter_buffer_size: options.jitter_buffer_size,
                 queue_input: queue_input.downgrade(),
             },
         )?;
