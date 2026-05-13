@@ -1125,11 +1125,9 @@ impl ReferenceContext {
             picNumLXNoWrap
         };
 
-        let mut shifted_picture_idx = reference_list
+        let shifted_picture_idx = reference_list
             .iter()
-            .enumerate()
-            .find(|(_, picture_info)| decode_picture_numbers_for_short_term_ref(picture_info.FrameNum.into(), header.frame_num.into(), sps).PicNum == picNumLX)
-            .map(|(i, _)| i)
+            .position(|picture_info| decode_picture_numbers_for_short_term_ref(picture_info.FrameNum.into(), header.frame_num.into(), sps).PicNum == picNumLX)
             .ok_or(ReferenceManagementError::IncorrectData(
                 format!("picture with picNumLX = {picNumLX} is not present in the reference list during modification")
             ))?;
@@ -1149,14 +1147,11 @@ impl ReferenceContext {
         let shifted_picture_info = reference_list[shifted_picture_idx];
         if *refIdxLX <= reference_list.len() {
             reference_list.insert(*refIdxLX, shifted_picture_info);
-            shifted_picture_idx = if *refIdxLX <= shifted_picture_idx {
-                shifted_picture_idx + 1
-            } else {
-                shifted_picture_idx
-            };
+            if *refIdxLX <= shifted_picture_idx {
+                reference_list.remove(shifted_picture_idx + 1);
+            }
         }
         *refIdxLX += 1;
-        reference_list.remove(shifted_picture_idx);
 
         Ok(())
     }
