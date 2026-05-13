@@ -627,7 +627,7 @@ fn test_rtcp_sync_does_not_snap_when_not_real_time() {
     thread::sleep(Duration::from_secs(11));
     let pts_after_block = stream.pts_from_timestamp(20);
 
-    // No snap: PTS reflects the 20ms RTP-time advance, not the 6s wall gap.
+    // No snap: PTS reflects the 20ms RTP-time advance, not the 11s wall gap.
     assert_duration_eq(pts_after_block, Duration::from_millis(20), PREC_RUNTIME);
 }
 
