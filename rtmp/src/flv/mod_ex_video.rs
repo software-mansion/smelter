@@ -2,7 +2,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
 
-use super::ex_video::ExVideoPacketType;
+use super::{MAX_TIMESTAMP_OFFSET_NANOS, ex_video::ExVideoPacketType};
 
 /// Enhanced RTMP ModEx sub-type for video packets.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,8 +25,6 @@ impl VideoPacketModExType {
         }
     }
 }
-
-const MAX_TIMESTAMP_OFFSET_NANOS: u32 = 999_999;
 
 /// Result of resolving ModEx prefixes from the wire.
 pub(super) struct ModExResult {

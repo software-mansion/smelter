@@ -15,6 +15,7 @@ use crate::{FlvAudioTagParseError, FlvVideoTagParseError, RtmpMessageSerializeEr
 
 pub(super) const EX_HEADER_BIT: u8 = 0b10000000;
 const EX_AUDIO_SOUND_FORMAT: u8 = 9;
+pub(super) const MAX_TIMESTAMP_OFFSET_NANOS: u32 = 999_999;
 
 /// Top-level FLV audio data, supporting both legacy and Enhanced RTMP formats.
 ///
@@ -27,6 +28,14 @@ pub enum FlvAudioData {
 }
 
 impl FlvAudioData {
+    #[allow(dead_code)]
+    pub fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
+        match self {
+            FlvAudioData::Legacy(tag) => tag.serialize(),
+            FlvAudioData::Enhanced(tag) => tag.serialize(),
+        }
+    }
+
     /// Parses flv `AUDIODATA`. Checks SoundFormat in the first byte and
     /// dispatches to either legacy or Enhanced RTMP parsing.
     pub fn parse(data: Bytes) -> Result<Self, FlvAudioTagParseError> {
