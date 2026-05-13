@@ -8,8 +8,8 @@ use crate::{
     client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
     error::{RtmpMessageSerializeError, RtmpStreamError},
     message::{
-        AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, DataMessage, RtmpMessage,
-        UserControlMessage, VideoMessage,
+        AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, DataMessage, RtmpMessageIncoming,
+        RtmpMessageOutgoing, UserControlMessage, VideoMessage,
     },
     protocol::{
         byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
@@ -95,7 +95,7 @@ impl RtmpClient {
                     )
                     .into());
                 }
-                RtmpMessage::Video {
+                RtmpMessageOutgoing::Video {
                     video: VideoMessage::Data(data),
                     stream_id: self.stream_id,
                 }
@@ -107,7 +107,7 @@ impl RtmpClient {
                     )
                     .into());
                 }
-                RtmpMessage::Video {
+                RtmpMessageOutgoing::Video {
                     video: VideoMessage::Config(config),
                     stream_id: self.stream_id,
                 }
@@ -119,7 +119,7 @@ impl RtmpClient {
                     .get(&TrackKey::new(self.stream_id, data.track_id))
                     .copied()
                     .unwrap_or(AudioChannels::Stereo);
-                RtmpMessage::Audio {
+                RtmpMessageOutgoing::Audio {
                     audio: AudioMessage::Data(data),
                     stream_id: self.stream_id,
                     channels,
@@ -130,13 +130,13 @@ impl RtmpClient {
                 self.state
                     .audio_channels
                     .insert(TrackKey::new(self.stream_id, config.track_id), channels);
-                RtmpMessage::Audio {
+                RtmpMessageOutgoing::Audio {
                     audio: AudioMessage::Config(config),
                     stream_id: self.stream_id,
                     channels,
                 }
             }
-            RtmpEvent::Metadata(metadata) => RtmpMessage::DataMessage {
+            RtmpEvent::Metadata(metadata) => RtmpMessageOutgoing::DataMessage {
                 data: DataMessage::OnMetaData(metadata),
                 stream_id: self.stream_id,
             },
@@ -153,13 +153,16 @@ impl RtmpClient {
 
 impl Drop for RtmpClient {
     fn drop(&mut self) {
-        let _ = self.state.stream.write_msg(RtmpMessage::CommandMessage {
-            msg: CommandMessage::DeleteStream {
-                transaction_id: 0,
-                stream_id: self.stream_id,
-            },
-            stream_id: CONTROL_MESSAGE_STREAM_ID,
-        });
+        let _ = self
+            .state
+            .stream
+            .write_msg(RtmpMessageOutgoing::CommandMessage {
+                msg: CommandMessage::DeleteStream {
+                    transaction_id: 0,
+                    stream_id: self.stream_id,
+                },
+                stream_id: CONTROL_MESSAGE_STREAM_ID,
+            });
         self.shutdown_condition.mark_for_shutdown();
     }
 }
@@ -197,7 +200,7 @@ impl RtmpClientState {
 
                 // should be after StreamBegin but e.g. YouTube does not send it
                 self.stream
-                    .write_msg(RtmpMessage::SetChunkSize { chunk_size: 4096 })?;
+                    .write_msg(RtmpMessageOutgoing::SetChunkSize { chunk_size: 4096 })?;
                 self.stream.set_writer_chunk_size(4096);
                 continue;
             }
@@ -210,27 +213,27 @@ impl RtmpClientState {
         }
     }
 
-    fn default_msg_handler(&mut self, msg: RtmpMessage) -> Result<(), RtmpStreamError> {
+    fn default_msg_handler(&mut self, msg: RtmpMessageIncoming) -> Result<(), RtmpStreamError> {
         match msg {
-            RtmpMessage::SetChunkSize { chunk_size } => {
+            RtmpMessageIncoming::SetChunkSize { chunk_size } => {
                 self.stream.set_reader_chunk_size(chunk_size as usize);
             }
-            RtmpMessage::WindowAckSize { window_size } => {
+            RtmpMessageIncoming::WindowAckSize { window_size } => {
                 // Client does not receive much data, so sending ACKs
                 // will be very rare.
                 self.window_size = Some(window_size as u64);
             }
-            RtmpMessage::Acknowledgement { .. } => {
+            RtmpMessageIncoming::Acknowledgement { .. } => {
                 // TODO: throttle sending based on acks
             }
-            RtmpMessage::SetPeerBandwidth { bandwidth, .. } => {
+            RtmpMessageIncoming::SetPeerBandwidth { bandwidth, .. } => {
                 // It configures how often client will be sending ACKs,
                 // it is different that self.window_size
-                self.stream.write_msg(RtmpMessage::WindowAckSize {
+                self.stream.write_msg(RtmpMessageOutgoing::WindowAckSize {
                     window_size: bandwidth,
                 })?;
             }
-            RtmpMessage::UserControl(UserControlMessage::PingRequest { timestamp }) => {
+            RtmpMessageIncoming::UserControl(UserControlMessage::PingRequest { timestamp }) => {
                 let msg = UserControlMessage::PingResponse { timestamp };
                 self.stream.write_msg(msg.into())?;
             }
@@ -251,9 +254,10 @@ impl RtmpClientState {
         };
         let bytes_received = self.stream.bytes_read();
         if bytes_received.saturating_sub(self.last_ack) > window_size / 2 {
-            self.stream.write_msg(RtmpMessage::Acknowledgement {
-                bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
-            })?;
+            self.stream
+                .write_msg(RtmpMessageOutgoing::Acknowledgement {
+                    bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
+                })?;
             self.last_ack = bytes_received;
         }
         Ok(())

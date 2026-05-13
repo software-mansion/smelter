@@ -2,7 +2,7 @@ use std::{ops::Deref, sync::Arc};
 
 use crate::{
     amf0::AmfValue,
-    message::{CommandMessage, RtmpMessage},
+    message::{CommandMessage, RtmpMessageIncoming},
 };
 
 pub const WINDOW_ACK_SIZE: u32 = 2_500_000;
@@ -40,12 +40,12 @@ pub(super) enum NegotiationProgress {
 }
 
 impl NegotiationProgress {
-    pub fn try_match_connect(&self, msg: &RtmpMessage) -> Option<(u32, Arc<str>)> {
+    pub fn try_match_connect(&self, msg: &RtmpMessageIncoming) -> Option<(u32, Arc<str>)> {
         let NegotiationProgress::WaitingForConnect = self else {
             return None;
         };
 
-        let RtmpMessage::CommandMessage { msg, .. } = msg else {
+        let RtmpMessageIncoming::CommandMessage { msg, .. } = msg else {
             return None;
         };
         let CommandMessage::Connect {
@@ -65,12 +65,12 @@ impl NegotiationProgress {
         Some((*transaction_id, Arc::from(app)))
     }
 
-    pub fn try_match_create_stream(&self, msg: &RtmpMessage) -> Option<(u32, Arc<str>)> {
+    pub fn try_match_create_stream(&self, msg: &RtmpMessageIncoming) -> Option<(u32, Arc<str>)> {
         let NegotiationProgress::WaitingForCreateStream { app, .. } = self else {
             return None;
         };
 
-        let RtmpMessage::CommandMessage { msg, .. } = msg else {
+        let RtmpMessageIncoming::CommandMessage { msg, .. } = msg else {
             return None;
         };
         let CommandMessage::CreateStream { transaction_id, .. } = msg else {
@@ -80,12 +80,12 @@ impl NegotiationProgress {
         Some((*transaction_id, app.clone()))
     }
 
-    pub fn try_match_publish(&self, msg: &RtmpMessage) -> Option<NegotiationResult> {
+    pub fn try_match_publish(&self, msg: &RtmpMessageIncoming) -> Option<NegotiationResult> {
         let NegotiationProgress::WaitingForPublish { app } = self else {
             return None;
         };
 
-        let RtmpMessage::CommandMessage { msg, .. } = msg else {
+        let RtmpMessageIncoming::CommandMessage { msg, .. } = msg else {
             return None;
         };
         let CommandMessage::Publish { stream_key, .. } = msg else {
