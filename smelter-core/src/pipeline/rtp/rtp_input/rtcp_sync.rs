@@ -12,10 +12,27 @@ mod sync_test;
 
 const POW_2_32: f64 = (1i64 << 32) as f64;
 
-/// Maximum amount `sync_offset_secs` is shifted toward `target_offset_secs` on
-/// every media packet. Smooths out per-SR jumps so PTS values change
-/// continuously instead of stepping on each SenderReport.
-const MAX_OFFSET_INCREMENT: Duration = Duration::from_micros(100);
+/// Per-packet share of the (target − current) offset that `sync_offset_secs`
+/// is slewed by. Sized to the inter-packet RTP-time delta so convergence
+/// speed scales with media time rather than packet count, making it
+/// bitrate-independent.
+const CONVERGENCE_RATIO: f64 = 0.01;
+
+/// If a fresh SR implies an offset more than this far from the current
+/// best-effort, snap instead of slewing. Catches cases the slew can't recover
+/// from in reasonable time (SFU rewriting RTP but not RTCP, or audio
+/// resuming after a long pause).
+const SNAP_THRESHOLD: Duration = Duration::from_millis(300);
+
+/// In wall-clock-aligned modes (RealTime), if wall-clock advance between two
+/// forward-moving packets exceeds the inter-packet RTP-time advance by more
+/// than this, snap `sync_offset_secs` forward by the skew. Catches
+/// sender-side resume after a real-time gap the sender failed to reflect in
+/// RTP timestamps (Chrome WHEP on mute/unmute). Only enabled for sources
+/// whose RTP timestamps are intended to track wall clock — buffered/file
+/// sources (FixedWindow mode) intentionally use media-time RTP and must not
+/// be snapped.
+const RESUME_SKEW_SNAP_THRESHOLD: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 /// State that should be shared between different RTP tracks to use for synchronization.
@@ -102,8 +119,22 @@ pub(crate) struct RtpTimestampSync {
     sync_offset_secs: Option<f64>,
     /// NTP-derived target for `sync_offset_secs`, refreshed on every
     /// SenderReport. `pts_from_timestamp` slews `sync_offset_secs` toward this
-    /// value by at most `MAX_OFFSET_INCREMENT` per packet.
+    /// value by at most `CONVERGENCE_RATIO` of the inter-packet RTP-time delta
+    /// per packet.
     target_offset_secs: Option<f64>,
+    /// Largest rolled RTP timestamp observed so far. Used to size the slew
+    /// step from the inter-packet RTP-time delta — packets arriving out of
+    /// order produce a zero step rather than nudging backwards.
+    last_max_rolled_rtp_timestamp: Option<u64>,
+    /// Wall-clock receive time paired with `last_max_rolled_rtp_timestamp`.
+    /// Used by the resume-skew snap to detect sender-side resume after a
+    /// real-time gap.
+    last_max_recv_time: Option<Instant>,
+    /// Whether the source is treated as live / wall-clock-aligned. Enables
+    /// the resume-skew snap (RTP timestamps are expected to track wall
+    /// clock). Cleared for buffered sources where RTP carries media time
+    /// and a long receiver block must not shift PTS.
+    real_time: bool,
     clock_rate: u32,
     rollover_state: TimestampRolloverState,
 
@@ -118,10 +149,13 @@ pub(crate) struct RtpTimestampSync {
 }
 
 impl RtpTimestampSync {
-    pub fn new(ntp_sync_point: Arc<RtpNtpSyncPoint>, clock_rate: u32) -> Self {
+    pub fn new(ntp_sync_point: Arc<RtpNtpSyncPoint>, clock_rate: u32, real_time: bool) -> Self {
         Self {
             sync_offset_secs: None,
             target_offset_secs: None,
+            last_max_rolled_rtp_timestamp: None,
+            last_max_recv_time: None,
+            real_time,
             rtp_timestamp_offset: None,
 
             clock_rate,
@@ -133,7 +167,29 @@ impl RtpTimestampSync {
     }
 
     pub fn pts_from_timestamp(&mut self, rtp_timestamp: u32) -> Duration {
-        let mut sync_offset_secs = *self.sync_offset_secs.get_or_insert_with(|| {
+        let rolled_timestamp = self.rollover_state.timestamp(rtp_timestamp);
+
+        // Detect sender-side resume after a wall-clock gap the sender did not
+        // reflect in RTP timestamps (Chrome WHEP on mute/unmute keeps RTP
+        // continuous). When wall-clock advance outpaces RTP-time advance by
+        // more than RESUME_SKEW_SNAP_THRESHOLD, snap sync_offset_secs forward
+        // immediately so PTS lines up with wall clock — otherwise the next
+        // SR is up to ~5s away and the buffer would balloon in the meantime.
+        //
+        // Gated on `real_time` because the heuristic is only valid when RTP
+        // timestamps are intended to track wall clock. For buffered/file
+        // inputs RTP carries media time and a long receiver block — e.g., a
+        // queue offset that delays consumption — would otherwise be mistaken
+        // for a sender-side resume and shift PTS by the block duration.
+        self.maybe_snap_on_resume(rolled_timestamp);
+
+        // Slew toward the latest NTP-derived target. Step size is
+        // CONVERGENCE_RATIO * inter-packet RTP-time delta, so convergence
+        // happens at a fixed rate per second of media regardless of bitrate.
+        // Out-of-order packets (current < last_max) produce a zero step.
+        self.maybe_converge_on_target(rolled_timestamp);
+
+        let sync_offset_secs = *self.sync_offset_secs.get_or_insert_with(|| {
             let sync_offset = self.ntp_sync_point.reference_time.elapsed();
             debug!(
                 ?sync_offset,
@@ -143,17 +199,11 @@ impl RtpTimestampSync {
             sync_offset.as_secs_f64()
         });
 
-        // Slew toward the latest NTP-derived target. Each packet shifts the
-        // offset by at most MAX_OFFSET_INCREMENT so PTS values change
-        // continuously instead of jumping on each SenderReport.
-        if let Some(target) = self.target_offset_secs {
-            let max_step_secs = MAX_OFFSET_INCREMENT.as_secs_f64();
-            let nudge = (target - sync_offset_secs).clamp(-max_step_secs, max_step_secs);
-            sync_offset_secs += nudge;
-            self.sync_offset_secs = Some(sync_offset_secs);
+        if rolled_timestamp > self.last_max_rolled_rtp_timestamp.unwrap_or(0) {
+            self.last_max_rolled_rtp_timestamp = Some(rolled_timestamp);
         }
+        self.last_max_recv_time = Some(Instant::now());
 
-        let rolled_timestamp = self.rollover_state.timestamp(rtp_timestamp);
         let rtp_timestamp_offset = *self.rtp_timestamp_offset.get_or_insert(rolled_timestamp);
 
         if rtp_timestamp_offset > rolled_timestamp {
@@ -172,6 +222,70 @@ impl RtpTimestampSync {
         } else {
             Duration::from_secs_f64(pts_secs)
         }
+    }
+
+    /// Implementation of the slew toward `target_offset_secs`. Mutates
+    /// `self.sync_offset_secs` in place by at most
+    /// `CONVERGENCE_RATIO * inter-packet RTP-time delta`. No-op when no
+    /// target is set or `sync_offset_secs` hasn't been initialized — in the
+    /// latter case there's nothing to slew yet, the first packet sets the
+    /// initial value downstream.
+    fn maybe_converge_on_target(&mut self, rolled_timestamp: u64) {
+        let (Some(target), Some(sync_offset_secs)) =
+            (self.target_offset_secs, self.sync_offset_secs)
+        else {
+            return;
+        };
+        let last_max = self
+            .last_max_rolled_rtp_timestamp
+            .unwrap_or(rolled_timestamp);
+        let rtp_delta_secs =
+            rolled_timestamp.saturating_sub(last_max) as f64 / self.clock_rate as f64;
+        let max_step_secs = rtp_delta_secs * CONVERGENCE_RATIO;
+        let new_sync_offset_secs = target.clamp(
+            sync_offset_secs - max_step_secs,
+            sync_offset_secs + max_step_secs,
+        );
+        self.sync_offset_secs = Some(new_sync_offset_secs);
+    }
+
+    /// Implementation of the resume-skew snap. Mutates `self.sync_offset_secs`
+    /// and `self.target_offset_secs` in place when the skew exceeds the
+    /// threshold; otherwise no-op. Both `sync_offset_secs` and
+    /// `target_offset_secs` are pinned to the snapped value so the slew that
+    /// runs next can't drag us back to a stale target before the next SR
+    /// arrives. Safe to call before `sync_offset_secs` is initialized — the
+    /// early-out on `last_max_recv_time` / `sync_offset_secs` ensures the
+    /// snap can only fire after at least one prior packet has set them.
+    fn maybe_snap_on_resume(&mut self, rolled_timestamp: u64) {
+        if !self.real_time {
+            return;
+        }
+        let (Some(prev_recv_time), Some(prev_rolled), Some(sync_offset_secs)) = (
+            self.last_max_recv_time,
+            self.last_max_rolled_rtp_timestamp,
+            self.sync_offset_secs,
+        ) else {
+            return;
+        };
+        if rolled_timestamp <= prev_rolled {
+            return;
+        }
+
+        let wall_gap_secs = prev_recv_time.elapsed().as_secs_f64();
+        let rtp_gap_secs = (rolled_timestamp - prev_rolled) as f64 / self.clock_rate as f64;
+        let skew_secs = wall_gap_secs - rtp_gap_secs;
+        if skew_secs <= RESUME_SKEW_SNAP_THRESHOLD.as_secs_f64() {
+            return;
+        }
+
+        warn!(
+            skew_secs,
+            "Sender resumed without RTP-time gap, snapping sync offset forward"
+        );
+        let new_sync_offset = sync_offset_secs + skew_secs;
+        self.sync_offset_secs = Some(new_sync_offset);
+        self.target_offset_secs = Some(new_sync_offset);
     }
 
     pub fn on_sender_report(&mut self, sr_ntp_time: u64, sr_rtp_timestamp: u32) {
@@ -207,7 +321,7 @@ impl RtpTimestampSync {
         // - receiving stream from SFU that modifies RTP packet but not RTCP packets.
         // - BroadcastBox if you connect to server over WHEP before starting stream
         let offset_diff_secs = new_offset_secs - self.sync_offset_secs.unwrap_or(0.0);
-        if offset_diff_secs.abs() > 2.0 {
+        if offset_diff_secs.abs() > SNAP_THRESHOLD.as_secs_f64() {
             warn!(
                 offset_diff_secs,
                 "NTP sync offset differs too much from initial estimate, forcing update"

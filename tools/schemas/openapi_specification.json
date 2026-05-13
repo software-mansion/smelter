@@ -4546,9 +4546,12 @@
         "required": [
           "packets_lost",
           "packets_received",
-          "effective_buffer_avg_seconds",
-          "effective_buffer_max_seconds",
-          "effective_buffer_min_seconds",
+          "effective_buffer_on_write_avg_seconds",
+          "effective_buffer_on_write_max_seconds",
+          "effective_buffer_on_write_min_seconds",
+          "effective_buffer_on_pop_avg_seconds",
+          "effective_buffer_on_pop_max_seconds",
+          "effective_buffer_on_pop_min_seconds",
           "input_buffer_avg_seconds",
           "input_buffer_max_seconds",
           "input_buffer_min_seconds"
@@ -4566,17 +4569,32 @@
             "description": "Count of packets received during the given time window.",
             "minimum": 0
           },
-          "effective_buffer_avg_seconds": {
+          "effective_buffer_on_write_avg_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when packet enters jitter buffer. This value represents how\nmuch time packet has to reach the queue to be processed, before\njitter-buffer reorder/wait is applied."
+          },
+          "effective_buffer_on_write_max_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when packet enters jitter buffer. This value represents how\nmuch time packet has to reach the queue to be processed, before\njitter-buffer reorder/wait is applied."
+          },
+          "effective_buffer_on_write_min_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when packet enters jitter buffer. This value represents how\nmuch time packet has to reach the queue to be processed, before\njitter-buffer reorder/wait is applied."
+          },
+          "effective_buffer_on_pop_avg_seconds": {
             "type": "number",
             "format": "double",
             "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
           },
-          "effective_buffer_max_seconds": {
+          "effective_buffer_on_pop_max_seconds": {
             "type": "number",
             "format": "double",
             "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
           },
-          "effective_buffer_min_seconds": {
+          "effective_buffer_on_pop_min_seconds": {
             "type": "number",
             "format": "double",
             "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."

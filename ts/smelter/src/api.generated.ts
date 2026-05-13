@@ -1881,17 +1881,29 @@ export interface RtpJitterBufferSlidingWindowStatsReport {
    */
   packets_received: number;
   /**
-   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
+   * Measured when packet enters jitter buffer. This value represents how much time packet has to reach the queue to be processed, before jitter-buffer reorder/wait is applied.
    */
-  effective_buffer_avg_seconds: number;
+  effective_buffer_on_write_avg_seconds: number;
+  /**
+   * Measured when packet enters jitter buffer. This value represents how much time packet has to reach the queue to be processed, before jitter-buffer reorder/wait is applied.
+   */
+  effective_buffer_on_write_max_seconds: number;
+  /**
+   * Measured when packet enters jitter buffer. This value represents how much time packet has to reach the queue to be processed, before jitter-buffer reorder/wait is applied.
+   */
+  effective_buffer_on_write_min_seconds: number;
   /**
    * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
    */
-  effective_buffer_max_seconds: number;
+  effective_buffer_on_pop_avg_seconds: number;
   /**
    * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
    */
-  effective_buffer_min_seconds: number;
+  effective_buffer_on_pop_max_seconds: number;
+  /**
+   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
+   */
+  effective_buffer_on_pop_min_seconds: number;
   /**
    * Size of the input buffer.
    */

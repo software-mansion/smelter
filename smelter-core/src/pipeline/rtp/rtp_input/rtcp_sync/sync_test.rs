@@ -17,8 +17,8 @@ const REFERENCE_NTP_TIME: u64 = 3966409461 * POW_2_32;
 fn test_rtcp_sync_pts_from_zero() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000);
-    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000);
+    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
+    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
 
     let stream_1_first_pts = stream_1.pts_from_timestamp(0);
     thread::sleep(Duration::from_millis(100));
@@ -77,8 +77,8 @@ fn test_rtcp_sync_pts_from_zero() {
 fn test_rtcp_sync_pts_from_non_zero() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000);
-    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000);
+    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
+    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
 
     let stream_1_first_pts = stream_1.pts_from_timestamp(60_000);
     thread::sleep(Duration::from_millis(100));
@@ -139,8 +139,8 @@ fn test_rtcp_sync_pts_from_non_zero() {
 fn test_rtcp_sync_pts_from_non_zero_different_clocks() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000);
-    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 3_000);
+    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
+    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 3_000, true);
 
     let stream_1_first_pts = stream_1.pts_from_timestamp(60_000);
     thread::sleep(Duration::from_millis(100));
@@ -201,8 +201,8 @@ fn test_rtcp_sync_pts_from_non_zero_different_clocks() {
 fn test_rtcp_sync_pts_with_rollover_before_sender_report_first_stream() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000);
-    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000);
+    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
+    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
 
     let stream_1_first_rtp_timestamp = u32::MAX - 5_000 + 1;
     let stream_2_first_rtp_timestamp = 100_000;
@@ -269,8 +269,8 @@ fn test_rtcp_sync_pts_with_rollover_before_sender_report_first_stream() {
 fn test_rtcp_sync_pts_with_rollover_before_sender_report_second_stream() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000);
-    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000);
+    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
+    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
 
     let stream_1_first_rtp_timestamp = 100_000;
     let stream_2_first_rtp_timestamp = u32::MAX - 5_000 + 1;
@@ -337,8 +337,8 @@ fn test_rtcp_sync_pts_with_rollover_before_sender_report_second_stream() {
 fn test_rtcp_sync_pts_with_rollover_after_sender_report_first_stream() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000);
-    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000);
+    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
+    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
 
     let stream_1_first_rtp_timestamp = 5_000;
     let stream_2_first_rtp_timestamp = 100_000;
@@ -405,8 +405,8 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_first_stream() {
 fn test_rtcp_sync_pts_with_rollover_after_sender_report_second_stream() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000);
-    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000);
+    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
+    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
 
     let stream_1_first_rtp_timestamp = 100_000;
     let stream_2_first_rtp_timestamp = 5_000;
@@ -469,17 +469,18 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_second_stream() {
     );
 }
 
-/// When an SR implies an offset more than 2s away from the current best-effort
-/// estimate (e.g. SFU mangling timestamps, or audio resuming after a long
-/// pause), `sync_offset_secs` snaps to the new target instead of slewing.
-/// After the snap, consecutive packets must still advance by their RTP-time
-/// delta — i.e. the timeline stays self-consistent past the discontinuity.
+/// When an SR implies an offset more than `SNAP_THRESHOLD` away from the
+/// current best-effort estimate (e.g. SFU mangling timestamps, or audio
+/// resuming after a long pause), `sync_offset_secs` snaps to the new target
+/// instead of slewing. After the snap, consecutive packets must still
+/// advance by their RTP-time delta — i.e. the timeline stays self-consistent
+/// past the discontinuity.
 #[test]
 fn test_rtcp_sync_snaps_on_large_offset_diff() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 48_000);
-    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 90_000);
+    let mut stream_1 = RtpTimestampSync::new(sync_point.clone(), 48_000, true);
+    let mut stream_2 = RtpTimestampSync::new(sync_point.clone(), 90_000, true);
 
     let stream_1_first_pts = stream_1.pts_from_timestamp(100_000_000);
     let stream_2_first_pts = stream_2.pts_from_timestamp(200_000_000);
@@ -515,14 +516,18 @@ fn test_rtcp_sync_snaps_on_large_offset_diff() {
 }
 
 /// SR sets `target_offset_secs`; `pts_from_timestamp` then slews
-/// `sync_offset_secs` toward it by ≤100µs per packet. To assert the converged
-/// state (rather than the per-packet step), pump enough packets to drain any
-/// outstanding diff. 1500 packets × 100µs = 150ms — covers any drift in these
-/// tests. Once `current == target`, further calls clamp to a 0-step.
+/// `sync_offset_secs` toward it by `CONVERGENCE_RATIO` of the inter-packet
+/// RTP-time delta. To converge, packets must actually advance — same-timestamp
+/// calls produce a zero step. We pump packets stepping by `clock_rate / 10`
+/// (= 100ms of media per packet → ~1ms slew step), then issue `rtp_timestamp`
+/// once at the end so subsequent assertions read at a known timestamp.
+/// 3000 × 1ms = 3s of cumulative drain — covers any drift in these tests.
 fn drain_slew(stream: &mut RtpTimestampSync, rtp_timestamp: u32) {
-    for _ in 0..1500 {
-        stream.pts_from_timestamp(rtp_timestamp);
+    let step = stream.clock_rate / 10;
+    for i in 0..3000 {
+        stream.pts_from_timestamp(rtp_timestamp.wrapping_add(i * step));
     }
+    stream.pts_from_timestamp(rtp_timestamp);
 }
 
 /// Verifies the slew mechanism itself: an SR sets a non-trivial target, after
@@ -537,7 +542,7 @@ fn drain_slew(stream: &mut RtpTimestampSync, rtp_timestamp: u32) {
 #[test]
 fn test_rtcp_sync_offset_slews_per_packet() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
-    let mut stream = RtpTimestampSync::new(sync_point.clone(), 1_000);
+    let mut stream = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
 
     stream.pts_from_timestamp(0);
     stream.pts_from_timestamp(1_000);
@@ -552,21 +557,109 @@ fn test_rtcp_sync_offset_slews_per_packet() {
     let shifted_ntp = REFERENCE_NTP_TIME + (POW_2_32 / 20); // +50 ms
     stream.on_sender_report(shifted_ntp, 0);
 
-    // First packet after the second SR: shifts by exactly one slew step.
-    let pts_after_one = stream.pts_from_timestamp(2_000);
+    // First packet after the second SR with RTP delta of 10 (= 10ms at clock
+    // 1000). Slew step = 1% × 10ms = 100µs. The PTS also advances by the
+    // intrinsic 10ms RTP delta, so isolate the slew contribution.
+    let pts_after_one = stream.pts_from_timestamp(2_010);
     assert_duration_eq(
-        pts_after_one - pts_pre_sr,
+        pts_after_one - pts_pre_sr - Duration::from_millis(10),
         Duration::from_micros(100),
         Duration::from_micros(10),
     );
 
-    // After draining: full +50ms target reached.
+    // After draining: full +50ms target reached. Read back at rtp=2_000 to
+    // line up with `pts_pre_sr`.
     drain_slew(&mut stream, 2_000);
     let pts_after_drain = stream.pts_from_timestamp(2_000);
     assert_duration_eq(
         pts_after_drain - pts_pre_sr,
         Duration::from_millis(50),
         Duration::from_micros(200),
+    );
+}
+
+/// Sender pauses long enough to exceed the resume-skew threshold but keeps
+/// RTP timestamps continuous on resume (Chrome WHEP mute/unmute behavior).
+/// The first post-resume packet should snap `sync_offset_secs` forward by
+/// the wall-clock/RTP-time skew so PTS reflects real time without waiting
+/// for the next SR.
+#[test]
+fn test_rtcp_sync_snaps_on_sender_resume_without_rtp_gap() {
+    let sync_point = RtpNtpSyncPoint::new(Instant::now());
+    let mut stream = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
+
+    let pts_first = stream.pts_from_timestamp(0);
+    assert_duration_eq(pts_first, Duration::ZERO, PREC_RUNTIME);
+
+    // Pause for 11s (above `RESUME_SKEW_SNAP_THRESHOLD` = 10s), then resume
+    // with a continuous RTP timestamp (only +20 RTP units = 20ms of media).
+    thread::sleep(Duration::from_secs(11));
+    let pts_after_resume = stream.pts_from_timestamp(20);
+
+    // Without the snap, PTS would be ≈ 20ms. With the snap, the wall-clock
+    // gap (~11s) minus the RTP-time gap (20ms) gets added to sync_offset_secs,
+    // so PTS lands near the real elapsed time.
+    assert_duration_eq(
+        pts_after_resume,
+        Duration::from_secs(11),
+        Duration::from_millis(20),
+    );
+}
+
+/// When `real_time` is false (FixedWindow / buffered modes), a long
+/// receiver block — e.g., a queue offset that delays consumption for
+/// minutes — must NOT shift PTS. RTP timestamps in this mode carry media
+/// time, so the post-block packet's PTS should reflect its RTP-time progress
+/// only, regardless of how long the receiver was blocked. Same input that
+/// would trigger a snap in the live-mode test stays untouched here.
+#[test]
+fn test_rtcp_sync_does_not_snap_when_not_real_time() {
+    let sync_point = RtpNtpSyncPoint::new(Instant::now());
+    let mut stream = RtpTimestampSync::new(sync_point.clone(), 1_000, false);
+
+    let pts_first = stream.pts_from_timestamp(0);
+    assert_duration_eq(pts_first, Duration::ZERO, PREC_RUNTIME);
+
+    // Simulate the receiver being blocked for 11s (queue offset, slow
+    // consumer, etc.) while sender's RTP timestamps stayed continuous in
+    // media time. Must exceed `RESUME_SKEW_SNAP_THRESHOLD` (10s) so that the
+    // test verifies the `real_time` guard, not just the threshold.
+    thread::sleep(Duration::from_secs(11));
+    let pts_after_block = stream.pts_from_timestamp(20);
+
+    // No snap: PTS reflects the 20ms RTP-time advance, not the 11s wall gap.
+    assert_duration_eq(pts_after_block, Duration::from_millis(20), PREC_RUNTIME);
+}
+
+/// A well-behaved sender that *does* advance RTP timestamps to reflect a
+/// pause (rtp_gap ≈ wall_gap → skew ≈ 0) must not trip the resume snap.
+#[test]
+fn test_rtcp_sync_does_not_snap_when_rtp_gap_matches_wall_gap() {
+    let sync_point = RtpNtpSyncPoint::new(Instant::now());
+    let mut stream = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
+
+    let pts_first = stream.pts_from_timestamp(0);
+    assert_duration_eq(pts_first, Duration::ZERO, PREC_RUNTIME);
+
+    // Sender pauses 6s and advances RTP timestamps to match (6000 RTP
+    // units at clock 1000 = 6s), so skew ≈ 0 — well below any threshold.
+    thread::sleep(Duration::from_secs(6));
+    let pts_after_resume = stream.pts_from_timestamp(6_000);
+
+    // No snap: PTS comes purely from RTP-time advance.
+    assert_duration_eq(
+        pts_after_resume,
+        Duration::from_secs(6),
+        Duration::from_millis(20),
+    );
+
+    // And the next packet keeps stepping at the RTP rate, not at any
+    // snapped offset.
+    let pts_next = stream.pts_from_timestamp(7_000);
+    assert_duration_eq(
+        pts_next - pts_after_resume,
+        Duration::from_secs(1),
+        PREC_RUNTIME,
     );
 }
 
