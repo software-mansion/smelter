@@ -50,6 +50,31 @@ pub enum RtmpClientVideoEncoderOptions {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
+    #[serde(rename = "ffmpeg_vp8")]
+    FfmpegVp8 {
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        bitrate: Option<VideoEncoderBitrate>,
+
+        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        keyframe_interval_ms: Option<f64>,
+
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
+    },
+    #[serde(rename = "ffmpeg_vp9")]
+    FfmpegVp9 {
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        bitrate: Option<VideoEncoderBitrate>,
+
+        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        keyframe_interval_ms: Option<f64>,
+
+        /// (**default=`"yuv420p"`**) Encoder pixel format.
+        pixel_format: Option<PixelFormat>,
+
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
+    },
     #[serde(rename = "vulkan_h264")]
     VulkanH264 {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
@@ -81,6 +106,13 @@ pub struct OutputRtmpClientAudioOptions {
 pub enum RtmpClientAudioEncoderOptions {
     Aac {
         /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+        sample_rate: Option<u32>,
+    },
+    Opus {
+        /// (**default="voip"**) Audio output encoder preset.
+        preset: Option<OpusEncoderPreset>,
+
+        /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
         sample_rate: Option<u32>,
     },
 }

@@ -51,7 +51,7 @@ impl TryFrom<RtmpOutput> for core::RegisterOutputOptions {
                 };
 
                 (
-                    Some(encoder.to_pipeline_options(channels)),
+                    Some(encoder.to_pipeline_options(channels)?),
                     Some(output_audio_options),
                 )
             }
@@ -98,6 +98,36 @@ impl RtmpClientVideoEncoderOptions {
                     .collect(),
                 bitstream_format: core::H264BitstreamFormat::Avcc,
             }),
+            RtmpClientVideoEncoderOptions::FfmpegVp8 {
+                bitrate,
+                keyframe_interval_ms,
+                ffmpeg_options,
+            } => core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
+                resolution: resolution.into(),
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                raw_options: ffmpeg_options
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            }),
+            RtmpClientVideoEncoderOptions::FfmpegVp9 {
+                bitrate,
+                keyframe_interval_ms,
+                pixel_format,
+                ffmpeg_options,
+            } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
+                resolution: resolution.into(),
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+                raw_options: ffmpeg_options
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            }),
             RtmpClientVideoEncoderOptions::VulkanH264 {
                 bitrate,
                 keyframe_interval_ms,
@@ -120,14 +150,27 @@ impl RtmpClientVideoEncoderOptions {
 }
 
 impl RtmpClientAudioEncoderOptions {
-    fn to_pipeline_options(&self, channels: AudioChannels) -> core::AudioEncoderOptions {
+    fn to_pipeline_options(
+        &self,
+        channels: AudioChannels,
+    ) -> Result<core::AudioEncoderOptions, TypeError> {
         match self {
-            RtmpClientAudioEncoderOptions::Aac { sample_rate } => {
+            RtmpClientAudioEncoderOptions::Aac { sample_rate } => Ok(
                 core::AudioEncoderOptions::FdkAac(core::FdkAacEncoderOptions {
                     channels: channels.into(),
                     sample_rate: sample_rate.unwrap_or(44100),
-                })
-            }
+                }),
+            ),
+            RtmpClientAudioEncoderOptions::Opus {
+                preset,
+                sample_rate,
+            } => Ok(core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
+                channels: channels.into(),
+                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
+                sample_rate: sample_rate.unwrap_or(48000),
+                forward_error_correction: false,
+                packet_loss: 0,
+            })),
         }
     }
 }

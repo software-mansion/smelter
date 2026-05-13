@@ -96,11 +96,13 @@ impl RtmpInput {
                 };
 
                 let cmd = format!(
-                    "ffmpeg -re -i {input_path} -c:v libx264 -tune zerolatency -c:a aac -ac 2 -f flv 'rtmp://127.0.0.1:1935/{}/{STREAM_KEY}'",
+                    "ffmpeg -re -i {input_path} -c:v libvpx-vp9 -b:v 2M -c:a aac -ac 2 -f flv -rtmp_enhanced_codecs vp09,mp4a 'rtmp://127.0.0.1:1935/{}/{STREAM_KEY}'",
                     self.name,
                 );
 
-                println!("Start streaming H264 encoded video and AAC encoded audio to Smelter:");
+                println!(
+                    "Start streaming VP9 encoded video and AAC encoded audio (E-RTMP) to Smelter:"
+                );
                 println!("{cmd}");
                 println!();
 

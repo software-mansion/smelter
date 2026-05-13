@@ -4105,6 +4105,40 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "preset": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OpusEncoderPreset",
+                    "description": "(**default=\"voip\"**) Audio output encoder preset."
+                  }
+                ]
+              },
+              "sample_rate": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "description": "(**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "opus"
+                ]
+              }
+            }
           }
         ]
       },
@@ -4174,6 +4208,109 @@
                 "type": "string",
                 "enum": [
                   "ffmpeg_h264"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "bitrate": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/VideoEncoderBitrate",
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate."
+                  }
+                ]
+              },
+              "keyframe_interval_ms": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double",
+                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+              },
+              "ffmpeg_options": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ffmpeg_vp8"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "bitrate": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/VideoEncoderBitrate",
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate."
+                  }
+                ]
+              },
+              "keyframe_interval_ms": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double",
+                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+              },
+              "pixel_format": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PixelFormat",
+                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format."
+                  }
+                ]
+              },
+              "ffmpeg_options": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ffmpeg_vp9"
                 ]
               }
             }

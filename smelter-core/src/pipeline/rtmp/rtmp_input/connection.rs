@@ -19,7 +19,9 @@ use crate::{
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac::FdkAacDecoder,
-            ffmpeg_h264, vulkan_h264,
+            ffmpeg_h264, ffmpeg_vp8, ffmpeg_vp9,
+            libopus::OpusDecoder,
+            vulkan_h264,
         },
         rtmp::rtmp_input::state::RtmpInputState,
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
@@ -110,14 +112,11 @@ enum RtmpConnectionError {
     #[error("Failed to parse H264 config")]
     ParseH264Config(#[from] H264AvcDecoderConfigError),
 
-    #[error("Failed to initialize H264 decoder")]
-    InitH264Decoder(#[source] DecoderInitError),
+    #[error("Failed to initialize video decoder")]
+    InitVideoDecoder(#[source] DecoderInitError),
 
-    #[error("Invalid video decoder provided, expected H264 decoder")]
-    InvalidVideoDecoder,
-
-    #[error("Failed to initialize AAC decoder")]
-    InitAacDecoder(#[source] DecoderInitError),
+    #[error("Failed to initialize audio decoder")]
+    InitAudioDecoder(#[source] DecoderInitError),
 
     #[error("Decoder channel closed")]
     ChannelClosed,
@@ -151,20 +150,21 @@ struct RtmpConnectionState {
 impl RtmpConnectionState {
     fn handle_rtmp_event(&mut self, rtmp_event: RtmpEvent) -> Result<(), RtmpConnectionError> {
         match rtmp_event {
-            RtmpEvent::VideoConfig(config) if config.codec == RtmpVideoCodec::H264 => {
-                self.process_video_config(config)?
-            }
-            RtmpEvent::AudioConfig(config) if config.codec == RtmpAudioCodec::Aac => {
-                self.process_audio_config(config)?
-            }
-            RtmpEvent::VideoData(data) if data.codec == RtmpVideoCodec::H264 => {
-                self.process_video(data)?
-            }
-            RtmpEvent::AudioData(data) if data.codec == RtmpAudioCodec::Aac => {
-                self.process_audio(data)?
-            }
+            RtmpEvent::VideoConfig(config) => self.process_video_config(config)?,
+            RtmpEvent::AudioConfig(config) => self.process_audio_config(config)?,
+            RtmpEvent::VideoData(data) => match data.codec {
+                RtmpVideoCodec::H264 => self.process_video(data, VideoCodec::H264)?,
+                RtmpVideoCodec::Vp8 => self.process_video(data, VideoCodec::Vp8)?,
+                RtmpVideoCodec::Vp9 => self.process_video(data, VideoCodec::Vp9)?,
+                codec => {
+                    warn!(?codec, "Unsupported video codec");
+                }
+            },
+            RtmpEvent::AudioData(data) => match data.codec {
+                RtmpAudioCodec::Aac => self.process_audio(data, AudioCodec::Aac)?,
+                RtmpAudioCodec::Opus => self.process_audio(data, AudioCodec::Opus)?,
+            },
             RtmpEvent::Metadata(metadata) => info!(?metadata, "Received metadata"),
-            _ => warn!(?rtmp_event, "Unsupported message"),
         }
         Ok(())
     }
@@ -173,34 +173,55 @@ impl RtmpConnectionState {
         let Some(frame_sender) = self.video_sender.take() else {
             return Err(RtmpConnectionError::ReceivedSecondVideoTrack);
         };
-        let h264_config = H264AvcDecoderConfig::parse(config.data)?;
+
+        let codec = config.codec;
+        let transformer = match codec {
+            RtmpVideoCodec::H264 => {
+                let h264_config = H264AvcDecoderConfig::parse(config.data)?;
+                Some(H264AvccToAnnexB::new(h264_config))
+            }
+            _ => None,
+        };
 
         let options = VideoDecoderThreadOptions {
             ctx: self.ctx.clone(),
-            transformer: Some(H264AvccToAnnexB::new(h264_config)),
+            transformer,
             frame_sender,
             input_buffer_size: RTMP_MAX_BUFFER,
         };
 
-        let h264_decoder = self.decoders.h264.unwrap_or_else(|| {
-            match self.ctx.graphics_context.has_vulkan_decoder_support() {
-                true => VideoDecoderOptions::VulkanH264,
-                false => VideoDecoderOptions::FfmpegH264,
+        let decoder_opt = match codec {
+            RtmpVideoCodec::H264 => self.decoders.h264.unwrap_or_else(|| {
+                match self.ctx.graphics_context.has_vulkan_decoder_support() {
+                    true => VideoDecoderOptions::VulkanH264,
+                    false => VideoDecoderOptions::FfmpegH264,
+                }
+            }),
+            RtmpVideoCodec::Vp8 => VideoDecoderOptions::FfmpegVp8,
+            RtmpVideoCodec::Vp9 => VideoDecoderOptions::FfmpegVp9,
+            codec => {
+                warn!(?codec, "Unsupported video codec");
+                return Ok(());
             }
-        });
+        };
 
         let input_ref = self.input_ref.clone();
-        let handle = match h264_decoder {
+        let handle = match decoder_opt {
             VideoDecoderOptions::FfmpegH264 => {
                 VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitH264Decoder)?
+                    .map_err(RtmpConnectionError::InitVideoDecoder)?
             }
             VideoDecoderOptions::VulkanH264 => {
                 VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitH264Decoder)?
+                    .map_err(RtmpConnectionError::InitVideoDecoder)?
             }
-            _ => {
-                return Err(RtmpConnectionError::InvalidVideoDecoder);
+            VideoDecoderOptions::FfmpegVp8 => {
+                VideoDecoderThread::<ffmpeg_vp8::FfmpegVp8Decoder, _>::spawn(input_ref, options)
+                    .map_err(RtmpConnectionError::InitVideoDecoder)?
+            }
+            VideoDecoderOptions::FfmpegVp9 => {
+                VideoDecoderThread::<ffmpeg_vp9::FfmpegVp9Decoder, _>::spawn(input_ref, options)
+                    .map_err(RtmpConnectionError::InitVideoDecoder)?
             }
         };
 
@@ -212,22 +233,42 @@ impl RtmpConnectionState {
         let Some(samples_sender) = self.audio_sender.take() else {
             return Err(RtmpConnectionError::ReceivedSecondAudioTrack);
         };
-        let options = AudioDecoderThreadOptions {
-            ctx: self.ctx.clone(),
-            decoder_options: FdkAacDecoderOptions {
-                asc: Some(config.data.clone()),
-            },
-            samples_sender,
-            input_buffer_size: RTMP_MAX_BUFFER,
-        };
+
         let input_ref = self.input_ref.clone();
-        let handle = AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref, options)
-            .map_err(RtmpConnectionError::InitAacDecoder)?;
+        let handle = match config.codec {
+            RtmpAudioCodec::Aac => {
+                let options = AudioDecoderThreadOptions {
+                    ctx: self.ctx.clone(),
+                    decoder_options: FdkAacDecoderOptions {
+                        asc: Some(config.data.clone()),
+                    },
+                    samples_sender,
+                    input_buffer_size: RTMP_MAX_BUFFER,
+                };
+                AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref, options)
+                    .map_err(RtmpConnectionError::InitAudioDecoder)?
+            }
+            RtmpAudioCodec::Opus => {
+                let options = AudioDecoderThreadOptions {
+                    ctx: self.ctx.clone(),
+                    decoder_options: (),
+                    samples_sender,
+                    input_buffer_size: RTMP_MAX_BUFFER,
+                };
+                AudioDecoderThread::<OpusDecoder>::spawn(input_ref, options)
+                    .map_err(RtmpConnectionError::InitAudioDecoder)?
+            }
+        };
+
         self.audio_track_state = TrackState::Ready(handle);
         Ok(())
     }
 
-    fn process_video(&mut self, video: VideoData) -> Result<(), RtmpConnectionError> {
+    fn process_video(
+        &mut self,
+        video: VideoData,
+        codec: VideoCodec,
+    ) -> Result<(), RtmpConnectionError> {
         let sender = self
             .video_track_state
             .chunk_sender()
@@ -238,7 +279,7 @@ impl RtmpConnectionState {
             data: video.data,
             pts,
             dts: Some(video.dts),
-            kind: MediaKind::Video(VideoCodec::H264),
+            kind: MediaKind::Video(codec),
             present: true,
         };
 
@@ -252,7 +293,11 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_audio(&mut self, audio: AudioData) -> Result<(), RtmpConnectionError> {
+    fn process_audio(
+        &mut self,
+        audio: AudioData,
+        codec: AudioCodec,
+    ) -> Result<(), RtmpConnectionError> {
         let sender = self
             .audio_track_state
             .chunk_sender()
@@ -263,7 +308,7 @@ impl RtmpConnectionState {
             data: audio.data.clone(),
             pts,
             dts: None,
-            kind: MediaKind::Audio(AudioCodec::Aac),
+            kind: MediaKind::Audio(codec),
             present: true,
         };
 
