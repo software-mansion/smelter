@@ -8,6 +8,12 @@ use crate::*;
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 pub struct RGBAColor(pub String);
 
+impl From<&str> for RGBAColor {
+    fn from(s: &str) -> Self {
+        Self(s.into())
+    }
+}
+
 impl TryFrom<RGBAColor> for scene::RGBAColor {
     type Error = TypeError;
     fn try_from(value: RGBAColor) -> std::result::Result<Self, Self::Error> {

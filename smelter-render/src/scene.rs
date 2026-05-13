@@ -46,7 +46,7 @@ pub struct OutputScene {
     pub resolution: Resolution,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Component {
     InputStream(InputStreamComponent),
     Shader(ShaderComponent),
