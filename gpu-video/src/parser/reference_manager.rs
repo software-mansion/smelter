@@ -1125,64 +1125,33 @@ impl ReferenceContext {
             picNumLXNoWrap
         };
 
-        // Find the picture in the DPB (not just the current list — the picture
-        // may have been compacted out of the list by an earlier modification).
-        let dpb_picture = self
-            .pictures
-            .short_term
+        let shifted_picture_idx = reference_list
             .iter()
-            .find(|pic| {
-                decode_picture_numbers_for_short_term_ref(
-                    pic.frame_num.into(),
-                    header.frame_num.into(),
-                    sps,
-                )
-                .PicNum
-                    == picNumLX
-            })
-            .ok_or(ReferenceManagementError::IncorrectData(format!(
-                "picture with picNumLX = {picNumLX} is not present in the DPB during modification"
-            )))?;
+            .position(|picture_info| decode_picture_numbers_for_short_term_ref(picture_info.FrameNum.into(), header.frame_num.into(), sps).PicNum == picNumLX)
+            .ok_or(ReferenceManagementError::IncorrectData(
+                format!("picture with picNumLX = {picNumLX} is not present in the reference list during modification")
+            ))?;
 
-        if dpb_picture.non_existing {
+        if reference_list[shifted_picture_idx].non_existing {
             return Err(ReferenceManagementError::IncorrectData(
                 "a short-term reference picture marked for shifting in the reference list modification process is marked as non-existing".into()
             ));
         }
 
-        let picture_info = ReferencePictureInfo {
-            id: dpb_picture.id,
-            LongTermPicNum: None,
-            non_existing: dpb_picture.non_existing,
-            FrameNum: dpb_picture.frame_num,
-            PicOrderCnt: dpb_picture.pic_order_cnt,
-        };
+        if reference_list[shifted_picture_idx].is_long_term() {
+            return Err(ReferenceManagementError::IncorrectData(
+                "a long-term reference picture marked for shifting in the short-term reference list modification process".into()
+            ));
+        }
 
-        // Per H.264 §8.2.4.3.2: shift entries at refIdxLX..end right by 1,
-        // place the picture at refIdxLX, then remove duplicates of picNumLX
-        // from positions > the inserted slot.
-        reference_list.insert(*refIdxLX, picture_info);
-        let inserted_idx = *refIdxLX;
-        *refIdxLX += 1;
-
-        // Compact: remove duplicates of this PicNum that appear after the
-        // freshly-inserted entry.
-        let mut i = inserted_idx + 1;
-        while i < reference_list.len() {
-            let same_pic = !reference_list[i].is_long_term()
-                && decode_picture_numbers_for_short_term_ref(
-                    reference_list[i].FrameNum.into(),
-                    header.frame_num.into(),
-                    sps,
-                )
-                .PicNum
-                    == picNumLX;
-            if same_pic {
-                reference_list.remove(i);
-            } else {
-                i += 1;
+        let shifted_picture_info = reference_list[shifted_picture_idx];
+        if *refIdxLX <= reference_list.len() {
+            reference_list.insert(*refIdxLX, shifted_picture_info);
+            if *refIdxLX <= shifted_picture_idx {
+                reference_list.remove(shifted_picture_idx + 1);
             }
         }
+        *refIdxLX += 1;
 
         Ok(())
     }
