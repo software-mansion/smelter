@@ -591,17 +591,17 @@ fn test_rtcp_sync_snaps_on_sender_resume_without_rtp_gap() {
     let pts_first = stream.pts_from_timestamp(0);
     assert_duration_eq(pts_first, Duration::ZERO, PREC_RUNTIME);
 
-    // Pause for 6s (above `RESUME_SKEW_SNAP_THRESHOLD`), then resume with a
-    // continuous RTP timestamp (only +20 RTP units = 20ms of media).
-    thread::sleep(Duration::from_secs(6));
+    // Pause for 11s (above `RESUME_SKEW_SNAP_THRESHOLD` = 10s), then resume
+    // with a continuous RTP timestamp (only +20 RTP units = 20ms of media).
+    thread::sleep(Duration::from_secs(11));
     let pts_after_resume = stream.pts_from_timestamp(20);
 
     // Without the snap, PTS would be ≈ 20ms. With the snap, the wall-clock
-    // gap (~6s) minus the RTP-time gap (20ms) gets added to sync_offset_secs,
+    // gap (~11s) minus the RTP-time gap (20ms) gets added to sync_offset_secs,
     // so PTS lands near the real elapsed time.
     assert_duration_eq(
         pts_after_resume,
-        Duration::from_secs(6),
+        Duration::from_secs(11),
         Duration::from_millis(20),
     );
 }
@@ -620,10 +620,11 @@ fn test_rtcp_sync_does_not_snap_when_not_real_time() {
     let pts_first = stream.pts_from_timestamp(0);
     assert_duration_eq(pts_first, Duration::ZERO, PREC_RUNTIME);
 
-    // Simulate the receiver being blocked for 6s (queue offset, slow
+    // Simulate the receiver being blocked for 11s (queue offset, slow
     // consumer, etc.) while sender's RTP timestamps stayed continuous in
-    // media time.
-    thread::sleep(Duration::from_secs(6));
+    // media time. Must exceed `RESUME_SKEW_SNAP_THRESHOLD` (10s) so that the
+    // test verifies the `real_time` guard, not just the threshold.
+    thread::sleep(Duration::from_secs(11));
     let pts_after_block = stream.pts_from_timestamp(20);
 
     // No snap: PTS reflects the 20ms RTP-time advance, not the 6s wall gap.
@@ -640,8 +641,8 @@ fn test_rtcp_sync_does_not_snap_when_rtp_gap_matches_wall_gap() {
     let pts_first = stream.pts_from_timestamp(0);
     assert_duration_eq(pts_first, Duration::ZERO, PREC_RUNTIME);
 
-    // Sender pauses 6s (above `RESUME_SKEW_SNAP_THRESHOLD`) and advances
-    // RTP timestamps to match (6000 RTP units at clock 1000 = 6s).
+    // Sender pauses 6s and advances RTP timestamps to match (6000 RTP
+    // units at clock 1000 = 6s), so skew ≈ 0 — well below any threshold.
     thread::sleep(Duration::from_secs(6));
     let pts_after_resume = stream.pts_from_timestamp(6_000);
 
