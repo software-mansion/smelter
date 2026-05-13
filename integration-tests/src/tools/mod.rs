@@ -1,4 +1,5 @@
 pub mod frame_inspector;
+pub mod render_inspector;
 pub mod rtp_inspector;
 pub mod rtp_player;
 pub mod rtp_video_diff_iter;

@@ -10,7 +10,7 @@ use smelter_render::{
     shader::ShaderSpec,
 };
 
-use super::{Step, test_case::TestCase};
+use super::harness::test_case::{Step, TestCase};
 
 fn run_case(test_case: TestCase, expected: &[u8]) {
     let snapshots = test_case.generate_snapshots();

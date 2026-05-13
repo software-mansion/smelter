@@ -361,12 +361,12 @@ fn push_to_viewer(state: &SessionState, viewer: &FrameInspector, mse: Option<f64
     };
     viewer.update(frame_inspector::Pair {
         left_label: "expected".to_string(),
-        left_caption: format!("pts={:.6}s", left.pts.as_secs_f64()),
+        left_lines: vec![format!("pts={:.6}s", left.pts.as_secs_f64())],
         left_rgba,
         left_w: left.resolution.width,
         left_h: left.resolution.height,
         right_label: "actual".to_string(),
-        right_caption: format!("pts={:.6}s", right.pts.as_secs_f64()),
+        right_lines: vec![format!("pts={:.6}s", right.pts.as_secs_f64())],
         right_rgba,
         right_w: right.resolution.width,
         right_h: right.resolution.height,

@@ -68,12 +68,12 @@ const BAR_TEXT_W: usize = 100 * BAR_GLYPH_W + 2 * BAR_PAD;
 /// Captions may be empty.
 pub struct Pair {
     pub left_label: String,
-    pub left_caption: String,
+    pub left_lines: Vec<String>,
     pub left_rgba: Vec<u8>,
     pub left_w: usize,
     pub left_h: usize,
     pub right_label: String,
-    pub right_caption: String,
+    pub right_lines: Vec<String>,
     pub right_rgba: Vec<u8>,
     pub right_w: usize,
     pub right_h: usize,
@@ -103,12 +103,33 @@ impl FrameInspector {
         }
     }
 
-    pub fn update(&self, pair: Pair) {
-        if let Some(tx) = &self.tx
-            && tx.send(pair).is_err()
-        {
+    pub fn update(&self, pair: Pair) -> bool {
+        let Some(tx) = &self.tx else {
+            return false;
+        };
+        if tx.send(pair).is_err() {
             warn!("frame_inspector thread closed; updates will be ignored");
+            return false;
         }
+        true
+    }
+
+    /// Block the calling thread until the user closes the inspector
+    /// window (Esc or window close button). Consumes the handle.
+    ///
+    /// Unlike letting the handle drop, this keeps the sender alive
+    /// while waiting — otherwise the window thread would exit on the
+    /// next [`TryRecvError::Disconnected`] check and the window would
+    /// disappear immediately. Use this when the caller has pushed a
+    /// final pair and wants the window to stay on screen until
+    /// dismissed by the user.
+    pub fn wait(mut self) {
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+        // self.tx is dropped here as `self` goes out of scope, after
+        // the thread has already exited — so closing the channel has
+        // no observable effect.
     }
 }
 
@@ -143,62 +164,38 @@ struct Image {
     pixels: Vec<u32>,
     width: usize,
     height: usize,
-    label: String,
-    caption: String,
+    lines: Vec<String>,
 }
 
 impl Image {
-    fn from_side(rgba: &[u8], width: usize, height: usize, label: String, caption: String) -> Self {
+    fn from_side(
+        rgba: &[u8],
+        width: usize,
+        height: usize,
+        label: String,
+        extra_lines: Vec<String>,
+    ) -> Self {
+        let mut lines = vec![label];
+        lines.extend(extra_lines);
         Self {
             pixels: rgba_to_minifb(rgba),
             width,
             height,
-            label,
-            caption,
+            lines,
         }
     }
 
-    fn line(&self) -> String {
-        if self.caption.is_empty() {
-            self.label.clone()
-        } else {
-            format!("{} {}", self.label, self.caption)
-        }
+    fn line_count(&self) -> usize {
+        self.lines.len()
     }
 }
 
-fn run(rx: Receiver<Pair>) {
-    let first = match rx.recv() {
-        Ok(p) => p,
-        Err(_) => return,
-    };
-    let mut left = Image::from_side(
-        &first.left_rgba,
-        first.left_w,
-        first.left_h,
-        first.left_label,
-        first.left_caption,
-    );
-    let mut right = Image::from_side(
-        &first.right_rgba,
-        first.right_w,
-        first.right_h,
-        first.right_label,
-        first.right_caption,
-    );
-    let mut mse = first.mse;
-
+fn required_canvas_size(left: &Image, right: &Image) -> (usize, usize) {
     let max_w = left.width.max(right.width);
     let max_h = left.height.max(right.height);
     let side_by_side_w = left.width + GAP + right.width;
     let over_under_w = max_w + LABEL_PAD + LABEL_W;
-    // Slider-H needs both per-side labels to sit at opposite edges of
-    // a single line, so the canvas must be wide enough to fit them
-    // without overlap regardless of how narrow the frames are.
     let slider_labels_w = 2 * LABEL_W + GLYPH_W;
-    // Modes 3/4/5 only ever show a single frame at a time, so we want
-    // them pixel-doubled by default — the canvas is sized to fit one
-    // frame at 2×. Capped at 4K so absurdly large inputs stay sane.
     let single_2x = max_w * 2 <= 3840 && max_h * 2 <= 2160;
     let single_scale = if single_2x { 2 } else { 1 };
     let slider_w = single_scale * max_w;
@@ -212,17 +209,51 @@ fn run(rx: Receiver<Pair>) {
         .max(BAR_TEXT_W)
         .max(slider_labels_w);
 
+    let max_lines = left.line_count().max(right.line_count()).max(1);
+    let label_block_h = max_lines * GLYPH_H;
+    // Toggle stacks the left and right label blocks vertically (left
+    // first, right below), so it needs the SUM, not the max — otherwise
+    // a multi-line description pushes the right block (and the
+    // "<-- shown" marker on its first line) outside the allocated area.
+    let toggle_label_block_h = (left.line_count() + right.line_count()) * GLYPH_H;
+
     let over_under_h = left.height + GAP + right.height;
-    let labels_below_h = max_h + LABEL_PAD + GLYPH_H;
-    let slider_h = single_scale * max_h + LABEL_PAD + GLYPH_H;
+    let labels_below_h = max_h + LABEL_PAD + label_block_h;
+    let slider_h = single_scale * max_h + LABEL_PAD + label_block_h;
     let slider_v_h = single_scale * max_h;
-    let toggle_h = single_scale * max_h + LABEL_PAD + 2 * GLYPH_H;
+    let toggle_h = single_scale * max_h + LABEL_PAD + toggle_label_block_h;
     let content_h = over_under_h
         .max(labels_below_h)
         .max(slider_h)
         .max(slider_v_h)
         .max(toggle_h);
     let canvas_h = LAYOUT_BAR_H + MSE_BAR_H + content_h;
+
+    (canvas_w, canvas_h)
+}
+
+fn run(rx: Receiver<Pair>) {
+    let first = match rx.recv() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    let mut left = Image::from_side(
+        &first.left_rgba,
+        first.left_w,
+        first.left_h,
+        first.left_label,
+        first.left_lines,
+    );
+    let mut right = Image::from_side(
+        &first.right_rgba,
+        first.right_w,
+        first.right_h,
+        first.right_label,
+        first.right_lines,
+    );
+    let mut mse = first.mse;
+
+    let (mut canvas_w, mut canvas_h) = required_canvas_size(&left, &right);
 
     // Tiling WMs (i3/sway/hyprland/...) ignore size hints and will
     // resize to fit the tile. `resize` accepts that; `UpperLeft`
@@ -255,6 +286,7 @@ fn run(rx: Receiver<Pair>) {
         }
 
         // Drain pending pairs — keep only the latest.
+        let mut got_update = false;
         loop {
             match rx.try_recv() {
                 Ok(next) => {
@@ -263,19 +295,29 @@ fn run(rx: Receiver<Pair>) {
                         next.left_w,
                         next.left_h,
                         next.left_label,
-                        next.left_caption,
+                        next.left_lines,
                     );
                     right = Image::from_side(
                         &next.right_rgba,
                         next.right_w,
                         next.right_h,
                         next.right_label,
-                        next.right_caption,
+                        next.right_lines,
                     );
                     mse = next.mse;
+                    got_update = true;
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return,
+            }
+        }
+
+        if got_update {
+            let (need_w, need_h) = required_canvas_size(&left, &right);
+            if need_w != canvas_w || need_h != canvas_h {
+                canvas_w = need_w;
+                canvas_h = need_h;
+                canvas.resize(canvas_w * canvas_h, BG);
             }
         }
 
@@ -315,8 +357,10 @@ fn run(rx: Receiver<Pair>) {
         draw_layout_bar(&mut canvas, canvas_w, layout);
         draw_mse_bar(&mut canvas, canvas_w, mse);
         let top = LAYOUT_BAR_H + MSE_BAR_H;
-        let avail_h = canvas_h - top;
-        let scale = pick_scale(layout, &left, &right, canvas_w, avail_h);
+        let (win_w, win_h) = window.get_size();
+        let view_w = win_w.min(canvas_w);
+        let view_h = win_h.min(canvas_h).saturating_sub(top);
+        let scale = pick_scale(layout, &left, &right, view_w, view_h);
         match layout {
             Layout::SideBySide => {
                 render_side_by_side(&mut canvas, canvas_w, canvas_h, top, &left, &right, scale)
@@ -388,13 +432,46 @@ fn title_for(layout: Layout, showing_right: bool, left: &Image, right: &Image) -
     match layout {
         Layout::Toggle => {
             let side = if showing_right {
-                &right.label
+                &right.lines[0]
             } else {
-                &left.label
+                &left.lines[0]
             };
             format!("frame_inspector — toggle: {side} (click to swap)")
         }
         _ => initial_title().to_string(),
+    }
+}
+
+/// Draw all lines of an image's label block, left-aligned at `(x, y)`.
+fn draw_lines_left(
+    canvas: &mut [u32],
+    canvas_w: usize,
+    canvas_h: usize,
+    x: usize,
+    y: usize,
+    img: &Image,
+    color: u32,
+) {
+    for (i, line) in img.lines.iter().enumerate() {
+        draw_text(canvas, canvas_w, canvas_h, x, y + i * GLYPH_H, line, color);
+    }
+}
+
+/// Draw all lines of an image's label block, right-aligned within
+/// `area_w` pixels starting at `x_origin`.
+fn draw_lines_right(
+    canvas: &mut [u32],
+    canvas_w: usize,
+    canvas_h: usize,
+    area_w: usize,
+    y: usize,
+    img: &Image,
+    color: u32,
+) {
+    for (i, line) in img.lines.iter().enumerate() {
+        let text_w = line.chars().count() * GLYPH_W;
+        let x = area_w.saturating_sub(text_w);
+        draw_text(canvas, canvas_w, canvas_h, x, y + i * GLYPH_H, line, color);
     }
 }
 
@@ -460,18 +537,23 @@ fn pick_scale(
 ) -> usize {
     let max_w = left.width.max(right.width);
     let max_h = left.height.max(right.height);
+    let max_lines = left.line_count().max(right.line_count()).max(1);
+    let label_block_h = max_lines * GLYPH_H;
+    // See `required_canvas_size`: toggle stacks both label blocks
+    // vertically, so its budget is the sum, not the max.
+    let toggle_label_block_h = (left.line_count() + right.line_count()) * GLYPH_H;
     let (need_w, need_h) = match layout {
         Layout::SideBySide => (
             2 * left.width + GAP + 2 * right.width,
-            2 * max_h + LABEL_PAD + GLYPH_H,
+            2 * max_h + LABEL_PAD + label_block_h,
         ),
         Layout::OverUnder => (
             2 * max_w + LABEL_PAD + LABEL_W,
             2 * left.height + GAP + 2 * right.height,
         ),
-        Layout::Slider => (2 * max_w, 2 * max_h + LABEL_PAD + GLYPH_H),
+        Layout::Slider => (2 * max_w, 2 * max_h + LABEL_PAD + label_block_h),
         Layout::SliderV => (2 * max_w + LABEL_PAD + LABEL_W, 2 * max_h),
-        Layout::Toggle => (2 * max_w, 2 * max_h + LABEL_PAD + 2 * GLYPH_H),
+        Layout::Toggle => (2 * max_w, 2 * max_h + LABEL_PAD + toggle_label_block_h),
     };
     if need_w <= canvas_w && need_h <= avail_h {
         2
@@ -495,22 +577,14 @@ fn render_side_by_side(
     blit_scaled(canvas, canvas_w, left, 0, top, scale);
     blit_scaled(canvas, canvas_w, right, lw + GAP, top, scale);
     let label_y = top + lh.max(rh) + LABEL_PAD;
-    draw_text(
-        canvas,
-        canvas_w,
-        canvas_h,
-        0,
-        label_y,
-        &left.line(),
-        LABEL_COLOR,
-    );
-    draw_text(
+    draw_lines_left(canvas, canvas_w, canvas_h, 0, label_y, left, LABEL_COLOR);
+    draw_lines_left(
         canvas,
         canvas_w,
         canvas_h,
         lw + GAP,
         label_y,
-        &right.line(),
+        right,
         LABEL_COLOR,
     );
 }
@@ -530,24 +604,26 @@ fn render_over_under(
     blit_scaled(canvas, canvas_w, right, 0, top + lh + GAP, scale);
     let max_w = (left.width.max(right.width)) * scale;
     let label_x = max_w + LABEL_PAD;
-    let left_label_y = top + lh.saturating_sub(GLYPH_H) / 2;
-    let right_label_y = top + (lh + GAP) + rh.saturating_sub(GLYPH_H) / 2;
-    draw_text(
+    let left_block_h = left.line_count() * GLYPH_H;
+    let right_block_h = right.line_count() * GLYPH_H;
+    let left_label_y = top + lh.saturating_sub(left_block_h) / 2;
+    let right_label_y = top + (lh + GAP) + rh.saturating_sub(right_block_h) / 2;
+    draw_lines_left(
         canvas,
         canvas_w,
         canvas_h,
         label_x,
         left_label_y,
-        &left.line(),
+        left,
         LABEL_COLOR,
     );
-    draw_text(
+    draw_lines_left(
         canvas,
         canvas_w,
         canvas_h,
         label_x,
         right_label_y,
-        &right.line(),
+        right,
         LABEL_COLOR,
     );
 }
@@ -597,28 +673,15 @@ fn render_slider(
     // expand the label area outward so the two never overlap and the
     // left/right placement still maps to the slider sides.
     let label_y = top + h + LABEL_PAD;
-    let left_text = left.line();
-    let right_text = right.line();
-    let left_text_w = left_text.chars().count() * GLYPH_W;
-    let right_text_w = right_text.chars().count() * GLYPH_W;
-    let label_area_w = max_w.max(left_text_w + GLYPH_W + right_text_w);
-    let right_x = label_area_w.saturating_sub(right_text_w);
-    draw_text(
+    let label_area_w = max_w.max(2 * LABEL_W + GLYPH_W);
+    draw_lines_left(canvas, canvas_w, canvas_h, 0, label_y, left, LABEL_COLOR);
+    draw_lines_right(
         canvas,
         canvas_w,
         canvas_h,
-        0,
+        label_area_w,
         label_y,
-        &left_text,
-        LABEL_COLOR,
-    );
-    draw_text(
-        canvas,
-        canvas_w,
-        canvas_h,
-        right_x,
-        label_y,
-        &right_text,
+        right,
         LABEL_COLOR,
     );
 }
@@ -665,24 +728,26 @@ fn render_slider_v(
     // (right/actual) half — so the side of the curtain each label
     // refers to is unambiguous.
     let label_x = max_w + LABEL_PAD;
-    let upper_label_y = top + (max_h / 4).saturating_sub(GLYPH_H / 2);
-    let lower_label_y = top + (3 * max_h / 4).saturating_sub(GLYPH_H / 2);
-    draw_text(
+    let left_block_h = left.line_count() * GLYPH_H;
+    let right_block_h = right.line_count() * GLYPH_H;
+    let upper_label_y = top + (max_h / 4).saturating_sub(left_block_h / 2);
+    let lower_label_y = top + (3 * max_h / 4).saturating_sub(right_block_h / 2);
+    draw_lines_left(
         canvas,
         canvas_w,
         canvas_h,
         label_x,
         upper_label_y,
-        &left.line(),
+        left,
         LABEL_COLOR,
     );
-    draw_text(
+    draw_lines_left(
         canvas,
         canvas_w,
         canvas_h,
         label_x,
         lower_label_y,
-        &right.line(),
+        right,
         LABEL_COLOR,
     );
 }
@@ -702,24 +767,49 @@ fn render_toggle(
     blit_scaled(canvas, canvas_w, visible, 0, top, scale);
     let label_y = top + (left.height.max(right.height)) * scale + LABEL_PAD;
     let mark = |on: bool| if on { "  <-- shown" } else { "" };
+    let left_first = format!("{}{}", left.lines[0], mark(!showing_right));
+    let right_first = format!("{}{}", right.lines[0], mark(showing_right));
+    let left_block_h = left.line_count().max(1) * GLYPH_H;
     draw_text(
         canvas,
         canvas_w,
         canvas_h,
         0,
         label_y,
-        &format!("{}{}", left.line(), mark(!showing_right)),
+        &left_first,
         LABEL_COLOR,
     );
+    for (i, line) in left.lines.iter().skip(1).enumerate() {
+        draw_text(
+            canvas,
+            canvas_w,
+            canvas_h,
+            0,
+            label_y + (i + 1) * GLYPH_H,
+            line,
+            LABEL_COLOR,
+        );
+    }
     draw_text(
         canvas,
         canvas_w,
         canvas_h,
         0,
-        label_y + GLYPH_H,
-        &format!("{}{}", right.line(), mark(showing_right)),
+        label_y + left_block_h,
+        &right_first,
         LABEL_COLOR,
     );
+    for (i, line) in right.lines.iter().skip(1).enumerate() {
+        draw_text(
+            canvas,
+            canvas_w,
+            canvas_h,
+            0,
+            label_y + left_block_h + (i + 1) * GLYPH_H,
+            line,
+            LABEL_COLOR,
+        );
+    }
 }
 
 fn blit_scaled(canvas: &mut [u32], canvas_w: usize, src: &Image, x: usize, y: usize, scale: usize) {
