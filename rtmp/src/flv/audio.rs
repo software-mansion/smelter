@@ -89,6 +89,7 @@ impl TryFrom<RtmpAudioCodec> for LegacyFlvAudioCodec {
     fn try_from(codec: RtmpAudioCodec) -> Result<Self, Self::Error> {
         match codec {
             RtmpAudioCodec::Aac => Ok(LegacyFlvAudioCodec::Aac),
+            _ => Err(AudioCodecConversionError::UnsupportedLegacyRtmp(codec)),
         }
     }
 }

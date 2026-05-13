@@ -2,12 +2,13 @@ use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
 
-use crate::{AudioChannels, amf0::AmfValue};
+use crate::{AudioChannels, TrackId, amf0::AmfValue};
 
 mod aac;
-pub use aac::AacAudioConfig;
+mod opus;
 
-use crate::TrackId;
+pub use aac::AacAudioConfig;
+pub use opus::OpusAudioConfig;
 
 /// Public video codec identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -22,6 +23,7 @@ pub enum RtmpVideoCodec {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RtmpAudioCodec {
     Aac,
+    Opus,
 }
 
 #[derive(Debug, Clone)]
