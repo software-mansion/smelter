@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    EX_HEADER_BIT,
+    EX_HEADER_BIT, MAX_TIMESTAMP_OFFSET_NANOS,
     mod_ex_video::{VideoPacketModExType, resolve_mod_ex, serialize_mod_ex},
     video::{VideoTagFrameType, parse_composition_time, serialize_composition_time},
 };
@@ -345,9 +345,9 @@ impl ExVideoTag {
 
                 // TimestampOffsetNano payload is UI24 (3 bytes), max 999,999 ns per spec.
                 let mod_ex_data: Option<[u8; 3]> = match timestamp_offset_nanos {
-                    Some(nanos) if *nanos > 999_999 => {
+                    Some(nanos) if *nanos > MAX_TIMESTAMP_OFFSET_NANOS => {
                         return Err(RtmpMessageSerializeError::InternalError(format!(
-                            "timestamp_offset_nanos {nanos} exceeds max 999999"
+                            "timestamp_offset_nanos {nanos} exceeds max {MAX_TIMESTAMP_OFFSET_NANOS}"
                         )));
                     }
                     Some(nanos) => {

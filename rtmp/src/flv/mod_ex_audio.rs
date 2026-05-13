@@ -1,8 +1,8 @@
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::error::FlvAudioTagParseError;
+use crate::{RtmpMessageSerializeError, error::FlvAudioTagParseError};
 
-use super::ex_audio::ExAudioPacketType;
+use super::{MAX_TIMESTAMP_OFFSET_NANOS, ex_audio::ExAudioPacketType};
 
 /// Enhanced RTMP ModEx sub-type for audio packets.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,9 +18,13 @@ impl AudioPacketModExType {
             _ => Err(FlvAudioTagParseError::UnknownAudioPacketModExType(value)),
         }
     }
-}
 
-const MAX_TIMESTAMP_OFFSET_NANOS: u32 = 999_999;
+    fn into_raw(self) -> u8 {
+        match self {
+            Self::TimestampOffsetNano => 0,
+        }
+    }
+}
 
 /// Result of resolving ModEx prefixes from the wire.
 pub(super) struct ModExResult {
@@ -95,6 +99,40 @@ pub(super) fn resolve_mod_ex(data: Bytes) -> Result<ModExResult, FlvAudioTagPars
             });
         }
     }
+}
+
+/// Serializes a single ModEx entry into `buf`.
+///
+/// Wire format:
+/// 1. UI8 data_size - 1 (or 0xFF followed by UI16 data_size - 1 if size >= 256)
+/// 2. ModEx data payload
+/// 3. `[AudioPacketModExType(4 bits) | ExAudioPacketType(4 bits)]`
+pub(super) fn serialize_mod_ex(
+    buf: &mut BytesMut,
+    mod_ex_type: AudioPacketModExType,
+    mod_ex_data: &[u8],
+    next_packet_type: ExAudioPacketType,
+) -> Result<(), RtmpMessageSerializeError> {
+    let data_size = mod_ex_data.len();
+
+    if data_size == 0 {
+        return Err(RtmpMessageSerializeError::InternalError(
+            "ModEx data must be at least 1 byte".into(),
+        ));
+    }
+
+    if data_size >= 256 {
+        buf.put_u8(0xFF);
+        buf.put_u16((data_size - 1) as u16);
+    } else {
+        buf.put_u8((data_size - 1) as u8);
+    }
+
+    buf.put(mod_ex_data);
+
+    let type_byte = (mod_ex_type.into_raw() << 4) | next_packet_type.into_raw();
+    buf.put_u8(type_byte);
+    Ok(())
 }
 
 #[cfg(test)]
