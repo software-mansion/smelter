@@ -24,11 +24,11 @@ expose-parsers = []
 vk-api-dump = []
 vk-validation = []
 wgpu = ["dep:wgpu"]
-transcoder = ["dep:naga"]
+transcoder = ["dep:naga", "dep:bytemuck"]
 default = ["wgpu"]
 
 [dependencies]
-bytemuck = { version = "1.19.0", features = ["derive"] }
+bytemuck = { version = "1.19.0", features = ["derive"], optional = true }
 bytes = "1"
 derivative = "2.2.0"
 h264-reader = { workspace = true }
@@ -48,6 +48,7 @@ clap = { version = "4.5.20", features = ["derive"] }
 tracing-subscriber = "0.3.20"
 wgpu = { version = "29.0.0", features = ["noop"] }
 winit = "0.29"
+bytemuck = { version = "1.19.0", features = ["derive"] }
 
 [build-dependencies]
 cfg_aliases = "0.2.1"
