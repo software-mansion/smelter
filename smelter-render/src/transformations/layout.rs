@@ -176,14 +176,9 @@ impl LayoutNode {
         let layouts = self.layout_provider.layouts(pts, &input_resolutions);
         let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
 
-        // TODO: Remove this CI check once lanczos3 snapshots are handled properly
-        let global_filter = if std::env::var("CI").is_ok() {
-            ImageScalingFilter::Bilinear
-        } else {
-            match ctx.wgpu_ctx.mode {
-                RenderingMode::GpuOptimized | RenderingMode::WebGl => ImageScalingFilter::Lanczos3,
-                RenderingMode::CpuOptimized => ImageScalingFilter::Bilinear,
-            }
+        let global_filter = match ctx.wgpu_ctx.mode {
+            RenderingMode::GpuOptimized | RenderingMode::WebGl => ImageScalingFilter::Lanczos3,
+            RenderingMode::CpuOptimized => ImageScalingFilter::Bilinear,
         };
 
         // Apply global filter and compute mip levels for Lanczos3 child nodes.
