@@ -14,7 +14,7 @@ retries = 4
 
 [[profile.ci.overrides]]
 filter = 'package(/^integration-tests/)'
-threads-required = 2
+threads-required = 4
 retries = 2
 
 [profile.audit]
