@@ -4,14 +4,13 @@ use std::time::Duration;
 
 use serde_json::json;
 use smelter_api::*;
+use smelter_core::QueueInputOptions;
 use smelter_core::codecs::VideoDecoderOptions;
 use smelter_core::protocols::{
-    HlsInputOptions, HlsInputVideoDecoders, Mp4InputOptions, Mp4InputSource,
-    Mp4InputVideoDecoders, PortOrRange, RtmpServerInputDecoders, RtmpServerInputOptions,
-    RtpAudioOptions, RtpInputOptions, RtpInputTransportProtocol, WebrtcVideoDecoderOptions,
-    WhepInputOptions, WhipInputOptions,
+    HlsInputOptions, HlsInputVideoDecoders, Mp4InputOptions, Mp4InputSource, Mp4InputVideoDecoders,
+    PortOrRange, RtmpServerInputDecoders, RtmpServerInputOptions, RtpAudioOptions, RtpInputOptions,
+    RtpInputTransportProtocol, WebrtcVideoDecoderOptions, WhepInputOptions, WhipInputOptions,
 };
-use smelter_core::QueueInputOptions;
 
 #[cfg(target_os = "linux")]
 use smelter_core::protocols::{V4l2Format, V4l2InputOptions};

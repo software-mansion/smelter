@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use serde_json::json;
 use smelter_api::*;
+use smelter_render::Resolution;
 use smelter_render::image::{ImageSource, ImageType};
 use smelter_render::shader;
 use smelter_render::web_renderer::{WebEmbeddingMethod, WebRendererSpec as RenderWebRendererSpec};
-use smelter_render::Resolution;
 
 type RendererSpec = smelter_render::RendererSpec;
 
