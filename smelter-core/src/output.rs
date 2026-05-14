@@ -4,7 +4,7 @@ use smelter_render::scene::Component;
 
 use crate::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RegisterOutputOptions {
     pub output_options: ProtocolOutputOptions,
     pub video: Option<RegisterOutputVideoOptions>,
@@ -25,7 +25,7 @@ pub struct RegisterRawDataOutputOptions {
     pub audio: Option<RegisterOutputAudioOptions>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ProtocolOutputOptions {
     Rtp(RtpOutputOptions),
     Rtmp(RtmpOutputOptions),
@@ -35,13 +35,13 @@ pub enum ProtocolOutputOptions {
     Whep(WhepOutputOptions),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RegisterOutputVideoOptions {
     pub initial: Component,
     pub end_condition: PipelineOutputEndCondition,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RegisterOutputAudioOptions {
     pub initial: AudioMixerConfig,
     pub mixing_strategy: AudioMixingStrategy,
@@ -49,25 +49,25 @@ pub struct RegisterOutputAudioOptions {
     pub end_condition: PipelineOutputEndCondition,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AudioMixerConfig {
     pub inputs: Vec<AudioMixerInputConfig>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AudioMixerInputConfig {
     pub input_id: InputId,
     // [0, 2] range of input volume
     pub volume: f32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AudioMixingStrategy {
     SumClip,
     SumScale,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PipelineOutputEndCondition {
     AnyOf(Vec<InputId>),
     AllOf(Vec<InputId>),

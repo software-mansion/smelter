@@ -12,7 +12,7 @@ use crate::{
     queue::QueueInputOptions,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RtpInputOptions {
     pub port: PortOrRange,
     pub transport_protocol: RtpInputTransportProtocol,
@@ -39,7 +39,7 @@ pub enum RtpInputTransportProtocol {
     TcpServer,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RtpOutputOptions {
     pub connection_options: RtpOutputConnectionOptions,
     pub video: Option<VideoEncoderOptions>,

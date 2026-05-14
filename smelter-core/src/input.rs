@@ -2,7 +2,7 @@ use std::{fmt, sync::Arc, time::Duration};
 
 use crate::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RegisterInputOptions {
     Rtp(RtpInputOptions),
     RtmpServer(RtmpServerInputOptions),

@@ -6,14 +6,14 @@ use url::Url;
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 use crate::queue::QueueInputOptions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RtmpOutputOptions {
     pub connection: RtmpConnectionOptions,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RtmpConnectionOptions {
     pub host: String,
     pub port: u16,
@@ -59,7 +59,7 @@ impl RtmpConnectionOptions {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RtmpServerInputOptions {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
@@ -67,7 +67,7 @@ pub struct RtmpServerInputOptions {
     pub queue_options: QueueInputOptions,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RtmpServerInputDecoders {
     pub h264: Option<VideoDecoderOptions>,
 }

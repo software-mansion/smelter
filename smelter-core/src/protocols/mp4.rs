@@ -3,7 +3,7 @@ use std::{path::Path, sync::Arc, time::Duration};
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 use crate::queue::QueueInputOptions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Mp4InputOptions {
     pub source: Mp4InputSource,
     pub should_loop: bool,
@@ -13,7 +13,7 @@ pub struct Mp4InputOptions {
     pub queue_options: QueueInputOptions,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Mp4OutputOptions {
     pub output_path: Arc<Path>,
     pub video: Option<VideoEncoderOptions>,
@@ -21,13 +21,13 @@ pub struct Mp4OutputOptions {
     pub raw_options: Vec<(Arc<str>, Arc<str>)>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Mp4InputSource {
     Url(Arc<str>),
     File(Arc<Path>),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Mp4InputVideoDecoders {
     pub h264: Option<VideoDecoderOptions>,
 }

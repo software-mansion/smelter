@@ -13,7 +13,7 @@ use crate::{
     queue::QueueInputOptions,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WhipInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
@@ -25,7 +25,7 @@ pub struct WhipInputOptions {
     pub queue_options: QueueInputOptions,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WhepInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
@@ -46,7 +46,7 @@ pub enum WebrtcVideoDecoderOptions {
     Any,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WhipOutputOptions {
     pub endpoint_url: Arc<str>,
     pub bearer_token: Option<Arc<str>>,
@@ -54,14 +54,14 @@ pub struct WhipOutputOptions {
     pub audio: Option<AudioWhipOptions>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WhepOutputOptions {
     pub bearer_token: Option<Arc<str>>,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VideoWhipOptions {
     pub encoder_preferences: Vec<WhipVideoEncoderOptions>,
 }
@@ -75,7 +75,7 @@ pub enum WhipVideoEncoderOptions {
     Any(Resolution),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AudioWhipOptions {
     pub encoder_preferences: Vec<WhipAudioEncoderOptions>,
 }

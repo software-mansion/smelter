@@ -19,13 +19,13 @@ impl Display for ComponentId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InputStreamComponent {
     pub id: Option<ComponentId>,
     pub input_id: InputId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ShaderComponent {
     pub id: Option<ComponentId>,
     pub children: Vec<Component>,
@@ -36,7 +36,7 @@ pub struct ShaderComponent {
     pub size: Size,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ShaderParam {
     F32(f32),
     U32(u32),
@@ -45,13 +45,13 @@ pub enum ShaderParam {
     Struct(Vec<ShaderParamStructField>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ShaderParamStructField {
     pub field_name: String,
     pub value: ShaderParam,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WebViewComponent {
     pub id: Option<ComponentId>,
     pub children: Vec<Component>,
@@ -67,7 +67,7 @@ pub struct ImageComponent {
     pub height: Option<f32>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextComponent {
     pub id: Option<ComponentId>,
     pub text: Arc<str>,
@@ -87,21 +87,21 @@ pub struct TextComponent {
     pub dimensions: TextDimensions,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TextStyle {
     Normal,
     Italic,
     Oblique,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TextWrap {
     None,
     Glyph,
     Word,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TextWeight {
     Thin,
     ExtraLight,
@@ -114,7 +114,7 @@ pub enum TextWeight {
     Black,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TextDimensions {
     /// Renders text and "trims" texture to smallest possible size
     Fitted {
@@ -133,7 +133,7 @@ pub enum TextDimensions {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ViewComponent {
     pub id: Option<ComponentId>,
     pub children: Vec<Component>,
@@ -161,7 +161,7 @@ pub enum Overflow {
     Fit,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Transition {
     pub duration: Duration,
     pub interpolation_kind: InterpolationKind,
@@ -208,7 +208,7 @@ impl Padding {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RescalerComponent {
     pub id: Option<ComponentId>,
     pub child: Box<Component>,
@@ -240,7 +240,7 @@ pub enum ImageScalingFilter {
     Lanczos3,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TilesComponent {
     pub id: Option<ComponentId>,
     pub children: Vec<Component>,

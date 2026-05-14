@@ -6,7 +6,7 @@ use crate::{
     state::{RegisterCtx, RenderCtx, node_texture::NodeTexture},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WebRendererSpec {
     pub url: Arc<str>,
     pub resolution: Resolution,

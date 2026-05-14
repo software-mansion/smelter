@@ -220,7 +220,7 @@ impl std::fmt::Debug for WeakQueueInput {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct QueueInputOptions {
     pub required: bool,
     pub audio_side_channel: bool,

@@ -18,7 +18,7 @@ pub use transition::*;
 
 use crate::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct VideoScene {
     pub root: Component,

@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 
 use crate::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Component {
     InputStream(InputStream),
@@ -19,7 +19,7 @@ pub enum Component {
     Rescaler(Rescaler),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct InputStream {
     /// Id of a component.
@@ -28,7 +28,7 @@ pub struct InputStream {
     pub input_id: InputId,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct View {
     /// Id of a component.
@@ -117,7 +117,7 @@ pub struct View {
     pub padding_left: Option<f32>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct BoxShadow {
     pub offset_x: Option<f32>,
@@ -126,7 +126,7 @@ pub struct BoxShadow {
     pub blur_radius: Option<f32>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Overflow {
     /// Render everything, including content that extends beyond their parent.
@@ -146,7 +146,7 @@ pub enum Overflow {
     Fit,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ViewDirection {
     /// Children positioned from left to right.
@@ -155,7 +155,7 @@ pub enum ViewDirection {
     Column,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Rescaler {
     /// Id of a component.
@@ -221,7 +221,7 @@ pub struct Rescaler {
     pub box_shadow: Option<Vec<BoxShadow>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum RescaleMode {
     /// Resize the component proportionally, so one of the dimensions is the same as its parent,
@@ -233,7 +233,7 @@ pub enum RescaleMode {
 }
 
 /// WebView component renders a website using Chromium.
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct WebView {
     /// Id of a component.
@@ -252,7 +252,7 @@ pub struct WebView {
     pub instance_id: RendererId,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Image {
     /// Id of a component.
@@ -270,7 +270,7 @@ pub struct Image {
     pub height: Option<f32>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Shader {
     /// Id of a component.
@@ -298,7 +298,7 @@ pub struct Shader {
     pub resolution: Resolution,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(
     tag = "type",
     rename_all = "snake_case",
@@ -315,7 +315,7 @@ pub enum ShaderParam {
     Struct(Vec<ShaderParamStructField>),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 pub struct ShaderParamStructField {
     pub field_name: String,
     #[serde(flatten)]
@@ -323,7 +323,7 @@ pub struct ShaderParamStructField {
     pub value: ShaderParam,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Text {
     /// Id of a component.
@@ -367,7 +367,7 @@ pub struct Text {
     pub weight: Option<TextWeight>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TextStyle {
     Normal,
@@ -375,7 +375,7 @@ pub enum TextStyle {
     Oblique,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TextWrapMode {
     /// Disable text wrapping. Text that does not fit inside the texture will be cut off.
@@ -387,7 +387,7 @@ pub enum TextWrapMode {
 }
 
 /// Font weight, based on the [OpenType specification](https://learn.microsoft.com/en-gb/typography/opentype/spec/os2#usweightclass).
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TextWeight {
     /// Weight 100.
@@ -410,14 +410,14 @@ pub enum TextWeight {
     Black,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Interpolation {
     Linear,
     Spring,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Tiles {
     /// Id of a component.
