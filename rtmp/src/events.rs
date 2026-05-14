@@ -16,7 +16,6 @@ pub enum RtmpVideoCodec {
     H264,
     Vp8,
     Vp9,
-    Av1,
 }
 
 /// Public audio codec identifier.

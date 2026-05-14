@@ -16,8 +16,8 @@ const CONNECT_TRANSACTION_ID: u32 = 1;
 const CREATE_STREAM_TRANSACTION_ID: u32 = 2;
 
 use crate::{
-    CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, FOURCC_INFO_CAN_DECODE,
-    FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD,
+    CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, FOURCC_INFO_CAN_ENCODE,
+    FOURCC_INFO_CAN_FORWARD,
 };
 
 use crate::{AUDIO_FOURCC_LIST, VIDEO_FOURCC_LIST};
@@ -139,31 +139,24 @@ pub(super) fn send_connect(
     stream: &mut RtmpMessageStream,
     config: &RtmpClientConfig,
 ) -> Result<(), RtmpConnectionError> {
+    let encode_forward_caps =
+        AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64);
     let video_fourcc_info_map = HashMap::from_iter([
         (
             "*".to_string(),
             AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
         ),
-        (
-            "avc1".to_string(),
-            AmfValue::Number(
-                (FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64,
-            ),
-        ),
+        ("avc1".to_string(), encode_forward_caps.clone()),
+        ("vp09".to_string(), encode_forward_caps.clone()),
+        ("vp08".to_string(), encode_forward_caps.clone()),
     ]);
     let audio_fourcc_info_map = HashMap::from_iter([
         (
             "*".to_string(),
             AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
         ),
-        (
-            "mp4a".to_string(),
-            AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64),
-        ),
-        (
-            "Opus".to_string(),
-            AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64),
-        ),
+        ("mp4a".to_string(), encode_forward_caps.clone()),
+        ("Opus".to_string(), encode_forward_caps),
     ]);
     let fourcc_list: Vec<AmfValue> = VIDEO_FOURCC_LIST
         .iter()

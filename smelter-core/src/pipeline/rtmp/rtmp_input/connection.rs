@@ -156,9 +156,6 @@ impl RtmpConnectionState {
                 RtmpVideoCodec::H264 => self.process_video(data, VideoCodec::H264)?,
                 RtmpVideoCodec::Vp8 => self.process_video(data, VideoCodec::Vp8)?,
                 RtmpVideoCodec::Vp9 => self.process_video(data, VideoCodec::Vp9)?,
-                codec => {
-                    warn!(?codec, "Unsupported video codec");
-                }
             },
             RtmpEvent::AudioData(data) => match data.codec {
                 RtmpAudioCodec::Aac => self.process_audio(data, AudioCodec::Aac)?,
@@ -199,10 +196,6 @@ impl RtmpConnectionState {
             }),
             RtmpVideoCodec::Vp8 => VideoDecoderOptions::FfmpegVp8,
             RtmpVideoCodec::Vp9 => VideoDecoderOptions::FfmpegVp9,
-            codec => {
-                warn!(?codec, "Unsupported video codec");
-                return Ok(());
-            }
         };
 
         let input_ref = self.input_ref.clone();

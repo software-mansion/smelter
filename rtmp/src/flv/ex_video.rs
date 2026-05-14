@@ -87,7 +87,6 @@ impl From<RtmpVideoCodec> for ExVideoFourCc {
         match codec {
             RtmpVideoCodec::Vp8 => ExVideoFourCc::Vp08,
             RtmpVideoCodec::Vp9 => ExVideoFourCc::Vp09,
-            RtmpVideoCodec::Av1 => ExVideoFourCc::Av01,
             RtmpVideoCodec::H264 => ExVideoFourCc::Avc1,
         }
     }
@@ -100,9 +99,8 @@ impl TryFrom<ExVideoFourCc> for RtmpVideoCodec {
         match four_cc {
             ExVideoFourCc::Vp08 => Ok(RtmpVideoCodec::Vp8),
             ExVideoFourCc::Vp09 => Ok(RtmpVideoCodec::Vp9),
-            ExVideoFourCc::Av01 => Ok(RtmpVideoCodec::Av1),
             ExVideoFourCc::Avc1 => Ok(RtmpVideoCodec::H264),
-            ExVideoFourCc::Hvc1 | ExVideoFourCc::Vvc1 => {
+            ExVideoFourCc::Av01 | ExVideoFourCc::Hvc1 | ExVideoFourCc::Vvc1 => {
                 Err(VideoCodecConversionError::UnsupportedEnhancedFlv(four_cc))
             }
         }

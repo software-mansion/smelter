@@ -21,8 +21,8 @@ pub use track::TrackId;
 pub(crate) use flv::*;
 pub(crate) use track::TrackKey;
 
-pub(crate) const VIDEO_FOURCC_LIST: [&str; 6] = ["av01", "vp09", "vp08", "hvc1", "vvc1", "avc1"];
-pub(crate) const AUDIO_FOURCC_LIST: [&str; 6] = ["mp4a", "Opus", ".mp3", "fLaC", "ac-3", "ec-3"];
+pub(crate) const VIDEO_FOURCC_LIST: [&str; 3] = ["avc1", "vp09", "vp08"];
+pub(crate) const AUDIO_FOURCC_LIST: [&str; 2] = ["mp4a", "Opus"];
 
 /// Capability flags for `videoFourCcInfoMap` / `audioFourCcInfoMap` entries
 /// in the E-RTMP connect handshake. See `enum FourCcInfoMask` in the spec.

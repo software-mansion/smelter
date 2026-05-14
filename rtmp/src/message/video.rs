@@ -149,7 +149,7 @@ fn video_into_raw(
             data: video.data,
         })
         .serialize()?,
-        RtmpVideoCodec::Av1 | RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
+        RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
             let timestamp_offset_nanos = match (dts_nanos % 1_000_000) as u32 {
                 0 => None,
                 offset => Some(offset),
@@ -192,7 +192,7 @@ fn config_into_raw(
             data: config.data,
         })
         .serialize()?,
-        RtmpVideoCodec::Av1 | RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
+        RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
             FlvVideoData::Enhanced(ExVideoTag::VideoBody {
                 four_cc: config.codec.into(),
                 packet: ExVideoPacket::SequenceStart(config.data),
