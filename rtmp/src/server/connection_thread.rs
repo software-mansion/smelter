@@ -28,7 +28,7 @@ use crate::{
     FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD,
 };
 
-use crate::VIDEO_FOURCC_LIST;
+use crate::{AUDIO_FOURCC_LIST, VIDEO_FOURCC_LIST};
 
 /// For server we can pick this number for client it would be based on value
 /// that came as _result for createStream
@@ -203,25 +203,39 @@ impl RtmpServerConnectionState {
                 ),
             ),
         ]);
+        let audio_fourcc_info_map = HashMap::from_iter([
+            (
+                "*".to_string(),
+                AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
+            ),
+            (
+                "mp4a".to_string(),
+                AmfValue::Number((FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_FORWARD) as f64),
+            ),
+            (
+                "Opus".to_string(),
+                AmfValue::Number((FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_FORWARD) as f64),
+            ),
+        ]);
+        let fourcc_list: Vec<AmfValue> = VIDEO_FOURCC_LIST
+            .iter()
+            .chain(AUDIO_FOURCC_LIST.iter())
+            .map(|v| AmfValue::String((*v).to_string()))
+            .collect();
         // _result - connect response
         let props = HashMap::from_iter(
             [
                 ("fmsVer", "FMS/3,0,1,123".into()),
                 ("capabilities", AmfValue::Number(31.0)),
-                (
-                    "fourCcList",
-                    AmfValue::StrictArray(
-                        VIDEO_FOURCC_LIST
-                            .iter()
-                            .map(|v| AmfValue::String((*v).to_string()))
-                            .collect(),
-                    ),
-                ),
+                ("fourCcList", AmfValue::StrictArray(fourcc_list)),
                 (
                     "videoFourCcInfoMap",
                     AmfValue::Object(video_fourcc_info_map),
                 ),
-                // TODO: add audioFourCcInfoMap once enhanced audio tags are implemented.
+                (
+                    "audioFourCcInfoMap",
+                    AmfValue::Object(audio_fourcc_info_map),
+                ),
                 (
                     "capsEx",
                     AmfValue::Number(

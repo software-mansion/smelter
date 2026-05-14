@@ -20,7 +20,7 @@ use crate::{
     FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD,
 };
 
-use crate::VIDEO_FOURCC_LIST;
+use crate::{AUDIO_FOURCC_LIST, VIDEO_FOURCC_LIST};
 
 /// -> - from client to server
 /// <- - from server to client
@@ -151,32 +151,45 @@ pub(super) fn send_connect(
             ),
         ),
     ]);
+    let audio_fourcc_info_map = HashMap::from_iter([
+        (
+            "*".to_string(),
+            AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
+        ),
+        (
+            "mp4a".to_string(),
+            AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64),
+        ),
+        (
+            "Opus".to_string(),
+            AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64),
+        ),
+    ]);
+    let fourcc_list: Vec<AmfValue> = VIDEO_FOURCC_LIST
+        .iter()
+        .chain(AUDIO_FOURCC_LIST.iter())
+        .map(|v| AmfValue::String((*v).to_string()))
+        .collect();
     let props = HashMap::from_iter(
         [
             ("app", config.app.clone().into()),
             ("tcUrl", config.tc_url().into()),
             ("flashVer", "FMS/3,0,1,123".into()),
-            // True if proxy is being used
             ("fpad", AmfValue::Boolean(false)),
-            // TODO: add config option
-            ("audioCodecs", AmfValue::Number(0x0FFF as f64)), // all RTMP supported
-            // TODO: add config option
-            ("videoCodecs", AmfValue::Number(0x00FF as f64)), // all RTMP supported
+            // legacy RTMP codecs
+            ("audioCodecs", AmfValue::Number(0x0400 as f64)), // AAC
+            ("videoCodecs", AmfValue::Number(0x0080 as f64)), // H.264
             ("videoFunction", AmfValue::Number(0.0)),
-            (
-                "fourCcList",
-                AmfValue::StrictArray(
-                    VIDEO_FOURCC_LIST
-                        .iter()
-                        .map(|v| AmfValue::String((*v).to_string()))
-                        .collect(),
-                ),
-            ),
+            // E-RTMP codecs
+            ("fourCcList", AmfValue::StrictArray(fourcc_list)),
             (
                 "videoFourCcInfoMap",
                 AmfValue::Object(video_fourcc_info_map),
             ),
-            // TODO: add audioFourCcInfoMap once enhanced audio tags are implemented.
+            (
+                "audioFourCcInfoMap",
+                AmfValue::Object(audio_fourcc_info_map),
+            ),
             (
                 "capsEx",
                 AmfValue::Number(
