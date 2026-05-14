@@ -178,6 +178,40 @@ impl From<&h264_reader::nal::sps::SeqParameterSet> for ColorRange {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CodecColorDescription {
+    pub colour_primaries: u8,
+    pub transfer_characteristics: u8,
+    pub matrix_coefficients: u8,
+}
+
+impl From<ColorSpace> for CodecColorDescription {
+    fn from(color_space: ColorSpace) -> Self {
+        match color_space {
+            ColorSpace::Unspecified => Self {
+                colour_primaries: 2,
+                transfer_characteristics: 2,
+                matrix_coefficients: 2,
+            },
+            ColorSpace::BT709 => Self {
+                colour_primaries: 1,
+                transfer_characteristics: 1,
+                matrix_coefficients: 1,
+            },
+            ColorSpace::BT601Ntsc => Self {
+                colour_primaries: 6,
+                transfer_characteristics: 6,
+                matrix_coefficients: 6,
+            },
+            ColorSpace::BT601Pal => Self {
+                colour_primaries: 5,
+                transfer_characteristics: 6,
+                matrix_coefficients: 5,
+            },
+        }
+    }
+}
+
 /// Parameters that describe an encoded output.
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderOutputParameters<P> {

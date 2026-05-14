@@ -1,6 +1,11 @@
 use ash::vk;
 
-use crate::{VulkanDecoderError, codec::h265::H265Codec, vulkan_encoder::FullEncoderParameters};
+use crate::{
+    VulkanDecoderError,
+    codec::h265::H265Codec,
+    device::{CodecColorDescription, ColorRange},
+    vulkan_encoder::FullEncoderParameters,
+};
 
 pub(crate) struct VkH265VideoParameterSet {
     pub(crate) vps: vk::native::StdVideoH265VideoParameterSet,
@@ -39,6 +44,68 @@ fn dec_pic_buf_mgr(
     dec_pic_buf_mgr
 }
 
+fn vui(
+    params: &FullEncoderParameters<H265Codec>,
+) -> vk::native::StdVideoH265SequenceParameterSetVui {
+    let video_full_range_flag = match params.color_range {
+        ColorRange::Full => 1,
+        ColorRange::Limited => 0,
+    };
+    let color_description: CodecColorDescription = params.color_space.into();
+
+    vk::native::StdVideoH265SequenceParameterSetVui {
+        flags: vk::native::StdVideoH265SpsVuiFlags {
+            _bitfield_align_1: [],
+            _bitfield_1: vk::native::StdVideoH265SpsVuiFlags::new_bitfield_1(
+                0, // aspect_ratio_info_present_flag,
+                0, // overscan_info_present_flag,
+                0, // overscan_appropriate_flag,
+                1, // video_signal_type_present_flag,
+                video_full_range_flag,
+                1, // colour_description_present_flag,
+                0, // chroma_loc_info_present_flag,
+                0, // neutral_chroma_indication_flag,
+                0, // field_seq_flag,
+                0, // frame_field_info_present_flag,
+                0, // default_display_window_flag,
+                1, // vui_timing_info_present_flag,
+                1, // vui_poc_proportional_to_timing_flag,
+                0, // vui_hrd_parameters_present_flag,
+                0, // bitstream_restriction_flag,
+                0, // tiles_fixed_structure_flag,
+                0, // motion_vectors_over_pic_boundaries_flag,
+                0, // restricted_ref_pic_lists_flag,
+            ),
+            __bindgen_padding_0: 0,
+        },
+        aspect_ratio_idc: 0,
+        sar_width: 0,
+        sar_height: 0,
+        video_format: 5, // unspecified
+        colour_primaries: color_description.colour_primaries,
+        transfer_characteristics: color_description.transfer_characteristics,
+        matrix_coeffs: color_description.matrix_coefficients,
+        chroma_sample_loc_type_top_field: 0,
+        chroma_sample_loc_type_bottom_field: 0,
+        reserved1: 0,
+        reserved2: 0,
+        def_disp_win_left_offset: 0,
+        def_disp_win_right_offset: 0,
+        def_disp_win_top_offset: 0,
+        def_disp_win_bottom_offset: 0,
+        vui_num_units_in_tick: params.framerate.denominator.get(),
+        vui_time_scale: params.framerate.numerator,
+        vui_num_ticks_poc_diff_one_minus1: 0,
+        min_spatial_segmentation_idc: 0,
+        reserved3: 0,
+        max_bytes_per_pic_denom: 0,
+        max_bits_per_min_cu_denom: 0,
+        log2_max_mv_length_horizontal: 0,
+        log2_max_mv_length_vertical: 0,
+        pHrdParameters: std::ptr::null(),
+    }
+}
+
 impl VkH265VideoParameterSet {
     pub(crate) fn new_encode(params: &FullEncoderParameters<H265Codec>) -> Self {
         let profile_tier_level = Box::new(profile_tier_level(params));
@@ -50,14 +117,14 @@ impl VkH265VideoParameterSet {
                 reserved1: 0,
                 flags: vk::native::StdVideoH265VpsFlags {
                     _bitfield_align_1: [],
-                    _bitfield_1: vk::native::StdVideoH265VpsFlags::new_bitfield_1(1, 1, 0, 0),
+                    _bitfield_1: vk::native::StdVideoH265VpsFlags::new_bitfield_1(1, 1, 1, 1),
                     __bindgen_padding_0: [0; 3],
                 },
                 vps_video_parameter_set_id: 0,
                 vps_max_sub_layers_minus1: 0,
                 reserved2: 0,
-                vps_num_units_in_tick: 0,
-                vps_time_scale: 0,
+                vps_num_units_in_tick: params.framerate.denominator.get(),
+                vps_time_scale: params.framerate.numerator,
                 vps_num_ticks_poc_diff_one_minus1: 0,
                 reserved3: 0,
                 pHrdParameters: std::ptr::null(),
@@ -74,6 +141,7 @@ pub(crate) struct VkH265SequenceParameterSet {
     pub(crate) sps: vk::native::StdVideoH265SequenceParameterSet,
     _profile_tier_level: Option<Box<vk::native::StdVideoH265ProfileTierLevel>>,
     _dec_pic_buf_mgr: Option<Box<vk::native::StdVideoH265DecPicBufMgr>>,
+    _vui: Option<Box<vk::native::StdVideoH265SequenceParameterSetVui>>,
 }
 
 impl VkH265SequenceParameterSet {
@@ -81,9 +149,9 @@ impl VkH265SequenceParameterSet {
         params: &FullEncoderParameters<H265Codec>,
         caps: &vk::VideoEncodeH265CapabilitiesKHR<'_>,
     ) -> Self {
-        // TODO: VUI
         let profile_tier_level = Box::new(profile_tier_level(params));
         let dec_pic_buf_mgr = Box::new(dec_pic_buf_mgr(params));
+        let vui = Box::new(vui(params));
 
         let ctb_log2_size = largest_supported_ctb_log2_size(caps.ctb_sizes);
 
@@ -122,7 +190,7 @@ impl VkH265SequenceParameterSet {
                         0, // long_term_ref_pics_present_flag
                         sps_temporal_mvp_enabled_flag,
                         1, // strong_intra_smoothing_enabled_flag
-                        0, // vui_parameters_present_flag
+                        1, // vui_parameters_present_flag
                         0, // sps_extension_present_flag
                         0,
                         0,
@@ -181,12 +249,13 @@ impl VkH265SequenceParameterSet {
                 pScalingLists: std::ptr::null(),
                 pShortTermRefPicSet: std::ptr::null(),
                 pLongTermRefPicsSps: std::ptr::null(),
-                pSequenceParameterSetVui: std::ptr::null(), // TODO
+                pSequenceParameterSetVui: vui.as_ref(),
                 pPredictorPaletteEntries: std::ptr::null(),
             },
 
             _profile_tier_level: Some(profile_tier_level),
             _dec_pic_buf_mgr: Some(dec_pic_buf_mgr),
+            _vui: Some(vui),
         }
     }
 }

@@ -5,6 +5,7 @@
 ### 💥 Breaking changes
 
 ### ✨ New features
+- Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)
 
 ### 🐛 Bug fixes
 
