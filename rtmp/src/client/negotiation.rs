@@ -158,9 +158,11 @@ pub(super) fn send_connect(
         ),
         (
             "mp4a".to_string(),
-            AmfValue::Number(
-                (FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64,
-            ),
+            AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64),
+        ),
+        (
+            "Opus".to_string(),
+            AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64),
         ),
     ]);
     let fourcc_list: Vec<AmfValue> = VIDEO_FOURCC_LIST
@@ -174,9 +176,11 @@ pub(super) fn send_connect(
             ("tcUrl", config.tc_url().into()),
             ("flashVer", "FMS/3,0,1,123".into()),
             ("fpad", AmfValue::Boolean(false)),
-            ("audioCodecs", AmfValue::Number(0x0FFF as f64)),
-            ("videoCodecs", AmfValue::Number(0x00FF as f64)),
+            // legacy RTMP codecs
+            ("audioCodecs", AmfValue::Number(0x0400 as f64)), // AAC
+            ("videoCodecs", AmfValue::Number(0x0080 as f64)), // H.264
             ("videoFunction", AmfValue::Number(0.0)),
+            // E-RTMP codecs
             ("fourCcList", AmfValue::StrictArray(fourcc_list)),
             (
                 "videoFourCcInfoMap",

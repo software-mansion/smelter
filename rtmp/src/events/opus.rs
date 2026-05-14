@@ -12,8 +12,9 @@ impl TryFrom<Bytes> for OpusAudioConfig {
     type Error = OpusConfigParseError;
 
     fn try_from(data: Bytes) -> Result<Self, Self::Error> {
-        // RFC 7845 §5.1: Opus ID Header
-        // Byte 9 = output channel count
+        // Byte 9 = output channel count (RFC 7845 §5.1).
+        // We only require 10 bytes since some E-RTMP senders omit the full
+        // RFC 7845 Opus ID header and send a minimal payload.
         if data.len() < 10 {
             return Err(OpusConfigParseError::TooShort);
         }

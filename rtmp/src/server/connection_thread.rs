@@ -210,10 +210,11 @@ impl RtmpServerConnectionState {
             ),
             (
                 "mp4a".to_string(),
-                AmfValue::Number(
-                    (FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD)
-                        as f64,
-                ),
+                AmfValue::Number((FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_FORWARD) as f64),
+            ),
+            (
+                "Opus".to_string(),
+                AmfValue::Number((FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_FORWARD) as f64),
             ),
         ]);
         let fourcc_list: Vec<AmfValue> = VIDEO_FOURCC_LIST

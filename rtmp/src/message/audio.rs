@@ -79,6 +79,9 @@ impl AudioMessage {
                 let channels = match codec {
                     RtmpAudioCodec::Aac => AacAudioConfig::try_from(data.clone())?.channels(),
                     RtmpAudioCodec::Opus => OpusAudioConfig::try_from(data.clone())
+                        .inspect_err(|err| {
+                            warn!("Failed to parse Opus ID header, defaulting to stereo: {err}")
+                        })
                         .map(|c| c.channels())
                         .unwrap_or(AudioChannels::Stereo),
                 };
