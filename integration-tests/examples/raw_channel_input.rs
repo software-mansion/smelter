@@ -80,6 +80,7 @@ fn main() {
                 bitstream_format: H264BitstreamFormat::Avcc,
             })),
             audio: None,
+            force_enhanced_rtmp: false,
         }),
         video: Some(RegisterOutputVideoOptions {
             initial: Component::InputStream(InputStreamComponent {

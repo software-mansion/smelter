@@ -45,6 +45,7 @@ pub struct RtmpOutputOptions {
     url: String,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
+    force_enhanced_rtmp: bool,
     player: OutputPlayer,
 }
 
@@ -53,9 +54,10 @@ impl Serialize for RtmpOutput {
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("RtmpOutput", 4)?;
+        let mut state = serializer.serialize_struct("RtmpOutput", 5)?;
         state.serialize_field("video", &self.options.video)?;
         state.serialize_field("audio", &self.options.audio)?;
+        state.serialize_field("force_enhanced_rtmp", &self.options.force_enhanced_rtmp)?;
         state.serialize_field("player", &self.options.player)?;
         state.serialize_field("url", &self.options.url)?;
         state.end()
@@ -83,6 +85,7 @@ impl RtmpOutput {
         json!({
             "type": "rtmp_client",
             "url": self.options.url,
+            "force_enhanced_rtmp": self.options.force_enhanced_rtmp,
             "video": self.options.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.options.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
@@ -141,6 +144,7 @@ pub struct RtmpOutputBuilder {
     port: u16,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
+    force_enhanced_rtmp: bool,
     player: OutputPlayer,
 }
 
@@ -154,6 +158,7 @@ impl RtmpOutputBuilder {
             port,
             video: None,
             audio: None,
+            force_enhanced_rtmp: false,
             player: OutputPlayer::Manual,
         }
     }
@@ -171,6 +176,8 @@ impl RtmpOutputBuilder {
                 break;
             }
         }
+
+        builder = builder.prompt_force_enhanced_rtmp()?;
 
         match &builder.url {
             Some(_) => Ok(builder),
@@ -210,6 +217,8 @@ impl RtmpOutputBuilder {
                     VideoEncoder::FfmpegH264,
                     VideoEncoder::FfmpegH264LowLatency,
                     VideoEncoder::VulkanH264,
+                    VideoEncoder::FfmpegVp8,
+                    VideoEncoder::FfmpegVp9,
                 ];
                 let encoder_choice =
                     Select::new("Select encoder (ESC for ffmpeg_h264)", encoder_options)
@@ -235,7 +244,17 @@ impl RtmpOutputBuilder {
 
         match audio_selection {
             Some(RtmpRegisterOptions::SetAudioStream) => {
-                Ok(self.with_audio(RtmpOutputAudioOptions::default()))
+                let encoder_options = vec![AudioEncoder::Aac, AudioEncoder::Opus];
+                let encoder_choice =
+                    Select::new("Select encoder (ESC for aac):", encoder_options)
+                        .prompt_skippable()?;
+
+                let mut audio = RtmpOutputAudioOptions::default();
+                if let Some(encoder) = encoder_choice {
+                    audio.encoder = encoder;
+                }
+
+                Ok(self.with_audio(audio))
             }
             Some(RtmpRegisterOptions::Skip) | None => Ok(self),
             _ => unreachable!(),
@@ -250,6 +269,29 @@ impl RtmpOutputBuilder {
             Some(player) => Ok(self.with_player(player)),
             None => Ok(self),
         }
+    }
+
+    fn prompt_force_enhanced_rtmp(self) -> Result<Self> {
+        let can_force_enhanced = self
+            .video
+            .as_ref()
+            .is_some_and(|video| matches!(video.encoder, VideoEncoder::FfmpegH264 | VideoEncoder::FfmpegH264LowLatency | VideoEncoder::VulkanH264))
+            || self
+                .audio
+                .as_ref()
+                .is_some_and(|audio| matches!(audio.encoder, AudioEncoder::Aac));
+
+        if !can_force_enhanced {
+            return Ok(self.with_force_enhanced_rtmp(false));
+        }
+
+        let force_enhanced_rtmp = Confirm::new(
+            "Force Enhanced RTMP signaling for H264/AAC as avc1/mp4a?",
+        )
+        .with_default(false)
+        .prompt()?;
+
+        Ok(self.with_force_enhanced_rtmp(force_enhanced_rtmp))
     }
 
     pub fn with_url(mut self, url: String) -> Self {
@@ -267,6 +309,11 @@ impl RtmpOutputBuilder {
         self
     }
 
+    pub fn with_force_enhanced_rtmp(mut self, force_enhanced_rtmp: bool) -> Self {
+        self.force_enhanced_rtmp = force_enhanced_rtmp;
+        self
+    }
+
     pub fn with_player(mut self, player: OutputPlayer) -> Self {
         self.player = player;
         self
@@ -279,6 +326,7 @@ impl RtmpOutputBuilder {
         let options = RtmpOutputOptions {
             video: self.video,
             audio: self.audio,
+            force_enhanced_rtmp: self.force_enhanced_rtmp,
             player: self.player,
             url: stream_url,
         };

@@ -44,10 +44,35 @@ impl DataMessage {
                 vec![
                     AmfValue::String("@setDataFrame".to_string()),
                     AmfValue::String("onMetaData".to_string()),
-                    AmfValue::Object(metadata),
+                    AmfValue::EcmaArray(metadata),
                 ]
             }
             DataMessage::Unknown(values) => values,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::DataMessage;
+    use crate::AmfValue;
+
+    #[test]
+    fn serializes_on_metadata_as_ecma_array() {
+        let mut metadata = HashMap::new();
+        metadata.insert("width".to_string(), AmfValue::Number(1920.0));
+
+        let values = DataMessage::OnMetaData(metadata.clone()).into_amf_values();
+
+        assert_eq!(
+            values,
+            vec![
+                AmfValue::String("@setDataFrame".to_string()),
+                AmfValue::String("onMetaData".to_string()),
+                AmfValue::EcmaArray(metadata),
+            ]
+        );
     }
 }

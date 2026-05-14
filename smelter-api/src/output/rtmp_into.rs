@@ -1,11 +1,18 @@
 use crate::common_core::prelude as core;
 use crate::*;
 
+const DEFAULT_RTMP_KEYFRAME_INTERVAL_MS: f64 = 2000.0;
+
 impl TryFrom<RtmpOutput> for core::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(value: RtmpOutput) -> Result<Self, Self::Error> {
-        let RtmpOutput { url, video, audio } = value;
+        let RtmpOutput {
+            url,
+            force_enhanced_rtmp,
+            video,
+            audio,
+        } = value;
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(
@@ -63,6 +70,7 @@ impl TryFrom<RtmpOutput> for core::RegisterOutputOptions {
                 .map_err(|err| TypeError::new(format!("Invalid url: {err}")))?,
             video: video_encoder_options,
             audio: audio_encoder_options,
+            force_enhanced_rtmp: force_enhanced_rtmp.unwrap_or(false),
         });
 
         Ok(Self {
@@ -88,7 +96,9 @@ impl RtmpClientVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                keyframe_interval: duration_from_keyframe_interval(&Some(
+                    keyframe_interval_ms.unwrap_or(DEFAULT_RTMP_KEYFRAME_INTERVAL_MS),
+                ))?,
                 resolution: resolution.into(),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
@@ -105,7 +115,9 @@ impl RtmpClientVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                keyframe_interval: duration_from_keyframe_interval(&Some(
+                    keyframe_interval_ms.unwrap_or(DEFAULT_RTMP_KEYFRAME_INTERVAL_MS),
+                ))?,
                 raw_options: ffmpeg_options
                     .clone()
                     .unwrap_or_default()
@@ -120,7 +132,9 @@ impl RtmpClientVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                keyframe_interval: duration_from_keyframe_interval(&Some(
+                    keyframe_interval_ms.unwrap_or(DEFAULT_RTMP_KEYFRAME_INTERVAL_MS),
+                ))?,
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()
@@ -140,7 +154,9 @@ impl RtmpClientVideoEncoderOptions {
                         ))
                     })
                     .transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                keyframe_interval: duration_from_keyframe_interval(&Some(
+                    keyframe_interval_ms.unwrap_or(DEFAULT_RTMP_KEYFRAME_INTERVAL_MS),
+                ))?,
                 preset: core::VulkanH264EncoderPreset::HighQuality,
                 bitstream_format: core::H264BitstreamFormat::Avcc,
             }),

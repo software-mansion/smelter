@@ -11,6 +11,9 @@ use crate::*;
 pub struct RtmpOutput {
     /// RTMP endpoint url.
     pub url: Arc<str>,
+    /// If set, always serialize media using Enhanced RTMP FourCC signaling.
+    /// This forces H.264/AAC to be sent as `avc1`/`mp4a` instead of legacy RTMP tags.
+    pub force_enhanced_rtmp: Option<bool>,
     /// Video stream configuration.
     pub video: Option<OutputRtmpClientVideoOptions>,
     /// Audio stream configuration.
@@ -41,7 +44,7 @@ pub enum RtmpClientVideoEncoderOptions {
         /// Encoding bitrate. Default value depends on chosen encoder.
         bitrate: Option<VideoEncoderBitrate>,
 
-        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        /// (**default=`2000`**) Maximal interval between keyframes, in milliseconds.
         keyframe_interval_ms: Option<f64>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format
@@ -55,7 +58,7 @@ pub enum RtmpClientVideoEncoderOptions {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
         bitrate: Option<VideoEncoderBitrate>,
 
-        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        /// (**default=`2000`**) Maximal interval between keyframes, in milliseconds.
         keyframe_interval_ms: Option<f64>,
 
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
@@ -66,7 +69,7 @@ pub enum RtmpClientVideoEncoderOptions {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
         bitrate: Option<VideoEncoderBitrate>,
 
-        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        /// (**default=`2000`**) Maximal interval between keyframes, in milliseconds.
         keyframe_interval_ms: Option<f64>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format.
@@ -81,7 +84,7 @@ pub enum RtmpClientVideoEncoderOptions {
         /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
         bitrate: Option<VideoEncoderBitrate>,
 
-        /// (**default=`5000`**) Interval between keyframes, in milliseconds.
+        /// (**default=`2000`**) Interval between keyframes, in milliseconds.
         keyframe_interval_ms: Option<f64>,
     },
 }

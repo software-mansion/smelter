@@ -4,8 +4,8 @@ use tracing::warn;
 
 use crate::{
     ExVideoPacket, ExVideoTag, FlvVideoData, LegacyFlvVideoCodec, RtmpMessageParseError,
-    RtmpMessageSerializeError, RtmpVideoCodec, TrackId, VideoConfig, VideoData, VideoTag,
-    VideoTagFrameType, VideoTagH264PacketType,
+    RtmpMessageSerializeError, RtmpSerializationMode, RtmpVideoCodec, TrackId, VideoConfig,
+    VideoData, VideoTag, VideoTagFrameType, VideoTagH264PacketType,
     message::VIDEO_CHUNK_STREAM_ID,
     protocol::{MessageType, RawMessage},
 };
@@ -118,10 +118,14 @@ impl VideoMessage {
         }
     }
 
-    pub(super) fn into_raw(self, stream_id: u32) -> Result<RawMessage, RtmpMessageSerializeError> {
+    pub(super) fn into_raw(
+        self,
+        stream_id: u32,
+        serialization_mode: RtmpSerializationMode,
+    ) -> Result<RawMessage, RtmpMessageSerializeError> {
         match self {
-            Self::Data(video) => video_into_raw(video, stream_id),
-            Self::Config(config) => config_into_raw(config, stream_id),
+            Self::Data(video) => video_into_raw(video, stream_id, serialization_mode),
+            Self::Config(config) => config_into_raw(config, stream_id, serialization_mode),
             Self::Unknown => Err(RtmpMessageSerializeError::InternalError(
                 "Cannot serialize an unknown video message".into(),
             )),
@@ -132,13 +136,15 @@ impl VideoMessage {
 fn video_into_raw(
     video: VideoData,
     stream_id: u32,
+    serialization_mode: RtmpSerializationMode,
 ) -> Result<RawMessage, RtmpMessageSerializeError> {
     let dts_nanos = video.dts.as_nanos();
     let timestamp = (dts_nanos / 1_000_000) as u32;
+    let timestamp_offset_nanos = (dts_nanos % 1_000_000) as u32;
     let composition_time = (video.pts.as_millis() as i64 - video.dts.as_millis() as i64) as i32;
 
-    let payload = match video.codec {
-        RtmpVideoCodec::H264 => FlvVideoData::Legacy(VideoTag {
+    let payload = match (video.codec, serialization_mode) {
+        (RtmpVideoCodec::H264, RtmpSerializationMode::Auto) => FlvVideoData::Legacy(VideoTag {
             h264_packet_type: Some(VideoTagH264PacketType::Data),
             codec: LegacyFlvVideoCodec::H264,
             composition_time: Some(composition_time),
@@ -149,11 +155,7 @@ fn video_into_raw(
             data: video.data,
         })
         .serialize()?,
-        RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
-            let timestamp_offset_nanos = match (dts_nanos % 1_000_000) as u32 {
-                0 => None,
-                offset => Some(offset),
-            };
+        (RtmpVideoCodec::H264 | RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9, mode) => {
             FlvVideoData::Enhanced(ExVideoTag::VideoBody {
                 four_cc: video.codec.into(),
                 packet: ExVideoPacket::CodedFrames {
@@ -164,7 +166,14 @@ fn video_into_raw(
                     true => VideoTagFrameType::Keyframe,
                     false => VideoTagFrameType::Interframe,
                 },
-                timestamp_offset_nanos,
+                timestamp_offset_nanos: match mode {
+                    RtmpSerializationMode::Enhanced if timestamp_offset_nanos != 0 => {
+                        Some(timestamp_offset_nanos)
+                    }
+                    RtmpSerializationMode::EnhancedNoModEx
+                    | RtmpSerializationMode::Auto
+                    | RtmpSerializationMode::Enhanced => None,
+                },
             })
             .serialize()?
         }
@@ -182,9 +191,10 @@ fn video_into_raw(
 fn config_into_raw(
     config: VideoConfig,
     stream_id: u32,
+    serialization_mode: RtmpSerializationMode,
 ) -> Result<RawMessage, RtmpMessageSerializeError> {
-    let payload = match config.codec {
-        RtmpVideoCodec::H264 => FlvVideoData::Legacy(VideoTag {
+    let payload = match (config.codec, serialization_mode) {
+        (RtmpVideoCodec::H264, RtmpSerializationMode::Auto) => FlvVideoData::Legacy(VideoTag {
             h264_packet_type: Some(VideoTagH264PacketType::Config),
             codec: LegacyFlvVideoCodec::H264,
             composition_time: Some(0),
@@ -192,7 +202,7 @@ fn config_into_raw(
             data: config.data,
         })
         .serialize()?,
-        RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
+        (RtmpVideoCodec::H264 | RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9, _) => {
             FlvVideoData::Enhanced(ExVideoTag::VideoBody {
                 four_cc: config.codec.into(),
                 packet: ExVideoPacket::SequenceStart(config.data),
@@ -214,11 +224,14 @@ fn config_into_raw(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use bytes::Bytes;
 
     use super::VideoMessage;
     use crate::{
-        ExVideoFourCc, ExVideoPacket, ExVideoTag, FlvVideoData, RtmpVideoCodec, VideoTagFrameType,
+        ExVideoFourCc, ExVideoPacket, ExVideoTag, FlvVideoData, RtmpSerializationMode,
+        RtmpVideoCodec, TrackId, VideoConfig, VideoData, VideoTagFrameType,
         protocol::{MessageType, RawMessage},
     };
 
@@ -338,6 +351,50 @@ mod tests {
                 assert_eq!(data.data, Bytes::from_static(b"frame"));
             }
             other => panic!("expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serializes_h264_data_as_enhanced_avc1_when_forced() {
+        let raw = VideoMessage::Data(VideoData {
+            track_id: TrackId::PRIMARY,
+            codec: RtmpVideoCodec::H264,
+            pts: Duration::from_millis(123),
+            dts: Duration::from_millis(123),
+            data: Bytes::from_static(b"frame"),
+            is_keyframe: true,
+        })
+        .into_raw(1, RtmpSerializationMode::Enhanced)
+        .unwrap();
+
+        let message = VideoMessage::from_raw(raw).unwrap();
+        match message {
+            VideoMessage::Data(data) => {
+                assert_eq!(data.codec, RtmpVideoCodec::H264);
+                assert_eq!(data.data, Bytes::from_static(b"frame"));
+                assert!(data.is_keyframe);
+            }
+            other => panic!("expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serializes_h264_config_as_enhanced_avc1_when_forced() {
+        let raw = VideoMessage::Config(VideoConfig {
+            track_id: TrackId::PRIMARY,
+            codec: RtmpVideoCodec::H264,
+            data: Bytes::from_static(&[1, 2, 3]),
+        })
+        .into_raw(1, RtmpSerializationMode::Enhanced)
+        .unwrap();
+
+        let message = VideoMessage::from_raw(raw).unwrap();
+        match message {
+            VideoMessage::Config(config) => {
+                assert_eq!(config.codec, RtmpVideoCodec::H264);
+                assert_eq!(config.data, Bytes::from_static(&[1, 2, 3]));
+            }
+            other => panic!("expected Config, got {other:?}"),
         }
     }
 }

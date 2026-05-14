@@ -34,7 +34,7 @@ fn default_audio() -> smelter_core::RegisterOutputAudioOptions {
 }
 
 fn default_keyframe_interval() -> Duration {
-    Duration::from_millis(5000)
+    Duration::from_millis(2000)
 }
 
 #[track_caller]
@@ -181,6 +181,7 @@ fn rtmp_video_only() {
                         },
                     )),
                     audio: None,
+                    force_enhanced_rtmp: false,
                 },
             ),
             video: Some(default_video()),
@@ -218,6 +219,7 @@ fn rtmp_audio_only() {
                             sample_rate: 44100,
                         },
                     )),
+                    force_enhanced_rtmp: false,
                 },
             ),
             video: None,
@@ -287,6 +289,7 @@ fn rtmp_video_and_audio() {
                             sample_rate: 44100,
                         },
                     )),
+                    force_enhanced_rtmp: false,
                 },
             ),
             video: Some(default_video()),
@@ -339,6 +342,7 @@ fn rtmp_vulkan_h264_encoder() {
                         },
                     )),
                     audio: None,
+                    force_enhanced_rtmp: false,
                 },
             ),
             video: Some(default_video()),
@@ -394,6 +398,7 @@ fn rtmp_vbr_bitrate() {
                         },
                     )),
                     audio: None,
+                    force_enhanced_rtmp: false,
                 },
             ),
             video: Some(default_video()),
@@ -443,6 +448,7 @@ fn rtmp_send_eos_when_any_of() {
                         },
                     )),
                     audio: None,
+                    force_enhanced_rtmp: false,
                 },
             ),
             video: Some(smelter_core::RegisterOutputVideoOptions {
@@ -500,6 +506,7 @@ fn rtmp_send_eos_when_all_inputs() {
                         },
                     )),
                     audio: None,
+                    force_enhanced_rtmp: false,
                 },
             ),
             video: Some(smelter_core::RegisterOutputVideoOptions {
@@ -522,6 +529,63 @@ fn err_rtmp_no_video_no_audio() {
             }
         }),
         "At least one of \"video\" and \"audio\" fields have to be specified.",
+    );
+}
+
+#[test]
+fn rtmp_force_enhanced_rtmp() {
+    check_rtmp(
+        json!({
+            "output": {
+                "url": "rtmp://localhost:1935/live/stream",
+                "force_enhanced_rtmp": true,
+                "video": {
+                    "resolution": { "width": 1920, "height": 1080 },
+                    "encoder": { "type": "ffmpeg_h264" },
+                    "initial": video_scene()
+                },
+                "audio": {
+                    "encoder": { "type": "aac" },
+                    "initial": audio_scene()
+                }
+            }
+        }),
+        CoreOutput {
+            output_options: smelter_core::ProtocolOutputOptions::Rtmp(
+                smelter_core::protocols::RtmpOutputOptions {
+                    connection: smelter_core::protocols::RtmpConnectionOptions {
+                        host: "localhost".into(),
+                        port: 1935,
+                        app: "live".into(),
+                        stream_key: "stream".into(),
+                        use_tls: false,
+                    },
+                    video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
+                        smelter_core::codecs::FfmpegH264EncoderOptions {
+                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            bitrate: None,
+                            keyframe_interval: default_keyframe_interval(),
+                            resolution: smelter_render::Resolution {
+                                width: 1920,
+                                height: 1080,
+                            },
+                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            raw_options: vec![],
+                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::Avcc,
+                        },
+                    )),
+                    audio: Some(smelter_core::codecs::AudioEncoderOptions::FdkAac(
+                        smelter_core::codecs::FdkAacEncoderOptions {
+                            channels: smelter_core::AudioChannels::Stereo,
+                            sample_rate: 44100,
+                        },
+                    )),
+                    force_enhanced_rtmp: true,
+                },
+            ),
+            video: Some(default_video()),
+            audio: Some(default_audio()),
+        },
     );
 }
 

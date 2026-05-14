@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use tracing::{debug, warn};
 
 use crate::{
-    AudioChannels, RtmpConnectionError, RtmpEvent, RtmpVideoCodec, TrackKey,
-    VideoCodecConversionError,
-    client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
+    AudioChannels, RtmpAudioCodec, RtmpConnectionError, RtmpEvent, RtmpSerializationMode,
+    RtmpVideoCodec, TrackKey, VideoCodecConversionError,
+    client::negotiation::{
+        NegotiatedCapabilities, NegotiationProgress, PublishStatus, send_connect,
+        send_create_stream, send_publish,
+    },
     error::{RtmpMessageSerializeError, RtmpStreamError},
     message::{
         AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, DataMessage, RtmpMessageIncoming,
@@ -26,6 +29,7 @@ pub struct RtmpClientConfig {
     pub app: String,
     pub stream_key: String,
     pub use_tls: bool,
+    pub serialization_mode: RtmpSerializationMode,
 }
 
 impl RtmpClientConfig {
@@ -44,6 +48,8 @@ pub struct RtmpClient {
 struct RtmpClientState {
     stream: RtmpMessageStream,
     peer_supports_enhanced: bool,
+    peer_supports_modex: bool,
+    serialization_mode: RtmpSerializationMode,
     audio_channels: HashMap<TrackKey, AudioChannels>,
     /// window size for data incoming from the server
     window_size: Option<u64>,
@@ -68,6 +74,8 @@ impl RtmpClient {
         let mut state = RtmpClientState {
             stream: RtmpMessageStream::new(socket),
             peer_supports_enhanced: false,
+            peer_supports_modex: false,
+            serialization_mode: config.serialization_mode,
             audio_channels: HashMap::new(),
             window_size: None,
             last_ack: 0,
@@ -89,7 +97,7 @@ impl RtmpClient {
     {
         let event = match RtmpEvent::from(event) {
             RtmpEvent::VideoData(data) => {
-                if data.codec != RtmpVideoCodec::H264 && !self.state.peer_supports_enhanced {
+                if self.state.peer_missing_enhanced_video(data.codec) {
                     return Err(RtmpMessageSerializeError::from(
                         VideoCodecConversionError::UnsupportedLegacyRtmp(data.codec),
                     )
@@ -98,10 +106,11 @@ impl RtmpClient {
                 RtmpMessageOutgoing::Video {
                     video: VideoMessage::Data(data),
                     stream_id: self.stream_id,
+                    serialization_mode: self.state.active_serialization_mode(),
                 }
             }
             RtmpEvent::VideoConfig(config) => {
-                if config.codec != RtmpVideoCodec::H264 && !self.state.peer_supports_enhanced {
+                if self.state.peer_missing_enhanced_video(config.codec) {
                     return Err(RtmpMessageSerializeError::from(
                         VideoCodecConversionError::UnsupportedLegacyRtmp(config.codec),
                     )
@@ -110,9 +119,17 @@ impl RtmpClient {
                 RtmpMessageOutgoing::Video {
                     video: VideoMessage::Config(config),
                     stream_id: self.stream_id,
+                    serialization_mode: self.state.active_serialization_mode(),
                 }
             }
             RtmpEvent::AudioData(data) => {
+                if self.state.peer_missing_enhanced_audio(data.codec) {
+                    return Err(RtmpMessageSerializeError::InternalError(format!(
+                        "Enhanced RTMP is required for audio codec {:?}",
+                        data.codec
+                    ))
+                    .into());
+                }
                 let channels = self
                     .state
                     .audio_channels
@@ -123,9 +140,17 @@ impl RtmpClient {
                     audio: AudioMessage::Data(data),
                     stream_id: self.stream_id,
                     channels,
+                    serialization_mode: self.state.active_serialization_mode(),
                 }
             }
             RtmpEvent::AudioConfig(config) => {
+                if self.state.peer_missing_enhanced_audio(config.codec) {
+                    return Err(RtmpMessageSerializeError::InternalError(format!(
+                        "Enhanced RTMP is required for audio codec {:?}",
+                        config.codec
+                    ))
+                    .into());
+                }
                 let channels = config.channels;
                 self.state
                     .audio_channels
@@ -134,6 +159,7 @@ impl RtmpClient {
                     audio: AudioMessage::Config(config),
                     stream_id: self.stream_id,
                     channels,
+                    serialization_mode: self.state.active_serialization_mode(),
                 }
             }
             RtmpEvent::Metadata(metadata) => RtmpMessageOutgoing::DataMessage {
@@ -168,6 +194,33 @@ impl Drop for RtmpClient {
 }
 
 impl RtmpClientState {
+    fn active_serialization_mode(&self) -> RtmpSerializationMode {
+        match self.serialization_mode {
+            RtmpSerializationMode::Enhanced if !self.peer_supports_modex => {
+                RtmpSerializationMode::EnhancedNoModEx
+            }
+            mode => mode,
+        }
+    }
+
+    fn peer_missing_enhanced_video(&self, codec: RtmpVideoCodec) -> bool {
+        match self.serialization_mode {
+            RtmpSerializationMode::Auto => {
+                codec != RtmpVideoCodec::H264 && !self.peer_supports_enhanced
+            }
+            RtmpSerializationMode::Enhanced | RtmpSerializationMode::EnhancedNoModEx => false,
+        }
+    }
+
+    fn peer_missing_enhanced_audio(&self, codec: RtmpAudioCodec) -> bool {
+        match self.serialization_mode {
+            RtmpSerializationMode::Auto => {
+                codec != RtmpAudioCodec::Aac && !self.peer_supports_enhanced
+            }
+            RtmpSerializationMode::Enhanced | RtmpSerializationMode::EnhancedNoModEx => false,
+        }
+    }
+
     fn negotiate_connection(
         &mut self,
         config: &RtmpClientConfig,
@@ -185,8 +238,13 @@ impl RtmpClientState {
                 Err(err) => return Err(err.into()),
             };
 
-            if let Some((_response, supports_enhanced)) = state.try_match_connect_response(&msg)? {
+            if let Some((_response, capabilities)) = state.try_match_connect_response(&msg)? {
+                let NegotiatedCapabilities {
+                    supports_enhanced,
+                    supports_modex,
+                } = capabilities;
                 self.peer_supports_enhanced = supports_enhanced;
+                self.peer_supports_modex = supports_modex;
                 state = NegotiationProgress::WaitingForCreateStreamResult;
                 send_create_stream(&mut self.stream)?;
                 continue;
@@ -205,8 +263,13 @@ impl RtmpClientState {
                 continue;
             }
 
-            if let Some((_on_status, stream_id)) = state.try_match_on_status(&msg) {
-                return Ok(stream_id);
+            if let Some(status) = state.try_match_on_status(&msg) {
+                match status {
+                    PublishStatus::Started { stream_id } => return Ok(stream_id),
+                    PublishStatus::Rejected(reason) => {
+                        return Err(RtmpConnectionError::ErrorOnPublish(reason));
+                    }
+                }
             }
 
             self.default_msg_handler(msg)?

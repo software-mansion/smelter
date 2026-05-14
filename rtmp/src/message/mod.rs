@@ -15,7 +15,7 @@ pub(crate) use data::DataMessage;
 pub(crate) use user_control::UserControlMessage;
 pub(crate) use video::VideoMessage;
 
-use crate::AudioChannels;
+use crate::{AudioChannels, RtmpSerializationMode};
 
 //
 // Chunk stream ids
@@ -110,12 +110,14 @@ pub(crate) enum RtmpMessageOutgoing {
     Video {
         video: VideoMessage,
         stream_id: u32,
+        serialization_mode: RtmpSerializationMode,
     },
 
     Audio {
         audio: AudioMessage,
         stream_id: u32,
         channels: AudioChannels,
+        serialization_mode: RtmpSerializationMode,
     },
 
     DataMessage {

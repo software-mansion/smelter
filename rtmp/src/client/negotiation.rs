@@ -48,11 +48,22 @@ pub(super) enum NegotiationProgress {
     WaitingForOnStatus { stream_id: u32 },
 }
 
+pub(super) enum PublishStatus {
+    Started { stream_id: u32 },
+    Rejected(String),
+}
+
+pub(super) struct NegotiatedCapabilities {
+    pub supports_enhanced: bool,
+    pub supports_modex: bool,
+}
+
 impl NegotiationProgress {
     pub(super) fn try_match_connect_response(
         &self,
         msg: &RtmpMessageIncoming,
-    ) -> Result<Option<(CommandMessageConnectSuccess, bool)>, RtmpConnectionError> {
+    ) -> Result<Option<(CommandMessageConnectSuccess, NegotiatedCapabilities)>, RtmpConnectionError>
+    {
         let NegotiationProgress::WaitingForConnectResult = self else {
             return Ok(None);
         };
@@ -76,9 +87,17 @@ impl NegotiationProgress {
                     .map_err(RtmpStreamError::ParseMessage)?;
                 // Fallback to checking 'information' because some non-compliant RTMP
                 // servers mistakenly place Enhanced RTMP capabilities there instead of 'properties'.
+                let supports_modex = map_supports_modex(&connect_success.properties)
+                    || map_supports_modex(&connect_success.information);
                 let supports_enhanced = map_supports_enhanced(&connect_success.properties)
                     || map_supports_enhanced(&connect_success.information);
-                Ok(Some((connect_success, supports_enhanced)))
+                Ok(Some((
+                    connect_success,
+                    NegotiatedCapabilities {
+                        supports_enhanced,
+                        supports_modex,
+                    },
+                )))
             }
             Err(err) => Err(RtmpConnectionError::ErrorOnConnect(format!("{err:?}"))),
         }
@@ -115,7 +134,7 @@ impl NegotiationProgress {
         }
     }
 
-    pub(super) fn try_match_on_status(&self, msg: &RtmpMessageIncoming) -> Option<(AmfValue, u32)> {
+    pub(super) fn try_match_on_status(&self, msg: &RtmpMessageIncoming) -> Option<PublishStatus> {
         let NegotiationProgress::WaitingForOnStatus { stream_id } = self else {
             return None;
         };
@@ -131,7 +150,32 @@ impl NegotiationProgress {
         if on_status_stream_id != stream_id {
             return None;
         }
-        Some((status.clone(), *stream_id))
+
+        Some(match status {
+            AmfValue::Object(status) | AmfValue::EcmaArray(status) => {
+                match status.get("code") {
+                    Some(AmfValue::String(code)) if code == "NetStream.Publish.Start" => {
+                        PublishStatus::Started {
+                            stream_id: *stream_id,
+                        }
+                    }
+                    Some(AmfValue::String(code)) => {
+                        let description = status
+                            .get("description")
+                            .and_then(|value| match value {
+                                AmfValue::String(description) => Some(description.as_str()),
+                                _ => None,
+                            })
+                            .unwrap_or("RTMP server returned non-success onStatus");
+                        PublishStatus::Rejected(format!("{code}: {description}"))
+                    }
+                    _ => PublishStatus::Rejected(format!(
+                        "Unexpected onStatus payload: {status:?}"
+                    )),
+                }
+            }
+            _ => PublishStatus::Rejected(format!("Unexpected onStatus payload: {status:?}")),
+        })
     }
 }
 
@@ -235,7 +279,7 @@ pub(super) fn send_publish(
 }
 
 fn map_supports_enhanced(map: &HashMap<String, AmfValue>) -> bool {
-    // TODO: include audio capability indicators once enhanced audio is implemented.
+    let has_caps_ex = map_supports_modex(map);
     let has_fourcc_list = map
         .get("fourCcList")
         .is_some_and(fourcc_list_supports_video);
@@ -243,7 +287,12 @@ fn map_supports_enhanced(map: &HashMap<String, AmfValue>) -> bool {
         .get("videoFourCcInfoMap")
         .is_some_and(video_fourcc_info_map_supports_video);
 
-    has_fourcc_list || has_video_info_map
+    has_caps_ex || has_fourcc_list || has_video_info_map
+}
+
+fn map_supports_modex(map: &HashMap<String, AmfValue>) -> bool {
+    map.get("capsEx")
+        .is_some_and(|v| matches!(v, AmfValue::Number(n) if (*n as u8) & CAPS_EX_MODEX != 0))
 }
 
 fn fourcc_list_supports_video(value: &AmfValue) -> bool {

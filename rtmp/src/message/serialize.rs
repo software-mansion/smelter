@@ -68,12 +68,14 @@ impl RtmpMessageOutgoing {
             RtmpMessageOutgoing::Video {
                 video: msg,
                 stream_id,
-            } => msg.into_raw(stream_id)?,
+                serialization_mode,
+            } => msg.into_raw(stream_id, serialization_mode)?,
             RtmpMessageOutgoing::Audio {
                 audio: msg,
                 stream_id,
                 channels,
-            } => msg.into_raw(stream_id, channels)?,
+                serialization_mode,
+            } => msg.into_raw(stream_id, channels, serialization_mode)?,
         };
         Ok(result)
     }

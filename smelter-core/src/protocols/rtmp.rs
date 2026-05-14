@@ -11,6 +11,7 @@ pub struct RtmpOutputOptions {
     pub connection: RtmpConnectionOptions,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
+    pub force_enhanced_rtmp: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

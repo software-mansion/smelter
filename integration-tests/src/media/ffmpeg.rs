@@ -294,7 +294,7 @@ fn receive_rtmp(port: u16, stdio: bool) -> Result<Vec<ProcessHandle>> {
     let child = Command::new("bash")
         .arg("-c")
         .arg(format!(
-            "ffmpeg -f flv -listen 1 -i rtmp://0.0.0.0:{port} -vcodec copy -f flv - | ffplay -autoexit -f flv -i -"
+            "ffmpeg -f flv -rtmp_enhanced_codecs vp09,vp08,avc1,Opus,mp4a -listen 1 -i rtmp://0.0.0.0:{port} -vcodec copy -f flv - | ffplay -autoexit -f flv -i -"
         ))
         .stdin(Stdio::null())
         .stdout(out)

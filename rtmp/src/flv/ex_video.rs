@@ -307,11 +307,12 @@ impl ExVideoTag {
                         if !four_cc.has_composition_time() {
                             // VP8/VP9/AV1: no composition time on wire
                             (ExVideoPacketType::CodedFrames, false)
-                        } else if *composition_time != 0 {
-                            // AVC/HEVC/VVC with nonzero composition time
+                        } else if *composition_time != 0 || *four_cc == ExVideoFourCc::Avc1 {
+                            // Always use explicit composition time for AVC to match
+                            // ingest implementations that expect a SI24 field even when zero.
                             (ExVideoPacketType::CodedFrames, true)
                         } else {
-                            // AVC/HEVC/VVC with zero composition time: use CodedFramesX
+                            // HEVC/VVC with zero composition time: use CodedFramesX
                             // to skip the 3-byte composition time field on wire
                             (ExVideoPacketType::CodedFramesX, false)
                         }
@@ -385,5 +386,32 @@ impl ExVideoTag {
                 Ok(buf.freeze())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+
+    use super::{ExVideoFourCc, ExVideoPacket, ExVideoTag};
+    use crate::VideoTagFrameType;
+
+    #[test]
+    fn round_trip_avc_coded_frames_with_zero_composition_time() {
+        let tag = ExVideoTag::VideoBody {
+            four_cc: ExVideoFourCc::Avc1,
+            packet: ExVideoPacket::CodedFrames {
+                composition_time: 0,
+                data: Bytes::from_static(b"frame"),
+            },
+            frame_type: VideoTagFrameType::Keyframe,
+            timestamp_offset_nanos: None,
+        };
+
+        let serialized = tag.serialize().unwrap();
+        assert_eq!(serialized[0], 0x91);
+
+        let parsed = ExVideoTag::parse(serialized).unwrap();
+        assert_eq!(parsed, tag);
     }
 }

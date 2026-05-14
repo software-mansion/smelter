@@ -4452,6 +4452,13 @@
             "type": "string",
             "description": "RTMP endpoint url."
           },
+          "force_enhanced_rtmp": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "If set, always serialize media using Enhanced RTMP FourCC signaling.\nThis forces H.264/AAC to be sent as `avc1`/`mp4a` instead of legacy RTMP tags."
+          },
           "video": {
             "oneOf": [
               {

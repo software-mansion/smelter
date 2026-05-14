@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use crossbeam_channel::{Receiver, bounded, select};
@@ -6,8 +6,8 @@ use smelter_render::error::ErrorStack;
 use tracing::{debug, warn};
 
 use rtmp::{
-    AudioData, RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError, RtmpVideoCodec,
-    TrackId, VideoData,
+    AudioData, RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpSerializationMode,
+    RtmpStreamError, RtmpVideoCodec, TrackId, VideoData, AmfValue,
 };
 
 use crate::{
@@ -43,12 +43,14 @@ struct AudioConfig {
     extradata: Bytes,
     codec: RtmpAudioCodec,
     channels: AudioChannels,
+    sample_rate: u32,
     chunks_receiver: Receiver<EncodedOutputEvent>,
 }
 
 struct VideoConfig {
     extradata: Bytes,
     codec: RtmpVideoCodec,
+    resolution: Resolution,
     chunks_receiver: Receiver<EncodedOutputEvent>,
 }
 
@@ -79,7 +81,13 @@ impl RtmpClientOutput {
             kind: OutputProtocolKind::Rtmp,
         });
 
-        let client = Self::establish_connection(options.connection, &video_config, &audio_config)?;
+        let client = Self::establish_connection(
+            &ctx,
+            options.connection,
+            options.force_enhanced_rtmp,
+            &video_config,
+            &audio_config,
+        )?;
         std::thread::Builder::new()
             .name(format!("RTMP sender thread for output {output_ref}"))
             .spawn(move || {
@@ -109,7 +117,9 @@ impl RtmpClientOutput {
     }
 
     fn establish_connection(
+        ctx: &Arc<PipelineCtx>,
         connection_opts: RtmpConnectionOptions,
+        force_enhanced_rtmp: bool,
         video_config: &Option<VideoConfig>,
         audio_config: &Option<AudioConfig>,
     ) -> Result<RtmpClient, RtmpClientError> {
@@ -119,7 +129,16 @@ impl RtmpClientOutput {
             app: connection_opts.app,
             stream_key: connection_opts.stream_key,
             use_tls: connection_opts.use_tls,
+            serialization_mode: if force_enhanced_rtmp {
+                RtmpSerializationMode::Enhanced
+            } else {
+                RtmpSerializationMode::Auto
+            },
         })?;
+
+        if let Some(metadata) = output_metadata(ctx, video_config, audio_config) {
+            client.send(rtmp::RtmpEvent::Metadata(metadata))?;
+        }
 
         if let Some(config) = video_config {
             client.send(rtmp::VideoConfig {
@@ -207,6 +226,7 @@ impl RtmpClientOutput {
             VideoConfig {
                 extradata,
                 codec,
+                resolution: options.resolution(),
                 chunks_receiver,
             },
         ))
@@ -218,6 +238,7 @@ impl RtmpClientOutput {
         options: AudioEncoderOptions,
     ) -> Result<(AudioEncoderThreadHandle, AudioConfig), OutputInitError> {
         let channels = options.channels();
+        let sample_rate = options.sample_rate();
 
         let (chunks_sender, chunks_receiver) = bounded(1000);
         let (encoder, codec) = match options {
@@ -252,6 +273,7 @@ impl RtmpClientOutput {
                 extradata,
                 codec,
                 channels,
+                sample_rate,
                 chunks_receiver,
             },
         ))
@@ -279,24 +301,97 @@ impl Output for RtmpClientOutput {
     }
 }
 
-fn video_chunk_to_event(chunk: EncodedOutputChunk, codec: RtmpVideoCodec) -> VideoData {
+fn video_chunk_to_event(
+    chunk: EncodedOutputChunk,
+    codec: RtmpVideoCodec,
+    timestamp_offset: Duration,
+) -> VideoData {
     VideoData {
         track_id: TrackId::PRIMARY,
         codec,
-        pts: chunk.pts,
-        dts: chunk.dts.unwrap_or(chunk.pts),
+        pts: chunk.pts.saturating_sub(timestamp_offset),
+        dts: chunk
+            .dts
+            .unwrap_or(chunk.pts)
+            .saturating_sub(timestamp_offset),
         data: chunk.data,
         is_keyframe: chunk.is_keyframe,
     }
 }
 
-fn audio_chunk_to_event(chunk: EncodedOutputChunk, codec: RtmpAudioCodec) -> AudioData {
+fn audio_chunk_to_event(
+    chunk: EncodedOutputChunk,
+    codec: RtmpAudioCodec,
+    timestamp_offset: Duration,
+) -> AudioData {
     AudioData {
         track_id: TrackId::PRIMARY,
         codec,
-        pts: chunk.pts,
+        pts: chunk.pts.saturating_sub(timestamp_offset),
         data: chunk.data,
     }
+}
+
+fn video_chunk_start_timestamp(chunk: &EncodedOutputChunk) -> Duration {
+    chunk.dts.unwrap_or(chunk.pts)
+}
+
+fn audio_chunk_start_timestamp(chunk: &EncodedOutputChunk) -> Duration {
+    chunk.pts
+}
+
+fn output_metadata(
+    ctx: &Arc<PipelineCtx>,
+    video_config: &Option<VideoConfig>,
+    audio_config: &Option<AudioConfig>,
+) -> Option<HashMap<String, AmfValue>> {
+    let mut metadata = HashMap::new();
+
+    if let Some(video) = video_config {
+        metadata.insert("width".into(), AmfValue::Number(video.resolution.width as f64));
+        metadata.insert("height".into(), AmfValue::Number(video.resolution.height as f64));
+        metadata.insert(
+            "framerate".into(),
+            AmfValue::Number(ctx.output_framerate.num as f64 / ctx.output_framerate.den as f64),
+        );
+        metadata.insert(
+            "videocodecid".into(),
+            match video.codec {
+                RtmpVideoCodec::H264 => "avc1",
+                RtmpVideoCodec::Vp8 => "vp08",
+                RtmpVideoCodec::Vp9 => "vp09",
+            }
+            .into(),
+        );
+    }
+
+    if let Some(audio) = audio_config {
+        metadata.insert(
+            "audiocodecid".into(),
+            match audio.codec {
+                RtmpAudioCodec::Aac => "mp4a",
+                RtmpAudioCodec::Opus => "Opus",
+            }
+            .into(),
+        );
+        metadata.insert(
+            "audiosamplerate".into(),
+            AmfValue::Number(audio.sample_rate as f64),
+        );
+        metadata.insert(
+            "stereo".into(),
+            AmfValue::Boolean(matches!(audio.channels, AudioChannels::Stereo)),
+        );
+        metadata.insert(
+            "audiochannels".into(),
+            AmfValue::Number(match audio.channels {
+                AudioChannels::Mono => 1.0,
+                AudioChannels::Stereo => 2.0,
+            }),
+        );
+    }
+
+    (!metadata.is_empty()).then_some(metadata)
 }
 
 fn run_rtmp_output_thread(
@@ -316,17 +411,23 @@ fn run_rtmp_output_thread(
         ),
         (Some(video), None) => {
             let codec = video.codec;
+            let mut timestamp_offset = None;
             while let Ok(EncodedOutputEvent::Data(chunk)) = video.chunks_receiver.recv() {
+                let timestamp_offset =
+                    *timestamp_offset.get_or_insert(video_chunk_start_timestamp(&chunk));
                 stats_sender.bytes_sent_event(chunk.data.len(), StatsTrackKind::Video);
-                client.send(video_chunk_to_event(chunk, codec))?;
+                client.send(video_chunk_to_event(chunk, codec, timestamp_offset))?;
             }
             Ok(())
         }
         (None, Some(audio)) => {
             let codec = audio.codec;
+            let mut timestamp_offset = None;
             while let Ok(EncodedOutputEvent::Data(chunk)) = audio.chunks_receiver.recv() {
+                let timestamp_offset =
+                    *timestamp_offset.get_or_insert(audio_chunk_start_timestamp(&chunk));
                 stats_sender.bytes_sent_event(chunk.data.len(), StatsTrackKind::Audio);
-                client.send(audio_chunk_to_event(chunk, codec))?;
+                client.send(audio_chunk_to_event(chunk, codec, timestamp_offset))?;
             }
             Ok(())
         }
@@ -344,6 +445,7 @@ fn run_synced_av(
 ) -> Result<(), RtmpStreamError> {
     let mut pending_video: Option<EncodedOutputChunk> = None;
     let mut pending_audio: Option<EncodedOutputChunk> = None;
+    let mut timestamp_offset: Option<Duration> = None;
     let mut video_eos = false;
     let mut audio_eos = false;
 
@@ -387,32 +489,44 @@ fn run_synced_av(
             //
             (false, false) => match (&pending_video, &pending_audio) {
                 (Some(video), Some(audio)) => {
+                    let timestamp_offset = *timestamp_offset.get_or_insert_with(|| {
+                        video_chunk_start_timestamp(video).min(audio_chunk_start_timestamp(audio))
+                    });
+
                     if video.pts <= audio.pts {
                         rtmp_stats_sender.bytes_sent_event(video.data.len(), StatsTrackKind::Video);
                         client.send(video_chunk_to_event(
                             pending_video.take().unwrap(),
                             video_codec,
+                            timestamp_offset,
                         ))?;
                     } else {
                         rtmp_stats_sender.bytes_sent_event(audio.data.len(), StatsTrackKind::Audio);
                         client.send(audio_chunk_to_event(
                             pending_audio.take().unwrap(),
                             audio_codec,
+                            timestamp_offset,
                         ))?;
                     }
                 }
                 (Some(video), None) => {
+                    let timestamp_offset =
+                        *timestamp_offset.get_or_insert(video_chunk_start_timestamp(video));
                     rtmp_stats_sender.bytes_sent_event(video.data.len(), StatsTrackKind::Video);
                     client.send(video_chunk_to_event(
                         pending_video.take().unwrap(),
                         video_codec,
+                        timestamp_offset,
                     ))?;
                 }
                 (None, Some(audio)) => {
+                    let timestamp_offset =
+                        *timestamp_offset.get_or_insert(audio_chunk_start_timestamp(audio));
                     rtmp_stats_sender.bytes_sent_event(audio.data.len(), StatsTrackKind::Audio);
                     client.send(audio_chunk_to_event(
                         pending_audio.take().unwrap(),
                         audio_codec,
+                        timestamp_offset,
                     ))?;
                 }
                 (None, None) => break,

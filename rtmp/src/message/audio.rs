@@ -6,7 +6,7 @@ use crate::{
     AacAudioConfig, AudioChannels, AudioConfig, AudioData, AudioTag, AudioTagAacPacketType,
     AudioTagSampleSize, AudioTagSoundRate, ExAudioFourCc, ExAudioPacket, ExAudioTag, FlvAudioData,
     LegacyFlvAudioCodec, OpusAudioConfig, RtmpAudioCodec, RtmpMessageParseError,
-    RtmpMessageSerializeError, TrackId,
+    RtmpMessageSerializeError, RtmpSerializationMode, TrackId,
     message::AUDIO_CHUNK_STREAM_ID,
     protocol::{MessageType, RawMessage},
 };
@@ -107,10 +107,13 @@ impl AudioMessage {
         self,
         stream_id: u32,
         channels: AudioChannels,
+        serialization_mode: RtmpSerializationMode,
     ) -> Result<RawMessage, RtmpMessageSerializeError> {
         match self {
-            Self::Data(audio) => audio_data_into_raw(audio, stream_id, channels),
-            Self::Config(config) => audio_config_into_raw(config, stream_id),
+            Self::Data(audio) => {
+                audio_data_into_raw(audio, stream_id, channels, serialization_mode)
+            }
+            Self::Config(config) => audio_config_into_raw(config, stream_id, serialization_mode),
             Self::Unknown => Err(RtmpMessageSerializeError::InternalError(
                 "Cannot serialize an unknown audio message".into(),
             )),
@@ -122,9 +125,14 @@ fn audio_data_into_raw(
     audio: AudioData,
     stream_id: u32,
     channels: AudioChannels,
+    serialization_mode: RtmpSerializationMode,
 ) -> Result<RawMessage, RtmpMessageSerializeError> {
-    let payload = match audio.codec {
-        RtmpAudioCodec::Aac => FlvAudioData::Legacy(AudioTag {
+    let pts_nanos = audio.pts.as_nanos();
+    let timestamp = (pts_nanos / 1_000_000) as u32;
+    let timestamp_offset_nanos = (pts_nanos % 1_000_000) as u32;
+
+    let payload = match (audio.codec, serialization_mode) {
+        (RtmpAudioCodec::Aac, RtmpSerializationMode::Auto) => FlvAudioData::Legacy(AudioTag {
             aac_packet_type: Some(AudioTagAacPacketType::Data),
             codec: LegacyFlvAudioCodec::Aac,
             sample_rate: AudioTagSoundRate::Rate44000,
@@ -133,16 +141,18 @@ fn audio_data_into_raw(
             data: audio.data,
         })
         .serialize()?,
-        RtmpAudioCodec::Opus => {
-            let pts_nanos = audio.pts.as_nanos();
-            let timestamp_offset_nanos = match (pts_nanos % 1_000_000) as u32 {
-                0 => None,
-                offset => Some(offset),
-            };
+        (RtmpAudioCodec::Aac | RtmpAudioCodec::Opus, mode) => {
             FlvAudioData::Enhanced(ExAudioTag {
                 four_cc: ExAudioFourCc::from(audio.codec),
                 packet: ExAudioPacket::CodedFrames(audio.data),
-                timestamp_offset_nanos,
+                timestamp_offset_nanos: match mode {
+                    RtmpSerializationMode::Enhanced if timestamp_offset_nanos != 0 => {
+                        Some(timestamp_offset_nanos)
+                    }
+                    RtmpSerializationMode::EnhancedNoModEx
+                    | RtmpSerializationMode::Auto
+                    | RtmpSerializationMode::Enhanced => None,
+                },
             })
             .serialize()?
         }
@@ -152,7 +162,7 @@ fn audio_data_into_raw(
         msg_type: MessageType::Audio.into_raw(),
         stream_id,
         chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
-        timestamp: audio.pts.as_millis() as u32,
+        timestamp,
         payload,
     })
 }
@@ -160,9 +170,10 @@ fn audio_data_into_raw(
 fn audio_config_into_raw(
     config: AudioConfig,
     stream_id: u32,
+    serialization_mode: RtmpSerializationMode,
 ) -> Result<RawMessage, RtmpMessageSerializeError> {
-    let payload = match config.codec {
-        RtmpAudioCodec::Aac => FlvAudioData::Legacy(AudioTag {
+    let payload = match (config.codec, serialization_mode) {
+        (RtmpAudioCodec::Aac, RtmpSerializationMode::Auto) => FlvAudioData::Legacy(AudioTag {
             aac_packet_type: Some(AudioTagAacPacketType::Config),
             codec: LegacyFlvAudioCodec::Aac,
             sample_rate: AudioTagSoundRate::Rate44000,
@@ -171,7 +182,7 @@ fn audio_config_into_raw(
             data: config.data,
         })
         .serialize()?,
-        RtmpAudioCodec::Opus => FlvAudioData::Enhanced(ExAudioTag {
+        (RtmpAudioCodec::Aac | RtmpAudioCodec::Opus, _) => FlvAudioData::Enhanced(ExAudioTag {
             four_cc: ExAudioFourCc::from(config.codec),
             packet: ExAudioPacket::SequenceStart(config.data),
             timestamp_offset_nanos: None,
@@ -197,7 +208,7 @@ mod tests {
     use super::AudioMessage;
     use crate::{
         AudioChannels, AudioConfig, AudioData, ExAudioFourCc, ExAudioPacket, ExAudioTag,
-        FlvAudioData, RtmpAudioCodec, TrackId,
+        FlvAudioData, RtmpAudioCodec, RtmpSerializationMode, TrackId,
         protocol::{MessageType, RawMessage},
     };
 
@@ -308,7 +319,7 @@ mod tests {
             pts: Duration::from_millis(33),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(1, AudioChannels::Mono)
+        .into_raw(1, AudioChannels::Mono, RtmpSerializationMode::Auto)
         .unwrap();
 
         assert_eq!(raw.payload[0] & 0b0000_0001, 0);
@@ -319,7 +330,7 @@ mod tests {
             pts: Duration::from_millis(33),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(2, AudioChannels::Stereo)
+        .into_raw(2, AudioChannels::Stereo, RtmpSerializationMode::Auto)
         .unwrap();
 
         assert_eq!(raw.payload[0] & 0b0000_0001, 1);
@@ -432,7 +443,7 @@ mod tests {
             pts: Duration::from_millis(100),
             data: Bytes::from_static(b"opus_frame"),
         })
-        .into_raw(1, AudioChannels::Stereo)
+        .into_raw(1, AudioChannels::Stereo, RtmpSerializationMode::Enhanced)
         .unwrap();
 
         assert_eq!(raw.timestamp, 100);
@@ -450,7 +461,7 @@ mod tests {
             data: Bytes::from_static(OPUS_ID_HEADER_STEREO),
             channels: AudioChannels::Stereo,
         })
-        .into_raw(1, AudioChannels::Stereo)
+        .into_raw(1, AudioChannels::Stereo, RtmpSerializationMode::Enhanced)
         .unwrap();
 
         assert_eq!(raw.timestamp, 0);
@@ -469,7 +480,7 @@ mod tests {
         };
 
         let raw = AudioMessage::Data(original.clone())
-            .into_raw(1, AudioChannels::Stereo)
+            .into_raw(1, AudioChannels::Stereo, RtmpSerializationMode::Enhanced)
             .unwrap();
         let parsed = AudioMessage::from_raw(raw).unwrap();
 
@@ -491,7 +502,7 @@ mod tests {
             pts: Duration::from_nanos(100_000_777),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(1, AudioChannels::Stereo)
+        .into_raw(1, AudioChannels::Stereo, RtmpSerializationMode::Enhanced)
         .unwrap();
 
         let parsed = AudioMessage::from_raw(raw).unwrap();
@@ -501,6 +512,49 @@ mod tests {
                 assert_eq!(data.pts.as_nanos(), 100_000_777);
             }
             other => panic!("expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serializes_aac_data_as_enhanced_mp4a_when_forced() {
+        let raw = AudioMessage::Data(AudioData {
+            track_id: TrackId::PRIMARY,
+            codec: RtmpAudioCodec::Aac,
+            pts: Duration::from_millis(123),
+            data: Bytes::from_static(b"frame"),
+        })
+        .into_raw(1, AudioChannels::Stereo, RtmpSerializationMode::Enhanced)
+        .unwrap();
+
+        let message = AudioMessage::from_raw(raw).unwrap();
+        match message {
+            AudioMessage::Data(data) => {
+                assert_eq!(data.codec, RtmpAudioCodec::Aac);
+                assert_eq!(data.data, Bytes::from_static(b"frame"));
+            }
+            other => panic!("expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serializes_aac_config_as_enhanced_mp4a_when_forced() {
+        let raw = AudioMessage::Config(AudioConfig {
+            track_id: TrackId::PRIMARY,
+            codec: RtmpAudioCodec::Aac,
+            data: Bytes::from_static(&[0x12, 0x10]),
+            channels: AudioChannels::Stereo,
+        })
+        .into_raw(1, AudioChannels::Stereo, RtmpSerializationMode::Enhanced)
+        .unwrap();
+
+        let message = AudioMessage::from_raw(raw).unwrap();
+        match message {
+            AudioMessage::Config(config) => {
+                assert_eq!(config.codec, RtmpAudioCodec::Aac);
+                assert_eq!(config.data, Bytes::from_static(&[0x12, 0x10]));
+                assert_eq!(config.channels, AudioChannels::Stereo);
+            }
+            other => panic!("expected Config, got {other:?}"),
         }
     }
 }

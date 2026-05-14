@@ -16,6 +16,9 @@ pub enum RtmpConnectionError {
     #[error("Server returned _error in response to createStream: {0:?}")]
     ErrorOnCreateStream(String),
 
+    #[error("Server rejected publish request: {0}")]
+    ErrorOnPublish(String),
+
     #[error("Failed to establish TCP connection")]
     TcpSocket(#[from] std::io::Error),
 

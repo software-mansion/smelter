@@ -118,6 +118,7 @@ mod main_module {
                 audio: None,
                 connection: RtmpConnectionOptions::from_url(&format!("rtmp://127.0.0.1:{PORT}"))
                     .unwrap(),
+                force_enhanced_rtmp: false,
             }),
             video: Some(RegisterOutputVideoOptions {
                 initial: Component::InputStream(InputStreamComponent { id: None, input_id }),

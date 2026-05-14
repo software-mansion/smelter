@@ -25,6 +25,14 @@ pub enum RtmpAudioCodec {
     Opus,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RtmpSerializationMode {
+    #[default]
+    Auto,
+    Enhanced,
+    EnhancedNoModEx,
+}
+
 #[derive(Debug, Clone)]
 pub enum RtmpEvent {
     VideoData(VideoData),

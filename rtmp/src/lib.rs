@@ -14,6 +14,7 @@ mod utils;
 pub use client::*;
 pub use error::*;
 pub use events::*;
+pub use amf0::AmfValue;
 pub use flv::AudioChannels;
 pub use server::*;
 pub use track::TrackId;
