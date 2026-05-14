@@ -147,7 +147,7 @@ impl FfmpegVp8Encoder {
                 Ok(_) => {
                     match encoded_chunk_from_av_packet(
                         &self.packet,
-                        MediaKind::Video(VideoCodec::Vp9),
+                        MediaKind::Video(VideoCodec::Vp8),
                         TIME_BASE,
                     ) {
                         Ok(chunk) => {
