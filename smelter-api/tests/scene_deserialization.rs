@@ -9,6 +9,10 @@ fn component_id(id: &str) -> scene::ComponentId {
     scene::ComponentId(id.into())
 }
 
+fn renderer_id(id: &str) -> smelter_render::RendererId {
+    smelter_render::RendererId(id.into())
+}
+
 fn input_stream(id: Option<&str>, input_id: &str) -> scene::Component {
     scene::Component::InputStream(scene::InputStreamComponent {
         id: id.map(component_id),
@@ -57,6 +61,21 @@ fn check(raw: serde_json::Value, expected: scene::Component) {
     let api_scene: VideoScene = serde_json::from_value(video).unwrap();
     let actual: scene::Component = api_scene.try_into().unwrap();
     assert_eq!(actual, expected);
+}
+
+#[track_caller]
+fn check_err(raw: serde_json::Value, expected_msg: &str) {
+    let video = raw.get("video").unwrap().clone();
+    let api_scene: VideoScene = serde_json::from_value(video).unwrap();
+    let result: Result<scene::Component, _> = api_scene.try_into();
+    let err = result.expect_err("expected conversion to fail");
+    assert_eq!(err.to_string(), expected_msg);
+}
+
+#[track_caller]
+fn check_serde_err(raw: serde_json::Value) {
+    let video = raw.get("video").unwrap().clone();
+    assert!(serde_json::from_value::<VideoScene>(video).is_err());
 }
 
 #[test]
@@ -945,4 +964,667 @@ fn shader_param_full_enum_coverage() {
             children: vec![],
         }),
     );
+}
+
+// ── WebView ──────────────────────────────────────────────────────────
+
+#[test]
+fn web_view_empty() {
+    check(
+        json!({
+            "video": {
+                "root": {
+                    "type": "web_view",
+                    "instance_id": "browser_1"
+                }
+            }
+        }),
+        scene::Component::WebView(scene::WebViewComponent {
+            id: None,
+            children: vec![],
+            instance_id: renderer_id("browser_1"),
+        }),
+    );
+}
+
+#[test]
+fn web_view_with_children() {
+    check(
+        json!({
+            "video": {
+                "root": {
+                    "type": "web_view",
+                    "id": "web",
+                    "instance_id": "browser_1",
+                    "children": [
+                        { "type": "input_stream", "input_id": "input_1" }
+                    ]
+                }
+            }
+        }),
+        scene::Component::WebView(scene::WebViewComponent {
+            id: Some(component_id("web")),
+            children: vec![input_stream(None, "input_1")],
+            instance_id: renderer_id("browser_1"),
+        }),
+    );
+}
+
+// ── Text dimension variants ──────────────────────────────────────────
+
+#[test]
+fn text_fitted_column() {
+    check(
+        json!({
+            "video": {
+                "root": {
+                    "type": "text",
+                    "text": "Column text",
+                    "font_size": 40,
+                    "width": 600
+                }
+            }
+        }),
+        scene::Component::Text(scene::TextComponent {
+            dimensions: scene::TextDimensions::FittedColumn {
+                width: 600.0,
+                max_height: smelter_render::MAX_NODE_RESOLUTION.height as f32,
+            },
+            ..text_default("Column text", 40.0)
+        }),
+    );
+}
+
+#[test]
+fn text_fitted_column_with_max_height() {
+    check(
+        json!({
+            "video": {
+                "root": {
+                    "type": "text",
+                    "text": "Column text",
+                    "font_size": 40,
+                    "width": 600,
+                    "max_height": 300
+                }
+            }
+        }),
+        scene::Component::Text(scene::TextComponent {
+            dimensions: scene::TextDimensions::FittedColumn {
+                width: 600.0,
+                max_height: 300.0,
+            },
+            ..text_default("Column text", 40.0)
+        }),
+    );
+}
+
+// ── View position: bottom/right offsets ──────────────────────────────
+
+#[test]
+fn view_bottom_left_absolute() {
+    check(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "children": [
+                        {
+                            "type": "view",
+                            "bottom": 10,
+                            "left": 20,
+                            "width": 100,
+                            "height": 100
+                        }
+                    ]
+                }
+            }
+        }),
+        scene::Component::View(scene::ViewComponent {
+            children: vec![scene::Component::View(scene::ViewComponent {
+                position: scene::Position::Absolute(scene::AbsolutePosition {
+                    width: Some(100.0),
+                    height: Some(100.0),
+                    position_horizontal: scene::HorizontalPosition::LeftOffset(20.0),
+                    position_vertical: scene::VerticalPosition::BottomOffset(10.0),
+                    rotation_degrees: 0.0,
+                }),
+                ..view_default()
+            })],
+            ..view_default()
+        }),
+    );
+}
+
+// ── View rotation triggers absolute position ─────────────────────────
+
+#[test]
+fn view_rotation_absolute() {
+    check(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "top": 0,
+                    "left": 0,
+                    "width": 200,
+                    "height": 200,
+                    "rotation": 45
+                }
+            }
+        }),
+        scene::Component::View(scene::ViewComponent {
+            position: scene::Position::Absolute(scene::AbsolutePosition {
+                width: Some(200.0),
+                height: Some(200.0),
+                position_horizontal: scene::HorizontalPosition::LeftOffset(0.0),
+                position_vertical: scene::VerticalPosition::TopOffset(0.0),
+                rotation_degrees: 45.0,
+            }),
+            ..view_default()
+        }),
+    );
+}
+
+// ── Error: View positioning ──────────────────────────────────────────
+
+#[test]
+fn err_view_top_and_bottom() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "top": 10,
+                    "bottom": 10,
+                    "left": 0
+                }
+            }
+        }),
+        "Fields \"top\" and \"bottom\" are mutually exclusive, you can only specify one on a \"View\" component.",
+    );
+}
+
+#[test]
+fn err_view_left_and_right() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "top": 10,
+                    "left": 10,
+                    "right": 10
+                }
+            }
+        }),
+        "Fields \"left\" and \"right\" are mutually exclusive, you can only specify one on a \"View\" component.",
+    );
+}
+
+#[test]
+fn err_view_rotation_missing_vertical() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "rotation": 45,
+                    "left": 0
+                }
+            }
+        }),
+        "\"View\" component with absolute positioning requires either \"top\" or \"bottom\" coordinate.",
+    );
+}
+
+#[test]
+fn err_view_rotation_missing_horizontal() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "rotation": 45,
+                    "top": 0
+                }
+            }
+        }),
+        "Non-static \"View\" component requires either \"left\" or \"right\" coordinate.",
+    );
+}
+
+// ── Error: Rescaler positioning ──────────────────────────────────────
+
+#[test]
+fn err_rescaler_top_and_bottom() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "rescaler",
+                    "top": 10,
+                    "bottom": 10,
+                    "left": 0,
+                    "child": { "type": "view" }
+                }
+            }
+        }),
+        "Fields \"top\" and \"bottom\" are mutually exclusive, you can only specify one on a \"Rescaler\" component.",
+    );
+}
+
+#[test]
+fn err_rescaler_left_and_right() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "rescaler",
+                    "top": 10,
+                    "left": 10,
+                    "right": 10,
+                    "child": { "type": "view" }
+                }
+            }
+        }),
+        "Fields \"left\" and \"right\" are mutually exclusive, you can only specify one on a \"Rescaler\" component.",
+    );
+}
+
+#[test]
+fn err_rescaler_rotation_missing_vertical() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "rescaler",
+                    "rotation": 45,
+                    "left": 0,
+                    "child": { "type": "view" }
+                }
+            }
+        }),
+        "\"Rescaler\" component with absolute positioning requires either \"top\" or \"bottom\" coordinate.",
+    );
+}
+
+#[test]
+fn err_rescaler_rotation_missing_horizontal() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "rescaler",
+                    "rotation": 45,
+                    "top": 0,
+                    "child": { "type": "view" }
+                }
+            }
+        }),
+        "Non-static \"Rescaler\" component requires either \"left\" or \"right\" coordinate.",
+    );
+}
+
+// ── Error: View negative padding ─────────────────────────────────────
+
+#[test]
+fn err_view_negative_padding() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "padding": -5
+                }
+            }
+        }),
+        "Padding values cannot be negative.",
+    );
+}
+
+#[test]
+fn err_view_negative_padding_top() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "padding_top": -1
+                }
+            }
+        }),
+        "Padding values cannot be negative.",
+    );
+}
+
+// ── Error: Text validation ───────────────────────────────────────────
+
+#[test]
+fn err_text_height_without_width() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "text",
+                    "text": "hello",
+                    "font_size": 20,
+                    "height": 100
+                }
+            }
+        }),
+        "\"height\" property on a Text component can only be provided if \"width\" is also defined.",
+    );
+}
+
+#[test]
+fn err_text_font_size_zero() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "text",
+                    "text": "hello",
+                    "font_size": 0
+                }
+            }
+        }),
+        "\"font_size\" property has to be larger than 0",
+    );
+}
+
+#[test]
+fn err_text_font_size_negative() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "text",
+                    "text": "hello",
+                    "font_size": -10
+                }
+            }
+        }),
+        "\"font_size\" property has to be larger than 0",
+    );
+}
+
+#[test]
+fn err_text_line_height_zero() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "text",
+                    "text": "hello",
+                    "font_size": 20,
+                    "line_height": 0
+                }
+            }
+        }),
+        "\"line_height\" property has to be larger than 0",
+    );
+}
+
+// ── Error: Color parsing ─────────────────────────────────────────────
+
+#[test]
+fn err_color_invalid_hex_length() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "background_color": "#FFF"
+                }
+            }
+        }),
+        "Invalid format. Color has to be in #RRGGBB or #RRGGBBAA format.",
+    );
+}
+
+#[test]
+fn err_color_invalid_hex_digit() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "background_color": "#ZZZZZZ"
+                }
+            }
+        }),
+        "Invalid format. Color representation is not a valid number.",
+    );
+}
+
+#[test]
+fn err_color_unsupported_format() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "background_color": "not_a_color_name"
+                }
+            }
+        }),
+        "Unsupported color format.",
+    );
+}
+
+#[test]
+fn err_color_rgba_alpha_out_of_range() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "background_color": "rgba(255,0,0,1.5)"
+                }
+            }
+        }),
+        "Alpha value out of range. It must be between 0.0 and 1.0",
+    );
+}
+
+#[test]
+fn err_color_rgb_wrong_components() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "background_color": "rgb(255, 0)"
+                }
+            }
+        }),
+        "Invalid RGB format.",
+    );
+}
+
+#[test]
+fn err_color_rgba_wrong_components() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "background_color": "rgba(255, 0, 0)"
+                }
+            }
+        }),
+        "Expected three color components and alpha channel.",
+    );
+}
+
+// ── Error: Aspect ratio ──────────────────────────────────────────────
+
+#[test]
+fn err_tiles_invalid_aspect_ratio_no_colon() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "tiles",
+                    "tile_aspect_ratio": "16x9"
+                }
+            }
+        }),
+        "Aspect ratio needs to be a string in the \"W:H\" format, where W and H are both unsigned integers.",
+    );
+}
+
+#[test]
+fn err_tiles_invalid_aspect_ratio_non_integer() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "tiles",
+                    "tile_aspect_ratio": "16:abc"
+                }
+            }
+        }),
+        "Aspect ratio needs to be a string in the \"W:H\" format, where W and H are both unsigned integers.",
+    );
+}
+
+// ── Error: Transition cubic bezier control points ────────────────────
+
+#[test]
+fn err_transition_cubic_bezier_x1_out_of_range() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "top": 0,
+                    "left": 0,
+                    "transition": {
+                        "duration_ms": 1000,
+                        "easing_function": {
+                            "function_name": "cubic_bezier",
+                            "points": [1.5, 0, 0.5, 1]
+                        }
+                    }
+                }
+            }
+        }),
+        "Control point x1 has to be in the range [0, 1].",
+    );
+}
+
+#[test]
+fn err_transition_cubic_bezier_x2_out_of_range() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "top": 0,
+                    "left": 0,
+                    "transition": {
+                        "duration_ms": 1000,
+                        "easing_function": {
+                            "function_name": "cubic_bezier",
+                            "points": [0.5, 0, -0.1, 1]
+                        }
+                    }
+                }
+            }
+        }),
+        "Control point x2 has to be in the range [0, 1].",
+    );
+}
+
+#[test]
+fn err_transition_negative_duration() {
+    check_err(
+        json!({
+            "video": {
+                "root": {
+                    "type": "view",
+                    "top": 0,
+                    "left": 0,
+                    "transition": {
+                        "duration_ms": -1000
+                    }
+                }
+            }
+        }),
+        "Invalid duration. cannot convert float seconds to Duration: value is negative",
+    );
+}
+
+// ── Serde-level errors (malformed JSON for the schema) ───────────────
+
+#[test]
+fn err_serde_unknown_component_type() {
+    check_serde_err(json!({
+        "video": {
+            "root": {
+                "type": "unknown_component"
+            }
+        }
+    }));
+}
+
+#[test]
+fn err_serde_unknown_field_on_view() {
+    check_serde_err(json!({
+        "video": {
+            "root": {
+                "type": "view",
+                "nonexistent_field": true
+            }
+        }
+    }));
+}
+
+#[test]
+fn err_serde_rescaler_missing_child() {
+    check_serde_err(json!({
+        "video": {
+            "root": {
+                "type": "rescaler"
+            }
+        }
+    }));
+}
+
+#[test]
+fn err_serde_shader_missing_resolution() {
+    check_serde_err(json!({
+        "video": {
+            "root": {
+                "type": "shader",
+                "shader_id": "s1"
+            }
+        }
+    }));
+}
+
+#[test]
+fn err_serde_text_missing_text_field() {
+    check_serde_err(json!({
+        "video": {
+            "root": {
+                "type": "text",
+                "font_size": 20
+            }
+        }
+    }));
+}
+
+#[test]
+fn err_serde_text_missing_font_size() {
+    check_serde_err(json!({
+        "video": {
+            "root": {
+                "type": "text",
+                "text": "hello"
+            }
+        }
+    }));
 }

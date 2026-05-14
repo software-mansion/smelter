@@ -20,7 +20,7 @@ pub struct Shader {
     clear_color: Option<wgpu::Color>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ShaderSpec {
     pub source: Arc<str>,
 }

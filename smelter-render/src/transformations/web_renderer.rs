@@ -32,7 +32,7 @@ pub(crate) use node::WebRendererNode;
 
 pub use chromium_context::{ChromiumContext, ChromiumContextInitError};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WebRendererSpec {
     pub url: Arc<str>,
     pub resolution: Resolution,

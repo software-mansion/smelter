@@ -4,7 +4,7 @@ use smelter_render::{Framerate, Resolution};
 
 use crate::queue::QueueInputOptions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct V4l2InputOptions {
     pub path: Arc<std::path::Path>,
     pub resolution: Option<Resolution>,

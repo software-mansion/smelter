@@ -92,7 +92,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Framerate {
     pub num: u32,
     pub den: u32,

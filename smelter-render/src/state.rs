@@ -84,7 +84,7 @@ pub(crate) struct RegisterCtx {
 /// RendererSpec provides configuration necessary to construct Renderer. Renderers
 /// are entities like shader, image or chromium_instance and can be used by nodes
 /// to transform or generate frames.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RendererSpec {
     Shader(shader::ShaderSpec),
     WebRenderer(web_renderer::WebRendererSpec),
