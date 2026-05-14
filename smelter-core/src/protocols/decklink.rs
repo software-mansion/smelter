@@ -2,7 +2,7 @@ pub use decklink::PixelFormat as DeckLinkPixelFormat;
 
 use crate::queue::QueueInputOptions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DeckLinkInputOptions {
     pub subdevice_index: Option<u32>,
     pub display_name: Option<String>,

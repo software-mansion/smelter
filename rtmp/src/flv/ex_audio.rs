@@ -61,17 +61,23 @@ impl ExAudioFourCc {
     }
 }
 
+impl From<RtmpAudioCodec> for ExAudioFourCc {
+    fn from(codec: RtmpAudioCodec) -> Self {
+        match codec {
+            RtmpAudioCodec::Aac => ExAudioFourCc::Aac,
+            RtmpAudioCodec::Opus => ExAudioFourCc::Opus,
+        }
+    }
+}
+
 impl TryFrom<ExAudioFourCc> for RtmpAudioCodec {
     type Error = AudioCodecConversionError;
 
     fn try_from(four_cc: ExAudioFourCc) -> Result<Self, Self::Error> {
         match four_cc {
             ExAudioFourCc::Aac => Ok(RtmpAudioCodec::Aac),
-            ExAudioFourCc::Ac3
-            | ExAudioFourCc::Eac3
-            | ExAudioFourCc::Opus
-            | ExAudioFourCc::Mp3
-            | ExAudioFourCc::Flac => {
+            ExAudioFourCc::Opus => Ok(RtmpAudioCodec::Opus),
+            ExAudioFourCc::Mp3 | ExAudioFourCc::Flac | ExAudioFourCc::Ac3 | ExAudioFourCc::Eac3 => {
                 Err(AudioCodecConversionError::UnsupportedEnhancedFlv(four_cc))
             }
         }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use smelter_render::scene;
 use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema, PartialEq)]
 pub struct Resolution {
     /// Width in pixels.
     pub width: usize,

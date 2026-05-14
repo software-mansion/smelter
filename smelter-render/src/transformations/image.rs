@@ -21,20 +21,20 @@ mod animated_image;
 mod bitmap_image;
 mod svg_image;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ImageSpec {
     pub src: ImageSource,
     pub image_type: ImageType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ImageSource {
     Url { url: Arc<str> },
     LocalPath { path: Arc<Path> },
     Bytes { bytes: Bytes },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ImageType {
     Png,
     Jpeg,

@@ -3,7 +3,7 @@ use std::{path::Path, sync::Arc, time::Duration};
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 use crate::queue::QueueInputOptions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HlsInputOptions {
     pub url: Arc<str>,
     pub video_decoders: HlsInputVideoDecoders,
@@ -11,7 +11,7 @@ pub struct HlsInputOptions {
     pub offset: Option<Duration>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HlsOutputOptions {
     pub output_path: Arc<Path>,
     pub max_playlist_size: Option<usize>,
@@ -19,7 +19,7 @@ pub struct HlsOutputOptions {
     pub audio: Option<AudioEncoderOptions>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HlsInputVideoDecoders {
     pub h264: Option<VideoDecoderOptions>,
 }

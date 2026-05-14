@@ -112,6 +112,9 @@ pub enum RtmpMessageParseError {
     #[error("Error parsing audio specific config")]
     AacConfigParse(#[from] AacConfigParseError),
 
+    #[error("Error parsing Opus ID header")]
+    OpusConfigParse(#[from] OpusConfigParseError),
+
     #[error("Error decoding AMF value")]
     AmfDecoding(#[from] AmfDecodingError),
 
@@ -197,6 +200,15 @@ pub enum FlvAudioTagParseError {
     UnsupportedPacketType(u8),
 
     #[error("Invalid audio tag, packet too short.")]
+    TooShort,
+}
+
+#[derive(Error, Debug, Clone, PartialEq)]
+pub enum OpusConfigParseError {
+    #[error("Invalid channel count: {0}")]
+    InvalidChannelCount(u8),
+
+    #[error("Not enough data, Opus ID header too short")]
     TooShort,
 }
 
