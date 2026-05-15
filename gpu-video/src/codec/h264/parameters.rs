@@ -3,7 +3,7 @@ use h264_reader::nal::sps::{FrameMbsFlags, SeqParameterSet};
 
 use crate::{
     VulkanDecoderError, VulkanEncoderError,
-    device::{ColorRange, ColorSpace, Rational},
+    device::{CodecColorDescription, ColorRange, ColorSpace, Rational},
     parameters::H264Profile,
     wrappers::ProfileInfo,
 };
@@ -261,7 +261,7 @@ impl VkH264SequenceParameterSet {
             ColorRange::Full => 1,
             ColorRange::Limited => 0,
         };
-        let color_description: H264ColorDescription = color_space.into();
+        let color_description: CodecColorDescription = color_space.into();
         let time_scale = framerate
             .numerator
             .checked_mul(2)
@@ -677,42 +677,6 @@ impl VkH264PictureParameterSet {
         Self {
             pps,
             _scaling_list: None,
-        }
-    }
-}
-
-/// Color description for H.264 VUI parameters.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct H264ColorDescription {
-    pub colour_primaries: u8,
-    pub transfer_characteristics: u8,
-    pub matrix_coefficients: u8,
-}
-
-impl From<ColorSpace> for H264ColorDescription {
-    fn from(color_space: ColorSpace) -> Self {
-        // Values correspond to ITU-T H.264 Tables E-3, E-4, E-5.
-        match color_space {
-            ColorSpace::Unspecified => Self {
-                colour_primaries: 2,
-                transfer_characteristics: 2,
-                matrix_coefficients: 2,
-            },
-            ColorSpace::BT709 => Self {
-                colour_primaries: 1,
-                transfer_characteristics: 1,
-                matrix_coefficients: 1,
-            },
-            ColorSpace::BT601Ntsc => Self {
-                colour_primaries: 6,
-                transfer_characteristics: 6,
-                matrix_coefficients: 6,
-            },
-            ColorSpace::BT601Pal => Self {
-                colour_primaries: 5,
-                transfer_characteristics: 6,
-                matrix_coefficients: 5,
-            },
         }
     }
 }
