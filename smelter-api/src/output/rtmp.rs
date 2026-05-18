@@ -105,11 +105,11 @@ pub struct OutputRtmpClientAudioOptions {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RtmpClientAudioEncoderOptions {
     Aac {
-        /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+        /// (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
         sample_rate: Option<u32>,
     },
     Opus {
-        /// (**default="voip"**) Audio output encoder preset.
+        /// (**default=`"voip"`**) Audio output encoder preset.
         preset: Option<OpusEncoderPreset>,
 
         /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].

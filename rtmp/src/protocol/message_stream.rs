@@ -49,6 +49,13 @@ impl RtmpMessageStream {
         self.writer.chunk_size = size;
     }
 
+    pub fn set_writer_supports_timestamp_nano_mod_ex(
+        &mut self,
+        supports_timestamp_nano_mod_ex: bool,
+    ) {
+        self.writer.supports_timestamp_nano_mod_ex = supports_timestamp_nano_mod_ex;
+    }
+
     pub fn read_msg(&mut self) -> Result<RtmpMessageIncoming, RtmpStreamError> {
         self.reader.read_msg(&mut self.stream)
     }
@@ -246,6 +253,7 @@ impl ReaderChunkStreamContext {
 struct RtmpMessageWriter {
     context: HashMap<u32, WriterChunkStreamContext>,
     chunk_size: usize,
+    supports_timestamp_nano_mod_ex: bool,
 }
 
 impl RtmpMessageWriter {
@@ -253,6 +261,7 @@ impl RtmpMessageWriter {
         Self {
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
+            supports_timestamp_nano_mod_ex: false,
         }
     }
 
@@ -266,7 +275,7 @@ impl RtmpMessageWriter {
             false => debug!(?msg, "Sending RTMP message"),
         }
 
-        let msg = msg.into_raw()?;
+        let msg = msg.into_raw(self.supports_timestamp_nano_mod_ex)?;
         let cs_id = msg.chunk_stream_id;
 
         let context = self.context.entry(cs_id).or_default();

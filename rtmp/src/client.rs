@@ -3,10 +3,9 @@ use std::collections::HashMap;
 use tracing::{debug, warn};
 
 use crate::{
-    AudioChannels, RtmpConnectionError, RtmpEvent, RtmpVideoCodec, TrackKey,
-    VideoCodecConversionError,
+    AudioChannels, RtmpConnectionError, RtmpEvent, TrackKey,
     client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
-    error::{RtmpMessageSerializeError, RtmpStreamError},
+    error::RtmpStreamError,
     message::{
         AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, DataMessage, RtmpMessageIncoming,
         RtmpMessageOutgoing, UserControlMessage, VideoMessage,
@@ -43,7 +42,6 @@ pub struct RtmpClient {
 
 struct RtmpClientState {
     stream: RtmpMessageStream,
-    peer_supports_enhanced: bool,
     audio_channels: HashMap<TrackKey, AudioChannels>,
     /// window size for data incoming from the server
     window_size: Option<u64>,
@@ -67,7 +65,6 @@ impl RtmpClient {
 
         let mut state = RtmpClientState {
             stream: RtmpMessageStream::new(socket),
-            peer_supports_enhanced: false,
             audio_channels: HashMap::new(),
             window_size: None,
             last_ack: 0,
@@ -88,30 +85,17 @@ impl RtmpClient {
         RtmpEvent: From<T>,
     {
         let event = match RtmpEvent::from(event) {
-            RtmpEvent::VideoData(data) => {
-                if data.codec != RtmpVideoCodec::H264 && !self.state.peer_supports_enhanced {
-                    return Err(RtmpMessageSerializeError::from(
-                        VideoCodecConversionError::UnsupportedLegacyRtmp(data.codec),
-                    )
-                    .into());
-                }
-                RtmpMessageOutgoing::Video {
-                    video: VideoMessage::Data(data),
-                    stream_id: self.stream_id,
-                }
-            }
-            RtmpEvent::VideoConfig(config) => {
-                if config.codec != RtmpVideoCodec::H264 && !self.state.peer_supports_enhanced {
-                    return Err(RtmpMessageSerializeError::from(
-                        VideoCodecConversionError::UnsupportedLegacyRtmp(config.codec),
-                    )
-                    .into());
-                }
-                RtmpMessageOutgoing::Video {
-                    video: VideoMessage::Config(config),
-                    stream_id: self.stream_id,
-                }
-            }
+            // Some servers support Enhanced RTMP media packets without advertising
+            // capability bits in the connect response (for example MediaMTX via gortmplib).
+            // Send enhanced video packets optimistically and let the server reject them if needed.
+            RtmpEvent::VideoData(data) => RtmpMessageOutgoing::Video {
+                video: VideoMessage::Data(data),
+                stream_id: self.stream_id,
+            },
+            RtmpEvent::VideoConfig(config) => RtmpMessageOutgoing::Video {
+                video: VideoMessage::Config(config),
+                stream_id: self.stream_id,
+            },
             RtmpEvent::AudioData(data) => {
                 let channels = self
                     .state
@@ -185,8 +169,11 @@ impl RtmpClientState {
                 Err(err) => return Err(err.into()),
             };
 
-            if let Some((_response, supports_enhanced)) = state.try_match_connect_response(&msg)? {
-                self.peer_supports_enhanced = supports_enhanced;
+            if let Some((_response, supports_timestamp_nano_mod_ex)) =
+                state.try_match_connect_response(&msg)?
+            {
+                self.stream
+                    .set_writer_supports_timestamp_nano_mod_ex(supports_timestamp_nano_mod_ex);
                 state = NegotiationProgress::WaitingForCreateStreamResult;
                 send_create_stream(&mut self.stream)?;
                 continue;

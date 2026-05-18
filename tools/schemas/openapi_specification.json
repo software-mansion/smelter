@@ -4095,7 +4095,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].",
+                "description": "(**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].",
                 "minimum": 0
               },
               "type": {
@@ -4119,7 +4119,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/OpusEncoderPreset",
-                    "description": "(**default=\"voip\"**) Audio output encoder preset."
+                    "description": "(**default=`\"voip\"`**) Audio output encoder preset."
                   }
                 ]
               },

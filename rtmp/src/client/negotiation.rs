@@ -74,11 +74,11 @@ impl NegotiationProgress {
                     .to_connect_success()
                     .map_err(RtmpMessageParseError::CommandMessage)
                     .map_err(RtmpStreamError::ParseMessage)?;
-                // Fallback to checking 'information' because some non-compliant RTMP
-                // servers mistakenly place Enhanced RTMP capabilities there instead of 'properties'.
-                let supports_enhanced = map_supports_enhanced(&connect_success.properties)
-                    || map_supports_enhanced(&connect_success.information);
-                Ok(Some((connect_success, supports_enhanced)))
+                let caps_ex_bits = parse_caps_ex_bits(&connect_success.properties)
+                    | parse_caps_ex_bits(&connect_success.information);
+                let supports_timestamp_nano_mod_ex = supports_timestamp_nano_mod_ex(caps_ex_bits);
+
+                Ok(Some((connect_success, supports_timestamp_nano_mod_ex)))
             }
             Err(err) => Err(RtmpConnectionError::ErrorOnConnect(format!("{err:?}"))),
         }
@@ -234,29 +234,54 @@ pub(super) fn send_publish(
     Ok(())
 }
 
-fn map_supports_enhanced(map: &HashMap<String, AmfValue>) -> bool {
-    // TODO: include audio capability indicators once enhanced audio is implemented.
-    let has_fourcc_list = map
-        .get("fourCcList")
-        .is_some_and(fourcc_list_supports_video);
-    let has_video_info_map = map
-        .get("videoFourCcInfoMap")
-        .is_some_and(video_fourcc_info_map_supports_video);
-
-    has_fourcc_list || has_video_info_map
+fn supports_timestamp_nano_mod_ex(caps_ex_bits: u8) -> bool {
+    caps_ex_bits & (CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO)
+        == CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO
 }
 
-fn fourcc_list_supports_video(value: &AmfValue) -> bool {
+fn parse_caps_ex_bits(map: &HashMap<String, AmfValue>) -> u8 {
+    match map.get("capsEx") {
+        Some(AmfValue::Number(bits)) if bits.is_finite() && *bits > 0.0 => {
+            let bits = bits.floor();
+            if bits > u8::MAX as f64 {
+                u8::MAX
+            } else {
+                bits as u8
+            }
+        }
+        _ => 0,
+    }
+}
+
+#[cfg(test)]
+fn map_advertises_enhanced_codecs(map: &HashMap<String, AmfValue>) -> bool {
+    map.get("fourCcList")
+        .is_some_and(fourcc_list_supports_enhanced)
+        || map
+            .get("videoFourCcInfoMap")
+            .is_some_and(video_fourcc_info_map_supports_video)
+        || map
+            .get("audioFourCcInfoMap")
+            .is_some_and(audio_fourcc_info_map_supports_audio)
+}
+
+#[cfg(test)]
+fn fourcc_list_supports_enhanced(value: &AmfValue) -> bool {
     let AmfValue::StrictArray(items) = value else {
         return false;
     };
 
     items.iter().any(|item| match item {
-        AmfValue::String(v) => v == "*" || VIDEO_FOURCC_LIST.contains(&v.as_str()),
+        AmfValue::String(v) => {
+            v == "*"
+                || VIDEO_FOURCC_LIST.contains(&v.as_str())
+                || AUDIO_FOURCC_LIST.contains(&v.as_str())
+        }
         _ => false,
     })
 }
 
+#[cfg(test)]
 fn video_fourcc_info_map_supports_video(value: &AmfValue) -> bool {
     let map = match value {
         AmfValue::Object(map) => map,
@@ -271,4 +296,91 @@ fn video_fourcc_info_map_supports_video(value: &AmfValue) -> bool {
         AmfValue::Number(_) => false,
         _ => false,
     })
+}
+
+#[cfg(test)]
+fn audio_fourcc_info_map_supports_audio(value: &AmfValue) -> bool {
+    let map = match value {
+        AmfValue::Object(map) => map,
+        AmfValue::EcmaArray(map) => map,
+        _ => return false,
+    };
+
+    map.iter().any(|(k, v)| match v {
+        AmfValue::Number(mask) if *mask > 0.0 => {
+            k == "*" || AUDIO_FOURCC_LIST.contains(&k.as_str())
+        }
+        AmfValue::Number(_) => false,
+        _ => false,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn caps_ex_without_fourcc_metadata_counts_as_enhanced() {
+        let capabilities = HashMap::from([(
+            "capsEx".to_string(),
+            AmfValue::Number(CAPS_EX_RECONNECT as f64),
+        )]);
+
+        let caps_ex_bits = parse_caps_ex_bits(&capabilities);
+        let advertises_enhanced_codecs =
+            map_advertises_enhanced_codecs(&capabilities) || caps_ex_bits != 0;
+
+        assert!(advertises_enhanced_codecs);
+        assert_eq!(caps_ex_bits, CAPS_EX_RECONNECT);
+    }
+
+    #[test]
+    fn audio_only_fourcc_list_counts_as_enhanced() {
+        let capabilities = HashMap::from([(
+            "fourCcList".to_string(),
+            AmfValue::StrictArray(vec![AmfValue::String("Opus".to_string())]),
+        )]);
+
+        assert!(map_advertises_enhanced_codecs(&capabilities));
+        assert_eq!(parse_caps_ex_bits(&capabilities), 0);
+    }
+
+    #[test]
+    fn audio_only_fourcc_info_map_counts_as_enhanced() {
+        let capabilities = HashMap::from([(
+            "audioFourCcInfoMap".to_string(),
+            AmfValue::Object(HashMap::from([(
+                "Opus".to_string(),
+                AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
+            )])),
+        )]);
+
+        assert!(map_advertises_enhanced_codecs(&capabilities));
+    }
+
+    #[test]
+    fn caps_ex_tracks_mod_ex_bits_separately_from_enhanced_codecs() {
+        let capabilities = HashMap::from([(
+            "capsEx".to_string(),
+            AmfValue::Number((CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO) as f64),
+        )]);
+
+        let caps_ex_bits = parse_caps_ex_bits(&capabilities);
+
+        assert!(supports_timestamp_nano_mod_ex(caps_ex_bits));
+    }
+
+    #[test]
+    fn merges_caps_ex_from_properties_and_information() {
+        let properties =
+            HashMap::from([("capsEx".to_string(), AmfValue::Number(CAPS_EX_MODEX as f64))]);
+        let information = HashMap::from([(
+            "capsEx".to_string(),
+            AmfValue::Number(CAPS_EX_TIMESTAMP_NANO as f64),
+        )]);
+
+        let caps_ex_bits = parse_caps_ex_bits(&properties) | parse_caps_ex_bits(&information);
+
+        assert!(supports_timestamp_nano_mod_ex(caps_ex_bits));
+    }
 }

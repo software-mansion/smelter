@@ -11,7 +11,10 @@ use crate::{
 };
 
 impl RtmpMessageOutgoing {
-    pub fn into_raw(self) -> Result<RawMessage, RtmpMessageSerializeError> {
+    pub fn into_raw(
+        self,
+        supports_timestamp_nano_mod_ex: bool,
+    ) -> Result<RawMessage, RtmpMessageSerializeError> {
         let result = match self {
             RtmpMessageOutgoing::WindowAckSize { window_size } => RawMessage {
                 msg_type: MessageType::WindowAckSize.into_raw(),
@@ -68,12 +71,12 @@ impl RtmpMessageOutgoing {
             RtmpMessageOutgoing::Video {
                 video: msg,
                 stream_id,
-            } => msg.into_raw(stream_id)?,
+            } => msg.into_raw(stream_id, supports_timestamp_nano_mod_ex)?,
             RtmpMessageOutgoing::Audio {
                 audio: msg,
                 stream_id,
                 channels,
-            } => msg.into_raw(stream_id, channels)?,
+            } => msg.into_raw(stream_id, channels, supports_timestamp_nano_mod_ex)?,
         };
         Ok(result)
     }

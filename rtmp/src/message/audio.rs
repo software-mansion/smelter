@@ -107,9 +107,12 @@ impl AudioMessage {
         self,
         stream_id: u32,
         channels: AudioChannels,
+        supports_timestamp_nano_mod_ex: bool,
     ) -> Result<RawMessage, RtmpMessageSerializeError> {
         match self {
-            Self::Data(audio) => audio_data_into_raw(audio, stream_id, channels),
+            Self::Data(audio) => {
+                audio_data_into_raw(audio, stream_id, channels, supports_timestamp_nano_mod_ex)
+            }
             Self::Config(config) => audio_config_into_raw(config, stream_id),
             Self::Unknown => Err(RtmpMessageSerializeError::InternalError(
                 "Cannot serialize an unknown audio message".into(),
@@ -122,6 +125,7 @@ fn audio_data_into_raw(
     audio: AudioData,
     stream_id: u32,
     channels: AudioChannels,
+    supports_timestamp_nano_mod_ex: bool,
 ) -> Result<RawMessage, RtmpMessageSerializeError> {
     let payload = match audio.codec {
         RtmpAudioCodec::Aac => FlvAudioData::Legacy(AudioTag {
@@ -135,10 +139,9 @@ fn audio_data_into_raw(
         .serialize()?,
         RtmpAudioCodec::Opus => {
             let pts_nanos = audio.pts.as_nanos();
-            let timestamp_offset_nanos = match (pts_nanos % 1_000_000) as u32 {
-                0 => None,
-                offset => Some(offset),
-            };
+            let timestamp_offset_nanos = supports_timestamp_nano_mod_ex
+                .then_some((pts_nanos % 1_000_000) as u32)
+                .filter(|offset| *offset != 0);
             FlvAudioData::Enhanced(ExAudioTag {
                 four_cc: ExAudioFourCc::from(audio.codec),
                 packet: ExAudioPacket::CodedFrames(audio.data),
@@ -308,7 +311,7 @@ mod tests {
             pts: Duration::from_millis(33),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(1, AudioChannels::Mono)
+        .into_raw(1, AudioChannels::Mono, false)
         .unwrap();
 
         assert_eq!(raw.payload[0] & 0b0000_0001, 0);
@@ -319,7 +322,7 @@ mod tests {
             pts: Duration::from_millis(33),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(2, AudioChannels::Stereo)
+        .into_raw(2, AudioChannels::Stereo, false)
         .unwrap();
 
         assert_eq!(raw.payload[0] & 0b0000_0001, 1);
@@ -432,7 +435,7 @@ mod tests {
             pts: Duration::from_millis(100),
             data: Bytes::from_static(b"opus_frame"),
         })
-        .into_raw(1, AudioChannels::Stereo)
+        .into_raw(1, AudioChannels::Stereo, false)
         .unwrap();
 
         assert_eq!(raw.timestamp, 100);
@@ -450,7 +453,7 @@ mod tests {
             data: Bytes::from_static(OPUS_ID_HEADER_STEREO),
             channels: AudioChannels::Stereo,
         })
-        .into_raw(1, AudioChannels::Stereo)
+        .into_raw(1, AudioChannels::Stereo, false)
         .unwrap();
 
         assert_eq!(raw.timestamp, 0);
@@ -469,7 +472,7 @@ mod tests {
         };
 
         let raw = AudioMessage::Data(original.clone())
-            .into_raw(1, AudioChannels::Stereo)
+            .into_raw(1, AudioChannels::Stereo, false)
             .unwrap();
         let parsed = AudioMessage::from_raw(raw).unwrap();
 
@@ -491,7 +494,7 @@ mod tests {
             pts: Duration::from_nanos(100_000_777),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(1, AudioChannels::Stereo)
+        .into_raw(1, AudioChannels::Stereo, true)
         .unwrap();
 
         let parsed = AudioMessage::from_raw(raw).unwrap();
@@ -499,6 +502,29 @@ mod tests {
             AudioMessage::Data(data) => {
                 assert_eq!(data.codec, RtmpAudioCodec::Opus);
                 assert_eq!(data.pts.as_nanos(), 100_000_777);
+            }
+            other => panic!("expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serializes_enhanced_data_without_nano_offset_when_peer_does_not_support_it() {
+        let raw = AudioMessage::Data(AudioData {
+            track_id: TrackId::PRIMARY,
+            codec: RtmpAudioCodec::Opus,
+            pts: Duration::from_nanos(100_000_777),
+            data: Bytes::from_static(b"frame"),
+        })
+        .into_raw(1, AudioChannels::Stereo, false)
+        .unwrap();
+
+        assert_eq!(raw.timestamp, 100);
+        assert_eq!(raw.payload[0], 0x91);
+
+        match AudioMessage::from_raw(raw).unwrap() {
+            AudioMessage::Data(data) => {
+                assert_eq!(data.codec, RtmpAudioCodec::Opus);
+                assert_eq!(data.pts.as_nanos(), 100_000_000);
             }
             other => panic!("expected Data, got {other:?}"),
         }

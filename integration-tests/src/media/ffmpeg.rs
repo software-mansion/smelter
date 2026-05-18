@@ -233,7 +233,7 @@ fn send_rtmp(asset: &ResolvedAsset, url: &str, stdio: bool) -> Result<Vec<Proces
     let child = Command::new("bash")
         .arg("-c")
         .arg(format!(
-            "ffmpeg -re -i {} -c:v libvpx-vp9 -b:v 2M -c:a aac -ac 2 -f flv -rtmp_enhanced_codecs vp09,mp4a {url}",
+            "ffmpeg -re -i {} -c copy -f flv {url}",
             shell_escape(path.to_string_lossy().as_ref())
         ))
         .stdin(Stdio::null())

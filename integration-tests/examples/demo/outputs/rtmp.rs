@@ -210,7 +210,10 @@ impl RtmpOutputBuilder {
                     VideoEncoder::FfmpegH264,
                     VideoEncoder::FfmpegH264LowLatency,
                     VideoEncoder::VulkanH264,
+                    VideoEncoder::FfmpegVp8,
+                    VideoEncoder::FfmpegVp9,
                 ];
+
                 let encoder_choice =
                     Select::new("Select encoder (ESC for ffmpeg_h264)", encoder_options)
                         .prompt_skippable()?;
@@ -235,7 +238,15 @@ impl RtmpOutputBuilder {
 
         match audio_selection {
             Some(RtmpRegisterOptions::SetAudioStream) => {
-                Ok(self.with_audio(RtmpOutputAudioOptions::default()))
+                let mut audio = RtmpOutputAudioOptions::default();
+                let encoder_options = vec![AudioEncoder::Aac, AudioEncoder::Opus];
+                let encoder_choice = Select::new("Select encoder (ESC for aac)", encoder_options)
+                    .prompt_skippable()?;
+                if let Some(encoder) = encoder_choice {
+                    audio.encoder = encoder;
+                }
+
+                Ok(self.with_audio(audio))
             }
             Some(RtmpRegisterOptions::Skip) | None => Ok(self),
             _ => unreachable!(),
@@ -304,7 +315,7 @@ impl RtmpOutputVideoOptions {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
-            "encoder" : self.encoder.serialize(),
+            "encoder": self.encoder.serialize(),
             "initial": {
                 "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
             },
