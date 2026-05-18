@@ -9,6 +9,7 @@
 
 ### 🐛 Bug fixes
 - Fix artifacts in h264 decoder caused by unnecessary short reference deletion ([#1991](https://github.com/software-mansion/smelter/pull/1991) by @noituri)
+- `bytemuck` is now only required if compiling with the `transcoder` feature ([#1986](https://github.com/software-mansion/smelter/pull/1986) by @jerzywilczek)
 
 ## [v0.4.0](https://github.com/software-mansion/smelter/releases/tag/gpu-video%2Fv0.4.0)
 
