@@ -6,12 +6,13 @@ pub(crate) mod utils;
 
 pub use ctx::WgpuCtx;
 pub use ctx::{required_wgpu_features, set_required_wgpu_limits};
+use tracing::error;
 pub use wgpu::Features as WgpuFeatures;
 
 #[must_use]
 pub(crate) struct WgpuErrorScope {
     #[cfg(not(target_arch = "wasm32"))]
-    scopes: [wgpu::ErrorScopeGuard; 2],
+    scopes: Option<[wgpu::ErrorScopeGuard; 2]>,
 }
 
 impl WgpuErrorScope {
@@ -21,7 +22,9 @@ impl WgpuErrorScope {
             device.push_error_scope(wgpu::ErrorFilter::Validation),
             device.push_error_scope(wgpu::ErrorFilter::OutOfMemory),
         ];
-        Self { scopes }
+        Self {
+            scopes: Some(scopes),
+        }
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -30,8 +33,12 @@ impl WgpuErrorScope {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn pop(self) -> Result<(), WgpuError> {
-        for scope in self.scopes.into_iter().rev() {
+    pub(crate) fn pop(mut self) -> Result<(), WgpuError> {
+        let scopes = self
+            .scopes
+            .take()
+            .expect("WgpuErrorScope::pop called twice");
+        for scope in scopes.into_iter().rev() {
             if let Some(error) = pollster::block_on(scope.pop()) {
                 return Err(error.into());
             }
@@ -44,6 +51,23 @@ impl WgpuErrorScope {
     pub(crate) fn pop(self) -> Result<(), WgpuError> {
         Ok(())
     }
+}
+
+impl Drop for WgpuErrorScope {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn drop(&mut self) {
+        let Some(scopes) = self.scopes.take() else {
+            return;
+        };
+        for scope in scopes.into_iter().rev() {
+            if let Some(err) = pollster::block_on(scope.pop()) {
+                error!("Wgpu error in dropped scope: {err}");
+            }
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn drop(&mut self) {}
 }
 
 #[derive(Debug, thiserror::Error, Clone)]
