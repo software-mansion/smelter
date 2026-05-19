@@ -70,7 +70,7 @@ pub enum DepayloadingError {
 struct BufferedDepayloader<T: Depacketizer + Default + 'static> {
     kind: MediaKind,
     buffer: Vec<Bytes>,
-    depayloader: T,
+    _marker: std::marker::PhantomData<T>,
 }
 
 impl<T: Depacketizer + Default + 'static> BufferedDepayloader<T> {
@@ -78,7 +78,7 @@ impl<T: Depacketizer + Default + 'static> BufferedDepayloader<T> {
         Box::new(Self {
             kind,
             buffer: Vec::new(),
-            depayloader: T::default(),
+            _marker: std::marker::PhantomData,
         })
     }
 }
@@ -89,7 +89,17 @@ impl<T: Depacketizer + Default + 'static> Depayloader for BufferedDepayloader<T>
         packet: RtpPacket,
     ) -> Result<Vec<EncodedInputEvent>, DepayloadingError> {
         trace!(?packet, "RTP depayloader received new packet");
-        let chunk = self.depayloader.depacketize(&packet.packet.payload)?;
+        // Workaround for a webrtc-rs `Vp9Packet::depacketize` bug — construct a fresh `T` per packet
+        // instead of reusing `self.depayloader`.
+        //
+        // Vp9Packet pushes into `pdiff` / `pgpdiff` / `width` / `height` Vecs without ever clearing them,
+        // so reusing one instance across RTP packets makes `pdiff.len()` grow until it trips
+        // `ErrTooManyPDiff` (MAX_VP9REF_PICS = 3) — even on streams with valid, gap-free sequence numbers.
+        //
+        // Safe to construct per-call: depacketize only reads `self` fields it wrote earlier in the same
+        // call (no cross-packet state needed), and Vp8Packet has no accumulating Vecs to worry about.
+        // Cross-packet assembly is carried by `self.buffer` below, not by the depacketizer.
+        let chunk = T::default().depacketize(&packet.packet.payload)?;
 
         if chunk.is_empty() {
             return Ok(Vec::new());
