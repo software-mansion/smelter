@@ -22,6 +22,10 @@ fn dump_test_signal() {
     let source = SignalSource::new(RATE, test_signal());
     let samples = source.samples(D, Duration::from_millis(300) + D);
     dump_wav(&[&samples], RATE, "test_signal.wav");
+
+    let source_5s = SignalSource::new(RATE, test_signal_5s());
+    let samples_5s = source_5s.samples(D, Duration::from_millis(2000) + D);
+    dump_wav(&[&samples_5s], RATE, "test_signal_5s.wav");
 }
 
 /// First `get_samples` call on a freshly-constructed resampler — the
@@ -849,6 +853,130 @@ mod running {
             output: &all_output[FIR_WINDOW..],
             source: &source
                 .shifted(Duration::from_millis(20) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+        }
+        .assert();
+    }
+
+    /// Write [100ms, 120ms)+D after primed (buffered end at 50ms). The 50ms
+    /// gap exceeds `STRETCH_THRESHOLD` so gap-fill prepends zeros. Output:
+    /// - [40, 90)+D  = silence (gap-fill zeros)
+    /// - [90, 100)+D = primed leftover (source [40, 50)+D)
+    /// - [100, 120)+D = written batch
+    #[test]
+    fn drift_shift_forward_50ms() {
+        let (source, mut r, out_chunk_1) = primed();
+        r.write_batch(source.batch(Duration::from_millis(100) + D, Duration::from_millis(20)));
+
+        let mut all_output = out_chunk_1;
+        for i in 0..4 {
+            let start = Duration::from_millis(40 + i * 20) + D;
+            let end = start + Duration::from_millis(20);
+            let chunk = mono(r.get_samples((start, end)));
+            assert_eq!(chunk.len(), 960);
+            all_output.extend_from_slice(&chunk);
+        }
+        let pad = silence_samples(RATE, Duration::from_millis(20));
+        dump_wav(
+            &[&pad, &all_output],
+            RATE,
+            "running_drift_shift_forward_50ms.wav",
+        );
+
+        // 480 - There is still 10ms unused from prime writes
+        // 64 - resampler is processing 256 at a time, so after prime there are
+        //   still 64 samples left
+        let silence_start = 960 + 64;
+        let silence_end = silence_start + 960 * 2 + 480;
+        SignalAssertion {
+            output: &all_output[(silence_start + FIR_WINDOW)..(silence_end - FIR_WINDOW)],
+            source: &SignalSource::new(RATE, silence()),
+        }
+        .assert();
+        let prime_batch_start = 960 * 3 + 480 + 64;
+        SignalAssertion {
+            output: &all_output
+                [(prime_batch_start + FIR_WINDOW)..(prime_batch_start + (480 - 64) - FIR_WINDOW)],
+            source: &source
+                .shifted(Duration::from_millis(40) + D + SAMPLE48 * (FIR_WINDOW as u32 + 64)),
+        }
+        .assert();
+        let batch_start = 960 * 4;
+        SignalAssertion {
+            output: &all_output[(batch_start + FIR_WINDOW)..(batch_start + 960 - FIR_WINDOW)],
+            source: &source.shifted(Duration::from_millis(100) + D + SAMPLE48 * FIR_WINDOW as u32),
+        }
+        .assert();
+    }
+
+    /// Same setup as `primed()` but with PTS shifted up by 1000ms to leave
+    /// room for backward drift. Writes [1010, 1050)+D, reads [1020, 1040)+D.
+    /// Then writes 12 contiguous 100ms batches of audio from [1050, 2250)+D,
+    /// each with PTS shifted backward by `(i+1) * 50ms`. Each batch is 100ms
+    /// of audio but its PTS only advances by 50ms, so `input_buffer_end_pts`
+    /// falls behind by 50ms per batch. Each batch's PTS stays within the
+    /// 80ms anti-overlap tolerance of the previous `input_buffer_end_pts`.
+    ///
+    /// After all writes the accumulated drift is ~600ms. Read at
+    /// [1040, 1060)+D → triggers DROP.
+    #[test]
+    fn drift_shift_backward_600ms() {
+        try_init_logger();
+        let source = SignalSource::new(RATE, test_signal_5s());
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        r.write_batch(source.batch(Duration::from_millis(1010) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(Duration::from_millis(1030) + D, Duration::from_millis(20)));
+        let out_chunk_1 = mono(r.get_samples((
+            Duration::from_millis(1020) + D,
+            Duration::from_millis(1040) + D,
+        )));
+
+        // Each 100ms batch has PTS shifted backward by (i+1)*50ms — would
+        // require squashing by 50% to handle without drops.
+        for i in 0..12u64 {
+            let content_start = Duration::from_millis(1050 + i * 100) + D;
+            let content_end = Duration::from_millis(1150 + i * 100) + D;
+            let samples = source.samples(content_start, content_end);
+            r.write_batch(InputAudioSamples::new(
+                AudioSamples::Mono(samples),
+                content_start - Duration::from_millis((i + 1) * 50),
+                RATE,
+            ));
+        }
+        // Each batch introduces 50ms of backward drift; after 12 batches the
+        // total is 600ms — past SQUASH_THRESHOLD, triggering DROP.
+
+        let chunk = mono(r.get_samples((
+            Duration::from_millis(1040) + D,
+            Duration::from_millis(1060) + D,
+        )));
+        assert_eq!(chunk.len(), 960);
+        let mut all_output = out_chunk_1;
+        all_output.extend_from_slice(&chunk);
+        let pad = silence_samples(RATE, Duration::from_millis(1020));
+        dump_wav(
+            &[&pad, &all_output],
+            RATE,
+            "running_drift_shift_backward_600ms.wav",
+        );
+
+        SignalAssertion {
+            output: &all_output[FIR_WINDOW..960],
+            source: &source
+                .shifted(Duration::from_millis(1020) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+        }
+        .assert();
+
+        // After DROP, the buffer is realigned. The first 64 samples are
+        // leftover from the primed run's output_buffer. Content is shifted
+        // by 600ms relative to the normal timeline.
+        SignalAssertion {
+            output: &chunk[(64 + FIR_WINDOW)..],
+            source: &source.shifted(
+                Duration::from_millis(1040)
+                    + D
+                    + SAMPLE48 * (64 + FIR_WINDOW as u32 - 1)
+                    + Duration::from_millis(600),
+            ),
         }
         .assert();
     }

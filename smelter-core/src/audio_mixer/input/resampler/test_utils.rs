@@ -112,12 +112,12 @@ pub(super) fn dump_wav(chunks: &[&[f64]], rate: u32, name: &str) {
 /// `&SignalSource` without leaking generic parameters through their
 /// signatures.
 pub(super) struct SignalSource {
-    func: Arc<dyn Fn(Duration) -> f64>,
+    func: Arc<dyn Fn(Duration) -> f64 + Send + Sync>,
     rate: u32,
 }
 
 impl SignalSource {
-    pub fn new<F: Fn(Duration) -> f64 + 'static>(rate: u32, func: F) -> Self {
+    pub fn new<F: Fn(Duration) -> f64 + Send + Sync + 'static>(rate: u32, func: F) -> Self {
         Self {
             func: Arc::new(func),
             rate,
@@ -177,6 +177,15 @@ pub(super) fn silence() -> impl Fn(Duration) -> f64 + 'static {
 ///   separate `SignalSource` for those windows.
 pub(super) fn test_signal() -> impl Fn(Duration) -> f64 + 'static {
     am_chirp(2000.0, -1800.0, Duration::from_millis(15), 0.5, 1.0)
+}
+
+/// Same idea as [`test_signal`] but tuned for tests with PTS values up to 5s.
+/// Carrier sweeps **2000 Hz → 200 Hz over 5s** (k = -360 Hz/s) — starts
+/// high so the most distinctive part of the signal lines up with early PTS
+/// values. Stays well below Nyquist at 48 kHz. Envelope cycles every 10ms
+/// between 0.2 and 1.0.
+pub(super) fn test_signal_5s() -> impl Fn(Duration) -> f64 + 'static {
+    am_chirp(2000.0, -360.0, Duration::from_millis(10), 0.2, 1.0)
 }
 
 /// Linear chirp with cosine amplitude modulation. Carrier instantaneous
@@ -324,7 +333,7 @@ impl<'a> SignalAssertion<'a> {
         let mut buf = String::new();
         let _ = writeln!(buf);
         let _ = writeln!(buf, "Resampler alignment mismatch");
-        let _ = writeln!(buf, "  expected: {} samples", length);
+        let _ = writeln!(buf, "  expected: {length} samples");
         let _ = writeln!(
             buf,
             "  worst @ +{:>5} ({:?}):  actual={:+.4}  expected={:+.4}  err={:.4}",
@@ -336,8 +345,7 @@ impl<'a> SignalAssertion<'a> {
         );
         let _ = writeln!(
             buf,
-            "  RMS @ shift 0: {:.4}    RMS @ best shift {:+.1}us: {:.4}",
-            rms_nominal, best_shift_us, rms_best_shift
+            "  RMS @ shift 0: {rms_nominal:.4}    RMS @ best shift {best_shift_us:+.1}us: {rms_best_shift:.4}",
         );
         let _ = writeln!(
             buf,
@@ -353,8 +361,7 @@ impl<'a> SignalAssertion<'a> {
             };
             let _ = writeln!(
                 buf,
-                "  diagnosis: signal IS present but lands {:+.0}us {} expected",
-                best_shift_us, direction
+                "  diagnosis: signal IS present but lands {best_shift_us:+.0}us {direction} expected",
             );
         } else if (best_stretch - params.stretch).abs() > 1e-6
             && rms_best_stretch * 4.0 < rms_nominal
