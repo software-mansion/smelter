@@ -1,6 +1,7 @@
 use tracing::error;
 
 pub(super) mod hls;
+pub(super) mod moq;
 pub(super) mod mp4;
 pub(super) mod rtmp;
 pub(super) mod rtp;
@@ -10,13 +11,14 @@ pub(super) mod whip;
 use crate::{
     InputProtocolKind,
     stats::{
-        input::hls::HlsInputState, input::mp4::Mp4InputState, input::rtmp::RtmpInputState,
-        input::rtp::RtpInputState, input::whep::WhepInputState, input::whip::WhipInputState,
-        input_reports::InputStatsReport,
+        input::hls::HlsInputState, input::moq::MoqInputState, input::mp4::Mp4InputState,
+        input::rtmp::RtmpInputState, input::rtp::RtpInputState, input::whep::WhepInputState,
+        input::whip::WhipInputState, input_reports::InputStatsReport,
     },
 };
 
 pub(crate) use hls::{HlsInputStatsEvent, HlsInputTrackStatsEvent};
+pub(crate) use moq::{MoqInputStatsEvent, MoqInputTrackStatsEvent};
 pub(crate) use mp4::{Mp4InputStatsEvent, Mp4InputTrackStatsEvent};
 pub(crate) use rtmp::{RtmpInputStatsEvent, RtmpInputTrackStatsEvent};
 pub(crate) use rtp::{RtpInputStatsEvent, RtpJitterBufferStatsEvent};
@@ -30,6 +32,7 @@ pub(crate) enum InputStatsEvent {
     Whep(WhepInputStatsEvent),
     Hls(HlsInputStatsEvent),
     Rtmp(RtmpInputStatsEvent),
+    Moq(MoqInputStatsEvent),
     Mp4(Mp4InputStatsEvent),
 }
 
@@ -41,6 +44,7 @@ impl From<&InputStatsEvent> for InputProtocolKind {
             InputStatsEvent::Whep(_) => InputProtocolKind::Whep,
             InputStatsEvent::Hls(_) => InputProtocolKind::Hls,
             InputStatsEvent::Rtmp(_) => InputProtocolKind::Rtmp,
+            InputStatsEvent::Moq(_) => InputProtocolKind::Moq,
             InputStatsEvent::Mp4(_) => InputProtocolKind::Mp4,
         }
     }
@@ -53,6 +57,7 @@ pub enum InputStatsState {
     Whep(WhepInputState),
     Hls(HlsInputState),
     Rtmp(RtmpInputState),
+    Moq(MoqInputState),
     Mp4(Mp4InputState),
 }
 
@@ -63,9 +68,9 @@ impl InputStatsState {
             InputProtocolKind::Whep => InputStatsState::Whep(WhepInputState::new()),
             InputProtocolKind::Rtp => InputStatsState::Rtp(RtpInputState::new()),
             InputProtocolKind::Rtmp => InputStatsState::Rtmp(RtmpInputState::new()),
+            InputProtocolKind::Moq => InputStatsState::Moq(MoqInputState::new()),
             InputProtocolKind::Mp4 => InputStatsState::Mp4(Mp4InputState::new()),
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
-            InputProtocolKind::Moq => unimplemented!(),
             InputProtocolKind::V4l2 => unimplemented!(),
             InputProtocolKind::DeckLink => unimplemented!(),
             InputProtocolKind::RawDataChannel => unimplemented!(),
@@ -87,6 +92,9 @@ impl InputStatsState {
             (InputStatsState::Rtmp(state), InputStatsEvent::Rtmp(event)) => {
                 state.handle_event(event);
             }
+            (InputStatsState::Moq(state), InputStatsEvent::Moq(event)) => {
+                state.handle_event(event);
+            }
             (InputStatsState::Mp4(state), InputStatsEvent::Mp4(event)) => {
                 state.handle_event(event);
             }
@@ -103,6 +111,7 @@ impl InputStatsState {
             InputStatsState::Whep(state) => InputStatsReport::Whep(state.report()),
             InputStatsState::Hls(state) => InputStatsReport::Hls(state.report()),
             InputStatsState::Rtmp(state) => InputStatsReport::Rtmp(state.report()),
+            InputStatsState::Moq(state) => InputStatsReport::Moq(state.report()),
             InputStatsState::Mp4(state) => InputStatsReport::Mp4(state.report()),
         }
     }

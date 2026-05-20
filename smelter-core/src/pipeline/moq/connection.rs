@@ -108,9 +108,9 @@ pub(crate) fn spawn_broadcast_handler(
         let video = discovered.video.take();
         let audio = discovered.audio.take();
 
-        let video_fut = run_video_track(video, video_decoder_handle, &broadcast);
+        let video_fut = run_video_track(video, video_decoder_handle, &broadcast, &ctx, &input_ref);
 
-        let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast);
+        let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast, &ctx, &input_ref);
 
         tokio::join!(video_fut, audio_fut);
         info!(input_id = %input_id_str, "MoQ broadcast connection closed");
@@ -242,6 +242,8 @@ async fn run_video_track(
     video: Option<DiscoveredVideo>,
     decoder_handle: Option<DecoderThreadHandle>,
     broadcast: &BroadcastConsumer,
+    ctx: &Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
 ) {
     if let Some(video) = video
         && let Some(decoder_handle) = decoder_handle
@@ -250,7 +252,9 @@ async fn run_video_track(
             Ok(track) => {
                 let consumer =
                     ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
-                if let Err(err) = read_video_track(consumer, decoder_handle).await {
+                if let Err(err) =
+                    read_video_track(ctx.clone(), input_ref.clone(), consumer, decoder_handle).await
+                {
                     warn!(
                         "MoQ video track error: {}",
                         ErrorStack::new(&err).into_string()
@@ -268,6 +272,8 @@ async fn run_audio_track(
     audio: Option<DiscoveredAudio>,
     decoder_handle: Option<DecoderThreadHandle>,
     broadcast: &BroadcastConsumer,
+    ctx: &Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
 ) {
     if let Some(audio) = audio
         && let Some(decoder_handle) = decoder_handle
@@ -276,7 +282,9 @@ async fn run_audio_track(
             Ok(track) => {
                 let consumer =
                     ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
-                if let Err(err) = read_audio_track(consumer, decoder_handle).await {
+                if let Err(err) =
+                    read_audio_track(ctx.clone(), input_ref.clone(), consumer, decoder_handle).await
+                {
                     warn!(
                         "MoQ audio track error: {}",
                         ErrorStack::new(&err).into_string()
@@ -333,6 +341,8 @@ enum MoqConnectionError {
 }
 
 async fn read_video_track(
+    ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
     mut consumer: ContainerConsumer<Hang>,
     decoder_handle: DecoderThreadHandle,
 ) -> Result<(), MoqConnectionError> {
@@ -357,6 +367,11 @@ async fn read_video_track(
             present: true,
         };
 
+        ctx.stats_sender.send(
+            MoqInputTrackStatsEvent::BytesReceived(chunk.data.len())
+                .into_event(&input_ref, StatsTrackKind::Video),
+        );
+
         decoder_handle
             .chunk_sender
             .send(PipelineEvent::Data(chunk))
@@ -367,6 +382,8 @@ async fn read_video_track(
 }
 
 async fn read_audio_track(
+    ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
     mut consumer: ContainerConsumer<Hang>,
     decoder_handle: DecoderThreadHandle,
 ) -> Result<(), MoqConnectionError> {
@@ -390,6 +407,11 @@ async fn read_audio_track(
             kind: MediaKind::Audio(AudioCodec::Aac),
             present: true,
         };
+
+        ctx.stats_sender.send(
+            MoqInputTrackStatsEvent::BytesReceived(chunk.data.len())
+                .into_event(&input_ref, StatsTrackKind::Audio),
+        );
 
         decoder_handle
             .chunk_sender
