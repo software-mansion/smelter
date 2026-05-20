@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use moq_lite::{Origin, OriginConsumer, OriginProducer};
+use moq_lite::{Origin, OriginConsumer, OriginProducer, Session};
 use moq_native::{ServerConfig, ServerTlsConfig};
 use smelter_render::error::ErrorStack;
 use tracing::{debug, info, warn};
@@ -28,14 +28,20 @@ impl MoqPipelineState {
     }
 }
 
+type MoqSessions = Arc<Mutex<Vec<Session>>>;
 pub struct MoqServerHandle {
-    tasks: Vec<tokio::task::JoinHandle<()>>,
+    accept_task: tokio::task::JoinHandle<()>,
+    announce_task: tokio::task::JoinHandle<()>,
+    sessions: MoqSessions,
 }
 
 impl Drop for MoqServerHandle {
     fn drop(&mut self) {
-        for task in &self.tasks {
-            task.abort();
+        self.accept_task.abort();
+        self.announce_task.abort();
+        let mut sessions = self.sessions.lock().unwrap();
+        while let Some(mut session) = sessions.pop() {
+            session.close(moq_lite::Error::Cancel);
         }
     }
 }
@@ -70,7 +76,8 @@ pub async fn spawn_moq_server(
         Err(error) => return Err(InitPipelineError::MoqServerInitError(error)),
     };
 
-    let accept_task = tokio::spawn(run_accept_loop(server));
+    let moq_sessions: MoqSessions = Arc::new(Mutex::new(vec![]));
+    let accept_task = tokio::spawn(run_accept_loop(server, moq_sessions.clone()));
 
     let origin_consumer = state.origin.consume();
     let moq_inputs = state.inputs.clone();
@@ -79,17 +86,24 @@ pub async fn spawn_moq_server(
     info!(port, "MoQ server started");
 
     Ok(MoqServerHandle {
-        tasks: vec![accept_task, announce_task],
+        accept_task,
+        announce_task,
+        sessions: moq_sessions,
     })
 }
 
-async fn run_accept_loop(mut server: moq_native::Server) {
+async fn run_accept_loop(mut server: moq_native::Server, moq_sessions: MoqSessions) {
     while let Some(request) = server.accept().await {
+        let moq_sessions = moq_sessions.clone();
         tokio::spawn(async move {
             match request.ok().await {
                 Ok(session) => {
                     info!("MoQ session established");
                     debug!(moq_version=?session.version());
+                    {
+                        let mut sessions = moq_sessions.lock().unwrap();
+                        sessions.push(session.clone());
+                    }
                     let _ = session.closed().await;
                     info!("MoQ session closed");
                 }
