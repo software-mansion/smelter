@@ -59,15 +59,15 @@ pub fn h264_cb_31_codec_params() -> Vec<RTCRtpCodecParameters> {
 pub fn h264_codec_params() -> Vec<RTCRtpCodecParameters> {
     // (payload_type, packetization_mode, profile_level)
     let codec_configs = [
-        // constrained baseline, 5.1
-        (104, 1, "42e033"),
-        (105, 0, "42e033"),
-        // main, 5.1
-        (106, 1, "4d0033"),
-        (107, 0, "4d0033"),
-        // high, 5.1
-        (108, 1, "640033"),
-        (109, 0, "640033"),
+        // constrained baseline, 5.2
+        (104, 1, "42e034"),
+        (105, 0, "42e034"),
+        // main, 5.2
+        (106, 1, "4d0034"),
+        (107, 0, "4d0034"),
+        // high, 5.2
+        (108, 1, "640034"),
+        (109, 0, "640034"),
     ];
 
     codec_configs
