@@ -50,7 +50,7 @@ jobs:
               run: |
                   VERSION=$(jq -r .version package.json)
                   if ! pnpm view "@swmansion/smelter@${VERSION}" version 2>/dev/null; then
-                    pnpm publish --tag next
+                    pnpm publish --no-git-checks --tag next
                   else
                     echo "Version ${VERSION} was already published, skipping."
                   fi
@@ -60,7 +60,7 @@ jobs:
               run: |
                   VERSION=$(jq -r .version package.json)
                   if ! pnpm view "@swmansion/smelter-core@${VERSION}" version 2>/dev/null; then
-                    pnpm publish --tag next
+                    pnpm publish --no-git-checks --tag next
                   else
                     echo "Version ${VERSION} was already published, skipping."
                   fi
@@ -70,7 +70,7 @@ jobs:
               run: |
                   VERSION=$(jq -r .version package.json)
                   if ! pnpm view "@swmansion/smelter-node@${VERSION}" version 2>/dev/null; then
-                    pnpm publish --tag next
+                    pnpm publish --no-git-checks --tag next
                   else
                     echo "Version ${VERSION} was already published, skipping."
                   fi
@@ -80,7 +80,7 @@ jobs:
               run: |
                   VERSION=$(jq -r .version package.json)
                   if ! pnpm view "@swmansion/smelter-browser-render@${VERSION}" version 2>/dev/null; then
-                    pnpm publish --tag next
+                    pnpm publish --no-git-checks --tag next
                   else
                     echo "Version ${VERSION} was already published, skipping."
                   fi
@@ -90,7 +90,7 @@ jobs:
               run: |
                   VERSION=$(jq -r .version package.json)
                   if ! pnpm view "@swmansion/smelter-web-wasm@${VERSION}" version 2>/dev/null; then
-                    pnpm publish --tag next
+                    pnpm publish --no-git-checks --tag next
                   else
                     echo "Version ${VERSION} was already published, skipping."
                   fi
@@ -100,7 +100,7 @@ jobs:
               run: |
                   VERSION=$(jq -r .version package.json)
                   if ! pnpm view "@swmansion/smelter-web-client@${VERSION}" version 2>/dev/null; then
-                    pnpm publish --tag next
+                    pnpm publish --no-git-checks --tag next
                   else
                     echo "Version ${VERSION} was already published, skipping."
                   fi
@@ -110,7 +110,7 @@ jobs:
               run: |
                   VERSION=$(jq -r .version package.json)
                   if ! pnpm view "create-smelter-app@${VERSION}" version 2>/dev/null; then
-                    pnpm publish --tag next
+                    pnpm publish --no-git-checks --tag next
                   else
                     echo "Version ${VERSION} was already published, skipping."
                   fi
