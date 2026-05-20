@@ -278,13 +278,13 @@ async fn run_audio_track(
                     ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
                 if let Err(err) = read_audio_track(consumer, decoder_handle).await {
                     warn!(
-                        "MoQ video track error: {}",
+                        "MoQ audio track error: {}",
                         ErrorStack::new(&err).into_string()
                     );
                 }
             }
             Err(err) => {
-                warn!("Failed to subscribe to MoQ video track: {err}");
+                warn!("Failed to subscribe to MoQ audio track: {err}");
             }
         }
     }
