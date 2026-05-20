@@ -235,19 +235,15 @@ pub(super) fn send_publish(
 }
 
 fn supports_timestamp_nano_mod_ex(caps_ex_bits: u8) -> bool {
-    caps_ex_bits & (CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO)
-        == CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO
+    let has_modex = (caps_ex_bits & CAPS_EX_MODEX) != 0;
+    let has_ts_nano = (caps_ex_bits & CAPS_EX_TIMESTAMP_NANO) != 0;
+    has_modex && has_ts_nano
 }
 
 fn parse_caps_ex_bits(map: &HashMap<String, AmfValue>) -> u8 {
     match map.get("capsEx") {
-        Some(AmfValue::Number(bits)) if bits.is_finite() && *bits > 0.0 => {
-            let bits = bits.floor();
-            if bits > u8::MAX as f64 {
-                u8::MAX
-            } else {
-                bits as u8
-            }
+        Some(AmfValue::Number(bits)) if bits.is_finite() => {
+            bits.floor().clamp(0.0, u8::MAX as f64) as u8
         }
         _ => 0,
     }

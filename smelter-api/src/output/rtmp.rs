@@ -50,6 +50,7 @@ pub enum RtmpClientVideoEncoderOptions {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
+    /// Requires Enhanced RTMP support on the receiver side.
     #[serde(rename = "ffmpeg_vp8")]
     FfmpegVp8 {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
@@ -61,6 +62,7 @@ pub enum RtmpClientVideoEncoderOptions {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
+    /// Requires Enhanced RTMP support on the receiver side.
     #[serde(rename = "ffmpeg_vp9")]
     FfmpegVp9 {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
@@ -108,6 +110,7 @@ pub enum RtmpClientAudioEncoderOptions {
         /// (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
         sample_rate: Option<u32>,
     },
+    /// Requires Enhanced RTMP support on the receiver side.
     Opus {
         /// (**default=`"voip"`**) Audio output encoder preset.
         preset: Option<OpusEncoderPreset>,
