@@ -1,6 +1,6 @@
 # `@swmansion/smelter`
 
-This package provides a set of React components that can be used to define a composition of a video stream. Available components can only be used with React renderers specific for Smelter. Currently, we only support Node.js runtime with `@swmansion/smelter-node` package, but support for more runtimes is planned in the future.
+This package provides a set of React components that can be used to define a composition of a video stream. Available components can only be used with React renderers specific for Smelter. We support Node.js runtime with `@swmansion/smelter-node`, browser with `@swmansion/smelter-web-wasm`, and remote server control from the browser with `@swmansion/smelter-web-client`.
 
 Smelter components should not be mixed with other React or React Native components, but you can still use hooks like `useState`/`useEffect` from React.
 
