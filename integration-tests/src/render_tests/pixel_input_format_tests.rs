@@ -7,9 +7,10 @@ use smelter_render::{
     scene::{Component, InputStreamComponent, ViewComponent},
 };
 
-use crate::render_tests::input::TestInput;
-
-use super::{Step, test_case::TestCase};
+use super::harness::{
+    input::TestInput,
+    test_case::{Step, TestCase},
+};
 
 fn run_case(test_case: TestCase, expected: &[u8]) {
     let snapshots = test_case.generate_snapshots();

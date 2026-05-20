@@ -1,7 +1,7 @@
 use smelter_render::{FrameData, Resolution, YuvPlanes, scene::RGBColor};
 
 #[derive(Debug, Clone)]
-pub(super) struct TestInput {
+pub(crate) struct TestInput {
     pub name: String,
     pub resolution: Resolution,
     pub data: FrameData,

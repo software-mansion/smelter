@@ -15,9 +15,7 @@ pub mod test_input;
 pub mod tools;
 
 pub mod pipeline_tests;
-
-#[cfg(test)]
-mod render_tests;
+pub mod render_tests;
 
 pub use common::*;
 pub use compositor_instance::*;

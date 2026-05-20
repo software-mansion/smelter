@@ -11,7 +11,11 @@ use crate::paths::render_tests_workdir;
 use super::snapshot_save_path;
 
 #[derive(Debug, Clone)]
-pub(super) struct Snapshot {
+pub(crate) struct Snapshot {
+    /// Module the test lives in — also the subdirectory under
+    /// `render_snapshots/` where the committed snapshot lives.
+    pub module: String,
+    /// Test name — also the prefix of the snapshot file name.
     pub test_name: String,
     pub pts: Duration,
     pub resolution: Resolution,
@@ -20,7 +24,7 @@ pub(super) struct Snapshot {
 
 impl Snapshot {
     pub(super) fn save_path(&self) -> PathBuf {
-        snapshot_save_path(&self.test_name, &self.pts)
+        snapshot_save_path(&self.module, &self.test_name, &self.pts)
     }
 
     pub(super) fn diff_with_saved(&self) -> f32 {
@@ -32,31 +36,22 @@ impl Snapshot {
         snapshots_diff(&old_snapshot, &self.data)
     }
 
-    pub(super) fn update_on_disk(&self) {
-        let width = self.resolution.width - (self.resolution.width % 2);
-        let height = self.resolution.height - (self.resolution.height % 2);
-        let save_path = self.save_path();
-        create_dir_all(save_path.parent().unwrap()).unwrap();
-        image::save_buffer(
-            save_path,
-            &self.data,
-            width as u32,
-            height as u32,
-            image::ColorType::Rgba8,
-        )
-        .unwrap();
-    }
-
     pub(super) fn write_as_failed_snapshot(&self) {
         let failed_snapshot_path = render_tests_workdir();
         create_dir_all(&failed_snapshot_path).unwrap();
 
-        let snapshot_name = self
-            .save_path()
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+        // Workdir is flat, so the module name is encoded into the
+        // file name (separated by `__`) — otherwise the audit tool
+        // can't tell which `<test.module>` a workdir file belongs
+        // to, and same-named tests in different modules would alias.
+        let pts_millis = self.pts.as_millis();
+        let snapshot_name = format!(
+            "{}__{}_{:05}_{}.png",
+            self.module,
+            self.test_name,
+            pts_millis,
+            super::OUTPUT_ID,
+        );
 
         let width = self.resolution.width - (self.resolution.width % 2);
         let height = self.resolution.height - (self.resolution.height % 2);
@@ -69,11 +64,10 @@ impl Snapshot {
         )
         .unwrap();
 
-        fs::copy(
+        let _ = fs::copy(
             self.save_path(),
             failed_snapshot_path.join(format!("expected_{snapshot_name}")),
-        )
-        .unwrap();
+        );
     }
 }
 
