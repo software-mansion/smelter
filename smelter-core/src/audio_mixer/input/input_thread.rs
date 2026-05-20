@@ -60,22 +60,11 @@ impl InputProcessor {
         let input_sample_rate = batch.sample_rate;
 
         let resampler = self.resampler.get_or_insert_with(|| {
-            InputResampler::new(
-                input_sample_rate,
-                self.mixing_sample_rate,
-                channels,
-                batch.start_pts,
-            )
-            .unwrap()
+            InputResampler::new(input_sample_rate, self.mixing_sample_rate, channels).unwrap()
         });
         if resampler.channels() != channels || resampler.input_sample_rate() != input_sample_rate {
-            *resampler = InputResampler::new(
-                input_sample_rate,
-                self.mixing_sample_rate,
-                channels,
-                batch.start_pts,
-            )
-            .unwrap();
+            *resampler =
+                InputResampler::new(input_sample_rate, self.mixing_sample_rate, channels).unwrap();
         }
         resampler.write_batch(batch);
     }
