@@ -68,8 +68,15 @@ impl MoqInputsState {
 
     pub(crate) fn remove_input(&self, input_ref: &Ref<InputId>) {
         let mut guard = self.0.lock().unwrap();
-        if guard.remove(input_ref).is_none() {
-            error!(?input_ref, "Failed to remove MoQ input, ID not found");
+        match guard.remove(input_ref) {
+            Some(mut input) => {
+                if let Some(handle) = input.connection_handle.take() {
+                    handle.abort();
+                }
+            }
+            None => {
+                error!(?input_ref, "Failed to remove MoQ input, ID not found");
+            }
         }
     }
 
