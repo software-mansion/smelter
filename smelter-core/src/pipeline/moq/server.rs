@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use moq_lite::{Origin, OriginConsumer, OriginProducer};
 use moq_native::{ServerConfig, ServerTlsConfig};
@@ -49,10 +50,25 @@ pub async fn spawn_moq_server(
     config.bind = Some(format!("[::]:{port}"));
     config.tls = state.tls_config.clone();
 
-    let server = config
-        .init()
-        .map_err(InitPipelineError::MoqServerInitError)?
-        .with_consume(state.origin.clone());
+    let mut server_result: Option<Result<moq_native::Server, anyhow::Error>> = None;
+    for _ in 0..5 {
+        match config.clone().init() {
+            Ok(server) => {
+                server_result = Some(Ok(server));
+                break;
+            }
+            Err(error) => {
+                warn!("Failed to start MoQ server. Retrying ...");
+                server_result = Some(Err(error));
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+
+    let server = match server_result.unwrap() {
+        Ok(server) => server.with_consume(state.origin.clone()),
+        Err(error) => return Err(InitPipelineError::MoqServerInitError(error)),
+    };
 
     let accept_task = tokio::spawn(run_accept_loop(server));
 
