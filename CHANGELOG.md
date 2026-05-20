@@ -6,6 +6,8 @@
 - Rename `var<push_constant>` to `var<immediate>` in user-provided shaders ([#1624](https://github.com/software-mansion/smelter/pull/1624) by [@noituri](https://github.com/noituri))
 - Replace `url` field with `app` and `stream_key` in RTMP input, port is now defined globally via `SMELTER_RTMP_SERVER_PORT` ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 - Rename `vk-video` feature to `gpu-video` ([#1942](https://github.com/software-mansion/smelter/pull/1942)) by [@jerzywilczek](https://github.com/jerzywilczek)
+- Remove `offset_ms` from WHIP and WHEP inputs ([#1974](https://github.com/software-mansion/smelter/pull/1974), [#1857](https://github.com/software-mansion/smelter/pull/1857) by [@wkozyra95](https://github.com/wkozyra95))
+- Remove `offset_ms` from RTMP input ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### ✨ New features
 - Add `bitrate` option to software encoders ([#1567](https://github.com/software-mansion/smelter/pull/1567) by [@JBRS307](https://github.com/JBRS307))
@@ -18,6 +20,11 @@
   - `SMELTER_WEBRTC_1_TO_1_NAT_IPS`
 - Add pause support for inputs ([#1798](https://github.com/software-mansion/smelter/pull/1798), [#1843](https://github.com/software-mansion/smelter/pull/1843) by [@wkozyra95](https://github.com/wkozyra95))
 - Add seek support for MP4 input ([#1817](https://github.com/software-mansion/smelter/pull/1817), [#1830](https://github.com/software-mansion/smelter/pull/1830) by [@wkozyra95](https://github.com/wkozyra95))
+- Add `/input/:id/update` endpoint for pause and seek operations ([#1798](https://github.com/software-mansion/smelter/pull/1798), [#1817](https://github.com/software-mansion/smelter/pull/1817) by [@wkozyra95](https://github.com/wkozyra95))
+- Add `side_channel` option to all inputs for sharing input data with external processes ([#1899](https://github.com/software-mansion/smelter/pull/1899) by [@wkozyra95](https://github.com/wkozyra95))
+- Add `buffer_size_ms` option to RTP, WHIP, and WHEP inputs to configure jitter buffer size ([#1974](https://github.com/software-mansion/smelter/pull/1974) by [@wkozyra95](https://github.com/wkozyra95))
+- Add `AUDIO_INPUT_PAUSED` and `VIDEO_INPUT_PAUSED` WebSocket events ([#1843](https://github.com/software-mansion/smelter/pull/1843) by [@wkozyra95](https://github.com/wkozyra95))
+- Add `OUTPUT_ERROR` WebSocket event when output/input fails after initialization ([#1753](https://github.com/software-mansion/smelter/pull/1753) by [@wkozyra95](https://github.com/wkozyra95))
 - RTMPS support for RTMP input ([#1777](https://github.com/software-mansion/smelter/pull/1777), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### 🐛 Bug fixes
@@ -26,6 +33,7 @@
 
 ### 🔧 Others
 
+- Add OpenAPI specification ([#1692](https://github.com/software-mansion/smelter/pull/1692), [#1703](https://github.com/software-mansion/smelter/pull/1703) by [@JBRS307](https://github.com/JBRS307))
 - Support FFmpeg 8.1 ([#1833](https://github.com/software-mansion/smelter/pull/1833) by [@JBRS307](https://github.com/JBRS307))
 - Replace FFmpeg-based RTMP server implementation. ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 
