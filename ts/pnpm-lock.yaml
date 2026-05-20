@@ -103,10 +103,10 @@ importers:
   create-smelter-app/templates/node-express-zustand:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../smelter-node
       express:
         specifier: ^4.22.0
@@ -137,10 +137,10 @@ importers:
   create-smelter-app/templates/node-minimal:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../smelter-node
       react:
         specifier: ^18.3.1
@@ -171,10 +171,10 @@ importers:
         specifier: ^0.34.48
         version: 0.34.48
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../../smelter-node
       fastify:
         specifier: ^5.8.5
@@ -202,10 +202,10 @@ importers:
   create-smelter-app/templates/node-offline-minimal:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../smelter-node
       react:
         specifier: ^18.3.1
@@ -227,10 +227,10 @@ importers:
   create-smelter-app/templates/node-offline-showcase:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../../smelter-node
       ora:
         specifier: ^5.4.1
@@ -255,10 +255,10 @@ importers:
   examples/node-examples:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter-node
       fs-extra:
         specifier: ^11.2.0
@@ -283,13 +283,13 @@ importers:
   examples/node-workerd:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter
       '@swmansion/smelter-core':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter-core
       '@swmansion/smelter-node':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter-node
       pino:
         specifier: ^9.5.0
@@ -341,13 +341,13 @@ importers:
   examples/vite-example:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter
       '@swmansion/smelter-browser-render':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter-browser-render
       '@swmansion/smelter-web-wasm':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter-web-wasm
       mp4box:
         specifier: ^0.5.2
@@ -397,10 +397,10 @@ importers:
         specifier: ^9.39.1
         version: 9.39.1
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter
       '@swmansion/smelter-web-client':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../../smelter-web-client
       '@types/node':
         specifier: ^24.10.1
@@ -449,7 +449,7 @@ importers:
   smelter-browser-render:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../smelter
     devDependencies:
       '@rollup/plugin-typescript':
@@ -471,7 +471,7 @@ importers:
   smelter-core:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../smelter
       react:
         specifier: '*'
@@ -505,10 +505,10 @@ importers:
   smelter-node:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../smelter
       '@swmansion/smelter-core':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../smelter-core
       fs-extra:
         specifier: ^11.2.0
@@ -548,10 +548,10 @@ importers:
   smelter-web-client:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../smelter
       '@swmansion/smelter-core':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../smelter-core
       pino:
         specifier: ^9.5.0
@@ -579,13 +579,13 @@ importers:
         specifier: ^4.2.3
         version: 4.2.3
       '@swmansion/smelter':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../smelter
       '@swmansion/smelter-browser-render':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../smelter-browser-render
       '@swmansion/smelter-core':
-        specifier: workspace:0.4.0-rc.0
+        specifier: workspace:0.4.0-rc.1
         version: link:../smelter-core
       mp4box:
         specifier: ^0.5.2
