@@ -8,6 +8,11 @@
     "url": "https://github.com/software-mansion/smelter/issues"
   },
   "homepage": "https://smelter.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/software-mansion/smelter.git",
+    "directory": "ts/create-smelter-app"
+  },
   "files": [
     "/dist",
     "/templates"
