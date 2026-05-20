@@ -35,7 +35,7 @@ async function startSmelter() {
 
   await smelter.registerOutput('example_output', <SmelterApp />, {
     type: 'rtmp_client',
-    url: 'rtmp://127.0.0.1:8000/'
+    url: 'rtmp://127.0.0.1:8000/',
     video: {
       encoder: { type: 'ffmpeg_h264', preset: 'ultrafast' },
       resolution: { width: 1920, height: 1080 },
