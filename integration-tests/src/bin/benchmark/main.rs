@@ -1,17 +1,17 @@
 use std::{fs, sync::Arc, time::Duration};
 
 use benchmark::{Benchmark, EncoderOptions};
-use benchmark_pass::{InputFile, SingleBenchmarkPass};
+use benchmark_pass::{InputFile, InputFileKind, SingleBenchmarkPass};
 use clap::Parser;
 use smelter_core::graphics_context::{GraphicsContext, GraphicsContextOptions};
 
-use scenes::simple_tiles_with_all_inputs;
+use scenes::TILES_1_TO_N;
 use smelter::{
     config::{LoggerConfig, read_config},
     logger,
 };
 use smelter_render::RenderingMode;
-use suite::{cpu_optimized_benchmark_suite, full_benchmark_suite, minimal_benchmark_suite};
+use suite::{full_benchmark_suite, minimal_benchmark_suite};
 use tracing::{info, warn};
 
 mod args;
@@ -25,7 +25,10 @@ mod utils;
 use args::{Args, BenchmarkSuite, NumericArgument, Resolution, ResolutionArgument, VideoEncoder};
 use utils::{ensure_default_mp4, generate_yuv_from_mp4};
 
-use crate::suite::encoders_only_benchmark_suite;
+use crate::suite::{
+    c5_docs_benchmark_suite, decoder_only_benchmark_suite, encoder_only_benchmark_suite,
+    g4dn_docs_benchmark_suite, high_res_benchmark_suite, vulkan_only_benchmark_suite,
+};
 
 fn main() {
     let args = Args::parse();
@@ -51,9 +54,13 @@ fn main() {
 
     let benchmarks = match args.suite {
         BenchmarkSuite::Full => full_benchmark_suite(&ctx),
-        BenchmarkSuite::CpuOptimized => cpu_optimized_benchmark_suite(&ctx),
         BenchmarkSuite::Minimal => minimal_benchmark_suite(&ctx),
-        BenchmarkSuite::EncodersOnly => encoders_only_benchmark_suite(&ctx),
+        BenchmarkSuite::VulkanOnly => vulkan_only_benchmark_suite(&ctx),
+        BenchmarkSuite::EncoderOnly => encoder_only_benchmark_suite(&ctx),
+        BenchmarkSuite::DecoderOnly => decoder_only_benchmark_suite(&ctx),
+        BenchmarkSuite::HighRes => high_res_benchmark_suite(&ctx),
+        BenchmarkSuite::AwsG4dnDocs => g4dn_docs_benchmark_suite(&ctx),
+        BenchmarkSuite::AwsC5Docs => c5_docs_benchmark_suite(&ctx),
         BenchmarkSuite::None => benchmark_from_args(args.clone()),
     };
 
@@ -132,7 +139,7 @@ fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
             };
 
             SingleBenchmarkPass {
-                scene_builder: simple_tiles_with_all_inputs,
+                builder: TILES_1_TO_N.builder,
                 resources: vec![],
 
                 input_count,
@@ -140,9 +147,12 @@ fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
                 framerate,
                 output_resolution,
 
-                input_file: match args.disable_decoder {
-                    true => InputFile::Raw(generate_yuv_from_mp4(&input_path).unwrap()),
-                    false => InputFile::Mp4(input_path.clone()),
+                input_file: InputFile {
+                    label: "from_args",
+                    kind: match args.disable_decoder {
+                        true => InputFileKind::Raw(generate_yuv_from_mp4(&input_path).unwrap()),
+                        false => InputFileKind::Mp4(input_path.clone()),
+                    },
                 },
                 encoder: match args.disable_encoder {
                     true => EncoderOptions::Disabled,
@@ -150,7 +160,6 @@ fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
                         VideoEncoder::FfmpegH264 => {
                             EncoderOptions::FfmpegH264(args.encoder_preset.into())
                         }
-                        #[cfg(not(target_os = "macos"))]
                         VideoEncoder::VulkanH264 => EncoderOptions::VulkanH264,
                     },
                 },

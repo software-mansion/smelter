@@ -26,8 +26,12 @@ impl std::str::FromStr for NumericArgument {
 pub enum BenchmarkSuite {
     Full,
     Minimal,
-    CpuOptimized,
-    EncodersOnly,
+    VulkanOnly,
+    AwsG4dnDocs,
+    AwsC5Docs,
+    EncoderOnly,
+    DecoderOnly,
+    HighRes,
     None,
 }
 
@@ -38,8 +42,12 @@ impl std::str::FromStr for BenchmarkSuite {
         match s {
             "full" => Ok(BenchmarkSuite::Full),
             "minimal" => Ok(BenchmarkSuite::Minimal),
-            "cpu" => Ok(BenchmarkSuite::CpuOptimized),
-            "encoders" => Ok(BenchmarkSuite::EncodersOnly),
+            "vulkan-only" => Ok(BenchmarkSuite::VulkanOnly),
+            "g4dn-docs" => Ok(BenchmarkSuite::AwsG4dnDocs),
+            "c5-docs" => Ok(BenchmarkSuite::AwsC5Docs),
+            "encoder-only" => Ok(BenchmarkSuite::EncoderOnly),
+            "decoder-only" => Ok(BenchmarkSuite::DecoderOnly),
+            "high-res" => Ok(BenchmarkSuite::HighRes),
             "none" => Ok(BenchmarkSuite::None),
             _ => Err("invalid suite name".to_string()),
         }
@@ -68,7 +76,6 @@ impl From<VideoDecoder> for VideoDecoderOptions {
 #[clap(rename_all = "snake_case")]
 pub enum VideoEncoder {
     FfmpegH264,
-    #[cfg(not(target_os = "macos"))]
     VulkanH264,
 }
 
@@ -179,6 +186,23 @@ impl From<ResolutionConstant> for Resolution {
             ResolutionConstant::Value(resolution) => resolution,
             ResolutionConstant::Preset(preset) => preset.into(),
         }
+    }
+}
+
+impl Resolution {
+    pub fn matching_preset(&self) -> Option<ResolutionPreset> {
+        const ALL: &[ResolutionPreset] = &[
+            ResolutionPreset::Res4320p,
+            ResolutionPreset::Res2160p,
+            ResolutionPreset::Res1440p,
+            ResolutionPreset::Res1080p,
+            ResolutionPreset::Res720p,
+            ResolutionPreset::Res480p,
+            ResolutionPreset::Res360p,
+            ResolutionPreset::Res240p,
+            ResolutionPreset::Res144p,
+        ];
+        ALL.iter().copied().find(|p| &Resolution::from(*p) == self)
     }
 }
 
