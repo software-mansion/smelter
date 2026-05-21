@@ -1,10 +1,10 @@
 use bytes::Bytes;
 use hang::catalog::{AudioCodec, VideoCodec};
-use moq_lite::BroadcastConsumer;
 use moq_mux::{
     catalog::Consumer as CatalogConsumer,
     container::{Cmaf, Hang},
 };
+use moq_native::moq_lite::{self, BroadcastConsumer};
 
 use crate::pipeline::moq::connection::{
     DiscoveredAudio, DiscoveredTracks, DiscoveredVideo, MoqConnectionError,
