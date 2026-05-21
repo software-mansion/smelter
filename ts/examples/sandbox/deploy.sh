@@ -13,7 +13,7 @@ fi
 
 if ! git diff-index --quiet HEAD --; then
   git add -A
-  git commit -m "wip"
+  git commit -m "deploy to puffer.fishjam.io"
 fi
 
 git push
