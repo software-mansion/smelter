@@ -127,8 +127,8 @@ async fn read_msf_catalog(
                 container,
                 description,
             }),
-            Err(reason) => {
-                warn!(track=%t.name, "Skipping MSF video track: {reason}");
+            Err(error) => {
+                warn!(track=%t.name, error, "Skipping MSF video track.");
                 None
             }
         });
@@ -146,8 +146,8 @@ async fn read_msf_catalog(
                 container,
                 description,
             }),
-            Err(reason) => {
-                warn!(track=%t.name, "Skipping MSF audio track: {reason}");
+            Err(error) => {
+                warn!(track=%t.name, error, "Skipping MSF audio track.");
                 None
             }
         });
