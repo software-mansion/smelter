@@ -9,7 +9,6 @@ use super::{
 };
 
 use anyhow::Result;
-use smelter::routes::update_output::UpdateOutputRequest;
 use smelter_render::{
     Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId, RendererSpec,
     RenderingMode, Resolution, scene::Component,
@@ -69,19 +68,6 @@ impl TestRunner {
         self
     }
 
-    pub(crate) fn update_scene_json(&mut self, scene: &str) {
-        let scene: UpdateOutputRequest = serde_json::from_str(scene).unwrap();
-        self.renderer
-            .update_scene(
-                OutputId(OUTPUT_ID.into()),
-                self.resolution,
-                self.output_format,
-                scene.video.unwrap().try_into().unwrap(),
-            )
-            .unwrap();
-    }
-
-    #[allow(dead_code)]
     pub(crate) fn update_scene(&mut self, scene: Component) {
         self.renderer
             .update_scene(
@@ -167,7 +153,6 @@ impl TestRunner {
 #[allow(dead_code)]
 pub(crate) enum Step {
     UpdateScene(Component),
-    UpdateSceneJson(&'static str),
     RenderWithSnapshot(Duration),
     Render(Duration),
 }
@@ -238,17 +223,6 @@ impl TestCase {
                         scene,
                     )
                     .unwrap(),
-                Step::UpdateSceneJson(scene) => {
-                    let scene: UpdateOutputRequest = serde_json::from_str(scene).unwrap();
-                    renderer
-                        .update_scene(
-                            OutputId(OUTPUT_ID.into()),
-                            self.resolution,
-                            self.output_format,
-                            scene.video.unwrap().try_into().unwrap(),
-                        )
-                        .unwrap()
-                }
                 Step::RenderWithSnapshot(pts) => {
                     snapshots.push(self.render_with_snaphot(&mut renderer, pts).unwrap());
                 }

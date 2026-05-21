@@ -2,6 +2,14 @@ use std::time::Duration;
 
 use anyhow::Result;
 use integration_tests_macros::render_test;
+use smelter_render::{
+    InputId,
+    scene::{
+        AbsolutePosition, Component, ComponentId, HorizontalAlign, HorizontalPosition,
+        InputStreamComponent, InterpolationKind, Position, RGBAColor, TilesComponent, Transition,
+        VerticalPosition, ViewComponent,
+    },
+};
 
 use crate::render_tests::{
     RenderTest,
@@ -23,6 +31,26 @@ pub const TESTS: &[RenderTest] = &[
     REPLACE_COMPONENT_BY_CHANGING_ID_ADD_NEW_COMPONENT_LAST_ROW_LEFT_ALIGNED,
 ];
 
+const DARK_GRAY: RGBAColor = RGBAColor(0x33, 0x33, 0x33, 255);
+const TILES_ID: &str = "tiles";
+
+fn linear_500ms(should_interrupt: bool) -> Transition {
+    Transition {
+        duration: Duration::from_millis(500),
+        interpolation_kind: InterpolationKind::Linear,
+        should_interrupt,
+    }
+}
+
+/// `input_stream` component for `input_{idx}`, optionally with the matching id.
+fn input(idx: usize, with_id: bool) -> Component {
+    let name = format!("input_{idx}");
+    Component::InputStream(InputStreamComponent {
+        id: with_id.then(|| ComponentId(name.clone().into())),
+        input_id: InputId(name.into()),
+    })
+}
+
 #[render_test(description = "")]
 fn tile_resize_entire_component_with_parent_transition() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
@@ -30,12 +58,50 @@ fn tile_resize_entire_component_with_parent_transition() -> Result<()> {
         TestInput::new(2),
         TestInput::new(3),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_tile_resize.scene.json"
-    ));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_tile_resize_with_view_transition.scene.json"
-    ));
+    // Start: large green container at bottom:0 right:0, no transitions.
+    runner.update_scene(Component::View(ViewComponent {
+        children: vec![Component::View(ViewComponent {
+            id: Some(ComponentId("view".into())),
+            background_color: DARK_GRAY,
+            position: Position::Absolute(AbsolutePosition {
+                width: Some(640.0),
+                height: Some(360.0),
+                position_horizontal: HorizontalPosition::RightOffset(0.0),
+                position_vertical: VerticalPosition::BottomOffset(0.0),
+                rotation_degrees: 0.0,
+            }),
+            children: vec![Component::Tiles(TilesComponent {
+                id: Some(ComponentId(TILES_ID.into())),
+                children: vec![input(1, true), input(2, true), input(3, true)],
+                ..Default::default()
+            })],
+            ..Default::default()
+        })],
+        ..Default::default()
+    }));
+    // End: shrink container to 320x340 with 500ms transition on both view and tiles.
+    runner.update_scene(Component::View(ViewComponent {
+        children: vec![Component::View(ViewComponent {
+            id: Some(ComponentId("view".into())),
+            background_color: DARK_GRAY,
+            position: Position::Absolute(AbsolutePosition {
+                width: Some(320.0),
+                height: Some(340.0),
+                position_horizontal: HorizontalPosition::RightOffset(10.0),
+                position_vertical: VerticalPosition::BottomOffset(10.0),
+                rotation_degrees: 0.0,
+            }),
+            transition: Some(linear_500ms(false)),
+            children: vec![Component::Tiles(TilesComponent {
+                id: Some(ComponentId(TILES_ID.into())),
+                transition: Some(linear_500ms(false)),
+                children: vec![input(1, true), input(2, true), input(3, true)],
+                ..Default::default()
+            })],
+            ..Default::default()
+        })],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -53,13 +119,49 @@ fn tile_resize_entire_component_without_parent_transition() -> Result<()> {
         TestInput::new(2),
         TestInput::new(3),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_tile_resize.scene.json"
-    ));
+    // Start: large green container at bottom:0 right:0, no transitions on the outer view.
+    runner.update_scene(Component::View(ViewComponent {
+        children: vec![Component::View(ViewComponent {
+            id: Some(ComponentId("view".into())),
+            background_color: DARK_GRAY,
+            position: Position::Absolute(AbsolutePosition {
+                width: Some(640.0),
+                height: Some(360.0),
+                position_horizontal: HorizontalPosition::RightOffset(0.0),
+                position_vertical: VerticalPosition::BottomOffset(0.0),
+                rotation_degrees: 0.0,
+            }),
+            children: vec![Component::Tiles(TilesComponent {
+                id: Some(ComponentId(TILES_ID.into())),
+                children: vec![input(1, true), input(2, true), input(3, true)],
+                ..Default::default()
+            })],
+            ..Default::default()
+        })],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_tile_resize.scene.json"
-    ));
+    // End: shrink container instantly (no view transition), only Tiles transitions.
+    runner.update_scene(Component::View(ViewComponent {
+        children: vec![Component::View(ViewComponent {
+            background_color: DARK_GRAY,
+            position: Position::Absolute(AbsolutePosition {
+                width: Some(320.0),
+                height: Some(340.0),
+                position_horizontal: HorizontalPosition::RightOffset(10.0),
+                position_vertical: VerticalPosition::BottomOffset(10.0),
+                rotation_degrees: 0.0,
+            }),
+            children: vec![Component::Tiles(TilesComponent {
+                id: Some(ComponentId(TILES_ID.into())),
+                transition: Some(linear_500ms(false)),
+                children: vec![input(1, true), input(2, true), input(3, true)],
+                ..Default::default()
+            })],
+            ..Default::default()
+        })],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(1));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -74,12 +176,17 @@ fn change_order_of_3_inputs_with_id() -> Result<()> {
         TestInput::new(2),
         TestInput::new(3),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_all_id.scene.json"
-    ));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_3_inputs_3_id_different_order.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        children: vec![input(1, true), input(2, true), input(3, true)],
+        ..Default::default()
+    }));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        children: vec![input(3, true), input(1, true), input(2, true)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -95,13 +202,18 @@ fn replace_component_by_adding_id() -> Result<()> {
         TestInput::new(3),
         TestInput::new(4),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_no_id.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        children: vec![input(1, false), input(2, false), input(3, false)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_3_inputs_1_id.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        children: vec![input(1, false), input(4, true), input(2, false)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(1));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -118,12 +230,17 @@ fn add_2_inputs_at_the_end_to_3_tiles_scene() -> Result<()> {
         TestInput::new(4),
         TestInput::new(5),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_no_id.scene.json"
-    ));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_5_inputs_no_id.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        children: vec![input(1, false), input(2, false), input(3, false)],
+        ..Default::default()
+    }));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        children: (1..=5).map(|i| input(i, false)).collect(),
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -139,12 +256,22 @@ fn add_input_on_2nd_pos_to_3_tiles_scene() -> Result<()> {
         TestInput::new(3),
         TestInput::new(4),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_no_id.scene.json"
-    ));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_4_inputs_1_id.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        children: vec![input(1, false), input(2, false), input(3, false)],
+        ..Default::default()
+    }));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        children: vec![
+            input(1, false),
+            input(4, true),
+            input(2, false),
+            input(3, false),
+        ],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -160,15 +287,23 @@ fn add_input_at_the_end_to_3_tiles_scene() -> Result<()> {
         TestInput::new(3),
         TestInput::new(4),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_no_id.scene.json"
-    ));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_4_inputs_no_id.scene.json"
-    ));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/after_end_with_4_inputs_no_id.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        children: vec![input(1, false), input(2, false), input(3, false)],
+        ..Default::default()
+    }));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        children: (1..=4).map(|i| input(i, false)).collect(),
+        ..Default::default()
+    }));
+    // Third update: same children, no transition — should "complete" the move.
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        children: (1..=4).map(|i| input(i, false)).collect(),
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -184,13 +319,18 @@ fn replace_component_by_changing_id() -> Result<()> {
         TestInput::new(3),
         TestInput::new(4),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_all_id.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        children: vec![input(1, true), input(2, true), input(3, true)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_3_inputs_3_id_different_component.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        children: vec![input(1, true), input(4, true), input(3, true)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(1));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -207,13 +347,23 @@ fn replace_component_by_changing_id_and_add_new_component() -> Result<()> {
         TestInput::new(4),
         TestInput::new(5),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_all_id.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        children: vec![input(1, true), input(2, true), input(3, true)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_4_inputs_3_id.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        children: vec![
+            input(1, true),
+            input(4, true),
+            input(3, true),
+            input(5, false),
+        ],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(1));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -229,13 +379,19 @@ fn replace_component_by_changing_id_add_margin() -> Result<()> {
         TestInput::new(3),
         TestInput::new(4),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_all_id.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        children: vec![input(1, true), input(2, true), input(3, true)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_3_inputs_3_id_different_component_margin.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        margin: 50.0,
+        children: vec![input(1, true), input(4, true), input(3, true)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(1));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -252,13 +408,25 @@ fn replace_component_by_changing_id_add_new_component_last_row_center_aligned() 
         TestInput::new(4),
         TestInput::new(5),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_all_id_center.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        horizontal_align: HorizontalAlign::Center,
+        children: vec![input(1, true), input(2, true), input(3, true)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_4_inputs_3_id_center.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        horizontal_align: HorizontalAlign::Center,
+        children: vec![
+            input(1, true),
+            input(2, true),
+            input(4, true),
+            input(5, false),
+        ],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(1));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));
@@ -275,13 +443,25 @@ fn replace_component_by_changing_id_add_new_component_last_row_left_aligned() ->
         TestInput::new(4),
         TestInput::new(5),
     ]);
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/start_with_3_inputs_all_id_left.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        horizontal_align: HorizontalAlign::Left,
+        children: vec![input(1, true), input(2, true), input(3, true)],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(0));
-    runner.update_scene_json(include_str!(
-        "./tiles_transitions/end_with_4_inputs_3_id_left.scene.json"
-    ));
+    runner.update_scene(Component::Tiles(TilesComponent {
+        id: Some(ComponentId(TILES_ID.into())),
+        transition: Some(linear_500ms(false)),
+        horizontal_align: HorizontalAlign::Left,
+        children: vec![
+            input(1, true),
+            input(2, true),
+            input(4, true),
+            input(5, false),
+        ],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(1));
     runner.snapshot(Duration::from_millis(100));
     runner.snapshot(Duration::from_millis(300));

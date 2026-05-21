@@ -6,6 +6,7 @@ use super::{
     AbsolutePosition, BorderRadius, BoxShadow, Component, HorizontalAlign, InterpolationKind,
     RGBAColor, Size, VerticalAlign,
 };
+use crate::MAX_NODE_RESOLUTION;
 
 mod interpolation;
 mod position;
@@ -65,6 +66,17 @@ pub struct ImageComponent {
     pub image_id: RendererId,
     pub width: Option<f32>,
     pub height: Option<f32>,
+}
+
+impl Default for ImageComponent {
+    fn default() -> Self {
+        Self {
+            id: None,
+            image_id: RendererId("".into()),
+            width: None,
+            height: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -297,6 +309,28 @@ impl Default for RescalerComponent {
             border_width: 0.0,
             border_color: RGBAColor(0, 0, 0, 0),
             box_shadow: vec![],
+        }
+    }
+}
+
+impl Default for TextComponent {
+    fn default() -> Self {
+        Self {
+            id: None,
+            text: Arc::from(""),
+            font_size: 0.0,
+            line_height: 0.0,
+            color: RGBAColor(255, 255, 255, 255),
+            font_family: Arc::from("Verdana"),
+            style: TextStyle::Normal,
+            align: HorizontalAlign::Left,
+            weight: TextWeight::Normal,
+            wrap: TextWrap::None,
+            background_color: RGBAColor(0, 0, 0, 0),
+            dimensions: TextDimensions::Fitted {
+                max_width: MAX_NODE_RESOLUTION.width as f32,
+                max_height: MAX_NODE_RESOLUTION.height as f32,
+            },
         }
     }
 }

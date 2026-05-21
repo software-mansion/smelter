@@ -139,9 +139,17 @@ jobs:
               with:
                   shared-key: "linux-build"
                   
-            - name: 🧪 Run tests
+            - name: 🧪 Run non-pipeline tests
               run: |
-                  cargo nextest run --workspace --profile ci
+                  cargo nextest run --workspace --profile ci -E 'not test(/^pipeline_tests::/)'
+
+            - name: 🧪 Run pipeline tests
+              run: |
+                  cargo nextest run --workspace --profile ci -E 'test(/^pipeline_tests::/) and not test(/_flaky$/)'
+
+            - name: 🧪 Run flaky pipeline tests
+              run: |
+                  cargo nextest run --workspace --profile ci -E 'test(/^pipeline_tests::/) and test(/_flaky$/)'
 
             - name: 📦 Upload failed snapshot test artifacts
               if: failure()

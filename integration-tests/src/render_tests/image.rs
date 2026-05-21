@@ -5,6 +5,7 @@ use integration_tests_macros::render_test;
 use smelter_render::{
     RendererId, RendererSpec,
     image::{ImageSource, ImageSpec, ImageType},
+    scene::{Component, ComponentId, ImageComponent, Overflow, ViewComponent},
 };
 
 use crate::paths::{integration_tests_root, submodule_root_path};
@@ -24,9 +25,14 @@ pub const TESTS: &[RenderTest] = &[
     GIF_PROGRESS_BETWEEN_UPDATES,
 ];
 
+const JPEG_ID: &str = "image_jpeg";
+const SVG_ID: &str = "image_svg";
+const GIF1_ID: &str = "image_gif1";
+const GIF2_ID: &str = "image_gif2";
+
 fn jpeg_renderer() -> (RendererId, RendererSpec) {
     (
-        RendererId("image_jpeg".into()),
+        RendererId(JPEG_ID.into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::Url {
                 url: "https://www.rust-lang.org/static/images/rust-social.jpg".into(),
@@ -38,7 +44,7 @@ fn jpeg_renderer() -> (RendererId, RendererSpec) {
 
 fn svg_renderer() -> (RendererId, RendererSpec) {
     (
-        RendererId("image_svg".into()),
+        RendererId(SVG_ID.into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
                 path: integration_tests_root().join("assets/image.svg").into(),
@@ -50,7 +56,7 @@ fn svg_renderer() -> (RendererId, RendererSpec) {
 
 fn gif1_renderer() -> (RendererId, RendererSpec) {
     (
-        RendererId("image_gif1".into()),
+        RendererId(GIF1_ID.into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
                 path: submodule_root_path().join("demo_assets/donate.gif").into(),
@@ -62,7 +68,7 @@ fn gif1_renderer() -> (RendererId, RendererSpec) {
 
 fn gif2_renderer() -> (RendererId, RendererSpec) {
     (
-        RendererId("image_gif2".into()),
+        RendererId(GIF2_ID.into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
                 path: submodule_root_path().join("assets/progress-bar.gif").into(),
@@ -77,7 +83,10 @@ fn jpeg_as_root() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME)
         .with_renderers(vec![jpeg_renderer()])
         .with_inputs(vec![TestInput::new(1)]);
-    runner.update_scene_json(include_str!("./image/jpeg_as_root.scene.json"));
+    runner.update_scene(Component::Image(ImageComponent {
+        image_id: RendererId(JPEG_ID.into()),
+        ..Default::default()
+    }));
     runner.snapshot(Duration::ZERO);
     runner.finish()
 }
@@ -87,7 +96,13 @@ fn jpeg_in_view() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME)
         .with_renderers(vec![jpeg_renderer()])
         .with_inputs(vec![TestInput::new(1)]);
-    runner.update_scene_json(include_str!("./image/jpeg_in_view.scene.json"));
+    runner.update_scene(Component::View(ViewComponent {
+        children: vec![Component::Image(ImageComponent {
+            image_id: RendererId(JPEG_ID.into()),
+            ..Default::default()
+        })],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::ZERO);
     runner.finish()
 }
@@ -97,7 +112,14 @@ fn jpeg_in_view_overflow_fit() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME)
         .with_renderers(vec![jpeg_renderer()])
         .with_inputs(vec![TestInput::new(1)]);
-    runner.update_scene_json(include_str!("./image/jpeg_in_view_overflow_fit.scene.json"));
+    runner.update_scene(Component::View(ViewComponent {
+        children: vec![Component::Image(ImageComponent {
+            image_id: RendererId(JPEG_ID.into()),
+            ..Default::default()
+        })],
+        overflow: Overflow::Fit,
+        ..Default::default()
+    }));
     runner.snapshot(Duration::ZERO);
     runner.finish()
 }
@@ -107,8 +129,11 @@ fn remove_jpeg_as_root() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME)
         .with_renderers(vec![jpeg_renderer()])
         .with_inputs(vec![TestInput::new(1)]);
-    runner.update_scene_json(include_str!("./image/jpeg_as_root.scene.json"));
-    runner.update_scene_json(include_str!("./view/empty_view.scene.json"));
+    runner.update_scene(Component::Image(ImageComponent {
+        image_id: RendererId(JPEG_ID.into()),
+        ..Default::default()
+    }));
+    runner.update_scene(Component::View(ViewComponent::default()));
     runner.snapshot(Duration::ZERO);
     runner.finish()
 }
@@ -118,8 +143,14 @@ fn remove_jpeg_in_view() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME)
         .with_renderers(vec![jpeg_renderer()])
         .with_inputs(vec![TestInput::new(1)]);
-    runner.update_scene_json(include_str!("./image/jpeg_in_view.scene.json"));
-    runner.update_scene_json(include_str!("./view/empty_view.scene.json"));
+    runner.update_scene(Component::View(ViewComponent {
+        children: vec![Component::Image(ImageComponent {
+            image_id: RendererId(JPEG_ID.into()),
+            ..Default::default()
+        })],
+        ..Default::default()
+    }));
+    runner.update_scene(Component::View(ViewComponent::default()));
     runner.snapshot(Duration::ZERO);
     runner.finish()
 }
@@ -127,7 +158,10 @@ fn remove_jpeg_in_view() -> Result<()> {
 #[render_test(description = "")]
 fn svg_as_root() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![svg_renderer()]);
-    runner.update_scene_json(include_str!("./image/svg_as_root.scene.json"));
+    runner.update_scene(Component::Image(ImageComponent {
+        image_id: RendererId(SVG_ID.into()),
+        ..Default::default()
+    }));
     runner.snapshot(Duration::ZERO);
     runner.finish()
 }
@@ -135,7 +169,13 @@ fn svg_as_root() -> Result<()> {
 #[render_test(description = "")]
 fn svg_in_view() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![svg_renderer()]);
-    runner.update_scene_json(include_str!("./image/svg_in_view.scene.json"));
+    runner.update_scene(Component::View(ViewComponent {
+        children: vec![Component::Image(ImageComponent {
+            image_id: RendererId(SVG_ID.into()),
+            ..Default::default()
+        })],
+        ..Default::default()
+    }));
     runner.snapshot(Duration::ZERO);
     runner.finish()
 }
@@ -144,13 +184,25 @@ fn svg_in_view() -> Result<()> {
 fn gif_progress_between_updates() -> Result<()> {
     let mut runner =
         TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![gif1_renderer(), gif2_renderer()]);
-    runner.update_scene_json(include_str!("./image/gif_as_root_variant1.scene.json"));
+    runner.update_scene(Component::Image(ImageComponent {
+        id: Some(ComponentId("gif".into())),
+        image_id: RendererId(GIF1_ID.into()),
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(500));
     // Update should not reset gif progress
-    runner.update_scene_json(include_str!("./image/gif_as_root_variant1.scene.json"));
+    runner.update_scene(Component::Image(ImageComponent {
+        id: Some(ComponentId("gif".into())),
+        image_id: RendererId(GIF1_ID.into()),
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(1000));
     // Image params changed, the progress should be restarted
-    runner.update_scene_json(include_str!("./image/gif_as_root_variant2.scene.json"));
+    runner.update_scene(Component::Image(ImageComponent {
+        id: Some(ComponentId("gif".into())),
+        image_id: RendererId(GIF2_ID.into()),
+        ..Default::default()
+    }));
     runner.snapshot(Duration::from_millis(1001));
     runner.finish()
 }

@@ -9,12 +9,11 @@ fail-fast = false
 
 [[profile.ci.overrides]]
 filter = 'package(/^integration-tests/) and test(/_flaky$/)'
-threads-required = 6
+threads-required = 100
 retries = 4
 
 [[profile.ci.overrides]]
-filter = 'package(/^integration-tests/)'
-threads-required = 2
+filter = 'package(/^integration-tests/) and test(/^pipeline_tests::/)'
 retries = 2
 
 [profile.audit]
