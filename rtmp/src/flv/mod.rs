@@ -1,4 +1,5 @@
 mod audio;
+mod codec_config;
 mod ex_audio;
 mod ex_video;
 mod mod_ex_audio;
@@ -7,6 +8,7 @@ mod video;
 
 pub use audio::*;
 use bytes::Bytes;
+pub use codec_config::VpCodecConfig;
 pub use ex_audio::*;
 pub use ex_video::*;
 pub use video::*;

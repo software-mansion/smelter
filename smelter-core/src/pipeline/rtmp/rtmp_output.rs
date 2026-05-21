@@ -7,8 +7,9 @@ use tracing::{debug, warn};
 
 use rtmp::{
     AudioData, RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError, RtmpVideoCodec,
-    TrackId, VideoData,
+    TrackId, VideoData, VpCodecConfig,
 };
+use smelter_render::OutputFrameFormat;
 
 use crate::{
     event::Event,
@@ -201,7 +202,14 @@ impl RtmpClientOutput {
             }
         };
 
-        let extradata = encoder.encoder_context().unwrap_or_default();
+        let extradata = match codec {
+            RtmpVideoCodec::H264 => encoder
+                .encoder_context()
+                .filter(|extradata| !extradata.is_empty())
+                .ok_or(RtmpClientError::MissingH264DecoderConfig)?,
+            RtmpVideoCodec::Vp8 => VpCodecConfig::vp8().to_bytes(),
+            RtmpVideoCodec::Vp9 => vp9_codec_config(&encoder.config.output_format).to_bytes(),
+        };
         Ok((
             encoder,
             VideoConfig {
@@ -244,7 +252,12 @@ impl RtmpClientOutput {
                 (encoder, RtmpAudioCodec::Opus)
             }
         };
-        let extradata = encoder.encoder_context().unwrap_or_default();
+        let extradata = match codec {
+            RtmpAudioCodec::Aac => encoder
+                .encoder_context()
+                .ok_or(RtmpClientError::MissingAacDecoderConfig)?,
+            RtmpAudioCodec::Opus => encoder.encoder_context().unwrap_or_default(),
+        };
 
         Ok((
             encoder,
@@ -421,6 +434,15 @@ fn run_synced_av(
     }
 
     Ok(())
+}
+
+fn vp9_codec_config(output_format: &OutputFrameFormat) -> VpCodecConfig {
+    match output_format {
+        OutputFrameFormat::PlanarYuv420Bytes => VpCodecConfig::vp9_yuv420p(),
+        OutputFrameFormat::PlanarYuv422Bytes => VpCodecConfig::vp9_yuv422p(),
+        OutputFrameFormat::PlanarYuv444Bytes => VpCodecConfig::vp9_yuv444p(),
+        _ => VpCodecConfig::vp9_yuv420p(),
+    }
 }
 
 struct RtmpOutputStatsSender {
