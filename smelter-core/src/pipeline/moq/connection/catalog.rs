@@ -14,9 +14,9 @@ use tracing::{debug, warn};
 pub(super) async fn read_catalog(
     broadcast: &BroadcastConsumer,
 ) -> Result<DiscoveredTracks, MoqConnectionError> {
-    tokio::select! {
-        result = read_hang_catalog(broadcast) => result,
-        result = read_msf_catalog(broadcast) => result,
+    match read_hang_catalog(broadcast).await {
+        Ok(discovered_tracks) => Ok(discovered_tracks),
+        Err(_) => read_msf_catalog(broadcast).await,
     }
 }
 
