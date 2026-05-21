@@ -5844,7 +5844,6 @@ dependencies = [
  "gpu-video",
  "hang",
  "itertools 0.14.0",
- "moq-lite",
  "moq-msf",
  "moq-mux",
  "moq-native",
