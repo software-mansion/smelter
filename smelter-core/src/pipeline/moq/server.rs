@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use moq_native::moq_lite::{self, Origin, OriginConsumer, OriginProducer, Session};
+use moq_native::moq_lite::{Origin, OriginConsumer, OriginProducer, Session};
 use moq_native::{ServerConfig, ServerTlsConfig};
 use smelter_render::error::ErrorStack;
 use tracing::{debug, info, warn};
@@ -44,9 +44,7 @@ impl Drop for MoqServer {
         self.accept_task.abort();
         self.announce_task.abort();
         let mut sessions = self.sessions.lock().unwrap();
-        for (_, mut session) in sessions.drain() {
-            session.close(moq_lite::Error::Cancel);
-        }
+        sessions.drain();
     }
 }
 
