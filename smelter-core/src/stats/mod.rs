@@ -80,6 +80,16 @@ impl StatsSender {
             warn!(?events, "Stats channel is full.");
         }
     }
+
+    /// Stats sender backed by a channel whose receiver is dropped immediately.
+    /// Every `send` becomes a no-op (Disconnected errors are swallowed by the
+    /// existing `try_send` match). Intended for unit tests that need to
+    /// construct components without a running stats monitor.
+    #[cfg(test)]
+    pub fn disconnected() -> Self {
+        let (sender, _) = bounded(1);
+        Self(sender)
+    }
 }
 
 fn run_event_loop(monitor: Weak<Mutex<StatsState>>, receiver: Receiver<Vec<StatsEvent>>) {

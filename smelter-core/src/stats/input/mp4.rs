@@ -6,7 +6,8 @@ use crate::{
     Ref,
     stats::{
         StatsTrackKind,
-        input_reports::{Mp4InputStatsReport, Mp4InputTrackStatsReport},
+        input::audio_mixer::AudioMixerStatsState,
+        input_reports::{Mp4AudioInputStatsReport, Mp4InputStatsReport, Mp4InputTrackStatsReport},
         state::StatsEvent,
         utils::SlidingWindowValue,
     },
@@ -50,7 +51,31 @@ impl Mp4InputTrackStatsEvent {
 #[derive(Debug)]
 pub struct Mp4InputState {
     pub video: Mp4InputTrackState,
-    pub audio: Mp4InputTrackState,
+    pub audio: Mp4AudioInputState,
+}
+
+/// Audio-side state for `MP4` inputs: per-track stats + per-input audio
+/// mixer (resampler) stats.
+#[derive(Debug)]
+pub struct Mp4AudioInputState {
+    pub track: Mp4InputTrackState,
+    pub mixer: AudioMixerStatsState,
+}
+
+impl Mp4AudioInputState {
+    pub fn new() -> Self {
+        Self {
+            track: Mp4InputTrackState::new(),
+            mixer: AudioMixerStatsState::new(),
+        }
+    }
+
+    pub fn report(&mut self) -> Mp4AudioInputStatsReport {
+        Mp4AudioInputStatsReport {
+            track: self.track.report(),
+            mixer: self.mixer.report(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -63,7 +88,7 @@ impl Mp4InputState {
     pub fn new() -> Self {
         Self {
             video: Mp4InputTrackState::new(),
-            audio: Mp4InputTrackState::new(),
+            audio: Mp4AudioInputState::new(),
         }
     }
 
@@ -77,7 +102,7 @@ impl Mp4InputState {
     pub fn handle_event(&mut self, event: Mp4InputStatsEvent) {
         match event {
             Mp4InputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
-            Mp4InputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+            Mp4InputStatsEvent::Audio(track_event) => self.audio.track.handle_event(track_event),
         }
     }
 }

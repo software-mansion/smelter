@@ -28,10 +28,15 @@ struct AudioMixerInputResult {
 }
 
 impl AudioMixerInput {
-    pub fn new(mixing_sample_rate: u32) -> Self {
+    pub fn new(mixing_sample_rate: u32, stats_sender: AudioMixerStatsSender) -> Self {
         let (input_sender, input_receiver) = bounded(100);
         let (result_sender, result_receiver) = bounded(100);
-        start_input_thread(mixing_sample_rate, input_receiver, result_sender);
+        start_input_thread(
+            mixing_sample_rate,
+            input_receiver,
+            result_sender,
+            stats_sender,
+        );
         Self {
             input_sender,
             result_receiver,

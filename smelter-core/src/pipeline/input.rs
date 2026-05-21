@@ -129,8 +129,10 @@ where
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
-    let (input, input_result, queue_input) = build_input(pipeline_ctx, Ref::new(&input_id))
-        .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
+    let input_ref = Ref::new(&input_id);
+    let (input, input_result, queue_input) =
+        build_input(pipeline_ctx.clone(), input_ref.clone())
+            .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
 
     // TODO: for now assume that
     let (audio_eos_received, video_eos_received) = (Some(false), Some(false));
@@ -165,7 +167,9 @@ where
 
     guard.inputs.insert(input_id.clone(), pipeline_input);
     guard.queue.add_input(&input_id, queue_input);
-    guard.audio_mixer.register_input(input_id.clone());
+    guard
+        .audio_mixer
+        .register_input(input_id.clone(), input_ref, &pipeline_ctx);
     guard.renderer.register_input(input_id);
 
     Ok(input_result)

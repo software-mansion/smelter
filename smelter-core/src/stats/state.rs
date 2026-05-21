@@ -3,7 +3,10 @@ use std::time::{Duration, Instant};
 
 use smelter_render::InputId;
 
-use crate::stats::{input::InputStatsState, output::OutputStatsState};
+use crate::stats::{
+    input::{AudioMixerStatsEvent, InputStatsState},
+    output::OutputStatsState,
+};
 
 use crate::prelude::*;
 
@@ -21,6 +24,12 @@ pub(crate) enum StatsEvent {
     NewInput {
         input_ref: Ref<InputId>,
         kind: InputProtocolKind,
+    },
+    /// Protocol-agnostic event from the per-input audio mixer stage. Routed
+    /// to the matching input's audio-mixer sub-state regardless of input kind.
+    AudioMixer {
+        input_ref: Ref<InputId>,
+        event: AudioMixerStatsEvent,
     },
     Output {
         output_ref: Ref<OutputId>,
@@ -66,6 +75,19 @@ impl StatsState {
             StatsEvent::NewInput { input_ref, kind } => {
                 self.inputs
                     .insert(input_ref, (now, InputStatsState::new(kind)));
+            }
+            StatsEvent::AudioMixer { input_ref, event } => {
+                // Audio-mixer events arrive only for inputs that have audio,
+                // and they alone can't determine the protocol kind, so we
+                // skip them if the input hasn't been registered with any
+                // other event yet — the next protocol event will create it
+                // and subsequent mixer events will land.
+                if let Some((updated_at, input)) = self.inputs.get_mut(&input_ref)
+                    && let Some(state) = input.audio_mixer_state_mut()
+                {
+                    *updated_at = now;
+                    state.handle_event(event);
+                }
             }
             StatsEvent::Output { output_ref, event } => {
                 if !self.outputs.contains_key(&output_ref) {

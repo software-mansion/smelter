@@ -6,7 +6,10 @@ use crate::{
     Ref,
     stats::{
         StatsTrackKind,
-        input_reports::{RtmpInputStatsReport, RtmpInputTrackStatsReport},
+        input::audio_mixer::AudioMixerStatsState,
+        input_reports::{
+            RtmpAudioInputStatsReport, RtmpInputStatsReport, RtmpInputTrackStatsReport,
+        },
         state::StatsEvent,
         utils::SlidingWindowValue,
     },
@@ -50,7 +53,31 @@ impl RtmpInputTrackStatsEvent {
 #[derive(Debug)]
 pub struct RtmpInputState {
     pub video: RtmpInputTrackState,
-    pub audio: RtmpInputTrackState,
+    pub audio: RtmpAudioInputState,
+}
+
+/// Audio-side state for `RTMP` inputs: per-track stats + per-input audio
+/// mixer (resampler) stats.
+#[derive(Debug)]
+pub struct RtmpAudioInputState {
+    pub track: RtmpInputTrackState,
+    pub mixer: AudioMixerStatsState,
+}
+
+impl RtmpAudioInputState {
+    pub fn new() -> Self {
+        Self {
+            track: RtmpInputTrackState::new(),
+            mixer: AudioMixerStatsState::new(),
+        }
+    }
+
+    pub fn report(&mut self) -> RtmpAudioInputStatsReport {
+        RtmpAudioInputStatsReport {
+            track: self.track.report(),
+            mixer: self.mixer.report(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -63,7 +90,7 @@ impl RtmpInputState {
     pub fn new() -> Self {
         Self {
             video: RtmpInputTrackState::new(),
-            audio: RtmpInputTrackState::new(),
+            audio: RtmpAudioInputState::new(),
         }
     }
 
@@ -77,7 +104,7 @@ impl RtmpInputState {
     pub fn handle_event(&mut self, event: RtmpInputStatsEvent) {
         match event {
             RtmpInputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
-            RtmpInputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+            RtmpInputStatsEvent::Audio(track_event) => self.audio.track.handle_event(track_event),
         }
     }
 }
