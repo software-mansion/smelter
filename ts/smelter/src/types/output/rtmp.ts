@@ -41,6 +41,48 @@ export type RtmpClientVideoEncoderOptions =
       ffmpegOptions?: Record<string, string>;
     }
   | {
+      /**
+       * Requires Enhanced RTMP support on the receiver side.
+       */
+      type: 'ffmpeg_vp8';
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+       * For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframeIntervalMs?: number;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpegOptions?: Record<string, string>;
+    }
+  | {
+      /**
+       * Requires Enhanced RTMP support on the receiver side.
+       */
+      type: 'ffmpeg_vp9';
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+       * For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframeIntervalMs?: number;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixelFormat?: Api.PixelFormat;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpegOptions?: Record<string, string>;
+    }
+  | {
       type: 'vulkan_h264';
       /**
        * Encoding bitrate in bits/second. If not provided, bitrate is calculated based on resolution and framerate.
@@ -72,10 +114,25 @@ export type RtmpClientAudioOptions = {
   encoder: RtmpClientAudioEncoderOptions;
 };
 
-export type RtmpClientAudioEncoderOptions = {
-  type: 'aac';
-  /**
-   * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
-   */
-  sampleRate?: number;
-};
+export type RtmpClientAudioEncoderOptions =
+  | {
+      type: 'aac';
+      /**
+       * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+       */
+      sampleRate?: number;
+    }
+  | {
+      /**
+       * Requires Enhanced RTMP support on the receiver side.
+       */
+      type: 'opus';
+      /**
+       * (**default=`"voip"`**) Audio output encoder preset.
+       */
+      preset?: Api.OpusEncoderPreset;
+      /**
+       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       */
+      sampleRate?: number;
+    };

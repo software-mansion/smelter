@@ -998,6 +998,44 @@ export type RtmpClientVideoEncoderOptions =
       } | null;
     }
   | {
+      type: "ffmpeg_vp8";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "ffmpeg_vp9";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
       type: "vulkan_h264";
       /**
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
@@ -1008,13 +1046,25 @@ export type RtmpClientVideoEncoderOptions =
        */
       keyframe_interval_ms?: number | null;
     };
-export type RtmpClientAudioEncoderOptions = {
-  type: "aac";
-  /**
-   * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
-   */
-  sample_rate?: number | null;
-};
+export type RtmpClientAudioEncoderOptions =
+  | {
+      type: "aac";
+      /**
+       * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+       */
+      sample_rate?: number | null;
+    }
+  | {
+      type: "opus";
+      /**
+       * (**default=`"voip"`**) Audio output encoder preset.
+       */
+      preset?: OpusEncoderPreset | null;
+      /**
+       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       */
+      sample_rate?: number | null;
+    };
 export type Mp4VideoEncoderOptions =
   | {
       type: "ffmpeg_h264";

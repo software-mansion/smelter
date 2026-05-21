@@ -46,6 +46,21 @@ function intoRtmpClientVideoEncoderOptions(
         pixel_format: encoder.pixelFormat,
         ffmpeg_options: encoder.ffmpegOptions,
       };
+    case 'ffmpeg_vp8':
+      return {
+        type: 'ffmpeg_vp8',
+        bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
+        keyframe_interval_ms: encoder.keyframeIntervalMs,
+        ffmpeg_options: encoder.ffmpegOptions,
+      };
+    case 'ffmpeg_vp9':
+      return {
+        type: 'ffmpeg_vp9',
+        bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
+        keyframe_interval_ms: encoder.keyframeIntervalMs,
+        pixel_format: encoder.pixelFormat,
+        ffmpeg_options: encoder.ffmpegOptions,
+      };
     case 'vulkan_h264':
       return {
         type: 'vulkan_h264',
@@ -70,8 +85,17 @@ function intoOutputRtmpClientAudioOptions(
 function intoRtmpClientAudioEncoderOptions(
   encoder: Outputs.RtmpClientAudioEncoderOptions
 ): Api.RtmpClientAudioEncoderOptions {
-  return {
-    type: 'aac',
-    sample_rate: encoder.sampleRate,
-  };
+  switch (encoder.type) {
+    case 'aac':
+      return {
+        type: 'aac',
+        sample_rate: encoder.sampleRate,
+      };
+    case 'opus':
+      return {
+        type: 'opus',
+        preset: encoder.preset,
+        sample_rate: encoder.sampleRate,
+      };
+  }
 }
