@@ -19,4 +19,4 @@ fi
 git push
 DOCKER_FLAG="${1:---build}"
 
-ssh puffer.fishjam.io "cd /root/smelter-test && git fetch && git checkout -f $BRANCH && git reset --hard origin/$BRANCH && docker compose -f ts/examples/sandbox/compose.yml up -d $DOCKER_FLAG"
+ssh root@puffer.fishjam.io "cd /root/smelter-test && git fetch && git checkout -f $BRANCH && git reset --hard origin/$BRANCH && docker compose -f ts/examples/sandbox/compose.yml up -d $DOCKER_FLAG"
