@@ -166,7 +166,7 @@ fn process_video_config(
     video: &DiscoveredVideo,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    // Only H264 is allowed right now, other codecs are rejected before this function
+    // Only CMAF H264 is allowed right now, other codecs are rejected before this function
 
     let avcc_bytes = video
         .description
