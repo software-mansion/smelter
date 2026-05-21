@@ -3,9 +3,9 @@ use std::time::Duration;
 use tracing::warn;
 
 use crate::{
-    ExVideoPacket, ExVideoTag, FlvVideoData, LegacyFlvVideoCodec, RtmpMessageParseError,
-    RtmpMessageSerializeError, RtmpVideoCodec, TrackId, VideoConfig, VideoData, VideoTag,
-    VideoTagFrameType, VideoTagH264PacketType,
+    ExCapabilities, ExVideoPacket, ExVideoTag, FlvVideoData, LegacyFlvVideoCodec,
+    RtmpMessageParseError, RtmpMessageSerializeError, RtmpVideoCodec, TrackId, VideoConfig,
+    VideoData, VideoTag, VideoTagFrameType, VideoTagH264PacketType,
     message::VIDEO_CHUNK_STREAM_ID,
     protocol::{MessageType, RawMessage},
 };
@@ -121,10 +121,10 @@ impl VideoMessage {
     pub(super) fn into_raw(
         self,
         stream_id: u32,
-        supports_timestamp_nano_mod_ex: bool,
+        ex_capabilities: ExCapabilities,
     ) -> Result<RawMessage, RtmpMessageSerializeError> {
         match self {
-            Self::Data(video) => video_into_raw(video, stream_id, supports_timestamp_nano_mod_ex),
+            Self::Data(video) => video_into_raw(video, stream_id, ex_capabilities),
             Self::Config(config) => config_into_raw(config, stream_id),
             Self::Unknown => Err(RtmpMessageSerializeError::InternalError(
                 "Cannot serialize an unknown video message".into(),
@@ -136,7 +136,7 @@ impl VideoMessage {
 fn video_into_raw(
     video: VideoData,
     stream_id: u32,
-    supports_timestamp_nano_mod_ex: bool,
+    ex_capabilities: ExCapabilities,
 ) -> Result<RawMessage, RtmpMessageSerializeError> {
     let dts_nanos = video.dts.as_nanos();
     let timestamp = (dts_nanos / 1_000_000) as u32;
@@ -155,7 +155,8 @@ fn video_into_raw(
         })
         .serialize()?,
         RtmpVideoCodec::Vp8 | RtmpVideoCodec::Vp9 => {
-            let timestamp_offset_nanos = supports_timestamp_nano_mod_ex
+            let timestamp_offset_nanos = ex_capabilities
+                .supports_timestamp_nano_mod_ex()
                 .then_some((dts_nanos % 1_000_000) as u32)
                 .filter(|offset| *offset != 0);
             FlvVideoData::Enhanced(ExVideoTag::VideoBody {
@@ -223,8 +224,8 @@ mod tests {
 
     use super::VideoMessage;
     use crate::{
-        ExVideoFourCc, ExVideoPacket, ExVideoTag, FlvVideoData, RtmpVideoCodec, TrackId, VideoData,
-        VideoTagFrameType,
+        ExCapabilities, ExVideoFourCc, ExVideoPacket, ExVideoTag, FlvVideoData, RtmpVideoCodec,
+        TrackId, VideoData, VideoTagFrameType,
         protocol::{MessageType, RawMessage},
     };
 
@@ -357,7 +358,7 @@ mod tests {
             data: Bytes::from_static(b"vp9"),
             is_keyframe: false,
         })
-        .into_raw(1, false)
+        .into_raw(1, ExCapabilities::default())
         .unwrap();
 
         assert_eq!(raw.timestamp, 100);
@@ -382,7 +383,14 @@ mod tests {
             data: Bytes::from_static(b"vp9"),
             is_keyframe: true,
         })
-        .into_raw(1, true)
+        .into_raw(
+            1,
+            ExCapabilities {
+                mod_ex: true,
+                timestamp_nano: true,
+                ..ExCapabilities::default()
+            },
+        )
         .unwrap();
 
         assert_eq!(raw.timestamp, 100);

@@ -3,6 +3,7 @@ mod amf3;
 mod client;
 mod error;
 mod events;
+mod ex_capabilities;
 mod flv;
 mod message;
 mod protocol;
@@ -18,6 +19,7 @@ pub use flv::AudioChannels;
 pub use server::*;
 pub use track::TrackId;
 
+pub(crate) use ex_capabilities::*;
 pub(crate) use flv::*;
 pub(crate) use track::TrackKey;
 
@@ -29,11 +31,3 @@ pub(crate) const AUDIO_FOURCC_LIST: [&str; 2] = ["mp4a", "Opus"];
 pub(crate) const FOURCC_INFO_CAN_DECODE: u8 = 0x01;
 pub(crate) const FOURCC_INFO_CAN_ENCODE: u8 = 0x02;
 pub(crate) const FOURCC_INFO_CAN_FORWARD: u8 = 0x04;
-
-/// Extended capability flags for the `capsEx` property in the E-RTMP connect
-/// handshake. See `enum CapsExMask` in the spec.
-pub(crate) const CAPS_EX_RECONNECT: u8 = 0x01;
-#[allow(unused)]
-pub(crate) const CAPS_EX_MULTITRACK: u8 = 0x02;
-pub(crate) const CAPS_EX_MODEX: u8 = 0x04;
-pub(crate) const CAPS_EX_TIMESTAMP_NANO: u8 = 0x08;

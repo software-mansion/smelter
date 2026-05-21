@@ -7,7 +7,7 @@ use bytes::{Bytes, BytesMut};
 use tracing::{debug, trace};
 
 use crate::{
-    RtmpMessageSerializeError,
+    ExCapabilities, RtmpMessageSerializeError,
     error::RtmpStreamError,
     message::{RtmpMessageIncoming, RtmpMessageOutgoing},
     protocol::{
@@ -49,11 +49,8 @@ impl RtmpMessageStream {
         self.writer.chunk_size = size;
     }
 
-    pub fn set_writer_supports_timestamp_nano_mod_ex(
-        &mut self,
-        supports_timestamp_nano_mod_ex: bool,
-    ) {
-        self.writer.supports_timestamp_nano_mod_ex = supports_timestamp_nano_mod_ex;
+    pub fn set_writer_ex_capabilities(&mut self, ex_capabilities: ExCapabilities) {
+        self.writer.ex_capabilities = ex_capabilities;
     }
 
     pub fn read_msg(&mut self) -> Result<RtmpMessageIncoming, RtmpStreamError> {
@@ -253,7 +250,7 @@ impl ReaderChunkStreamContext {
 struct RtmpMessageWriter {
     context: HashMap<u32, WriterChunkStreamContext>,
     chunk_size: usize,
-    supports_timestamp_nano_mod_ex: bool,
+    ex_capabilities: ExCapabilities,
 }
 
 impl RtmpMessageWriter {
@@ -261,7 +258,7 @@ impl RtmpMessageWriter {
         Self {
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
-            supports_timestamp_nano_mod_ex: false,
+            ex_capabilities: ExCapabilities::default(),
         }
     }
 
@@ -275,7 +272,7 @@ impl RtmpMessageWriter {
             false => debug!(?msg, "Sending RTMP message"),
         }
 
-        let msg = msg.into_raw(self.supports_timestamp_nano_mod_ex)?;
+        let msg = msg.into_raw(self.ex_capabilities)?;
         let cs_id = msg.chunk_stream_id;
 
         let context = self.context.entry(cs_id).or_default();

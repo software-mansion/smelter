@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    RtmpClientConfig, RtmpConnectionError, RtmpMessageParseError,
+    CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, ExCapabilities,
+    FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD, RtmpClientConfig, RtmpConnectionError,
+    RtmpMessageParseError,
     amf0::AmfValue,
     error::RtmpStreamError,
     message::{
@@ -14,11 +16,6 @@ use crate::{
 
 const CONNECT_TRANSACTION_ID: u32 = 1;
 const CREATE_STREAM_TRANSACTION_ID: u32 = 2;
-
-use crate::{
-    CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, FOURCC_INFO_CAN_ENCODE,
-    FOURCC_INFO_CAN_FORWARD,
-};
 
 use crate::{AUDIO_FOURCC_LIST, VIDEO_FOURCC_LIST};
 
@@ -52,7 +49,7 @@ impl NegotiationProgress {
     pub(super) fn try_match_connect_response(
         &self,
         msg: &RtmpMessageIncoming,
-    ) -> Result<Option<(CommandMessageConnectSuccess, bool)>, RtmpConnectionError> {
+    ) -> Result<Option<(CommandMessageConnectSuccess, ExCapabilities)>, RtmpConnectionError> {
         let NegotiationProgress::WaitingForConnectResult = self else {
             return Ok(None);
         };
@@ -76,9 +73,9 @@ impl NegotiationProgress {
                     .map_err(RtmpStreamError::ParseMessage)?;
                 let caps_ex_bits = parse_caps_ex_bits(&connect_success.properties)
                     | parse_caps_ex_bits(&connect_success.information);
-                let supports_timestamp_nano_mod_ex = supports_timestamp_nano_mod_ex(caps_ex_bits);
+                let ex_capabilities = ExCapabilities::from_caps_ex_bits(caps_ex_bits);
 
-                Ok(Some((connect_success, supports_timestamp_nano_mod_ex)))
+                Ok(Some((connect_success, ex_capabilities)))
             }
             Err(err) => Err(RtmpConnectionError::ErrorOnConnect(format!("{err:?}"))),
         }
@@ -234,12 +231,6 @@ pub(super) fn send_publish(
     Ok(())
 }
 
-fn supports_timestamp_nano_mod_ex(caps_ex_bits: u8) -> bool {
-    let has_modex = (caps_ex_bits & CAPS_EX_MODEX) != 0;
-    let has_ts_nano = (caps_ex_bits & CAPS_EX_TIMESTAMP_NANO) != 0;
-    has_modex && has_ts_nano
-}
-
 fn parse_caps_ex_bits(map: &HashMap<String, AmfValue>) -> u8 {
     match map.get("capsEx") {
         Some(AmfValue::Number(bits)) if bits.is_finite() => {
@@ -362,8 +353,9 @@ mod tests {
         )]);
 
         let caps_ex_bits = parse_caps_ex_bits(&capabilities);
+        let ex_capabilities = ExCapabilities::from_caps_ex_bits(caps_ex_bits);
 
-        assert!(supports_timestamp_nano_mod_ex(caps_ex_bits));
+        assert!(ex_capabilities.supports_timestamp_nano_mod_ex());
     }
 
     #[test]
@@ -376,7 +368,8 @@ mod tests {
         )]);
 
         let caps_ex_bits = parse_caps_ex_bits(&properties) | parse_caps_ex_bits(&information);
+        let ex_capabilities = ExCapabilities::from_caps_ex_bits(caps_ex_bits);
 
-        assert!(supports_timestamp_nano_mod_ex(caps_ex_bits));
+        assert!(ex_capabilities.supports_timestamp_nano_mod_ex());
     }
 }

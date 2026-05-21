@@ -4,9 +4,9 @@ use tracing::warn;
 
 use crate::{
     AacAudioConfig, AudioChannels, AudioConfig, AudioData, AudioTag, AudioTagAacPacketType,
-    AudioTagSampleSize, AudioTagSoundRate, ExAudioFourCc, ExAudioPacket, ExAudioTag, FlvAudioData,
-    LegacyFlvAudioCodec, OpusAudioConfig, RtmpAudioCodec, RtmpMessageParseError,
-    RtmpMessageSerializeError, TrackId,
+    AudioTagSampleSize, AudioTagSoundRate, ExAudioFourCc, ExAudioPacket, ExAudioTag,
+    ExCapabilities, FlvAudioData, LegacyFlvAudioCodec, OpusAudioConfig, RtmpAudioCodec,
+    RtmpMessageParseError, RtmpMessageSerializeError, TrackId,
     message::AUDIO_CHUNK_STREAM_ID,
     protocol::{MessageType, RawMessage},
 };
@@ -107,12 +107,10 @@ impl AudioMessage {
         self,
         stream_id: u32,
         channels: AudioChannels,
-        supports_timestamp_nano_mod_ex: bool,
+        ex_capabilities: ExCapabilities,
     ) -> Result<RawMessage, RtmpMessageSerializeError> {
         match self {
-            Self::Data(audio) => {
-                audio_data_into_raw(audio, stream_id, channels, supports_timestamp_nano_mod_ex)
-            }
+            Self::Data(audio) => audio_data_into_raw(audio, stream_id, channels, ex_capabilities),
             Self::Config(config) => audio_config_into_raw(config, stream_id),
             Self::Unknown => Err(RtmpMessageSerializeError::InternalError(
                 "Cannot serialize an unknown audio message".into(),
@@ -125,7 +123,7 @@ fn audio_data_into_raw(
     audio: AudioData,
     stream_id: u32,
     channels: AudioChannels,
-    supports_timestamp_nano_mod_ex: bool,
+    ex_capabilities: ExCapabilities,
 ) -> Result<RawMessage, RtmpMessageSerializeError> {
     let payload = match audio.codec {
         RtmpAudioCodec::Aac => FlvAudioData::Legacy(AudioTag {
@@ -139,7 +137,8 @@ fn audio_data_into_raw(
         .serialize()?,
         RtmpAudioCodec::Opus => {
             let pts_nanos = audio.pts.as_nanos();
-            let timestamp_offset_nanos = supports_timestamp_nano_mod_ex
+            let timestamp_offset_nanos = ex_capabilities
+                .supports_timestamp_nano_mod_ex()
                 .then_some((pts_nanos % 1_000_000) as u32)
                 .filter(|offset| *offset != 0);
             FlvAudioData::Enhanced(ExAudioTag {
@@ -200,7 +199,7 @@ mod tests {
     use super::AudioMessage;
     use crate::{
         AudioChannels, AudioConfig, AudioData, ExAudioFourCc, ExAudioPacket, ExAudioTag,
-        FlvAudioData, RtmpAudioCodec, TrackId,
+        ExCapabilities, FlvAudioData, RtmpAudioCodec, TrackId,
         protocol::{MessageType, RawMessage},
     };
 
@@ -311,7 +310,7 @@ mod tests {
             pts: Duration::from_millis(33),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(1, AudioChannels::Mono, false)
+        .into_raw(1, AudioChannels::Mono, ExCapabilities::default())
         .unwrap();
 
         assert_eq!(raw.payload[0] & 0b0000_0001, 0);
@@ -322,7 +321,7 @@ mod tests {
             pts: Duration::from_millis(33),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(2, AudioChannels::Stereo, false)
+        .into_raw(2, AudioChannels::Stereo, ExCapabilities::default())
         .unwrap();
 
         assert_eq!(raw.payload[0] & 0b0000_0001, 1);
@@ -435,7 +434,7 @@ mod tests {
             pts: Duration::from_millis(100),
             data: Bytes::from_static(b"opus_frame"),
         })
-        .into_raw(1, AudioChannels::Stereo, false)
+        .into_raw(1, AudioChannels::Stereo, ExCapabilities::default())
         .unwrap();
 
         assert_eq!(raw.timestamp, 100);
@@ -453,7 +452,7 @@ mod tests {
             data: Bytes::from_static(OPUS_ID_HEADER_STEREO),
             channels: AudioChannels::Stereo,
         })
-        .into_raw(1, AudioChannels::Stereo, false)
+        .into_raw(1, AudioChannels::Stereo, ExCapabilities::default())
         .unwrap();
 
         assert_eq!(raw.timestamp, 0);
@@ -472,7 +471,7 @@ mod tests {
         };
 
         let raw = AudioMessage::Data(original.clone())
-            .into_raw(1, AudioChannels::Stereo, false)
+            .into_raw(1, AudioChannels::Stereo, ExCapabilities::default())
             .unwrap();
         let parsed = AudioMessage::from_raw(raw).unwrap();
 
@@ -494,7 +493,15 @@ mod tests {
             pts: Duration::from_nanos(100_000_777),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(1, AudioChannels::Stereo, true)
+        .into_raw(
+            1,
+            AudioChannels::Stereo,
+            ExCapabilities {
+                mod_ex: true,
+                timestamp_nano: true,
+                ..ExCapabilities::default()
+            },
+        )
         .unwrap();
 
         let parsed = AudioMessage::from_raw(raw).unwrap();
@@ -515,7 +522,7 @@ mod tests {
             pts: Duration::from_nanos(100_000_777),
             data: Bytes::from_static(b"frame"),
         })
-        .into_raw(1, AudioChannels::Stereo, false)
+        .into_raw(1, AudioChannels::Stereo, ExCapabilities::default())
         .unwrap();
 
         assert_eq!(raw.timestamp, 100);

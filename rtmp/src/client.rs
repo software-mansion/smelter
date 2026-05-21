@@ -169,11 +169,8 @@ impl RtmpClientState {
                 Err(err) => return Err(err.into()),
             };
 
-            if let Some((_response, supports_timestamp_nano_mod_ex)) =
-                state.try_match_connect_response(&msg)?
-            {
-                self.stream
-                    .set_writer_supports_timestamp_nano_mod_ex(supports_timestamp_nano_mod_ex);
+            if let Some((_response, ex_capabilities)) = state.try_match_connect_response(&msg)? {
+                self.stream.set_writer_ex_capabilities(ex_capabilities);
                 state = NegotiationProgress::WaitingForCreateStreamResult;
                 send_create_stream(&mut self.stream)?;
                 continue;
