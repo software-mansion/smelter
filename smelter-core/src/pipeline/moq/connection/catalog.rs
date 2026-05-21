@@ -14,6 +14,7 @@ use tracing::{debug, warn};
 pub(super) async fn read_catalog(
     broadcast: &BroadcastConsumer,
 ) -> Result<DiscoveredTracks, MoqConnectionError> {
+    // Handle moq-lite "catalog.json", if it is not present fallback to the standard msf "catalog"
     match read_hang_catalog(broadcast).await {
         Ok(discovered_tracks) => Ok(discovered_tracks),
         Err(_) => read_msf_catalog(broadcast).await,
