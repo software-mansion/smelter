@@ -11,7 +11,8 @@
     "build": "tsc",
     "clean": "rimraf dist",
     "start": "pnpm ts-node ./src/index.tsx",
-    "deploy": "./deploy.sh"
+    "deploy": "./deploy.sh --build",
+    "deploy:restart": "./deploy.sh --force-recreate"
   },
   "author": "",
   "license": "MIT",

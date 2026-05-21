@@ -11,5 +11,12 @@ if [ "$BRANCH" = "master" ]; then
   exit 1
 fi
 
+if ! git diff-index --quiet HEAD --; then
+  git add -A
+  git commit -m "wip"
+fi
+
 git push
-ssh puffer.fishjam.io "cd /root/smelter-test && git fetch && git checkout -f $BRANCH && git reset --hard origin/$BRANCH && docker compose -f ts/examples/sandbox/compose.yml up -d --build"
+DOCKER_FLAG="${1:---build}"
+
+ssh puffer.fishjam.io "cd /root/smelter-test && git fetch && git checkout -f $BRANCH && git reset --hard origin/$BRANCH && docker compose -f ts/examples/sandbox/compose.yml up -d $DOCKER_FLAG"
