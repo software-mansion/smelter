@@ -15,7 +15,7 @@ mod utils;
 pub use client::*;
 pub use error::*;
 pub use events::*;
-pub use flv::AudioChannels;
+pub use flv::{AudioChannels, VpCodecConfig};
 pub use server::*;
 pub use track::TrackId;
 
