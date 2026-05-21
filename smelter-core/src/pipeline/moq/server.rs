@@ -29,13 +29,13 @@ impl MoqPipelineState {
 }
 
 type MoqSessions = Arc<Mutex<Vec<Session>>>;
-pub struct MoqServerHandle {
+pub struct MoqServer {
     accept_task: tokio::task::JoinHandle<()>,
     announce_task: tokio::task::JoinHandle<()>,
     sessions: MoqSessions,
 }
 
-impl Drop for MoqServerHandle {
+impl Drop for MoqServer {
     fn drop(&mut self) {
         self.accept_task.abort();
         self.announce_task.abort();
@@ -49,7 +49,7 @@ impl Drop for MoqServerHandle {
 pub async fn spawn_moq_server(
     ctx: Arc<PipelineCtx>,
     state: &Arc<MoqPipelineState>,
-) -> Result<MoqServerHandle, InitPipelineError> {
+) -> Result<MoqServer, InitPipelineError> {
     let port = state.port;
 
     let mut config = ServerConfig::default();
@@ -85,7 +85,7 @@ pub async fn spawn_moq_server(
 
     info!(port, "MoQ server started");
 
-    Ok(MoqServerHandle {
+    Ok(MoqServer {
         accept_task,
         announce_task,
         sessions: moq_sessions,
