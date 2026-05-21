@@ -1,8 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
-use moq_lite::{BroadcastConsumer, Track};
 use moq_mux::container::{Consumer as ContainerConsumer, Hang};
+use moq_native::moq_lite::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
 use tracing::{info, trace, warn};
 
@@ -293,10 +293,10 @@ async fn run_audio_track(
 #[derive(thiserror::Error, Debug)]
 enum MoqConnectionError {
     #[error("MoQ track error")]
-    TrackError(#[from] moq_lite::Error),
+    TrackError(#[from] MoqError),
 
     #[error("Failed to subscribe to catalog track")]
-    CatalogSubscribeError(#[source] moq_lite::Error),
+    CatalogSubscribeError(#[source] MoqError),
 
     #[error("Catalog track produced no frames")]
     CatalogEmpty,
