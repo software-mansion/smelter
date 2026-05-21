@@ -164,7 +164,6 @@ fn msf_track_to_hang(track: &moq_msf::Track) -> Result<(Hang, Option<Bytes>), &'
         .map_err(|_| "invalid base64 init_data")?;
 
     let container = match track.packaging {
-        moq_msf::Packaging::Legacy => Hang::Legacy,
         moq_msf::Packaging::Cmaf => {
             let init_bytes = init_data
                 .as_ref()
@@ -173,12 +172,12 @@ fn msf_track_to_hang(track: &moq_msf::Track) -> Result<(Hang, Option<Bytes>), &'
                 Cmaf::from_init(init_bytes).map_err(|_| "failed to parse CMAF init segment")?,
             )
         }
-        _ => return Err("Unsupported packaging mode, only CMAF and Legacy modes are supported."),
+        _ => return Err("Unsupported packaging mode, only CMAF mode is supported."),
     };
 
     let description = match &container {
         Hang::Cmaf(cmaf) => Some(extract_codec_description(cmaf)?),
-        Hang::Legacy => init_data,
+        _ => None,
     };
 
     Ok((container, description))
