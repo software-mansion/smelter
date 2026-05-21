@@ -1,3 +1,5 @@
+name: smelter-test
+
 services:
   server:
     build:
