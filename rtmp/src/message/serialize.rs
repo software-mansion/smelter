@@ -1,7 +1,7 @@
 use bytes::Bytes;
 
 use crate::{
-    RtmpMessageSerializeError,
+    ExCapabilities, RtmpMessageSerializeError,
     amf0::encode_amf_values,
     message::{
         CONTROL_MESSAGE_STREAM_ID, MAIN_CHUNK_STREAM_ID, PROTOCOL_CHUNK_STREAM_ID,
@@ -11,7 +11,10 @@ use crate::{
 };
 
 impl RtmpMessageOutgoing {
-    pub fn into_raw(self) -> Result<RawMessage, RtmpMessageSerializeError> {
+    pub fn into_raw(
+        self,
+        ex_capabilities: ExCapabilities,
+    ) -> Result<RawMessage, RtmpMessageSerializeError> {
         let result = match self {
             RtmpMessageOutgoing::WindowAckSize { window_size } => RawMessage {
                 msg_type: MessageType::WindowAckSize.into_raw(),
@@ -68,12 +71,12 @@ impl RtmpMessageOutgoing {
             RtmpMessageOutgoing::Video {
                 video: msg,
                 stream_id,
-            } => msg.into_raw(stream_id)?,
+            } => msg.into_raw(stream_id, ex_capabilities)?,
             RtmpMessageOutgoing::Audio {
                 audio: msg,
                 stream_id,
                 channels,
-            } => msg.into_raw(stream_id, channels)?,
+            } => msg.into_raw(stream_id, channels, ex_capabilities)?,
         };
         Ok(result)
     }

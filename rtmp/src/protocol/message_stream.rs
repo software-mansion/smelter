@@ -7,7 +7,7 @@ use bytes::{Bytes, BytesMut};
 use tracing::{debug, trace};
 
 use crate::{
-    RtmpMessageSerializeError,
+    ExCapabilities, RtmpMessageSerializeError,
     error::RtmpStreamError,
     message::{RtmpMessageIncoming, RtmpMessageOutgoing},
     protocol::{
@@ -47,6 +47,10 @@ impl RtmpMessageStream {
 
     pub fn set_writer_chunk_size(&mut self, size: usize) {
         self.writer.chunk_size = size;
+    }
+
+    pub fn set_writer_ex_capabilities(&mut self, ex_capabilities: ExCapabilities) {
+        self.writer.ex_capabilities = ex_capabilities;
     }
 
     pub fn read_msg(&mut self) -> Result<RtmpMessageIncoming, RtmpStreamError> {
@@ -246,6 +250,7 @@ impl ReaderChunkStreamContext {
 struct RtmpMessageWriter {
     context: HashMap<u32, WriterChunkStreamContext>,
     chunk_size: usize,
+    ex_capabilities: ExCapabilities,
 }
 
 impl RtmpMessageWriter {
@@ -253,6 +258,7 @@ impl RtmpMessageWriter {
         Self {
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
+            ex_capabilities: ExCapabilities::default(),
         }
     }
 
@@ -266,7 +272,7 @@ impl RtmpMessageWriter {
             false => debug!(?msg, "Sending RTMP message"),
         }
 
-        let msg = msg.into_raw()?;
+        let msg = msg.into_raw(self.ex_capabilities)?;
         let cs_id = msg.chunk_stream_id;
 
         let context = self.context.entry(cs_id).or_default();

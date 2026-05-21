@@ -22,6 +22,9 @@ use crate::{
             },
             fdk_aac::FdkAacEncoder,
             ffmpeg_h264::FfmpegH264Encoder,
+            ffmpeg_vp8::FfmpegVp8Encoder,
+            ffmpeg_vp9::FfmpegVp9Encoder,
+            libopus::OpusEncoder,
             vulkan_h264::VulkanH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
@@ -38,12 +41,14 @@ pub struct RtmpClientOutput {
 
 struct AudioConfig {
     extradata: Bytes,
+    codec: RtmpAudioCodec,
     channels: AudioChannels,
     chunks_receiver: Receiver<EncodedOutputEvent>,
 }
 
 struct VideoConfig {
     extradata: Bytes,
+    codec: RtmpVideoCodec,
     chunks_receiver: Receiver<EncodedOutputEvent>,
 }
 
@@ -119,14 +124,14 @@ impl RtmpClientOutput {
         if let Some(config) = video_config {
             client.send(rtmp::VideoConfig {
                 track_id: TrackId::PRIMARY,
-                codec: RtmpVideoCodec::H264,
+                codec: config.codec,
                 data: config.extradata.clone(),
             })?;
         }
         if let Some(config) = audio_config {
             client.send(rtmp::AudioConfig {
                 track_id: TrackId::PRIMARY,
-                codec: RtmpAudioCodec::Aac,
+                codec: config.codec,
                 data: config.extradata.clone(),
                 channels: match config.channels {
                     AudioChannels::Mono => rtmp::AudioChannels::Mono,
@@ -144,16 +149,17 @@ impl RtmpClientOutput {
     ) -> Result<(VideoEncoderThreadHandle, VideoConfig), OutputInitError> {
         let (chunks_sender, chunks_receiver) = bounded(1000);
 
-        let encoder = match &options {
+        let (encoder, codec) = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
-                VideoEncoderThread::<FfmpegH264Encoder>::spawn(
+                let encoder = VideoEncoderThread::<FfmpegH264Encoder>::spawn(
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
                         chunks_sender,
                     },
-                )?
+                )?;
+                (encoder, RtmpVideoCodec::H264)
             }
             VideoEncoderOptions::VulkanH264(options) => {
                 if !ctx.graphics_context.has_vulkan_encoder_support() {
@@ -161,30 +167,46 @@ impl RtmpClientOutput {
                         EncoderInitError::VulkanContextRequiredForVulkanEncoder,
                     ));
                 }
-                VideoEncoderThread::<VulkanH264Encoder>::spawn(
+                let encoder = VideoEncoderThread::<VulkanH264Encoder>::spawn(
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
                         chunks_sender,
                     },
-                )?
+                )?;
+                (encoder, RtmpVideoCodec::H264)
             }
-            VideoEncoderOptions::FfmpegVp8(_) => {
-                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp8));
+            VideoEncoderOptions::FfmpegVp8(options) => {
+                let encoder = VideoEncoderThread::<FfmpegVp8Encoder>::spawn(
+                    output_id.clone(),
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender,
+                    },
+                )?;
+                (encoder, RtmpVideoCodec::Vp8)
             }
-            VideoEncoderOptions::FfmpegVp9(_) => {
-                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp9));
+            VideoEncoderOptions::FfmpegVp9(options) => {
+                let encoder = VideoEncoderThread::<FfmpegVp9Encoder>::spawn(
+                    output_id.clone(),
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender,
+                    },
+                )?;
+                (encoder, RtmpVideoCodec::Vp9)
             }
         };
 
-        let Some(extradata) = encoder.encoder_context() else {
-            return Err(RtmpClientError::MissingH264DecoderConfig.into());
-        };
+        let extradata = encoder.encoder_context().unwrap_or_default();
         Ok((
             encoder,
             VideoConfig {
                 extradata,
+                codec,
                 chunks_receiver,
             },
         ))
@@ -198,27 +220,37 @@ impl RtmpClientOutput {
         let channels = options.channels();
 
         let (chunks_sender, chunks_receiver) = bounded(1000);
-        let encoder = match options {
-            AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
-                output_id.clone(),
-                AudioEncoderThreadOptions {
-                    ctx: ctx.clone(),
-                    encoder_options: options,
-                    chunks_sender,
-                },
-            )?,
-            AudioEncoderOptions::Opus(_) => {
-                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus));
+        let (encoder, codec) = match options {
+            AudioEncoderOptions::FdkAac(options) => {
+                let encoder = AudioEncoderThread::<FdkAacEncoder>::spawn(
+                    output_id.clone(),
+                    AudioEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options,
+                        chunks_sender,
+                    },
+                )?;
+                (encoder, RtmpAudioCodec::Aac)
+            }
+            AudioEncoderOptions::Opus(options) => {
+                let encoder = AudioEncoderThread::<OpusEncoder>::spawn(
+                    output_id.clone(),
+                    AudioEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options,
+                        chunks_sender,
+                    },
+                )?;
+                (encoder, RtmpAudioCodec::Opus)
             }
         };
-        let Some(extradata) = encoder.encoder_context() else {
-            return Err(RtmpClientError::MissingAacDecoderConfig.into());
-        };
+        let extradata = encoder.encoder_context().unwrap_or_default();
 
         Ok((
             encoder,
             AudioConfig {
                 extradata,
+                codec,
                 channels,
                 chunks_receiver,
             },
@@ -247,10 +279,10 @@ impl Output for RtmpClientOutput {
     }
 }
 
-fn video_chunk_to_event(chunk: EncodedOutputChunk) -> VideoData {
+fn video_chunk_to_event(chunk: EncodedOutputChunk, codec: RtmpVideoCodec) -> VideoData {
     VideoData {
         track_id: TrackId::PRIMARY,
-        codec: RtmpVideoCodec::H264,
+        codec,
         pts: chunk.pts,
         dts: chunk.dts.unwrap_or(chunk.pts),
         data: chunk.data,
@@ -258,10 +290,10 @@ fn video_chunk_to_event(chunk: EncodedOutputChunk) -> VideoData {
     }
 }
 
-fn audio_chunk_to_event(chunk: EncodedOutputChunk) -> AudioData {
+fn audio_chunk_to_event(chunk: EncodedOutputChunk, codec: RtmpAudioCodec) -> AudioData {
     AudioData {
         track_id: TrackId::PRIMARY,
-        codec: RtmpAudioCodec::Aac,
+        codec,
         pts: chunk.pts,
         data: chunk.data,
     }
@@ -277,20 +309,24 @@ fn run_rtmp_output_thread(
         (Some(video), Some(audio)) => run_synced_av(
             &mut client,
             &video.chunks_receiver,
+            video.codec,
             &audio.chunks_receiver,
+            audio.codec,
             stats_sender,
         ),
         (Some(video), None) => {
+            let codec = video.codec;
             while let Ok(EncodedOutputEvent::Data(chunk)) = video.chunks_receiver.recv() {
                 stats_sender.bytes_sent_event(chunk.data.len(), StatsTrackKind::Video);
-                client.send(video_chunk_to_event(chunk))?;
+                client.send(video_chunk_to_event(chunk, codec))?;
             }
             Ok(())
         }
         (None, Some(audio)) => {
+            let codec = audio.codec;
             while let Ok(EncodedOutputEvent::Data(chunk)) = audio.chunks_receiver.recv() {
                 stats_sender.bytes_sent_event(chunk.data.len(), StatsTrackKind::Audio);
-                client.send(audio_chunk_to_event(chunk))?;
+                client.send(audio_chunk_to_event(chunk, codec))?;
             }
             Ok(())
         }
@@ -301,7 +337,9 @@ fn run_rtmp_output_thread(
 fn run_synced_av(
     client: &mut RtmpClient,
     video_rx: &Receiver<EncodedOutputEvent>,
+    video_codec: RtmpVideoCodec,
     audio_rx: &Receiver<EncodedOutputEvent>,
+    audio_codec: RtmpAudioCodec,
     rtmp_stats_sender: RtmpOutputStatsSender,
 ) -> Result<(), RtmpStreamError> {
     let mut pending_video: Option<EncodedOutputChunk> = None;
@@ -351,19 +389,31 @@ fn run_synced_av(
                 (Some(video), Some(audio)) => {
                     if video.pts <= audio.pts {
                         rtmp_stats_sender.bytes_sent_event(video.data.len(), StatsTrackKind::Video);
-                        client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
+                        client.send(video_chunk_to_event(
+                            pending_video.take().unwrap(),
+                            video_codec,
+                        ))?;
                     } else {
                         rtmp_stats_sender.bytes_sent_event(audio.data.len(), StatsTrackKind::Audio);
-                        client.send(audio_chunk_to_event(pending_audio.take().unwrap()))?;
+                        client.send(audio_chunk_to_event(
+                            pending_audio.take().unwrap(),
+                            audio_codec,
+                        ))?;
                     }
                 }
                 (Some(video), None) => {
                     rtmp_stats_sender.bytes_sent_event(video.data.len(), StatsTrackKind::Video);
-                    client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
+                    client.send(video_chunk_to_event(
+                        pending_video.take().unwrap(),
+                        video_codec,
+                    ))?;
                 }
                 (None, Some(audio)) => {
                     rtmp_stats_sender.bytes_sent_event(audio.data.len(), StatsTrackKind::Audio);
-                    client.send(audio_chunk_to_event(pending_audio.take().unwrap()))?;
+                    client.send(audio_chunk_to_event(
+                        pending_audio.take().unwrap(),
+                        audio_codec,
+                    ))?;
                 }
                 (None, None) => break,
             },
