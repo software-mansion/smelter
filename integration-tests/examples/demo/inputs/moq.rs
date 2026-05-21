@@ -26,7 +26,7 @@ impl MoqInput {
     pub fn on_after_registration(&self) -> Result<()> {
         println!("Publish to this input using moq-cli:");
         println!(
-            "  moq-cli publish https://localhost:4443/{}",
+            "ffmpeg -re -readrate_initial_burst 7 -i <SOURCE_MP4> -c copy -movflags cmaf -f mp4 - | moq-cli publish --tls-disable-verify --url https://localhost:4443 --broadcast {} fmp4",
             self.broadcast_path
         );
         println!();
