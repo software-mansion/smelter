@@ -40,13 +40,17 @@ async fn read_hang_catalog(
     let video = match catalog.video.renditions.first_key_value() {
         Some((name, config)) if let VideoCodec::H264(_) = config.codec => {
             match Hang::try_from(&config.container) {
-                Ok(container) => Some(DiscoveredVideo {
+                Ok(container) if let Hang::Cmaf(_) = container => Some(DiscoveredVideo {
                     name: name.clone(),
                     container,
                     description: config.description.clone(),
                 }),
+                Ok(_) => {
+                    warn!("Unsupported video container, skipping");
+                    None
+                }
                 Err(error) => {
-                    warn!(track=%name, "Unsupported video container, skipping: {error}");
+                    warn!(track=%name, %error, "Unsupported video container, skipping.");
                     None
                 }
             }
@@ -61,11 +65,15 @@ async fn read_hang_catalog(
     let audio = match catalog.audio.renditions.first_key_value() {
         Some((name, config)) if let AudioCodec::AAC(_) = config.codec => {
             match Hang::try_from(&config.container) {
-                Ok(container) => Some(DiscoveredAudio {
+                Ok(container) if let Hang::Cmaf(_) = container => Some(DiscoveredAudio {
                     name: name.clone(),
                     container,
                     description: config.description.clone(),
                 }),
+                Ok(_) => {
+                    warn!("Unsupported audio container, skipping");
+                    None
+                }
                 Err(error) => {
                     warn!(track=%name, "Unsupported audio container, skipping: {error}");
                     None
