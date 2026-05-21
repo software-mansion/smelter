@@ -52,7 +52,6 @@ async function run() {
   await smelter.registerInput('input_ffmpeg_h264', {
     type: 'whip_server',
     bearerToken: 'example',
-    bufferSizeMs: 5000,
     video: {
       decoderPreferences: ['ffmpeg_h264'],
     },
@@ -64,7 +63,6 @@ async function run() {
   await smelter.registerInput('input_vulkan_h264', {
     type: 'whip_server',
     bearerToken: 'example',
-    bufferSizeMs: 5000,
     video: {
       decoderPreferences: ['vulkan_h264'],
     },
