@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -28,7 +30,9 @@ impl MoqPipelineState {
     }
 }
 
-type MoqSessions = Arc<Mutex<Vec<Session>>>;
+static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(0);
+
+type MoqSessions = Arc<Mutex<HashMap<u64, Session>>>;
 pub struct MoqServer {
     accept_task: tokio::task::JoinHandle<()>,
     announce_task: tokio::task::JoinHandle<()>,
@@ -40,7 +44,7 @@ impl Drop for MoqServer {
         self.accept_task.abort();
         self.announce_task.abort();
         let mut sessions = self.sessions.lock().unwrap();
-        while let Some(mut session) = sessions.pop() {
+        for (_, mut session) in sessions.drain() {
             session.close(moq_lite::Error::Cancel);
         }
     }
@@ -76,7 +80,7 @@ pub async fn spawn_moq_server(
         Err(error) => return Err(InitPipelineError::MoqServerInitError(error)),
     };
 
-    let moq_sessions: MoqSessions = Arc::new(Mutex::new(vec![]));
+    let moq_sessions: MoqSessions = Arc::new(Mutex::new(HashMap::new()));
     let accept_task = tokio::spawn(run_accept_loop(server, moq_sessions.clone()));
 
     let origin_consumer = state.origin.consume();
@@ -100,12 +104,17 @@ async fn run_accept_loop(mut server: moq_native::Server, moq_sessions: MoqSessio
                 Ok(session) => {
                     info!("MoQ session established");
                     debug!(moq_version=?session.version());
+                    let session_id = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
                     {
                         let mut sessions = moq_sessions.lock().unwrap();
-                        sessions.push(session.clone());
+                        sessions.insert(session_id, session.clone());
                     }
                     let _ = session.closed().await;
                     info!("MoQ session closed");
+                    {
+                        let mut sessions = moq_sessions.lock().unwrap();
+                        sessions.remove(&session_id);
+                    }
                 }
                 Err(err) => {
                     warn!("MoQ handshake failed: {err}");
