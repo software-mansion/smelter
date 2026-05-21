@@ -28,7 +28,7 @@ use crate::{
         MoqPipelineState, RtmpPipelineState,
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
         input::{PipelineInput, new_external_input, register_pipeline_input},
-        moq::{MoqServerHandle, spawn_moq_server},
+        moq::{MoqServer, spawn_moq_server},
         output::{OutputSender, PipelineOutput, new_external_output, register_pipeline_output},
         rtmp::spawn_rtmp_server,
         webrtc::{
@@ -63,7 +63,7 @@ pub struct Pipeline {
     rtmp_server: Option<RtmpServer>,
 
     #[allow(dead_code)]
-    moq_server: Option<MoqServerHandle>,
+    moq_server: Option<MoqServer>,
 }
 
 impl Pipeline {
