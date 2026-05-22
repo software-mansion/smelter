@@ -5,8 +5,10 @@ use smelter_render::InputId;
 use crate::{
     Ref,
     stats::{
+        input::audio_mixer::AudioMixerStatsState,
         input_reports::{
-            HlsInputStatsReport, HlsInputTrackSlidingWindowStatsReport, HlsInputTrackStatsReport,
+            HlsAudioInputStatsReport, HlsInputStatsReport, HlsInputTrackSlidingWindowStatsReport,
+            HlsInputTrackStatsReport,
         },
         state::StatsEvent,
         utils::SlidingWindowValue,
@@ -42,7 +44,31 @@ pub(crate) enum HlsInputTrackStatsEvent {
 #[derive(Debug)]
 pub struct HlsInputState {
     pub video: HlsInputTrackState,
-    pub audio: HlsInputTrackState,
+    pub audio: HlsAudioInputState,
+}
+
+/// Audio-side state for `HLS` inputs: per-track stats + per-input audio
+/// mixer (resampler) stats.
+#[derive(Debug)]
+pub struct HlsAudioInputState {
+    pub track: HlsInputTrackState,
+    pub mixer: AudioMixerStatsState,
+}
+
+impl HlsAudioInputState {
+    pub fn new() -> Self {
+        Self {
+            track: HlsInputTrackState::new(),
+            mixer: AudioMixerStatsState::new(),
+        }
+    }
+
+    pub fn report(&mut self) -> HlsAudioInputStatsReport {
+        HlsAudioInputStatsReport {
+            track: self.track.report(),
+            mixer: self.mixer.report(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -62,26 +88,23 @@ pub struct HlsInputTrackState {
 
 impl HlsInputState {
     pub fn new() -> Self {
-        let video = HlsInputTrackState::new();
-        let audio = HlsInputTrackState::new();
-
-        Self { video, audio }
+        Self {
+            video: HlsInputTrackState::new(),
+            audio: HlsAudioInputState::new(),
+        }
     }
 
     pub fn report(&mut self) -> HlsInputStatsReport {
-        let video_report = self.video.report();
-        let audio_report = self.audio.report();
-
         HlsInputStatsReport {
-            video: video_report,
-            audio: audio_report,
+            video: self.video.report(),
+            audio: self.audio.report(),
         }
     }
 
     pub fn handle_event(&mut self, event: HlsInputStatsEvent) {
         match event {
             HlsInputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
-            HlsInputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+            HlsInputStatsEvent::Audio(track_event) => self.audio.track.handle_event(track_event),
         }
     }
 }

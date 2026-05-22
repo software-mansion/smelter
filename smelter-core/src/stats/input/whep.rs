@@ -3,7 +3,7 @@ use smelter_render::InputId;
 use crate::{
     Ref,
     stats::{
-        input::rtp::{RtpJitterBufferState, RtpJitterBufferStatsEvent},
+        input::rtp::{RtpAudioInputState, RtpJitterBufferState, RtpJitterBufferStatsEvent},
         input_reports::WhepInputStatsReport,
         state::StatsEvent,
     },
@@ -29,28 +29,28 @@ impl WhepInputStatsEvent {
 #[derive(Debug)]
 pub struct WhepInputState {
     pub video: RtpJitterBufferState,
-    pub audio: RtpJitterBufferState,
+    pub audio: RtpAudioInputState,
 }
 
 impl WhepInputState {
     pub fn new() -> Self {
         Self {
             video: RtpJitterBufferState::new(),
-            audio: RtpJitterBufferState::new(),
+            audio: RtpAudioInputState::new(),
         }
     }
 
     pub fn handle_event(&mut self, event: WhepInputStatsEvent) {
         match event {
             WhepInputStatsEvent::VideoRtp(event) => self.video.handle_event(event),
-            WhepInputStatsEvent::AudioRtp(event) => self.audio.handle_event(event),
+            WhepInputStatsEvent::AudioRtp(event) => self.audio.rtp.handle_event(event),
         }
     }
 
     pub fn report(&mut self) -> WhepInputStatsReport {
         WhepInputStatsReport {
             video_rtp: self.video.report(),
-            audio_rtp: self.audio.report(),
+            audio: self.audio.report(),
         }
     }
 }

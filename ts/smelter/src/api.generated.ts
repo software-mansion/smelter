@@ -1386,9 +1386,9 @@ export type InputStatsReport =
        */
       video_rtp: RtpJitterBufferStatsReport;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track (jitter buffer + per-input audio mixer).
        */
-      audio_rtp: RtpJitterBufferStatsReport;
+      audio: RtpAudioInputStatsReport;
     }
   | {
       type: "whip";
@@ -1397,9 +1397,9 @@ export type InputStatsReport =
        */
       video_rtp: RtpJitterBufferStatsReport;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track (jitter buffer + per-input audio mixer).
        */
-      audio_rtp: RtpJitterBufferStatsReport;
+      audio: RtpAudioInputStatsReport;
     }
   | {
       type: "whep";
@@ -1408,9 +1408,9 @@ export type InputStatsReport =
        */
       video_rtp: RtpJitterBufferStatsReport;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track (jitter buffer + per-input audio mixer).
        */
-      audio_rtp: RtpJitterBufferStatsReport;
+      audio: RtpAudioInputStatsReport;
     }
   | {
       type: "hls";
@@ -1419,9 +1419,9 @@ export type InputStatsReport =
        */
       video: HlsInputTrackStatsReport;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track (track stats + per-input audio mixer).
        */
-      audio: HlsInputTrackStatsReport;
+      audio: HlsAudioInputStatsReport;
     }
   | {
       type: "rtmp";
@@ -1430,9 +1430,9 @@ export type InputStatsReport =
        */
       video: RtmpInputTrackStatsReport;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track (track stats + per-input audio mixer).
        */
-      audio: RtmpInputTrackStatsReport;
+      audio: RtmpAudioInputStatsReport;
     }
   | {
       type: "mp4";
@@ -1441,9 +1441,9 @@ export type InputStatsReport =
        */
       video: Mp4InputTrackStatsReport;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track (track stats + per-input audio mixer).
        */
-      audio: Mp4InputTrackStatsReport;
+      audio: Mp4AudioInputStatsReport;
     };
 /**
  * Stats report for outputs.
@@ -1968,6 +1968,71 @@ export interface RtpJitterBufferSlidingWindowStatsReport {
   input_buffer_min_seconds: number;
 }
 /**
+ * Combined stats for the audio track of an `RTP` / `WHIP` / `WHEP` input.
+ */
+export interface RtpAudioInputStatsReport {
+  /**
+   * RTP-side jitter buffer stats.
+   */
+  rtp: RtpJitterBufferStatsReport;
+  /**
+   * Per-input audio mixer (resampler / drift correction) stats.
+   */
+  mixer: AudioMixerStatsReport;
+}
+/**
+ * Stats report for the per-input audio mixer (resampler + drift correction).
+ *
+ * The audio mixer runs once per input audio track. It compensates for the difference between the input clock and the mixing clock by stretching, squashing, dropping, or zero-padding samples; this report describes how much it had to work.
+ */
+export interface AudioMixerStatsReport {
+  /**
+   * Total count of discontinuities (input gaps that exceeded the stretch/squash range and forced a resampler reset) since the input was registered.
+   */
+  discontinuities_total: number;
+  /**
+   * Audio-mixer stats in the 1-second window.
+   */
+  last_1_second: AudioMixerSlidingWindowStatsReport;
+  /**
+   * Audio-mixer stats in the 10-second window.
+   */
+  last_10_seconds: AudioMixerSlidingWindowStatsReport;
+}
+/**
+ * Stats report for the given time window in the per-input audio mixer.
+ */
+export interface AudioMixerSlidingWindowStatsReport {
+  /**
+   * Average drift between the input buffer's earliest PTS and the PTS the mixer asked for. Positive = input is behind the request (stretching), negative = input is ahead (squashing).
+   */
+  drift_avg_seconds: number;
+  /**
+   * Minimum (most-negative) drift observed in the window.
+   */
+  drift_min_seconds: number;
+  /**
+   * Maximum (most-positive) drift observed in the window.
+   */
+  drift_max_seconds: number;
+  /**
+   * Average duration of audio held in the resampler input buffer (i.e. pending input samples not yet fed to the resampler).
+   */
+  buffer_duration_avg_seconds: number;
+  /**
+   * Minimum buffer duration observed in the window.
+   */
+  buffer_duration_min_seconds: number;
+  /**
+   * Maximum buffer duration observed in the window.
+   */
+  buffer_duration_max_seconds: number;
+  /**
+   * Count of resampler discontinuities (forced resets) in the window.
+   */
+  discontinuities_count: number;
+}
+/**
  * Stats report for a track in the `HLS` input.
  */
 export interface HlsInputTrackStatsReport {
@@ -2030,6 +2095,19 @@ export interface HlsInputTrackSlidingWindowStatsReport {
   input_buffer_min_seconds: number;
 }
 /**
+ * Combined stats for the audio track of an `HLS` input.
+ */
+export interface HlsAudioInputStatsReport {
+  /**
+   * Per-track HLS audio stats.
+   */
+  track: HlsInputTrackStatsReport;
+  /**
+   * Per-input audio mixer (resampler / drift correction) stats.
+   */
+  mixer: AudioMixerStatsReport;
+}
+/**
  * Stats report for a track in `RTMP` input.
  */
 export interface RtmpInputTrackStatsReport {
@@ -2043,6 +2121,19 @@ export interface RtmpInputTrackStatsReport {
   bitrate_1_minute: number;
 }
 /**
+ * Combined stats for the audio track of an `RTMP` input.
+ */
+export interface RtmpAudioInputStatsReport {
+  /**
+   * Per-track RTMP audio stats.
+   */
+  track: RtmpInputTrackStatsReport;
+  /**
+   * Per-input audio mixer (resampler / drift correction) stats.
+   */
+  mixer: AudioMixerStatsReport;
+}
+/**
  * Stats report for a track in `MP4` input.
  */
 export interface Mp4InputTrackStatsReport {
@@ -2054,6 +2145,19 @@ export interface Mp4InputTrackStatsReport {
    * Bitrate in the 1-minute window.
    */
   bitrate_1_minute: number;
+}
+/**
+ * Combined stats for the audio track of an `MP4` input.
+ */
+export interface Mp4AudioInputStatsReport {
+  /**
+   * Per-track MP4 audio stats.
+   */
+  track: Mp4InputTrackStatsReport;
+  /**
+   * Per-input audio mixer (resampler / drift correction) stats.
+   */
+  mixer: AudioMixerStatsReport;
 }
 /**
  * Stats report for a track in the `WHEP` output.

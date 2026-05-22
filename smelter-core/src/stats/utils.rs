@@ -1,9 +1,67 @@
 use std::{
     collections::VecDeque,
     iter::Sum,
-    ops::Div,
     time::{Duration, Instant},
 };
+
+/// Trait that captures the per-type aggregation semantics
+/// `SlidingWindowValue` needs (min/max/avg). Implemented for the few numeric
+/// types we actually store. Lets the window support `f64` drift values
+/// alongside `Duration` and integers without running into coherence problems
+/// (`f64` lacks `Ord` and native `Div<u32>`).
+pub trait Aggregable: Copy + Default {
+    fn agg_max(a: Self, b: Self) -> Self;
+    fn agg_min(a: Self, b: Self) -> Self;
+    fn agg_div(self, count: u32) -> Self;
+}
+
+impl Aggregable for Duration {
+    fn agg_max(a: Self, b: Self) -> Self {
+        Self::max(a, b)
+    }
+    fn agg_min(a: Self, b: Self) -> Self {
+        Self::min(a, b)
+    }
+    fn agg_div(self, count: u32) -> Self {
+        self / count
+    }
+}
+
+impl Aggregable for u32 {
+    fn agg_max(a: Self, b: Self) -> Self {
+        Self::max(a, b)
+    }
+    fn agg_min(a: Self, b: Self) -> Self {
+        Self::min(a, b)
+    }
+    fn agg_div(self, count: u32) -> Self {
+        self / count
+    }
+}
+
+impl Aggregable for u64 {
+    fn agg_max(a: Self, b: Self) -> Self {
+        Self::max(a, b)
+    }
+    fn agg_min(a: Self, b: Self) -> Self {
+        Self::min(a, b)
+    }
+    fn agg_div(self, count: u32) -> Self {
+        self / count as u64
+    }
+}
+
+impl Aggregable for f64 {
+    fn agg_max(a: Self, b: Self) -> Self {
+        Self::max(a, b)
+    }
+    fn agg_min(a: Self, b: Self) -> Self {
+        Self::min(a, b)
+    }
+    fn agg_div(self, count: u32) -> Self {
+        self / count as f64
+    }
+}
 
 #[derive(Debug)]
 pub struct SlidingWindowValue<Value: Copy> {
@@ -38,14 +96,14 @@ impl<Value: Copy> SlidingWindowValue<Value> {
     }
 }
 
-impl<Value: Ord + Copy + Default> SlidingWindowValue<Value> {
+impl<Value: Aggregable> SlidingWindowValue<Value> {
     pub fn max(&mut self) -> Value {
         let now = Instant::now();
         self.drop_older(now);
         self.buffer
             .iter()
             .map(|(_, v)| *v)
-            .max()
+            .reduce(Value::agg_max)
             .unwrap_or_default()
     }
 
@@ -55,7 +113,7 @@ impl<Value: Ord + Copy + Default> SlidingWindowValue<Value> {
         self.buffer
             .iter()
             .map(|(_, v)| *v)
-            .min()
+            .reduce(Value::agg_min)
             .unwrap_or_default()
     }
 }
@@ -68,7 +126,7 @@ impl<Value: Sum + Copy> SlidingWindowValue<Value> {
     }
 }
 
-impl<Value: Sum + Copy + Div<u32, Output = Value> + Default> SlidingWindowValue<Value> {
+impl<Value: Sum + Aggregable> SlidingWindowValue<Value> {
     pub fn avg(&mut self) -> Value {
         let now = Instant::now();
         self.drop_older(now);
@@ -76,6 +134,6 @@ impl<Value: Sum + Copy + Div<u32, Output = Value> + Default> SlidingWindowValue<
             return Value::default();
         }
         let sum: Value = self.buffer.iter().map(|(_, v)| *v).sum();
-        sum / self.buffer.len() as u32
+        sum.agg_div(self.buffer.len() as u32)
     }
 }

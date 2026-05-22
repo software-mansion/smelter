@@ -7,7 +7,11 @@ use rubato::{
 };
 use tracing::{debug, error, trace, warn};
 
-use crate::{AudioChannels, AudioSamples, prelude::InputAudioSamples, utils::AudioSamplesBuffer};
+use crate::{
+    AudioChannels, AudioSamples,
+    prelude::{AudioMixerStatsSender, InputAudioSamples},
+    utils::AudioSamplesBuffer,
+};
 
 // Maximum *relative* deviation from the nominal resample ratio that we are willing to apply
 // when stretching/squashing to correct drift. Rubato's `Async::new_sinc` is initialized with
@@ -69,6 +73,8 @@ pub(super) struct InputResampler {
     input_sample_rate: u32,
     output_sample_rate: u32,
     channels: AudioChannels,
+
+    stats_sender: AudioMixerStatsSender,
 
     /// Pending input PCM that hasn't been fed to rubato yet. Frames are consumed (drained) from
     /// the front each time `resample()` runs. May also have zeros pushed to the front (gap-fill
@@ -152,6 +158,7 @@ impl InputResampler {
         input_sample_rate: u32,
         output_sample_rate: u32,
         channels: AudioChannels,
+        stats_sender: AudioMixerStatsSender,
     ) -> Result<Self, rubato::ResamplerConstructionError> {
         debug!(
             ?input_sample_rate,
@@ -204,6 +211,8 @@ impl InputResampler {
             output_sample_rate,
             channels,
 
+            stats_sender,
+
             resampler,
             resampler_input_buffer: AudioSamplesBuffer::new(channels),
             resampler_output_buffer,
@@ -238,9 +247,15 @@ impl InputResampler {
 
     fn input_buffer_start_pts(&self) -> Duration {
         self.input_buffer_end_pts
-            .saturating_sub(Duration::from_secs_f64(
-                self.resampler_input_buffer.frames() as f64 / self.input_sample_rate as f64,
-            ))
+            .saturating_sub(self.input_buffer_duration())
+    }
+
+    /// How much audio (in seconds) is currently sitting in the resampler input
+    /// buffer waiting to be fed to rubato.
+    fn input_buffer_duration(&self) -> Duration {
+        Duration::from_secs_f64(
+            self.resampler_input_buffer.frames() as f64 / self.input_sample_rate as f64,
+        )
     }
 
     /// Adjust rubato's resample ratio by a multiplicative factor relative to
@@ -249,7 +264,7 @@ impl InputResampler {
         let rel_ratio = rel_ratio.clamp(1.0 / (1.0 + MAX_STRETCH_RATIO), 1.0 + MAX_STRETCH_RATIO);
         let desired = self.original_resampler_ratio * rel_ratio;
         let current = self.resampler.resample_ratio();
-        let should_update = (current == 1.0 && desired != 1.0) || (desired - current).abs() > 0.01;
+        let should_update = (current == 1.0 && desired != 1.0) || (desired - current).abs() > 0.001;
         if should_update
             && let Err(err) = self.resampler.set_resample_ratio_relative(rel_ratio, true)
         {
@@ -293,6 +308,12 @@ impl InputResampler {
             * self.output_sample_rate as f64)
             .round() as usize;
 
+        // Sampled once per call, on the first loop iteration that actually runs
+        // a resample. Sampling before the gate or while the input buffer has
+        // never seen a batch yields meaningless values, so we wait until the
+        // resampler is actually doing work on real input.
+        let mut stats_sampled = false;
+
         while self.output_buffer.frames() < batch_size {
             // Where the *next* output sample we still owe should land, accounting for what
             // we've already produced into `output_buffer`.
@@ -307,6 +328,14 @@ impl InputResampler {
             let input_start_pts = self
                 .input_buffer_start_pts()
                 .saturating_sub(self.original_output_delay);
+
+            if !stats_sampled {
+                let drift_secs = input_start_pts.as_secs_f64() - requested_start_pts.as_secs_f64();
+                self.stats_sender.send_drift(drift_secs);
+                self.stats_sender
+                    .send_buffer_duration(self.input_buffer_duration());
+                stats_sampled = true;
+            }
 
             if input_start_pts > requested_start_pts + STRETCH_THRESHOLD {
                 // === GAP-FILL ===
@@ -324,6 +353,7 @@ impl InputResampler {
                 };
                 self.resampler_input_buffer.push_front(samples);
                 self.set_resample_ratio_relative(1.0);
+                self.stats_sender.send_discontinuity();
                 debug!(
                     sample_count,
                     ?gap,
@@ -365,6 +395,7 @@ impl InputResampler {
                     (duration_to_drop.as_secs_f64() * self.input_sample_rate as f64) as usize;
                 self.resampler_input_buffer.drain_samples(samples_to_drop);
                 self.set_resample_ratio_relative(1.0);
+                self.stats_sender.send_discontinuity();
                 debug!(
                     samples_to_drop,
                     ?duration_to_drop,
@@ -510,6 +541,7 @@ impl InputResampler {
         self.resampler.reset();
         self.resampler_output_buffer.samples_to_drop = self.resampler.output_delay();
         self.needs_input_resync = true;
+        self.stats_sender.send_discontinuity();
     }
 }
 

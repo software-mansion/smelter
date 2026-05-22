@@ -13,11 +13,12 @@ pub(super) fn start_input_thread(
     mixing_sample_rate: u32,
     input_receiver: Receiver<AudioMixerInputEvent>,
     result_sender: Sender<AudioMixerInputResult>,
+    stats_sender: AudioMixerStatsSender,
 ) {
     std::thread::Builder::new()
         .name("audio mixer input".to_string())
         .spawn(move || {
-            let mut processor = InputProcessor::new(mixing_sample_rate);
+            let mut processor = InputProcessor::new(mixing_sample_rate, stats_sender);
 
             for event in input_receiver {
                 // Separation to write_batch and get_samples exists here, because
@@ -41,13 +42,15 @@ pub(super) fn start_input_thread(
 
 struct InputProcessor {
     mixing_sample_rate: u32,
+    stats_sender: AudioMixerStatsSender,
     resampler: Option<InputResampler>,
 }
 
 impl InputProcessor {
-    pub fn new(mixing_sample_rate: u32) -> Self {
+    pub fn new(mixing_sample_rate: u32, stats_sender: AudioMixerStatsSender) -> Self {
         Self {
             mixing_sample_rate,
+            stats_sender,
             resampler: None,
         }
     }
@@ -60,11 +63,22 @@ impl InputProcessor {
         let input_sample_rate = batch.sample_rate;
 
         let resampler = self.resampler.get_or_insert_with(|| {
-            InputResampler::new(input_sample_rate, self.mixing_sample_rate, channels).unwrap()
+            InputResampler::new(
+                input_sample_rate,
+                self.mixing_sample_rate,
+                channels,
+                self.stats_sender.clone(),
+            )
+            .unwrap()
         });
         if resampler.channels() != channels || resampler.input_sample_rate() != input_sample_rate {
-            *resampler =
-                InputResampler::new(input_sample_rate, self.mixing_sample_rate, channels).unwrap();
+            *resampler = InputResampler::new(
+                input_sample_rate,
+                self.mixing_sample_rate,
+                channels,
+                self.stats_sender.clone(),
+            )
+            .unwrap();
         }
         resampler.write_batch(batch);
     }
