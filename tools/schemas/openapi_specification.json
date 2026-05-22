@@ -4227,7 +4227,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -4274,7 +4274,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
                   }
                 ]
               },
