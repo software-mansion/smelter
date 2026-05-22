@@ -32,6 +32,12 @@ pub enum MoqServerError {
     #[error("Input {0} already has an active broadcast connection.")]
     BroadcastAlreadyActive(InputId),
 
+    #[error("Broadcast path \"{broadcast_path}\" is already used by input \"{existing_input}\".")]
+    BroadcastPathAlreadyUsed {
+        broadcast_path: Arc<str>,
+        existing_input: InputId,
+    },
+
     #[error("Broadcast path \"{0}\" not found among registered inputs.")]
     BroadcastPathNotFound(Arc<str>),
 }
