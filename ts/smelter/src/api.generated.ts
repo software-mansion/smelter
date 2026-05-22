@@ -81,6 +81,10 @@ export type RegisterInput =
   | {
       type: "moq_server";
       /**
+       * The MoQ broadcast path that Smelter listens on for incoming streams. A publishing client must announce this broadcast path for the input to receive media.
+       */
+      broadcast_path: string;
+      /**
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
