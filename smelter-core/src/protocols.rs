@@ -3,6 +3,7 @@ mod hls;
 mod mp4;
 mod rtmp;
 mod rtp;
+mod srt;
 mod v4l2;
 mod webrtc;
 
@@ -11,6 +12,7 @@ pub use hls::*;
 pub use mp4::*;
 pub use rtmp::*;
 pub use rtp::*;
+pub use srt::*;
 pub use v4l2::*;
 pub use webrtc::*;
 

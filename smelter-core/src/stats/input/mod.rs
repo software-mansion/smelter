@@ -65,6 +65,7 @@ impl InputStatsState {
             InputProtocolKind::Rtmp => InputStatsState::Rtmp(RtmpInputState::new()),
             InputProtocolKind::Mp4 => InputStatsState::Mp4(Mp4InputState::new()),
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
+            InputProtocolKind::Srt => unimplemented!(),
             InputProtocolKind::V4l2 => unimplemented!(),
             InputProtocolKind::DeckLink => unimplemented!(),
             InputProtocolKind::RawDataChannel => unimplemented!(),

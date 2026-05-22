@@ -2,8 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use axum::response::IntoResponse;
 use smelter_core::{
-    Pipeline, PipelineOptions, PipelineRtmpServerOptions, PipelineWgpuOptions,
-    PipelineWhipWhepServerOptions, error::InitPipelineError, protocols::WebrtcUdpPortStrategy,
+    Pipeline, PipelineOptions, PipelineRtmpServerOptions, PipelineSrtServerOptions,
+    PipelineWgpuOptions, PipelineWhipWhepServerOptions, error::InitPipelineError,
+    protocols::WebrtcUdpPortStrategy,
 };
 use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 
@@ -148,6 +149,12 @@ pub fn pipeline_options_from_config(
                 tls_config: opt.rtmp_tls_config.clone(),
             },
             false => PipelineRtmpServerOptions::Disable,
+        },
+        srt_server: match opt.srt_enable {
+            true => PipelineSrtServerOptions::Enable {
+                port: opt.srt_server_port,
+            },
+            false => PipelineSrtServerOptions::Disable,
         },
     }
 }
