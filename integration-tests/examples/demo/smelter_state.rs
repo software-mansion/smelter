@@ -155,7 +155,7 @@ impl SmelterState {
             InputProtocol::Moq => {
                 let moq_input = MoqInputBuilder::new().prompt()?.build();
                 let register_request = moq_input.serialize_register();
-                (InputHandle::Moq(moq_input), register_request)
+                (InputHandle::MoqServer(moq_input), register_request)
             }
         };
 
