@@ -62,6 +62,15 @@ impl MoqInputsState {
                 input_ref.id().clone(),
             ));
         }
+        if let Some((existing_ref, _)) = guard
+            .iter()
+            .find(|(_, input)| input.broadcast_path == options.broadcast_path)
+        {
+            return Err(MoqServerError::BroadcastPathAlreadyUsed {
+                broadcast_path: options.broadcast_path,
+                existing_input: existing_ref.id().clone(),
+            });
+        }
         guard.insert(input_ref.clone(), MoqInputState::new(options));
         Ok(())
     }
