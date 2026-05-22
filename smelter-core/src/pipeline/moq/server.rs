@@ -122,7 +122,6 @@ async fn run_accept_loop(mut server: moq_native::Server, moq_sessions: MoqSessio
     }
 }
 
-// Waits for and handles broadcast announcements from the publishers
 async fn run_announce_loop(
     mut origin_consumer: OriginConsumer,
     moq_inputs: MoqInputsState,
