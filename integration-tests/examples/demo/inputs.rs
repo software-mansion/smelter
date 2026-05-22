@@ -26,7 +26,7 @@ pub enum InputHandle {
     Hls(HlsInput),
     Whip(WhipInput),
     Whep(WhepInput),
-    Moq(MoqInput),
+    MoqServer(MoqInput),
 }
 
 impl InputHandle {
@@ -38,7 +38,7 @@ impl InputHandle {
             Self::Hls(i) => &i.name,
             Self::Whip(i) => &i.name,
             Self::Whep(i) => &i.name,
-            Self::Moq(i) => &i.name,
+            Self::MoqServer(i) => &i.name,
         }
     }
 
@@ -50,7 +50,7 @@ impl InputHandle {
             Self::Hls(i) => i.serialize_register(),
             Self::Whip(i) => i.serialize_register(),
             Self::Whep(i) => i.serialize_register(),
-            Self::Moq(i) => i.serialize_register(),
+            Self::MoqServer(i) => i.serialize_register(),
         }
     }
 
@@ -83,7 +83,7 @@ impl InputHandle {
             Self::Rtp(i) => i.on_after_registration(),
             Self::Rtmp(i) => i.on_after_registration(),
             Self::Whip(i) => i.on_after_registration(),
-            Self::Moq(i) => i.on_after_registration(),
+            Self::MoqServer(i) => i.on_after_registration(),
             _ => Ok(()),
         }
     }
