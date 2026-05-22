@@ -11,6 +11,7 @@ import type {
   RegisterWhepServerOutput,
   RegisterWhipServerInput,
   RegisterWhipClientOutput,
+  RegisterMoqServerInput,
   RegisterV4l2Input,
 } from '@swmansion/smelter';
 

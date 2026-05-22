@@ -177,6 +177,7 @@ function intoRtmpRegisterInput(input: Inputs.RegisterRtmpServerInput): RegisterI
 function intoMoqRegisterInput(input: Inputs.RegisterMoqServerInput): RegisterInputRequest {
   return {
     type: 'moq_server',
+    broadcast_path: input.broadcastPath,
     required: input.required,
     decoder_map: input.decoderMap,
     side_channel: input.sideChannel,
