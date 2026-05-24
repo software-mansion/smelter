@@ -13,6 +13,7 @@ use crate::inputs::InputHandle;
 use crate::inputs::hls::HlsInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::rtmp::RtmpInputBuilder;
+use crate::inputs::srt::SrtInputBuilder;
 use crate::inputs::whep::WhepInputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
 
@@ -150,6 +151,11 @@ impl SmelterState {
                 let hls_input = HlsInputBuilder::new().prompt()?.build();
                 let register_request = hls_input.serialize_register();
                 (InputHandle::Hls(hls_input), register_request)
+            }
+            InputProtocol::Srt => {
+                let srt_input = SrtInputBuilder::new().prompt()?.build();
+                let register_request = srt_input.serialize_register();
+                (InputHandle::Srt(srt_input), register_request)
             }
         };
 
