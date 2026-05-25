@@ -6,7 +6,6 @@ pub(crate) mod utils;
 
 pub use ctx::WgpuCtx;
 pub use ctx::{required_wgpu_features, set_required_wgpu_limits};
-use tracing::error;
 pub use wgpu::Features as WgpuFeatures;
 
 #[must_use]
@@ -61,7 +60,7 @@ impl Drop for WgpuErrorScope {
         };
         for scope in scopes.into_iter().rev() {
             if let Some(err) = pollster::block_on(scope.pop()) {
-                error!("Wgpu error in dropped scope: {err}");
+                tracing::error!("Wgpu error in dropped scope: {err}");
             }
         }
     }
