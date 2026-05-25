@@ -11,8 +11,12 @@ use crate::{
 
 use crate::prelude::*;
 
-pub struct MoqClientInput {
-    _task: tokio::task::JoinHandle<()>,
+pub struct MoqClientInput(tokio::task::JoinHandle<()>);
+
+impl Drop for MoqClientInput {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 impl MoqClientInput {
@@ -51,7 +55,7 @@ impl MoqClientInput {
         });
 
         Ok((
-            Input::MoqClient(Self { _task: task }),
+            Input::MoqClient(Self(task)),
             InputInitInfo::Other,
             queue_input,
         ))
@@ -102,10 +106,4 @@ async fn run_moq_client(
     Err(anyhow::anyhow!(
         "MoQ relay closed without announcing the requested broadcast"
     ))
-}
-
-impl Drop for MoqClientInput {
-    fn drop(&mut self) {
-        self._task.abort();
-    }
 }
