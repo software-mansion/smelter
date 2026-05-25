@@ -52,9 +52,18 @@ pub enum MoqServerError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MoqClientError {
-    #[error("Failed to connect to MoQ relay.")]
+    #[error("Failed to parse URL: {0}")]
+    UrlParseError(#[from] url::ParseError),
+
+    #[error("Failed to connect to MoQ relay: {0}")]
     ConnectionError(#[source] anyhow::Error),
+
+    #[error("Failed to initialize MoQ client: {0}")]
+    ClientInitError(#[source] anyhow::Error),
 
     #[error("Broadcast not found on the MoQ relay.")]
     BroadcastNotFound,
+
+    #[error("MoQ relay closed without announcing the requested broadcast.")]
+    BroadcastNotAnnounced,
 }

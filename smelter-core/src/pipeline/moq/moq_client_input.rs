@@ -27,16 +27,14 @@ impl MoqClientInput {
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
         let decoders = options.decoders;
-        let url: Url = options.url.parse().map_err(|err: url::ParseError| {
-            MoqClientError::ConnectionError(anyhow::anyhow!(err))
-        })?;
+        let url: Url = options.url.parse().map_err(MoqClientError::UrlParseError)?;
         let broadcast_path = options.broadcast_path;
 
         let task_ctx = ctx.clone();
         let task_input_ref = input_ref.clone();
         let task_queue_input = queue_input.clone();
 
-        let task = ctx.tokio_rt.spawn(async move {
+        let client_handle = ctx.tokio_rt.spawn(async move {
             if let Err(err) = run_moq_client(
                 task_ctx,
                 task_input_ref.clone(),
@@ -55,7 +53,7 @@ impl MoqClientInput {
         });
 
         Ok((
-            Input::MoqClient(Self(task)),
+            Input::MoqClient(Self(client_handle)),
             InputInitInfo::Other,
             queue_input,
         ))
@@ -69,7 +67,7 @@ async fn run_moq_client(
     queue_input: QueueInput,
     url: Url,
     broadcast_path: Arc<str>,
-) -> anyhow::Result<()> {
+) -> Result<(), MoqClientError> {
     let mut config = moq_native::ClientConfig::default();
 
     // TODO: (@jbrs) This is fine for the experimental, however will need to be addressed in the
@@ -79,8 +77,14 @@ async fn run_moq_client(
     let origin = Origin::random().produce();
     let mut origin_consumer = origin.consume();
 
-    let client = config.init()?.with_consume(origin);
-    let session = client.connect(url).await?;
+    let client = config
+        .init()
+        .map_err(MoqClientError::ClientInitError)?
+        .with_consume(origin);
+    let session = client
+        .connect(url)
+        .await
+        .map_err(MoqClientError::ConnectionError)?;
 
     info!(input_id = %input_ref, "MoQ client connected to relay");
 
@@ -103,7 +107,5 @@ async fn run_moq_client(
         }
     }
 
-    Err(anyhow::anyhow!(
-        "MoQ relay closed without announcing the requested broadcast"
-    ))
+    Err(MoqClientError::BroadcastNotAnnounced)
 }
