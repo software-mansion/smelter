@@ -3,8 +3,8 @@ fn main() {
     use std::io::Write;
 
     use gpu_video::{
-        EncodedInputChunk, OutputFrame, VulkanInstance,
-        parameters::{DecoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor},
+        EncodedInputChunk, OutputFrame, VideoInstance,
+        parameters::{DecoderParameters, VideoAdapterDescriptor, VideoDeviceDescriptor},
     };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -21,15 +21,15 @@ fn main() {
 
     let h264_bytestream = std::fs::read(&args[1]).unwrap_or_else(|_| panic!("read {}", args[1]));
 
-    let vulkan_instance = VulkanInstance::new().unwrap();
+    let vulkan_instance = VideoInstance::new().unwrap();
     let vulkan_adapter = vulkan_instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
+        .create_adapter(&VideoAdapterDescriptor::default())
         .unwrap();
-    let vulkan_device = vulkan_adapter
-        .create_device(&VulkanDeviceDescriptor::default())
+    let device = vulkan_adapter
+        .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
-    let mut decoder = vulkan_device
+    let mut decoder = device
         .create_bytes_decoder_h264(DecoderParameters::default())
         .unwrap();
 

@@ -1,6 +1,8 @@
+mod global_registry;
 mod nv12_to_rgba;
 mod rgba_to_nv12;
 
+pub use global_registry::*;
 pub use nv12_to_rgba::*;
 pub use rgba_to_nv12::*;
 

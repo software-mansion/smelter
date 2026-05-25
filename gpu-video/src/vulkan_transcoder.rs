@@ -3,8 +3,8 @@ use std::{num::NonZeroU32, sync::Arc};
 use ash::vk;
 
 use crate::{
-    DecoderError, EncodedInputChunk, EncodedOutputChunk, OutputFrame, VulkanCommonError,
-    VulkanDevice, VulkanEncoderError,
+    DecoderError, EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoDevice,
+    VulkanCommonError, VulkanEncoderError,
     codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
     device::{EncoderOutputParameters, Rational},
     parameters::{H264Profile, H265Profile, ScalingAlgorithm},
@@ -39,6 +39,10 @@ pub enum TranscoderError {
 
     #[error("Wrong output number: expected a value between 0 and {expected_max}, found {actual}")]
     WrongOutputNumber { expected_max: usize, actual: usize },
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    RegistryError(#[from] crate::RegistryError),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -78,7 +82,7 @@ pub(crate) struct ResizedImages {
 }
 
 pub struct Transcoder {
-    device: Arc<VulkanDevice>,
+    device: Arc<VideoDevice>,
     decoder: VulkanDecoder<'static>,
     parser: H264Parser,
     reference_ctx: ReferenceContext,
@@ -89,7 +93,7 @@ pub struct Transcoder {
 
 impl Transcoder {
     pub(crate) fn new(
-        device: Arc<VulkanDevice>,
+        device: Arc<VideoDevice>,
         config: TranscoderParameters,
     ) -> Result<Self, TranscoderError> {
         let decoder = VulkanDecoder::new(

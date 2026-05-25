@@ -16,6 +16,7 @@ use crate::{
 
 /// A decoder that outputs frames stored as [`wgpu::Texture`]s
 pub struct WgpuTexturesDecoder {
+    pub(crate) wgpu_device: wgpu::Device,
     pub(crate) vulkan_decoder: VulkanDecoder<'static>,
     pub(crate) parser: H264Parser,
     pub(crate) reference_ctx: ReferenceContext,
@@ -74,7 +75,9 @@ impl WgpuTexturesDecoder {
         access_units: Vec<AccessUnit>,
     ) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
         let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
-        let unsorted_frames = self.vulkan_decoder.decode_to_wgpu_textures(&instructions)?;
+        let unsorted_frames = self
+            .vulkan_decoder
+            .decode_to_wgpu_textures(&self.wgpu_device, &instructions)?;
         let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
         Ok(sorted_frames)
     }
@@ -82,6 +85,8 @@ impl WgpuTexturesDecoder {
 
 /// An H.265 (HEVC) encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
 pub struct WgpuTexturesEncoderH265 {
+    pub(crate) wgpu_device: wgpu::Device,
+    pub(crate) wgpu_queue: wgpu::Queue,
     pub(crate) vulkan_encoder: VulkanEncoder<'static, H265Codec>,
 }
 
@@ -96,7 +101,12 @@ impl WgpuTexturesEncoderH265 {
         frame: InputFrame<wgpu::Texture>,
         force_keyframe: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        self.vulkan_encoder.encode_texture(frame, force_keyframe)
+        self.vulkan_encoder.encode_texture(
+            &self.wgpu_device,
+            &self.wgpu_queue,
+            frame,
+            force_keyframe,
+        )
     }
 
     /// Retrieve encoded VPS NAL units from the video session parameters, in Annex B.
@@ -141,6 +151,8 @@ impl WgpuTexturesEncoderH265 {
 
 /// An H.264 (AVC) encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
 pub struct WgpuTexturesEncoderH264 {
+    pub(crate) wgpu_device: wgpu::Device,
+    pub(crate) wgpu_queue: wgpu::Queue,
     pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
 }
 
@@ -155,7 +167,12 @@ impl WgpuTexturesEncoderH264 {
         frame: InputFrame<wgpu::Texture>,
         force_keyframe: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        self.vulkan_encoder.encode_texture(frame, force_keyframe)
+        self.vulkan_encoder.encode_texture(
+            &self.wgpu_device,
+            &self.wgpu_queue,
+            frame,
+            force_keyframe,
+        )
     }
 
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.

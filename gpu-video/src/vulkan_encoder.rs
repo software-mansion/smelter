@@ -64,6 +64,10 @@ pub enum VulkanEncoderError {
     #[cfg(feature = "wgpu")]
     #[error(transparent)]
     WgpuTextureEncoderError(#[from] WgpuTextureEncoderError),
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    RegistryError(#[from] crate::RegistryError),
 }
 
 #[cfg(feature = "wgpu")]
@@ -714,6 +718,8 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     #[cfg(feature = "wgpu")]
     fn copy_wgpu_texture_to_image(
         &mut self,
+        wgpu_device: &wgpu::Device,
+        wgpu_queue: &wgpu::Queue,
         frame: &InputFrame<wgpu::Texture>,
     ) -> Result<wgpu::hal::vulkan::CommandEncoder, WgpuTextureEncoderError> {
         use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
@@ -739,13 +745,8 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             });
         }
 
-        let hal_device = unsafe {
-            self.encoding_device
-                .wgpu_device()
-                .as_hal::<VkApi>()
-                .unwrap()
-        };
-        let hal_queue = unsafe { self.encoding_device.wgpu_queue().as_hal::<VkApi>().unwrap() };
+        let hal_device = unsafe { wgpu_device.as_hal::<VkApi>().unwrap() };
+        let hal_queue = unsafe { wgpu_queue.as_hal::<VkApi>().unwrap() };
 
         let input_image_clone = self.input_image.clone();
         let hal_texture = unsafe {
@@ -770,29 +771,24 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         };
 
         let texture = unsafe {
-            self.encoding_device
-                .wgpu_device()
-                .create_texture_from_hal::<VkApi>(
-                    hal_texture,
-                    &wgpu::TextureDescriptor {
-                        label: None,
-                        size: encode_texture_extent,
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: wgpu::TextureFormat::NV12,
-                        usage: wgpu::TextureUsages::COPY_DST,
-                        view_formats: &[],
-                    },
-                    wgpu::TextureUses::UNINITIALIZED,
-                )
+            wgpu_device.create_texture_from_hal::<VkApi>(
+                hal_texture,
+                &wgpu::TextureDescriptor {
+                    label: None,
+                    size: encode_texture_extent,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::NV12,
+                    usage: wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                },
+                wgpu::TextureUses::UNINITIALIZED,
+            )
         };
 
         // Copy is on the wgpu core queue because it will handle `frame.data` layout transitions for us
-        let mut encoder = self
-            .encoding_device
-            .wgpu_device()
-            .create_command_encoder(&Default::default());
+        let mut encoder = wgpu_device.create_command_encoder(&Default::default());
         encoder.copy_texture_to_texture(
             frame.data.as_image_copy(),
             texture.as_image_copy(),
@@ -801,7 +797,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
 
         // TODO: dont wait for all here
         self.tracker.wait_for_all(u64::MAX)?;
-        self.encoding_device.wgpu_queue().submit([encoder.finish()]);
+        wgpu_queue.submit([encoder.finish()]);
 
         self.tracker
             .image_layout_tracker
@@ -884,10 +880,12 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     #[cfg(feature = "wgpu")]
     pub fn encode_texture(
         &mut self,
+        wgpu_device: &wgpu::Device,
+        wgpu_queue: &wgpu::Queue,
         frame: InputFrame<wgpu::Texture>,
         force_idr: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let _cmd_encoder = self.copy_wgpu_texture_to_image(&frame)?;
+        let _cmd_encoder = self.copy_wgpu_texture_to_image(wgpu_device, wgpu_queue, &frame)?;
 
         self.encode(self.input_image.clone(), force_idr, frame.pts)?
             .wait_and_download(u64::MAX)
