@@ -23,7 +23,7 @@ use crate::{
             fdk_aac::FdkAacDecoder,
             ffmpeg_h264, vulkan_h264,
         },
-        moq::state::MoqInputState,
+        moq::state::MoqServerInputState,
     },
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
     utils::InitializableThread,
@@ -56,7 +56,7 @@ struct DiscoveredTracks {
 pub(crate) fn spawn_broadcast_handler(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    input: &MoqInputState,
+    input: &MoqServerInputState,
     broadcast: BroadcastConsumer,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let queue_input = input.queue_input.upgrade()?;

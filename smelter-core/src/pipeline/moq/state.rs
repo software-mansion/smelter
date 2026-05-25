@@ -11,10 +11,10 @@ use crate::queue::WeakQueueInput;
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct MoqInputsState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>>);
+pub(crate) struct MoqServerInputsState(Arc<Mutex<HashMap<Ref<InputId>, MoqServerInputState>>>);
 
 #[derive(Debug)]
-pub(crate) struct MoqInputState {
+pub(crate) struct MoqServerInputState {
     pub broadcast_path: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: MoqInputDecoders,
@@ -27,7 +27,7 @@ pub(crate) struct MoqInputStateOptions {
     pub decoders: MoqInputDecoders,
 }
 
-impl MoqInputState {
+impl MoqServerInputState {
     fn new(options: MoqInputStateOptions) -> Self {
         Self {
             broadcast_path: options.broadcast_path,
@@ -38,8 +38,8 @@ impl MoqInputState {
     }
 }
 
-impl MoqInputsState {
-    pub fn get_mut_with<T, F: FnOnce(&mut MoqInputState) -> Result<T, MoqServerError>>(
+impl MoqServerInputsState {
+    pub fn get_mut_with<T, F: FnOnce(&mut MoqServerInputState) -> Result<T, MoqServerError>>(
         &self,
         input_ref: &Ref<InputId>,
         f: F,
@@ -71,7 +71,7 @@ impl MoqInputsState {
                 existing_input: existing_ref.id().clone(),
             });
         }
-        guard.insert(input_ref.clone(), MoqInputState::new(options));
+        guard.insert(input_ref.clone(), MoqServerInputState::new(options));
         Ok(())
     }
 
@@ -102,7 +102,7 @@ impl MoqInputsState {
     }
 }
 
-impl MoqInputState {
+impl MoqServerInputState {
     pub fn ensure_no_active_connection(
         &self,
         input_ref: &Ref<InputId>,
