@@ -1,5 +1,5 @@
 use std::env::VarError;
-use std::{env, fs, mem};
+use std::{env, fs, mem, thread, time::Duration};
 
 use anyhow::{Context, Result};
 use inquire::{CustomType, Select};
@@ -368,6 +368,65 @@ impl SmelterState {
         Ok(())
     }
 
+    pub fn reconnect(&mut self) -> Result<()> {
+        let mut items: Vec<ReconnectItem> = Vec::new();
+
+        for (idx, input) in self.inputs.iter().enumerate() {
+            if input.is_client() {
+                items.push(ReconnectItem::Input(OrderedItem::new(idx, input.name())));
+            }
+        }
+        for (idx, output) in self.outputs.iter().enumerate() {
+            if output.is_client() {
+                items.push(ReconnectItem::Output(OrderedItem::new(idx, output.name())));
+            }
+        }
+
+        if items.is_empty() {
+            println!("No client inputs or outputs to reconnect.");
+            return Ok(());
+        }
+
+        let selected = Select::new("Select client to reconnect:", items).prompt()?;
+
+        match selected {
+            ReconnectItem::Input(item) => {
+                let input = &self.inputs[item.idx];
+                let unregister_route = format!("input/{}/unregister", input.name());
+                examples::post(&unregister_route, &json!({}))
+                    .with_context(|| "Input unregistration failed".to_string())?;
+
+                thread::sleep(Duration::from_secs(1));
+
+                let input = &mut self.inputs[item.idx];
+                let register_json = input.serialize_register();
+                let register_route = format!("input/{}/register", input.name());
+                input.on_before_registration()?;
+                examples::post(&register_route, &register_json)
+                    .with_context(|| "Input registration failed".to_string())?;
+                input.on_after_registration()?;
+            }
+            ReconnectItem::Output(item) => {
+                let output = &self.outputs[item.idx];
+                let unregister_route = format!("output/{}/unregister", output.name());
+                examples::post(&unregister_route, &json!({}))
+                    .with_context(|| "Output unregistration failed".to_string())?;
+
+                thread::sleep(Duration::from_secs(1));
+
+                let output = &mut self.outputs[item.idx];
+                let register_json = output.serialize_register(&self.inputs);
+                let register_route = format!("output/{}/register", output.name());
+                output.on_before_registration()?;
+                examples::post(&register_route, &register_json)
+                    .with_context(|| "Output registration failed".to_string())?;
+                output.on_after_registration()?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn json_dump(&self) -> Result<()> {
         let json = serde_json::to_value(self)?;
         Ok(fs::write(JSON_BASE, serde_json::to_string_pretty(&json)?)?)
@@ -392,5 +451,19 @@ impl OrderedItem {
 impl std::fmt::Display for OrderedItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}. {}", self.idx + 1, self.name)
+    }
+}
+
+enum ReconnectItem {
+    Input(OrderedItem),
+    Output(OrderedItem),
+}
+
+impl std::fmt::Display for ReconnectItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Input(item) => write!(f, "[input] {}", item.name),
+            Self::Output(item) => write!(f, "[output] {}", item.name),
+        }
     }
 }

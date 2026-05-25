@@ -49,6 +49,9 @@ pub enum Action {
     #[strum(to_string = "Reset")]
     Reset,
 
+    #[strum(to_string = "Reconnect")]
+    Reconnect,
+
     #[strum(to_string = "JSON dump")]
     JsonDump,
 }
@@ -120,6 +123,7 @@ fn run_demo() {
                     Err(e) => Err(e.context("Start request failed")),
                 }
             }
+            Action::Reconnect => state.reconnect(),
             Action::JsonDump => state.json_dump(),
         };
 

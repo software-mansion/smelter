@@ -45,6 +45,10 @@ impl OutputHandle {
         }
     }
 
+    pub fn is_client(&self) -> bool {
+        matches!(self, Self::Rtmp(_) | Self::Whip(_))
+    }
+
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         match self {
             OutputHandle::Rtp(o) => o.serialize_register(inputs),

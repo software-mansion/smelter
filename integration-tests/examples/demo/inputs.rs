@@ -58,6 +58,10 @@ impl InputHandle {
         }
     }
 
+    pub fn is_client(&self) -> bool {
+        matches!(self, Self::Whep(_) | Self::MoqClient(_))
+    }
+
     pub fn has_video(&self) -> bool {
         match self {
             Self::Rtp(i) => i.has_video(),
