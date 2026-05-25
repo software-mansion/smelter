@@ -41,7 +41,7 @@ pub struct InputInfo {
 pub enum InputProtocolKind {
     Rtp,
     Rtmp,
-    Moq,
+    MoqServer,
     Mp4,
     Hls,
     Whip,
@@ -56,7 +56,7 @@ impl fmt::Display for InputProtocolKind {
         match self {
             InputProtocolKind::Rtp => write!(f, "rtp"),
             InputProtocolKind::Rtmp => write!(f, "rtmp"),
-            InputProtocolKind::Moq => write!(f, "moq"),
+            InputProtocolKind::MoqServer => write!(f, "moq_server"),
             InputProtocolKind::Mp4 => write!(f, "mp4"),
             InputProtocolKind::Hls => write!(f, "hls"),
             InputProtocolKind::Whip => write!(f, "whip"),
