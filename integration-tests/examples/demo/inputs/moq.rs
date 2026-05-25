@@ -19,7 +19,6 @@ impl MoqInput {
         json!({
             "type": "moq_server",
             "broadcast_path": self.broadcast_path,
-            "required": true,
         })
     }
 
