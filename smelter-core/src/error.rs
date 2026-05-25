@@ -246,6 +246,9 @@ pub enum InputInitError {
     #[error(transparent)]
     Moq(#[from] MoqServerError),
 
+    #[error(transparent)]
+    MoqClient(#[from] MoqClientError),
+
     #[cfg(feature = "decklink")]
     #[error(transparent)]
     DeckLink(#[from] DeckLinkInputError),

@@ -84,6 +84,7 @@ pub async fn status_handler(
                 InputProtocolKind::DeckLink => "decklink",
                 InputProtocolKind::RawDataChannel => "raw_data",
                 InputProtocolKind::MoqServer => "moq_server",
+                InputProtocolKind::MoqClient => "moq_client",
             };
             InputInfo {
                 input_id: id.to_string(),

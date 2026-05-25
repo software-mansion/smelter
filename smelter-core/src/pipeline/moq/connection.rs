@@ -64,59 +64,73 @@ pub(crate) fn spawn_broadcast_handler(
     let decoders = input.decoders.clone();
     let rt = ctx.tokio_rt.clone();
 
-    let handle = rt.spawn(async move {
-        let input_id_str = input_ref.to_string();
-        info!(input_id = %input_id_str, "MoQ broadcast connection established");
-
-        let mut discovered = match read_catalog(&broadcast).await {
-            Ok(d) => d,
-            Err(err) => {
-                warn!(
-                    input_id = %input_id_str,
-                    "MoQ catalog error: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-                return;
-            }
-        };
-
-        let has_video = discovered.video.is_some();
-        let has_audio = discovered.audio.is_some();
-
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: has_video,
-            audio: has_audio,
-            offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_BUFFER),
-        });
-
-        if let Some(v) = &discovered.video {
-            info!(input_id = %input_id_str, track = %v.name, "Discovered MoQ video track");
-        }
-        if let Some(a) = &discovered.audio {
-            info!(input_id = %input_id_str, track = %a.name, "Discovered MoQ audio track");
-        }
-
-        let (video_decoder_handle, audio_decoder_handle) = spawn_decoders(
-            &ctx,
-            &input_ref,
-            &decoders,
-            &discovered,
-            video_sender,
-            audio_sender,
-        );
-
-        let video = discovered.video.take();
-        let audio = discovered.audio.take();
-
-        let video_fut = run_video_track(video, video_decoder_handle, &broadcast);
-
-        let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast);
-
-        tokio::join!(video_fut, audio_fut);
-        info!(input_id = %input_id_str, "MoQ broadcast connection closed");
-    });
+    let handle = rt.spawn(handle_broadcast(
+        ctx,
+        input_ref,
+        decoders,
+        queue_input,
+        broadcast,
+    ));
 
     Some(handle)
+}
+
+pub(crate) async fn handle_broadcast(
+    ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
+    decoders: MoqServerInputDecoders,
+    queue_input: crate::queue::QueueInput,
+    broadcast: BroadcastConsumer,
+) {
+    let input_id_str = input_ref.to_string();
+    info!(input_id = %input_id_str, "MoQ broadcast connection established");
+
+    let mut discovered = match read_catalog(&broadcast).await {
+        Ok(d) => d,
+        Err(err) => {
+            warn!(
+                input_id = %input_id_str,
+                "MoQ catalog error: {}",
+                ErrorStack::new(&err).into_string()
+            );
+            return;
+        }
+    };
+
+    let has_video = discovered.video.is_some();
+    let has_audio = discovered.audio.is_some();
+
+    let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+        video: has_video,
+        audio: has_audio,
+        offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_BUFFER),
+    });
+
+    if let Some(v) = &discovered.video {
+        info!(input_id = %input_id_str, track = %v.name, "Discovered MoQ video track");
+    }
+    if let Some(a) = &discovered.audio {
+        info!(input_id = %input_id_str, track = %a.name, "Discovered MoQ audio track");
+    }
+
+    let (video_decoder_handle, audio_decoder_handle) = spawn_decoders(
+        &ctx,
+        &input_ref,
+        &decoders,
+        &discovered,
+        video_sender,
+        audio_sender,
+    );
+
+    let video = discovered.video.take();
+    let audio = discovered.audio.take();
+
+    let video_fut = run_video_track(video, video_decoder_handle, &broadcast);
+
+    let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast);
+
+    tokio::join!(video_fut, audio_fut);
+    info!(input_id = %input_id_str, "MoQ broadcast connection closed");
 }
 
 fn spawn_decoders(

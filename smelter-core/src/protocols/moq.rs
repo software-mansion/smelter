@@ -18,6 +18,16 @@ pub struct MoqServerInputDecoders {
     pub aac: Option<AudioDecoderOptions>,
 }
 
+pub type MoqClientInputDecoders = MoqServerInputDecoders;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MoqClientInputOptions {
+    pub url: Arc<str>,
+    pub broadcast_path: Arc<str>,
+    pub decoders: MoqClientInputDecoders,
+    pub queue_options: QueueInputOptions,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum MoqServerError {
     #[error("MoQ server is not running, cannot start MoQ input.")]
@@ -40,4 +50,13 @@ pub enum MoqServerError {
 
     #[error("Broadcast path \"{0}\" not found among registered inputs.")]
     BroadcastPathNotFound(Arc<str>),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MoqClientError {
+    #[error("Failed to connect to MoQ relay.")]
+    ConnectionError(#[source] anyhow::Error),
+
+    #[error("Broadcast not found on the MoQ relay.")]
+    BroadcastNotFound,
 }
