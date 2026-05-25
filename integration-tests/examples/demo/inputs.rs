@@ -58,6 +58,19 @@ impl InputHandle {
         }
     }
 
+    pub fn protocol(&self) -> InputProtocol {
+        match self {
+            Self::Rtp(_) => InputProtocol::Rtp,
+            Self::Rtmp(_) => InputProtocol::Rtmp,
+            Self::Mp4(_) => InputProtocol::Mp4,
+            Self::Hls(_) => InputProtocol::Hls,
+            Self::Whip(_) => InputProtocol::Whip,
+            Self::Whep(_) => InputProtocol::Whep,
+            Self::MoqServer(_) => InputProtocol::MoqServer,
+            Self::MoqClient(_) => InputProtocol::MoqClient,
+        }
+    }
+
     pub fn is_client(&self) -> bool {
         matches!(self, Self::Whep(_) | Self::MoqClient(_))
     }

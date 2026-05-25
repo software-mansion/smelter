@@ -45,6 +45,17 @@ impl OutputHandle {
         }
     }
 
+    pub fn protocol(&self) -> OutputProtocol {
+        match self {
+            Self::Rtp(_) => OutputProtocol::Rtp,
+            Self::Rtmp(_) => OutputProtocol::Rtmp,
+            Self::Mp4(_) => OutputProtocol::Mp4,
+            Self::Whip(_) => OutputProtocol::Whip,
+            Self::Whep(_) => OutputProtocol::Whep,
+            Self::Hls(_) => OutputProtocol::Hls,
+        }
+    }
+
     pub fn is_client(&self) -> bool {
         matches!(self, Self::Rtmp(_) | Self::Whip(_))
     }

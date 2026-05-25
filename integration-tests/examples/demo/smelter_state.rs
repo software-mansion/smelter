@@ -373,12 +373,18 @@ impl SmelterState {
 
         for (idx, input) in self.inputs.iter().enumerate() {
             if input.is_client() {
-                items.push(ReconnectItem::Input(OrderedItem::new(idx, input.name())));
+                items.push(ReconnectItem::Input {
+                    item: OrderedItem::new(idx, input.name()),
+                    protocol: input.protocol(),
+                });
             }
         }
         for (idx, output) in self.outputs.iter().enumerate() {
             if output.is_client() {
-                items.push(ReconnectItem::Output(OrderedItem::new(idx, output.name())));
+                items.push(ReconnectItem::Output {
+                    item: OrderedItem::new(idx, output.name()),
+                    protocol: output.protocol(),
+                });
             }
         }
 
@@ -390,7 +396,7 @@ impl SmelterState {
         let selected = Select::new("Select client to reconnect:", items).prompt()?;
 
         match selected {
-            ReconnectItem::Input(item) => {
+            ReconnectItem::Input { item, .. } => {
                 let input = &self.inputs[item.idx];
                 let unregister_route = format!("input/{}/unregister", input.name());
                 examples::post(&unregister_route, &json!({}))
@@ -406,7 +412,7 @@ impl SmelterState {
                     .with_context(|| "Input registration failed".to_string())?;
                 input.on_after_registration()?;
             }
-            ReconnectItem::Output(item) => {
+            ReconnectItem::Output { item, .. } => {
                 let output = &self.outputs[item.idx];
                 let unregister_route = format!("output/{}/unregister", output.name());
                 examples::post(&unregister_route, &json!({}))
@@ -455,15 +461,25 @@ impl std::fmt::Display for OrderedItem {
 }
 
 enum ReconnectItem {
-    Input(OrderedItem),
-    Output(OrderedItem),
+    Input {
+        item: OrderedItem,
+        protocol: InputProtocol,
+    },
+    Output {
+        item: OrderedItem,
+        protocol: OutputProtocol,
+    },
 }
 
 impl std::fmt::Display for ReconnectItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Input(item) => write!(f, "[input] {}", item.name),
-            Self::Output(item) => write!(f, "[output] {}", item.name),
+            Self::Input { item, protocol } => {
+                write!(f, "[input/{}] {}", protocol, item.name)
+            }
+            Self::Output { item, protocol } => {
+                write!(f, "[output/{}] {}", protocol, item.name)
+            }
         }
     }
 }
