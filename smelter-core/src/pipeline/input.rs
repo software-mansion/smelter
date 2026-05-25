@@ -48,7 +48,7 @@ impl Input {
         match self {
             Input::Rtp(_input) => InputProtocolKind::Rtp,
             Input::RtmpServer(_input) => InputProtocolKind::Rtmp,
-            Input::MoqServer(_input) => InputProtocolKind::Moq,
+            Input::MoqServer(_input) => InputProtocolKind::MoqServer,
             Input::Mp4(_input) => InputProtocolKind::Mp4,
             Input::Whip(_input) => InputProtocolKind::Whip,
             Input::Whep(_input) => InputProtocolKind::Whep,
