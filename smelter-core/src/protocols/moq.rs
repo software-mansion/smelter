@@ -18,13 +18,11 @@ pub struct MoqInputDecoders {
     pub aac: Option<AudioDecoderOptions>,
 }
 
-pub type MoqClientInputDecoders = MoqInputDecoders;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoqClientInputOptions {
     pub url: Arc<str>,
     pub broadcast_path: Arc<str>,
-    pub decoders: MoqClientInputDecoders,
+    pub decoders: MoqInputDecoders,
     pub queue_options: QueueInputOptions,
 }
 
