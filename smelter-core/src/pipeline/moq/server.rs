@@ -8,14 +8,14 @@ use moq_native::{ServerConfig, ServerTlsConfig};
 use smelter_render::error::ErrorStack;
 use tracing::{debug, info, warn};
 
-use crate::pipeline::moq::{connection::spawn_broadcast_handler, state::MoqInputsState};
+use crate::pipeline::moq::{connection::spawn_broadcast_handler, state::MoqServerInputsState};
 
 use crate::prelude::*;
 
 pub struct MoqPipelineState {
     pub port: u16,
     pub origin: OriginProducer,
-    pub inputs: MoqInputsState,
+    pub inputs: MoqServerInputsState,
     pub tls_config: ServerTlsConfig,
 }
 
@@ -24,7 +24,7 @@ impl MoqPipelineState {
         Arc::new(Self {
             port,
             origin: Origin::random().produce(),
-            inputs: MoqInputsState::default(),
+            inputs: MoqServerInputsState::default(),
             tls_config,
         })
     }
@@ -124,7 +124,7 @@ async fn run_accept_loop(mut server: moq_native::Server, moq_sessions: MoqSessio
 
 async fn run_announce_loop(
     mut origin_consumer: OriginConsumer,
-    moq_inputs: MoqInputsState,
+    moq_inputs: MoqServerInputsState,
     ctx: Arc<PipelineCtx>,
 ) {
     while let Some((path, broadcast)) = origin_consumer.announced().await {
