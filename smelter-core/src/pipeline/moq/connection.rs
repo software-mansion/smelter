@@ -352,32 +352,54 @@ async fn read_video_track(
 ) -> Result<(), MoqConnectionError> {
     let mut first_pts: Option<Duration> = None;
 
+    let first_keyframe = loop {
+        let Some(frame) = consumer
+            .read()
+            .await
+            .map_err(MoqConnectionError::ContainerError)?
+        else {
+            return Ok(());
+        };
+        if frame.keyframe {
+            break frame;
+        }
+    };
+
+    send_video_frame(&mut first_pts, &decoder_handle, first_keyframe)?;
+
     while let Some(frame) = consumer
         .read()
         .await
         .map_err(MoqConnectionError::ContainerError)?
     {
-        let raw_pts: Duration = frame.timestamp.into();
-        let first = *first_pts.get_or_insert(raw_pts);
-        let pts = raw_pts.saturating_sub(first);
-        trace!(?pts, "MoQ video frame");
-        let payload = frame.payload;
-
-        let chunk = EncodedInputChunk {
-            data: payload,
-            pts,
-            dts: None,
-            kind: MediaKind::Video(VideoCodec::H264),
-            present: true,
-        };
-
-        decoder_handle
-            .chunk_sender
-            .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
+        send_video_frame(&mut first_pts, &decoder_handle, frame)?;
     }
 
     Ok(())
+}
+
+fn send_video_frame(
+    first_pts: &mut Option<Duration>,
+    decoder_handle: &DecoderThreadHandle,
+    frame: moq_mux::container::Frame,
+) -> Result<(), MoqConnectionError> {
+    let raw_pts: Duration = frame.timestamp.into();
+    let first = *first_pts.get_or_insert(raw_pts);
+    let pts = raw_pts.saturating_sub(first);
+    trace!(?pts, "MoQ video frame");
+
+    let chunk = EncodedInputChunk {
+        data: frame.payload,
+        pts,
+        dts: None,
+        kind: MediaKind::Video(VideoCodec::H264),
+        present: true,
+    };
+
+    decoder_handle
+        .chunk_sender
+        .send(PipelineEvent::Data(chunk))
+        .map_err(|_| MoqConnectionError::ChannelClosed)
 }
 
 async fn read_audio_track(

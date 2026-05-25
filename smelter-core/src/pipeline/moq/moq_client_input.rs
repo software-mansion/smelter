@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use moq_native::moq_lite::Origin;
+use moq_native::moq_lite::{Origin, Session};
 use tracing::{info, warn};
 use url::Url;
 
@@ -11,11 +11,16 @@ use crate::{
 
 use crate::prelude::*;
 
-pub struct MoqClientInput(tokio::task::JoinHandle<()>);
+type SharedSession = Arc<Mutex<Option<Session>>>;
+pub struct MoqClientInput {
+    task: tokio::task::JoinHandle<()>,
+    session: SharedSession,
+}
 
 impl Drop for MoqClientInput {
     fn drop(&mut self) {
-        self.0.abort();
+        self.task.abort();
+        self.session.lock().unwrap().take();
     }
 }
 
@@ -33,6 +38,8 @@ impl MoqClientInput {
         let task_ctx = ctx.clone();
         let task_input_ref = input_ref.clone();
         let task_queue_input = queue_input.clone();
+        let session: SharedSession = Arc::new(Mutex::new(None));
+        let task_session = session.clone();
 
         let client_handle = ctx.tokio_rt.spawn(async move {
             if let Err(err) = run_moq_client(
@@ -42,6 +49,7 @@ impl MoqClientInput {
                 task_queue_input,
                 url,
                 broadcast_path,
+                task_session,
             )
             .await
             {
@@ -53,7 +61,10 @@ impl MoqClientInput {
         });
 
         Ok((
-            Input::MoqClient(Self(client_handle)),
+            Input::MoqClient(Self {
+                task: client_handle,
+                session,
+            }),
             InputInitInfo::Other,
             queue_input,
         ))
@@ -67,6 +78,7 @@ async fn run_moq_client(
     queue_input: QueueInput,
     url: Url,
     broadcast_path: Arc<str>,
+    shared_session: SharedSession,
 ) -> Result<(), MoqClientError> {
     let mut config = moq_native::ClientConfig::default();
 
@@ -88,9 +100,7 @@ async fn run_moq_client(
 
     info!(input_id = %input_ref, "MoQ client connected to relay");
 
-    tokio::spawn(async move {
-        let _ = session.closed().await;
-    });
+    *shared_session.lock().unwrap() = Some(session);
 
     while let Some((path, broadcast)) = origin_consumer.announced().await {
         let path_str = path.to_string();
