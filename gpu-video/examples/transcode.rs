@@ -8,10 +8,11 @@ fn main() {
     };
 
     use gpu_video::{
-        EncodedInputChunk, VulkanInstance,
+        EncodedInputChunk, VideoInstance,
         parameters::{
             AnyEncoderParameters, RateControl, ScalingAlgorithm, TranscoderOutputParameters,
-            TranscoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+            TranscoderParameters, VideoAdapterDescriptor, VideoDeviceDescriptor,
+            VideoInstanceDescriptor,
         },
     };
 
@@ -45,12 +46,16 @@ fn main() {
         ScalingAlgorithm::default()
     };
 
-    let instance = VulkanInstance::new().unwrap();
+    let instance = VideoInstance::new(&VideoInstanceDescriptor {
+        enable_validations: true,
+        ..Default::default()
+    })
+    .unwrap();
     let adapter = instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
+        .create_adapter(&VideoAdapterDescriptor::default())
         .unwrap();
     let device = adapter
-        .create_device(&VulkanDeviceDescriptor::default())
+        .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
     let average_bitrate = 1_000_000;

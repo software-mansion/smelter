@@ -8,8 +8,7 @@ pub mod wgpu_context;
 #[cfg(feature = "gpu-video")]
 #[derive(Debug, Clone)]
 pub struct VulkanCtx {
-    pub device: Arc<gpu_video::VulkanDevice>,
-    pub instance: Arc<gpu_video::VulkanInstance>,
+    pub adapter_info: Arc<gpu_video::capabilities::VideoAdapterInfo>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +60,7 @@ impl GraphicsContext {
     pub fn has_vulkan_decoder_support(&self) -> bool {
         self.vulkan_ctx
             .as_ref()
-            .map(|ctx| ctx.device.supports_decoding())
+            .map(|ctx| ctx.adapter_info.supports_decoding)
             .unwrap_or(false)
     }
     #[cfg(not(feature = "gpu-video"))]
@@ -73,7 +72,7 @@ impl GraphicsContext {
     pub fn has_vulkan_encoder_support(&self) -> bool {
         self.vulkan_ctx
             .as_ref()
-            .map(|ctx| ctx.device.supports_encoding())
+            .map(|ctx| ctx.adapter_info.supports_encoding)
             .unwrap_or(false)
     }
     #[cfg(not(feature = "gpu-video"))]
@@ -84,7 +83,7 @@ impl GraphicsContext {
     #[cfg(feature = "gpu-video")]
     pub fn vulkan_h264_decode_profile_level_support(&self) -> Option<H264ProfileLevelSupport> {
         let vulkan_ctx = self.vulkan_ctx.as_ref()?;
-        let caps = vulkan_ctx.device.decode_capabilities().h264?;
+        let caps = vulkan_ctx.adapter_info.decode_capabilities.h264?;
 
         Some(H264ProfileLevelSupport {
             baseline_max_level_idc: caps.baseline_profile.map(|p| p.max_level_idc),
@@ -131,4 +130,12 @@ pub enum CreateGraphicsContextError {
     #[cfg(feature = "gpu-video")]
     #[error(transparent)]
     VulkanInitError(#[from] gpu_video::VulkanInitError),
+
+    #[cfg(feature = "gpu-video")]
+    #[error(transparent)]
+    VulkanLoadingError(#[from] ash::LoadingError),
+
+    #[cfg(feature = "gpu-video")]
+    #[error(transparent)]
+    WgpuHalInstanceError(#[from] wgpu::hal::InstanceError),
 }

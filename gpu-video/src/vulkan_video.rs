@@ -1,5 +1,5 @@
 pub mod capabilities {
-    pub use crate::adapter::AdapterInfo;
+    pub use crate::adapter::VideoAdapterInfo;
     pub use crate::device::caps::{
         DecodeCapabilities, DecodeH264Capabilities, DecodeH264ProfileCapabilities,
         DecodeH265Capabilities, DecodeH265ProfileCapabilities, EncodeCapabilities,
@@ -10,12 +10,13 @@ pub mod capabilities {
 }
 
 pub mod parameters {
-    pub use crate::adapter::VulkanAdapterDescriptor;
+    pub use crate::adapter::VideoAdapterDescriptor;
     pub use crate::device::{
         ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
-        EncoderParametersH265, MissedFrameHandling, Rational, VideoParameters,
-        VulkanDeviceDescriptor,
+        EncoderParametersH265, MissedFrameHandling, Rational, VideoDeviceDescriptor,
+        VideoParameters,
     };
+    pub use crate::instance::VideoInstanceDescriptor;
 
     pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<H264Profile>;
 
@@ -101,9 +102,14 @@ use crate::parser::h264::AccessUnit;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use ash::vk;
 
-pub use crate::adapter::VulkanAdapter;
-pub use crate::device::VulkanDevice;
-pub use crate::instance::VulkanInstance;
+#[cfg(feature = "wgpu")]
+pub use crate::adapter::VideoAdapterExt;
+#[cfg(feature = "wgpu")]
+pub use crate::device::VideoDeviceExt;
+
+pub use crate::adapter::VideoAdapter;
+pub use crate::device::VideoDevice;
+pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 pub use crate::vulkan_decoder::VulkanDecoderError;
 pub use crate::vulkan_encoder::VulkanEncoderError;
@@ -112,7 +118,7 @@ pub use crate::vulkan_transcoder::{Transcoder, TranscoderError};
 
 #[cfg(feature = "wgpu")]
 pub use crate::wgpu_helpers::{
-    WgpuConverterInitError, WgpuNv12ToRgbaConverter, WgpuRgbaToNv12Converter,
+    RegistryError, WgpuConverterInitError, WgpuNv12ToRgbaConverter, WgpuRgbaToNv12Converter,
 };
 
 use crate::parser::{
@@ -132,6 +138,10 @@ pub enum DecoderError {
 
     #[error("Reference management error: {0}")]
     ReferenceManagementError(#[from] ReferenceManagementError),
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    RegistryError(#[from] RegistryError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -142,18 +152,25 @@ pub enum VulkanInitError {
     #[error("Vulkan error: {0}")]
     VkError(#[from] vk::Result),
 
-    #[cfg(feature = "wgpu")]
-    #[error(transparent)]
-    WgpuError(#[from] WgpuInitError),
-
     #[error("Cannot find a suitable physical device")]
     NoDevice,
+
+    #[error("Missing required extension: {0}")]
+    MissingExtension(String),
 
     #[error("String conversion error: {0}")]
     StringConversionError(#[from] std::ffi::FromBytesUntilNulError),
 
     #[error("Profile does not support NV12 texture format")]
     NoNV12ProfileSupport,
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    WgpuError(#[from] WgpuInitError),
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    RegistryError(#[from] RegistryError),
 }
 
 #[derive(thiserror::Error, Debug)]

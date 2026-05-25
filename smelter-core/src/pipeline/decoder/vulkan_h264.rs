@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use gpu_video::{
-    DecoderError, H264DecoderEvent, ReferenceManagementError, WgpuTexturesDecoder,
+    DecoderError, H264DecoderEvent, ReferenceManagementError, VideoDeviceExt, WgpuTexturesDecoder,
     parameters::{DecoderParameters, DecoderUsageFlags, MissedFrameHandling},
 };
 use smelter_render::{Frame, FrameData, Resolution};
@@ -25,22 +25,23 @@ impl VideoDecoder for VulkanH264Decoder {
         ctx: &Arc<PipelineCtx>,
         keyframe_request_sender: Option<KeyframeRequestSender>,
     ) -> Result<Self, DecoderInitError> {
-        match &ctx.graphics_context.vulkan_ctx {
-            Some(vulkan_ctx) => {
-                info!("Initializing Vulkan H264 decoder");
-                let device = vulkan_ctx.device.clone();
-                let decoder = device.create_wgpu_textures_decoder_h264(DecoderParameters {
-                    missed_frame_handling: MissedFrameHandling::Strict,
-                    usage_flags: DecoderUsageFlags::DEFAULT,
-                })?;
-                Ok(Self {
-                    decoder,
-                    keyframe_request_sender,
-                    drop_frames: false,
-                })
-            }
-            None => Err(DecoderInitError::VulkanContextRequiredForVulkanDecoder),
+        if ctx.graphics_context.vulkan_ctx.is_none() {
+            return Err(DecoderInitError::VulkanContextRequiredForVulkanDecoder);
         }
+
+        info!("Initializing Vulkan H264 decoder");
+        let decoder = ctx
+            .wgpu_ctx
+            .device
+            .create_wgpu_textures_decoder_h264(DecoderParameters {
+                missed_frame_handling: MissedFrameHandling::Strict,
+                usage_flags: DecoderUsageFlags::DEFAULT,
+            })?;
+        Ok(Self {
+            decoder,
+            keyframe_request_sender,
+            drop_frames: false,
+        })
     }
 }
 

@@ -42,25 +42,30 @@ This library was developed as a part of [smelter, a tool for video composition](
 ### Decode video frame to [`wgpu::Texture`]
 
 ```rust
-fn decode_video(
-    window: &winit::window::Window,
+async fn decode_video(
     mut encoded_video_reader: impl std::io::Read,
 ) {
-    let instance = gpu_video::VulkanInstance::new().unwrap();
-    let surface = instance.wgpu_instance().create_surface(window).unwrap();
-    let adapter = instance.create_adapter(&gpu_video::parameters::VulkanAdapterDescriptor {
-        compatible_surface: Some(&surface),
-        ..Default::default()
-    }).unwrap();
-    let device = adapter
-        .create_device(&gpu_video::parameters::VulkanDeviceDescriptor::default())
+    use gpu_video::{VideoAdapterExt, VideoDeviceExt, parameters::VideoDeviceDescriptor};
+
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let adapter = instance
+        .enumerate_adapters(wgpu::Backends::VULKAN)
+        .await
+        .into_iter()
+        .find(|a| {
+            a.video_adapter_info()
+                .is_some_and(|info| info.decode_capabilities.h264.is_some())
+        })
+        .unwrap();
+    let (device, queue) = adapter
+        .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
 
     let mut decoder = device
         .create_wgpu_textures_decoder_h264(
             gpu_video::parameters::DecoderParameters::default()
         ).unwrap();
-
+        
     let mut buffer = vec![0; 4096];
 
     while let Ok(n) = encoded_video_reader.read(&mut buffer) {
@@ -85,26 +90,29 @@ fn decode_video(
 ### Encode video frame from [`wgpu::Texture`]
 
 ```rust
-fn encode_video(
-    window: &winit::window::Window,
+async fn encode_video(
     frame_receiver: std::sync::mpsc::Receiver<wgpu::Texture>,
 ) {
     use std::num::NonZeroU32;
+    use gpu_video::{VideoAdapterExt, VideoDeviceExt, parameters::VideoDeviceDescriptor};
 
-    let instance = gpu_video::VulkanInstance::new().unwrap();
-    let surface = instance.wgpu_instance().create_surface(window).unwrap();
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let adapter = instance
-        .create_adapter(&gpu_video::parameters::VulkanAdapterDescriptor {
-            compatible_surface: Some(&surface),
-            ..Default::default()
+        .enumerate_adapters(wgpu::Backends::VULKAN)
+        .await
+        .into_iter()
+        .find(|a| {
+            a.video_adapter_info()
+                .is_some_and(|info| info.encode_capabilities.h264.is_some())
         })
         .unwrap();
-    let device = adapter
-        .create_device(&gpu_video::parameters::VulkanDeviceDescriptor::default())
+    let (device, queue) = adapter
+        .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
 
     let mut encoder = device
         .create_wgpu_textures_encoder_h264(
+            &queue,
             gpu_video::parameters::EncoderParametersH264 {
                 output_parameters: device
                     .encoder_output_parameters_h264_high_quality(

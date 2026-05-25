@@ -120,10 +120,13 @@ impl<'a, 'b> DecodeSubmission<'a, 'b> {
     }
 
     #[cfg(feature = "wgpu")]
-    fn output_to_wgpu_texture(self) -> Result<DecodeResult<wgpu::Texture>, VulkanDecoderError> {
+    fn output_to_wgpu_texture(
+        self,
+        wgpu_device: &wgpu::Device,
+    ) -> Result<DecodeResult<wgpu::Texture>, VulkanDecoderError> {
         let wgpu_texture = self
             .decoder
-            .output_to_wgpu_texture(&self.decode_result.frame)?;
+            .output_to_wgpu_texture(wgpu_device, &self.decode_result.frame)?;
 
         self.finish(wgpu_texture)
     }
@@ -227,12 +230,13 @@ impl<'a> VulkanDecoder<'a> {
     #[cfg(feature = "wgpu")]
     pub fn decode_to_wgpu_textures(
         &mut self,
+        wgpu_device: &wgpu::Device,
         decoder_instructions: &[DecoderInstruction],
     ) -> Result<Vec<DecodeResult<wgpu::Texture>>, VulkanDecoderError> {
         let mut result = Vec::new();
         for instruction in decoder_instructions {
             if let Some(output) = self.decode(instruction)? {
-                result.push(output.output_to_wgpu_texture()?);
+                result.push(output.output_to_wgpu_texture(wgpu_device)?);
             }
         }
 
@@ -661,14 +665,10 @@ impl<'a> VulkanDecoder<'a> {
     #[cfg(feature = "wgpu")]
     fn output_to_wgpu_texture(
         &mut self,
+        wgpu_device: &wgpu::Device,
         decode_output: &DecodeSubmissionImageInfo,
     ) -> Result<wgpu::Texture, VulkanDecoderError> {
-        let wgpu_device = unsafe {
-            self.decoding_device
-                .wgpu_device()
-                .as_hal::<wgpu::hal::vulkan::Api>()
-                .unwrap()
-        };
+        let hal_device = unsafe { wgpu_device.as_hal::<wgpu::hal::vulkan::Api>().unwrap() };
         let copy_extent = vk::Extent3D {
             width: decode_output.cropped_extent.width,
             height: decode_output.cropped_extent.height,
@@ -790,7 +790,7 @@ impl<'a> VulkanDecoder<'a> {
         let image_clone = image.clone();
 
         let hal_texture = unsafe {
-            wgpu_device.texture_from_raw(
+            hal_device.texture_from_raw(
                 **image,
                 &wgpu::hal::TextureDescriptor {
                     label: Some("vulkan video output texture"),
@@ -817,28 +817,26 @@ impl<'a> VulkanDecoder<'a> {
         };
 
         let wgpu_texture = unsafe {
-            self.decoding_device
-                .wgpu_device()
-                .create_texture_from_hal::<wgpu::hal::vulkan::Api>(
-                    hal_texture,
-                    &wgpu::TextureDescriptor {
-                        label: Some("vulkan video output texture"),
-                        usage: wgpu::TextureUsages::COPY_DST
-                            | wgpu::TextureUsages::TEXTURE_BINDING
-                            | wgpu::TextureUsages::COPY_SRC,
-                        size: wgpu::Extent3d {
-                            width: copy_extent.width,
-                            height: copy_extent.height,
-                            depth_or_array_layers: copy_extent.depth,
-                        },
-                        dimension: wgpu::TextureDimension::D2,
-                        sample_count: 1,
-                        view_formats: &[],
-                        format: wgpu::TextureFormat::NV12,
-                        mip_level_count: 1,
+            wgpu_device.create_texture_from_hal::<wgpu::hal::vulkan::Api>(
+                hal_texture,
+                &wgpu::TextureDescriptor {
+                    label: Some("vulkan video output texture"),
+                    usage: wgpu::TextureUsages::COPY_DST
+                        | wgpu::TextureUsages::TEXTURE_BINDING
+                        | wgpu::TextureUsages::COPY_SRC,
+                    size: wgpu::Extent3d {
+                        width: copy_extent.width,
+                        height: copy_extent.height,
+                        depth_or_array_layers: copy_extent.depth,
                     },
-                    wgpu::TextureUses::COPY_DST,
-                )
+                    dimension: wgpu::TextureDimension::D2,
+                    sample_count: 1,
+                    view_formats: &[],
+                    format: wgpu::TextureFormat::NV12,
+                    mip_level_count: 1,
+                },
+                wgpu::TextureUses::COPY_DST,
+            )
         };
 
         Ok(wgpu_texture)

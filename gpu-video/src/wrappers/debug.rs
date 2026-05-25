@@ -14,6 +14,12 @@ pub(crate) struct DebugMessenger {
 
 impl DebugMessenger {
     pub(crate) fn new(instance: Arc<Instance>) -> Result<Self, VulkanInitError> {
+        let Some(debug_utils) = &instance.debug_utils_instance_ext else {
+            return Err(VulkanInitError::MissingExtension(
+                vk::EXT_DEBUG_UTILS_NAME.to_string_lossy().to_string(),
+            ));
+        };
+
         let debug_messenger_create_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
             .message_severity(
                 vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
@@ -29,9 +35,7 @@ impl DebugMessenger {
             .pfn_user_callback(Some(debug_messenger_callback));
 
         let messenger = unsafe {
-            instance
-                .debug_utils_instance_ext
-                .create_debug_utils_messenger(&debug_messenger_create_info, None)?
+            debug_utils.create_debug_utils_messenger(&debug_messenger_create_info, None)?
         };
 
         Ok(Self {
@@ -43,11 +47,11 @@ impl DebugMessenger {
 
 impl Drop for DebugMessenger {
     fn drop(&mut self) {
-        unsafe {
-            self.instance
-                .debug_utils_instance_ext
-                .destroy_debug_utils_messenger(self.messenger, None)
+        let Some(debug_utils) = &self.instance.debug_utils_instance_ext else {
+            return;
         };
+
+        unsafe { debug_utils.destroy_debug_utils_messenger(self.messenger, None) };
     }
 }
 

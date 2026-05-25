@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### 💥 Breaking changes
+- Complete API overhaul ([#2039](https://github.com/software-mansion/smelter/pull/2039) by @noituri):
+  - There are now 2 initialization paths:
+    - with `wgpu` support:
+      You can follow the typical `wgpu` initialization path, but to create a `wgpu::Device`, you need to use `VideoAdapterExt::request_device_with_video_support`.
+      Decoders and encoders can be created from `wgpu::Device` via `VideoDeviceExt` trait (the device has to be created from `VideoAdapterExt`).
+    - without `wgpu` support:
+      For the most part the API remains unchanged, but some structs have been renamed:
+      - `VulkanInstance` -> `VideoInstance`
+      - `VulkanAdapter` -> `VideoAdapter`
+      - `VulkanDevice` -> `VideoDevice`
+      - etc...
+  - Removed `vk-validation` and `vk-api-dump` features. Instead you can enable them when creating a `VideoInstance` or `wgpu::Instance`
 
 ### ✨ New features
 - Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)

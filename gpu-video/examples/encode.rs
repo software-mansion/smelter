@@ -6,10 +6,10 @@ fn main() {
     };
 
     use gpu_video::{
-        InputFrame, RawFrameData, VulkanInstance,
+        InputFrame, RawFrameData, VideoInstance,
         parameters::{
-            EncoderParametersH264, EncoderParametersH265, RateControl, VideoParameters,
-            VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+            EncoderParametersH264, EncoderParametersH265, RateControl, VideoAdapterDescriptor,
+            VideoDeviceDescriptor, VideoInstanceDescriptor, VideoParameters,
         },
     };
 
@@ -30,22 +30,26 @@ fn main() {
     let mut nv12 =
         std::fs::File::open(&args[1]).unwrap_or_else(|e| panic!("open {}: {}", args[1], e));
 
-    let vulkan_instance = VulkanInstance::new().unwrap();
+    let vulkan_instance = VideoInstance::new(&VideoInstanceDescriptor {
+        enable_validations: true,
+        ..Default::default()
+    })
+    .unwrap();
     let vulkan_adapter = vulkan_instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
+        .create_adapter(&VideoAdapterDescriptor::default())
         .unwrap();
-    let vulkan_device = vulkan_adapter
-        .create_device(&VulkanDeviceDescriptor::default())
+    let device = vulkan_adapter
+        .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
-    let mut encoder_h264 = vulkan_device
+    let mut encoder_h264 = device
         .create_bytes_encoder_h264(EncoderParametersH264 {
             input_parameters: VideoParameters {
                 width,
                 height,
                 target_framerate: 24.into(),
             },
-            output_parameters: vulkan_device
+            output_parameters: device
                 .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
                     average_bitrate: 1_000_000,
                     max_bitrate: 2_000_000,
@@ -55,14 +59,14 @@ fn main() {
         })
         .expect("create encoder");
 
-    let mut encoder_h265 = vulkan_device
+    let mut encoder_h265 = device
         .create_bytes_encoder_h265(EncoderParametersH265 {
             input_parameters: VideoParameters {
                 width,
                 height,
                 target_framerate: 24.into(),
             },
-            output_parameters: vulkan_device
+            output_parameters: device
                 .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
                     average_bitrate: 1_000_000,
                     max_bitrate: 2_000_000,

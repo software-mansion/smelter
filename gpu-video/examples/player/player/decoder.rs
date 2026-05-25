@@ -1,21 +1,17 @@
-use std::{
-    io::Read,
-    sync::{Arc, mpsc::SyncSender},
-    time::Duration,
-};
+use std::{io::Read, sync::mpsc::SyncSender, time::Duration};
 
 use bytes::BytesMut;
-use gpu_video::{EncodedInputChunk, OutputFrame, VulkanDevice, parameters::DecoderParameters};
+use gpu_video::{EncodedInputChunk, OutputFrame, VideoDeviceExt, parameters::DecoderParameters};
 
 use super::FrameWithPts;
 
 pub fn run_decoder(
     tx: SyncSender<super::FrameWithPts>,
     framerate: u64,
-    vulkan_device: Arc<VulkanDevice>,
+    device: wgpu::Device,
     mut bytestream_reader: impl Read,
 ) {
-    let mut decoder = vulkan_device
+    let mut decoder = device
         .create_wgpu_textures_decoder_h264(DecoderParameters::default())
         .unwrap();
     let frame_interval = 1.0 / (framerate as f64);
