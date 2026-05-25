@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use anyhow::Result;
-use inquire::Text;
+use inquire::{Confirm, Text};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -23,6 +23,17 @@ impl MoqClientInput {
             "broadcast_path": self.broadcast_path,
             "required": true,
         })
+    }
+
+    pub fn on_before_registration(&mut self) -> Result<()> {
+        loop {
+            let confirmation = Confirm::new("Is server running? [Y/n]")
+                .with_default(true)
+                .prompt()?;
+            if confirmation {
+                return Ok(());
+            }
+        }
     }
 }
 

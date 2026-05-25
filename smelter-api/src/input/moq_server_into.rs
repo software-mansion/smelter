@@ -27,7 +27,7 @@ impl TryFrom<MoqInputServer> for core::RegisterInputOptions {
 
         let input_options = core::MoqServerInputOptions {
             broadcast_path,
-            decoders: core::MoqServerInputDecoders { h264, aac: None },
+            decoders: core::MoqInputDecoders { h264, aac: None },
             queue_options: core::QueueInputOptions {
                 required: required.unwrap_or(false),
                 video_side_channel: side_channel.video.unwrap_or(false),

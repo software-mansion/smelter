@@ -61,12 +61,15 @@ impl MoqClientInput {
 async fn run_moq_client(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    decoders: MoqServerInputDecoders,
+    decoders: MoqInputDecoders,
     queue_input: QueueInput,
     url: Url,
     broadcast_path: Arc<str>,
 ) -> anyhow::Result<()> {
     let mut config = moq_native::ClientConfig::default();
+
+    // TODO: (@jbrs) This is fine for the experimental, however will need to be addressed in the
+    // "complete" version.
     config.tls.disable_verify = Some(true);
 
     let origin = Origin::random().produce();
