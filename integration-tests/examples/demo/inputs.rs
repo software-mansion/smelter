@@ -78,6 +78,7 @@ impl InputHandle {
     pub fn on_before_registration(&mut self) -> Result<()> {
         match self {
             Self::Whep(i) => i.on_before_registration(),
+            Self::MoqClient(i) => i.on_before_registration(),
             _ => Ok(()),
         }
     }

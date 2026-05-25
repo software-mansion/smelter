@@ -78,7 +78,7 @@ pub(crate) fn spawn_broadcast_handler(
 pub(crate) async fn handle_broadcast(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    decoders: MoqServerInputDecoders,
+    decoders: MoqInputDecoders,
     queue_input: crate::queue::QueueInput,
     broadcast: BroadcastConsumer,
 ) {
@@ -136,7 +136,7 @@ pub(crate) async fn handle_broadcast(
 fn spawn_decoders(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    decoders: &MoqServerInputDecoders,
+    decoders: &MoqInputDecoders,
     discovered: &DiscoveredTracks,
     video_sender: Option<QueueSender<Frame>>,
     audio_sender: Option<QueueSender<InputAudioSamples>>,
@@ -176,7 +176,7 @@ fn spawn_decoders(
 fn process_video_config(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    decoders: &MoqServerInputDecoders,
+    decoders: &MoqInputDecoders,
     video: &DiscoveredVideo,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {

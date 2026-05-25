@@ -17,14 +17,14 @@ pub(crate) struct MoqInputsState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>
 pub(crate) struct MoqInputState {
     pub broadcast_path: Arc<str>,
     pub queue_input: WeakQueueInput,
-    pub decoders: MoqServerInputDecoders,
+    pub decoders: MoqInputDecoders,
     pub connection_handle: Option<JoinHandle<()>>,
 }
 
 pub(crate) struct MoqInputStateOptions {
     pub broadcast_path: Arc<str>,
     pub queue_input: WeakQueueInput,
-    pub decoders: MoqServerInputDecoders,
+    pub decoders: MoqInputDecoders,
 }
 
 impl MoqInputState {

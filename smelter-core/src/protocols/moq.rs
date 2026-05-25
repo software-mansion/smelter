@@ -8,17 +8,17 @@ use crate::queue::QueueInputOptions;
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoqServerInputOptions {
     pub broadcast_path: Arc<str>,
-    pub decoders: MoqServerInputDecoders,
+    pub decoders: MoqInputDecoders,
     pub queue_options: QueueInputOptions,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct MoqServerInputDecoders {
+pub struct MoqInputDecoders {
     pub h264: Option<VideoDecoderOptions>,
     pub aac: Option<AudioDecoderOptions>,
 }
 
-pub type MoqClientInputDecoders = MoqServerInputDecoders;
+pub type MoqClientInputDecoders = MoqInputDecoders;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoqClientInputOptions {
