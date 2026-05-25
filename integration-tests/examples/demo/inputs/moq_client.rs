@@ -21,7 +21,7 @@ impl MoqClientInput {
             "type": "moq_client",
             "url": self.url,
             "broadcast_path": self.broadcast_path,
-            "required": true,
+            "verify_tls": false,
         })
     }
 

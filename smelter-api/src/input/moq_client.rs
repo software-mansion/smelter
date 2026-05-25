@@ -14,6 +14,8 @@ pub struct MoqInputClient {
     pub url: Arc<str>,
     /// The MoQ broadcast path to subscribe to on the relay.
     pub broadcast_path: Arc<str>,
+    /// (**default=`true`**) Verify the TLS certificate of the MoQ relay.
+    pub verify_tls: Option<bool>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,

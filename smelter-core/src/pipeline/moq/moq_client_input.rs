@@ -34,6 +34,7 @@ impl MoqClientInput {
         let decoders = options.decoders;
         let url: Url = options.url.parse().map_err(MoqClientError::UrlParseError)?;
         let broadcast_path = options.broadcast_path;
+        let verify_tls = options.verify_tls;
 
         let task_ctx = ctx.clone();
         let task_input_ref = input_ref.clone();
@@ -49,6 +50,7 @@ impl MoqClientInput {
                 task_queue_input,
                 url,
                 broadcast_path,
+                verify_tls,
                 task_session,
             )
             .await
@@ -78,13 +80,12 @@ async fn run_moq_client(
     queue_input: QueueInput,
     url: Url,
     broadcast_path: Arc<str>,
+    verify_tls: bool,
     shared_session: SharedSession,
 ) -> Result<(), MoqClientError> {
     let mut config = moq_native::ClientConfig::default();
 
-    // TODO: (@jbrs) This is fine for the experimental, however will need to be addressed in the
-    // "complete" version.
-    config.tls.disable_verify = Some(true);
+    config.tls.disable_verify = Some(!verify_tls);
 
     let origin = Origin::random().produce();
     let mut origin_consumer = origin.consume();

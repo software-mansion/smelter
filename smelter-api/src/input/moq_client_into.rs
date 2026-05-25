@@ -10,6 +10,7 @@ impl TryFrom<MoqInputClient> for core::RegisterInputOptions {
             broadcast_path,
             required,
             decoder_map,
+            verify_tls,
             side_channel,
         } = value;
 
@@ -27,6 +28,7 @@ impl TryFrom<MoqInputClient> for core::RegisterInputOptions {
         let input_options = core::MoqClientInputOptions {
             url,
             broadcast_path,
+            verify_tls: verify_tls.unwrap_or(true),
             decoders: core::MoqInputDecoders { h264, aac: None },
             queue_options: core::QueueInputOptions {
                 required: required.unwrap_or(false),

@@ -22,6 +22,7 @@ pub struct MoqInputDecoders {
 pub struct MoqClientInputOptions {
     pub url: Arc<str>,
     pub broadcast_path: Arc<str>,
+    pub verify_tls: bool,
     pub decoders: MoqInputDecoders,
     pub queue_options: QueueInputOptions,
 }
