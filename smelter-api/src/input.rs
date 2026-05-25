@@ -2,6 +2,8 @@ mod decklink;
 mod decklink_into;
 mod hls;
 mod hls_into;
+mod moq_client;
+mod moq_client_into;
 mod moq_server;
 mod moq_server_into;
 mod mp4;
@@ -22,6 +24,7 @@ mod side_channel;
 
 pub use decklink::*;
 pub use hls::*;
+pub use moq_client::*;
 pub use moq_server::*;
 pub use mp4::*;
 pub use rtmp::*;
