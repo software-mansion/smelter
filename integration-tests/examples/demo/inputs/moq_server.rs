@@ -9,12 +9,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MoqInput {
+pub struct MoqServerInput {
     pub name: String,
     broadcast_path: String,
 }
 
-impl MoqInput {
+impl MoqServerInput {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "moq_server",
@@ -95,8 +95,8 @@ impl MoqInputBuilder {
         self
     }
 
-    pub fn build(self) -> MoqInput {
-        MoqInput {
+    pub fn build(self) -> MoqServerInput {
+        MoqServerInput {
             name: self.name,
             broadcast_path: self.broadcast_path,
         }
