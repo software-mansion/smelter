@@ -2,7 +2,7 @@ import os from 'os';
 import path from 'path';
 
 import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as tar from 'tar';
 import type {
   ApiRequest,

@@ -1,4 +1,4 @@
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import path from 'path';
 import type { PackageManager } from './utils/packageManager';
 
