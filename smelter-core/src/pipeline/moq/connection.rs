@@ -1,8 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
-use moq_mux::container::{Consumer as ContainerConsumer, Hang};
-use moq_native::moq_lite::{BroadcastConsumer, Error as MoqError, Track};
+use moq_mux::container::{Consumer as ContainerConsumer, Hang, fmp4};
+use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
 use tracing::{info, trace, warn};
 
@@ -295,17 +295,8 @@ enum MoqConnectionError {
     #[error("MoQ track error")]
     TrackError(#[from] MoqError),
 
-    #[error("Failed to subscribe to catalog track")]
-    CatalogSubscribeError(#[source] MoqError),
-
-    #[error("Catalog track produced no frames")]
-    CatalogEmpty,
-
-    #[error("Catalog contains no recognizable video or audio tracks")]
-    CatalogNoTracks,
-
-    #[error("Failed to parse MSF catalog")]
-    CatalogParseError,
+    #[error("MoQ catalog error: {0}")]
+    CatalogError(#[from] MoqCatalogError),
 
     #[error("Failed to initialize H264 decoder")]
     InitVideoDecoder(#[source] DecoderInitError),
@@ -330,6 +321,24 @@ enum MoqConnectionError {
 
     #[error("Container read error")]
     ContainerError(#[source] moq_mux::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+enum MoqCatalogError {
+    #[error("Failed to subscribe to catalog track")]
+    CatalogSubscribeError(#[source] MoqError),
+
+    #[error("Catalog track produced no frames")]
+    CatalogEmpty,
+
+    #[error("Catalog contains no recognizable video or audio tracks")]
+    CatalogNoTracks,
+
+    #[error("Failed to parse MSF catalog")]
+    CatalogParseError,
+
+    #[error("CMAF parse error: {0}")]
+    CmafParseError(#[from] fmp4::Error),
 }
 
 async fn read_video_track(
