@@ -2,12 +2,12 @@ use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use moq_mux::catalog::hang::Container;
-use moq_mux::container::{Consumer as ContainerConsumer, fmp4};
+use moq_mux::container::Consumer as ContainerConsumer;
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
 use tracing::{info, trace, warn};
 
-use crate::pipeline::moq::connection::catalog::read_catalog;
+use crate::pipeline::moq::connection::catalog::{MoqCatalogError, read_catalog};
 use crate::utils::{H264AvcDecoderConfig, H264AvccToAnnexB};
 use crate::{
     MediaKind, PipelineCtx, PipelineEvent,
@@ -322,21 +322,6 @@ enum MoqConnectionError {
 
     #[error("Container read error")]
     ContainerError(#[source] moq_mux::Error),
-}
-
-#[derive(thiserror::Error, Debug)]
-enum MoqCatalogError {
-    #[error("Failed to subscribe to catalog track")]
-    CatalogSubscribeError(#[source] MoqError),
-
-    #[error("Catalog track produced no frames")]
-    CatalogEmpty,
-
-    #[error("Catalog contains no recognizable video or audio tracks")]
-    CatalogNoTracks,
-
-    #[error("CMAF parse error: {0}")]
-    CmafParseError(#[from] fmp4::Error),
 }
 
 async fn read_video_track(
