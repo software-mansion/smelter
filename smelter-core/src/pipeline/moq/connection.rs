@@ -1,7 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
-use moq_mux::container::{Consumer as ContainerConsumer, Hang, fmp4};
+use moq_mux::catalog::hang::Container;
+use moq_mux::container::{Consumer as ContainerConsumer, fmp4};
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
 use tracing::{info, trace, warn};
@@ -37,13 +38,13 @@ const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct DiscoveredVideo {
     name: String,
-    container: Hang,
+    container: Container,
     description: Option<Bytes>,
 }
 
 struct DiscoveredAudio {
     name: String,
-    container: Hang,
+    container: Container,
     description: Option<Bytes>,
 }
 
@@ -334,15 +335,12 @@ enum MoqCatalogError {
     #[error("Catalog contains no recognizable video or audio tracks")]
     CatalogNoTracks,
 
-    #[error("Failed to parse MSF catalog")]
-    CatalogParseError,
-
     #[error("CMAF parse error: {0}")]
     CmafParseError(#[from] fmp4::Error),
 }
 
 async fn read_video_track(
-    mut consumer: ContainerConsumer<Hang>,
+    mut consumer: ContainerConsumer<Container>,
     decoder_handle: DecoderThreadHandle,
 ) -> Result<(), MoqConnectionError> {
     let mut first_pts: Option<Duration> = None;
@@ -376,7 +374,7 @@ async fn read_video_track(
 }
 
 async fn read_audio_track(
-    mut consumer: ContainerConsumer<Hang>,
+    mut consumer: ContainerConsumer<Container>,
     decoder_handle: DecoderThreadHandle,
 ) -> Result<(), MoqConnectionError> {
     let mut first_pts: Option<Duration> = None;
