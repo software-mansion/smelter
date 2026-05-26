@@ -48,10 +48,10 @@ pollster = { workspace = true }
 audioadapter-buffers = "2.0.0"
 audioadapter = "2.0.0"
 async-trait = "0.1.89"
-hang = "0.16"
-moq-msf = "0.1"
-moq-mux = "0.4"
-mp4-atom = "0.10"
+hang = "0.18"
+moq-msf = "0.2"
+moq-mux = "0.5"
+mp4-atom = "0.11"
 moq-native = { workspace = true }
 data-encoding = "2"
 

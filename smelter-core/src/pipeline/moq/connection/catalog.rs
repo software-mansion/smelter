@@ -1,19 +1,19 @@
 use bytes::Bytes;
-use hang::catalog::{AudioCodec, VideoCodec};
+use hang::catalog::{AudioCodec, Container, VideoCodec};
 use moq_mux::{
-    catalog::Consumer as CatalogConsumer,
-    container::{Cmaf, Hang},
+    catalog::{hang::Consumer as HangConsumer, msf::Consumer as MsfConsumer},
+    container::fmp4,
 };
-use moq_native::moq_lite::{self, BroadcastConsumer};
+use moq_native::moq_net::{self, BroadcastConsumer};
 
 use crate::pipeline::moq::connection::{
-    DiscoveredAudio, DiscoveredTracks, DiscoveredVideo, MoqConnectionError,
+    DiscoveredAudio, DiscoveredTracks, DiscoveredVideo, MoqCatalogError,
 };
 use tracing::{debug, warn};
 
 pub(super) async fn read_catalog(
     broadcast: &BroadcastConsumer,
-) -> Result<DiscoveredTracks, MoqConnectionError> {
+) -> Result<DiscoveredTracks, MoqCatalogError> {
     // Handle moq-lite "catalog.json", if it is not present fallback to the standard msf "catalog"
     match read_hang_catalog(broadcast).await {
         Ok(discovered_tracks) => Ok(discovered_tracks),
@@ -23,38 +23,36 @@ pub(super) async fn read_catalog(
 
 async fn read_hang_catalog(
     broadcast: &BroadcastConsumer,
-) -> Result<DiscoveredTracks, MoqConnectionError> {
+) -> Result<DiscoveredTracks, MoqCatalogError> {
     let catalog_track = broadcast
         .subscribe_track(&hang::Catalog::default_track())
-        .map_err(MoqConnectionError::CatalogSubscribeError)?;
+        .map_err(MoqCatalogError::CatalogSubscribeError)?;
 
-    let mut consumer = CatalogConsumer::new(catalog_track);
+    let mut consumer = HangConsumer::new(catalog_track);
 
     let catalog = consumer
         .next()
         .await
-        .map_err(|_| MoqConnectionError::CatalogEmpty)?
-        .ok_or(MoqConnectionError::CatalogEmpty)?;
+        .map_err(|_| MoqCatalogError::CatalogEmpty)?
+        .ok_or(MoqCatalogError::CatalogEmpty)?;
     debug!(?catalog, "Received MoQ Hang catalog");
 
     let video = match catalog.video.renditions.first_key_value() {
-        Some((name, config)) if let VideoCodec::H264(_) = config.codec => {
-            match Hang::try_from(&config.container) {
-                Ok(container) if let Hang::Cmaf(_) = container => Some(DiscoveredVideo {
+        Some((name, config)) if let VideoCodec::H264(_) = config.codec => match &config.container {
+            Container::Cmaf { init, .. } => {
+                let container = fmp4::Wire::from_init(init)?;
+
+                Some(DiscoveredVideo {
                     name: name.clone(),
                     container,
                     description: config.description.clone(),
-                }),
-                Ok(_) => {
-                    warn!("Unsupported video container, skipping");
-                    None
-                }
-                Err(error) => {
-                    warn!(track=%name, %error, "Unsupported video container, skipping.");
-                    None
-                }
+                })
             }
-        }
+            _ => {
+                warn!("Only CMAF container is supported.");
+                None
+            }
+        },
         Some((name, config)) => {
             warn!(track=%name, codec=%config.codec, "Unsupported video codec, skipping track");
             None
@@ -63,23 +61,21 @@ async fn read_hang_catalog(
     };
 
     let audio = match catalog.audio.renditions.first_key_value() {
-        Some((name, config)) if let AudioCodec::AAC(_) = config.codec => {
-            match Hang::try_from(&config.container) {
-                Ok(container) if let Hang::Cmaf(_) = container => Some(DiscoveredAudio {
+        Some((name, config)) if let AudioCodec::AAC(_) = config.codec => match &config.container {
+            Container::Cmaf { init, .. } => {
+                let container = fmp4::Wire::from_init(init)?;
+
+                Some(DiscoveredAudio {
                     name: name.clone(),
                     container,
                     description: config.description.clone(),
-                }),
-                Ok(_) => {
-                    warn!("Unsupported audio container, skipping");
-                    None
-                }
-                Err(error) => {
-                    warn!(track=%name, "Unsupported audio container, skipping: {error}");
-                    None
-                }
+                })
             }
-        }
+            _ => {
+                warn!("Only CMAF container is supported.");
+                None
+            }
+        },
         Some((name, config)) => {
             warn!(track=%name, codec=%config.codec, "Unsupported audio codec, skipping track");
             None
@@ -88,7 +84,7 @@ async fn read_hang_catalog(
     };
 
     if video.is_none() && audio.is_none() {
-        return Err(MoqConnectionError::CatalogNoTracks);
+        return Err(MoqCatalogError::CatalogNoTracks);
     }
 
     Ok(DiscoveredTracks { video, audio })
@@ -98,7 +94,7 @@ async fn read_msf_catalog(
     broadcast: &BroadcastConsumer,
 ) -> Result<DiscoveredTracks, MoqConnectionError> {
     let mut catalog_track = broadcast
-        .subscribe_track(&moq_lite::Track::new(moq_msf::DEFAULT_NAME))
+        .subscribe_track(&moq_net::Track::new(moq_msf::DEFAULT_NAME))
         .map_err(MoqConnectionError::CatalogSubscribeError)?;
 
     let frame = catalog_track

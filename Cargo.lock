@@ -1645,6 +1645,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "feeef44e73baff3a26d371801df019877a9866a8c493d315ab00177843314f35"
 
 [[package]]
+name = "ebml-iterable"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b5173ac3752f08b526a6991509615e1a345b221ec3c58c7633433e8c9582312"
+dependencies = [
+ "ebml-iterable-specification",
+ "ebml-iterable-specification-derive",
+ "futures",
+]
+
+[[package]]
+name = "ebml-iterable-specification"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f56467af159a98735d44231f53eaa505e919e6003266f103b99649a93f106784"
+
+[[package]]
+name = "ebml-iterable-specification-derive"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b066b81018300fdce40f71c4db355a102699324af96fad28f25ab1b5f87de066"
+dependencies = [
+ "ebml-iterable-specification",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "ecdsa"
 version = "0.16.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2350,15 +2379,15 @@ dependencies = [
 
 [[package]]
 name = "hang"
-version = "0.16.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59435f843c8a41ac499ce68828d16c575438e34ffa85b1ea46ba2529bb2a5b16"
+checksum = "71b019f256f47766d61ef0a85013a90f918d0100e8dc243f61bade18ef13391d"
 dependencies = [
  "bytes",
  "derive_more",
  "hex",
  "lazy_static",
- "moq-lite",
+ "moq-net",
  "regex",
  "serde",
  "serde_json",
@@ -3380,29 +3409,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "moq-lite"
-version = "0.16.3"
+name = "moq-loc"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf9a1647116baba22cb0435fd56debb071b9e54e43ec0a72f2e6a44011cd520"
+checksum = "489094f71ebaef7f33f400947a9fd9ef1cd65b390a36b83e356920bf91866cae"
 dependencies = [
  "bytes",
- "conducer",
- "futures",
- "num_enum",
- "rand 0.9.3",
- "serde",
  "thiserror 2.0.17",
- "tokio",
- "tracing",
- "web-async",
- "web-transport-trait",
 ]
 
 [[package]]
 name = "moq-msf"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d61b0d5ce8285c75ed59343934aae278c4c49b1dedf41f1356939b40fab4d29"
+checksum = "9ccfbfb04d4fc9f7f3f31662bf12c590dbfcd79ecc4113496c07bdf497a2636d"
 dependencies = [
  "serde",
  "serde_json",
@@ -3411,20 +3431,20 @@ dependencies = [
 
 [[package]]
 name = "moq-mux"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a022c9ac1960154f01e4418bee8361b8814716df89f6bc4107d432dcd66d5e6d"
+checksum = "65aa464c601e2cb834a9d0cabbcf04de63e0f1b59074361b058fdf90dbc9ae0c"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "bytes",
  "conducer",
- "derive_more",
  "h264-parser",
  "hang",
  "m3u8-rs",
- "moq-lite",
+ "moq-loc",
  "moq-msf",
+ "moq-net",
  "mp4-atom",
  "num_enum",
  "reqwest",
@@ -3434,13 +3454,14 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "webm-iterable",
 ]
 
 [[package]]
 name = "moq-native"
-version = "0.14.1"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab42daf5ef625f704beda522d721484025f458a7ca33464906f68898416f1772"
+checksum = "4e83db6e767da04c3e141830ec91229ed93d7f9de0780c1fa1370609e7a96455"
 dependencies = [
  "anyhow",
  "clap",
@@ -3448,7 +3469,7 @@ dependencies = [
  "hex",
  "humantime",
  "humantime-serde",
- "moq-lite",
+ "moq-net",
  "parking_lot",
  "qmux",
  "quinn",
@@ -3457,7 +3478,6 @@ dependencies = [
  "reqwest",
  "rustls",
  "rustls-native-certs",
- "rustls-pemfile",
  "rustls-webpki",
  "serde",
  "serde_with",
@@ -3467,6 +3487,26 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "web-transport-quinn",
+]
+
+[[package]]
+name = "moq-net"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddc15aa1a2b803e19c84c0b7014157fd9370ddd6935d85be415f549a642742e9"
+dependencies = [
+ "bytes",
+ "conducer",
+ "futures",
+ "num_enum",
+ "rand 0.9.3",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "web-async",
+ "web-transport-trait",
 ]
 
 [[package]]
@@ -3484,14 +3524,14 @@ dependencies = [
 
 [[package]]
 name = "mp4-atom"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e8e949244bbd26ea7eb6d936af3a6a0202be68bcfc9afce700f3c9026860ff7"
+checksum = "6c6b338be0a8d66954dfb183f8469913c9c435d48885e801debde0953de74563"
 dependencies = [
  "bytes",
  "derive_more",
  "num",
- "paste",
+ "pastey",
  "serde",
  "thiserror 1.0.69",
  "tokio",
@@ -4120,6 +4160,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pastey"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
+
+[[package]]
 name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4370,9 +4416,9 @@ dependencies = [
 
 [[package]]
 name = "qmux"
-version = "0.0.5"
+version = "0.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32a87859012c43a1e38dda29f2464e0ee39b0e96d0f95f870a73610bc6f2c3c2"
+checksum = "1a625edac9a3021654a955444ca602b7b66b6764c7372196df08af53779ffbe7"
 dependencies = [
  "bytes",
  "futures",
@@ -4417,7 +4463,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.5.8",
+ "socket2 0.6.3",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -4457,7 +4503,7 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "libc",
  "once_cell",
- "socket2 0.5.8",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -7461,6 +7507,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb67841c4a481ca3c1412ee4c9f463987401991e1ddc000903df2124f3dc85e9"
 dependencies = [
  "bytes",
+]
+
+[[package]]
+name = "webm-iterable"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd9fbf173b4b38f2f8bbb0082a0d4cb21f263a70811f5fccb1663c421c66d9f9"
+dependencies = [
+ "ebml-iterable",
 ]
 
 [[package]]
