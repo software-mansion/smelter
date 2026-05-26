@@ -44,7 +44,7 @@ impl Drop for MoqServer {
         self.accept_task.abort();
         self.announce_task.abort();
         let mut sessions = self.sessions.lock().unwrap();
-        sessions.drain();
+        sessions.clear();
     }
 }
 
