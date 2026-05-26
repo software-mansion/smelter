@@ -26,6 +26,11 @@ impl MoqClientInput {
     }
 
     pub fn on_before_registration(&mut self) -> Result<()> {
+        println!("Start serving MoQ streams using moq-cli:");
+        println!(
+            "ffmpeg -re -readrate_initial_burst 7 -i <SOURCE_MP4> -c copy -movflags cmaf -f mp4 - | moq-cli serve --tls-generate localhost --broadcast {} fmp4",
+            self.broadcast_path,
+        );
         loop {
             let confirmation = Confirm::new("Is server running? [Y/n]")
                 .with_default(true)
