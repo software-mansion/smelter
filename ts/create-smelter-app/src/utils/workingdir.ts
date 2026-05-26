@@ -1,4 +1,4 @@
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import { confirmPrompt } from './prompts';
 
 export async function ensureProjectDir(directory: string) {
