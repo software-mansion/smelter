@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use moq_native::moq_lite::{Origin, Session};
+use moq_native::moq_net::{Origin, Session};
 use tracing::{info, warn};
 use url::Url;
 
