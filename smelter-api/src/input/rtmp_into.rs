@@ -14,6 +14,7 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
         } = value;
 
         let side_channel = side_channel.unwrap_or_default();
+        let side_channel_delay = side_channel.delay()?;
 
         let h264 = decoder_map
             .as_ref()
@@ -32,6 +33,7 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
                 required: required.unwrap_or(false),
                 video_side_channel: side_channel.video.unwrap_or(false),
                 audio_side_channel: side_channel.audio.unwrap_or(false),
+                side_channel_delay,
             },
         };
 

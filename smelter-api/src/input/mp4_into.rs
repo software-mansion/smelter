@@ -24,6 +24,7 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
 
         let (required, offset) = new_queue_options(required, offset_ms)?;
         let side_channel = side_channel.unwrap_or_default();
+        let side_channel_delay = side_channel.delay()?;
 
         let source = match (url, path) {
             (Some(_), Some(_)) | (None, None) => {
@@ -59,6 +60,7 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
                 required,
                 video_side_channel: side_channel.video.unwrap_or(false),
                 audio_side_channel: side_channel.audio.unwrap_or(false),
+                side_channel_delay,
             },
         }))
     }

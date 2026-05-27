@@ -44,7 +44,6 @@ pub struct QueueOptions {
     pub ahead_of_time_processing: bool,
     pub run_late_scheduled_events: bool,
     pub never_drop_output_frames: bool,
-    pub side_channel_delay: Duration,
     pub side_channel_socket_dir: Option<Arc<Path>>,
 }
 
@@ -56,7 +55,6 @@ impl From<&PipelineOptions> for QueueOptions {
             ahead_of_time_processing: opt.ahead_of_time_processing,
             run_late_scheduled_events: opt.run_late_scheduled_events,
             never_drop_output_frames: opt.never_drop_output_frames,
-            side_channel_delay: opt.side_channel_delay,
             side_channel_socket_dir: opt.side_channel_socket_dir.clone(),
         }
     }
@@ -87,13 +85,13 @@ impl From<&PipelineOptions> for QueueOptions {
 ///     `sync_point.elapsed()` at that moment (via `drop_old_frames_before_start`), after
 ///     queue start to the current queue PTS at which the packet is observed.
 ///
-/// - Side channel (`side_channel_delay`):
-///   - Every input receiver (both with and without a side channel) shifts incoming PTS
-///     by `side_channel_delay`, so the whole pipeline runs that far behind the inputs.
-///   - Inputs with a side channel additionally allow their receiver buffer to grow up to
-///     `side_channel_delay` worth of data, so the side-channel subscriber receives frames
-///     ahead of when the queue consumes them — leaving the subscriber roughly
-///     `side_channel_delay` time to process before the frame is due.
+/// - Side channel (`QueueInputOptions::side_channel_delay`):
+///   - For inputs with a side channel, the receiver shifts incoming PTS by
+///     `side_channel_delay`, so that input runs that far behind real time.
+///   - The receiver buffer is allowed to grow up to `side_channel_delay` worth of data,
+///     so the side-channel subscriber receives frames ahead of when the queue consumes
+///     them — leaving the subscriber roughly `side_channel_delay` time to process
+///     before the frame is due.
 ///
 /// - Example usage scenarios:
 ///   - MP4 input:
@@ -142,7 +140,6 @@ pub struct QueueContext {
     /// the queue start
     start_pts: SharedPts,
     last_pts: SharedPts,
-    side_channel_delay: Duration,
     pub(crate) side_channel_socket_dir: Option<Arc<Path>>,
 }
 
@@ -224,7 +221,6 @@ impl Queue {
             sync_point: Instant::now(),
             start_pts: Default::default(),
             last_pts: Default::default(),
-            side_channel_delay: opts.side_channel_delay,
             side_channel_socket_dir: opts.side_channel_socket_dir,
         };
         let (queue_start_sender, queue_start_receiver) = bounded(0);

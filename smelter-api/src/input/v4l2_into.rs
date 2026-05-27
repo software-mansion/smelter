@@ -7,6 +7,7 @@ impl TryFrom<V4l2Input> for core::RegisterInputOptions {
     #[cfg(target_os = "linux")]
     fn try_from(value: V4l2Input) -> Result<Self, Self::Error> {
         let side_channel = value.side_channel.unwrap_or_default();
+        let side_channel_delay = side_channel.delay()?;
         Ok(core::RegisterInputOptions::V4l2(core::V4l2InputOptions {
             path: value.path,
             format: value.format.into(),
@@ -19,6 +20,7 @@ impl TryFrom<V4l2Input> for core::RegisterInputOptions {
                 required: value.required.unwrap_or(false),
                 video_side_channel: side_channel.video.unwrap_or(false),
                 audio_side_channel: side_channel.audio.unwrap_or(false),
+                side_channel_delay,
             },
         }))
     }

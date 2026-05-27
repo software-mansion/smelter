@@ -110,7 +110,6 @@ pub fn pipeline_options_from_config(
         ahead_of_time_processing: opt.ahead_of_time_processing,
         run_late_scheduled_events: opt.run_late_scheduled_events,
         never_drop_output_frames: opt.never_drop_output_frames,
-        side_channel_delay: opt.side_channel_delay,
         side_channel_socket_dir: opt.side_channel_socket_dir.clone(),
 
         mixing_sample_rate: opt.mixing_sample_rate,

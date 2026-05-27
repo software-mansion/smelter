@@ -23,7 +23,6 @@ pub struct Config {
     pub download_root: Arc<Path>,
     pub stream_fallback_timeout: Duration,
     pub default_buffer_duration: Duration,
-    pub side_channel_delay: Duration,
     pub side_channel_socket_dir: Option<Arc<Path>>,
 
     pub ahead_of_time_processing: bool,
@@ -243,20 +242,6 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => DEFAULT_BUFFER_DURATION,
     };
 
-    const DEFAULT_SIDE_CHANNEL_DELAY: Duration = Duration::ZERO;
-    let side_channel_delay = match env::var("SMELTER_SIDE_CHANNEL_DELAY_MS") {
-        Ok(duration) => match duration.parse::<f64>() {
-            Ok(duration) => Duration::from_secs_f64(duration / 1000.0),
-            Err(_) => {
-                println!(
-                    "CONFIG ERROR: Invalid value provided for \"SMELTER_SIDE_CHANNEL_DELAY_MS\". Falling back to default value {DEFAULT_SIDE_CHANNEL_DELAY:?}."
-                );
-                DEFAULT_SIDE_CHANNEL_DELAY
-            }
-        },
-        Err(_) => DEFAULT_SIDE_CHANNEL_DELAY,
-    };
-
     let side_channel_socket_dir = Some(read_side_channel_socket_dir());
 
     let load_system_fonts = match env::var("SMELTER_LOAD_SYSTEM_FONTS") {
@@ -381,7 +366,6 @@ fn try_read_config() -> Result<Config, String> {
             log_file,
         },
         default_buffer_duration,
-        side_channel_delay,
         side_channel_socket_dir,
         ahead_of_time_processing,
         output_framerate,

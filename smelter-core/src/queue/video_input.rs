@@ -51,9 +51,9 @@ impl VideoQueueInput {
         offset_from_start: Option<Duration>,
         track_offset: TrackOffset,
         side_channel: Option<VideoSideChannel>,
+        side_channel_delay: Duration,
     ) -> (Self, Sender<Frame>) {
-        let (receiver, sender) =
-            VideoInputReceiver::new(ctx.queue_ctx.side_channel_delay, side_channel);
+        let (receiver, sender) = VideoInputReceiver::new(side_channel_delay, side_channel);
         let input = Self {
             queue_ctx: ctx.queue_ctx.clone(),
             required,

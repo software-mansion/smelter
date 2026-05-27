@@ -26,6 +26,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
 
         let (required, offset) = new_queue_options(required, offset_ms)?;
         let side_channel = side_channel.unwrap_or_default();
+        let side_channel_delay = side_channel.delay()?;
 
         let transport_protocol = transport_protocol.unwrap_or(TransportProtocol::Udp).into();
 
@@ -62,6 +63,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
                 required,
                 video_side_channel: side_channel.video.unwrap_or(false),
                 audio_side_channel: side_channel.audio.unwrap_or(false),
+                side_channel_delay,
             },
             offset,
         }))

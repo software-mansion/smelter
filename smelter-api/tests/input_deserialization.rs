@@ -22,6 +22,7 @@ fn default_queue() -> QueueInputOptions {
         required: false,
         video_side_channel: false,
         audio_side_channel: false,
+        side_channel_delay: Duration::ZERO,
     }
 }
 
@@ -181,6 +182,7 @@ fn rtmp_with_all_options() {
                 required: true,
                 video_side_channel: true,
                 audio_side_channel: false,
+                side_channel_delay: Duration::ZERO,
             },
         }),
     );
@@ -345,6 +347,7 @@ fn rtp_video_and_audio() {
                 required: true,
                 video_side_channel: true,
                 audio_side_channel: false,
+                side_channel_delay: Duration::ZERO,
             },
             offset: Some(Duration::from_millis(500)),
             buffer_duration: Some(Duration::from_millis(200)),
@@ -587,6 +590,7 @@ fn mp4_with_all_options() {
                 required: true,
                 video_side_channel: false,
                 audio_side_channel: true,
+                side_channel_delay: Duration::ZERO,
             },
         }),
     );
@@ -696,6 +700,7 @@ fn whip_with_all_options() {
                 required: true,
                 video_side_channel: true,
                 audio_side_channel: true,
+                side_channel_delay: Duration::ZERO,
             },
         }),
     );
@@ -801,6 +806,7 @@ fn whep_with_all_options() {
                 required: true,
                 video_side_channel: true,
                 audio_side_channel: false,
+                side_channel_delay: Duration::ZERO,
             },
         }),
     );
@@ -868,6 +874,7 @@ fn hls_with_all_options() {
                 required: true,
                 video_side_channel: true,
                 audio_side_channel: true,
+                side_channel_delay: Duration::ZERO,
             },
             offset: Some(Duration::from_millis(500)),
         }),
@@ -951,6 +958,7 @@ fn v4l2_with_all_options() {
                 required: true,
                 video_side_channel: true,
                 audio_side_channel: false,
+                side_channel_delay: Duration::ZERO,
             },
         }),
     );

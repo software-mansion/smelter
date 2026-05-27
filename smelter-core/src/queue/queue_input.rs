@@ -60,6 +60,7 @@ pub(super) struct InnerQueueInput {
     required: bool,
     video_side_channel: Option<VideoSideChannel>,
     audio_side_channel: Option<AudioSideChannel>,
+    side_channel_delay: Duration,
 }
 
 impl InnerQueueInput {
@@ -130,6 +131,7 @@ impl InnerQueueInput {
                 offset_from_start,
                 track_offset.clone(),
                 side_channel,
+                self.side_channel_delay,
             );
             (Some(video_input), Some(QueueSender::new(video_sender)))
         } else {
@@ -147,6 +149,7 @@ impl InnerQueueInput {
                 offset_from_start,
                 track_offset.clone(),
                 side_channel,
+                self.side_channel_delay,
             );
             (Some(audio_input), Some(QueueSender::new(audio_sender)))
         } else {
@@ -225,6 +228,7 @@ pub struct QueueInputOptions {
     pub required: bool,
     pub audio_side_channel: bool,
     pub video_side_channel: bool,
+    pub side_channel_delay: Duration,
 }
 
 impl QueueInput {
@@ -252,6 +256,7 @@ impl QueueInput {
             pause_state: PauseState::new(),
             video_side_channel,
             audio_side_channel,
+            side_channel_delay: opts.side_channel_delay,
         })))
     }
 
