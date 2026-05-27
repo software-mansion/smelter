@@ -1,4 +1,4 @@
-import { copy, readFile, remove, writeFile } from 'fs-extra';
+import fs from 'fs-extra';
 import path from 'path';
 import type { PackageManager } from './utils/packageManager';
 
@@ -20,18 +20,18 @@ export type Template = {
 
 export async function applyTemplate(template: Template, destination: string): Promise<void> {
   const templatePath = path.join(TEMPLATES_ROOT, template.templateId);
-  await copy(templatePath, destination);
+  await fs.copy(templatePath, destination);
 
   for (const project of template.projects) {
     const projectDir = path.join(destination, project.dir ?? '.');
     for (const dirToRemove of project.dirsToRemove ?? []) {
-      await remove(path.join(projectDir, dirToRemove));
+      await fs.remove(path.join(projectDir, dirToRemove));
     }
 
     const packageJsonPath = path.join(projectDir, 'package.json');
-    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
     const transformedPackageJson = transformPackageJson(packageJson, project.projectName);
-    await writeFile(
+    await fs.writeFile(
       packageJsonPath,
       JSON.stringify(transformedPackageJson, null, 2) + '\n',
       'utf8'

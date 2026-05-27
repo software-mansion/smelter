@@ -1,6 +1,5 @@
 import path from 'path';
-import { createWriteStream } from 'fs';
-import { mkdirp, pathExists } from 'fs-extra';
+import fs, { mkdirp, pathExists } from 'fs-extra';
 import type { ChildProcess } from 'child_process';
 import { spawn as nodeSpawn } from 'child_process';
 import { promisify } from 'util';
@@ -81,7 +80,7 @@ async function download(url: string, destination: string): Promise<void> {
     throw err;
   }
   if (response.body) {
-    await pipeline(Readable.fromWeb(response.body as any), createWriteStream(destination));
+    await pipeline(Readable.fromWeb(response.body as any), fs.createWriteStream(destination));
   } else {
     throw Error(`Response with empty body.`);
   }
