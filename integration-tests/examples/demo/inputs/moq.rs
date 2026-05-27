@@ -19,6 +19,9 @@ impl MoqInput {
         json!({
             "type": "moq_server",
             "broadcast_path": self.broadcast_path,
+            "decoder_map": {
+                "h264": "ffmpeg_h264",
+            }
         })
     }
 
