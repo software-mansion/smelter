@@ -96,22 +96,22 @@ impl WhipWhepServer {
     ) {
         let app = Router::new()
             .route("/status", get((StatusCode::OK, axum::Json(json!({})))))
-            .route("/whip/:endpoint_id", post(handle_create_whip_session))
+            .route("/whip/:input_id", post(handle_create_whip_session))
             .route(
-                "/whip/:endpoint_id/:session_id",
+                "/whip/:input_id/:session_id",
                 patch(handle_new_whip_ice_candidates),
             )
             .route(
-                "/whip/:endpoint_id/:session_id",
+                "/whip/:input_id/:session_id",
                 delete(handle_terminate_whip_session),
             )
-            .route("/whep/:endpoint_id", post(handle_create_whep_session))
+            .route("/whep/:input_id", post(handle_create_whep_session))
             .route(
-                "/whep/:endpoint_id/:session_id",
+                "/whep/:input_id/:session_id",
                 patch(handle_new_whep_ice_candidates),
             )
             .route(
-                "/whep/:endpoint_id/:session_id",
+                "/whep/:input_id/:session_id",
                 delete(handle_terminate_whep_session),
             )
             .layer(CorsLayer::permissive())

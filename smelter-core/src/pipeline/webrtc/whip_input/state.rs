@@ -51,18 +51,15 @@ impl WhipInputsState {
         }
     }
 
-    pub fn find_by_endpoint_id(
-        &self,
-        endpoint_id: &Arc<str>,
-    ) -> Result<Ref<InputId>, WhipWhepServerError> {
+    pub fn resolve_input_ref(&self, input_id: &str) -> Result<Ref<InputId>, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
         let entry = guard
-            .iter()
-            .find(|(_, input)| input.endpoint_id == *endpoint_id);
+            .keys()
+            .find(|input_ref| &*input_ref.id().0 == input_id);
         match entry {
-            Some((input_ref, _)) => Ok(input_ref.clone()),
+            Some(input_ref) => Ok(input_ref.clone()),
             None => Err(WhipWhepServerError::NotFound(format!(
-                "{endpoint_id:?} not found"
+                "{input_id:?} not found"
             ))),
         }
     }
@@ -73,12 +70,9 @@ impl WhipInputsState {
         options: WhipInputStateOptions,
     ) -> Result<(), WebrtcServerError> {
         let mut guard = self.0.lock().unwrap();
-        let is_endpoint_id_in_use = guard
-            .iter()
-            .any(|(_, input)| input.endpoint_id == options.endpoint_id);
-        if is_endpoint_id_in_use {
+        if guard.contains_key(input_ref) {
             return Err(WebrtcServerError::EndpointIdAlreadyInUse(
-                options.endpoint_id,
+                input_ref.id().0.clone(),
             ));
         }
         let old_value = guard.insert(input_ref.clone(), WhipInputState::new(options));
@@ -135,7 +129,6 @@ impl WhipInputsState {
 #[derive(Debug, Clone)]
 pub(crate) struct WhipInputStateOptions {
     pub bearer_token: Arc<str>,
-    pub endpoint_id: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub jitter_buffer_size: Option<Duration>,
     pub queue_input: WeakQueueInput,
@@ -144,7 +137,6 @@ pub(crate) struct WhipInputStateOptions {
 #[derive(Debug)]
 pub(crate) struct WhipInputState {
     pub bearer_token: Arc<str>,
-    pub endpoint_id: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub jitter_buffer_size: Option<Duration>,
     pub queue_input: WeakQueueInput,
@@ -161,7 +153,6 @@ impl WhipInputState {
     pub fn new(options: WhipInputStateOptions) -> Self {
         WhipInputState {
             bearer_token: options.bearer_token,
-            endpoint_id: options.endpoint_id,
             video_preferences: options.video_preferences,
             jitter_buffer_size: options.jitter_buffer_size,
             queue_input: options.queue_input,

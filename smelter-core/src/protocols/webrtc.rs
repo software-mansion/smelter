@@ -17,7 +17,6 @@ use crate::{
 pub struct WhipInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
-    pub endpoint_override: Option<Arc<str>>,
     /// Reference/desired jitter buffer size. Sets the lower edge of the adaptive
     /// buffer's stable band; the buffer converges toward this value when network
     /// conditions allow.
@@ -94,7 +93,7 @@ pub enum WebrtcUdpPortStrategy {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WebrtcServerError {
-    #[error("Endpoint ID already in use (endpoint_id: {0})")]
+    #[error("Endpoint ID already in use (input_id: {0})")]
     EndpointIdAlreadyInUse(Arc<str>),
 
     #[error("WHIP/WHEP server is not running, cannot start WHIP input.")]

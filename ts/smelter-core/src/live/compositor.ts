@@ -87,7 +87,7 @@ export class Smelter {
     _smelterInternals.assertGlobalInputId(inputId);
     return this.store.runBlocking(async updateStore => {
       const inputRef = { type: 'global', id: inputId } as const;
-      const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
+      const result = await this.api.registerInput(inputRef, intoRegisterInput(request));
       const handle = newInputHandle(inputRef, this.api, result, request.type);
       this.inputs[inputId] = handle;
 

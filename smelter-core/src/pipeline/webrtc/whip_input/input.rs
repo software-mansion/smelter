@@ -64,11 +64,7 @@ impl WhipInput {
 
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
 
-        let endpoint_id = options
-            .endpoint_override
-            .unwrap_or(input_ref.id().0.clone());
-        let endpoint_route = Arc::from(format!("/whip/{}", urlencoding::encode(&endpoint_id)));
-
+        let endpoint_route = Arc::from(format!("/whip/{}", urlencoding::encode(&input_ref.id().0)));
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
 
         let video_preferences = resolve_video_preferences(&ctx, options.video_preferences)?;
@@ -77,7 +73,6 @@ impl WhipInput {
             &input_ref,
             WhipInputStateOptions {
                 bearer_token: bearer_token.clone(),
-                endpoint_id,
                 video_preferences,
                 jitter_buffer_size: options.jitter_buffer_size,
                 queue_input: queue_input.downgrade(),

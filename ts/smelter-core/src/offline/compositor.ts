@@ -91,10 +91,7 @@ export class OfflineSmelter {
     _smelterInternals.assertGlobalInputId(inputId);
 
     const inputRef = { type: 'global', id: inputId } as const;
-    const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
-    if (request.type === 'whip_server') {
-      result.endpoint_route = `/whip/${encodeURIComponent(inputId)}`;
-    }
+    const result = await this.api.registerInput(inputRef, intoRegisterInput(request));
 
     const offsetMs = 'offsetMs' in request && request.offsetMs ? request.offsetMs : 0;
 
