@@ -63,6 +63,7 @@ def setup_pipeline(mp4_path: str | None):
                 "side_channel": {
                     "audio": True,
                     "video": True,
+                    "delay_ms": SIDE_CHANNEL_DELAY_MS,
                 },
             },
         )
@@ -78,6 +79,7 @@ def setup_pipeline(mp4_path: str | None):
                 "side_channel": {
                     "audio": True,
                     "video": True,
+                    "delay_ms": SIDE_CHANNEL_DELAY_MS,
                 },
             },
         )
@@ -467,7 +469,6 @@ def start_server() -> subprocess.Popen:
     env = {
         **os.environ,
         "SMELTER_API_PORT": str(SMELTER_PORT),
-        "SMELTER_SIDE_CHANNEL_DELAY_MS": str(SIDE_CHANNEL_DELAY_MS),
     }
 
     print(f"Starting smelter on port {SMELTER_PORT}...")
