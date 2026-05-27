@@ -22,13 +22,12 @@ use crate::pipeline::webrtc::{
 };
 
 pub async fn handle_create_whep_session(
-    Path(endpoint_id): Path<String>,
+    Path(output_id): Path<String>,
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipWhepServerError> {
-    let endpoint_id = Arc::from(endpoint_id.clone());
-    let output_ref = state.outputs.find_by_endpoint_id(&endpoint_id)?;
+    let output_ref = state.outputs.resolve_output_ref(&output_id)?;
     let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
     debug!("SDP offer: {}", offer);
 
@@ -124,7 +123,7 @@ pub async fn handle_create_whep_session(
             "Location",
             format!(
                 "/whep/{}/{}",
-                urlencoding::encode(&endpoint_id),
+                urlencoding::encode(&output_id),
                 urlencoding::encode(&session_id),
             ),
         )

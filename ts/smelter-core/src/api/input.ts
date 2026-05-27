@@ -58,7 +58,7 @@ export type RegisterInput =
  * Converts object passed by user (or modified by platform specific interface) into
  * HTTP request
  */
-export function intoRegisterInput(inputId: string, input: RegisterInput): RegisterInputRequest {
+export function intoRegisterInput(input: RegisterInput): RegisterInputRequest {
   if (input.type === 'mp4') {
     return intoMp4RegisterInput(input);
   } else if (input.type === 'hls') {
@@ -66,7 +66,7 @@ export function intoRegisterInput(inputId: string, input: RegisterInput): Regist
   } else if (input.type === 'rtp_stream') {
     return intoRtpRegisterInput(input);
   } else if (input.type === 'whip_server') {
-    return intoWhipRegisterInput(inputId, input);
+    return intoWhipRegisterInput(input);
   } else if (input.type === 'whep_client') {
     return intoWhepRegisterInput(input);
   } else if (input.type === 'rtmp_server') {
@@ -130,15 +130,11 @@ function intoRtpRegisterInput(input: Inputs.RegisterRtpInput): RegisterInputRequ
   };
 }
 
-function intoWhipRegisterInput(
-  inputId: string,
-  input: Inputs.RegisterWhipServerInput
-): RegisterInputRequest {
+function intoWhipRegisterInput(input: Inputs.RegisterWhipServerInput): RegisterInputRequest {
   return {
     type: 'whip_server',
     video: input.video && intoInputWhipVideoOptions(input.video),
     bearer_token: input.bearerToken,
-    endpoint_override: inputId,
     required: input.required,
     buffer_size_ms: input.bufferSizeMs,
     side_channel: intoSideChannel(input.sideChannel),

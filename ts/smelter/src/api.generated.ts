@@ -126,10 +126,6 @@ export type RegisterInput =
        */
       bearer_token?: string | null;
       /**
-       * Internal use only. Overrides whip endpoint id which is used when referencing the input via whip server. If not provided, it defaults to input id.
-       */
-      endpoint_override?: string | null;
-      /**
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;

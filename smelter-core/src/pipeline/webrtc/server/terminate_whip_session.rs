@@ -7,11 +7,11 @@ use std::sync::Arc;
 use tracing::info;
 
 pub async fn handle_terminate_whip_session(
-    Path((endpoint_id, session_id)): Path<(String, String)>,
+    Path((input_id, session_id)): Path<(String, String)>,
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
 ) -> Result<StatusCode, WhipWhepServerError> {
-    let input_ref = state.inputs.find_by_endpoint_id(&Arc::from(endpoint_id))?;
+    let input_ref = state.inputs.resolve_input_ref(&input_id)?;
     let session_id = Arc::from(session_id);
 
     state.inputs.validate_token(&input_ref, &headers).await?;

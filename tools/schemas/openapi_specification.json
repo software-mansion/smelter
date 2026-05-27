@@ -6693,13 +6693,6 @@
             ],
             "description": "Token used for authentication in WHIP protocol. If not provided, the random value\nwill be generated and returned in the response."
           },
-          "endpoint_override": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Internal use only.\nOverrides whip endpoint id which is used when referencing the input via whip server.\nIf not provided, it defaults to input id."
-          },
           "required": {
             "type": [
               "boolean",

@@ -667,7 +667,6 @@ fn whip_minimal() {
         CoreInput::Whip(WhipInputOptions {
             video_preferences: vec![WebrtcVideoDecoderOptions::Any],
             bearer_token: None,
-            endpoint_override: None,
             jitter_buffer_size: None,
             queue_options: default_queue(),
         }),
@@ -694,7 +693,6 @@ fn whip_with_all_options() {
                 WebrtcVideoDecoderOptions::FfmpegVp8,
             ],
             bearer_token: Some(Arc::from("secret")),
-            endpoint_override: None,
             jitter_buffer_size: Some(Duration::from_millis(200)),
             queue_options: QueueInputOptions {
                 required: true,
@@ -723,7 +721,6 @@ fn whip_video_decoder_preferences() {
                 WebrtcVideoDecoderOptions::Any,
             ],
             bearer_token: None,
-            endpoint_override: None,
             jitter_buffer_size: None,
             queue_options: default_queue(),
         }),
@@ -743,7 +740,6 @@ fn whip_empty_decoder_preferences_defaults_to_any() {
         CoreInput::Whip(WhipInputOptions {
             video_preferences: vec![WebrtcVideoDecoderOptions::Any],
             bearer_token: None,
-            endpoint_override: None,
             jitter_buffer_size: None,
             queue_options: default_queue(),
         }),

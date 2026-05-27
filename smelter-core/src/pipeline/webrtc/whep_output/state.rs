@@ -40,18 +40,18 @@ impl WhepOutputsState {
         }
     }
 
-    pub fn find_by_endpoint_id(
+    pub fn resolve_output_ref(
         &self,
-        endpoint_id: &Arc<str>,
+        output_id: &str,
     ) -> Result<Ref<OutputId>, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
         let entry = guard
             .iter()
-            .find(|(output_ref, _)| &output_ref.id().0 == endpoint_id);
+            .find(|(output_ref, _)| &*output_ref.id().0 == output_id);
         match entry {
             Some((output_ref, _)) => Ok(output_ref.clone()),
             None => Err(WhipWhepServerError::NotFound(format!(
-                "Output {endpoint_id} not found"
+                "Output {output_id} not found"
             ))),
         }
     }

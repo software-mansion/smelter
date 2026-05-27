@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::pipeline::webrtc::{
     WhipWhepServerState, error::WhipWhepServerError,
     whip_input::create_new_session::create_new_whip_session,
@@ -17,15 +15,14 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
 #[debug_handler]
 pub async fn handle_create_whip_session(
-    Path(endpoint_id): Path<String>,
+    Path(input_id): Path<String>,
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipWhepServerError> {
-    let endpoint_id = Arc::from(endpoint_id.clone());
     debug!("SDP offer: {}", offer);
 
-    let input_ref = state.inputs.find_by_endpoint_id(&endpoint_id)?;
+    let input_ref = state.inputs.resolve_input_ref(&input_id)?;
 
     validate_sdp_content_type(&headers)?;
     state.inputs.validate_token(&input_ref, &headers).await?;
@@ -43,7 +40,7 @@ pub async fn handle_create_whip_session(
             "Location",
             format!(
                 "/whip/{}/{}",
-                urlencoding::encode(&endpoint_id),
+                urlencoding::encode(&input_id),
                 urlencoding::encode(&session_id)
             ),
         )

@@ -11,7 +11,6 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
             video,
             required,
             bearer_token,
-            endpoint_override,
             buffer_size_ms,
             side_channel,
         } = value;
@@ -35,7 +34,6 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
         let whip_options = core::WhipInputOptions {
             video_preferences,
             bearer_token,
-            endpoint_override,
             jitter_buffer_size,
             queue_options: core::QueueInputOptions {
                 required: required.unwrap_or(false),

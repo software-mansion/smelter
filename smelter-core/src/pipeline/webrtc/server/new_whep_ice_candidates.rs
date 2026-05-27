@@ -13,13 +13,12 @@ use crate::pipeline::webrtc::{
 };
 
 pub async fn handle_new_whep_ice_candidates(
-    Path((endpoint_id, session_id)): Path<(String, String)>,
+    Path((output_id, session_id)): Path<(String, String)>,
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     sdp_fragment_content: String,
 ) -> Result<StatusCode, WhipWhepServerError> {
-    let endpoint_id = Arc::from(endpoint_id.clone());
-    let output_ref = state.outputs.find_by_endpoint_id(&endpoint_id)?;
+    let output_ref = state.outputs.resolve_output_ref(&output_id)?;
     let session_id = Arc::from(session_id);
 
     validate_content_type(&headers)?;
@@ -41,8 +40,7 @@ pub async fn handle_new_whep_ice_candidates(
         }
         info!(
             ?session_id,
-            output_id=?output_ref.id(),
-            "Added ICE candidate for WHEP session"
+            output_id, "Added ICE candidate for WHEP session"
         );
     }
 
