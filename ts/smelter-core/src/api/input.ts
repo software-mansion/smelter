@@ -130,9 +130,7 @@ function intoRtpRegisterInput(input: Inputs.RegisterRtpInput): RegisterInputRequ
   };
 }
 
-function intoWhipRegisterInput(
-  input: Inputs.RegisterWhipServerInput
-): RegisterInputRequest {
+function intoWhipRegisterInput(input: Inputs.RegisterWhipServerInput): RegisterInputRequest {
   return {
     type: 'whip_server',
     video: input.video && intoInputWhipVideoOptions(input.video),
