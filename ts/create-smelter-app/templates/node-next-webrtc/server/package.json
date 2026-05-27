@@ -15,7 +15,7 @@
     "@fastify/type-provider-typebox": "^5.2.0",
     "@sinclair/typebox": "^0.34.48",
     "@swmansion/smelter": "workspace:0.4.0-rc.2",
-    "@swmansion/smelter-node": "workspace:0.4.0-rc.2",
+    "@swmansion/smelter-node": "workspace:0.4.0-rc.3",
     "fastify": "^5.8.5",
     "react": "^18.3.1",
     "zustand": "4.5.5"
