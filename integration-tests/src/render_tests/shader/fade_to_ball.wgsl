@@ -1,6 +1,7 @@
 /// Fades input "into ball" progersively in time 
 
 /// Depends on base_params.time
+enable wgpu_binding_array;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,

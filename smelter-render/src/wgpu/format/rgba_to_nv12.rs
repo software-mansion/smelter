@@ -94,7 +94,7 @@ fn create_converting_pipeline(
         cache: None,
         vertex: wgpu::VertexState {
             module: shader,
-            buffers: &[Vertex::LAYOUT],
+            buffers: &[Some(Vertex::LAYOUT)],
             entry_point: None,
             compilation_options: Default::default(),
         },

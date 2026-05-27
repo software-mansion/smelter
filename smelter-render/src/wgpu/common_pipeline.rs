@@ -111,7 +111,7 @@ pub fn create_render_pipeline(
             unclipped_depth: false,
         },
         vertex: wgpu::VertexState {
-            buffers: &[Vertex::LAYOUT],
+            buffers: &[Some(Vertex::LAYOUT)],
             module: shader_module,
             entry_point: Some(crate::wgpu::common_pipeline::VERTEX_ENTRYPOINT_NAME),
             compilation_options: wgpu::PipelineCompilationOptions::default(),

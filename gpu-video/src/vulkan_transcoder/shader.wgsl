@@ -1,3 +1,5 @@
+enable wgpu_binding_array;
+
 @group(0) @binding(0) var source_y: texture_storage_2d<r8unorm, read>;
 @group(0) @binding(1) var source_uv: texture_storage_2d<rg8unorm, read>;
 

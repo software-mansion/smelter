@@ -4,6 +4,7 @@
 /// blue if inputs count > 1
 
 /// Depends on base_params.texture_count
+enable wgpu_binding_array;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,

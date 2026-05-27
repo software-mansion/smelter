@@ -784,6 +784,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
                         usage: wgpu::TextureUsages::COPY_DST,
                         view_formats: &[],
                     },
+                    wgpu::TextureUses::UNINITIALIZED,
                 )
         };
 

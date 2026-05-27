@@ -36,7 +36,7 @@ impl PremultiplyAlphaPipeline {
             vertex: wgpu::VertexState {
                 module: &shader_module,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::LAYOUT],
+                buffers: &[Some(Vertex::LAYOUT)],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
 

@@ -526,9 +526,9 @@ dependencies = [
 
 [[package]]
 name = "bit-set"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ddef2995421ab6a5c779542c81ee77c115206f4ad9d5a8e05f4ff49716a3dd"
+checksum = "09ec2f926cc3060f09db9ebc5b52823d85268d24bb917e472c0c4bea35780a7d"
 dependencies = [
  "bit-vec",
 ]
@@ -1525,19 +1525,18 @@ dependencies = [
 
 [[package]]
 name = "etagere"
-version = "0.2.15"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc89bf99e5dc15954a60f707c1e09d7540e5cd9af85fa75caa0b510bc08c5342"
+checksum = "7ecb5c40d5683a270e077688f53a99eac51c1cb1ae5ba63b55590370cb3536bf"
 dependencies = [
  "euclid",
- "svg_fmt",
 ]
 
 [[package]]
 name = "euclid"
-version = "0.22.11"
+version = "0.22.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad9cdb4b747e485a12abb0e6566612956c7a1bafa3bdb8d682c5b6d403589e48"
+checksum = "f1a05365e3b1c6d1650318537c7460c6923f1abdd272ad6842baa2b509957a06"
 dependencies = [
  "num-traits",
 ]
@@ -2036,8 +2035,8 @@ dependencies = [
 
 [[package]]
 name = "glyphon"
-version = "0.10.0"
-source = "git+https://github.com/grovesNL/glyphon?rev=28f1cb9#28f1cb92e120ab790eca9ecc6aeb0ed8c8336fc0"
+version = "0.11.0"
+source = "git+https://github.com/smelter-labs/glyphon?rev=33b3dfe#33b3dfed4c2867ba7d94ecba4b5b68f031c35f0d"
 dependencies = [
  "cosmic-text",
  "etagere",
@@ -2058,26 +2057,6 @@ dependencies = [
  "presser",
  "thiserror 2.0.17",
  "windows 0.62.2",
-]
-
-[[package]]
-name = "gpu-descriptor"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b89c83349105e3732062a895becfc71a8f921bb71ecbbdd8ff99263e3b53a0ca"
-dependencies = [
- "bitflags 2.11.0",
- "gpu-descriptor-types",
- "hashbrown 0.15.2",
-]
-
-[[package]]
-name = "gpu-descriptor-types"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdf242682df893b86f33a73828fb09ca4b2d3bb6cc95249707fc684d27484b91"
-dependencies = [
- "bitflags 2.11.0",
 ]
 
 [[package]]
@@ -2177,15 +2156,6 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hashbrown"
-version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
-dependencies = [
- "foldhash 0.1.4",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
@@ -2232,12 +2202,6 @@ name = "hex-slice"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5491a308e0214554f07a81d8944abe45f552871c12e3c3c6e7e5d354039a6c4c"
-
-[[package]]
-name = "hexf-parse"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hkdf"
@@ -3188,8 +3152,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85b4372fed0bd362d646d01b6926df0e837859ccc522fed720c395e0460f29c8"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -3199,7 +3162,6 @@ dependencies = [
  "codespan-reporting 0.13.1",
  "half",
  "hashbrown 0.16.1",
- "hexf-parse",
  "indexmap 2.12.1",
  "libm",
  "log",
@@ -5364,12 +5326,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
-name = "svg_fmt"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce5d813d71d82c4cbc1742135004e4a79fd870214c155443451c139c9470a0aa"
-
-[[package]]
 name = "svgtypes"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6818,8 +6774,7 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 [[package]]
 name = "wgpu"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78f9f386699b1fb8b8a05bfe82169b24d151f05702d2905a0bf93bc454fcc825"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "arrayvec",
  "bitflags 2.11.0",
@@ -6848,8 +6803,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7c34181b0acb8f98168f78f8e57ec66f57df5522b39143dbe5f2f45d7ca927c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -6884,8 +6838,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-apple"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43acd053312501689cd92a01a9638d37f3e41a5fd9534875efa8917ee2d11ac0"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "wgpu-hal",
 ]
@@ -6893,8 +6846,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-emscripten"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef043bf135cc68b6f667c55ff4e345ce2b5924d75bad36a47921b0287ca4b24a"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "wgpu-hal",
 ]
@@ -6902,8 +6854,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-wasm"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f7b75e72f49035f000dd5262e4126242e92a090a4fd75931ecfe7e60784e6fa"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "wgpu-hal",
 ]
@@ -6911,8 +6862,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "725d5c006a8c02967b6d93ef04f6537ec4593313e330cfe86d9d3f946eb90f28"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "wgpu-hal",
 ]
@@ -6920,8 +6870,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "058b6047337cf323a4f092486443a9337f3d81325347e5d77deed7e563aeaedc"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -6935,7 +6884,6 @@ dependencies = [
  "glow",
  "glutin_wgl_sys",
  "gpu-allocator",
- "gpu-descriptor",
  "hashbrown 0.16.1",
  "js-sys",
  "khronos-egl",
@@ -6960,6 +6908,7 @@ dependencies = [
  "raw-window-metal",
  "renderdoc-sys",
  "smallvec",
+ "static_assertions",
  "thiserror 2.0.17",
  "wasm-bindgen",
  "wayland-sys 0.31.6",
@@ -6968,13 +6917,13 @@ dependencies = [
  "wgpu-types",
  "windows 0.62.2",
  "windows-core",
+ "windows-result 0.4.1",
 ]
 
 [[package]]
 name = "wgpu-naga-bridge"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0b8e1e505095f24cb4a578f04b1421d456257dca7fac114d9d9dd3d978c34b8"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "naga",
  "wgpu-types",
@@ -6983,8 +6932,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "29.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d15ece45db77dd5451f11c0ce898334317ce8502d304a20454b531fdc0652fae"
+source = "git+https://github.com/gfx-rs/wgpu?rev=1503796#1503796ad4cf16f1a8010fbcf2fa09e626b198f6"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
@@ -6992,6 +6940,7 @@ dependencies = [
  "log",
  "raw-window-handle",
  "serde",
+ "static_assertions",
  "web-sys",
 ]
 

@@ -225,7 +225,7 @@ impl<'a> Renderer<'a> {
             cache: None,
             vertex: wgpu::VertexState {
                 module: &shader_module,
-                buffers: &[Vertex::LAYOUT],
+                buffers: &[Some(Vertex::LAYOUT)],
                 compilation_options: Default::default(),
                 entry_point: None,
             },
@@ -359,6 +359,6 @@ impl<'a> Renderer<'a> {
 
         self.queue.submit(Some(command_encoder.finish()));
         window.pre_present_notify();
-        surface.present();
+        self.queue.present(surface);
     }
 }

@@ -192,7 +192,7 @@ impl FramePreProcessor {
         let mut writer = output.writer();
 
         {
-            let range = buffer.slice(..).get_mapped_range();
+            let range = buffer.slice(..).get_mapped_range().unwrap();
             for chunk in range.chunks(padded_row_bytes) {
                 writer.write_all(&chunk[..row_bytes]).unwrap();
             }

@@ -77,7 +77,7 @@ impl RendererOutputs {
         frame: &Frame,
         buffer: &wgpu::Buffer,
     ) -> Result<OutputFrame, JsValue> {
-        let buffer_view = buffer.slice(..).get_mapped_range();
+        let buffer_view = buffer.slice(..).get_mapped_range().unwrap();
         let resolution = Resolution {
             width: frame.resolution.width,
             height: frame.resolution.height,

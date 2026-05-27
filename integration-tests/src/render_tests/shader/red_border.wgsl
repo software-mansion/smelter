@@ -1,6 +1,7 @@
 /// Adds red border to input
 
 /// Depends on base_params.output_resolution  
+enable wgpu_binding_array;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,

@@ -772,14 +772,6 @@ impl<'a> VulkanDecoder<'a> {
             );
         }
 
-        image.transition_layout_single_layer(
-            &mut cmd_buffer,
-            vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
-            vk::AccessFlags2::TRANSFER_WRITE..vk::AccessFlags2::NONE,
-            vk::ImageLayout::GENERAL,
-            0,
-        )?;
-
         let semaphore_wait_value = self
             .decoding_device
             .queues
@@ -845,6 +837,7 @@ impl<'a> VulkanDecoder<'a> {
                         format: wgpu::TextureFormat::NV12,
                         mip_level_count: 1,
                     },
+                    wgpu::TextureUses::COPY_DST,
                 )
         };
 

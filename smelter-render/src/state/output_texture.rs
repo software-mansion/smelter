@@ -101,7 +101,7 @@ impl PlanarYuvOutput {
             r.recv().unwrap()?;
             let mut buffer = buffer.writer();
             {
-                let range = source.slice(..).get_mapped_range();
+                let range = source.slice(..).get_mapped_range().unwrap();
                 let chunks = range.chunks(pad_to_256(size.width) as usize);
                 for chunk in chunks {
                     buffer.write_all(&chunk[..size.width as usize]).unwrap();

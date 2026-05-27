@@ -1,4 +1,5 @@
 /// Depends on uniform params (1st bind group)
+enable wgpu_binding_array;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
