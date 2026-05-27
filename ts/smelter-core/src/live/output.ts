@@ -140,7 +140,7 @@ class OutputContext implements SmelterOutputContext {
   ): Promise<{ videoDurationMs?: number; audioDurationMs?: number }> {
     return await this.output.internalInputStreamStore.runBlocking(async updateStore => {
       const inputRef = {
-        type: 'output-specific-input',
+        type: _smelterInternals.OUTPUT_SPECIFIC_INPUT_TYPE,
         outputId: this.outputId,
         id: inputId,
       } as const;
@@ -175,7 +175,7 @@ class OutputContext implements SmelterOutputContext {
   public async unregisterMp4Input(inputId: number): Promise<void> {
     await this.output.api.unregisterInput(
       {
-        type: 'output-specific-input',
+        type: _smelterInternals.OUTPUT_SPECIFIC_INPUT_TYPE,
         outputId: this.outputId,
         id: inputId,
       },
@@ -184,7 +184,7 @@ class OutputContext implements SmelterOutputContext {
   }
   public async registerImage(imageId: number, imageSpec: Renderers.RegisterImage) {
     const imageRef = {
-      type: 'output-specific-image',
+      type: _smelterInternals.OUTPUT_SPECIFIC_IMAGE_TYPE,
       outputId: this.outputId,
       id: imageId,
     } as const satisfies ImageRef;
@@ -198,7 +198,7 @@ class OutputContext implements SmelterOutputContext {
   public async unregisterImage(imageId: number) {
     await this.output.api.unregisterImage(
       {
-        type: 'output-specific-image',
+        type: _smelterInternals.OUTPUT_SPECIFIC_IMAGE_TYPE,
         outputId: this.outputId,
         id: imageId,
       },

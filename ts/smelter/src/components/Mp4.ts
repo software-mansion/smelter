@@ -1,7 +1,7 @@
 import { createElement, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import { newBlockingTask } from '../hooks.js';
 import { SmelterContext } from '../context/index.js';
-import { inputRefIntoRawId, OfflineTimeContext } from '../internal.js';
+import { inputRefIntoRawId, OfflineTimeContext, OUTPUT_SPECIFIC_INPUT_TYPE } from '../internal.js';
 import { InnerInputStream } from './InputStream.js';
 import { newInternalStreamId } from '../context/internalStreamIdManager.js';
 import type { ComponentBaseProps } from '../component.js';
@@ -88,7 +88,7 @@ function Mp4(props: Mp4Props) {
   return createElement(InnerInputStream, {
     ...otherProps,
     inputId: inputRefIntoRawId({
-      type: 'output-specific-input',
+      type: OUTPUT_SPECIFIC_INPUT_TYPE,
       id: inputId,
       outputId: ctx.outputId,
     }),
@@ -103,12 +103,12 @@ function useInternalAudioInput(inputId: number, volume: number) {
     }
     const options = { volume };
     ctx.audioContext.addInputAudioComponent(
-      { type: 'output-specific-input', id: inputId, outputId: ctx.outputId },
+      { type: OUTPUT_SPECIFIC_INPUT_TYPE, id: inputId, outputId: ctx.outputId },
       options
     );
     return () => {
       ctx.audioContext.removeInputAudioComponent(
-        { type: 'output-specific-input', id: inputId, outputId: ctx.outputId },
+        { type: OUTPUT_SPECIFIC_INPUT_TYPE, id: inputId, outputId: ctx.outputId },
         options
       );
     };

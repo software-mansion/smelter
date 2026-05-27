@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react';
 import { SmelterContext } from './index.js';
 import type { Logger } from '../types/logger.js';
+import { inputRefIntoRawId, OUTPUT_SPECIFIC_INPUT_TYPE } from '../types/refs/inputRef.js';
 
 let nextStreamNumber = 1;
 
@@ -14,7 +15,11 @@ export function useInternalStreamId(): string {
     nextStreamNumber += 1;
     return result;
   });
-  return `output-specific-input:${streamNumber}:${ctx.outputId}`;
+  return inputRefIntoRawId({
+    type: OUTPUT_SPECIFIC_INPUT_TYPE,
+    id: streamNumber,
+    outputId: ctx.outputId,
+  });
 }
 
 export type StreamState = 'ready' | 'playing' | 'paused' | 'finished';
