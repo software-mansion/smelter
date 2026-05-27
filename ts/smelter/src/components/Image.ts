@@ -2,7 +2,7 @@ import { createElement, useContext, useEffect, useState } from 'react';
 import type { ComponentBaseProps, SceneComponent } from '../component.js';
 import { createSmelterComponent } from '../component.js';
 import { View, type Api } from '../index.js';
-import { imageRefIntoRawId } from '../types/refs/imageRef.js';
+import { imageRefIntoRawId, OUTPUT_SPECIFIC_IMAGE_TYPE } from '../types/refs/imageRef.js';
 import { newInternalImageId } from '../context/internalImageIdManager.js';
 import { newBlockingTask } from '../hooks.js';
 import { SmelterContext } from '../context/index.js';
@@ -93,7 +93,7 @@ function Image(props: ImageProps) {
     return createElement(InnerImage, {
       ...props,
       imageId: imageRefIntoRawId({
-        type: 'output-specific-image',
+        type: OUTPUT_SPECIFIC_IMAGE_TYPE,
         id: internalImageId,
         outputId: ctx.outputId,
       }),

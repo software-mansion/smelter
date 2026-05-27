@@ -11,8 +11,20 @@ export {
 } from './context/inputStreamStore.js';
 export { SceneBuilder, SceneComponent } from './component.js';
 export { SmelterEvent, SmelterEventType, SmelterErrorSeverity } from './types/events.js';
-export { InputRef, inputRefIntoRawId, parseInputRef } from './types/refs/inputRef.js';
-export { ImageRef, imageRefIntoRawId, parseImageRef } from './types/refs/imageRef.js';
+export {
+  InputRef,
+  inputRefIntoRawId,
+  parseInputRef,
+  assertGlobalInputId,
+  OUTPUT_SPECIFIC_INPUT_TYPE,
+} from './types/refs/inputRef.js';
+export {
+  ImageRef,
+  imageRefIntoRawId,
+  parseImageRef,
+  assertGlobalImageId,
+  OUTPUT_SPECIFIC_IMAGE_TYPE,
+} from './types/refs/imageRef.js';
 export {
   ChildrenLifetimeContext,
   ChildrenLifetimeContextType,

@@ -88,6 +88,7 @@ export class OfflineSmelter {
   ): Promise<RegisterInputResponse> {
     this.checkNotStarted();
     this.logger.info({ inputId, type: request.type }, 'Register new input');
+    _smelterInternals.assertGlobalInputId(inputId);
 
     const inputRef = { type: 'global', id: inputId } as const;
     const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
@@ -139,6 +140,7 @@ export class OfflineSmelter {
   public async registerImage(imageId: string, request: Renderers.RegisterImage): Promise<object> {
     this.checkNotStarted();
     this.logger.info({ imageId }, 'Register image');
+    _smelterInternals.assertGlobalImageId(imageId);
     const imageRef = { type: 'global', id: imageId } as const satisfies ImageRef;
 
     return this.api.registerImage(imageRef, intoRegisterImage(request));
