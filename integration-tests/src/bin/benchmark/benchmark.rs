@@ -12,7 +12,6 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub enum EncoderOptions {
     FfmpegH264(FfmpegH264EncoderPreset),
-    #[cfg(not(target_os = "macos"))]
     VulkanH264,
     Disabled,
 }
@@ -75,11 +74,13 @@ impl BenchmarkResult {
               "input_count": format!("{:?}", pass.input_count),
               "output_count": format!("{:?}", pass.output_count),
               "framerate": format!("{:?}", pass.framerate),
-              "output_resolution": format!("{:?}", pass.output_resolution),
-              "input_file": format!("{:?}", pass.input_file),
+              "output_resolution": match pass.output_resolution.matching_preset() {
+                  Some(preset) => format!("{preset:?}"),
+                  None => format!("{:?}", pass.output_resolution),
+              },
+              "input_file": pass.input_file.label,
               "encoder": format!("{:?}", pass.encoder),
               "decoder": format!("{:?}", pass.decoder),
-              "warm_up_time": pass.warm_up_time,
             }),
             None => serde_json::Value::Null,
           }
