@@ -53,9 +53,9 @@ impl AudioQueueInput {
         offset: Option<Duration>,
         track_offset: TrackOffset,
         side_channel: Option<AudioSideChannel>,
+        side_channel_delay: Duration,
     ) -> (Self, Sender<InputAudioSamples>) {
-        let (receiver, sender) =
-            AudioInputReceiver::new(ctx.queue_ctx.side_channel_delay, side_channel);
+        let (receiver, sender) = AudioInputReceiver::new(side_channel_delay, side_channel);
         let input = Self {
             queue_ctx: ctx.queue_ctx.clone(),
             required,

@@ -5308,6 +5308,14 @@
               "null"
             ],
             "description": "Enable side channel for audio track."
+          },
+          "delay_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Side channel delay in milliseconds. Frames are buffered for this duration ahead of\nwhen the queue consumes them, so the side-channel subscriber receives them early\nand has roughly this much time to process before the frame is due."
           }
         },
         "additionalProperties": false

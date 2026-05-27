@@ -101,7 +101,7 @@ function intoMp4RegisterInput(input: Inputs.RegisterMp4Input): RegisterInputRequ
     offset_ms: input.offsetMs,
     seek_ms: input.seekMs,
     decoder_map: input.decoderMap,
-    side_channel: input.sideChannel,
+    side_channel: intoSideChannel(input.sideChannel),
   };
 }
 
@@ -112,7 +112,7 @@ function intoHlsRegisterInput(input: Inputs.RegisterHlsInput): RegisterInputRequ
     required: input.required,
     offset_ms: input.offsetMs,
     decoder_map: input.decoderMap,
-    side_channel: input.sideChannel,
+    side_channel: intoSideChannel(input.sideChannel),
   };
 }
 
@@ -126,7 +126,7 @@ function intoRtpRegisterInput(input: Inputs.RegisterRtpInput): RegisterInputRequ
     required: input.required,
     offset_ms: input.offsetMs,
     buffer_size_ms: input.bufferSizeMs,
-    side_channel: input.sideChannel,
+    side_channel: intoSideChannel(input.sideChannel),
   };
 }
 
@@ -141,7 +141,7 @@ function intoWhipRegisterInput(
     endpoint_override: inputId,
     required: input.required,
     buffer_size_ms: input.bufferSizeMs,
-    side_channel: input.sideChannel,
+    side_channel: intoSideChannel(input.sideChannel),
   };
 }
 
@@ -153,7 +153,7 @@ function intoWhepRegisterInput(input: Inputs.RegisterWhepClientInput): RegisterI
     video: input.video && intoInputWhepVideoOptions(input.video),
     required: input.required,
     buffer_size_ms: input.bufferSizeMs,
-    side_channel: input.sideChannel,
+    side_channel: intoSideChannel(input.sideChannel),
   };
 }
 
@@ -164,7 +164,7 @@ function intoRtmpRegisterInput(input: Inputs.RegisterRtmpServerInput): RegisterI
     stream_key: input.streamKey,
     required: input.required,
     decoder_map: input.decoderMap,
-    side_channel: input.sideChannel,
+    side_channel: intoSideChannel(input.sideChannel),
   };
 }
 
@@ -176,7 +176,18 @@ function intoV4l2RegisterInput(input: Inputs.RegisterV4l2Input): RegisterInputRe
     format: input.format,
     framerate: input.framerate,
     required: input.required,
-    side_channel: input.sideChannel,
+    side_channel: intoSideChannel(input.sideChannel),
+  };
+}
+
+function intoSideChannel(sideChannel?: Inputs.SideChannel): Api.SideChannel | undefined {
+  if (!sideChannel) {
+    return undefined;
+  }
+  return {
+    video: sideChannel.video,
+    audio: sideChannel.audio,
+    delay_ms: sideChannel.delayMs,
   };
 }
 

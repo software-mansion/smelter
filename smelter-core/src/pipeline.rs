@@ -57,7 +57,6 @@ pub struct PipelineOptions {
     pub run_late_scheduled_events: bool,
     pub never_drop_output_frames: bool,
     pub ahead_of_time_processing: bool,
-    pub side_channel_delay: Duration,
     pub side_channel_socket_dir: Option<Arc<Path>>,
 
     pub output_framerate: Framerate,
