@@ -33,7 +33,7 @@ use crate::prelude::*;
 
 mod catalog;
 
-const MOQ_BUFFER: Duration = Duration::from_millis(200);
+const MOQ_BUFFER: Duration = Duration::from_secs(2);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct DiscoveredVideo {
@@ -87,7 +87,7 @@ pub(crate) fn spawn_broadcast_handler(
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: has_video,
             audio: has_audio,
-            offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts()),
+            offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_BUFFER),
         });
 
         if let Some(v) = &discovered.video {
