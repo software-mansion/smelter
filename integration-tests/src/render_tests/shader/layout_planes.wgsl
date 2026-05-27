@@ -2,6 +2,7 @@
 /// and next ones in the center
 
 /// Depends on base_params.plane_id
+enable wgpu_binding_array;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,

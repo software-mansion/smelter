@@ -76,7 +76,7 @@ fn download_buffer(
     r.recv().unwrap().unwrap();
     let mut buffer = buffer.writer();
     {
-        let range = source.slice(..).get_mapped_range();
+        let range = source.slice(..).get_mapped_range().unwrap();
         let chunks = range.chunks(pad_to_256(size.width * 4) as usize);
         for chunk in chunks {
             buffer

@@ -36,7 +36,7 @@ memchr = "2.7.4"
 rustc-hash = "2.1.1"
 thiserror = "1.0.59"
 tracing = "0.1.40"
-wgpu = { version = "29.0.0", optional = true }
+wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", optional = true }
 
 # Platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
@@ -46,13 +46,13 @@ vk-mem = "0.4.0"
 [dev-dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
 tracing-subscriber = "0.3.20"
-wgpu = { version = "29.0.0", features = ["noop"] }
+wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", features = ["noop"] }
 winit = "0.29"
 bytemuck = { version = "1.19.0", features = ["derive"] }
 
 [build-dependencies]
 cfg_aliases = "0.2.1"
-naga = { version = "29.0.0", features = [
+naga = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", features = [
   "spv-out",
   "wgsl-in",
 ], optional = true }

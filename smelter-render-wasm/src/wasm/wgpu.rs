@@ -43,6 +43,7 @@ pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue
             power_preference: wgpu::PowerPreference::HighPerformance,
             force_fallback_adapter: false,
             compatible_surface: Some(&surface),
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|_| JsValue::from_str("Failed to get a wgpu adapter"))?;
