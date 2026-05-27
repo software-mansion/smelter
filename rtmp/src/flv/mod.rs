@@ -2,8 +2,7 @@ mod audio;
 mod codec_config;
 mod ex_audio;
 mod ex_video;
-mod mod_ex_audio;
-mod mod_ex_video;
+mod mod_ex;
 mod video;
 
 pub use audio::*;

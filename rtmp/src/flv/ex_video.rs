@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     EX_HEADER_BIT, MAX_TIMESTAMP_OFFSET_NANOS,
-    mod_ex_video::{VideoPacketModExType, resolve_mod_ex, serialize_mod_ex},
+    mod_ex::{ExPacketKind, ModExType, resolve_mod_ex, serialize_mod_ex},
     video::{VideoTagFrameType, parse_composition_time, serialize_composition_time},
 };
 
@@ -129,7 +129,7 @@ pub enum ExVideoPacket {
     Mpeg2TsSequenceStart(Bytes),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ExVideoPacketType {
     SequenceStart,
     CodedFrames,
@@ -141,8 +141,12 @@ pub(super) enum ExVideoPacketType {
     ModEx,
 }
 
-impl ExVideoPacketType {
-    pub(super) fn from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
+impl ExPacketKind for ExVideoPacketType {
+    type ParseError = FlvVideoTagParseError;
+
+    const MOD_EX: Self = Self::ModEx;
+
+    fn from_raw(value: u8) -> Result<Self, Self::ParseError> {
         match value {
             0 => Ok(Self::SequenceStart),
             1 => Ok(Self::CodedFrames),
@@ -156,7 +160,7 @@ impl ExVideoPacketType {
         }
     }
 
-    pub(super) fn into_raw(self) -> u8 {
+    fn into_raw(self) -> u8 {
         match self {
             Self::SequenceStart => 0,
             Self::CodedFrames => 1,
@@ -365,7 +369,7 @@ impl ExVideoTag {
                 if let Some(data) = &mod_ex_data {
                     serialize_mod_ex(
                         &mut buf,
-                        VideoPacketModExType::TimestampOffsetNano,
+                        ModExType::TimestampOffsetNano,
                         data,
                         wire_packet_type,
                     )?;

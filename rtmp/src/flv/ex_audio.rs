@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     EX_AUDIO_SOUND_FORMAT, MAX_TIMESTAMP_OFFSET_NANOS,
-    mod_ex_audio::{AudioPacketModExType, resolve_mod_ex, serialize_mod_ex},
+    mod_ex::{ExPacketKind, ModExType, resolve_mod_ex, serialize_mod_ex},
 };
 
 // TODO: This is a struct while ExVideoTag is an enum. Rethink if audio might require multiple tag variants as well
@@ -97,7 +97,7 @@ pub enum ExAudioPacket {
     MultichannelConfig(Bytes),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ExAudioPacketType {
     SequenceStart,
     CodedFrames,
@@ -107,8 +107,12 @@ pub(super) enum ExAudioPacketType {
     ModEx,
 }
 
-impl ExAudioPacketType {
-    pub(super) fn from_raw(value: u8) -> Result<Self, FlvAudioTagParseError> {
+impl ExPacketKind for ExAudioPacketType {
+    type ParseError = FlvAudioTagParseError;
+
+    const MOD_EX: Self = Self::ModEx;
+
+    fn from_raw(value: u8) -> Result<Self, Self::ParseError> {
         match value {
             0 => Ok(Self::SequenceStart),
             1 => Ok(Self::CodedFrames),
@@ -120,7 +124,7 @@ impl ExAudioPacketType {
         }
     }
 
-    pub(super) fn into_raw(self) -> u8 {
+    fn into_raw(self) -> u8 {
         match self {
             Self::SequenceStart => 0,
             Self::CodedFrames => 1,
@@ -235,7 +239,7 @@ impl ExAudioTag {
         if let Some(data) = &mod_ex_data {
             serialize_mod_ex(
                 &mut buf,
-                AudioPacketModExType::TimestampOffsetNano,
+                ModExType::TimestampOffsetNano,
                 data,
                 wire_packet_type,
             )?;
