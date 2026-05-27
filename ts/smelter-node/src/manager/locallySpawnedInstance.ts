@@ -2,7 +2,7 @@ import os from 'os';
 import path from 'path';
 
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs-extra';
+import { mkdirp, pathExists, remove, writeFile } from 'fs-extra';
 import * as tar from 'tar';
 import type {
   ApiRequest,
@@ -172,17 +172,17 @@ async function prepareExecutable(enableWebRenderer?: boolean): Promise<Executabl
   const readyFilePath = path.join(downloadDir, '.ready');
   const executableDir = path.join(downloadDir, 'smelter');
 
-  if (await fs.pathExists(readyFilePath)) {
+  if (await pathExists(readyFilePath)) {
     return {
       mainProcess: path.join(executableDir, 'smelter_main'),
       dependencyCheck: path.join(executableDir, 'dependency_check'),
     };
   }
-  await fs.mkdirp(downloadDir);
+  await mkdirp(downloadDir);
 
   const tarGzPath = path.join(downloadDir, 'smelter.tar.gz');
-  if (await fs.pathExists(tarGzPath)) {
-    await fs.remove(tarGzPath);
+  if (await pathExists(tarGzPath)) {
+    await remove(tarGzPath);
   }
   await download(smelterTarGzUrl(enableWebRenderer), tarGzPath);
 
@@ -190,9 +190,9 @@ async function prepareExecutable(enableWebRenderer?: boolean): Promise<Executabl
     file: tarGzPath,
     cwd: downloadDir,
   });
-  await fs.remove(tarGzPath);
+  await remove(tarGzPath);
 
-  await fs.writeFile(readyFilePath, '\n', 'utf-8');
+  await writeFile(readyFilePath, '\n', 'utf-8');
   return {
     mainProcess: path.join(executableDir, 'smelter_main'),
     dependencyCheck: path.join(executableDir, 'dependency_check'),
