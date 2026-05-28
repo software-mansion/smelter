@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::VecDeque,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use bytes::Bytes;
 use moq_mux::catalog::hang::Container;
@@ -34,7 +38,7 @@ use crate::prelude::*;
 mod catalog;
 
 const MOQ_LATENCY_TOLERANCE: Duration = Duration::from_millis(500);
-const MOQ_QUEUE_BUFFER: Duration = Duration::from_secs(2);
+const MOQ_JITTER_BUFFER_SIZE: Duration = Duration::from_millis(500);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct DiscoveredVideo {
@@ -88,7 +92,7 @@ pub(crate) fn spawn_broadcast_handler(
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: has_video,
             audio: has_audio,
-            offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_QUEUE_BUFFER),
+            offset: QueueTrackOffset::Pts(Duration::ZERO),
         });
 
         if let Some(v) = &discovered.video {
@@ -109,10 +113,11 @@ pub(crate) fn spawn_broadcast_handler(
 
         let video = discovered.video.take();
         let audio = discovered.audio.take();
+        let sync_point = ctx.queue_ctx.sync_point;
 
-        let video_fut = run_video_track(video, video_decoder_handle, &broadcast);
+        let video_fut = run_video_track(video, video_decoder_handle, &broadcast, sync_point);
 
-        let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast);
+        let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast, sync_point);
 
         tokio::join!(video_fut, audio_fut);
         info!(input_id = %input_id_str, "MoQ broadcast connection closed");
@@ -244,6 +249,7 @@ async fn run_video_track(
     video: Option<DiscoveredVideo>,
     decoder_handle: Option<DecoderThreadHandle>,
     broadcast: &BroadcastConsumer,
+    sync_point: Instant,
 ) {
     if let Some(video) = video
         && let Some(decoder_handle) = decoder_handle
@@ -252,7 +258,11 @@ async fn run_video_track(
             Ok(track) => {
                 let consumer = ContainerConsumer::new(track, video.container)
                     .with_latency(MOQ_LATENCY_TOLERANCE);
-                if let Err(err) = read_video_track(consumer, decoder_handle).await {
+                let jitter_buffer = MoqJitterBuffer::new(MOQ_JITTER_BUFFER_SIZE, sync_point);
+                if let Err(err) = jitter_buffer
+                    .run(consumer, decoder_handle, MediaKind::Video(VideoCodec::H264))
+                    .await
+                {
                     warn!(
                         "MoQ video track error: {}",
                         ErrorStack::new(&err).into_string()
@@ -270,6 +280,7 @@ async fn run_audio_track(
     audio: Option<DiscoveredAudio>,
     decoder_handle: Option<DecoderThreadHandle>,
     broadcast: &BroadcastConsumer,
+    sync_point: Instant,
 ) {
     if let Some(audio) = audio
         && let Some(decoder_handle) = decoder_handle
@@ -278,7 +289,11 @@ async fn run_audio_track(
             Ok(track) => {
                 let consumer = ContainerConsumer::new(track, audio.container)
                     .with_latency(MOQ_LATENCY_TOLERANCE);
-                if let Err(err) = read_audio_track(consumer, decoder_handle).await {
+                let jitter_buffer = MoqJitterBuffer::new(MOQ_JITTER_BUFFER_SIZE, sync_point);
+                if let Err(err) = jitter_buffer
+                    .run(consumer, decoder_handle, MediaKind::Audio(AudioCodec::Aac))
+                    .await
+                {
                     warn!(
                         "MoQ audio track error: {}",
                         ErrorStack::new(&err).into_string()
@@ -325,70 +340,157 @@ enum MoqConnectionError {
     ContainerError(#[source] moq_mux::Error),
 }
 
-async fn read_video_track(
-    mut consumer: ContainerConsumer<Container>,
-    decoder_handle: DecoderThreadHandle,
-) -> Result<(), MoqConnectionError> {
-    let mut first_pts: Option<Duration> = None;
-
-    while let Some(frame) = consumer
-        .read()
-        .await
-        .map_err(MoqConnectionError::ContainerError)?
-    {
-        let raw_pts: Duration = frame.timestamp.into();
-        let first = *first_pts.get_or_insert(raw_pts);
-        let pts = raw_pts.saturating_sub(first);
-        trace!(?pts, "MoQ video frame");
-        let payload = frame.payload;
-
-        let chunk = EncodedInputChunk {
-            data: payload,
-            pts,
-            dts: None,
-            kind: MediaKind::Video(VideoCodec::H264),
-            present: true,
-        };
-
-        decoder_handle
-            .chunk_sender
-            .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
-    }
-
-    Ok(())
+struct BufferedFrame {
+    payload: Bytes,
+    raw_pts: Duration,
 }
 
-async fn read_audio_track(
-    mut consumer: ContainerConsumer<Container>,
-    decoder_handle: DecoderThreadHandle,
-) -> Result<(), MoqConnectionError> {
-    let mut first_pts: Option<Duration> = None;
+struct MoqJitterBuffer {
+    buffer: VecDeque<BufferedFrame>,
+    buffer_size: Duration,
+    sync_point: Instant,
+    first_pts: Option<Duration>,
+    /// Wall-clock instant when releasing begins (set after fill phase)
+    wall_anchor: Option<Instant>,
+    /// `sync_point.elapsed()` captured at `wall_anchor` time
+    anchor_pts: Option<Duration>,
+}
 
-    while let Some(frame) = consumer
-        .read()
-        .await
-        .map_err(MoqConnectionError::ContainerError)?
-    {
-        let raw_pts: Duration = frame.timestamp.into();
-        let first = *first_pts.get_or_insert(raw_pts);
-        let pts = raw_pts.saturating_sub(first);
-        // trace!(?pts, "MoQ audio frame");
-        let payload = frame.payload;
+impl MoqJitterBuffer {
+    fn new(buffer_size: Duration, sync_point: Instant) -> Self {
+        Self {
+            buffer: VecDeque::new(),
+            buffer_size,
+            sync_point,
+            first_pts: None,
+            wall_anchor: None,
+            anchor_pts: None,
+        }
+    }
+
+    fn pts_span(&self) -> Duration {
+        match (self.buffer.front(), self.buffer.back()) {
+            (Some(first), Some(last)) => last.raw_pts.saturating_sub(first.raw_pts),
+            _ => Duration::ZERO,
+        }
+    }
+
+    fn output_pts(&self, raw_pts: Duration) -> Duration {
+        let first = self.first_pts.unwrap_or(raw_pts);
+        let normalized = raw_pts.saturating_sub(first);
+        let base = self.anchor_pts.unwrap_or_else(|| self.sync_point.elapsed());
+        base + normalized + self.buffer_size
+    }
+
+    fn release_time(&self, raw_pts: Duration) -> tokio::time::Instant {
+        let first = self.first_pts.unwrap_or(raw_pts);
+        let normalized = raw_pts.saturating_sub(first);
+        let wall_anchor = self.wall_anchor.unwrap_or_else(Instant::now);
+        tokio::time::Instant::from_std(wall_anchor + normalized)
+    }
+
+    async fn run(
+        mut self,
+        mut consumer: ContainerConsumer<Container>,
+        decoder_handle: DecoderThreadHandle,
+        media_kind: MediaKind,
+    ) -> Result<(), MoqConnectionError> {
+        // Fill phase: buffer frames until we have buffer_size worth of PTS span
+        loop {
+            let frame = consumer
+                .read()
+                .await
+                .map_err(MoqConnectionError::ContainerError)?;
+
+            let Some(frame) = frame else {
+                return self.flush_remaining(&decoder_handle, media_kind);
+            };
+
+            let raw_pts: Duration = frame.timestamp.into();
+            self.first_pts.get_or_insert(raw_pts);
+            self.buffer.push_back(BufferedFrame {
+                payload: frame.payload,
+                raw_pts,
+            });
+
+            if self.pts_span() >= self.buffer_size {
+                break;
+            }
+        }
+
+        self.anchor_pts = Some(self.sync_point.elapsed());
+        self.wall_anchor = Some(Instant::now());
+        trace!(
+            buffered_frames = self.buffer.len(),
+            pts_span_ms = self.pts_span().as_millis(),
+            "MoQ jitter buffer filled"
+        );
+
+        // Release phase: select loop
+        loop {
+            let sleep_until = self
+                .buffer
+                .front()
+                .map(|f| self.release_time(f.raw_pts));
+
+            tokio::select! {
+                result = consumer.read() => {
+                    let frame = result.map_err(MoqConnectionError::ContainerError)?;
+                    let Some(frame) = frame else {
+                        return self.flush_remaining(&decoder_handle, media_kind);
+                    };
+                    let raw_pts: Duration = frame.timestamp.into();
+                    self.buffer.push_back(BufferedFrame {
+                        payload: frame.payload,
+                        raw_pts,
+                    });
+                }
+
+                _ = async {
+                    match sleep_until {
+                        Some(deadline) => tokio::time::sleep_until(deadline).await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    if let Some(frame) = self.buffer.pop_front() {
+                        self.send_frame(&decoder_handle, media_kind, frame)?;
+                    }
+                }
+            }
+        }
+    }
+
+    fn send_frame(
+        &self,
+        decoder_handle: &DecoderThreadHandle,
+        media_kind: MediaKind,
+        frame: BufferedFrame,
+    ) -> Result<(), MoqConnectionError> {
+        let pts = self.output_pts(frame.raw_pts);
+        trace!(?pts, "MoQ jitter buffer release");
 
         let chunk = EncodedInputChunk {
-            data: payload,
+            data: frame.payload,
             pts,
             dts: None,
-            kind: MediaKind::Audio(AudioCodec::Aac),
+            kind: media_kind,
             present: true,
         };
 
         decoder_handle
             .chunk_sender
             .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
+            .map_err(|_| MoqConnectionError::ChannelClosed)
     }
 
-    Ok(())
+    fn flush_remaining(
+        &mut self,
+        decoder_handle: &DecoderThreadHandle,
+        media_kind: MediaKind,
+    ) -> Result<(), MoqConnectionError> {
+        while let Some(frame) = self.buffer.pop_front() {
+            self.send_frame(decoder_handle, media_kind, frame)?;
+        }
+        Ok(())
+    }
 }
