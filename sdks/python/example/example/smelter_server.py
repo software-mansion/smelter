@@ -286,9 +286,15 @@ def post_scene(body: dict, schedule_time_ms: float, text: str, detections: list)
     api_post(f"/api/output/{OUTPUT_MP4_ID}/update", update_body)
 
 
-# Must be large enough to include desync between audio and video, so larger
-# than CHUNK_DURATION_MS
-SETTLE_MS = 4000
+# How long (in pts terms) to wait for the other track to deliver older-pts entries
+# before committing a scene, so audio and video merge in pts order despite their
+# desync. Also covers the transcription's flush-to-delivery lag (segment length +
+# whisper time) so a continuous-speech subtitle lands aligned rather than late, so
+# this must exceed VAD_MAX_SEGMENT_MS. Must stay below SIDE_CHANNEL_DELAY_MS so
+# committed updates still post before the output reaches that pts — raising it
+# within that budget adds no output latency (the output is delayed by
+# SIDE_CHANNEL_DELAY_MS regardless), it only uses more of the existing lookahead.
+SETTLE_MS = 6000
 CLEANUP_MS = 10000
 
 
