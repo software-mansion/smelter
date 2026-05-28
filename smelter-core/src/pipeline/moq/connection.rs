@@ -33,8 +33,8 @@ use crate::prelude::*;
 
 mod catalog;
 
-const MOQ_LATENCY_TOLERANCE: Duration = Duration::from_secs(2);
-const MOQ_QUEUE_BUFFER: Duration = Duration::from_millis(500);
+const MOQ_LATENCY_TOLERANCE: Duration = Duration::from_millis(500);
+const MOQ_QUEUE_BUFFER: Duration = Duration::from_secs(2);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct DiscoveredVideo {
