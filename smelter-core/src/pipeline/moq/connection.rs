@@ -428,10 +428,7 @@ impl MoqJitterBuffer {
 
         // Release phase: select loop
         loop {
-            let sleep_until = self
-                .buffer
-                .front()
-                .map(|f| self.release_time(f.raw_pts));
+            let sleep_until = self.buffer.front().map(|f| self.release_time(f.raw_pts));
 
             tokio::select! {
                 result = consumer.read() => {
