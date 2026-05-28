@@ -33,7 +33,8 @@ use crate::prelude::*;
 
 mod catalog;
 
-const MOQ_BUFFER: Duration = Duration::from_secs(2);
+const MOQ_LATENCY_TOLERANCE: Duration = Duration::from_secs(2);
+const MOQ_QUEUE_BUFFER: Duration = Duration::from_millis(500);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct DiscoveredVideo {
@@ -87,7 +88,7 @@ pub(crate) fn spawn_broadcast_handler(
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: has_video,
             audio: has_audio,
-            offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_BUFFER),
+            offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_QUEUE_BUFFER),
         });
 
         if let Some(v) = &discovered.video {
@@ -249,8 +250,8 @@ async fn run_video_track(
     {
         match broadcast.subscribe_track(&Track::new(&video.name)) {
             Ok(track) => {
-                let consumer =
-                    ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
+                let consumer = ContainerConsumer::new(track, video.container)
+                    .with_latency(MOQ_LATENCY_TOLERANCE);
                 if let Err(err) = read_video_track(consumer, decoder_handle).await {
                     warn!(
                         "MoQ video track error: {}",
@@ -275,8 +276,8 @@ async fn run_audio_track(
     {
         match broadcast.subscribe_track(&Track::new(&audio.name)) {
             Ok(track) => {
-                let consumer =
-                    ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
+                let consumer = ContainerConsumer::new(track, audio.container)
+                    .with_latency(MOQ_LATENCY_TOLERANCE);
                 if let Err(err) = read_audio_track(consumer, decoder_handle).await {
                     warn!(
                         "MoQ audio track error: {}",
@@ -372,7 +373,7 @@ async fn read_audio_track(
         let raw_pts: Duration = frame.timestamp.into();
         let first = *first_pts.get_or_insert(raw_pts);
         let pts = raw_pts.saturating_sub(first);
-        trace!(?pts, "MoQ audio frame");
+        // trace!(?pts, "MoQ audio frame");
         let payload = frame.payload;
 
         let chunk = EncodedInputChunk {
