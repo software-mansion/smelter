@@ -7,7 +7,8 @@ use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
     OnConnectionCallback, RtmpEvent, RtmpServerConfig, RtmpServerConnection,
-    RtmpServerConnectionError, server::listener_thread::start_listener_thread,
+    RtmpServerConnectionError,
+    server::{connection::ServerCommand, listener_thread::start_listener_thread},
     utils::ShutdownCondition,
 };
 
@@ -91,11 +92,13 @@ impl ServerConnectionCtx {
         app: Arc<str>,
         stream_key: Arc<str>,
         receiver: Receiver<RtmpEvent>,
+        command_sender: Sender<ServerCommand>,
     ) -> Result<(), RtmpServerConnectionError> {
         let conn = RtmpServerConnection {
             app,
             stream_key,
             receiver,
+            command_sender,
             shutdown_condition: self.shutdown_condition.clone(),
         };
         self.conn_sender

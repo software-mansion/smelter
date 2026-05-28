@@ -2,6 +2,7 @@ use std::{ops::Deref, sync::Arc};
 
 use crate::{
     amf0::AmfValue,
+    ex_capabilities::parse_caps_ex_bits,
     message::{CommandMessage, RtmpMessageIncoming},
 };
 
@@ -40,7 +41,7 @@ pub(super) enum NegotiationProgress {
 }
 
 impl NegotiationProgress {
-    pub fn try_match_connect(&self, msg: &RtmpMessageIncoming) -> Option<(u32, Arc<str>)> {
+    pub fn try_match_connect(&self, msg: &RtmpMessageIncoming) -> Option<(u32, Arc<str>, u8)> {
         let NegotiationProgress::WaitingForConnect = self else {
             return None;
         };
@@ -51,6 +52,7 @@ impl NegotiationProgress {
         let CommandMessage::Connect {
             transaction_id,
             command_object,
+            optional_args,
             ..
         } = msg
         else {
@@ -62,7 +64,12 @@ impl NegotiationProgress {
             None | Some(_) => "",
         };
 
-        Some((*transaction_id, Arc::from(app)))
+        let mut caps_ex_bits = parse_caps_ex_bits(command_object);
+        if let Some(AmfValue::Object(args)) = optional_args.as_ref() {
+            caps_ex_bits |= parse_caps_ex_bits(args);
+        }
+
+        Some((*transaction_id, Arc::from(app), caps_ex_bits))
     }
 
     pub fn try_match_create_stream(&self, msg: &RtmpMessageIncoming) -> Option<(u32, Arc<str>)> {

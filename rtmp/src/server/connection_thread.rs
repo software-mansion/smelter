@@ -3,11 +3,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crossbeam_channel::bounded;
+use crossbeam_channel::{TryRecvError, bounded};
 use tracing::{debug, warn};
 
 use crate::{
-    RtmpEvent, RtmpServerConnectionError, RtmpStreamError,
+    ExCapabilities, RtmpEvent, RtmpServerConnectionError, RtmpStreamError,
     amf0::AmfValue,
     message::{
         AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageOk, DataMessage,
@@ -16,7 +16,9 @@ use crate::{
     protocol::{
         byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
     },
+    reconnect::build_reconnect_info_object,
     server::{
+        connection::ServerCommand,
         instance::ServerConnectionCtx,
         negotiation::{NegotiationProgress, NegotiationResult, PEER_BANDWIDTH, WINDOW_ACK_SIZE},
     },
@@ -48,19 +50,38 @@ pub(super) fn run_connection_thread(
         stream: RtmpMessageStream::new(stream),
         window_size: None,
         last_ack: 0,
+        ex_capabilities: ExCapabilities::default(),
     };
 
     let NegotiationResult { app, stream_key } = state.negotiate_connection()?;
     debug!(?app, ?stream_key, "Negotiation complete");
 
     let (sender, receiver) = bounded(1000);
+    let (command_sender, command_receiver) = bounded(8);
     // Return connection to caller via on_connection callback
     ctx.lock()
         .unwrap()
-        .send_connection(app, stream_key, receiver)?;
+        .send_connection(app, stream_key, receiver, command_sender)?;
 
     loop {
-        let msg = state.next_msg()?;
+        match command_receiver.try_recv() {
+            Ok(cmd) => state.handle_command(cmd)?,
+            Err(TryRecvError::Empty) => {}
+            Err(TryRecvError::Disconnected) => {
+                debug!("RtmpServerConnection dropped, stopping connection thread");
+                return Ok(());
+            }
+        }
+
+        let msg = match state.stream.try_read_msg() {
+            Ok(Some(msg)) => msg,
+            Ok(None) => continue,
+            Err(err) if !err.is_critical() => {
+                warn!(?err);
+                continue;
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         let event = match msg {
             RtmpMessageIncoming::Audio { audio, .. } => match audio {
@@ -103,6 +124,8 @@ struct RtmpServerConnectionState {
     window_size: Option<u64>,
     /// last ack sent to client
     last_ack: u64,
+    /// E-RTMP capabilities advertised by the publisher in its connect command.
+    ex_capabilities: ExCapabilities,
 }
 
 impl RtmpServerConnectionState {
@@ -127,7 +150,8 @@ impl RtmpServerConnectionState {
         loop {
             let msg = self.next_msg()?;
 
-            if let Some((transaction_id, app)) = state.try_match_connect(&msg) {
+            if let Some((transaction_id, app, caps_ex_bits)) = state.try_match_connect(&msg) {
+                self.ex_capabilities = ExCapabilities::from_caps_ex_bits(caps_ex_bits);
                 state = NegotiationProgress::WaitingForCreateStream { app };
                 self.on_connect(transaction_id)?;
                 continue;
@@ -291,6 +315,38 @@ impl RtmpServerConnectionState {
 
         self.maybe_send_ack()?;
 
+        Ok(())
+    }
+
+    fn handle_command(&mut self, cmd: ServerCommand) -> Result<(), RtmpStreamError> {
+        match cmd {
+            ServerCommand::RequestReconnect {
+                tc_url,
+                description,
+            } => {
+                if !self.ex_capabilities.reconnect {
+                    warn!(
+                        "Skipping ReconnectRequest: publisher did not advertise capsEx.Reconnect"
+                    );
+                    return Ok(());
+                }
+                self.send_reconnect_request(tc_url.as_deref(), description.as_deref())?;
+            }
+        }
+        Ok(())
+    }
+
+    fn send_reconnect_request(
+        &mut self,
+        tc_url: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<(), RtmpStreamError> {
+        let info = build_reconnect_info_object(tc_url, description);
+        debug!(?tc_url, "Sending NetConnection.Connect.ReconnectRequest");
+        self.stream.write_msg(RtmpMessageOutgoing::CommandMessage {
+            msg: CommandMessage::OnStatus(AmfValue::Object(info)),
+            stream_id: CONTROL_MESSAGE_STREAM_ID,
+        })?;
         Ok(())
     }
 

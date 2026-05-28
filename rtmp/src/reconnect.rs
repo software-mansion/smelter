@@ -1,9 +1,37 @@
+use std::collections::HashMap;
+
 use url::Url;
 
-use crate::amf0::AmfValue;
-use crate::message::{CONTROL_MESSAGE_STREAM_ID, CommandMessage, RtmpMessageIncoming};
+use crate::{
+    amf0::AmfValue,
+    message::{CONTROL_MESSAGE_STREAM_ID, CommandMessage, RtmpMessageIncoming},
+};
 
 pub(crate) const RECONNECT_REQUEST_CODE: &str = "NetConnection.Connect.ReconnectRequest";
+
+/// Build the AMF Info Object for a `NetConnection.Connect.ReconnectRequest` onStatus.
+pub(crate) fn build_reconnect_info_object(
+    tc_url: Option<&str>,
+    description: Option<&str>,
+) -> HashMap<String, AmfValue> {
+    let mut info = HashMap::from_iter([
+        ("level".to_string(), AmfValue::String("status".to_string())),
+        (
+            "code".to_string(),
+            AmfValue::String(RECONNECT_REQUEST_CODE.to_string()),
+        ),
+    ]);
+    if let Some(tc_url) = tc_url {
+        info.insert("tcUrl".to_string(), AmfValue::String(tc_url.to_string()));
+    }
+    if let Some(description) = description {
+        info.insert(
+            "description".to_string(),
+            AmfValue::String(description.to_string()),
+        );
+    }
+    info
+}
 
 pub(crate) fn try_match_reconnect_request(msg: &RtmpMessageIncoming) -> Option<ReconnectRequest> {
     let RtmpMessageIncoming::CommandMessage {
@@ -13,7 +41,6 @@ pub(crate) fn try_match_reconnect_request(msg: &RtmpMessageIncoming) -> Option<R
     else {
         return None;
     };
-
     let map = match info {
         AmfValue::Object(map) | AmfValue::EcmaArray(map) => map,
         _ => return None,

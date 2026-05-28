@@ -6,6 +6,7 @@ use crate::{
     RtmpMessageParseError,
     amf0::AmfValue,
     error::RtmpStreamError,
+    ex_capabilities::parse_caps_ex_bits,
     message::{
         CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageConnectSuccess,
         CommandMessageCreateStreamSuccess, CommandMessageResultExt, RtmpMessageIncoming,
@@ -229,15 +230,6 @@ pub(super) fn send_publish(
         stream_id,
     })?;
     Ok(())
-}
-
-fn parse_caps_ex_bits(map: &HashMap<String, AmfValue>) -> u8 {
-    match map.get("capsEx") {
-        Some(AmfValue::Number(bits)) if bits.is_finite() => {
-            bits.floor().clamp(0.0, u8::MAX as f64) as u8
-        }
-        _ => 0,
-    }
 }
 
 #[cfg(test)]
