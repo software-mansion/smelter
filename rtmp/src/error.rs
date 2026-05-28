@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::{
     ExAudioFourCc, ExVideoFourCc, LegacyFlvAudioCodec, LegacyFlvVideoCodec, RtmpAudioCodec,
-    RtmpVideoCodec,
+    RtmpVideoCodec, reconnect::ReconnectRequest,
 };
 
 #[derive(Error, Debug)]
@@ -27,6 +27,9 @@ pub enum RtmpConnectionError {
 
     #[error("TLS configuration error: {0}")]
     TlsConfig(String),
+
+    #[error("Server requested reconnect during negotiation: {0:?}")]
+    ReconnectRequestedDuringNegotiation(ReconnectRequest),
 
     #[error(transparent)]
     StreamError(#[from] RtmpStreamError),
