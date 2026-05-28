@@ -6,8 +6,8 @@ use std::{
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
-    OnConnectionCallback, RtmpEvent, RtmpServerConfig, RtmpServerConnection,
-    RtmpServerConnectionError, server::listener_thread::start_listener_thread,
+    OnConnectionCallback, RtmpAudioCodec, RtmpEvent, RtmpServerConfig, RtmpServerConnection,
+    RtmpServerConnectionError, RtmpVideoCodec, server::listener_thread::start_listener_thread,
     utils::ShutdownCondition,
 };
 
@@ -74,6 +74,8 @@ pub(super) struct ServerConnectionCtx {
     pub shutdown_condition: ShutdownCondition,
     pub conn_sender: Sender<RtmpServerConnection>,
     pub thread_handle: Option<JoinHandle<()>>,
+    pub video_codecs: Vec<RtmpVideoCodec>,
+    pub audio_codecs: Vec<RtmpAudioCodec>,
 }
 
 impl ServerConnectionCtx {
@@ -83,6 +85,8 @@ impl ServerConnectionCtx {
             shutdown_condition: guard.shutdown_condition.child_condition(),
             conn_sender: guard.conn_sender.clone(),
             thread_handle: None,
+            video_codecs: guard.config.video_codecs.clone(),
+            audio_codecs: guard.config.audio_codecs.clone(),
         }))
     }
 

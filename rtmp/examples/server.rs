@@ -5,10 +5,7 @@ use tracing::info;
 fn main() {
     tracing_subscriber::fmt::init();
 
-    let config = RtmpServerConfig {
-        port: 1935,
-        tls: None,
-    };
+    let config = RtmpServerConfig::new(1935, None);
 
     let on_connection = Box::new(|conn: RtmpServerConnection| {
         let app = conn.app().to_string();
