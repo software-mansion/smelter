@@ -5,6 +5,7 @@ requires-python = ">=3.13"
 dependencies = [
     "smelter-sdk",
     "faster-whisper",
+    "silero-vad>=5.1",
     "numpy",
     "ultralytics>=8.4.40",
     "opencv-python-headless>=4.13.0.92",
