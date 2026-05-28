@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{RtmpConnectionError, RtmpStreamError};
+use crate::{RtmpAudioCodec, RtmpConnectionError, RtmpStreamError, RtmpVideoCodec};
 
 mod connection;
 mod connection_thread;
@@ -17,6 +17,36 @@ pub type OnConnectionCallback = Box<dyn FnMut(RtmpServerConnection) + Send + 'st
 pub struct RtmpServerConfig {
     pub port: u16,
     pub tls: Option<TlsConfig>,
+    /// Video codecs advertised to clients during `connect`. Defaults to all
+    /// supported codecs when constructed via [`RtmpServerConfig::new`].
+    pub video_codecs: Vec<RtmpVideoCodec>,
+    /// Audio codecs advertised to clients during `connect`. Defaults to all
+    /// supported codecs when constructed via [`RtmpServerConfig::new`].
+    pub audio_codecs: Vec<RtmpAudioCodec>,
+}
+
+impl RtmpServerConfig {
+    /// Build a config with all known codecs advertised.
+    pub fn new(port: u16, tls: Option<TlsConfig>) -> Self {
+        Self {
+            port,
+            tls,
+            video_codecs: vec![RtmpVideoCodec::H264, RtmpVideoCodec::Vp8, RtmpVideoCodec::Vp9],
+            audio_codecs: vec![RtmpAudioCodec::Aac, RtmpAudioCodec::Opus],
+        }
+    }
+
+    /// Override the video codecs advertised to clients during `connect`.
+    pub fn with_video_codecs(mut self, video_codecs: Vec<RtmpVideoCodec>) -> Self {
+        self.video_codecs = video_codecs;
+        self
+    }
+
+    /// Override the audio codecs advertised to clients during `connect`.
+    pub fn with_audio_codecs(mut self, audio_codecs: Vec<RtmpAudioCodec>) -> Self {
+        self.audio_codecs = audio_codecs;
+        self
+    }
 }
 
 #[derive(Debug, Clone)]

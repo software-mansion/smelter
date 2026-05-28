@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, ExCapabilities,
-    FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD, RtmpClientConfig, RtmpConnectionError,
-    RtmpMessageParseError,
+    FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD, RtmpAudioCodec, RtmpClientConfig,
+    RtmpConnectionError, RtmpMessageParseError, RtmpVideoCodec,
     amf0::AmfValue,
     error::RtmpStreamError,
     message::{
@@ -17,7 +17,10 @@ use crate::{
 const CONNECT_TRANSACTION_ID: u32 = 1;
 const CREATE_STREAM_TRANSACTION_ID: u32 = 2;
 
-use crate::{AUDIO_FOURCC_LIST, VIDEO_FOURCC_LIST};
+/// Legacy FLV `audioCodecs` bit for AAC. See FLV spec, `SoundFormat`.
+const LEGACY_AUDIO_CODEC_AAC: u32 = 0x0400;
+/// Legacy FLV `videoCodecs` bit for H.264.
+const LEGACY_VIDEO_CODEC_H264: u32 = 0x0080;
 
 /// -> - from client to server
 /// <- - from server to client
@@ -138,28 +141,46 @@ pub(super) fn send_connect(
 ) -> Result<(), RtmpConnectionError> {
     let encode_forward_caps =
         AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64);
-    let video_fourcc_info_map = HashMap::from_iter([
-        (
-            "*".to_string(),
-            AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
-        ),
-        ("avc1".to_string(), encode_forward_caps.clone()),
-        ("vp09".to_string(), encode_forward_caps.clone()),
-        ("vp08".to_string(), encode_forward_caps.clone()),
-    ]);
-    let audio_fourcc_info_map = HashMap::from_iter([
-        (
-            "*".to_string(),
-            AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
-        ),
-        ("mp4a".to_string(), encode_forward_caps.clone()),
-        ("Opus".to_string(), encode_forward_caps),
-    ]);
-    let fourcc_list: Vec<AmfValue> = VIDEO_FOURCC_LIST
+
+    let mut video_fourcc_info_map = HashMap::new();
+    video_fourcc_info_map.insert(
+        "*".to_string(),
+        AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
+    );
+    for codec in &config.video_codecs {
+        video_fourcc_info_map.insert(codec.fourcc().to_string(), encode_forward_caps.clone());
+    }
+
+    let mut audio_fourcc_info_map = HashMap::new();
+    audio_fourcc_info_map.insert(
+        "*".to_string(),
+        AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
+    );
+    for codec in &config.audio_codecs {
+        audio_fourcc_info_map.insert(codec.fourcc().to_string(), encode_forward_caps.clone());
+    }
+
+    let video_fourcc_list = config
+        .video_codecs
         .iter()
-        .chain(AUDIO_FOURCC_LIST.iter())
-        .map(|v| AmfValue::String((*v).to_string()))
-        .collect();
+        .map(|c| AmfValue::String(c.fourcc().to_string()));
+    let audio_fourcc_list = config
+        .audio_codecs
+        .iter()
+        .map(|c| AmfValue::String(c.fourcc().to_string()));
+    let fourcc_list: Vec<AmfValue> = video_fourcc_list.chain(audio_fourcc_list).collect();
+
+    let legacy_audio_codecs = if config.audio_codecs.contains(&RtmpAudioCodec::Aac) {
+        LEGACY_AUDIO_CODEC_AAC
+    } else {
+        0
+    };
+    let legacy_video_codecs = if config.video_codecs.contains(&RtmpVideoCodec::H264) {
+        LEGACY_VIDEO_CODEC_H264
+    } else {
+        0
+    };
+
     let props = HashMap::from_iter(
         [
             ("app", config.app.clone().into()),
@@ -167,8 +188,8 @@ pub(super) fn send_connect(
             ("flashVer", "FMS/3,0,1,123".into()),
             ("fpad", AmfValue::Boolean(false)),
             // legacy RTMP codecs
-            ("audioCodecs", AmfValue::Number(0x0400 as f64)), // AAC
-            ("videoCodecs", AmfValue::Number(0x0080 as f64)), // H.264
+            ("audioCodecs", AmfValue::Number(legacy_audio_codecs as f64)),
+            ("videoCodecs", AmfValue::Number(legacy_video_codecs as f64)),
             ("videoFunction", AmfValue::Number(0.0)),
             // E-RTMP codecs
             ("fourCcList", AmfValue::StrictArray(fourcc_list)),
@@ -258,11 +279,19 @@ fn fourcc_list_supports_enhanced(value: &AmfValue) -> bool {
         return false;
     };
 
+    let known_video: Vec<&'static str> =
+        [RtmpVideoCodec::H264, RtmpVideoCodec::Vp8, RtmpVideoCodec::Vp9]
+            .into_iter()
+            .map(|c| c.fourcc())
+            .collect();
+    let known_audio: Vec<&'static str> = [RtmpAudioCodec::Aac, RtmpAudioCodec::Opus]
+        .into_iter()
+        .map(|c| c.fourcc())
+        .collect();
+
     items.iter().any(|item| match item {
         AmfValue::String(v) => {
-            v == "*"
-                || VIDEO_FOURCC_LIST.contains(&v.as_str())
-                || AUDIO_FOURCC_LIST.contains(&v.as_str())
+            v == "*" || known_video.contains(&v.as_str()) || known_audio.contains(&v.as_str())
         }
         _ => false,
     })
@@ -275,11 +304,14 @@ fn video_fourcc_info_map_supports_video(value: &AmfValue) -> bool {
         AmfValue::EcmaArray(map) => map,
         _ => return false,
     };
+    let known: Vec<&'static str> =
+        [RtmpVideoCodec::H264, RtmpVideoCodec::Vp8, RtmpVideoCodec::Vp9]
+            .into_iter()
+            .map(|c| c.fourcc())
+            .collect();
 
     map.iter().any(|(k, v)| match v {
-        AmfValue::Number(mask) if *mask > 0.0 => {
-            k == "*" || VIDEO_FOURCC_LIST.contains(&k.as_str())
-        }
+        AmfValue::Number(mask) if *mask > 0.0 => k == "*" || known.contains(&k.as_str()),
         AmfValue::Number(_) => false,
         _ => false,
     })
@@ -292,11 +324,13 @@ fn audio_fourcc_info_map_supports_audio(value: &AmfValue) -> bool {
         AmfValue::EcmaArray(map) => map,
         _ => return false,
     };
+    let known: Vec<&'static str> = [RtmpAudioCodec::Aac, RtmpAudioCodec::Opus]
+        .into_iter()
+        .map(|c| c.fourcc())
+        .collect();
 
     map.iter().any(|(k, v)| match v {
-        AmfValue::Number(mask) if *mask > 0.0 => {
-            k == "*" || AUDIO_FOURCC_LIST.contains(&k.as_str())
-        }
+        AmfValue::Number(mask) if *mask > 0.0 => k == "*" || known.contains(&k.as_str()),
         AmfValue::Number(_) => false,
         _ => false,
     })
