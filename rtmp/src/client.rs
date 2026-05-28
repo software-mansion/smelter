@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::thread::JoinHandle;
+use std::{collections::HashMap, thread::JoinHandle};
 
 use tracing::{debug, info, warn};
 use url::Url;
@@ -136,7 +135,7 @@ impl RtmpClient {
             .as_ref()
             .is_some_and(|p| p.handle.is_finished());
 
-        let msg = match RtmpEvent::from(event) {
+        let event = match RtmpEvent::from(event) {
             RtmpEvent::VideoData(data) => {
                 if reconnect_ready && data.is_keyframe {
                     self.do_reconnect();
@@ -189,7 +188,7 @@ impl RtmpClient {
                 }
             }
         };
-        self.state.stream.write_msg(msg)?;
+        self.state.stream.write_msg(event)?;
 
         while let Some(msg) = self.state.stream.try_read_msg()? {
             self.state
