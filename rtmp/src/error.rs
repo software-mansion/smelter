@@ -274,3 +274,15 @@ pub enum AudioCodecConversionError {
     #[error("Enhanced FLV audio codec {0:?} is not supported")]
     UnsupportedEnhancedFlv(ExAudioFourCc),
 }
+
+#[derive(Error, Debug)]
+pub(crate) enum TcUrlError {
+    #[error(transparent)]
+    Parse(#[from] url::ParseError),
+
+    #[error("Unsupported URL scheme \"{0}\", expected \"rtmp\" or \"rtmps\"")]
+    UnsupportedScheme(String),
+
+    #[error("URL has no host")]
+    MissingHost,
+}

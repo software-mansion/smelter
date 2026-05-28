@@ -7,6 +7,7 @@ mod ex_capabilities;
 mod flv;
 mod message;
 mod protocol;
+mod reconnect;
 mod server;
 mod track;
 mod transport;
