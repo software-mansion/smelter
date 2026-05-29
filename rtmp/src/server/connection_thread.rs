@@ -25,10 +25,8 @@ use crate::{
 
 use crate::{
     CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, FOURCC_INFO_CAN_DECODE,
-    FOURCC_INFO_CAN_FORWARD,
+    FOURCC_INFO_CAN_FORWARD, RtmpAudioCodec, RtmpVideoCodec,
 };
-
-use crate::{AUDIO_FOURCC_LIST, VIDEO_FOURCC_LIST};
 
 /// For server we can pick this number for client it would be based on value
 /// that came as _result for createStream
@@ -38,7 +36,14 @@ pub(super) fn run_connection_thread(
     ctx: &Arc<Mutex<ServerConnectionCtx>>,
     transport: RtmpTransport,
 ) -> Result<(), RtmpServerConnectionError> {
-    let shutdown_condition = ctx.lock().unwrap().shutdown_condition.clone();
+    let (shutdown_condition, video_codecs, audio_codecs) = {
+        let guard = ctx.lock().unwrap();
+        (
+            guard.shutdown_condition.clone(),
+            guard.video_codecs.clone(),
+            guard.audio_codecs.clone(),
+        )
+    };
     let mut stream = RtmpByteStream::new(transport, shutdown_condition);
 
     Handshake::perform_as_server(&mut stream)?;
@@ -48,6 +53,8 @@ pub(super) fn run_connection_thread(
         stream: RtmpMessageStream::new(stream),
         window_size: None,
         last_ack: 0,
+        video_codecs,
+        audio_codecs,
     };
 
     let NegotiationResult { app, stream_key } = state.negotiate_connection()?;
@@ -103,6 +110,10 @@ struct RtmpServerConnectionState {
     window_size: Option<u64>,
     /// last ack sent to client
     last_ack: u64,
+
+    /// Codecs to advertise in the `connect` response.
+    video_codecs: Vec<RtmpVideoCodec>,
+    audio_codecs: Vec<RtmpAudioCodec>,
 }
 
 impl RtmpServerConnectionState {
@@ -192,27 +203,34 @@ impl RtmpServerConnectionState {
 
         let decode_forward_caps =
             AmfValue::Number((FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_FORWARD) as f64);
-        let video_fourcc_info_map = HashMap::from_iter([
-            (
-                "*".to_string(),
-                AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
-            ),
-            ("avc1".to_string(), decode_forward_caps.clone()),
-            ("vp09".to_string(), decode_forward_caps.clone()),
-            ("vp08".to_string(), decode_forward_caps.clone()),
-        ]);
-        let audio_fourcc_info_map = HashMap::from_iter([
-            (
-                "*".to_string(),
-                AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
-            ),
-            ("mp4a".to_string(), decode_forward_caps.clone()),
-            ("Opus".to_string(), decode_forward_caps),
-        ]);
-        let fourcc_list: Vec<AmfValue> = VIDEO_FOURCC_LIST
+
+        let mut video_fourcc_info_map = HashMap::new();
+        video_fourcc_info_map.insert(
+            "*".to_string(),
+            AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
+        );
+        for codec in &self.video_codecs {
+            video_fourcc_info_map.insert(codec.fourcc().to_string(), decode_forward_caps.clone());
+        }
+
+        let mut audio_fourcc_info_map = HashMap::new();
+        audio_fourcc_info_map.insert(
+            "*".to_string(),
+            AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
+        );
+        for codec in &self.audio_codecs {
+            audio_fourcc_info_map.insert(codec.fourcc().to_string(), decode_forward_caps.clone());
+        }
+
+        let fourcc_list: Vec<AmfValue> = self
+            .video_codecs
             .iter()
-            .chain(AUDIO_FOURCC_LIST.iter())
-            .map(|v| AmfValue::String((*v).to_string()))
+            .map(|c| AmfValue::String(c.fourcc().to_string()))
+            .chain(
+                self.audio_codecs
+                    .iter()
+                    .map(|c| AmfValue::String(c.fourcc().to_string())),
+            )
             .collect();
         // _result - connect response
         let props = HashMap::from_iter(

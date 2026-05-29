@@ -3,8 +3,12 @@ use std::collections::HashMap;
 use tracing::{debug, warn};
 
 use crate::{
-    AudioChannels, RtmpConnectionError, RtmpEvent, TrackKey,
-    client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
+    AudioChannels, ExCapabilities, RtmpAudioCodec, RtmpConnectionError, RtmpEvent, RtmpVideoCodec,
+    TrackKey,
+    client::negotiation::{
+        NegotiationProgress, send_connect, send_create_stream, send_publish,
+        warn_on_unsupported_codecs,
+    },
     error::RtmpStreamError,
     message::{
         AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, DataMessage, RtmpMessageIncoming,
@@ -25,6 +29,41 @@ pub struct RtmpClientConfig {
     pub app: String,
     pub stream_key: String,
     pub use_tls: bool,
+    /// Video codecs advertised to the server during `connect`. Defaults to [H264, VP8, VP9].
+    pub video_codecs: Vec<RtmpVideoCodec>,
+    /// Audio codecs advertised to the server during `connect`. Defaults to [AAC, Opus].
+    pub audio_codecs: Vec<RtmpAudioCodec>,
+}
+
+impl RtmpClientConfig {
+    /// Build a config with all known codecs advertised.
+    pub fn new(host: String, port: u16, app: String, stream_key: String, use_tls: bool) -> Self {
+        Self {
+            host,
+            port,
+            app,
+            stream_key,
+            use_tls,
+            video_codecs: vec![
+                RtmpVideoCodec::H264,
+                RtmpVideoCodec::Vp8,
+                RtmpVideoCodec::Vp9,
+            ],
+            audio_codecs: vec![RtmpAudioCodec::Aac, RtmpAudioCodec::Opus],
+        }
+    }
+
+    /// Override the video codecs advertised to the server during `connect`.
+    pub fn with_video_codecs(mut self, video_codecs: Vec<RtmpVideoCodec>) -> Self {
+        self.video_codecs = video_codecs;
+        self
+    }
+
+    /// Override the audio codecs advertised to the server during `connect`.
+    pub fn with_audio_codecs(mut self, audio_codecs: Vec<RtmpAudioCodec>) -> Self {
+        self.audio_codecs = audio_codecs;
+        self
+    }
 }
 
 impl RtmpClientConfig {
@@ -169,8 +208,13 @@ impl RtmpClientState {
                 Err(err) => return Err(err.into()),
             };
 
-            if let Some((_response, ex_capabilities)) = state.try_match_connect_response(&msg)? {
+            if let Some(response) = state.try_match_connect_response(&msg)? {
+                let ex_capabilities = ExCapabilities::from_connect_response(
+                    &response.properties,
+                    &response.information,
+                );
                 self.stream.set_writer_ex_capabilities(ex_capabilities);
+                warn_on_unsupported_codecs(&response, config);
                 state = NegotiationProgress::WaitingForCreateStreamResult;
                 send_create_stream(&mut self.stream)?;
                 continue;
