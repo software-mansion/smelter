@@ -29,7 +29,6 @@ pub enum FlvAudioData {
 }
 
 impl FlvAudioData {
-    #[allow(dead_code)]
     pub fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
         match self {
             FlvAudioData::Legacy(tag) => tag.serialize(),
