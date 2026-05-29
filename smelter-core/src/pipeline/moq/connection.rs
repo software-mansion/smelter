@@ -23,7 +23,7 @@ use crate::{
             fdk_aac::FdkAacDecoder,
             ffmpeg_h264, vulkan_h264,
         },
-        moq::state::MoqInputState,
+        moq::state::MoqServerInputState,
     },
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
     utils::InitializableThread,
@@ -56,7 +56,7 @@ struct DiscoveredTracks {
 pub(crate) fn spawn_broadcast_handler(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    input: &MoqInputState,
+    input: &MoqServerInputState,
     broadcast: BroadcastConsumer,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let queue_input = input.queue_input.upgrade()?;
@@ -65,65 +65,79 @@ pub(crate) fn spawn_broadcast_handler(
     let decoders = input.decoders.clone();
     let rt = ctx.tokio_rt.clone();
 
-    let handle = rt.spawn(async move {
-        let input_id_str = input_ref.to_string();
-        info!(input_id = %input_id_str, "MoQ broadcast connection established");
-
-        let mut discovered = match read_catalog(&broadcast).await {
-            Ok(d) => d,
-            Err(err) => {
-                warn!(
-                    input_id = %input_id_str,
-                    "MoQ catalog error: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-                return;
-            }
-        };
-
-        let has_video = discovered.video.is_some();
-        let has_audio = discovered.audio.is_some();
-
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: has_video,
-            audio: has_audio,
-            offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_BUFFER),
-        });
-
-        if let Some(v) = &discovered.video {
-            info!(input_id = %input_id_str, track = %v.name, "Discovered MoQ video track");
-        }
-        if let Some(a) = &discovered.audio {
-            info!(input_id = %input_id_str, track = %a.name, "Discovered MoQ audio track");
-        }
-
-        let (video_decoder_handle, audio_decoder_handle) = spawn_decoders(
-            &ctx,
-            &input_ref,
-            &decoders,
-            &discovered,
-            video_sender,
-            audio_sender,
-        );
-
-        let video = discovered.video.take();
-        let audio = discovered.audio.take();
-
-        let video_fut = run_video_track(video, video_decoder_handle, &broadcast);
-
-        let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast);
-
-        tokio::join!(video_fut, audio_fut);
-        info!(input_id = %input_id_str, "MoQ broadcast connection closed");
-    });
+    let handle = rt.spawn(handle_broadcast(
+        ctx,
+        input_ref,
+        decoders,
+        queue_input,
+        broadcast,
+    ));
 
     Some(handle)
+}
+
+pub(crate) async fn handle_broadcast(
+    ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
+    decoders: MoqInputDecoders,
+    queue_input: crate::queue::QueueInput,
+    broadcast: BroadcastConsumer,
+) {
+    let input_id_str = input_ref.to_string();
+    info!(input_id = %input_id_str, "MoQ broadcast connection established");
+
+    let mut discovered = match read_catalog(&broadcast).await {
+        Ok(d) => d,
+        Err(err) => {
+            warn!(
+                input_id = %input_id_str,
+                "MoQ catalog error: {}",
+                ErrorStack::new(&err).into_string()
+            );
+            return;
+        }
+    };
+
+    let has_video = discovered.video.is_some();
+    let has_audio = discovered.audio.is_some();
+
+    let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+        video: has_video,
+        audio: has_audio,
+        offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_BUFFER),
+    });
+
+    if let Some(v) = &discovered.video {
+        info!(input_id = %input_id_str, track = %v.name, "Discovered MoQ video track");
+    }
+    if let Some(a) = &discovered.audio {
+        info!(input_id = %input_id_str, track = %a.name, "Discovered MoQ audio track");
+    }
+
+    let (video_decoder_handle, audio_decoder_handle) = spawn_decoders(
+        &ctx,
+        &input_ref,
+        &decoders,
+        &discovered,
+        video_sender,
+        audio_sender,
+    );
+
+    let video = discovered.video.take();
+    let audio = discovered.audio.take();
+
+    let video_fut = run_video_track(video, video_decoder_handle, &broadcast);
+
+    let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast);
+
+    tokio::join!(video_fut, audio_fut);
+    info!(input_id = %input_id_str, "MoQ broadcast connection closed");
 }
 
 fn spawn_decoders(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    decoders: &MoqServerInputDecoders,
+    decoders: &MoqInputDecoders,
     discovered: &DiscoveredTracks,
     video_sender: Option<QueueSender<Frame>>,
     audio_sender: Option<QueueSender<InputAudioSamples>>,
@@ -163,7 +177,7 @@ fn spawn_decoders(
 fn process_video_config(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    decoders: &MoqServerInputDecoders,
+    decoders: &MoqInputDecoders,
     video: &DiscoveredVideo,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
@@ -330,32 +344,54 @@ async fn read_video_track(
 ) -> Result<(), MoqConnectionError> {
     let mut first_pts: Option<Duration> = None;
 
+    let first_keyframe = loop {
+        let Some(frame) = consumer
+            .read()
+            .await
+            .map_err(MoqConnectionError::ContainerError)?
+        else {
+            return Ok(());
+        };
+        if frame.keyframe {
+            break frame;
+        }
+    };
+
+    send_video_frame(&mut first_pts, &decoder_handle, first_keyframe)?;
+
     while let Some(frame) = consumer
         .read()
         .await
         .map_err(MoqConnectionError::ContainerError)?
     {
-        let raw_pts: Duration = frame.timestamp.into();
-        let first = *first_pts.get_or_insert(raw_pts);
-        let pts = raw_pts.saturating_sub(first);
-        trace!(?pts, "MoQ video frame");
-        let payload = frame.payload;
-
-        let chunk = EncodedInputChunk {
-            data: payload,
-            pts,
-            dts: None,
-            kind: MediaKind::Video(VideoCodec::H264),
-            present: true,
-        };
-
-        decoder_handle
-            .chunk_sender
-            .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
+        send_video_frame(&mut first_pts, &decoder_handle, frame)?;
     }
 
     Ok(())
+}
+
+fn send_video_frame(
+    first_pts: &mut Option<Duration>,
+    decoder_handle: &DecoderThreadHandle,
+    frame: moq_mux::container::Frame,
+) -> Result<(), MoqConnectionError> {
+    let raw_pts: Duration = frame.timestamp.into();
+    let first = *first_pts.get_or_insert(raw_pts);
+    let pts = raw_pts.saturating_sub(first);
+    trace!(?pts, "MoQ video frame");
+
+    let chunk = EncodedInputChunk {
+        data: frame.payload,
+        pts,
+        dts: None,
+        kind: MediaKind::Video(VideoCodec::H264),
+        present: true,
+    };
+
+    decoder_handle
+        .chunk_sender
+        .send(PipelineEvent::Data(chunk))
+        .map_err(|_| MoqConnectionError::ChannelClosed)
 }
 
 async fn read_audio_track(

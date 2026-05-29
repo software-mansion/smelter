@@ -4,49 +4,57 @@ use std::sync::{
 };
 
 use anyhow::Result;
-use inquire::Text;
+use inquire::{Confirm, Text};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MoqInput {
+pub struct MoqClientInput {
     pub name: String,
+    url: String,
     broadcast_path: String,
 }
 
-impl MoqInput {
+impl MoqClientInput {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
-            "type": "moq_server",
+            "type": "moq_client",
+            "url": self.url,
             "broadcast_path": self.broadcast_path,
-            "decoder_map": {
-                "h264": "ffmpeg_h264",
-            }
+            "verify_tls": false,
         })
     }
 
-    pub fn on_after_registration(&self) -> Result<()> {
-        println!("Publish to this input using moq-cli:");
+    pub fn on_before_registration(&mut self) -> Result<()> {
+        println!("Start serving MoQ streams using moq-cli:");
         println!(
-            "ffmpeg -re -readrate_initial_burst 7 -i <SOURCE_MP4> -c copy -movflags cmaf -f mp4 - | moq-cli publish --tls-disable-verify --url https://localhost:4443 --broadcast {} fmp4",
-            self.broadcast_path
+            "ffmpeg -re -readrate_initial_burst 7 -i <SOURCE_MP4> -c copy -movflags cmaf -f mp4 - | moq-cli serve --tls-generate localhost --broadcast {} fmp4",
+            self.broadcast_path,
         );
-        println!();
-        Ok(())
+        loop {
+            let confirmation = Confirm::new("Is server running? [Y/n]")
+                .with_default(true)
+                .prompt()?;
+            if confirmation {
+                return Ok(());
+            }
+        }
     }
 }
 
-pub struct MoqInputBuilder {
+pub struct MoqClientInputBuilder {
     name: String,
+    url: String,
     broadcast_path: String,
 }
 
-impl MoqInputBuilder {
+impl MoqClientInputBuilder {
     pub fn new() -> Self {
         let name = Self::generate_name();
         let broadcast_path = name.clone();
         Self {
             name,
+            url: "https://localhost:4443".to_string(),
             broadcast_path,
         }
     }
@@ -55,11 +63,11 @@ impl MoqInputBuilder {
         static LAST_INPUT: OnceLock<AtomicU32> = OnceLock::new();
         let atomic_suffix = LAST_INPUT.get_or_init(|| AtomicU32::new(0));
         let suffix = atomic_suffix.fetch_add(1, Ordering::Relaxed);
-        format!("input_moq_{suffix}")
+        format!("input_moq_client_{suffix}")
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_name()?.prompt_broadcast_path()
+        self.prompt_name()?.prompt_url()?.prompt_broadcast_path()
     }
 
     fn prompt_name(self) -> Result<Self> {
@@ -67,6 +75,16 @@ impl MoqInputBuilder {
 
         match name_input {
             Some(name) if !name.trim().is_empty() => Ok(self.with_name(name)),
+            None | Some(_) => Ok(self),
+        }
+    }
+
+    fn prompt_url(self) -> Result<Self> {
+        let url_input =
+            Text::new(&format!("Relay URL (ESC for '{}'):", self.url)).prompt_skippable()?;
+
+        match url_input {
+            Some(url) if !url.trim().is_empty() => Ok(Self { url, ..self }),
             None | Some(_) => Ok(self),
         }
     }
@@ -79,25 +97,24 @@ impl MoqInputBuilder {
         .prompt_skippable()?;
 
         match path_input {
-            Some(path) if !path.trim().is_empty() => Ok(self.with_broadcast_path(path)),
+            Some(path) if !path.trim().is_empty() => Ok(Self {
+                broadcast_path: path,
+                ..self
+            }),
             None | Some(_) => Ok(self),
         }
     }
 
-    pub fn with_name(mut self, name: String) -> Self {
+    fn with_name(mut self, name: String) -> Self {
         self.broadcast_path = name.clone();
         self.name = name;
         self
     }
 
-    pub fn with_broadcast_path(mut self, broadcast_path: String) -> Self {
-        self.broadcast_path = broadcast_path;
-        self
-    }
-
-    pub fn build(self) -> MoqInput {
-        MoqInput {
+    pub fn build(self) -> MoqClientInput {
+        MoqClientInput {
             name: self.name,
+            url: self.url,
             broadcast_path: self.broadcast_path,
         }
     }
