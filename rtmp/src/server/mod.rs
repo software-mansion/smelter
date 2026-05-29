@@ -17,11 +17,9 @@ pub type OnConnectionCallback = Box<dyn FnMut(RtmpServerConnection) + Send + 'st
 pub struct RtmpServerConfig {
     pub port: u16,
     pub tls: Option<TlsConfig>,
-    /// Video codecs advertised to clients during `connect`. Defaults to all
-    /// supported codecs when constructed via [`RtmpServerConfig::new`].
+    /// Video codecs advertised to clients during `connect`. Defaults to [H264, VP8, VP9].
     pub video_codecs: Vec<RtmpVideoCodec>,
-    /// Audio codecs advertised to clients during `connect`. Defaults to all
-    /// supported codecs when constructed via [`RtmpServerConfig::new`].
+    /// Audio codecs advertised to clients during `connect`. Defaults to [AAC, Opus].
     pub audio_codecs: Vec<RtmpAudioCodec>,
 }
 
@@ -31,7 +29,11 @@ impl RtmpServerConfig {
         Self {
             port,
             tls,
-            video_codecs: vec![RtmpVideoCodec::H264, RtmpVideoCodec::Vp8, RtmpVideoCodec::Vp9],
+            video_codecs: vec![
+                RtmpVideoCodec::H264,
+                RtmpVideoCodec::Vp8,
+                RtmpVideoCodec::Vp9,
+            ],
             audio_codecs: vec![RtmpAudioCodec::Aac, RtmpAudioCodec::Opus],
         }
     }

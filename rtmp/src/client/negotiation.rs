@@ -1,9 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+use tracing::warn;
 
 use crate::{
-    CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, ExCapabilities,
-    FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD, RtmpAudioCodec, RtmpClientConfig,
-    RtmpConnectionError, RtmpMessageParseError, RtmpVideoCodec,
+    CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, FOURCC_INFO_CAN_ENCODE,
+    FOURCC_INFO_CAN_FORWARD, RtmpAudioCodec, RtmpClientConfig, RtmpConnectionError,
+    RtmpMessageParseError, RtmpVideoCodec,
     amf0::AmfValue,
     error::RtmpStreamError,
     message::{
@@ -52,7 +54,7 @@ impl NegotiationProgress {
     pub(super) fn try_match_connect_response(
         &self,
         msg: &RtmpMessageIncoming,
-    ) -> Result<Option<(CommandMessageConnectSuccess, ExCapabilities)>, RtmpConnectionError> {
+    ) -> Result<Option<CommandMessageConnectSuccess>, RtmpConnectionError> {
         let NegotiationProgress::WaitingForConnectResult = self else {
             return Ok(None);
         };
@@ -74,11 +76,8 @@ impl NegotiationProgress {
                     .to_connect_success()
                     .map_err(RtmpMessageParseError::CommandMessage)
                     .map_err(RtmpStreamError::ParseMessage)?;
-                let caps_ex_bits = parse_caps_ex_bits(&connect_success.properties)
-                    | parse_caps_ex_bits(&connect_success.information);
-                let ex_capabilities = ExCapabilities::from_caps_ex_bits(caps_ex_bits);
 
-                Ok(Some((connect_success, ex_capabilities)))
+                Ok(Some(connect_success))
             }
             Err(err) => Err(RtmpConnectionError::ErrorOnConnect(format!("{err:?}"))),
         }
@@ -252,12 +251,55 @@ pub(super) fn send_publish(
     Ok(())
 }
 
-fn parse_caps_ex_bits(map: &HashMap<String, AmfValue>) -> u8 {
-    match map.get("capsEx") {
-        Some(AmfValue::Number(bits)) if bits.is_finite() => {
-            bits.floor().clamp(0.0, u8::MAX as f64) as u8
+/// Warn (but do not fail) when a configured codec is not among those the server
+/// advertised it accepts.
+///
+/// Advisory only, not a hard check: the E-RTMP spec says a server SHOULD (not
+/// MUST) advertise codec support, and common servers (e.g. YouTube) advertise
+/// nothing. Rejecting on a mismatch would break publishing to them, so we let
+/// the publish proceed and only log to aid debugging a dropped stream.
+pub(super) fn warn_on_unsupported_codecs(
+    connect_success: &CommandMessageConnectSuccess,
+    config: &RtmpClientConfig,
+) {
+    let mut accepted: HashSet<&str> = HashSet::new();
+    for map in [&connect_success.properties, &connect_success.information] {
+        for (key, value) in map {
+            match (key.as_str(), value) {
+                ("fourCcList", AmfValue::StrictArray(items)) => {
+                    accepted.extend(items.iter().filter_map(|v| match v {
+                        AmfValue::String(s) => Some(s.as_str()),
+                        _ => None,
+                    }));
+                }
+                (
+                    "videoFourCcInfoMap" | "audioFourCcInfoMap",
+                    AmfValue::Object(m) | AmfValue::EcmaArray(m),
+                ) => {
+                    accepted.extend(m.iter().filter_map(|(c, v)| {
+                        matches!(v, AmfValue::Number(mask) if *mask > 0.0).then_some(c.as_str())
+                    }));
+                }
+                _ => {}
+            }
         }
-        _ => 0,
+    }
+
+    // Nothing advertised (e.g. YouTube) or a "*" wildcard means there is nothing to check
+    if accepted.is_empty() || accepted.contains("*") {
+        return;
+    }
+
+    let configured = config
+        .video_codecs
+        .iter()
+        .map(|c| c.fourcc())
+        .chain(config.audio_codecs.iter().map(|c| c.fourcc()));
+    for fourcc in configured.filter(|c| !accepted.contains(c)) {
+        warn!(
+            codec = fourcc,
+            "Server did not advertise support for the configured codec. Publishing anyway, but the server may drop the stream"
+        );
     }
 }
 
@@ -279,11 +321,14 @@ fn fourcc_list_supports_enhanced(value: &AmfValue) -> bool {
         return false;
     };
 
-    let known_video: Vec<&'static str> =
-        [RtmpVideoCodec::H264, RtmpVideoCodec::Vp8, RtmpVideoCodec::Vp9]
-            .into_iter()
-            .map(|c| c.fourcc())
-            .collect();
+    let known_video: Vec<&'static str> = [
+        RtmpVideoCodec::H264,
+        RtmpVideoCodec::Vp8,
+        RtmpVideoCodec::Vp9,
+    ]
+    .into_iter()
+    .map(|c| c.fourcc())
+    .collect();
     let known_audio: Vec<&'static str> = [RtmpAudioCodec::Aac, RtmpAudioCodec::Opus]
         .into_iter()
         .map(|c| c.fourcc())
@@ -304,11 +349,14 @@ fn video_fourcc_info_map_supports_video(value: &AmfValue) -> bool {
         AmfValue::EcmaArray(map) => map,
         _ => return false,
     };
-    let known: Vec<&'static str> =
-        [RtmpVideoCodec::H264, RtmpVideoCodec::Vp8, RtmpVideoCodec::Vp9]
-            .into_iter()
-            .map(|c| c.fourcc())
-            .collect();
+    let known: Vec<&'static str> = [
+        RtmpVideoCodec::H264,
+        RtmpVideoCodec::Vp8,
+        RtmpVideoCodec::Vp9,
+    ]
+    .into_iter()
+    .map(|c| c.fourcc())
+    .collect();
 
     map.iter().any(|(k, v)| match v {
         AmfValue::Number(mask) if *mask > 0.0 => k == "*" || known.contains(&k.as_str()),
@@ -339,6 +387,7 @@ fn audio_fourcc_info_map_supports_audio(value: &AmfValue) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ExCapabilities;
 
     #[test]
     fn caps_ex_without_fourcc_metadata_counts_as_enhanced() {
@@ -347,12 +396,12 @@ mod tests {
             AmfValue::Number(CAPS_EX_RECONNECT as f64),
         )]);
 
-        let caps_ex_bits = parse_caps_ex_bits(&capabilities);
+        let caps = ExCapabilities::from_connect_response(&capabilities, &HashMap::new());
         let advertises_enhanced_codecs =
-            map_advertises_enhanced_codecs(&capabilities) || caps_ex_bits != 0;
+            map_advertises_enhanced_codecs(&capabilities) || caps != ExCapabilities::default();
 
         assert!(advertises_enhanced_codecs);
-        assert_eq!(caps_ex_bits, CAPS_EX_RECONNECT);
+        assert!(caps.reconnect);
     }
 
     #[test]
@@ -363,7 +412,10 @@ mod tests {
         )]);
 
         assert!(map_advertises_enhanced_codecs(&capabilities));
-        assert_eq!(parse_caps_ex_bits(&capabilities), 0);
+        assert_eq!(
+            ExCapabilities::from_connect_response(&capabilities, &HashMap::new()),
+            ExCapabilities::default()
+        );
     }
 
     #[test]
@@ -377,33 +429,5 @@ mod tests {
         )]);
 
         assert!(map_advertises_enhanced_codecs(&capabilities));
-    }
-
-    #[test]
-    fn caps_ex_tracks_mod_ex_bits_separately_from_enhanced_codecs() {
-        let capabilities = HashMap::from([(
-            "capsEx".to_string(),
-            AmfValue::Number((CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO) as f64),
-        )]);
-
-        let caps_ex_bits = parse_caps_ex_bits(&capabilities);
-        let ex_capabilities = ExCapabilities::from_caps_ex_bits(caps_ex_bits);
-
-        assert!(ex_capabilities.supports_timestamp_nano_mod_ex());
-    }
-
-    #[test]
-    fn merges_caps_ex_from_properties_and_information() {
-        let properties =
-            HashMap::from([("capsEx".to_string(), AmfValue::Number(CAPS_EX_MODEX as f64))]);
-        let information = HashMap::from([(
-            "capsEx".to_string(),
-            AmfValue::Number(CAPS_EX_TIMESTAMP_NANO as f64),
-        )]);
-
-        let caps_ex_bits = parse_caps_ex_bits(&properties) | parse_caps_ex_bits(&information);
-        let ex_capabilities = ExCapabilities::from_caps_ex_bits(caps_ex_bits);
-
-        assert!(ex_capabilities.supports_timestamp_nano_mod_ex());
     }
 }
