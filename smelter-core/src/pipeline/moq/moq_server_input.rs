@@ -30,7 +30,6 @@ impl MoqServerInput {
         state.inputs.add_input(
             &input_ref,
             MoqInputStateOptions {
-                broadcast_path: options.broadcast_path,
                 queue_input: queue_input.downgrade(),
                 decoders: options.decoders,
             },
