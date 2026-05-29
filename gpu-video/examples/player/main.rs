@@ -2,8 +2,9 @@
 mod player;
 
 #[cfg(vulkan)]
-fn main() {
-    player::run()
+#[tokio::main]
+async fn main() {
+    player::run().await
 }
 
 #[cfg(not(vulkan))]

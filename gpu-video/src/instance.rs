@@ -4,21 +4,18 @@ use ash::{Entry, vk};
 
 use crate::{
     VulkanInitError,
-    adapter::{VulkanAdapter, VulkanAdapterDescriptor},
+    adapter::{VideoAdapter, VideoAdapterDescriptor},
     wrappers::*,
 };
 
 /// Context for all encoders and decoders. Also contains a [`wgpu::Instance`].
-pub struct VulkanInstance {
-    #[cfg(feature = "wgpu")]
-    pub(crate) wgpu_instance: wgpu::Instance,
-
+pub struct VideoInstance {
     _entry: Arc<Entry>,
     pub(crate) instance: Arc<Instance>,
     _debug_messenger: Option<DebugMessenger>,
 }
 
-impl VulkanInstance {
+impl VideoInstance {
     pub fn new() -> Result<Arc<Self>, VulkanInitError> {
         let entry = Arc::new(unsafe { Entry::load()? });
         Self::new_from_entry(entry)
@@ -64,12 +61,7 @@ impl VulkanInstance {
             .map(|layer| layer.as_ptr())
             .collect::<Vec<_>>();
 
-        let extensions = vec![vk::EXT_DEBUG_UTILS_NAME];
-
-        let extensions = extensions.into_iter().collect::<Vec<_>>();
-        #[cfg(feature = "wgpu")]
-        let extensions = merge_with_wgpu_instance_extensions(&entry, api_version, extensions)?;
-
+        let extensions = [vk::EXT_DEBUG_UTILS_NAME];
         let extension_ptrs = extensions.iter().map(|e| e.as_ptr()).collect::<Vec<_>>();
 
         let create_info = vk::InstanceCreateInfo::default()
@@ -78,18 +70,7 @@ impl VulkanInstance {
             .enabled_extension_names(&extension_ptrs);
 
         let instance = unsafe { entry.create_instance(&create_info, None) }?;
-        let video_queue_instance_ext = ash::khr::video_queue::Instance::new(&entry, &instance);
-        let video_encode_queue_instance_ext =
-            ash::khr::video_encode_queue::Instance::new(&entry, &instance);
-        let debug_utils_instance_ext = ash::ext::debug_utils::Instance::new(&entry, &instance);
-
-        let instance = Arc::new(Instance {
-            instance,
-            _entry: entry.clone(),
-            video_queue_instance_ext,
-            debug_utils_instance_ext,
-            video_encode_queue_instance_ext,
-        });
+        let instance = Arc::new(Instance::new(instance.clone(), entry.clone(), true));
 
         let debug_messenger = if cfg!(debug_assertions) {
             Some(DebugMessenger::new(instance.clone())?)
@@ -97,47 +78,33 @@ impl VulkanInstance {
             None
         };
 
-        #[cfg(feature = "wgpu")]
-        let wgpu_instance =
-            create_wgpu_instance(&entry, instance.clone(), api_version, extensions)?;
-
         Ok(Self {
             _entry: entry,
             instance,
             _debug_messenger: debug_messenger,
-
-            #[cfg(feature = "wgpu")]
-            wgpu_instance,
         }
         .into())
     }
 
-    #[cfg(feature = "wgpu")]
-    pub fn wgpu_instance(&self) -> wgpu::Instance {
-        self.wgpu_instance.clone()
+    /// Creates an instance that does not own `ash::Instance`. The instance is not destroyed on drop.
+    pub fn new_unowned(instance: ash::Instance, entry: Arc<Entry>) -> Self {
+        let instance = Arc::new(Instance::new(instance.clone(), entry.clone(), false));
+        Self {
+            _entry: entry,
+            instance,
+            _debug_messenger: None,
+        }
     }
 
     /// Creates an adapter that meets requirements specified in the descriptor.
     pub fn create_adapter<'a>(
         &'a self,
-        descriptor: &VulkanAdapterDescriptor,
-    ) -> Result<VulkanAdapter<'a>, VulkanInitError> {
+        descriptor: &VideoAdapterDescriptor,
+    ) -> Result<VideoAdapter<'a>, VulkanInitError> {
         self.iter_adapters()?
             .find(|adapter| {
-                if (descriptor.supports_decoding && !adapter.supports_decoding())
-                    || (descriptor.supports_encoding && !adapter.supports_encoding())
-                {
-                    return false;
-                }
-
-                #[cfg(feature = "wgpu")]
-                if let Some(surface) = descriptor.compatible_surface
-                    && !adapter.supports_surface(surface)
-                {
-                    return false;
-                }
-
-                true
+                (!descriptor.supports_decoding || adapter.supports_decoding())
+                    && (!descriptor.supports_encoding || adapter.supports_encoding())
             })
             .ok_or(VulkanInitError::NoDevice)
     }
@@ -145,55 +112,13 @@ impl VulkanInstance {
     /// Iterator over all available [`VulkanAdapter`]s that support at least decoding or encoding.
     pub fn iter_adapters<'a>(
         &'a self,
-    ) -> Result<impl Iterator<Item = VulkanAdapter<'a>> + 'a, VulkanInitError> {
+    ) -> Result<impl Iterator<Item = VideoAdapter<'a>> + 'a, VulkanInitError> {
         crate::adapter::iter_adapters(self)
     }
 }
 
-impl std::fmt::Debug for VulkanInstance {
+impl std::fmt::Debug for VideoInstance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VulkanInstance").finish()
     }
-}
-
-#[cfg(feature = "wgpu")]
-fn merge_with_wgpu_instance_extensions(
-    entry: &Entry,
-    api_version: u32,
-    extensions: Vec<&'static std::ffi::CStr>,
-) -> Result<Vec<&'static std::ffi::CStr>, crate::WgpuInitError> {
-    let wgpu_extensions = wgpu::hal::vulkan::Instance::desired_extensions(
-        entry,
-        api_version,
-        wgpu::InstanceFlags::empty(),
-    )?;
-
-    Ok([extensions, wgpu_extensions].concat())
-}
-
-#[cfg(feature = "wgpu")]
-fn create_wgpu_instance(
-    entry: &Entry,
-    instance: Arc<Instance>,
-    api_version: u32,
-    extensions: Vec<&'static std::ffi::CStr>,
-) -> Result<wgpu::Instance, crate::WgpuInitError> {
-    let wgpu_instance = unsafe {
-        wgpu::hal::vulkan::Instance::from_raw(
-            (*entry).clone(),
-            instance.instance.clone(),
-            api_version,
-            0,
-            None,
-            extensions,
-            wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER,
-            wgpu::MemoryBudgetThresholds::default(),
-            false,
-            Some(Box::new(move || {
-                drop(instance);
-            })),
-        )?
-    };
-
-    Ok(unsafe { wgpu::Instance::from_hal::<wgpu::hal::vulkan::Api>(wgpu_instance) })
 }

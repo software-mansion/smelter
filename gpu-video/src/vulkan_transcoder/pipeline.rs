@@ -3,7 +3,7 @@ use std::{io::Cursor, sync::Arc};
 use ash::vk;
 
 use crate::{
-    VulkanDevice,
+    VideoDevice,
     parameters::ScalingAlgorithm,
     vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
     vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
@@ -78,12 +78,12 @@ impl ResizingImageBundle {
 
 struct ImageHeap {
     freelist: Vec<Box<[ResizingImageBundle]>>,
-    device: Arc<VulkanDevice>,
+    device: Arc<VideoDevice>,
     configs: Vec<OutputConfig>,
 }
 
 impl ImageHeap {
-    fn new(device: Arc<VulkanDevice>, configs: Vec<OutputConfig>) -> Self {
+    fn new(device: Arc<VideoDevice>, configs: Vec<OutputConfig>) -> Self {
         Self {
             device,
             freelist: Vec::new(),
@@ -221,12 +221,12 @@ pub(crate) struct ResizingPipeline {
     image_heap: ImageHeap,
     pipeline: ComputePipeline,
     buffer_pool: CommandBufferPool,
-    device: Arc<VulkanDevice>,
+    device: Arc<VideoDevice>,
 }
 
 impl ResizingPipeline {
     pub(crate) fn new(
-        device: Arc<VulkanDevice>,
+        device: Arc<VideoDevice>,
         configs: Vec<OutputConfig>,
     ) -> Result<Self, TranscoderError> {
         if configs.is_empty() || configs.len() > MAX_OUTPUTS as usize {

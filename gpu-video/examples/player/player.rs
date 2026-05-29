@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 
 use clap::Parser;
-use gpu_video::VulkanInstance;
+use gpu_video::{VideoAdapterExt, parameters::VideoDeviceDescriptor};
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 mod decoder;
@@ -25,7 +25,7 @@ struct FrameWithPts {
     pts: Duration,
 }
 
-pub fn run() {
+pub async fn run() {
     let args = Args::parse();
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -38,29 +38,28 @@ pub fn run() {
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    let vulkan_instance = VulkanInstance::new().unwrap();
-
-    let surface = vulkan_instance
-        .wgpu_instance()
-        .create_surface(&window)
-        .unwrap();
-
-    let vulkan_adapter = vulkan_instance
-        .create_adapter(&gpu_video::parameters::VulkanAdapterDescriptor {
-            compatible_surface: Some(&surface),
-            ..Default::default()
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let adapter = instance
+        .enumerate_adapters(wgpu::Backends::VULKAN)
+        .await
+        .into_iter()
+        .find(|a| {
+            a.video_adapter_info()
+                .is_some_and(|info| info.decode_capabilities.h264.is_some())
         })
         .unwrap();
-    let vulkan_device = vulkan_adapter
-        .create_device(&gpu_video::parameters::VulkanDeviceDescriptor::default())
+    let (device, queue) = adapter
+        .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
 
+    let surface = instance.create_surface(&window).unwrap();
+
     let (tx, rx) = mpsc::sync_channel(FRAMES_BUFFER_LEN);
-    let vulkan_device_clone = vulkan_device.clone();
+    let device_clone = device.clone();
 
     std::thread::spawn(move || {
-        decoder::run_decoder(tx, args.framerate, vulkan_device_clone, file);
+        decoder::run_decoder(tx, args.framerate, device_clone, file);
     });
 
-    renderer::run_renderer(event_loop, &window, surface, &vulkan_device, rx);
+    renderer::run_renderer(event_loop, &window, surface, adapter, device, queue, rx);
 }

@@ -1,3 +1,4 @@
+use gpu_video::VideoAdapterExt;
 #[cfg(vulkan)]
 use gpu_video::{
     WgpuRgbaToNv12Converter,
@@ -5,12 +6,11 @@ use gpu_video::{
 };
 
 #[cfg(vulkan)]
-fn main() {
+#[tokio::main]
+async fn main() {
     use gpu_video::{
-        InputFrame, VulkanInstance,
-        parameters::{
-            RateControl, VideoParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
-        },
+        InputFrame, VideoDeviceExt,
+        parameters::{RateControl, VideoDeviceDescriptor, VideoParameters},
     };
     use std::{io::Write, num::NonZeroU32};
 
@@ -31,14 +31,22 @@ fn main() {
     let height = args[2].parse::<NonZeroU32>().expect("parse height");
     let frame_count = args[3].parse::<u32>().expect("parse frame count");
 
-    let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_adapter = vulkan_instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let adapter = instance
+        .enumerate_adapters(wgpu::Backends::VULKAN)
+        .await
+        .into_iter()
+        .find(|a| {
+            a.video_adapter_info().is_some_and(|info| {
+                info.encode_capabilities.h264.is_some() && info.encode_capabilities.h265.is_some()
+            })
+        })
         .unwrap();
-    let vulkan_device = vulkan_adapter
-        .create_device(&VulkanDeviceDescriptor {
+    let (device, queue) = adapter
+        .request_device_with_video_support(&VideoDeviceDescriptor {
             wgpu_features: wgpu::Features::IMMEDIATES,
             wgpu_limits: wgpu::Limits {
+                max_binding_array_elements_per_shader_stage: 128,
                 max_immediate_size: 4,
                 ..Default::default()
             },
@@ -46,46 +54,47 @@ fn main() {
         })
         .unwrap();
 
-    let wgpu_state = WgpuState::new(
-        vulkan_device.wgpu_device(),
-        vulkan_device.wgpu_queue(),
-        width,
-        height,
-    );
-
-    let mut encoder_h264 = vulkan_device
-        .create_wgpu_textures_encoder_h264(EncoderParametersH264 {
-            input_parameters: VideoParameters {
-                width,
-                height,
-                target_framerate: 30.into(),
+    let mut encoder_h264 = device
+        .create_wgpu_textures_encoder_h264(
+            &queue,
+            EncoderParametersH264 {
+                input_parameters: VideoParameters {
+                    width,
+                    height,
+                    target_framerate: 30.into(),
+                },
+                output_parameters: device
+                    .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
+                        average_bitrate: 500_000,
+                        max_bitrate: 2_000_000,
+                        virtual_buffer_size: std::time::Duration::from_secs(2),
+                    })
+                    .unwrap(),
             },
-            output_parameters: vulkan_device
-                .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
-                    average_bitrate: 500_000,
-                    max_bitrate: 2_000_000,
-                    virtual_buffer_size: std::time::Duration::from_secs(2),
-                })
-                .unwrap(),
-        })
+        )
         .unwrap();
 
-    let mut encoder_h265 = vulkan_device
-        .create_wgpu_textures_encoder_h265(EncoderParametersH265 {
-            input_parameters: VideoParameters {
-                width,
-                height,
-                target_framerate: 30.into(),
+    let mut encoder_h265 = device
+        .create_wgpu_textures_encoder_h265(
+            &queue,
+            EncoderParametersH265 {
+                input_parameters: VideoParameters {
+                    width,
+                    height,
+                    target_framerate: 30.into(),
+                },
+                output_parameters: device
+                    .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
+                        average_bitrate: 500_000,
+                        max_bitrate: 2_000_000,
+                        virtual_buffer_size: std::time::Duration::from_secs(2),
+                    })
+                    .unwrap(),
             },
-            output_parameters: vulkan_device
-                .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
-                    average_bitrate: 500_000,
-                    max_bitrate: 2_000_000,
-                    virtual_buffer_size: std::time::Duration::from_secs(2),
-                })
-                .unwrap(),
-        })
+        )
         .unwrap();
+
+    let wgpu_state = WgpuState::new(device, queue, width, height);
 
     let mut output_file_h264 = std::fs::File::create("output.h264").unwrap();
     let mut output_file_h265 = std::fs::File::create("output.h265").unwrap();

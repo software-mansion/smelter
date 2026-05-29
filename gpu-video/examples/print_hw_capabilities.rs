@@ -1,8 +1,8 @@
 #[cfg(vulkan)]
 fn main() {
     use gpu_video::{
-        VulkanInstance,
-        parameters::{VulkanAdapterDescriptor, VulkanDeviceDescriptor},
+        VideoInstance,
+        parameters::{VideoAdapterDescriptor, VideoDeviceDescriptor},
     };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -11,12 +11,12 @@ fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed to initialize tracing");
 
-    let vulkan_instance = VulkanInstance::new().unwrap();
+    let vulkan_instance = VideoInstance::new().unwrap();
     let vulkan_adapter = vulkan_instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
+        .create_adapter(&VideoAdapterDescriptor::default())
         .unwrap();
     let vulkan_device = vulkan_adapter
-        .create_device(&VulkanDeviceDescriptor::default())
+        .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
     std::hint::black_box(vulkan_device);

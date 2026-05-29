@@ -1,6 +1,5 @@
 use std::sync::mpsc::Receiver;
 
-use gpu_video::VulkanDevice;
 use wgpu::util::DeviceExt;
 use winit::{
     dpi::PhysicalSize,
@@ -16,7 +15,9 @@ pub fn run_renderer<'a>(
     event_loop: EventLoop<()>,
     window: &'a Window,
     surface: wgpu::Surface<'a>,
-    vulkan_device: &VulkanDevice,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
     rx: Receiver<FrameWithPts>,
 ) {
     let mut current_frame = rx.recv().unwrap();
@@ -29,7 +30,7 @@ pub fn run_renderer<'a>(
         current_frame.frame.size().height,
     ));
 
-    let mut renderer = Renderer::new(surface, vulkan_device, window);
+    let mut renderer = Renderer::new(surface, adapter, device, queue, window);
 
     let start_timestamp = std::time::Instant::now();
     event_loop
@@ -127,11 +128,15 @@ struct Renderer<'a> {
 }
 
 impl<'a> Renderer<'a> {
-    fn new(surface: wgpu::Surface<'a>, vulkan_device: &VulkanDevice, window: &Window) -> Self {
-        let device = vulkan_device.wgpu_device();
-        let queue = vulkan_device.wgpu_queue();
+    fn new(
+        surface: wgpu::Surface<'a>,
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        window: &Window,
+    ) -> Self {
         let size = window.inner_size();
-        let surface_capabilities = surface.get_capabilities(&vulkan_device.wgpu_adapter());
+        let surface_capabilities = surface.get_capabilities(&adapter);
         let surface_texture_format = surface_capabilities
             .formats
             .iter()

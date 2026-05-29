@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use ash::vk;
 
-use crate::adapter::VulkanAdapter;
-use crate::capabilities::AdapterInfo;
+use crate::adapter::VideoAdapter;
+use crate::capabilities::VideoAdapterInfo;
 use crate::codec::EncodeCodec;
 use crate::codec::h264::H264Codec;
 use crate::device::caps::{
@@ -24,8 +24,8 @@ use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 #[cfg(feature = "transcoder")]
 use crate::vulkan_transcoder::TranscoderParameters;
 use crate::{
-    BytesDecoder, BytesEncoderH264, BytesEncoderH265, DecoderError, RawFrameData,
-    VulkanDecoderError, VulkanEncoderError, VulkanInitError, VulkanInstance, wrappers::*,
+    BytesDecoder, BytesEncoderH264, BytesEncoderH265, DecoderError, RawFrameData, VideoInstance,
+    VulkanDecoderError, VulkanEncoderError, VulkanInitError, wrappers::*,
 };
 
 pub(crate) mod caps;
@@ -34,7 +34,7 @@ pub(crate) mod queues;
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
 #[cfg(feature = "wgpu")]
-pub(crate) use wgpu_api::*;
+pub use wgpu_api::*;
 
 pub(crate) const REQUIRED_EXTENSIONS: &[&CStr] =
     &[vk::KHR_VIDEO_QUEUE_NAME, vk::KHR_VIDEO_MAINTENANCE1_NAME];
@@ -56,7 +56,7 @@ pub(crate) const ENCODE_CODEC_EXTENSIONS: &[&CStr] = &[
 /// Describes a [`VulkanDevice`].
 /// Used by [`VulkanAdapter::create_device`]
 #[derive(Default, Clone)]
-pub struct VulkanDeviceDescriptor {
+pub struct VideoDeviceDescriptor {
     #[cfg(feature = "wgpu")]
     pub wgpu_features: wgpu::Features,
 
@@ -267,58 +267,94 @@ pub struct EncoderParametersH265 {
 
 /// Open connection to a coding-capable device. Also contains a [`wgpu::Device`], a [`wgpu::Queue`] and
 /// a [`wgpu::Adapter`].
-pub struct VulkanDevice {
-    #[cfg(feature = "wgpu")]
-    pub(crate) wgpu_ctx: WgpuContext,
-
+pub struct VideoDevice {
     pub(crate) _physical_device: vk::PhysicalDevice,
     pub(crate) allocator: Arc<Allocator>,
     pub(crate) queues: Queues,
     pub(crate) native_decode_capabilities: Option<NativeDecodeCapabilities>,
     pub(crate) native_encode_capabilities: Option<NativeEncodeCapabilities>,
-    pub(crate) adapter_info: AdapterInfo,
+    pub(crate) adapter_info: Arc<VideoAdapterInfo>,
     pub(crate) device: Arc<Device>,
 }
 
-impl VulkanDevice {
+impl VideoDevice {
     pub(crate) fn new(
-        instance: &VulkanInstance,
-        adapter: VulkanAdapter<'_>,
-        #[allow(unused)] descriptor: &VulkanDeviceDescriptor,
-    ) -> Result<Self, VulkanInitError> {
-        let mut required_extensions = REQUIRED_EXTENSIONS
-            .iter()
-            .copied()
-            .chain(match adapter.supports_decoding() {
-                true => DECODE_EXTENSIONS.iter().copied(),
-                false => [].iter().copied(),
-            })
-            .chain(match adapter.supports_decoding() {
-                true => DECODE_CODEC_EXTENSIONS.iter().copied(),
-                false => [].iter().copied(),
-            })
-            .chain(match adapter.supports_encoding() {
-                true => ENCODE_EXTENSIONS.iter().copied(),
-                false => [].iter().copied(),
-            })
-            .chain(match adapter.supports_encoding() {
-                true => ENCODE_CODEC_EXTENSIONS.iter().copied(),
-                false => [].iter().copied(),
-            })
-            .collect::<Vec<_>>();
-
-        #[cfg(feature = "wgpu")]
-        append_wgpu_device_extensions(&adapter, descriptor.wgpu_features, &mut required_extensions);
-
-        #[cfg(not(feature = "wgpu"))]
+        instance: &VideoInstance,
+        video_adapter: VideoAdapter<'_>,
+        _desc: VideoDeviceDescriptor,
+    ) -> Result<Arc<VideoDevice>, VulkanInitError> {
+        let mut required_extensions = video_adapter.required_extensions();
         required_extensions.push(ash::khr::timeline_semaphore::NAME);
 
-        let required_extensions_as_ptrs = required_extensions
-            .iter()
-            .map(|e| e.as_ptr())
-            .collect::<Vec<_>>();
+        let mut timeline_semaphore_feature =
+            vk::PhysicalDeviceTimelineSemaphoreFeatures::default().timeline_semaphore(true);
 
-        let VulkanAdapter {
+        let mut device_create_info = vk::DeviceCreateInfo::default();
+        device_create_info = device_create_info.push_next(&mut timeline_semaphore_feature);
+
+        Self::new_from_create_info(
+            instance,
+            video_adapter,
+            &required_extensions,
+            device_create_info,
+        )
+    }
+
+    #[cfg(feature = "wgpu")]
+    pub(crate) fn new_with_wgpu(
+        instance: &VideoInstance,
+        wgpu_adapter: &wgpu::Adapter,
+        video_adapter: VideoAdapter<'_>,
+        desc: VideoDeviceDescriptor,
+    ) -> Result<(wgpu::Device, wgpu::Queue), VulkanInitError> {
+        use wgpu::hal::vulkan::Api as VkApi;
+
+        let hal_adapter = unsafe { wgpu_adapter.as_hal::<VkApi>().unwrap() };
+
+        let wgpu_queue_family_index = video_adapter
+            .queue_indices
+            .graphics_transfer_compute
+            .family_index as u32;
+        let mut required_extensions = video_adapter.required_extensions();
+
+        let wgpu_features = desc.wgpu_features | wgpu::Features::TEXTURE_FORMAT_NV12;
+        let mut wgpu_extensions = hal_adapter.required_device_extensions(wgpu_features);
+        required_extensions.append(&mut wgpu_extensions);
+
+        let mut wgpu_physical_device_features = unsafe {
+            wgpu_adapter
+                .as_hal::<wgpu::hal::vulkan::Api>()
+                .unwrap()
+                .physical_device_features(&required_extensions, desc.wgpu_features)
+        };
+
+        let mut device_create_info = vk::DeviceCreateInfo::default();
+        device_create_info = wgpu_physical_device_features.add_to_device_create(device_create_info);
+
+        let video_device = Self::new_from_create_info(
+            instance,
+            video_adapter,
+            &required_extensions,
+            device_create_info,
+        )?;
+
+        wgpu_api::create_and_register_wgpu_device(
+            video_device,
+            wgpu_adapter,
+            desc,
+            &required_extensions,
+            wgpu_queue_family_index,
+        )
+        .map_err(VulkanInitError::WgpuError)
+    }
+
+    fn new_from_create_info(
+        instance: &VideoInstance,
+        adapter: VideoAdapter<'_>,
+        required_extensions: &[&'static CStr],
+        device_create_info: vk::DeviceCreateInfo<'_>,
+    ) -> Result<Arc<Self>, VulkanInitError> {
+        let VideoAdapter {
             physical_device,
             queue_indices,
             decode_capabilities,
@@ -326,6 +362,11 @@ impl VulkanDevice {
             info,
             ..
         } = adapter;
+
+        let required_extensions_as_ptrs = required_extensions
+            .iter()
+            .map(|e| e.as_ptr())
+            .collect::<Vec<_>>();
 
         let queue_create_infos = queue_indices.queue_create_infos();
         let queue_create_infos = queue_create_infos
@@ -337,33 +378,15 @@ impl VulkanDevice {
             vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
         let mut vk_video_maintenance1_feature =
             vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default().video_maintenance1(true);
-
         let mut vk_descriptor_feature = vk::PhysicalDeviceDescriptorIndexingFeatures::default()
             .descriptor_binding_partially_bound(true);
 
-        let device_create_info = vk::DeviceCreateInfo::default()
-            .queue_create_infos(&queue_create_infos)
-            .enabled_extension_names(&required_extensions_as_ptrs);
-
         let device_create_info = device_create_info
+            .queue_create_infos(&queue_create_infos)
+            .enabled_extension_names(&required_extensions_as_ptrs)
             .push_next(&mut vk_synch_2_feature)
             .push_next(&mut vk_video_maintenance1_feature)
             .push_next(&mut vk_descriptor_feature);
-
-        #[cfg(feature = "wgpu")]
-        let mut wgpu_physical_device_features = adapter
-            .wgpu_adapter
-            .adapter
-            .physical_device_features(&required_extensions, descriptor.wgpu_features);
-        #[cfg(feature = "wgpu")]
-        let device_create_info =
-            wgpu_physical_device_features.add_to_device_create(device_create_info);
-
-        #[cfg(not(feature = "wgpu"))]
-        let mut timeline_semaphore_feature =
-            vk::PhysicalDeviceTimelineSemaphoreFeatures::default().timeline_semaphore(true);
-        #[cfg(not(feature = "wgpu"))]
-        let device_create_info = device_create_info.push_next(&mut timeline_semaphore_feature);
 
         let device = unsafe {
             instance
@@ -437,27 +460,15 @@ impl VulkanDevice {
             device.clone(),
         )?);
 
-        #[cfg(feature = "wgpu")]
-        let wgpu_ctx = WgpuContext::new(
-            adapter.instance,
-            adapter.wgpu_adapter,
-            queue_indices.graphics_transfer_compute.family_index as u32,
-            descriptor,
-            device.clone(),
-            required_extensions,
-        )?;
-
-        Ok(VulkanDevice {
-            #[cfg(feature = "wgpu")]
-            wgpu_ctx,
+        Ok(Arc::new(Self {
             _physical_device: physical_device,
             device,
             allocator,
             queues,
             native_decode_capabilities: decode_capabilities,
             native_encode_capabilities: encode_capabilities,
-            adapter_info: info,
-        })
+            adapter_info: Arc::new(info),
+        }))
     }
 
     pub(crate) fn decoding_device(self: &Arc<Self>) -> Result<DecodingDevice, VulkanDecoderError> {
@@ -844,20 +855,20 @@ impl VulkanDevice {
     }
 }
 
-impl std::fmt::Debug for VulkanDevice {
+impl std::fmt::Debug for VideoDevice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VulkanDevice").finish()
     }
 }
 
 pub(crate) struct DecodingDevice {
-    pub(crate) vulkan_device: Arc<VulkanDevice>,
+    pub(crate) vulkan_device: Arc<VideoDevice>,
     pub(crate) h264_decode_queues: Arc<VideoQueues>,
     pub(crate) profile_capabilities: NativeDecodeProfileCapabilities<H264Codec>,
 }
 
 impl Deref for DecodingDevice {
-    type Target = VulkanDevice;
+    type Target = VideoDevice;
 
     fn deref(&self) -> &Self::Target {
         &self.vulkan_device
@@ -865,13 +876,13 @@ impl Deref for DecodingDevice {
 }
 
 pub(crate) struct EncodingDevice {
-    pub(crate) vulkan_device: Arc<VulkanDevice>,
+    pub(crate) vulkan_device: Arc<VideoDevice>,
     pub(crate) encode_queues: Arc<VideoQueues>,
     pub(crate) native_encode_capabilities: NativeEncodeCapabilities,
 }
 
 impl Deref for EncodingDevice {
-    type Target = VulkanDevice;
+    type Target = VideoDevice;
 
     fn deref(&self) -> &Self::Target {
         &self.vulkan_device

@@ -28,11 +28,32 @@ pub(crate) struct Instance {
     pub(crate) video_queue_instance_ext: ash::khr::video_queue::Instance,
     pub(crate) video_encode_queue_instance_ext: ash::khr::video_encode_queue::Instance,
     pub(crate) debug_utils_instance_ext: ash::ext::debug_utils::Instance,
+    pub(crate) destroy_instance_on_drop: bool,
+}
+
+impl Instance {
+    pub fn new(instance: ash::Instance, entry: Arc<Entry>, destroy_instance_on_drop: bool) -> Self {
+        let video_queue_instance_ext = ash::khr::video_queue::Instance::new(&entry, &instance);
+        let video_encode_queue_instance_ext =
+            ash::khr::video_encode_queue::Instance::new(&entry, &instance);
+        let debug_utils_instance_ext = ash::ext::debug_utils::Instance::new(&entry, &instance);
+
+        Self {
+            instance,
+            _entry: entry,
+            video_queue_instance_ext,
+            video_encode_queue_instance_ext,
+            debug_utils_instance_ext,
+            destroy_instance_on_drop,
+        }
+    }
 }
 
 impl Drop for Instance {
     fn drop(&mut self) {
-        unsafe { self.destroy_instance(None) };
+        if self.destroy_instance_on_drop {
+            unsafe { self.destroy_instance(None) };
+        }
     }
 }
 

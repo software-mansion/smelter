@@ -1,7 +1,7 @@
 use std::{num::NonZero, ops::Deref, sync::Arc};
 
 use gpu_video::{
-    WgpuTexturesEncoderH264,
+    VideoDeviceExt, WgpuTexturesEncoderH264,
     parameters::{EncoderParametersH264, RateControl, Rational, VideoParameters},
 };
 use smelter_render::{FrameData, OutputFrameFormat};
@@ -29,7 +29,7 @@ impl VideoEncoder for VulkanH264Encoder {
         ctx: &Arc<PipelineCtx>,
         options: Self::Options,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
-        let Some(vulkan_ctx) = &ctx.graphics_context.vulkan_ctx else {
+        if ctx.graphics_context.vulkan_ctx.is_none() {
             return Err(EncoderInitError::VulkanContextRequiredForVulkanEncoder);
         };
 
@@ -60,7 +60,7 @@ impl VideoEncoder for VulkanH264Encoder {
             }
         };
 
-        let device = vulkan_ctx.device.clone();
+        let device = &ctx.wgpu_ctx.device;
 
         let video_params = VideoParameters {
             width,
@@ -97,7 +97,8 @@ impl VideoEncoder for VulkanH264Encoder {
             encoder_params.output_parameters.inline_stream_params = Some(false);
         }
 
-        let encoder = device.create_wgpu_textures_encoder_h264(encoder_params)?;
+        let encoder =
+            device.create_wgpu_textures_encoder_h264(&ctx.wgpu_ctx.queue, encoder_params)?;
 
         let extradata = if options.bitstream_format == H264BitstreamFormat::Avcc {
             build_avc_decoder_config(&[encoder.sps()?, encoder.pps()?].concat())
