@@ -86,7 +86,7 @@ pub(crate) fn spawn_broadcast_handler(
         let has_audio = discovered.audio.is_some();
 
         // TODO: This has to be handled in a more reliable way that does not introduce high latency,
-        // probalby jitter buffer.
+        // probably jitter buffer.
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: has_video,
             audio: has_audio,
