@@ -358,32 +358,7 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => true,
     };
 
-    let moq_tls_cert_file = env::var("SMELTER_MOQ_TLS_CERT_FILE")
-        .ok()
-        .map(PathBuf::from);
-    let moq_tls_key_file = env::var("SMELTER_MOQ_TLS_KEY_FILE").ok().map(PathBuf::from);
-
-    let moq_tls_config = match (moq_tls_cert_file, moq_tls_key_file) {
-        (Some(cert), Some(key)) => {
-            let mut tls = moq_native::ServerTlsConfig::default();
-            tls.cert = vec![cert];
-            tls.key = vec![key];
-            Some(tls)
-        }
-        // For easier debugging
-        _ if cfg!(debug_assertions) => {
-            tracing::debug!(
-                "TLS certificate for MoQ not specified. Self signed one will be generated."
-            );
-            let mut tls = moq_native::ServerTlsConfig::default();
-            tls.generate = vec!["localhost".into()];
-            Some(tls)
-        }
-        _ => {
-            warn!("MoQ TLS cert/key not configured, MoQ server will not start");
-            None
-        }
-    };
+    let moq_tls_config = moq_tls_config();
 
     let log_file = match env::var("SMELTER_LOG_FILE") {
         Ok(path) => Some(Arc::from(PathBuf::from(path))),
@@ -438,6 +413,35 @@ fn try_read_config() -> Result<Config, String> {
         rendering_mode,
     };
     Ok(config)
+}
+
+fn moq_tls_config() -> Option<moq_native::ServerTlsConfig> {
+    let moq_tls_cert_file = env::var("SMELTER_MOQ_TLS_CERT_FILE")
+        .ok()
+        .map(PathBuf::from);
+    let moq_tls_key_file = env::var("SMELTER_MOQ_TLS_KEY_FILE").ok().map(PathBuf::from);
+
+    match (moq_tls_cert_file, moq_tls_key_file) {
+        (Some(cert), Some(key)) => {
+            let mut tls = moq_native::ServerTlsConfig::default();
+            tls.cert = vec![cert];
+            tls.key = vec![key];
+            Some(tls)
+        }
+        // For easier debugging
+        _ if cfg!(debug_assertions) => {
+            tracing::debug!(
+                "TLS certificate for MoQ not specified. Self signed one will be generated."
+            );
+            let mut tls = moq_native::ServerTlsConfig::default();
+            tls.generate = vec!["localhost".into()];
+            Some(tls)
+        }
+        _ => {
+            warn!("MoQ TLS cert/key not configured, MoQ server will not start");
+            None
+        }
+    }
 }
 
 fn read_side_channel_socket_dir() -> Arc<Path> {
