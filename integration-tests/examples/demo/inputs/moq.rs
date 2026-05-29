@@ -11,14 +11,12 @@ use serde_json::json;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoqInput {
     pub name: String,
-    broadcast_path: String,
 }
 
 impl MoqInput {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "moq_server",
-            "broadcast_path": self.broadcast_path,
             "decoder_map": {
                 "h264": "ffmpeg_h264",
             }
@@ -29,7 +27,7 @@ impl MoqInput {
         println!("Publish to this input using moq-cli:");
         println!(
             "ffmpeg -re -readrate_initial_burst 7 -i <SOURCE_MP4> -c copy -movflags cmaf -f mp4 - | moq-cli publish --tls-disable-verify --url https://localhost:4443 --broadcast {} fmp4",
-            self.broadcast_path
+            self.name
         );
         println!();
         Ok(())
@@ -38,17 +36,12 @@ impl MoqInput {
 
 pub struct MoqInputBuilder {
     name: String,
-    broadcast_path: String,
 }
 
 impl MoqInputBuilder {
     pub fn new() -> Self {
         let name = Self::generate_name();
-        let broadcast_path = name.clone();
-        Self {
-            name,
-            broadcast_path,
-        }
+        Self { name }
     }
 
     fn generate_name() -> String {
@@ -59,7 +52,7 @@ impl MoqInputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_name()?.prompt_broadcast_path()
+        self.prompt_name()
     }
 
     fn prompt_name(self) -> Result<Self> {
@@ -71,34 +64,12 @@ impl MoqInputBuilder {
         }
     }
 
-    fn prompt_broadcast_path(self) -> Result<Self> {
-        let path_input = Text::new(&format!(
-            "Broadcast path (ESC for '{}'):",
-            self.broadcast_path
-        ))
-        .prompt_skippable()?;
-
-        match path_input {
-            Some(path) if !path.trim().is_empty() => Ok(self.with_broadcast_path(path)),
-            None | Some(_) => Ok(self),
-        }
-    }
-
     pub fn with_name(mut self, name: String) -> Self {
-        self.broadcast_path = name.clone();
         self.name = name;
         self
     }
 
-    pub fn with_broadcast_path(mut self, broadcast_path: String) -> Self {
-        self.broadcast_path = broadcast_path;
-        self
-    }
-
     pub fn build(self) -> MoqInput {
-        MoqInput {
-            name: self.name,
-            broadcast_path: self.broadcast_path,
-        }
+        MoqInput { name: self.name }
     }
 }

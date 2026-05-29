@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -9,9 +9,6 @@ use super::SideChannel;
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MoqInputServer {
-    /// The MoQ broadcast path that Smelter listens on for incoming streams.
-    /// A publishing client must announce this broadcast path for the input to receive media.
-    pub broadcast_path: Arc<str>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,
