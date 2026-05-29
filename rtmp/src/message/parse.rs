@@ -25,8 +25,8 @@ impl RtmpMessageIncoming {
             },
 
             MessageType::SetChunkSize if msg.payload.len() >= 4 => {
+                // top bit is reserved (0), low 31 bits are the size (RTMP 5.4.1).
                 let chunk_size = u32::from_be_bytes([p[0] & 0x7F, p[1], p[2], p[3]]);
-                // TODO: double check p[0] or p[3]
                 RtmpMessageIncoming::SetChunkSize { chunk_size }
             }
             MessageType::SetChunkSize => {

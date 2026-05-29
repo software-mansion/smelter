@@ -122,7 +122,6 @@ impl UserControlMessage {
 
 // https://rtmp.veriskope.com/docs/spec/#717user-control-message-events
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(unused)]
 enum UserControlMessageKind {
     StreamBegin,
     StreamEof,

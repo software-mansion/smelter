@@ -19,6 +19,8 @@ use crate::{
 
 mod negotiation;
 
+const OUTGOING_CHUNK_SIZE: u32 = 4096;
+
 pub struct RtmpClientConfig {
     pub host: String,
     pub port: u16,
@@ -183,9 +185,11 @@ impl RtmpClientState {
                 send_publish(&mut self.stream, &config.stream_key, response.stream_id)?;
 
                 // should be after StreamBegin but e.g. YouTube does not send it
+                self.stream.write_msg(RtmpMessageOutgoing::SetChunkSize {
+                    chunk_size: OUTGOING_CHUNK_SIZE,
+                })?;
                 self.stream
-                    .write_msg(RtmpMessageOutgoing::SetChunkSize { chunk_size: 4096 })?;
-                self.stream.set_writer_chunk_size(4096);
+                    .set_writer_chunk_size(OUTGOING_CHUNK_SIZE as usize);
                 continue;
             }
 
