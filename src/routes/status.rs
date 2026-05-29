@@ -80,10 +80,10 @@ pub async fn status_handler(
                 InputProtocolKind::Whip => "whip",
                 InputProtocolKind::Whep => "whep",
                 InputProtocolKind::Hls => "hls",
+                InputProtocolKind::MoqServer => "moq_server",
                 InputProtocolKind::V4l2 => "v4l2",
                 InputProtocolKind::DeckLink => "decklink",
                 InputProtocolKind::RawDataChannel => "raw_data",
-                InputProtocolKind::MoqServer => "moq_server",
             };
             InputInfo {
                 input_id: id.to_string(),

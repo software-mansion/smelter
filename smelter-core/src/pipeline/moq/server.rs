@@ -67,6 +67,7 @@ pub async fn spawn_moq_server(
             }
             Err(error) => {
                 warn!("Failed to start MoQ server. Retrying ...");
+                debug!(%error, "Failed to start MoQ server.");
                 server_result = Some(Err(error));
             }
         }
