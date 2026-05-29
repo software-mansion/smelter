@@ -55,7 +55,7 @@ async fn read_hang_catalog(
     let video = match catalog.video.renditions.first_key_value() {
         Some((name, config)) if let VideoCodec::H264(_) = config.codec => match &config.container {
             CatalogContainer::Cmaf { init, .. } => {
-                let wire = fmp4::Wire::from_init(&init)?;
+                let wire = fmp4::Wire::from_init(init)?;
                 let container = Container::Cmaf(wire);
 
                 Some(DiscoveredVideo {
@@ -126,7 +126,7 @@ async fn read_msf_catalog(
     let video = match catalog.video.renditions.first_key_value() {
         Some((name, config)) if let VideoCodec::H264(_) = config.codec => match &config.container {
             CatalogContainer::Cmaf { init, .. } => {
-                let wire = fmp4::Wire::from_init(&init)?;
+                let wire = fmp4::Wire::from_init(init)?;
                 let description = match extract_codec_description(&wire) {
                     Ok(config) => Some(config),
                     Err(error) => {
