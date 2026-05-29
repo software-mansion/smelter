@@ -91,6 +91,12 @@ impl From<AudioConfig> for RtmpEvent {
     }
 }
 
+impl From<HashMap<String, AmfValue>> for RtmpEvent {
+    fn from(value: HashMap<String, AmfValue>) -> Self {
+        RtmpEvent::Metadata(value)
+    }
+}
+
 impl std::fmt::Debug for VideoData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Video")

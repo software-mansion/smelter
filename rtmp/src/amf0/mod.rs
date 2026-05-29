@@ -40,6 +40,15 @@ pub enum AmfValue {
     },
 }
 
+impl AmfValue {
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            AmfValue::String(s) | AmfValue::LongString(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
 impl From<&'_ str> for AmfValue {
     fn from(val: &'_ str) -> Self {
         AmfValue::String(val.to_string())

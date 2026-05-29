@@ -7,6 +7,7 @@ mod ex_capabilities;
 mod flv;
 mod message;
 mod protocol;
+mod reconnect;
 mod server;
 mod track;
 mod transport;
@@ -16,6 +17,7 @@ pub use client::*;
 pub use error::*;
 pub use events::*;
 pub use flv::{AudioChannels, VpCodecConfig};
+pub use reconnect::ReconnectRequest;
 pub use server::*;
 pub use track::TrackId;
 
