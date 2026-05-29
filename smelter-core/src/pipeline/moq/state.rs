@@ -15,14 +15,12 @@ pub(crate) struct MoqInputsState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>
 
 #[derive(Debug)]
 pub(crate) struct MoqInputState {
-    pub broadcast_path: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: MoqServerInputDecoders,
     pub connection_handle: Option<JoinHandle<()>>,
 }
 
 pub(crate) struct MoqInputStateOptions {
-    pub broadcast_path: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: MoqServerInputDecoders,
 }
@@ -30,7 +28,6 @@ pub(crate) struct MoqInputStateOptions {
 impl MoqInputState {
     fn new(options: MoqInputStateOptions) -> Self {
         Self {
-            broadcast_path: options.broadcast_path,
             queue_input: options.queue_input,
             decoders: options.decoders,
             connection_handle: None,
@@ -62,15 +59,6 @@ impl MoqInputsState {
                 input_ref.id().clone(),
             ));
         }
-        if let Some((existing_ref, _)) = guard
-            .iter()
-            .find(|(_, input)| input.broadcast_path == options.broadcast_path)
-        {
-            return Err(MoqServerError::BroadcastPathAlreadyUsed {
-                broadcast_path: options.broadcast_path,
-                existing_input: existing_ref.id().clone(),
-            });
-        }
         guard.insert(input_ref.clone(), MoqInputState::new(options));
         Ok(())
     }
@@ -96,7 +84,7 @@ impl MoqInputsState {
         let guard = self.0.lock().unwrap();
         let (input_ref, _) = guard
             .iter()
-            .find(|(_, input)| input.broadcast_path.as_ref() == broadcast_path)
+            .find(|(input_ref, _)| input_ref.id().0.as_ref() == broadcast_path)
             .ok_or_else(|| MoqServerError::BroadcastPathNotFound(Arc::from(broadcast_path)))?;
         Ok(input_ref.clone())
     }
