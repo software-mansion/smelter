@@ -33,7 +33,8 @@ use crate::prelude::*;
 
 mod catalog;
 
-const MOQ_BUFFER: Duration = Duration::from_secs(2);
+// This seems to be a safe value even for large groups
+const MOQ_BUFFER: Duration = Duration::from_secs(5);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct DiscoveredVideo {
@@ -84,6 +85,8 @@ pub(crate) fn spawn_broadcast_handler(
         let has_video = discovered.video.is_some();
         let has_audio = discovered.audio.is_some();
 
+        // TODO: This has to be handled in a more reliable way that does not introduce high latency,
+        // probalby jitter buffer.
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: has_video,
             audio: has_audio,
