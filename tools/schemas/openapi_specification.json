@@ -2431,14 +2431,7 @@
       },
       "MoqInputServer": {
         "type": "object",
-        "required": [
-          "broadcast_path"
-        ],
         "properties": {
-          "broadcast_path": {
-            "type": "string",
-            "description": "The MoQ broadcast path that Smelter listens on for incoming streams.\nA publishing client must announce this broadcast path for the input to receive media."
-          },
           "required": {
             "type": [
               "boolean",
