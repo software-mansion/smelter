@@ -6,6 +6,7 @@ import type { SideChannel } from './input/common.js';
 import type { InputWhipVideoOptions } from './input/whip.js';
 import type { InputWhepVideoOptions } from './input/whep.js';
 import type { InputRtmpDecoderMap } from './input/rtmp.js';
+import type { InputMoqDecoderMap } from './input/moq_server.js';
 
 export * from './input/mp4.js';
 export * from './input/hls.js';
@@ -13,6 +14,7 @@ export * from './input/whip.js';
 export * from './input/whep.js';
 export * from './input/rtp.js';
 export * from './input/rtmp.js';
+export * from './input/moq_server.js';
 export * from './input/common.js';
 
 export type RegisterRtpInput = {
@@ -213,6 +215,27 @@ export type RegisterRtmpServerInput = {
    * Assigns which decoder should be used for media encoded with a specific codec.
    */
   decoderMap?: InputRtmpDecoderMap | null;
+  /**
+   * Enable side channel for video and/or audio track.
+   */
+  sideChannel?: SideChannel;
+};
+
+export type RegisterMoqServerInput = {
+  type: 'moq_server';
+  /**
+   * The MoQ broadcast path that Smelter listens on for incoming streams.
+   * A publishing client must announce this broadcast path for the input to receive media.
+   */
+  broadcastPath: string;
+  /**
+   * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+   */
+  required?: boolean | null;
+  /**
+   * Assigns which decoder should be used for media encoded with a specific codec.
+   */
+  decoderMap?: InputMoqDecoderMap | null;
   /**
    * Enable side channel for video and/or audio track.
    */

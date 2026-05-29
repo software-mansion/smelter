@@ -12,6 +12,7 @@ import type {
   RegisterWhepClientInput,
   RegisterWhepServerOutput,
   RegisterV4l2Input,
+  RegisterMoqServerInput,
 } from '@swmansion/smelter';
 
 export type RegisterOutput =
@@ -33,6 +34,7 @@ export type RegisterInput =
   | ({ type: 'whip_server' } & RegisterWhipServerInput)
   | ({ type: 'whep_client' } & RegisterWhepClientInput)
   | ({ type: 'rtmp_server' } & RegisterRtmpServerInput)
+  | ({ type: 'moq_server' } & RegisterMoqServerInput)
   | ({ type: 'v4l2' } & RegisterV4l2Input);
 
 export type RegisterMp4InputResponse = {
