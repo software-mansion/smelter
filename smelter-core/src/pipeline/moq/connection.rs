@@ -67,14 +67,13 @@ pub(crate) fn spawn_broadcast_handler(
     let rt = ctx.tokio_rt.clone();
 
     let handle = rt.spawn(async move {
-        let input_id_str = input_ref.to_string();
-        info!(input_id = %input_id_str, "MoQ broadcast connection established");
+        info!(input_id = %input_ref, "MoQ broadcast connection established");
 
         let mut discovered = match read_catalog(&broadcast).await {
             Ok(d) => d,
             Err(err) => {
                 warn!(
-                    input_id = %input_id_str,
+                    input_id = %input_ref,
                     "MoQ catalog error: {}",
                     ErrorStack::new(&err).into_string()
                 );
@@ -94,10 +93,10 @@ pub(crate) fn spawn_broadcast_handler(
         });
 
         if let Some(v) = &discovered.video {
-            info!(input_id = %input_id_str, track = %v.name, "Discovered MoQ video track");
+            info!(input_id = %input_ref, track = %v.name, "Discovered MoQ video track");
         }
         if let Some(a) = &discovered.audio {
-            info!(input_id = %input_id_str, track = %a.name, "Discovered MoQ audio track");
+            info!(input_id = %input_ref, track = %a.name, "Discovered MoQ audio track");
         }
 
         let (video_decoder_handle, audio_decoder_handle) = spawn_decoders(
@@ -117,7 +116,7 @@ pub(crate) fn spawn_broadcast_handler(
         let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast);
 
         tokio::join!(video_fut, audio_fut);
-        info!(input_id = %input_id_str, "MoQ broadcast connection closed");
+        info!(input_id = %input_ref, "MoQ broadcast connection closed");
     });
 
     Some(handle)
@@ -171,7 +170,6 @@ fn process_video_config(
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
     // Only CMAF H264 is allowed right now, other codecs are rejected before this function
-
     let avcc_bytes = video
         .description
         .clone()
@@ -220,7 +218,6 @@ fn process_audio_config(
     samples_sender: QueueSender<InputAudioSamples>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
     // Only AAC is allowed right now, different codecs are rejected before this function is called
-
     let asc = audio
         .description
         .clone()
