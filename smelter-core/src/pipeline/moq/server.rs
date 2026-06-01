@@ -58,23 +58,7 @@ pub async fn spawn_moq_server(
     config.bind = Some(format!("[::]:{port}"));
     config.tls = state.tls_config.clone();
 
-    let mut server_result: Option<Result<moq_native::Server, anyhow::Error>> = None;
-    for _ in 0..5 {
-        match config.clone().init() {
-            Ok(server) => {
-                server_result = Some(Ok(server));
-                break;
-            }
-            Err(error) => {
-                warn!("Failed to start MoQ server. Retrying ...");
-                debug!(%error, "Failed to start MoQ server.");
-                server_result = Some(Err(error));
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
-
-    let server = match server_result.unwrap() {
+    let server = match try_start_server(config).await {
         Ok(server) => server.with_consume(state.origin.clone()),
         Err(error) => return Err(InitPipelineError::MoqServerInitError(error)),
     };
@@ -93,6 +77,22 @@ pub async fn spawn_moq_server(
         announce_task,
         sessions: moq_sessions,
     })
+}
+
+async fn try_start_server(config: ServerConfig) -> Result<moq_native::Server, anyhow::Error> {
+    for _ in 0..4 {
+        match config.clone().init() {
+            Ok(server) => {
+                return Ok(server);
+            }
+            Err(error) => {
+                warn!("Failed to start MoQ server. Retrying ...");
+                debug!(%error, "Failed to start MoQ server.");
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    config.init()
 }
 
 async fn run_accept_loop(mut server: moq_native::Server, moq_sessions: MoqSessions) {
