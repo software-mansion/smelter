@@ -129,11 +129,10 @@ async fn run_announce_loop(
     ctx: Arc<PipelineCtx>,
 ) {
     while let Some((path, broadcast)) = origin_consumer.announced().await {
-        let path_str = path.to_string();
         match broadcast {
             Some(broadcast) => {
-                info!(path = %path_str, "MoQ broadcast announced");
-                let input_ref = match moq_inputs.find_by_broadcast_path(&path_str) {
+                info!(%path, "MoQ broadcast announced");
+                let input_ref = match moq_inputs.find_by_broadcast_path(&path) {
                     Ok(r) => r,
                     Err(err) => {
                         warn!(
@@ -159,7 +158,7 @@ async fn run_announce_loop(
                 }
             }
             None => {
-                info!(path = %path_str, "MoQ broadcast unannounced");
+                info!(%path, "MoQ broadcast unannounced");
             }
         }
     }
