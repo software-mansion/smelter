@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use moq_native::moq_net::{Origin, OriginConsumer, OriginProducer, Session};
@@ -33,6 +33,7 @@ impl MoqPipelineState {
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(0);
 
 type MoqSessions = Arc<Mutex<HashMap<u64, Session>>>;
+type WeakMoqSessions = Weak<Mutex<HashMap<u64, Session>>>;
 pub struct MoqServer {
     accept_task: tokio::task::JoinHandle<()>,
     announce_task: tokio::task::JoinHandle<()>,
@@ -64,7 +65,7 @@ pub async fn spawn_moq_server(
     };
 
     let moq_sessions: MoqSessions = Arc::new(Mutex::new(HashMap::new()));
-    let accept_task = tokio::spawn(run_accept_loop(server, moq_sessions.clone()));
+    let accept_task = tokio::spawn(run_accept_loop(server, Arc::downgrade(&moq_sessions)));
 
     let origin_consumer = state.origin.consume();
     let moq_inputs = state.inputs.clone();
@@ -95,9 +96,12 @@ async fn try_start_server(config: ServerConfig) -> Result<moq_native::Server, an
     config.init()
 }
 
-async fn run_accept_loop(mut server: moq_native::Server, moq_sessions: MoqSessions) {
+async fn run_accept_loop(mut server: moq_native::Server, weak_sessions: WeakMoqSessions) {
     while let Some(request) = server.accept().await {
-        let moq_sessions = moq_sessions.clone();
+        let moq_sessions = match weak_sessions.clone().upgrade() {
+            Some(s) => s,
+            None => break,
+        };
         tokio::spawn(async move {
             match request.ok().await {
                 Ok(session) => {
@@ -121,6 +125,7 @@ async fn run_accept_loop(mut server: moq_native::Server, moq_sessions: MoqSessio
             }
         });
     }
+    server.close().await;
 }
 
 async fn run_announce_loop(
