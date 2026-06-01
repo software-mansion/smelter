@@ -421,7 +421,7 @@ struct InnerLatencyOptimizedBuffer {
 
     /// Largest PTS observed with each grow-side zone classification. The effective
     /// `trend` returns the most-grow-leaning zone whose timestamp still lies within
-    /// `TREND_WINDOW` of `pts`. A grow signal latches for the window length so that
+    /// 5 seconds of `pts`. A grow signal latches for that long so that
     /// a recent Grow outranks a newer Shrink.
     last_jump_grow_pts: Option<Duration>,
     last_grow_fast_pts: Option<Duration>,
@@ -451,9 +451,11 @@ struct InnerLatencyOptimizedBuffer {
 
 impl InnerLatencyOptimizedBuffer {
     /// Slow shrink rate of stream time.
-    const SHRINK_RATE: f64 = 0.005;
+    /// It takes about 5 minutes to shrink by a second
+    const SHRINK_RATE: f64 = 0.003;
     /// Fast shrink rate per second of stream time.
-    const SHRINK_FAST_RATE: f64 = 0.02;
+    /// It takes 100 sec to shrink by a 1 sec
+    const SHRINK_FAST_RATE: f64 = 0.01;
     /// Slow grow rate per second of stream time.
     const GROW_RATE: f64 = 0.01;
     /// Fast grow rate per second of stream time.
@@ -465,7 +467,7 @@ impl InnerLatencyOptimizedBuffer {
     /// Stream-time window during which a per-zone observation still influences the
     /// effective trend. Equivalent to "no contradicting trend in N seconds" — when this
     /// window expires for a zone its observation is forgotten.
-    const TREND_WINDOW: Duration = Duration::from_secs(10);
+    const TREND_WINDOW: Duration = Duration::from_secs(20);
     /// Sliding stream-time window over which grow jumps are counted to
     /// detect recurring spike patterns.
     const JUMP_RECURRENCE_WINDOW: Duration = Duration::from_secs(240);
@@ -596,7 +598,7 @@ impl InnerLatencyOptimizedBuffer {
     /// `TREND_WINDOW` of stream time, so an isolated shrink signal never fires.
     fn resolve_trend(&self, pts: Duration) -> LatencyTrend {
         let recent = |last: Option<Duration>| -> bool {
-            last.is_some_and(|p| pts.saturating_sub(p) < Self::TREND_WINDOW)
+            last.is_some_and(|p| pts.saturating_sub(p) < Duration::from_secs(5))
         };
         let streak_ready = |start: Option<Duration>| -> bool {
             start.is_some_and(|s| pts.saturating_sub(s) >= Self::TREND_WINDOW)
