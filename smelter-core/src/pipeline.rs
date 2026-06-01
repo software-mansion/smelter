@@ -83,15 +83,6 @@ pub struct PipelineOptions {
 }
 
 #[derive(Debug)]
-pub enum PipelineMoqServerOptions {
-    Enable {
-        port: u16,
-        tls_config: moq_native::ServerTlsConfig,
-    },
-    Disable,
-}
-
-#[derive(Debug)]
 pub enum PipelineWgpuOptions {
     Context(GraphicsContext),
     Options {
@@ -113,6 +104,15 @@ pub enum PipelineRtmpServerOptions {
     Enable {
         port: u16,
         tls_config: Option<TlsConfig>,
+    },
+    Disable,
+}
+
+#[derive(Debug)]
+pub enum PipelineMoqServerOptions {
+    Enable {
+        port: u16,
+        tls_config: moq_native::ServerTlsConfig,
     },
     Disable,
 }
