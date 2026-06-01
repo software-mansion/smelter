@@ -2429,6 +2429,53 @@
           }
         }
       },
+      "MoqInputServer": {
+        "type": "object",
+        "properties": {
+          "required": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+          },
+          "decoder_map": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Assigns which decoder should be used for media encoded with a specific codec.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MoqVideoDecoderOptions"
+            },
+            "propertyNames": {
+              "type": "string",
+              "enum": [
+                "h264"
+              ]
+            }
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MoqVideoDecoderOptions": {
+        "type": "string",
+        "enum": [
+          "ffmpeg_h264",
+          "vulkan_h264"
+        ]
+      },
       "Mp4AudioEncoderOptions": {
         "oneOf": [
           {
@@ -3571,6 +3618,27 @@
                     "type": "string",
                     "enum": [
                       "rtmp_server"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoqInputServer"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "moq_server"
                     ]
                   }
                 }

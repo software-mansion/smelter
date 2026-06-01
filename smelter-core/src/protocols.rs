@@ -1,5 +1,6 @@
 mod channel;
 mod hls;
+mod moq;
 mod mp4;
 mod rtmp;
 mod rtp;
@@ -8,6 +9,7 @@ mod webrtc;
 
 pub use channel::*;
 pub use hls::*;
+pub use moq::*;
 pub use mp4::*;
 pub use rtmp::*;
 pub use rtp::*;
