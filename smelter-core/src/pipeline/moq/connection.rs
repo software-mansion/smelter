@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use bytes::Bytes;
 use moq_mux::catalog::hang::Container;
@@ -111,9 +114,14 @@ pub(crate) fn spawn_broadcast_handler(
         let video = discovered.video.take();
         let audio = discovered.audio.take();
 
-        let video_fut = run_video_track(video, video_decoder_handle, &broadcast);
+        // Shared across audio and video so both tracks are normalized against
+        // the same first PTS, preserving A/V synchronization. Whichever track
+        // produces the first frame sets the common zero point for both.
+        let first_pts = Arc::new(Mutex::new(None));
 
-        let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast);
+        let video_fut = run_video_track(video, video_decoder_handle, &broadcast, first_pts.clone());
+
+        let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast, first_pts);
 
         tokio::join!(video_fut, audio_fut);
         info!(input_id = %input_ref, "MoQ broadcast connection closed");
@@ -243,6 +251,7 @@ async fn run_video_track(
     video: Option<DiscoveredVideo>,
     decoder_handle: Option<DecoderThreadHandle>,
     broadcast: &BroadcastConsumer,
+    first_pts: Arc<Mutex<Option<Duration>>>,
 ) {
     if let Some(video) = video
         && let Some(decoder_handle) = decoder_handle
@@ -260,7 +269,7 @@ async fn run_video_track(
                 // proceed to the next one.
                 let consumer =
                     ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
-                if let Err(err) = read_video_track(consumer, decoder_handle).await {
+                if let Err(err) = read_video_track(consumer, decoder_handle, first_pts).await {
                     warn!(
                         "MoQ video track error: {}",
                         ErrorStack::new(&err).into_string()
@@ -278,6 +287,7 @@ async fn run_audio_track(
     audio: Option<DiscoveredAudio>,
     decoder_handle: Option<DecoderThreadHandle>,
     broadcast: &BroadcastConsumer,
+    first_pts: Arc<Mutex<Option<Duration>>>,
 ) {
     if let Some(audio) = audio
         && let Some(decoder_handle) = decoder_handle
@@ -295,7 +305,7 @@ async fn run_audio_track(
                 // proceed to the next one.
                 let consumer =
                     ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
-                if let Err(err) = read_audio_track(consumer, decoder_handle).await {
+                if let Err(err) = read_audio_track(consumer, decoder_handle, first_pts).await {
                     warn!(
                         "MoQ audio track error: {}",
                         ErrorStack::new(&err).into_string()
@@ -342,20 +352,26 @@ enum MoqConnectionError {
     ContainerError(#[source] moq_mux::Error),
 }
 
+/// Normalizes a raw track timestamp against the first PTS observed across all
+/// tracks of the broadcast, so audio and video share the same zero point.
+fn normalize_pts(first_pts: &Mutex<Option<Duration>>, raw_pts: Duration) -> Duration {
+    let mut first_pts = first_pts.lock().unwrap();
+    let first = *first_pts.get_or_insert(raw_pts);
+    raw_pts.saturating_sub(first)
+}
+
 async fn read_video_track(
     mut consumer: ContainerConsumer<Container>,
     decoder_handle: DecoderThreadHandle,
+    first_pts: Arc<Mutex<Option<Duration>>>,
 ) -> Result<(), MoqConnectionError> {
-    let mut first_pts: Option<Duration> = None;
-
     while let Some(frame) = consumer
         .read()
         .await
         .map_err(MoqConnectionError::ContainerError)?
     {
         let raw_pts: Duration = frame.timestamp.into();
-        let first = *first_pts.get_or_insert(raw_pts);
-        let pts = raw_pts.saturating_sub(first);
+        let pts = normalize_pts(&first_pts, raw_pts);
         trace!(?pts, "MoQ video frame");
         let payload = frame.payload;
 
@@ -379,17 +395,15 @@ async fn read_video_track(
 async fn read_audio_track(
     mut consumer: ContainerConsumer<Container>,
     decoder_handle: DecoderThreadHandle,
+    first_pts: Arc<Mutex<Option<Duration>>>,
 ) -> Result<(), MoqConnectionError> {
-    let mut first_pts: Option<Duration> = None;
-
     while let Some(frame) = consumer
         .read()
         .await
         .map_err(MoqConnectionError::ContainerError)?
     {
         let raw_pts: Duration = frame.timestamp.into();
-        let first = *first_pts.get_or_insert(raw_pts);
-        let pts = raw_pts.saturating_sub(first);
+        let pts = normalize_pts(&first_pts, raw_pts);
         trace!(?pts, "MoQ audio frame");
         let payload = frame.payload;
 
