@@ -1,7 +1,8 @@
 mod connection;
-mod moq_server_input;
 mod server;
+mod server_input;
 mod state;
 
-pub use moq_server_input::MoqServerInput;
 pub(super) use server::{MoqPipelineState, MoqServer, spawn_moq_server};
+pub use server_input::MoqServerInput;
+
