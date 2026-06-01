@@ -44,8 +44,11 @@ impl Drop for MoqServer {
     fn drop(&mut self) {
         self.accept_task.abort();
         self.announce_task.abort();
-        let mut sessions = self.sessions.lock().unwrap();
-        sessions.clear();
+
+        // Each session task in the `run_accept_loop` holds `Arc` reference to the sessions map.
+        // This clears the map, which closes every session and ends all tasks awaiting
+        // for the corresponding session to close.
+        self.sessions.lock().unwrap().clear();
     }
 }
 
