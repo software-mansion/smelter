@@ -1,8 +1,8 @@
+import fs from 'fs/promises';
 import Smelter from '@swmansion/smelter-node';
 import { Text, InputStream, Tiles, Rescaler, View, useInputStreams } from '@swmansion/smelter';
 import { downloadAllAssets, ffplayStartRtmpServerAsync, sleep } from './utils';
 import path from 'path';
-import { mkdirp } from 'fs-extra';
 
 function ExampleApp() {
   const inputs = useInputStreams();
@@ -32,7 +32,7 @@ function InputTile({ inputId }: { inputId: string }) {
 }
 
 async function run() {
-  await mkdirp(path.join(__dirname, '../.workingdir'));
+  await fs.mkdir(path.join(__dirname, '../.workingdir'), { recursive: true });
   await downloadAllAssets();
   const smelter = new Smelter();
   await smelter.init();

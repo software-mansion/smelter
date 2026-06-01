@@ -31,11 +31,9 @@
   },
   "dependencies": {
     "chalk": "^4.1.2",
-    "fs-extra": "^11.2.0",
     "prompts": "^2.4.2"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/prompts": "^2.4.9"
   }
 }
