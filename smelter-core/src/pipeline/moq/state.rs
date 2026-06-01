@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use hang::moq_net::Path;
 use tokio::task::JoinHandle;
 use tracing::error;
 
@@ -79,8 +80,9 @@ impl MoqInputsState {
 
     pub(crate) fn find_by_broadcast_path(
         &self,
-        broadcast_path: &str,
+        broadcast_path: &Path<'static>,
     ) -> Result<Ref<InputId>, MoqServerError> {
+        let broadcast_path = broadcast_path.to_string();
         let guard = self.0.lock().unwrap();
         let (input_ref, _) = guard
             .iter()
