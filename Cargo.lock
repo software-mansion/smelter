@@ -1016,15 +1016,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "conducer"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d2cb64e61144d6960a830d3e6f2ba3a61d5c0ca689e87e11dc9effb96dcfff5"
-dependencies = [
- "smallvec",
-]
-
-[[package]]
 name = "console_error_panic_hook"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2379,9 +2370,9 @@ dependencies = [
 
 [[package]]
 name = "hang"
-version = "0.18.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71b019f256f47766d61ef0a85013a90f918d0100e8dc243f61bade18ef13391d"
+checksum = "46b70ad38bad2912c241507b9aec3bfe522be0ec532ab9c8e83583e39d0b7457"
 dependencies = [
  "bytes",
  "derive_more",
@@ -3069,6 +3060,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
+name = "kio"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32311a076e65af53bebb6ba1d6808aae929453800cbebc12e1fa561624baa808"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
 name = "kurbo"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3431,16 +3431,16 @@ dependencies = [
 
 [[package]]
 name = "moq-mux"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65aa464c601e2cb834a9d0cabbcf04de63e0f1b59074361b058fdf90dbc9ae0c"
+checksum = "e6b36ac05c98bfebb2dda2b3331760d4f388fcf08dd178bbd18ef65543e3c6a7"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "bytes",
- "conducer",
  "h264-parser",
  "hang",
+ "kio",
  "m3u8-rs",
  "moq-loc",
  "moq-msf",
@@ -3491,13 +3491,13 @@ dependencies = [
 
 [[package]]
 name = "moq-net"
-version = "0.1.4"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddc15aa1a2b803e19c84c0b7014157fd9370ddd6935d85be415f549a642742e9"
+checksum = "4e6df8317fbac0fc334536c85ad8b2ff7e880d11802f1f93af56f1e30486ed0e"
 dependencies = [
  "bytes",
- "conducer",
  "futures",
+ "kio",
  "num_enum",
  "rand 0.9.3",
  "serde",
@@ -4463,7 +4463,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.6.3",
+ "socket2 0.5.8",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -4503,7 +4503,7 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "libc",
  "once_cell",
- "socket2 0.6.3",
+ "socket2 0.5.8",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -5514,9 +5514,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.149"
+version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
+checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
 dependencies = [
  "indexmap 2.12.1",
  "itoa",
@@ -5985,9 +5985,9 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.6.3"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
+checksum = "52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
@@ -6456,7 +6456,7 @@ dependencies = [
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.6.3",
+ "socket2 0.6.4",
  "tokio-macros",
  "windows-sys 0.61.2",
 ]
@@ -7502,9 +7502,9 @@ dependencies = [
 
 [[package]]
 name = "web-transport-trait"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb67841c4a481ca3c1412ee4c9f463987401991e1ddc000903df2124f3dc85e9"
+checksum = "fc5f83d19cf6c8ba147f4e1e5935a8a115c91f6abbf714d740a83b967d558e6e"
 dependencies = [
  "bytes",
 ]
