@@ -34,6 +34,7 @@ mod v4l2;
 mod channel;
 mod hls;
 mod moq;
+pub(crate) use moq::SelfSignedTlsError;
 mod mp4;
 mod rtmp;
 mod rtp;

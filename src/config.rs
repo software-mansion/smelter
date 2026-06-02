@@ -428,17 +428,10 @@ fn moq_tls_config() -> Option<moq_native::ServerTlsConfig> {
             tls.key = vec![key];
             Some(tls)
         }
-        // For easier debugging
-        _ if cfg!(debug_assertions) => {
-            tracing::debug!(
-                "TLS certificate for MoQ not specified. Self signed one will be generated."
-            );
-            let mut tls = moq_native::ServerTlsConfig::default();
-            tls.generate = vec!["localhost".into()];
-            Some(tls)
-        }
         _ => {
-            warn!("MoQ TLS cert/key not configured, MoQ server will not start");
+            // No cert/key configured. smelter-core will fall back to a persisted,
+            // insecure self-signed certificate (dev/test only) and log a warning
+            // with its SHA-256 fingerprint.
             None
         }
     }

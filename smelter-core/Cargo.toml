@@ -54,6 +54,11 @@ moq-mux = "0.5"
 mp4-atom = "0.11"
 moq-native = { workspace = true }
 data-encoding = "2"
+rcgen = "0.14"
+rustls-webpki = "0.103"
+sha2 = "0.10"
+dirs = "5.0"
+time = "0.3"
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 decklink = { path = "../decklink", optional = true }
