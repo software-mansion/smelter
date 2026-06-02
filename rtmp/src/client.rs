@@ -82,15 +82,19 @@ impl RtmpConnectionOptions {
 
 pub struct RtmpClient {
     connection_opts: RtmpConnectionOptions,
-    state: RtmpClientState,
-    stream_id: u32,
+    connection: RtmpConnection,
     shutdown_condition: ShutdownCondition,
     media_config: MediaConfig,
     pending_reconnect: Option<PendingReconnection>,
 }
 
-struct RtmpClientState {
+/// A single live RTMP connection: the wire plus all state scoped to it.
+/// Everything here dies with the socket and is rebuilt on an E-RTMP reconnect —
+/// in contrast to [`RtmpClient`], which owns the durable publishing session.
+struct RtmpConnection {
     stream: RtmpMessageStream,
+    /// publishing stream id from createStream; valid after negotiation
+    stream_id: u32,
     /// window size for data incoming from the server
     window_size: Option<u64>,
     /// last ack sent to client
@@ -158,7 +162,7 @@ impl MediaConfig {
 }
 
 struct PendingReconnection {
-    handle: JoinHandle<Result<(RtmpClientState, u32), RtmpConnectionError>>,
+    handle: JoinHandle<Result<RtmpConnection, RtmpConnectionError>>,
     new_connection_opts: RtmpConnectionOptions,
     shutdown: ShutdownCondition,
 }
@@ -166,42 +170,15 @@ struct PendingReconnection {
 impl RtmpClient {
     pub fn connect(connection_opts: RtmpConnectionOptions) -> Result<Self, RtmpConnectionError> {
         let shutdown_condition = ShutdownCondition::default();
-        let (state, stream_id) = Self::establish_connection(&connection_opts, &shutdown_condition)?;
+        let connection =
+            RtmpConnection::establish_connection(&connection_opts, &shutdown_condition)?;
         Ok(Self {
             connection_opts,
-            state,
-            stream_id,
+            connection,
             shutdown_condition,
             media_config: MediaConfig::default(),
             pending_reconnect: None,
         })
-    }
-
-    fn establish_connection(
-        connection_opts: &RtmpConnectionOptions,
-        shutdown_condition: &ShutdownCondition,
-    ) -> Result<(RtmpClientState, u32), RtmpConnectionError> {
-        let transport = if connection_opts.use_tls {
-            RtmpTransport::tls_client(&connection_opts.host, connection_opts.port)?
-        } else {
-            RtmpTransport::tcp_client(&connection_opts.host, connection_opts.port)?
-        };
-        let mut socket = RtmpByteStream::new(transport, shutdown_condition.clone());
-
-        Handshake::perform_as_client(&mut socket)?;
-        debug!("Handshake complete");
-
-        let mut state = RtmpClientState {
-            stream: RtmpMessageStream::new(socket),
-            window_size: None,
-            last_ack: 0,
-            ex_capabilities: ExCapabilities::default(),
-        };
-
-        let stream_id = state.negotiate_connection(connection_opts)?;
-        debug!("Negotiation complete");
-
-        Ok((state, stream_id))
     }
 
     /// Send an RTMP event (audio/video data or config).
@@ -223,42 +200,43 @@ impl RtmpClient {
         self.maybe_switch_connection(&event);
         // Remember codec configs / metadata so they can be replayed after a switch.
         self.media_config.record(&event);
-        // Build + write on whatever connection is now current.
+        // Encode + write on whatever connection is now current.
         let msg = self.outgoing_message(event);
-        self.state.stream.write_msg(msg)?;
+        self.connection.stream.write_msg(msg)?;
 
-        while let Some(msg) = self.state.stream.try_read_msg()? {
+        while let Some(msg) = self.connection.stream.try_read_msg()? {
             self.handle_incoming(msg)?;
         }
         Ok(())
     }
 
     fn outgoing_message(&self, event: RtmpEvent) -> RtmpMessageOutgoing {
+        let stream_id = self.connection.stream_id;
         match event {
             RtmpEvent::VideoData(data) => RtmpMessageOutgoing::Video {
                 video: VideoMessage::Data(data),
-                stream_id: self.stream_id,
+                stream_id,
             },
             RtmpEvent::VideoConfig(config) => RtmpMessageOutgoing::Video {
                 video: VideoMessage::Config(config),
-                stream_id: self.stream_id,
+                stream_id,
             },
             RtmpEvent::AudioData(data) => RtmpMessageOutgoing::Audio {
                 channels: self.media_config.resolve_audio_channels(data.track_id),
                 audio: AudioMessage::Data(data),
-                stream_id: self.stream_id,
+                stream_id,
             },
             RtmpEvent::AudioConfig(config) => {
                 let channels = config.channels;
                 RtmpMessageOutgoing::Audio {
                     audio: AudioMessage::Config(config),
-                    stream_id: self.stream_id,
+                    stream_id,
                     channels,
                 }
             }
             RtmpEvent::Metadata(metadata) => RtmpMessageOutgoing::DataMessage {
                 data: DataMessage::OnMetaData(metadata),
-                stream_id: self.stream_id,
+                stream_id,
             },
         }
     }
@@ -287,7 +265,7 @@ impl RtmpClient {
             "Completing E-RTMP reconnect"
         );
 
-        let (new_state, stream_id) = match pending.handle.join() {
+        let new_connection = match pending.handle.join() {
             Ok(Ok(result)) => result,
             Ok(Err(err)) => {
                 warn!(%err, "E-RTMP reconnect failed, continuing on current connection");
@@ -299,24 +277,19 @@ impl RtmpClient {
             }
         };
 
-        if let Err(err) = self
-            .state
-            .stream
-            .write_msg(RtmpMessageOutgoing::CommandMessage {
-                msg: CommandMessage::DeleteStream {
-                    transaction_id: 0,
-                    stream_id: self.stream_id,
-                },
-                stream_id: CONTROL_MESSAGE_STREAM_ID,
-            })
-        {
+        // Tear down the old stream before swapping to the new connection.
+        if let Err(err) = self.connection.send_delete_stream() {
             debug!(%err, "Failed to send DeleteStream on old connection during reconnect");
         }
 
         self.connection_opts = pending.new_connection_opts;
-        self.state = new_state;
-        self.stream_id = stream_id;
+        self.connection = new_connection;
 
+        // The new connection's NetStream has no history, so codec configs and
+        // metadata must be resent: a sequence header (AVC/AAC config) MUST
+        // precede media on a stream, and onMetaData describes it. The E-RTMP
+        // Reconnect flow doesn't spell this out — it follows from NetStream
+        // sequence-header semantics.
         for event in self.media_config.events_to_replay() {
             if let Err(err) = self.send(event) {
                 warn!(%err, "Failed to replay recorded config after reconnect");
@@ -330,11 +303,11 @@ impl RtmpClient {
             self.start_reconnect(request);
             return Ok(());
         }
-        self.state.default_msg_handler(msg)
+        self.connection.default_msg_handler(msg)
     }
 
     fn start_reconnect(&mut self, request: ReconnectRequest) {
-        if !self.state.ex_capabilities.reconnect {
+        if !self.connection.ex_capabilities.reconnect {
             debug!("Ignoring ReconnectRequest: capsEx.Reconnect not negotiated");
             return;
         }
@@ -359,7 +332,7 @@ impl RtmpClient {
         let thread_connection_opts = new_connection_opts.clone();
         let thread_shutdown = child_shutdown.clone();
         let handle = std::thread::spawn(move || {
-            RtmpClient::establish_connection(&thread_connection_opts, &thread_shutdown)
+            RtmpConnection::establish_connection(&thread_connection_opts, &thread_shutdown)
         });
 
         self.pending_reconnect = Some(PendingReconnection {
@@ -372,33 +345,51 @@ impl RtmpClient {
 
 impl Drop for RtmpClient {
     fn drop(&mut self) {
-        if let Err(err) = self
-            .state
-            .stream
-            .write_msg(RtmpMessageOutgoing::CommandMessage {
-                msg: CommandMessage::DeleteStream {
-                    transaction_id: 0,
-                    stream_id: self.stream_id,
-                },
-                stream_id: CONTROL_MESSAGE_STREAM_ID,
-            })
-        {
+        if let Err(err) = self.connection.send_delete_stream() {
             debug!(%err, "Failed to send DeleteStream on drop");
         }
         self.shutdown_condition.mark_for_shutdown();
     }
 }
 
-impl RtmpClientState {
+impl RtmpConnection {
+    fn establish_connection(
+        connection_opts: &RtmpConnectionOptions,
+        shutdown_condition: &ShutdownCondition,
+    ) -> Result<Self, RtmpConnectionError> {
+        let transport = if connection_opts.use_tls {
+            RtmpTransport::tls_client(&connection_opts.host, connection_opts.port)?
+        } else {
+            RtmpTransport::tcp_client(&connection_opts.host, connection_opts.port)?
+        };
+        let mut socket = RtmpByteStream::new(transport, shutdown_condition.clone());
+
+        Handshake::perform_as_client(&mut socket)?;
+        debug!("Handshake complete");
+
+        let message_stream = RtmpMessageStream::new(socket);
+        let connection = Self::negotiate_connection(message_stream, connection_opts)?;
+        debug!("Negotiation complete");
+
+        Ok(connection)
+    }
+
     fn negotiate_connection(
-        &mut self,
+        stream: RtmpMessageStream,
         conn_opts: &RtmpConnectionOptions,
-    ) -> Result<u32, RtmpConnectionError> {
+    ) -> Result<Self, RtmpConnectionError> {
+        let mut conn = Self {
+            stream,
+            stream_id: 0,
+            window_size: None,
+            last_ack: 0,
+            ex_capabilities: ExCapabilities::default(),
+        };
         let mut state = NegotiationProgress::WaitingForConnectResult;
-        send_connect(&mut self.stream, conn_opts)?;
+        send_connect(&mut conn.stream, conn_opts)?;
 
         loop {
-            let msg = match self.stream.read_msg() {
+            let msg = match conn.stream.read_msg() {
                 Ok(msg) => msg,
                 Err(RtmpStreamError::ParseMessage(err)) => {
                     warn!(%err, "Received unknown msg");
@@ -408,10 +399,10 @@ impl RtmpClientState {
             };
 
             if let Some((_response, ex_capabilities)) = state.try_match_connect_response(&msg)? {
-                self.stream.set_writer_ex_capabilities(ex_capabilities);
-                self.ex_capabilities = ex_capabilities;
+                conn.stream.set_writer_ex_capabilities(ex_capabilities);
+                conn.ex_capabilities = ex_capabilities;
                 state = NegotiationProgress::WaitingForCreateStreamResult;
-                send_create_stream(&mut self.stream)?;
+                send_create_stream(&mut conn.stream)?;
                 continue;
             }
 
@@ -419,19 +410,20 @@ impl RtmpClientState {
                 state = NegotiationProgress::WaitingForOnStatus {
                     stream_id: response.stream_id,
                 };
-                send_publish(&mut self.stream, &conn_opts.stream_key, response.stream_id)?;
+                send_publish(&mut conn.stream, &conn_opts.stream_key, response.stream_id)?;
 
                 // should be after StreamBegin but e.g. YouTube does not send it
-                self.stream.write_msg(RtmpMessageOutgoing::SetChunkSize {
+                conn.stream.write_msg(RtmpMessageOutgoing::SetChunkSize {
                     chunk_size: OUTGOING_CHUNK_SIZE,
                 })?;
-                self.stream
+                conn.stream
                     .set_writer_chunk_size(OUTGOING_CHUNK_SIZE as usize);
                 continue;
             }
 
             if let Some((_on_status, stream_id)) = state.try_match_on_status(&msg) {
-                return Ok(stream_id);
+                conn.stream_id = stream_id;
+                return Ok(conn);
             }
 
             if let Some(request) = try_match_reconnect_request(&msg) {
@@ -441,8 +433,18 @@ impl RtmpClientState {
                 ));
             }
 
-            self.default_msg_handler(msg)?;
+            conn.default_msg_handler(msg)?;
         }
+    }
+
+    fn send_delete_stream(&mut self) -> Result<(), RtmpStreamError> {
+        self.stream.write_msg(RtmpMessageOutgoing::CommandMessage {
+            msg: CommandMessage::DeleteStream {
+                transaction_id: 0,
+                stream_id: self.stream_id,
+            },
+            stream_id: CONTROL_MESSAGE_STREAM_ID,
+        })
     }
 
     fn default_msg_handler(&mut self, msg: RtmpMessageIncoming) -> Result<(), RtmpStreamError> {
@@ -460,7 +462,7 @@ impl RtmpClientState {
             }
             RtmpMessageIncoming::SetPeerBandwidth { bandwidth, .. } => {
                 // It configures how often client will be sending ACKs,
-                // it is different that self.window_size
+                // it is different from self.window_size
                 self.stream.write_msg(RtmpMessageOutgoing::WindowAckSize {
                     window_size: bandwidth,
                 })?;
