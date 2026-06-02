@@ -77,6 +77,23 @@ export type RegisterInput =
       side_channel?: SideChannel | null;
     }
   | {
+      type: "moq_server";
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Assigns which decoder should be used for media encoded with a specific codec.
+       */
+      decoder_map?: {
+        [k: string]: MoqVideoDecoderOptions;
+      } | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
+  | {
       type: "mp4";
       /**
        * URL of the MP4 file.
@@ -280,6 +297,7 @@ export type InputRtpAudioOptions =
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
 export type RtmpVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type MoqVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type WhepVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
@@ -1429,6 +1447,17 @@ export type InputStatsReport =
       audio: RtmpInputTrackStatsReport;
     }
   | {
+      type: "moq_server";
+      /**
+       * Stats for the video track.
+       */
+      video: MoqServerInputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: MoqServerInputTrackStatsReport;
+    }
+  | {
       type: "mp4";
       /**
        * Stats for the video track.
@@ -2031,6 +2060,19 @@ export interface HlsInputTrackSlidingWindowStatsReport {
  * Stats report for a track in `RTMP` input.
  */
 export interface RtmpInputTrackStatsReport {
+  /**
+   * Bitrate in the 1-second window.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate in the 1-minute window.
+   */
+  bitrate_1_minute: number;
+}
+/**
+ * Stats report for a track in `MoQ` server input.
+ */
+export interface MoqServerInputTrackStatsReport {
   /**
    * Bitrate in the 1-second window.
    */
