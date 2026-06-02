@@ -13,8 +13,7 @@ use crate::{
     stats::{
         input::hls::HlsInputState, input::moq_server::MoqServerInputState,
         input::mp4::Mp4InputState, input::rtmp::RtmpInputState, input::rtp::RtpInputState,
-        input::whep::WhepInputState, input::whip::WhipInputState,
-        input_reports::InputStatsReport,
+        input::whep::WhepInputState, input::whip::WhipInputState, input_reports::InputStatsReport,
     },
 };
 
@@ -71,9 +70,7 @@ impl InputStatsState {
             InputProtocolKind::Rtmp => InputStatsState::Rtmp(RtmpInputState::new()),
             InputProtocolKind::Mp4 => InputStatsState::Mp4(Mp4InputState::new()),
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
-            InputProtocolKind::MoqServer => {
-                InputStatsState::MoqServer(MoqServerInputState::new())
-            }
+            InputProtocolKind::MoqServer => InputStatsState::MoqServer(MoqServerInputState::new()),
             InputProtocolKind::V4l2 => unimplemented!(),
             InputProtocolKind::DeckLink => unimplemented!(),
             InputProtocolKind::RawDataChannel => unimplemented!(),

@@ -100,13 +100,23 @@ pub(crate) fn spawn_broadcast_handler(
         // produces the first frame sets the common zero point for both.
         let first_pts = Arc::new(Mutex::new(None));
 
+        let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
+
         let first_pts_inner = first_pts.clone();
+        let stats_sender_inner = stats_sender.clone();
         let video_fut = async {
             if let (Some(video), Some(frame_sender)) = (video, video_sender) {
                 let decoder_handle =
                     spawn_video_decoder(&ctx, &input_ref, &decoders, &video, frame_sender);
                 if let Some(decoder_handle) = decoder_handle {
-                    run_video_track(video, decoder_handle, &broadcast, first_pts_inner).await;
+                    run_video_track(
+                        video,
+                        decoder_handle,
+                        &broadcast,
+                        first_pts_inner,
+                        stats_sender_inner,
+                    )
+                    .await;
                 }
             }
         };
@@ -115,7 +125,8 @@ pub(crate) fn spawn_broadcast_handler(
             if let (Some(audio), Some(sample_sender)) = (audio, audio_sender) {
                 let decoder_handle = spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender);
                 if let Some(decoder_handle) = decoder_handle {
-                    run_audio_track(audio, decoder_handle, &broadcast, first_pts).await;
+                    run_audio_track(audio, decoder_handle, &broadcast, first_pts, stats_sender)
+                        .await;
                 }
             }
         };
@@ -246,13 +257,16 @@ async fn run_video_track(
     decoder_handle: DecoderThreadHandle,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
+    stats_sender: MoqStatsSender,
 ) {
     match broadcast.subscribe_track(&Track::new(&video.name)) {
         Ok(track) => {
             // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
             // group start timestamp and highest received timestamp.
             let consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
-            if let Err(err) = read_video_track(consumer, decoder_handle, first_pts).await {
+            if let Err(err) =
+                read_video_track(consumer, decoder_handle, first_pts, stats_sender).await
+            {
                 warn!(
                     "MoQ video track error: {}",
                     ErrorStack::new(&err).into_string()
@@ -270,13 +284,16 @@ async fn run_audio_track(
     decoder_handle: DecoderThreadHandle,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
+    stats_sender: MoqStatsSender,
 ) {
     match broadcast.subscribe_track(&Track::new(&audio.name)) {
         Ok(track) => {
             // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
             // group start timestamp and highest received timestamp.
             let consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
-            if let Err(err) = read_audio_track(consumer, decoder_handle, first_pts).await {
+            if let Err(err) =
+                read_audio_track(consumer, decoder_handle, first_pts, stats_sender).await
+            {
                 warn!(
                     "MoQ audio track error: {}",
                     ErrorStack::new(&err).into_string()
@@ -334,12 +351,15 @@ async fn read_video_track(
     mut consumer: ContainerConsumer<Container>,
     decoder_handle: DecoderThreadHandle,
     first_pts: Arc<Mutex<Option<Duration>>>,
+    stats_sender: MoqStatsSender,
 ) -> Result<(), MoqConnectionError> {
     while let Some(frame) = consumer
         .read()
         .await
         .map_err(MoqConnectionError::ContainerError)?
     {
+        stats_sender.bytes_reveived_event(frame.payload.len(), StatsTrackKind::Video);
+
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
         trace!(?pts, "MoQ video frame");
@@ -366,12 +386,15 @@ async fn read_audio_track(
     mut consumer: ContainerConsumer<Container>,
     decoder_handle: DecoderThreadHandle,
     first_pts: Arc<Mutex<Option<Duration>>>,
+    stats_sender: MoqStatsSender,
 ) -> Result<(), MoqConnectionError> {
     while let Some(frame) = consumer
         .read()
         .await
         .map_err(MoqConnectionError::ContainerError)?
     {
+        stats_sender.bytes_reveived_event(frame.payload.len(), StatsTrackKind::Audio);
+
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
         trace!(?pts, "MoQ audio frame");
@@ -392,4 +415,26 @@ async fn read_audio_track(
     }
 
     Ok(())
+}
+
+#[derive(Clone)]
+struct MoqStatsSender {
+    input_ref: Ref<InputId>,
+    stats_sender: StatsSender,
+}
+
+impl MoqStatsSender {
+    fn new(input_ref: Ref<InputId>, stats_sender: StatsSender) -> Self {
+        Self {
+            input_ref,
+            stats_sender,
+        }
+    }
+
+    fn bytes_reveived_event(&self, size: usize, track_kind: StatsTrackKind) {
+        self.stats_sender.send(
+            MoqServerInputTrackStatsEvent::BytesReceived(size)
+                .into_event(&self.input_ref, track_kind),
+        );
+    }
 }
