@@ -58,6 +58,7 @@ struct TrackCtx {
     decoders: MoqServerInputDecoders,
     first_pts: Arc<Mutex<Option<Duration>>>,
     should_close: Arc<AtomicBool>,
+    stats_sender: MoqStatsSender,
 }
 
 pub(crate) fn start_broadcast_handler_task(
@@ -468,4 +469,25 @@ fn normalize_pts(first_pts: &Arc<Mutex<Option<Duration>>>, raw_pts: Duration) ->
     let mut first_pts = first_pts.lock().unwrap();
     let first = *first_pts.get_or_insert(raw_pts);
     raw_pts.saturating_sub(first)
+}
+#[derive(Clone)]
+struct MoqStatsSender {
+    input_ref: Ref<InputId>,
+    stats_sender: StatsSender,
+}
+
+impl MoqStatsSender {
+    fn new(input_ref: Ref<InputId>, stats_sender: StatsSender) -> Self {
+        Self {
+            input_ref,
+            stats_sender,
+        }
+    }
+
+    fn bytes_received_event(&self, size: usize, track_kind: StatsTrackKind) {
+        self.stats_sender.send(
+            MoqServerInputTrackStatsEvent::BytesReceived(size)
+                .into_event(&self.input_ref, track_kind),
+        );
+    }
 }
