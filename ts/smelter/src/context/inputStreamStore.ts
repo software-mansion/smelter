@@ -46,22 +46,71 @@ type UpdateAction<Id> =
   | { type: 'add_input'; input: InputStreamInfo<Id> }
   | { type: 'remove_input'; inputId: Id };
 
+/**
+ * Input state updates (driven by smelter events) are applied after this debounce window.
+ * Updates that arrive one after another within the window are merged and only the resulting
+ * state is applied, so a burst of events does not trigger a re-render per event.
+ */
+const INPUT_UPDATE_DEBOUNCE_MS = 50;
+
+type PendingUpdate<Id> = {
+  input: InputStreamInfo<Id>;
+  timeout: ReturnType<typeof setTimeout>;
+};
+
 export class LiveInputStreamStore<Id> {
   private context: Record<string, InputStreamInfo<Id>> = {};
   private onChangeCallbacks: Set<() => void> = new Set();
   private eventQueue?: UpdateAction<Id>[];
   private logger: Logger;
   private pendingPromise?: Promise<any>;
+  private pendingUpdates: Map<Id, PendingUpdate<Id>> = new Map();
 
   constructor(logger: Logger) {
     this.logger = logger;
   }
 
   /**
-   * Apply update immediately if there are no `runBlocking` calls in progress.
-   * Otherwise wait for `runBlocking call to finish`.
+   * `update_input` actions are debounced: the update is applied `INPUT_UPDATE_DEBOUNCE_MS`
+   * after it is received, but if further updates for the same input arrive within that window
+   * they are merged and the timer is reset, so only the resulting state is applied.
+   * Structural actions (`add_input`/`remove_input`) are applied immediately.
+   *
+   * Applied updates wait for any in-progress `runBlocking` call to finish.
    */
   public dispatchUpdate(update: UpdateAction<Id>) {
+    if (update.type === 'update_input') {
+      this.scheduleInputUpdate(update.input);
+    } else {
+      this.cancelPendingUpdate(
+        update.type === 'remove_input' ? update.inputId : update.input.inputId
+      );
+      this.enqueueOrApply(update);
+    }
+  }
+
+  private scheduleInputUpdate(input: InputStreamInfo<Id>) {
+    const pending = this.pendingUpdates.get(input.inputId);
+    if (pending) {
+      clearTimeout(pending.timeout);
+    }
+    const merged = pending ? { ...pending.input, ...input } : input;
+    const timeout = setTimeout(() => {
+      this.pendingUpdates.delete(input.inputId);
+      this.enqueueOrApply({ type: 'update_input', input: merged });
+    }, INPUT_UPDATE_DEBOUNCE_MS);
+    this.pendingUpdates.set(input.inputId, { input: merged, timeout });
+  }
+
+  private cancelPendingUpdate(inputId: Id) {
+    const pending = this.pendingUpdates.get(inputId);
+    if (pending) {
+      clearTimeout(pending.timeout);
+      this.pendingUpdates.delete(inputId);
+    }
+  }
+
+  private enqueueOrApply(update: UpdateAction<Id>) {
     if (this.eventQueue) {
       this.eventQueue.push(update);
     } else {
@@ -125,6 +174,7 @@ export class LiveInputStreamStore<Id> {
   }
 
   private removeInput(inputId: Id) {
+    this.cancelPendingUpdate(inputId);
     const context = { ...this.context };
     delete context[String(inputId)];
     this.context = context;
