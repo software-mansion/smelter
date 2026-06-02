@@ -16,7 +16,9 @@ use crate::{
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac::FdkAacDecoder,
-            ffmpeg_h264, vulkan_h264,
+            ffmpeg_h264,
+            libopus::OpusDecoder,
+            vulkan_h264,
         },
         moq::state::MoqInputState,
     },
@@ -35,12 +37,14 @@ const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct DiscoveredVideo {
     name: String,
+    codec: VideoCodec,
     container: Container,
     description: Option<Bytes>,
 }
 
 struct DiscoveredAudio {
     name: String,
+    codec: AudioCodec,
     container: Container,
     description: Option<Bytes>,
 }
@@ -280,7 +284,7 @@ async fn run_video_track(
             data: payload,
             pts,
             dts: None,
-            kind: MediaKind::Video(VideoCodec::H264),
+            kind: MediaKind::Video(video.codec),
             present: true,
         };
 
@@ -343,7 +347,7 @@ async fn run_audio_track(
             data: payload,
             pts,
             dts: None,
-            kind: MediaKind::Audio(AudioCodec::Aac),
+            kind: MediaKind::Audio(audio.codec),
             present: true,
         };
 
@@ -374,17 +378,26 @@ fn spawn_video_decoder(
     video: &DiscoveredVideo,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    // Only CMAF H264 is allowed right now, other codecs are rejected before this function
-    let avcc_bytes = video
-        .description
-        .clone()
-        .ok_or(MoqConnectionError::InvalidAvcc)?;
+    let transformer = {
+        match &video.description {
+            Some(desc) => {
+                let h264_config = H264AvcDecoderConfig::parse(desc.clone())
+                    .map_err(|_| MoqConnectionError::InvalidAvcc)?;
 
-    let h264_config =
-        H264AvcDecoderConfig::parse(avcc_bytes).map_err(|_| MoqConnectionError::InvalidAvcc)?;
+                Some(H264AvccToAnnexB::new(h264_config))
+            }
+            None => None,
+        }
+    };
+    if let Container::Cmaf(_) = video.container
+        && transformer.is_none()
+    {
+        return Err(MoqConnectionError::MissingAvcc);
+    }
+
     let options = VideoDecoderThreadOptions {
         ctx: ctx.clone(),
-        transformer: Some(H264AvccToAnnexB::new(h264_config)),
+        transformer,
         frame_sender,
         input_buffer_size: MOQ_MAX_BUFFER,
     };
@@ -416,18 +429,18 @@ fn spawn_audio_decoder(
     audio: &DiscoveredAudio,
     sample_sender: QueueSender<InputAudioSamples>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    // Only AAC is allowed right now, different codecs are rejected before this function is called
-    let asc = audio
-        .description
-        .clone()
-        .ok_or(MoqConnectionError::MissingAsc)?;
-    let aac_decoder_options = AudioDecoderOptions::FdkAac(FdkAacDecoderOptions { asc: Some(asc) });
+    match &audio.codec {
+        AudioCodec::Aac => {
+            let asc = audio.description.clone();
+            if let Container::Cmaf(_) = audio.container
+                && asc.is_none()
+            {
+                return Err(MoqConnectionError::MissingAsc);
+            }
 
-    match aac_decoder_options {
-        AudioDecoderOptions::FdkAac(decoder_options) => {
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
-                decoder_options,
+                decoder_options: FdkAacDecoderOptions { asc },
                 samples_sender: sample_sender,
                 input_buffer_size: MOQ_MAX_BUFFER,
             };
@@ -436,7 +449,18 @@ fn spawn_audio_decoder(
                 options,
             )?)
         }
-        _ => Err(MoqConnectionError::UnsupportedAudioCodec),
+        AudioCodec::Opus => {
+            let options = AudioDecoderThreadOptions {
+                ctx: ctx.clone(),
+                decoder_options: (),
+                samples_sender: sample_sender,
+                input_buffer_size: MOQ_MAX_BUFFER,
+            };
+            Ok(AudioDecoderThread::<OpusDecoder>::spawn(
+                input_ref.clone(),
+                options,
+            )?)
+        }
     }
 }
 
@@ -457,8 +481,8 @@ enum MoqConnectionError {
     #[error("Invalid H264 decoder config.")]
     InvalidAvcc,
 
-    #[error("Unsupported audio codec, AAC expected.")]
-    UnsupportedAudioCodec,
+    #[error("Missing H264 decoder config.")]
+    MissingAvcc,
 
     #[error("Missing AAC decoder config.")]
     MissingAsc,
