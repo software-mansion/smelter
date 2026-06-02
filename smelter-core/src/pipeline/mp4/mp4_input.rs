@@ -357,8 +357,10 @@ impl TrackManagerThread {
             );
         }
 
-        {
-            // sleep so the new frames have time to go through decoder
+        // sleep so the new frames have time to go through decoder,
+        // only when seeking, we don't want to cut off any remaining
+        // frames when looping
+        if seek.is_some() {
             // TODO: wait until next track is ready
             thread::sleep(Duration::from_millis(500));
             let Some(queue_input) = self.queue_input.upgrade() else {
