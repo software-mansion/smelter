@@ -112,7 +112,7 @@ pub enum PipelineRtmpServerOptions {
 pub enum PipelineMoqServerOptions {
     Enable {
         port: u16,
-        tls_config: moq_native::ServerTlsConfig,
+        tls_config: Option<moq_native::ServerTlsConfig>,
     },
     Disable,
 }

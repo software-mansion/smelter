@@ -20,7 +20,12 @@ pub struct MoqPipelineState {
 }
 
 impl MoqPipelineState {
-    pub fn new(port: u16, tls_config: ServerTlsConfig) -> Arc<Self> {
+    pub fn new(port: u16, tls_config: Option<ServerTlsConfig>) -> Arc<Self> {
+        let tls_config = match tls_config {
+            Some(tc) => tc,
+            None => todo!(),
+        };
+
         Arc::new(Self {
             port,
             origin: Origin::random().produce(),
