@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import fs from 'fs/promises';
 import path from 'path';
 import type { PackageManager } from './utils/packageManager';
 
@@ -20,12 +20,12 @@ export type Template = {
 
 export async function applyTemplate(template: Template, destination: string): Promise<void> {
   const templatePath = path.join(TEMPLATES_ROOT, template.templateId);
-  await fs.copy(templatePath, destination);
+  await fs.cp(templatePath, destination, { recursive: true });
 
   for (const project of template.projects) {
     const projectDir = path.join(destination, project.dir ?? '.');
     for (const dirToRemove of project.dirsToRemove ?? []) {
-      await fs.remove(path.join(projectDir, dirToRemove));
+      await fs.rm(path.join(projectDir, dirToRemove), { recursive: true, force: true });
     }
 
     const packageJsonPath = path.join(projectDir, 'package.json');

@@ -1,5 +1,6 @@
 import path from 'path';
-import fs, { mkdirp, pathExists } from 'fs-extra';
+import { createWriteStream } from 'fs';
+import fs from 'fs/promises';
 import type { ChildProcess } from 'child_process';
 import { spawn as nodeSpawn } from 'child_process';
 import { promisify } from 'util';
@@ -63,12 +64,21 @@ const exampleAssets = [
 
 export async function downloadAllAssets(): Promise<void> {
   const downloadDir = path.join(__dirname, '../.assets');
-  await mkdirp(downloadDir);
+  await fs.mkdir(downloadDir, { recursive: true });
 
   for (const asset of exampleAssets) {
     if (!(await pathExists(path.join(downloadDir, asset.path)))) {
       await download(asset.url, path.join(downloadDir, asset.path));
     }
+  }
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -80,7 +90,7 @@ async function download(url: string, destination: string): Promise<void> {
     throw err;
   }
   if (response.body) {
-    await pipeline(Readable.fromWeb(response.body as any), fs.createWriteStream(destination));
+    await pipeline(Readable.fromWeb(response.body as any), createWriteStream(destination));
   } else {
     throw Error(`Response with empty body.`);
   }
