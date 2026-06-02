@@ -23,7 +23,6 @@ pub use track::TrackId;
 
 pub(crate) use ex_capabilities::*;
 pub(crate) use flv::*;
-pub(crate) use track::TrackKey;
 
 pub(crate) const VIDEO_FOURCC_LIST: [&str; 3] = ["avc1", "vp09", "vp08"];
 pub(crate) const AUDIO_FOURCC_LIST: [&str; 2] = ["mp4a", "Opus"];

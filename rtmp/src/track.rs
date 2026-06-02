@@ -15,23 +15,3 @@ impl Default for TrackId {
         Self::PRIMARY
     }
 }
-
-/// Session-level addressing for a single track inside a single RTMP stream.
-///
-/// `(stream_id, track_id)` is the natural key for any per-track state that a
-/// connection has to keep across messages — e.g. the AAC channel layout that
-/// `AudioConfig` declares once and every legacy `AudioData` frame must replay.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub(crate) struct TrackKey {
-    pub stream_id: u32,
-    pub track_id: TrackId,
-}
-
-impl TrackKey {
-    pub fn new(stream_id: u32, track_id: TrackId) -> Self {
-        Self {
-            stream_id,
-            track_id,
-        }
-    }
-}
