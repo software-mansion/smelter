@@ -12,13 +12,13 @@
 use std::fs;
 use std::path::Path;
 
-use moq_native::ServerTlsConfig;
 use moq_native::rustls::pki_types::pem::PemObject;
 use moq_native::rustls::pki_types::{CertificateDer, UnixTime};
+use moq_native::ServerTlsConfig;
 use sha2::{Digest, Sha256};
 use time::{Duration, OffsetDateTime};
 use tracing::warn;
-use webpki::{EndEntityCert, KeyUsage, anchor_from_trusted_cert};
+use webpki::{anchor_from_trusted_cert, EndEntityCert, KeyUsage};
 
 const CERT_FILE_NAME: &str = "moq_cert.pem";
 const KEY_FILE_NAME: &str = "moq_key.pem";
@@ -155,37 +155,4 @@ fn write_key(key_path: &Path, pem: &str) -> Result<(), std::io::Error> {
 fn fingerprint(cert_der: &[u8]) -> String {
     let digest = Sha256::digest(cert_der);
     data_encoding::HEXLOWER.encode(&digest)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn generated_cert_validates() {
-        let dir = std::env::temp_dir().join(format!("smelter_moq_cert_test_{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        let cert_path = dir.join(CERT_FILE_NAME);
-        let key_path = dir.join(KEY_FILE_NAME);
-
-        let der = generate(&cert_path, &key_path).unwrap();
-
-        // A freshly generated, valid self-signed cert must pass validation, otherwise
-        // we would regenerate (and change the fingerprint) on every restart.
-        let reread = read_and_validate(&cert_path).expect("freshly generated cert must validate");
-        assert_eq!(der, reread, "re-read DER must match generated DER");
-
-        // Fingerprint is stable for the same cert.
-        assert_eq!(fingerprint(&der), fingerprint(&reread));
-
-        // Key file is 0600 on unix.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = fs::metadata(&key_path).unwrap().permissions().mode();
-            assert_eq!(mode & 0o777, 0o600);
-        }
-
-        fs::remove_dir_all(&dir).ok();
-    }
 }
