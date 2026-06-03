@@ -66,8 +66,9 @@ pub fn load_or_create_self_signed_tls() -> Result<ServerTlsConfig, SelfSignedTls
 
     let fingerprint = fingerprint(&cert_der);
     warn!(
-        "Using INSECURE self-signed MoQ TLS certificate. Generated/loaded from ~/.smelter. \
-         NEVER use in production. Cert SHA-256 (for client serverCertificateHashes): {fingerprint}"
+        "Using INSECURE self-signed MoQ TLS certificate. Generated/loaded from {}. \
+         NEVER use in production. Cert SHA-256 (for client serverCertificateHashes): {fingerprint}",
+        dir.display()
     );
 
     let mut tls = ServerTlsConfig::default();
