@@ -29,8 +29,7 @@ impl MoqPipelineState {
     ) -> Result<Arc<Self>, InitPipelineError> {
         let tls_config = match tls_config {
             Some(tc) => tc,
-            None => load_or_create_self_signed_tls()
-                .map_err(InitPipelineError::MoqSelfSignedTlsError)?,
+            None => load_or_create_self_signed_tls()?,
         };
 
         Ok(Arc::new(Self {

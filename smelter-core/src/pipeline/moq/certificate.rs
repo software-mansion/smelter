@@ -12,13 +12,13 @@
 use std::fs;
 use std::path::Path;
 
+use moq_native::ServerTlsConfig;
 use moq_native::rustls::pki_types::pem::PemObject;
 use moq_native::rustls::pki_types::{CertificateDer, UnixTime};
-use moq_native::ServerTlsConfig;
 use sha2::{Digest, Sha256};
 use time::{Duration, OffsetDateTime};
 use tracing::warn;
-use webpki::{anchor_from_trusted_cert, EndEntityCert, KeyUsage};
+use webpki::{EndEntityCert, KeyUsage, anchor_from_trusted_cert};
 
 const CERT_FILE_NAME: &str = "moq_cert.pem";
 const KEY_FILE_NAME: &str = "moq_key.pem";
@@ -52,9 +52,9 @@ pub fn load_or_create_self_signed_tls() -> Result<ServerTlsConfig, SelfSignedTls
     let cert_der = if cert_path.exists() && key_path.exists() {
         match read_and_validate(&cert_path) {
             Ok(cert_der) => cert_der,
-            Err(err) => {
+            Err(error) => {
                 warn!(
-                    %err,
+                    %error,
                     "Existing self-signed MoQ certificate is invalid (expired or corrupted). Regenerating."
                 );
                 generate(&cert_path, &key_path)?
@@ -66,7 +66,6 @@ pub fn load_or_create_self_signed_tls() -> Result<ServerTlsConfig, SelfSignedTls
 
     let fingerprint = fingerprint(&cert_der);
     warn!(
-        fingerprint = %fingerprint,
         "Using INSECURE self-signed MoQ TLS certificate. Generated/loaded from ~/.smelter. \
          NEVER use in production. Cert SHA-256 (for client serverCertificateHashes): {fingerprint}"
     );
@@ -127,28 +126,21 @@ fn generate(cert_path: &Path, key_path: &Path) -> Result<Vec<u8>, SelfSignedTlsE
     Ok(cert.der().to_vec())
 }
 
-/// Write the private key, restricting it to owner read/write (`0600`) on unix.
+/// Write the private key, restricting it to owner read/write (`0600`).
 /// The file is created with the restrictive mode directly to avoid a window in
 /// which a world-readable key exists on disk.
 fn write_key(key_path: &Path, pem: &str) -> Result<(), std::io::Error> {
-    #[cfg(unix)]
-    {
-        use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
 
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(key_path)?;
-        file.write_all(pem.as_bytes())?;
-        Ok(())
-    }
-    #[cfg(not(unix))]
-    {
-        fs::write(key_path, pem)
-    }
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(key_path)?;
+    file.write_all(pem.as_bytes())?;
+    Ok(())
 }
 
 /// SHA-256 over the certificate DER, hex-encoded. Matches moq's own fingerprint scheme.
