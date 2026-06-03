@@ -116,7 +116,8 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
     }
 
     fn flush(&mut self) -> Vec<Frame> {
-        self.decoder.flush();
+        // Signal end of stream so the decoder drains the frames it holds back for reordering.
+        let _ = self.decoder.send_eof();
         self.read_all_frames()
     }
 }
