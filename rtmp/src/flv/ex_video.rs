@@ -24,18 +24,6 @@ pub enum ExVideoTag {
     },
 }
 
-#[allow(unused)]
-impl ExVideoTag {
-    pub fn frame_type(&self) -> VideoTagFrameType {
-        match self {
-            ExVideoTag::StartSeek | ExVideoTag::EndSeek => {
-                VideoTagFrameType::VideoInfoOrCommandFrame
-            }
-            ExVideoTag::VideoBody { frame_type, .. } => *frame_type,
-        }
-    }
-}
-
 /// FourCC video codec identifiers for Enhanced RTMP.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExVideoFourCc {
