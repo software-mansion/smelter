@@ -8,7 +8,7 @@
 
 Run these checks before releasing a new version:
 
-- Start the demo server (`cargo run --example demo_server`) and exercise every supported input and output type, confirming each works.
+- Start the demo server (`cargo run -p integration-tests --example demo_server`) and exercise every supported input and output type, confirming each works.
 - Run the other examples from the `integration-tests` crate.
 - Search the changelog for new or changed input/output options. Temporarily modify one of the examples to exercise those new options.
 
