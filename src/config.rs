@@ -428,6 +428,12 @@ fn moq_tls_config() -> Option<moq_native::ServerTlsConfig> {
             tls.key = vec![key];
             Some(tls)
         }
+        (Some(_), None) | (None, Some(_)) => {
+            warn!(
+                "Both \"SMELTER_MOQ_TLS_CERT_FILE\" and \"SMELTER_MOQ_TLS_KEY_FILE\" must be set. Falling back to self-signed certs."
+            );
+            None
+        }
         _ => {
             // No cert/key configured. smelter-core will fall back to a persisted,
             // insecure self-signed certificate (dev/test only) and log a warning
