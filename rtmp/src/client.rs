@@ -4,7 +4,7 @@ use tracing::{debug, info, warn};
 use url::Url;
 
 use crate::{
-    AudioChannels, AudioConfig, RtmpConnectionError, RtmpEvent, TrackId, VideoConfig,
+    AudioChannels, AudioConfig, RtmpConnectionError, RtmpEvent, VideoConfig,
     amf0::AmfValue,
     client::negotiation::{NegotiationProgress, send_connect, send_create_stream, send_publish},
     error::{RtmpStreamError, TcUrlError},
@@ -102,20 +102,14 @@ struct RtmpConnection {
     ex_capabilities: ExCapabilities,
 }
 
-/// Recorded codec configs / metadata, replayed on a new connection after an
-/// E-RTMP reconnect switch.
+/// Codec configs and metadata for the stream.
 ///
-/// In multitrack each track carries its own sequence-header/config in the
-/// stream (E-RTMPv2, "Multitrack Media Message Guidelines"), and `audioTrackId`
-/// / `videoTrackId` are independent namespaces — so video and audio configs are
-/// each kept per `TrackId`. Metadata stays stream-level: `onMetaData` is a
-/// single script-data message (per-track attributes live inside it).
-///
-/// TODO: multitrack is not implemented yet, every outgoing track has trackId=0
+/// Single-track only, the wire layer rejects multitrack media messages.
+/// Multitrack would make `video`/`audio` per-`TrackId` (`HashMap<TrackId, _>`).
 #[derive(Default, Clone)]
 struct MediaConfig {
-    video: HashMap<TrackId, VideoConfig>,
-    audio: HashMap<TrackId, AudioConfig>,
+    video: Option<VideoConfig>,
+    audio: Option<AudioConfig>,
     metadata: Option<HashMap<String, AmfValue>>,
 }
 
@@ -124,39 +118,34 @@ impl MediaConfig {
     /// connection after an E-RTMP reconnect switch.
     fn record(&mut self, event: &RtmpEvent) {
         match event {
-            RtmpEvent::VideoConfig(config) => {
-                self.video.insert(config.track_id, config.clone());
-            }
-            RtmpEvent::AudioConfig(config) => {
-                self.audio.insert(config.track_id, config.clone());
-            }
+            RtmpEvent::VideoConfig(config) => self.video = Some(config.clone()),
+            RtmpEvent::AudioConfig(config) => self.audio = Some(config.clone()),
             RtmpEvent::Metadata(metadata) => self.metadata = Some(metadata.clone()),
             RtmpEvent::VideoData(_) | RtmpEvent::AudioData(_) => {}
         }
     }
 
     fn is_audio_only(&self) -> bool {
-        self.video.is_empty()
+        self.video.is_none()
     }
 
-    fn resolve_audio_channels(&self, track_id: TrackId) -> AudioChannels {
+    fn resolve_audio_channels(&self) -> AudioChannels {
         self.audio
-            .get(&track_id)
+            .as_ref()
             .map(|config| config.channels)
             .unwrap_or(AudioChannels::Stereo)
     }
 
     /// Events to resend on a fresh connection, in dependency order: metadata
-    /// first, then every track's codec config (which must precede the media
-    /// data that resumes once the switch completes). Order across tracks of the
-    /// same media type is unspecified — they are independent.
+    /// first, then codec configs (which must precede the media data that
+    /// resumes once the switch completes).
     fn events_to_replay(&self) -> Vec<RtmpEvent> {
         let mut events = Vec::new();
         if let Some(metadata) = self.metadata.clone() {
             events.push(RtmpEvent::Metadata(metadata));
         }
-        events.extend(self.video.values().cloned().map(RtmpEvent::VideoConfig));
-        events.extend(self.audio.values().cloned().map(RtmpEvent::AudioConfig));
+        events.extend(self.video.clone().map(RtmpEvent::VideoConfig));
+        events.extend(self.audio.clone().map(RtmpEvent::AudioConfig));
         events
     }
 }
@@ -222,7 +211,7 @@ impl RtmpClient {
                 stream_id,
             },
             RtmpEvent::AudioData(data) => RtmpMessageOutgoing::Audio {
-                channels: self.media_config.resolve_audio_channels(data.track_id),
+                channels: self.media_config.resolve_audio_channels(),
                 audio: AudioMessage::Data(data),
                 stream_id,
             },
