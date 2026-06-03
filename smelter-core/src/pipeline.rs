@@ -34,7 +34,6 @@ mod v4l2;
 mod channel;
 mod hls;
 mod moq;
-pub(crate) use moq::SelfSignedTlsError;
 mod mp4;
 mod rtmp;
 mod rtp;
@@ -47,6 +46,7 @@ mod output;
 pub(crate) mod utils;
 
 pub use instance::Pipeline;
+pub(crate) use moq::SelfSignedTlsError;
 
 #[cfg(target_os = "linux")]
 pub use v4l2::{V4l2DeviceInfo, V4l2FormatInfo, V4l2ResolutionInfo, list_v4l2_devices};
