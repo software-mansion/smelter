@@ -14,7 +14,7 @@ use std::path::Path;
 
 use moq_native::ServerTlsConfig;
 use moq_native::rustls::pki_types::pem::PemObject;
-use moq_native::rustls::pki_types::{CertificateDer, UnixTime};
+use moq_native::rustls::pki_types::{CertificateDer, PrivateKeyDer, UnixTime};
 use sha2::{Digest, Sha256};
 use time::{Duration, OffsetDateTime};
 use tracing::warn;
@@ -50,7 +50,7 @@ pub fn load_or_create_self_signed_tls() -> Result<ServerTlsConfig, SelfSignedTls
     let key_path = dir.join(KEY_FILE_NAME);
 
     let cert_der = if cert_path.exists() && key_path.exists() {
-        match read_and_validate(&cert_path) {
+        match read_and_validate(&cert_path, &key_path) {
             Ok(cert_der) => cert_der,
             Err(error) => {
                 warn!(
@@ -76,11 +76,16 @@ pub fn load_or_create_self_signed_tls() -> Result<ServerTlsConfig, SelfSignedTls
     Ok(tls)
 }
 
-/// Read the on-disk cert and verify it is currently valid (self-signed, server auth).
-/// Returns the certificate DER bytes on success. Any failure (parse error, expiry,
-/// corruption) is returned as an error so the caller can regenerate.
-fn read_and_validate(cert_path: &Path) -> Result<Vec<u8>, anyhow::Error> {
+/// Read the on-disk cert and verify it is currently valid (self-signed, server auth),
+/// and confirm the private key still parses. Returns the certificate DER bytes on
+/// success. Any failure (parse error, expiry, corruption) is returned as an error so
+/// the caller can regenerate both files.
+fn read_and_validate(cert_path: &Path, key_path: &Path) -> Result<Vec<u8>, anyhow::Error> {
     let cert_der = CertificateDer::from_pem_file(cert_path)?;
+
+    // Validate the key parses too; moq parses it later at `Server::init`, so a corrupted
+    // key would otherwise slip past reuse and crash server init instead of regenerating.
+    PrivateKeyDer::from_pem_file(key_path)?;
 
     // A self-signed certificate acts as its own trust anchor.
     let anchor = anchor_from_trusted_cert(&cert_der)?;
