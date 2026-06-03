@@ -46,7 +46,7 @@ pub(super) async fn validate_token(
             }
         }
         None => Err(WhipWhepServerError::Unauthorized(
-            "Expected token and authorization header required".to_string(),
+            "Unauthorized, \"Authorization\" header is required".to_string(),
         )),
     }
 }

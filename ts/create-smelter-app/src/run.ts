@@ -26,7 +26,7 @@ export default async function run() {
 
 async function createNodeProject(options: ProjectOptions) {
   await ensureProjectDir(options.directory);
-  await applyTemplate(options.template, options.directory);
+  await applyTemplate(options.template, options.directory, options.packageManager);
   for (const project of options.template.projects) {
     const projectDir = path.join(options.directory, project.dir ?? '.');
     await runPackageManagerInstall(options.packageManager, projectDir);

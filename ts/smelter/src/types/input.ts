@@ -138,12 +138,6 @@ export type RegisterWhipServerInput = {
    */
   required?: boolean | null;
   /**
-   * Offset in milliseconds relative to the pipeline start (start request). If the offset is
-   * not defined then the stream will be synchronized based on the delivery time of the initial
-   * frames.
-   */
-  offsetMs?: number | null;
-  /**
    * Reference/desired jitter buffer size in milliseconds. The adaptive buffer converges
    * toward this value in steady state; it shifts as conditions change. Higher values
    * trade latency for resilience.
@@ -173,12 +167,6 @@ export type RegisterWhepClientInput = {
    * on time, then Smelter will delay producing output frames.
    */
   required?: boolean | null;
-  /**
-   * Offset in milliseconds relative to the pipeline start (start request). If the offset is
-   * not defined then the stream will be synchronized based on the delivery time of the initial
-   * frames.
-   */
-  offsetMs?: number | null;
   /**
    * Reference/desired jitter buffer size in milliseconds. The adaptive buffer converges
    * toward this value in steady state; it shifts as conditions change. Higher values

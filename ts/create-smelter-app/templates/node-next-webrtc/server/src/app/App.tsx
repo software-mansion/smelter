@@ -20,7 +20,7 @@ export default function App() {
           width: 580,
           height: 920,
           padding: 40,
-          backgroundColor: '#FFFFFF55',
+          backgroundColor: '#FFFFFFAA',
           borderRadius: 20,
           direction: 'column',
         }}
