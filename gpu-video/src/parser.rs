@@ -2,10 +2,14 @@ mod au_splitter;
 mod nalu_parser;
 mod nalu_splitter;
 
-#[cfg(vulkan)]
+#[cfg(all(vulkan, not(feature = "expose-parsers")))]
 pub(crate) mod decoder_instructions;
-#[cfg(vulkan)]
+#[cfg(feature = "expose-parsers")]
+pub mod decoder_instructions;
+#[cfg(all(vulkan, not(feature = "expose-parsers")))]
 pub(crate) mod reference_manager;
+#[cfg(feature = "expose-parsers")]
+pub mod reference_manager;
 
 pub mod h264 {
     use super::au_splitter::AUSplitter;

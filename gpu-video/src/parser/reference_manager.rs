@@ -37,7 +37,7 @@ pub enum ReferenceManagementError {
 }
 
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct ReferenceId(usize);
+pub struct ReferenceId(usize);
 
 #[derive(Debug, Clone, Copy)]
 enum BFrameReferenceListKind {
@@ -47,7 +47,7 @@ enum BFrameReferenceListKind {
 
 #[derive(Debug, Default)]
 #[allow(non_snake_case)]
-pub(crate) struct ReferenceContext {
+pub struct ReferenceContext {
     pictures: ReferencePictures,
     next_reference_id: ReferenceId,
     prevFrameNum: u16,
@@ -142,7 +142,7 @@ impl ReferenceContext {
         id
     }
 
-    pub(crate) fn mark_missed_frames(&mut self) {
+    pub fn mark_missed_frames(&mut self) {
         self.detected_missed_frames = true;
     }
 
@@ -178,18 +178,32 @@ impl ReferenceContext {
         // really that many places to put this code in
         let mut rbsp_bytes = Vec::new();
         let mut slice_indices = Vec::new();
+        let mut slice_data = Vec::new();
+        let mut slice_data_indices = Vec::new();
+        let mut slice_headers = Vec::new();
+        let mut slice_header_bit_sizes = Vec::new();
         for (slice, _) in &mut slices {
             if slice.rbsp_bytes.is_empty() {
                 continue;
             }
             slice_indices.push(rbsp_bytes.len());
+            slice_data_indices.push(slice_data.len());
+            slice_headers.push(slice.header.clone());
+            slice_header_bit_sizes.push(slice.header_bit_size);
+            if slice.rbsp_bytes.len() > 4 {
+                slice_data.extend_from_slice(&slice.rbsp_bytes[4..]);
+            }
             rbsp_bytes.append(&mut slice.rbsp_bytes);
         }
 
         let decode_info = self.decode_information_for_frame(
             header.clone(),
             slice_indices,
+            slice_data_indices,
+            slice_headers,
+            slice_header_bit_sizes,
             rbsp_bytes,
+            slice_data,
             &sps,
             &pps,
             pts,
@@ -547,7 +561,11 @@ impl ReferenceContext {
         &mut self,
         header: Arc<SliceHeader>,
         slice_indices: Vec<usize>,
+        slice_data_indices: Vec<usize>,
+        slice_headers: Vec<Arc<SliceHeader>>,
+        slice_header_bit_sizes: Vec<u16>,
         rbsp_bytes: Vec<u8>,
+        slice_data: Vec<u8>,
         sps: &SeqParameterSet,
         pps: &PicParameterSet,
         pts: Option<u64>,
@@ -660,7 +678,11 @@ impl ReferenceContext {
             reference_list_l1,
             header: header.clone(),
             slice_indices,
+            slice_data_indices,
+            slice_headers,
+            slice_header_bit_sizes,
             rbsp_bytes,
+            slice_data,
             sps_id: sps.id().id(),
             pps_id: pps.pic_parameter_set_id.id(),
             picture_info: PictureInfo {
@@ -1271,27 +1293,32 @@ impl SliceHeaderExt for SliceHeader {
 #[derive(Clone, derivative::Derivative)]
 #[derivative(Debug)]
 pub struct DecodeInformation {
-    pub(crate) reference_list_l0: Option<Vec<ReferencePictureInfo>>,
-    pub(crate) reference_list_l1: Option<Vec<ReferencePictureInfo>>,
+    pub reference_list_l0: Option<Vec<ReferencePictureInfo>>,
+    pub reference_list_l1: Option<Vec<ReferencePictureInfo>>,
     #[derivative(Debug = "ignore")]
-    pub(crate) rbsp_bytes: Vec<u8>,
-    pub(crate) slice_indices: Vec<usize>,
+    pub rbsp_bytes: Vec<u8>,
+    pub slice_indices: Vec<usize>,
     #[derivative(Debug = "ignore")]
-    pub(crate) header: Arc<SliceHeader>,
-    pub(crate) sps_id: u8,
-    pub(crate) pps_id: u8,
-    pub(crate) picture_info: PictureInfo,
-    pub(crate) pts: Option<u64>,
+    pub slice_data: Vec<u8>,
+    pub slice_data_indices: Vec<usize>,
+    pub slice_headers: Vec<Arc<SliceHeader>>,
+    pub slice_header_bit_sizes: Vec<u16>,
+    #[derivative(Debug = "ignore")]
+    pub header: Arc<SliceHeader>,
+    pub sps_id: u8,
+    pub pps_id: u8,
+    pub picture_info: PictureInfo,
+    pub pts: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
-pub(crate) struct ReferencePictureInfo {
-    pub(crate) id: ReferenceId,
-    pub(crate) LongTermPicNum: Option<u64>,
-    pub(crate) non_existing: bool,
-    pub(crate) FrameNum: u16,
-    pub(crate) PicOrderCnt: [i32; 2],
+pub struct ReferencePictureInfo {
+    pub id: ReferenceId,
+    pub LongTermPicNum: Option<u64>,
+    pub non_existing: bool,
+    pub FrameNum: u16,
+    pub PicOrderCnt: [i32; 2],
 }
 
 impl ReferencePictureInfo {
@@ -1302,10 +1329,10 @@ impl ReferencePictureInfo {
 
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
-pub(crate) struct PictureInfo {
-    pub(crate) used_for_long_term_reference: bool,
-    pub(crate) non_existing: bool,
-    pub(crate) FrameNum: u16,
-    pub(crate) PicOrderCnt_for_decoding: [i32; 2],
-    pub(crate) PicOrderCnt_as_reference_pic: [i32; 2],
+pub struct PictureInfo {
+    pub used_for_long_term_reference: bool,
+    pub non_existing: bool,
+    pub FrameNum: u16,
+    pub PicOrderCnt_for_decoding: [i32; 2],
+    pub PicOrderCnt_as_reference_pic: [i32; 2],
 }

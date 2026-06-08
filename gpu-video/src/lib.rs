@@ -24,6 +24,16 @@ mod vulkan_video;
 #[cfg(vulkan)]
 pub use vulkan_video::*;
 
+#[cfg(all(feature = "expose-parsers", not(vulkan)))]
+pub mod parameters {
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum MissedFrameHandling {
+        #[default]
+        Strict,
+        Tolerant,
+    }
+}
+
 #[cfg(feature = "expose-parsers")]
 pub mod parser;
 #[cfg(not(feature = "expose-parsers"))]

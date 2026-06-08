@@ -28,7 +28,8 @@ mod imp {
                 },
             },
             reference_manager::{
-                DecodeInformation, ReferenceContext, ReferenceId, ReferencePictureInfo,
+                DecodeInformation, ReferenceContext, ReferenceId,
+                ReferenceManagementError, ReferencePictureInfo,
             },
         },
     };
@@ -227,13 +228,13 @@ mod imp {
             let access_units =
                 self.parser.parse(data, pts).map_err(|err| err.to_string())?;
             compile_to_decoder_instructions(&mut self.reference_ctx, access_units)
-                .map_err(|err| err.to_string())
+                .map_err(|err: ReferenceManagementError| err.to_string())
         }
 
         fn flush_parser(&mut self) -> Result<Vec<DecoderInstruction>, String> {
             let access_units = self.parser.flush().map_err(|err| err.to_string())?;
             compile_to_decoder_instructions(&mut self.reference_ctx, access_units)
-                .map_err(|err| err.to_string())
+                .map_err(|err: ReferenceManagementError| err.to_string())
         }
 
         fn process_instructions(
@@ -808,7 +809,7 @@ mod imp {
     fn current_long_term_pic_num(decode_info: &DecodeInformation) -> Option<u64> {
         match decode_info.header.dec_ref_pic_marking.as_ref()? {
             DecRefPicMarking::Idr { long_term_reference_flag, .. } => {
-                (*long_term_reference_flag).then_some(0)
+                long_term_reference_flag.then_some(0)
             }
             DecRefPicMarking::Adaptive(operations) => operations.iter().find_map(|op| {
                 if let MemoryManagementControlOperation::CurrentUsedForLongTerm {
