@@ -72,6 +72,7 @@ wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", default-featur
     "wgsl",
     "dx12",
     "metal",
+    "vulkan",
     "naga-ir",
     "webgl",
     "fragile-send-sync-non-atomic-wasm",
