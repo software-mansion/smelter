@@ -19,12 +19,15 @@ import { WebSocketConnection } from '../ws';
 import { smelterInstanceLoggerOptions } from '../logger';
 import { getSmelterStatus } from '../getSmelterStatus';
 
-// TODO: This should be changed to `software-mansion/smelter` repo with proper version on ts-sdk release
-const VERSION = `7054709b`;
-const REPO = `smelter-labs/rc-releases`;
+const VERSION = `v0.6.0`;
+const REPO = `software-mansion/smelter`;
+
+// During the pre-release/RC cycle, swap to the lines below: point at the
+// `smelter-labs/rc-releases` repo and set VERSION to the release tag (which also
+// represents a commit hash in the main repo).
 //
-//const VERSION = `v0.5.0`;
-//const REPO = `software-mansion/smelter`;
+// const VERSION = `7054709b`;
+// const REPO = `smelter-labs/rc-releases`;
 
 export type LocallySpawnedInstanceOptions = {
   port: number;
