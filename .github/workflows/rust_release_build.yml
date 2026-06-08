@@ -26,12 +26,12 @@ jobs:
             - name: Run dependency check
               run: ./tools/build/smelter/dependency_check
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                 name: smelter_linux_x86_64.tar.gz
                 path: tools/build/smelter_linux_x86_64.tar.gz
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                 name: smelter_with_web_renderer_linux_x86_64.tar.gz
                 path: tools/build/smelter_with_web_renderer_linux_x86_64.tar.gz
@@ -59,7 +59,7 @@ jobs:
             - name: Run dependency check
               run: ./tools/build/smelter/dependency_check
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                 name: smelter_linux_aarch64.tar.gz
                 path: tools/build/smelter_linux_aarch64.tar.gz
@@ -82,12 +82,12 @@ jobs:
             - name: 📦 Package
               run: cargo run -p tools --bin package_for_release
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                 name: smelter_darwin_x86_64.tar.gz
                 path: tools/build/smelter_darwin_x86_64.tar.gz
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                 name: smelter_with_web_renderer_darwin_x86_64.tar.gz
                 path: tools/build/smelter_with_web_renderer_darwin_x86_64.tar.gz
@@ -113,12 +113,12 @@ jobs:
             - name: Run dependency check
               run: ./tools/build/smelter/dependency_check
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                 name: smelter_darwin_aarch64.tar.gz
                 path: tools/build/smelter_darwin_aarch64.tar.gz
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                 name: smelter_with_web_renderer_darwin_aarch64.tar.gz
                 path: tools/build/smelter_with_web_renderer_darwin_aarch64.tar.gz
