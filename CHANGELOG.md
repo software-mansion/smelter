@@ -3,8 +3,18 @@
 ## unreleased
 
 ### 💥 Breaking changes
+
+### ✨ New features
+
+### 🐛 Bug fixes
+
+### 🔧 Others
+
+## [v0.6.0](https://github.com/software-mansion/smelter/releases/tag/v0.6.0)
+
+### 💥 Breaking changes
 - Rename `var<push_constant>` to `var<immediate>` in user-provided shaders ([#1624](https://github.com/software-mansion/smelter/pull/1624) by [@noituri](https://github.com/noituri))
-- User-provided shaders now need to include `enable wgpu_binding_array;` in their shaders ([#2025](https://github.com/software-mansion/smelter/pull/2025)) by [@noituri](https://github.com/noituri))
+- User-provided shaders now need to include `enable wgpu_binding_array;`. ([#2025](https://github.com/software-mansion/smelter/pull/2025)) by [@noituri](https://github.com/noituri))
 - Replace `url` field with `stream_key` in RTMP input, port is now defined globally via `SMELTER_RTMP_SERVER_PORT` ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 - Rename `vk-video` feature to `gpu-video` ([#1942](https://github.com/software-mansion/smelter/pull/1942)) by [@jerzywilczek](https://github.com/jerzywilczek)
 - Remove `offset_ms` from WHIP and WHEP inputs ([#1974](https://github.com/software-mansion/smelter/pull/1974), [#1857](https://github.com/software-mansion/smelter/pull/1857) by [@wkozyra95](https://github.com/wkozyra95))
