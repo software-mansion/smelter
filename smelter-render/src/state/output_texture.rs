@@ -21,7 +21,7 @@ use crate::wgpu::texture::NV12Texture;
 #[cfg(target_os = "linux")]
 use crate::{
     DRM_FORMAT_NV12, DmaBufFrame, DmaBufLayer, DmaBufObject, DmaBufPlane,
-    Nv12DmaBufImportUsage, validate_nv12_dmabuf_layout,
+    validate_nv12_dmabuf_layout,
 };
 use crate::{
     OutputFrameFormat, Resolution,
@@ -529,6 +529,11 @@ unsafe fn wrap_nv12_image_as_wgpu_texture(
         if render_attachment {
             wgpu_usage |= wgpu::TextureUsages::RENDER_ATTACHMENT;
         }
+        let initial_state = if render_attachment {
+            wgpu::TextureUses::UNINITIALIZED
+        } else {
+            wgpu::TextureUses::RESOURCE
+        };
 
         wgpu_device.create_texture_from_hal::<VkApi>(
             hal_texture,
@@ -549,6 +554,7 @@ unsafe fn wrap_nv12_image_as_wgpu_texture(
                     wgpu::TextureFormat::Rg8Unorm,
                 ],
             },
+            initial_state,
         )
     }
 }
