@@ -60,7 +60,6 @@ impl RtmpServerInput {
         state.inputs.add_input(
             &input_ref,
             RtmpInputStateOptions {
-                app: options.app,
                 stream_key: options.stream_key,
                 queue_input: queue_input.downgrade(),
                 decoders: options.decoders,

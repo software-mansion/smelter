@@ -6,7 +6,6 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
 
     fn try_from(value: RtmpInput) -> Result<Self, Self::Error> {
         let RtmpInput {
-            app,
             stream_key,
             required,
             decoder_map,
@@ -26,7 +25,6 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             .transpose()?;
 
         let input_options = core::RtmpServerInputOptions {
-            app,
             stream_key,
             decoders: core::RtmpServerInputDecoders { h264 },
             queue_options: core::QueueInputOptions {

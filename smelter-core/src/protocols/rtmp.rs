@@ -61,7 +61,6 @@ impl RtmpConnectionOptions {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RtmpServerInputOptions {
-    pub app: Arc<str>,
     pub stream_key: Arc<str>,
     pub decoders: RtmpServerInputDecoders,
     pub queue_options: QueueInputOptions,

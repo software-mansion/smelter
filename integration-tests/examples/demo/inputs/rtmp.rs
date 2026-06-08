@@ -58,7 +58,6 @@ impl RtmpInput {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "rtmp_server",
-            "app": &self.name,
             "stream_key": STREAM_KEY,
         })
     }

@@ -15,7 +15,6 @@ pub(crate) struct RtmpInputsState(Arc<Mutex<HashMap<Ref<InputId>, RtmpInputState
 
 #[derive(Debug)]
 pub(crate) struct RtmpInputState {
-    pub app: Arc<str>,
     pub stream_key: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: RtmpServerInputDecoders,
@@ -23,7 +22,6 @@ pub(crate) struct RtmpInputState {
 }
 
 pub(crate) struct RtmpInputStateOptions {
-    pub app: Arc<str>,
     pub stream_key: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: RtmpServerInputDecoders,
@@ -32,7 +30,6 @@ pub(crate) struct RtmpInputStateOptions {
 impl RtmpInputState {
     fn new(options: RtmpInputStateOptions) -> Self {
         Self {
-            app: options.app,
             stream_key: options.stream_key,
             queue_input: options.queue_input,
             decoders: options.decoders,
@@ -76,17 +73,26 @@ impl RtmpInputsState {
         }
     }
 
+    /// The RTMP `app` is the URL-encoded input id, so decode it and match it
+    /// against the registered input ids.
     pub(crate) fn find_by_app_stream_key(
         &self,
-        app: &Arc<str>,
+        app: &str,
         stream_key: &Arc<str>,
     ) -> Result<Ref<InputId>, RtmpServerError> {
+        let app = match urlencoding::decode(app) {
+            Ok(decoded) => decoded.into_owned(),
+            Err(_) => app.to_string(),
+        };
+
         let guard = self.0.lock().unwrap();
         let (input_ref, _) = guard
             .iter()
-            .find(|(_, input)| &input.app == app && &input.stream_key == stream_key)
+            .find(|(input_ref, input)| {
+                input_ref.id().0.as_ref() == app && &input.stream_key == stream_key
+            })
             .ok_or_else(|| RtmpServerError::NotRegisteredAppStreamKeyPair {
-                app: app.clone(),
+                app: app.into(),
                 stream_key: stream_key.clone(),
             })?;
         Ok(input_ref.clone())
