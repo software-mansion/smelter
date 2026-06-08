@@ -16,7 +16,7 @@ services:
       SMELTER_INSTANCE_URL: 'http://smelter-instance:8081'
 
   smelter-instance:
-    image: ghcr.io/software-mansion/smelter:v0.5.0
+    image: ghcr.io/software-mansion/smelter:v0.6.0
     ports:
       # Smelter API
       - 8081:8081

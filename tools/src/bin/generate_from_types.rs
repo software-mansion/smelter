@@ -127,7 +127,7 @@ enum SchemaAction {
     info(
         title = "Smelter",
         description = "Real-time video compositing software",
-        version = "0.5.0",
+        version = "0.6.0",
         license(name = "MIT",),
     ),
     paths(
