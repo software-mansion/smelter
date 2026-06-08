@@ -142,12 +142,10 @@ fn rtmp_minimal() {
     check_rtmp(
         json!({
             "input": {
-                "app": "live",
                 "stream_key": "stream_1"
             }
         }),
         CoreInput::RtmpServer(RtmpServerInputOptions {
-            app: Arc::from("live"),
             stream_key: Arc::from("stream_1"),
             decoders: RtmpServerInputDecoders { h264: None },
             queue_options: default_queue(),
@@ -160,7 +158,6 @@ fn rtmp_with_all_options() {
     check_rtmp(
         json!({
             "input": {
-                "app": "live",
                 "stream_key": "stream_1",
                 "required": true,
                 "decoder_map": {
@@ -173,7 +170,6 @@ fn rtmp_with_all_options() {
             }
         }),
         CoreInput::RtmpServer(RtmpServerInputOptions {
-            app: Arc::from("live"),
             stream_key: Arc::from("stream_1"),
             decoders: RtmpServerInputDecoders {
                 h264: Some(VideoDecoderOptions::FfmpegH264),
@@ -193,7 +189,6 @@ fn rtmp_vulkan_decoder() {
     check_rtmp(
         json!({
             "input": {
-                "app": "live",
                 "stream_key": "stream_1",
                 "decoder_map": {
                     "h264": "vulkan_h264"
@@ -201,7 +196,6 @@ fn rtmp_vulkan_decoder() {
             }
         }),
         CoreInput::RtmpServer(RtmpServerInputOptions {
-            app: Arc::from("live"),
             stream_key: Arc::from("stream_1"),
             decoders: RtmpServerInputDecoders {
                 h264: Some(VideoDecoderOptions::VulkanH264),
@@ -212,20 +206,9 @@ fn rtmp_vulkan_decoder() {
 }
 
 #[test]
-fn err_serde_rtmp_missing_app() {
-    check_serde_err::<RtmpInput>(json!({
-        "input": {
-            "stream_key": "stream_1"
-        }
-    }));
-}
-
-#[test]
 fn err_serde_rtmp_missing_stream_key() {
     check_serde_err::<RtmpInput>(json!({
-        "input": {
-            "app": "live"
-        }
+        "input": {}
     }));
 }
 
@@ -233,7 +216,6 @@ fn err_serde_rtmp_missing_stream_key() {
 fn err_serde_rtmp_unknown_field() {
     check_serde_err::<RtmpInput>(json!({
         "input": {
-            "app": "live",
             "stream_key": "stream_1",
             "unknown": true
         }

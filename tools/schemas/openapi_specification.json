@@ -4356,17 +4356,12 @@
       "RtmpInput": {
         "type": "object",
         "required": [
-          "app",
           "stream_key"
         ],
         "properties": {
-          "app": {
-            "type": "string",
-            "description": "The RTMP application name.\nThis is the first path segment of the RTMP stream URL that Smelter listens on for incoming streams.\nFormat: `rtmp://<ip_address>:<port>/<app>/<stream_key`"
-          },
           "stream_key": {
             "type": "string",
-            "description": "The RTMP stream key.\nThis is the second path segment of the RTMP stream URL that Smelter listens on for incoming streams.\nFormat: `rtmp://<ip_address>:<port>/<app>/<stream_key`"
+            "description": "The RTMP stream key.\n\nIn most RTMP clients you will need to provide url in following format\n`rtmp://<ip_address>:<port>/<input_id>/<stream_key>`"
           },
           "required": {
             "type": [
