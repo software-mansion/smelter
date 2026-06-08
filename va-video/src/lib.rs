@@ -15,7 +15,8 @@ fn test_wgpu_device_and_queue()
             compatible_surface: None,
         }))
         .expect("failed to find WGPU adapter");
-    let required_features = smelter_render::required_wgpu_features();
+    let required_features =
+        smelter_render::required_wgpu_features() | wgpu::Features::TEXTURE_FORMAT_NV12;
     let required_limits =
         smelter_render::set_required_wgpu_limits(wgpu::Limits::default());
     let (device, queue) =

@@ -67,7 +67,7 @@ pub fn create_wgpu_graphics_ctx(
         error!("Selected adapter is CPU based. Aborting.");
         return Err(CreateGraphicsContextError::NoAdapter);
     }
-    let required_features = features | required_wgpu_features();
+    let required_features = features | required_wgpu_features() | vaapi_wgpu_features();
 
     let missing_features = required_features.difference(adapter.features());
     if !missing_features.is_empty() {
@@ -97,6 +97,16 @@ pub fn create_wgpu_graphics_ctx(
         #[cfg(feature = "gpu-video")]
         vulkan_ctx: None,
     })
+}
+
+#[cfg(all(feature = "vaapi", target_os = "linux"))]
+fn vaapi_wgpu_features() -> wgpu::Features {
+    wgpu::Features::TEXTURE_FORMAT_NV12
+}
+
+#[cfg(not(all(feature = "vaapi", target_os = "linux")))]
+fn vaapi_wgpu_features() -> wgpu::Features {
+    wgpu::Features::empty()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
