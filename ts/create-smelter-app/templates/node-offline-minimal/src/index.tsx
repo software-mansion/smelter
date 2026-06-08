@@ -44,5 +44,7 @@ async function run() {
     },
     5000
   );
+
+  console.log(`Mp4 successfully written to ./output.mp4`);
 }
 void run();

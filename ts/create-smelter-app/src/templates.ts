@@ -24,7 +24,7 @@ export const NodeMinimalTemplate: TemplateOption = {
     projects: [
       {
         projectName,
-        dirsToRemove: ['dist', 'node_modules'],
+        filesToRemove: ['dist', 'node_modules'],
       },
     ],
     usageInstructions: defaultNodeInstructions,
@@ -34,13 +34,13 @@ export const NodeMinimalTemplate: TemplateOption = {
 export const NodeExpressZustandTemplate: TemplateOption = {
   title: 'Express.js + Zustand',
   description:
-    'A Node.js application that streams composed video to an RTMP server. An HTTP API controls the stream layout, enables dynamic layout changes and adding MP4 files.',
+    'A Node.js application that streams composed video to a local RTMP server. An HTTP API lets you change the layout and add MP4 files at runtime.',
   resolveTemplate: projectName => ({
     templateId: 'node-express-zustand',
     projects: [
       {
         projectName,
-        dirsToRemove: ['dist', 'node_modules'],
+        filesToRemove: ['dist', 'node_modules'],
       },
     ],
     usageInstructions: defaultNodeInstructions,
@@ -48,7 +48,7 @@ export const NodeExpressZustandTemplate: TemplateOption = {
 };
 
 export const OfflineNodeMinimalTemplate: TemplateOption = {
-  title: 'Generate simple MP4 file',
+  title: 'Generate an MP4 file',
   description:
     'A Node.js application that generates an MP4 file, rendering a single, simple static layout.',
   resolveTemplate: projectName => ({
@@ -56,7 +56,7 @@ export const OfflineNodeMinimalTemplate: TemplateOption = {
     projects: [
       {
         projectName,
-        dirsToRemove: ['dist', 'node_modules'],
+        filesToRemove: ['dist', 'node_modules'],
       },
     ],
     usageInstructions: defaultNodeInstructions,
@@ -64,7 +64,7 @@ export const OfflineNodeMinimalTemplate: TemplateOption = {
 };
 
 export const OfflineNodeShowcaseTemplate: TemplateOption = {
-  title: 'Converting and combining MP4 files',
+  title: 'Combine MP4 files',
   description:
     'A Node.js application that generates an MP4 file by combining and composing multiple source MP4 files.',
   resolveTemplate: projectName => ({
@@ -72,7 +72,7 @@ export const OfflineNodeShowcaseTemplate: TemplateOption = {
     projects: [
       {
         projectName,
-        dirsToRemove: ['dist', 'node_modules'],
+        filesToRemove: ['dist', 'node_modules'],
       },
     ],
     usageInstructions: defaultNodeInstructions,
@@ -80,27 +80,22 @@ export const OfflineNodeShowcaseTemplate: TemplateOption = {
 };
 
 export const NodeNextWebRTCTemplate: TemplateOption = {
-  title: 'Streaming between Smelter and Next.js app via WebRTC',
+  title: 'Next.js + WebRTC',
   description:
-    'A Next.js application that streams camera or screen share to the Smelter instance over WHIP. Smelter modifies the stream and broadcasts it over WHEP.',
+    'A Next.js application that streams camera or screen share to Smelter over WHIP. Smelter composes the stream and broadcasts it back over WHEP.',
   resolveTemplate: projectName => ({
     templateId: 'node-next-webrtc',
     projects: [
       {
         projectName,
         dir: 'server',
-        dirsToRemove: ['dist', 'node_modules'],
+        filesToRemove: ['dist', 'node_modules'],
       },
       {
         projectName,
         dir: 'client',
-        dirsToRemove: [
-          '.next',
-          'next-env.d.ts',
-          'node_modules',
-          'pnpm-lock.yaml',
-          'pnpm-workspace.yaml',
-        ],
+        filesToRemove: ['.next', 'next-env.d.ts', 'node_modules', 'pnpm-lock.yaml'],
+        packageManagerFiles: { pnpm: ['pnpm-workspace.yaml'] },
       },
     ],
     usageInstructions: (directoryName, packageManager) =>

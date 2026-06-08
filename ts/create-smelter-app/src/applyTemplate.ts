@@ -9,7 +9,10 @@ export type TemplateProject = {
   // Relative from template root, defaults to root dir
   dir?: string;
   // Relative from root from root of the project
-  dirsToRemove?: string[];
+  filesToRemove?: string[];
+  // Files (relative to the project root) that are only relevant for a specific
+  // package manager. They are removed when a different package manager is selected.
+  packageManagerFiles?: Partial<Record<PackageManager, string[]>>;
 };
 
 export type Template = {
@@ -18,14 +21,27 @@ export type Template = {
   usageInstructions: (directoryName: string, packageManage: PackageManager) => string;
 };
 
-export async function applyTemplate(template: Template, destination: string): Promise<void> {
+export async function applyTemplate(
+  template: Template,
+  destination: string,
+  packageManager: PackageManager
+): Promise<void> {
   const templatePath = path.join(TEMPLATES_ROOT, template.templateId);
   await fs.cp(templatePath, destination, { recursive: true });
 
   for (const project of template.projects) {
     const projectDir = path.join(destination, project.dir ?? '.');
-    for (const dirToRemove of project.dirsToRemove ?? []) {
+    for (const dirToRemove of project.filesToRemove ?? []) {
       await fs.rm(path.join(projectDir, dirToRemove), { recursive: true, force: true });
+    }
+
+    for (const [pm, files] of Object.entries(project.packageManagerFiles ?? {})) {
+      if (pm === packageManager) {
+        continue;
+      }
+      for (const file of files) {
+        await fs.rm(path.join(projectDir, file), { recursive: true, force: true });
+      }
     }
 
     const packageJsonPath = path.join(projectDir, 'package.json');
