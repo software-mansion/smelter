@@ -5,13 +5,13 @@ use std::{
     time::Duration,
 };
 
+use crate::{
+    DmaBufFrame, DmaBufLayer, DmaBufObject, DmaBufPlane, Nv12DmaBufImportUsage,
+    VideoResolution, import_nv12_dmabuf_texture, validate_nv12_dmabuf_layout,
+};
 use libva::{
     Display, DrmPrimeSurfaceDescriptor, PictureH264, Surface, UsageHint, VA_INVALID_ID,
     VA_PICTURE_H264_INVALID,
-};
-use smelter_render::{
-    DmaBufFrame, DmaBufLayer, DmaBufObject, DmaBufPlane, Nv12DmaBufImportUsage,
-    Resolution, validate_nv12_dmabuf_layout,
 };
 
 const DEFAULT_DRM_RENDER_NODE: &str = "/dev/dri/renderD128";
@@ -46,7 +46,7 @@ pub(crate) fn export_surface_as_frame_with_owner(
 pub(crate) fn take_nv12_surface(
     display: &Rc<Display>,
     free_surfaces: &mut Vec<Surface<()>>,
-    resolution: Resolution,
+    resolution: VideoResolution,
     usage_hint: UsageHint,
     batch_size: usize,
     label: &str,
@@ -59,8 +59,8 @@ pub(crate) fn take_nv12_surface(
         .create_surfaces(
             libva::VA_RT_FORMAT_YUV420,
             Some(libva::VA_FOURCC_NV12),
-            resolution.width as u32,
-            resolution.height as u32,
+            resolution.width,
+            resolution.height,
             Some(usage_hint),
             vec![(); batch_size],
         )
@@ -124,7 +124,7 @@ pub(crate) fn import_drm_prime_surface(
         ));
     }
 
-    smelter_render::import_nv12_dmabuf_texture(
+    import_nv12_dmabuf_texture(
         device,
         descriptor.fourcc,
         descriptor.width,

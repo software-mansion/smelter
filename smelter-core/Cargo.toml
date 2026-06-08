@@ -10,7 +10,7 @@ default = []
 decklink = ["dep:decklink"]
 web-renderer = ["smelter-render/web-renderer"]
 gpu-video = []
-vaapi = ["dep:va-video"]
+vaapi = ["gpu-video/vaapi"]
 
 [dependencies]
 smelter-render = { workspace = true }
@@ -33,7 +33,6 @@ fdk-aac-sys = "0.5.0"
 rubato = { workspace = true }
 wgpu = { workspace = true }
 gpu-video = { workspace = true }
-va-video = { workspace = true, optional = true }
 glyphon = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }

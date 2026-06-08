@@ -129,7 +129,13 @@ pub(super) fn read_outputs(
                 #[cfg(target_os = "linux")]
                 OutputTexture::Nv12DmaBuf(output) => {
                     let resolution = output.resolution();
-                    let (texture, frame) = output.next_frame();
+                    let (texture, frame) = match output.next_frame() {
+                        Ok(frame) => frame,
+                        Err(err) => {
+                            error!("Failed to prepare NV12 DMA-BUF output frame: {err}");
+                            continue;
+                        }
+                    };
                     ctx.wgpu_ctx.format.rgba_to_nv12.convert(
                         ctx.wgpu_ctx,
                         node.output_texture_bind_group(),
@@ -199,7 +205,13 @@ pub(super) fn read_outputs(
                 #[cfg(target_os = "linux")]
                 OutputTexture::Nv12DmaBuf(output) => {
                     let resolution = output.resolution();
-                    let (texture, frame) = output.next_frame();
+                    let (texture, frame) = match output.next_frame() {
+                        Ok(frame) => frame,
+                        Err(err) => {
+                            error!("Failed to prepare NV12 DMA-BUF fallback frame: {err}");
+                            continue;
+                        }
+                    };
                     texture.fill_with_color(ctx.wgpu_ctx, RGBColor::BLACK);
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
                         output_id: output_id.clone(),

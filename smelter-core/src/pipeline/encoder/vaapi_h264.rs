@@ -2,9 +2,12 @@
 mod imp {
     use std::sync::Arc;
 
-    use smelter_render::{FrameData, OutputFrameFormat};
+    use gpu_video::{
+        VideoFramerate, VideoResolution,
+        vaapi::h264::{EncodedFrame, H264Encoder, H264EncoderConfig},
+    };
+    use smelter_render::{FrameData, Framerate, OutputFrameFormat, Resolution};
     use tracing::{error, info};
-    use va_video::h264::{EncodedFrame, H264Encoder, H264EncoderConfig};
 
     use crate::{
         pipeline::{
@@ -49,15 +52,17 @@ mod imp {
                 VaapiH264EncoderPreset::HighQuality => 8,
                 VaapiH264EncoderPreset::LowLatency => 1,
             };
+            let video_resolution = video_resolution(options.resolution);
+            let video_framerate = video_framerate(framerate);
 
             let encoder = H264Encoder::new(H264EncoderConfig {
                 device: Arc::clone(&ctx.graphics_context.device),
                 queue: Arc::clone(&ctx.graphics_context.queue),
                 adapter_info: Some(ctx.graphics_context.adapter.get_info()),
-                resolution: options.resolution,
+                resolution: video_resolution,
                 bitrate,
                 gop_size,
-                framerate,
+                framerate: video_framerate,
                 max_pending_frames,
             })
             .map_err(|err| {
@@ -138,6 +143,17 @@ mod imp {
                 kind: MediaKind::Video(VideoCodec::H264),
             }
         }
+    }
+
+    fn video_resolution(resolution: Resolution) -> VideoResolution {
+        VideoResolution {
+            width: resolution.width as u32,
+            height: resolution.height as u32,
+        }
+    }
+
+    fn video_framerate(framerate: Framerate) -> VideoFramerate {
+        VideoFramerate { num: framerate.num, den: framerate.den }
     }
 }
 

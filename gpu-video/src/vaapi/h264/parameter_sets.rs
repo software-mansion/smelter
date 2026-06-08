@@ -1,5 +1,6 @@
 use bytes::Bytes;
-use smelter_render::{Framerate, Resolution};
+
+use crate::{VideoFramerate, VideoResolution};
 
 const H264_PROFILE_MAIN: u8 = 77;
 pub const H264_LEVEL_4_0: u8 = 40;
@@ -7,13 +8,16 @@ pub const LOG2_MAX_FRAME_NUM_MINUS4: u32 = 12;
 pub const LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4: u32 = 12;
 const PPS_NAL: &[u8] = &[0, 0, 0, 1, 0x68, 0xce, 0x3c, 0x80];
 
-pub fn main_parameter_sets(resolution: Resolution, framerate: Framerate) -> Bytes {
-    let coded_width = (resolution.width as u32).next_multiple_of(16);
-    let coded_height = (resolution.height as u32).next_multiple_of(16);
+pub fn main_parameter_sets(
+    resolution: VideoResolution,
+    framerate: VideoFramerate,
+) -> Bytes {
+    let coded_width = resolution.width.next_multiple_of(16);
+    let coded_height = resolution.height.next_multiple_of(16);
     let width_mbs = coded_width / 16;
     let height_mbs = coded_height / 16;
-    let crop_right = (coded_width - resolution.width as u32) / 2;
-    let crop_bottom = (coded_height - resolution.height as u32) / 2;
+    let crop_right = (coded_width - resolution.width) / 2;
+    let crop_bottom = (coded_height - resolution.height) / 2;
 
     let mut out = Vec::new();
     append_annexb_nal(
@@ -30,7 +34,7 @@ fn sps_rbsp(
     height_mbs: u32,
     crop_right: u32,
     crop_bottom: u32,
-    framerate: Framerate,
+    framerate: VideoFramerate,
 ) -> Vec<u8> {
     let mut bits = BitWriter::new();
     bits.bits(H264_PROFILE_MAIN.into(), 8);
@@ -137,8 +141,8 @@ mod tests {
     #[test]
     fn parameter_sets_build_avc_config() {
         let parameter_sets = main_parameter_sets(
-            Resolution { width: 1920, height: 1080 },
-            Framerate { num: 30, den: 1 },
+            VideoResolution { width: 1920, height: 1080 },
+            VideoFramerate { num: 30, den: 1 },
         );
         let config = build_avc_decoder_config(&parameter_sets).unwrap();
         assert_eq!(&config[..4], &[1, H264_PROFILE_MAIN, 0, H264_LEVEL_4_0]);
@@ -147,8 +151,8 @@ mod tests {
     #[test]
     fn parameter_sets_use_annexb_start_codes() {
         let parameter_sets = main_parameter_sets(
-            Resolution { width: 1280, height: 720 },
-            Framerate { num: 60, den: 1 },
+            VideoResolution { width: 1280, height: 720 },
+            VideoFramerate { num: 60, den: 1 },
         );
         assert!(parameter_sets.starts_with(&[0, 0, 0, 1, 0x67]));
         assert!(parameter_sets.windows(5).any(|window| window == [0, 0, 0, 1, 0x68]));
@@ -157,8 +161,8 @@ mod tests {
     #[test]
     fn main_profile_sps_matches_1080p_ntsc_timing() {
         let parameter_sets = main_parameter_sets(
-            Resolution { width: 1920, height: 1080 },
-            Framerate { num: 30_000, den: 1001 },
+            VideoResolution { width: 1920, height: 1080 },
+            VideoFramerate { num: 30_000, den: 1001 },
         );
         let expected_sps = [
             0x00, 0x00, 0x00, 0x01, 0x67, 0x4d, 0x00, 0x28, 0x8d, 0x8d, 0x40, 0x3c, 0x01,

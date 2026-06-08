@@ -1,36 +1,39 @@
 #[cfg(target_os = "linux")]
 mod imp {
     use std::{
-        cmp::Ordering,
-        collections::{BinaryHeap, HashMap, HashSet},
+        collections::{HashMap, HashSet},
         rc::Rc,
         sync::Arc,
         time::Duration,
     };
 
-    use crossbeam_channel::{Receiver, Sender};
-    use gpu_video::{
-        parameters::MissedFrameHandling,
+    use crate::{
+        DmaBufFrame, OutputFrame, VideoResolution,
+        device::{ColorRange, ColorSpace, MissedFrameHandling},
         parser::{
             decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
-            h264::{
-                H264Parser,
-                nal_types::{
-                    pps::PicParameterSet,
-                    slice::{
-                        DecRefPicMarking, FieldPic, MemoryManagementControlOperation,
-                        NumRefIdxActive, PredWeightTable, SliceFamily, SliceHeader,
-                    },
-                    sps::{
-                        ChromaFormat, FrameMbsFlags, PicOrderCntType, Profile,
-                        ScalingList, SeqParameterSet,
-                    },
-                },
-            },
+            h264::H264Parser,
             reference_manager::{
                 DecodeInformation, ReferenceContext, ReferenceId,
                 ReferenceManagementError, ReferencePictureInfo,
             },
+        },
+        vaapi::display::{
+            export_surface_as_frame_with_owner, invalid_h264_pictures, open_display,
+            take_nv12_surface,
+        },
+        vulkan_decoder::{DecodeResult, DecodeResultMetadata, FrameSorter},
+    };
+    use crossbeam_channel::{Receiver, Sender};
+    use h264_reader::nal::{
+        pps::PicParameterSet,
+        slice::{
+            DecRefPicMarking, FieldPic, MemoryManagementControlOperation,
+            NumRefIdxActive, PredWeightTable, SliceFamily, SliceHeader,
+        },
+        sps::{
+            ChromaFormat, FrameMbsFlags, PicOrderCntType, Profile, ScalingList,
+            SeqParameterSet,
         },
     };
     use libva::{
@@ -42,13 +45,7 @@ mod imp {
         VA_SLICE_DATA_FLAG_ALL, VAConfigAttrib, VAConfigAttribType, VAEntrypoint,
         VAProfile,
     };
-    use smelter_render::{DmaBufFrame, Resolution};
     use tracing::info;
-
-    use crate::display::{
-        export_surface_as_frame_with_owner, invalid_h264_pictures, open_display,
-        take_nv12_surface,
-    };
 
     const DECODE_SURFACE_ALLOCATION_BATCH: usize = 4;
 
@@ -63,7 +60,7 @@ mod imp {
         output_leased_surfaces: HashSet<libva::VASurfaceID>,
         output_release_sender: Sender<libva::VASurfaceID>,
         output_release_receiver: Receiver<libva::VASurfaceID>,
-        frame_sorter: DecodedFrameSorter,
+        frame_sorter: FrameSorter<DecodedFrameData>,
         sps: HashMap<u8, SeqParameterSet>,
         pps: HashMap<u8, PicParameterSet>,
         device: Arc<wgpu::Device>,
@@ -73,75 +70,12 @@ mod imp {
     pub struct DecodedFrame {
         pub data: Arc<DmaBufFrame>,
         pub pts: Duration,
-        pub resolution: Resolution,
+        pub resolution: VideoResolution,
     }
 
-    struct DecodedOutputFrame {
-        frame: DecodedFrame,
-        pic_order_cnt: i32,
-        max_num_reorder_frames: u64,
-        is_idr: bool,
-    }
-
-    impl PartialEq for DecodedOutputFrame {
-        fn eq(&self, other: &Self) -> bool {
-            self.pic_order_cnt == other.pic_order_cnt
-        }
-    }
-
-    impl Eq for DecodedOutputFrame {}
-
-    impl PartialOrd for DecodedOutputFrame {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            Some(self.cmp(other))
-        }
-    }
-
-    impl Ord for DecodedOutputFrame {
-        fn cmp(&self, other: &Self) -> Ordering {
-            self.pic_order_cnt.cmp(&other.pic_order_cnt).reverse()
-        }
-    }
-
-    struct DecodedFrameSorter {
-        frames: BinaryHeap<DecodedOutputFrame>,
-    }
-
-    impl DecodedFrameSorter {
-        fn new() -> Self {
-            Self { frames: BinaryHeap::new() }
-        }
-
-        fn put(&mut self, frame: DecodedOutputFrame) -> Vec<DecodedFrame> {
-            let max_num_reorder_frames = frame.max_num_reorder_frames as usize;
-            let mut frames = Vec::new();
-
-            if frame.is_idr {
-                frames.extend(self.flush());
-                frames.push(frame.frame);
-            } else {
-                self.frames.push(frame);
-                while self.frames.len() > max_num_reorder_frames {
-                    let frame =
-                        self.frames.pop().expect("frame sorter heap cannot be empty");
-                    frames.push(frame.frame);
-                }
-            }
-
-            frames
-        }
-
-        fn flush(&mut self) -> Vec<DecodedFrame> {
-            let mut frames = Vec::with_capacity(self.frames.len());
-            while let Some(frame) = self.frames.pop() {
-                frames.push(frame.frame);
-            }
-            frames
-        }
-
-        fn clear(&mut self) {
-            self.frames.clear();
-        }
+    struct DecodedFrameData {
+        data: Arc<DmaBufFrame>,
+        resolution: VideoResolution,
     }
 
     struct DecodedSurfaceLease {
@@ -180,7 +114,7 @@ mod imp {
                 output_leased_surfaces: HashSet::new(),
                 output_release_sender,
                 output_release_receiver,
-                frame_sorter: DecodedFrameSorter::new(),
+                frame_sorter: FrameSorter::new(),
                 sps: HashMap::new(),
                 pps: HashMap::new(),
                 device,
@@ -196,7 +130,6 @@ mod imp {
         ) -> Result<Vec<DecodedFrame>, String> {
             self.drop_frames = !present;
             if !present {
-                self.frame_sorter.clear();
                 self.drain_released_output_surfaces();
             }
             let instructions = self.parse_h264(data, pts)?;
@@ -210,7 +143,7 @@ mod imp {
 
         pub fn flush(&mut self) -> Result<Vec<DecodedFrame>, String> {
             let mut frames = self.flush_frame()?;
-            frames.extend(self.frame_sorter.flush());
+            frames.extend(self.flush_sorted_frames());
             Ok(frames)
         }
 
@@ -256,14 +189,14 @@ mod imp {
                         if let Some(frame) =
                             self.decode_picture(decode_info, reference_id, true)?
                         {
-                            frames.extend(self.frame_sorter.put(frame));
+                            frames.extend(self.sort_frame(frame));
                         }
                     }
                     DecoderInstruction::Decode { decode_info, reference_id } => {
                         if let Some(frame) =
                             self.decode_picture(decode_info, reference_id, false)?
                         {
-                            frames.extend(self.frame_sorter.put(frame));
+                            frames.extend(self.sort_frame(frame));
                         }
                     }
                     DecoderInstruction::Drop { reference_ids } => {
@@ -284,7 +217,7 @@ mod imp {
             let stream = VaapiStreamInfo::from_sps(&sps)?;
             let mut frames = Vec::new();
             if self.session.as_ref().is_none_or(|session| session.stream != stream) {
-                frames.extend(self.frame_sorter.flush());
+                frames.extend(self.flush_sorted_frames());
                 self.retire_session_surfaces(false);
                 self.session = Some(VaapiDecodeSession::new(&self.display, stream)?);
             }
@@ -297,7 +230,7 @@ mod imp {
             decode_info: DecodeInformation,
             reference_id: ReferenceId,
             is_idr: bool,
-        ) -> Result<Option<DecodedOutputFrame>, String> {
+        ) -> Result<Option<DecodeResult<DecodedFrameData>>, String> {
             let session = self
                 .session
                 .as_ref()
@@ -315,6 +248,8 @@ mod imp {
                 .sps
                 .get(&decode_info.sps_id)
                 .ok_or_else(|| format!("unknown SPS id {}", decode_info.sps_id))?;
+            let color_space = ColorSpace::from(sps);
+            let color_range = ColorRange::from(sps);
             let pps = self
                 .pps
                 .get(&decode_info.pps_id)
@@ -338,13 +273,18 @@ mod imp {
                 .map_err(|_| "VA-API picture kept a shared output surface".to_string())?;
 
             let frame = (!self.drop_frames)
-                .then(|| self.frame_from_surface(&surface, display_resolution, pts))
+                .then(|| self.frame_from_surface(&surface, display_resolution))
                 .transpose()?
-                .map(|frame| DecodedOutputFrame {
+                .map(|frame| DecodeResult {
                     frame,
-                    pic_order_cnt,
-                    max_num_reorder_frames,
-                    is_idr,
+                    metadata: DecodeResultMetadata {
+                        pts,
+                        pic_order_cnt,
+                        max_num_reorder_frames,
+                        is_idr,
+                        color_space,
+                        color_range,
+                    },
                 });
             self.references.push((
                 reference_id,
@@ -535,7 +475,7 @@ mod imp {
 
         fn take_surface(
             &mut self,
-            resolution: Resolution,
+            resolution: VideoResolution,
         ) -> Result<Surface<()>, String> {
             self.drain_released_output_surfaces();
             take_nv12_surface(
@@ -551,15 +491,21 @@ mod imp {
         fn frame_from_surface(
             &mut self,
             surface: &Surface<()>,
-            resolution: Resolution,
-            pts: Option<u64>,
-        ) -> Result<DecodedFrame, String> {
+            resolution: VideoResolution,
+        ) -> Result<DecodedFrameData, String> {
             let dmabuf = self.dmabuf_for_surface(surface)?;
-            Ok(DecodedFrame {
-                data: dmabuf,
-                pts: Duration::from_micros(pts.unwrap_or_default()),
-                resolution,
-            })
+            Ok(DecodedFrameData { data: dmabuf, resolution })
+        }
+
+        fn sort_frame(
+            &mut self,
+            frame: DecodeResult<DecodedFrameData>,
+        ) -> Vec<DecodedFrame> {
+            self.frame_sorter.put(frame).into_iter().map(from_sorted_frame).collect()
+        }
+
+        fn flush_sorted_frames(&mut self) -> Vec<DecodedFrame> {
+            self.frame_sorter.flush().into_iter().map(from_sorted_frame).collect()
         }
 
         fn dmabuf_for_surface(
@@ -636,6 +582,14 @@ mod imp {
         }
     }
 
+    fn from_sorted_frame(frame: OutputFrame<DecodedFrameData>) -> DecodedFrame {
+        DecodedFrame {
+            data: frame.data.data,
+            pts: Duration::from_micros(frame.metadata.pts.unwrap_or_default()),
+            resolution: frame.data.resolution,
+        }
+    }
+
     impl Drop for H264Decoder {
         fn drop(&mut self) {
             self.frame_sorter.clear();
@@ -677,8 +631,8 @@ mod imp {
             let context = display
                 .create_context::<()>(
                     &config,
-                    stream.coded_resolution.width as u32,
-                    stream.coded_resolution.height as u32,
+                    stream.coded_resolution.width,
+                    stream.coded_resolution.height,
                     None,
                     true,
                 )
@@ -692,8 +646,8 @@ mod imp {
     struct VaapiStreamInfo {
         profile: VAProfile::Type,
         rt_format: u32,
-        coded_resolution: Resolution,
-        display_resolution: Resolution,
+        coded_resolution: VideoResolution,
+        display_resolution: VideoResolution,
         max_num_reorder_frames: u64,
     }
 
@@ -707,9 +661,9 @@ mod imp {
             }
             let profile = va_profile(sps)?;
             let rt_format = va_rt_format(sps)?;
-            let coded_resolution = Resolution {
-                width: ((sps.pic_width_in_mbs_minus1 + 1) * 16) as usize,
-                height: ((sps.pic_height_in_map_units_minus1 + 1) * 16) as usize,
+            let coded_resolution = VideoResolution {
+                width: (sps.pic_width_in_mbs_minus1 + 1) * 16,
+                height: (sps.pic_height_in_map_units_minus1 + 1) * 16,
             };
             let (width, height) = sps
                 .pixel_dimensions()
@@ -718,10 +672,7 @@ mod imp {
                 profile,
                 rt_format,
                 coded_resolution,
-                display_resolution: Resolution {
-                    width: width as usize,
-                    height: height as usize,
-                },
+                display_resolution: VideoResolution { width, height },
                 max_num_reorder_frames: max_num_reorder_frames(sps)?,
             })
         }
@@ -1175,12 +1126,10 @@ mod imp {
             time::{SystemTime, UNIX_EPOCH},
         };
 
-        use smelter_render::DRM_FORMAT_NV12;
-
         use super::*;
 
-        const TEST_WIDTH: usize = 64;
-        const TEST_HEIGHT: usize = 64;
+        const TEST_WIDTH: u32 = 64;
+        const TEST_HEIGHT: u32 = 64;
         const TEST_FRAME_COUNT: usize = 4;
         static VAAPI_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -1231,9 +1180,9 @@ mod imp {
             frame: DecodedFrame,
         ) -> Vec<u8> {
             let expected_resolution =
-                Resolution { width: TEST_WIDTH, height: TEST_HEIGHT };
+                VideoResolution { width: TEST_WIDTH, height: TEST_HEIGHT };
             assert_eq!(frame.resolution, expected_resolution);
-            assert_eq!(frame.data.fourcc(), DRM_FORMAT_NV12);
+            assert_eq!(frame.data.fourcc(), crate::DRM_FORMAT_NV12);
             assert_eq!(frame.data.resolution(), expected_resolution);
             assert_eq!(frame.data.layers().len(), 1);
             assert_eq!(frame.data.layers()[0].planes.len(), 2);
@@ -1244,8 +1193,8 @@ mod imp {
                 queue,
                 texture,
                 wgpu::TextureAspect::Plane0,
-                TEST_WIDTH as u32,
-                TEST_HEIGHT as u32,
+                TEST_WIDTH,
+                TEST_HEIGHT,
                 1,
             );
             output.extend(download_texture_plane(
@@ -1253,8 +1202,8 @@ mod imp {
                 queue,
                 texture,
                 wgpu::TextureAspect::Plane1,
-                (TEST_WIDTH / 2) as u32,
-                (TEST_HEIGHT / 2) as u32,
+                TEST_WIDTH / 2,
+                TEST_HEIGHT / 2,
                 2,
             ));
             output
@@ -1311,7 +1260,8 @@ mod imp {
                 .expect("failed to receive NV12 readback result")
                 .expect("failed to map NV12 readback buffer");
 
-            let mapped = slice.get_mapped_range();
+            let mapped =
+                slice.get_mapped_range().expect("failed to read mapped NV12 buffer");
             let mut output = Vec::with_capacity((row_bytes * height) as usize);
             for row in mapped.chunks(padded_row_bytes as usize).take(height as usize) {
                 output.extend_from_slice(&row[..row_bytes as usize]);
@@ -1412,7 +1362,7 @@ mod imp {
                 output.status
             );
 
-            let frame_size = TEST_WIDTH * TEST_HEIGHT * 3 / 2;
+            let frame_size = (TEST_WIDTH * TEST_HEIGHT * 3 / 2) as usize;
             assert_eq!(output.stdout.len(), TEST_FRAME_COUNT * frame_size);
             output.stdout.chunks(frame_size).map(|chunk| chunk.to_vec()).collect()
         }
@@ -1423,14 +1373,14 @@ mod imp {
 mod imp {
     use std::{sync::Arc, time::Duration};
 
-    use smelter_render::Resolution;
+    use crate::VideoResolution;
 
     pub struct H264Decoder;
 
     pub struct DecodedFrame {
         pub data: Arc<()>,
         pub pts: Duration,
-        pub resolution: Resolution,
+        pub resolution: VideoResolution,
     }
 
     impl H264Decoder {

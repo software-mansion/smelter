@@ -97,4 +97,8 @@ impl<T> FrameSorter<T> {
 
         result
     }
+
+    pub(crate) fn clear(&mut self) {
+        self.frames.clear();
+    }
 }

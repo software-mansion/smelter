@@ -9,6 +9,9 @@ mod imp {
         time::{Duration, Instant},
     };
 
+    use crate::{
+        DmaBufFrame, VideoFramerate, VideoResolution, validate_nv12_dmabuf_frame,
+    };
     use bytes::Bytes;
     use libva::{
         BufferType, Config, Context, Display, EncCodedBuffer, EncMiscParameter,
@@ -22,12 +25,9 @@ mod imp {
         VAConfigAttrib, VAConfigAttribType, VADRMPRIMESurfaceDescriptor, VAEntrypoint,
         VAProfile, VASurfaceAttribType, VASurfaceStatus,
     };
-    use smelter_render::{
-        DmaBufFrame, Framerate, Resolution, validate_nv12_dmabuf_frame,
-    };
     use tracing::{info, warn};
 
-    use crate::display::{
+    use crate::vaapi::display::{
         duration_micros, invalid_h264_pictures, open_display, take_nv12_surface,
     };
 
@@ -67,10 +67,10 @@ mod imp {
         pub device: Arc<wgpu::Device>,
         pub queue: Arc<wgpu::Queue>,
         pub adapter_info: Option<wgpu::AdapterInfo>,
-        pub resolution: Resolution,
+        pub resolution: VideoResolution,
         pub bitrate: u32,
         pub gop_size: u16,
-        pub framerate: Framerate,
+        pub framerate: VideoFramerate,
         pub max_pending_frames: usize,
     }
 
@@ -135,24 +135,24 @@ mod imp {
         pending: VecDeque<PendingEncode>,
         retired_after_producer: Vec<Surface<()>>,
         reference: Option<EncodedReference>,
-        resolution: smelter_render::Resolution,
+        resolution: VideoResolution,
         bitrate: u32,
         gop_size: u16,
         max_pending_frames: usize,
         frames_since_keyframe: u16,
         frame_num: u16,
         idr_pic_id: u16,
-        framerate: Framerate,
+        framerate: VideoFramerate,
         parameter_sets: Bytes,
     }
 
     impl IntelVaapiH264Encoder {
         fn new(
             display: Rc<Display>,
-            resolution: smelter_render::Resolution,
+            resolution: VideoResolution,
             bitrate: u32,
             gop_size: u16,
-            framerate: Framerate,
+            framerate: VideoFramerate,
             max_pending_frames: usize,
             parameter_sets: Bytes,
         ) -> Result<Self, String> {
@@ -178,8 +178,8 @@ mod imp {
             let context = display
                 .create_context::<()>(
                     &config,
-                    resolution.width as u32,
-                    resolution.height as u32,
+                    resolution.width,
+                    resolution.height,
                     None,
                     true,
                 )
@@ -325,8 +325,8 @@ mod imp {
                 .create_surfaces(
                     libva::VA_RT_FORMAT_YUV420,
                     Some(libva::VA_FOURCC_NV12),
-                    self.resolution.width as u32,
-                    self.resolution.height as u32,
+                    self.resolution.width,
+                    self.resolution.height,
                     Some(UsageHint::USAGE_HINT_ENCODER),
                     vec![descriptor],
                 )
@@ -670,15 +670,13 @@ mod imp {
         }
 
         fn coded_buffer_size(&self) -> usize {
-            let raw_size = self.resolution.width * self.resolution.height * 3 / 2;
+            let raw_size =
+                self.resolution.width as usize * self.resolution.height as usize * 3 / 2;
             ((self.bitrate as usize / 8) * 2).max(DEFAULT_CODED_BUFFER_SIZE).max(raw_size)
         }
 
         fn macroblocks(&self) -> (u32, u32) {
-            (
-                (self.resolution.width as u32).div_ceil(16),
-                (self.resolution.height as u32).div_ceil(16),
-            )
+            (self.resolution.width.div_ceil(16), self.resolution.height.div_ceil(16))
         }
 
         fn macroblock_count(&self) -> u32 {
@@ -689,8 +687,8 @@ mod imp {
         fn crop_offsets(&self) -> (u32, u32) {
             let (width_mbs, height_mbs) = self.macroblocks();
             (
-                (width_mbs * 16 - self.resolution.width as u32) / 2,
-                (height_mbs * 16 - self.resolution.height as u32) / 2,
+                (width_mbs * 16 - self.resolution.width) / 2,
+                (height_mbs * 16 - self.resolution.height) / 2,
             )
         }
 
@@ -936,7 +934,7 @@ mod imp {
         }
     }
 
-    fn rounded_framerate(framerate: Framerate) -> u32 {
+    fn rounded_framerate(framerate: VideoFramerate) -> u32 {
         let den = u64::from(framerate.den.max(1));
         let rounded = (u64::from(framerate.num) + den / 2) / den;
         rounded.max(1).min(u64::from(u32::MAX)) as u32
@@ -953,21 +951,22 @@ mod imp {
             time::{Duration, Instant},
         };
 
-        use smelter_render::Resolution;
-
         use super::*;
-        const TEST_RESOLUTION: Resolution = Resolution { width: 64, height: 64 };
-        const STRESS_RESOLUTION: Resolution = Resolution { width: 1280, height: 720 };
-        const TEST_FRAMERATE: Framerate = Framerate { num: 30, den: 1 };
-        const WT_PREVIEW_FRAMERATE: Framerate = Framerate { num: 30_000, den: 1001 };
+        const TEST_RESOLUTION: VideoResolution =
+            VideoResolution { width: 64, height: 64 };
+        const STRESS_RESOLUTION: VideoResolution =
+            VideoResolution { width: 1280, height: 720 };
+        const TEST_FRAMERATE: VideoFramerate = VideoFramerate { num: 30, den: 1 };
+        const WT_PREVIEW_FRAMERATE: VideoFramerate =
+            VideoFramerate { num: 30_000, den: 1001 };
         const MAX_PENDING_ENCODE_FRAMES: usize = 8;
         static VAAPI_TEST_LOCK: Mutex<()> = Mutex::new(());
 
         #[test]
         fn rounds_vaapi_rate_control_framerate() {
-            assert_eq!(rounded_framerate(Framerate { num: 30_000, den: 1001 }), 30);
-            assert_eq!(rounded_framerate(Framerate { num: 24_000, den: 1001 }), 24);
-            assert_eq!(rounded_framerate(Framerate { num: 25, den: 1 }), 25);
+            assert_eq!(rounded_framerate(VideoFramerate { num: 30_000, den: 1001 }), 30);
+            assert_eq!(rounded_framerate(VideoFramerate { num: 24_000, den: 1001 }), 24);
+            assert_eq!(rounded_framerate(VideoFramerate { num: 25, den: 1 }), 25);
         }
 
         #[test]
@@ -988,7 +987,8 @@ mod imp {
             .expect("failed to create VA-API H264 encoder");
             let mut frames = (0..2)
                 .map(|_| {
-                    smelter_render::export_nv12_dmabuf_texture(&device, TEST_RESOLUTION)
+                    crate::export_nv12_dmabuf_texture(&device, TEST_RESOLUTION)
+                        .expect("failed to export NV12 DMA-BUF test texture")
                 })
                 .collect::<Vec<_>>();
 
@@ -1037,7 +1037,8 @@ mod imp {
             .expect("failed to create VA-API H264 encoder");
             let frames = (0..FRAME_POOL_SIZE)
                 .map(|_| {
-                    smelter_render::export_nv12_dmabuf_texture(&device, TEST_RESOLUTION)
+                    crate::export_nv12_dmabuf_texture(&device, TEST_RESOLUTION)
+                        .expect("failed to export NV12 DMA-BUF test texture")
                 })
                 .collect::<Vec<_>>();
 
@@ -1064,7 +1065,7 @@ mod imp {
                 .flat_map(|frame| frame.data.iter().copied())
                 .collect::<Vec<_>>();
             let decoded = ffmpeg_decode_h264_to_nv12(&bitstream);
-            let y_plane_len = TEST_RESOLUTION.width * TEST_RESOLUTION.height;
+            let y_plane_len = (TEST_RESOLUTION.width * TEST_RESOLUTION.height) as usize;
             let frame_len = y_plane_len * 3 / 2;
             assert_eq!(decoded.len(), FRAME_COUNT * frame_len);
             for index in 0..FRAME_COUNT {
@@ -1097,7 +1098,8 @@ mod imp {
             .expect("failed to create VA-API H264 encoder");
             let frames = (0..MAX_PENDING_ENCODE_FRAMES + 1)
                 .map(|_| {
-                    smelter_render::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
+                    crate::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
+                        .expect("failed to export NV12 DMA-BUF stress texture")
                 })
                 .collect::<Vec<_>>();
 
@@ -1161,7 +1163,8 @@ mod imp {
             .expect("failed to create WT-preview VA-API H264 encoder");
             let frames = (0..3)
                 .map(|_| {
-                    smelter_render::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
+                    crate::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
+                        .expect("failed to export NV12 DMA-BUF WT preview texture")
                 })
                 .collect::<Vec<_>>();
 
@@ -1334,7 +1337,7 @@ mod imp {
             output.stdout
         }
 
-        fn frame_pts(index: usize, framerate: Framerate) -> Duration {
+        fn frame_pts(index: usize, framerate: VideoFramerate) -> Duration {
             Duration::from_nanos(
                 index as u64 * 1_000_000_000u64 * framerate.den as u64
                     / framerate.num as u64,
@@ -1367,18 +1370,18 @@ mod imp {
 mod imp {
     use std::{sync::Arc, time::Duration};
 
+    use crate::{VideoFramerate, VideoResolution};
     use bytes::Bytes;
-    use smelter_render::{Framerate, Resolution};
 
     #[derive(Debug, Clone)]
     pub struct H264EncoderConfig {
         pub device: Arc<wgpu::Device>,
         pub queue: Arc<wgpu::Queue>,
         pub adapter_info: Option<wgpu::AdapterInfo>,
-        pub resolution: Resolution,
+        pub resolution: VideoResolution,
         pub bitrate: u32,
         pub gop_size: u16,
-        pub framerate: Framerate,
+        pub framerate: VideoFramerate,
         pub max_pending_frames: usize,
     }
 

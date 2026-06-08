@@ -316,6 +316,7 @@ impl BytesDecoder {
             }
             DecoderEvent::SignalDataLoss => {
                 self.reference_ctx.mark_missed_frames();
+                self.frame_sorter.clear();
                 Ok(Vec::new())
             }
             DecoderEvent::Flush => {

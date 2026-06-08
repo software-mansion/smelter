@@ -2101,10 +2101,13 @@ dependencies = [
  "bytes",
  "cfg_aliases 0.2.1",
  "clap",
+ "cros-libva",
+ "crossbeam-channel",
  "derivative",
  "h264-reader",
  "memchr",
  "naga",
+ "pollster",
  "rustc-hash 2.1.1",
  "thiserror 1.0.69",
  "tracing",
@@ -5128,7 +5131,6 @@ dependencies = [
  "utoipa",
  "uuid",
  "v4l",
- "va-video",
  "webrtc",
  "webrtc-util",
  "wgpu",
@@ -5138,11 +5140,11 @@ dependencies = [
 name = "smelter-render"
 version = "0.6.0"
 dependencies = [
- "ash",
  "bytemuck",
  "bytes",
  "crossbeam-channel",
  "glyphon",
+ "gpu-video",
  "image",
  "itertools 0.14.0",
  "libcef",
@@ -6277,21 +6279,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6779878362b9bacadc7893eac76abe69612e8837ef746573c4a5239daf11990b"
 dependencies = [
  "bindgen 0.65.1",
-]
-
-[[package]]
-name = "va-video"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "cros-libva",
- "crossbeam-channel",
- "gpu-video",
- "pollster",
- "smelter-render",
- "thiserror 1.0.69",
- "tracing",
- "wgpu",
 ]
 
 [[package]]

@@ -2,9 +2,9 @@
 mod imp {
     use std::{sync::Arc, time::Duration};
 
-    use smelter_render::{Frame, FrameData};
+    use gpu_video::vaapi::h264::{DecodedFrame, H264Decoder};
+    use smelter_render::{Frame, FrameData, Resolution};
     use tracing::{debug, info, trace, warn};
-    use va_video::h264::{DecodedFrame, H264Decoder};
 
     use crate::{
         pipeline::decoder::{
@@ -95,7 +95,10 @@ mod imp {
         Frame {
             data: FrameData::Nv12DmaBuf(frame.data),
             pts: frame.pts,
-            resolution: frame.resolution,
+            resolution: Resolution {
+                width: frame.resolution.width as usize,
+                height: frame.resolution.height as usize,
+            },
         }
     }
 
