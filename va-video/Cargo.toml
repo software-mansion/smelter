@@ -1,0 +1,24 @@
+[package]
+name = "va-video"
+version = "0.1.0"
+edition = "2024"
+license-file = "../LICENSE"
+description = "VA-API video coding helpers with wgpu DMA-BUF integration."
+
+[dependencies]
+bytes = { workspace = true }
+crossbeam-channel = { workspace = true }
+smelter-render = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+gpu-video = { workspace = true }
+wgpu = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libva = { package = "cros-libva", git = "https://github.com/michael-dm/cros-libva", branch = "export-prime-options" }
+
+[dev-dependencies]
+pollster = { workspace = true }
+
+[lints]
+workspace = true

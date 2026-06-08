@@ -506,6 +506,26 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
+version = "0.70.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f49d8fed880d473ea71efb9bf597651e77201bdd4893efe54c9e5d65ae04ce6f"
+dependencies = [
+ "bitflags 2.11.0",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.13.0",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 1.1.0",
+ "shlex",
+ "syn 2.0.98",
+]
+
+[[package]]
+name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
@@ -1068,6 +1088,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "cros-libva"
+version = "0.0.13"
+source = "git+https://github.com/michael-dm/cros-libva?branch=export-prime-options#24c9e2993dcf2eb97762db586821c6e602e71fc2"
+dependencies = [
+ "bindgen 0.70.1",
+ "bitflags 2.11.0",
+ "log",
+ "pkg-config",
+ "regex",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -5095,6 +5128,7 @@ dependencies = [
  "utoipa",
  "uuid",
  "v4l",
+ "va-video",
  "webrtc",
  "webrtc-util",
  "wgpu",
@@ -5104,6 +5138,7 @@ dependencies = [
 name = "smelter-render"
 version = "0.6.0"
 dependencies = [
+ "ash",
  "bytemuck",
  "bytes",
  "crossbeam-channel",
@@ -6242,6 +6277,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6779878362b9bacadc7893eac76abe69612e8837ef746573c4a5239daf11990b"
 dependencies = [
  "bindgen 0.65.1",
+]
+
+[[package]]
+name = "va-video"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "cros-libva",
+ "crossbeam-channel",
+ "gpu-video",
+ "pollster",
+ "smelter-render",
+ "thiserror 1.0.69",
+ "tracing",
+ "wgpu",
 ]
 
 [[package]]

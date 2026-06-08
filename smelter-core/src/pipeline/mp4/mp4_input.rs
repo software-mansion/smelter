@@ -16,7 +16,7 @@ use crate::{
             DecoderThreadHandle,
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
-            fdk_aac, ffmpeg_h264, vulkan_h264,
+            fdk_aac, ffmpeg_h264, vaapi_h264, vulkan_h264,
         },
         input::Input,
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
@@ -455,6 +455,17 @@ impl TrackManagerThread {
                     ));
                 }
                 VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
+                    self.input_ref.clone(),
+                    VideoDecoderThreadOptions {
+                        ctx: self.ctx.clone(),
+                        transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
+                        frame_sender,
+                        input_buffer_size: CHUNK_BUFFER_DURATION,
+                    },
+                )?
+            }
+            (DecoderOptions::H264(h264_config), VideoDecoderOptions::VaapiH264) => {
+                VideoDecoderThread::<vaapi_h264::VaapiH264Decoder, _>::spawn(
                     self.input_ref.clone(),
                     VideoDecoderThreadOptions {
                         ctx: self.ctx.clone(),

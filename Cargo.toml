@@ -15,6 +15,7 @@ members = [
     # Libraries
     "decklink",
     "gpu-video",
+    "va-video",
     "libcef",
     "rtmp",
 
@@ -30,6 +31,7 @@ default = ["web-renderer"]
 update-snapshots = []
 decklink = ["smelter-api/decklink"]
 web-renderer = ["dep:libcef", "smelter-api/web-renderer"]
+vaapi = ["smelter-core/vaapi"]
 
 [workspace.dependencies]
 smelter = { path = ".", default-features = false }
@@ -38,6 +40,7 @@ smelter-core = { path = "smelter-core" }
 smelter-render = { path = "smelter-render" }
 libcef = { path = "libcef" }
 gpu-video = { path = "gpu-video", features = ["expose-parsers"] }
+va-video = { path = "va-video" }
 rtmp = { path = "rtmp" }
 bytes = "1.11.1"
 serde_json = { version = "1.0.99", features = ["preserve_order"] }

@@ -17,6 +17,7 @@ use crate::{
             },
             fdk_aac::FdkAacEncoder,
             ffmpeg_h264::FfmpegH264Encoder,
+            vaapi_h264::VaapiH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
         ffmpeg_utils::{StreamMutExt, write_extradata},
@@ -170,6 +171,16 @@ impl HlsOutput {
                     ));
                 }
                 VideoEncoderThread::<VulkanH264Encoder>::spawn(
+                    output_id.clone(),
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: encoded_chunks_sender,
+                    },
+                )?
+            }
+            VideoEncoderOptions::VaapiH264(options) => {
+                VideoEncoderThread::<VaapiH264Encoder>::spawn(
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),

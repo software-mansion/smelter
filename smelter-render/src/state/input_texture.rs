@@ -173,6 +173,17 @@ impl InputTexture {
                     }
                 };
             }
+            #[cfg(target_os = "linux")]
+            FrameData::Nv12DmaBuf(frame) => match &mut self.0 {
+                Some(InputTextureState::Nv12(input)) => {
+                    input.update(ctx, frame.texture_arc()).unwrap();
+                }
+                state => {
+                    *state = Some(InputTextureState::Nv12(
+                        NV12Input::new_from_texture(ctx, frame.texture_arc()).unwrap(),
+                    ));
+                }
+            },
             FrameData::Bgra(data) => {
                 match &mut self.0 {
                     Some(InputTextureState::Bgra(input)) => {

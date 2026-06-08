@@ -73,6 +73,9 @@ pub(crate) fn resolve_video_preferences(
                     }
                 }
             }
+            VideoDecoderOptions::VaapiH264 => {
+                video_codecs_params.extend(h264_codec_params());
+            }
             VideoDecoderOptions::FfmpegVp8 => {
                 video_codecs_params.extend(vp8_codec_params());
             }

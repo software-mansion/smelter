@@ -13,7 +13,8 @@ use crate::{
     pipeline::{
         encoder::{
             ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vulkan_h264::VulkanH264Encoder,
+            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vaapi_h264::VaapiH264Encoder,
+            vulkan_h264::VulkanH264Encoder,
         },
         rtp::payloader::{PayloadedCodec, PayloaderOptions},
         webrtc::{
@@ -43,7 +44,9 @@ pub trait MatchCodecCapability {
 impl MatchCodecCapability for VideoEncoderOptions {
     fn matches(&self, capability: &RTCRtpCodecCapability) -> bool {
         match self {
-            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+            VideoEncoderOptions::FfmpegH264(_)
+            | VideoEncoderOptions::VulkanH264(_)
+            | VideoEncoderOptions::VaapiH264(_) => {
                 capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase()
             }
             VideoEncoderOptions::FfmpegVp8(_) => {
@@ -134,6 +137,22 @@ pub async fn setup_video_track(
         }
         VideoEncoderOptions::VulkanH264(options) => {
             WhipVideoTrackThread::<VulkanH264Encoder>::spawn(
+                output_ref.clone(),
+                WhipVideoTrackThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options,
+                    payloader_options: payloader_options(
+                        PayloadedCodec::H264,
+                        codec_params.payload_type,
+                        ssrc,
+                    ),
+                    chunks_sender: sender,
+                    stats_sender,
+                },
+            )
+        }
+        VideoEncoderOptions::VaapiH264(options) => {
+            WhipVideoTrackThread::<VaapiH264Encoder>::spawn(
                 output_ref.clone(),
                 WhipVideoTrackThreadOptions {
                     ctx: ctx.clone(),

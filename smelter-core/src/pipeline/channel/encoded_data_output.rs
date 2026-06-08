@@ -17,6 +17,7 @@ use crate::{
             ffmpeg_vp8::FfmpegVp8Encoder,
             ffmpeg_vp9::FfmpegVp9Encoder,
             libopus::OpusEncoder,
+            vaapi_h264::VaapiH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
@@ -72,6 +73,16 @@ impl EncodedDataOutput {
                 }
                 VideoEncoderOptions::VulkanH264(options) => {
                     Some(VideoEncoderThread::<VulkanH264Encoder>::spawn(
+                        output_id.clone(),
+                        VideoEncoderThreadOptions {
+                            ctx: ctx.clone(),
+                            encoder_options: options.clone(),
+                            chunks_sender: sender.clone(),
+                        },
+                    )?)
+                }
+                VideoEncoderOptions::VaapiH264(options) => {
+                    Some(VideoEncoderThread::<VaapiH264Encoder>::spawn(
                         output_id.clone(),
                         VideoEncoderThreadOptions {
                             ctx: ctx.clone(),

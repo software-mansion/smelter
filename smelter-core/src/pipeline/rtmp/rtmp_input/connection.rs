@@ -21,6 +21,7 @@ use crate::{
             fdk_aac::FdkAacDecoder,
             ffmpeg_h264, ffmpeg_vp8, ffmpeg_vp9,
             libopus::OpusDecoder,
+            vaapi_h264,
             vulkan_h264,
         },
         rtmp::rtmp_input::state::RtmpInputState,
@@ -206,6 +207,10 @@ impl RtmpConnectionState {
             }
             VideoDecoderOptions::VulkanH264 => {
                 VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(input_ref, options)
+                    .map_err(RtmpConnectionError::InitVideoDecoder)?
+            }
+            VideoDecoderOptions::VaapiH264 => {
+                VideoDecoderThread::<vaapi_h264::VaapiH264Decoder, _>::spawn(input_ref, options)
                     .map_err(RtmpConnectionError::InitVideoDecoder)?
             }
             VideoDecoderOptions::FfmpegVp8 => {

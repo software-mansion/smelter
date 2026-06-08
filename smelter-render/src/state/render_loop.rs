@@ -49,6 +49,7 @@ where
         output_id: OutputId,
         pending_download: PlanarYuvPendingDownload<'a, F, wgpu::BufferAsyncError>,
         resolution: Resolution,
+        variant: PlanarYuvVariant,
     },
     CompleteFrame {
         output_id: OutputId,
@@ -62,20 +63,23 @@ pub(super) fn read_outputs(
     pts: Duration,
 ) -> HashMap<OutputId, Frame> {
     let mut partial_textures = Vec::with_capacity(scene.outputs.len());
-    for (output_id, output) in &scene.outputs {
+    for (output_id, output) in &mut scene.outputs {
         match output.root.output_texture(&scene.inputs).state() {
-            Some(node) => match &output.output_texture {
+            Some(node) => match &mut output.output_texture {
                 OutputTexture::PlanarYuvTextures(yuv_output) => {
                     ctx.wgpu_ctx.format.rgba_to_yuv.convert(
                         ctx.wgpu_ctx,
                         node.output_texture_bind_group(),
                         yuv_output.yuv_textures(),
                     );
+                    let resolution = yuv_output.resolution();
+                    let variant = yuv_output.yuv_textures().variant();
                     let pending_download = yuv_output.start_download(ctx.wgpu_ctx);
                     partial_textures.push(PartialOutputFrame::PendingYuvDownload {
                         output_id: output_id.clone(),
                         pending_download,
-                        resolution: yuv_output.resolution(),
+                        resolution,
+                        variant,
                     });
                 }
                 OutputTexture::Rgba8UnormWgpuTexture { .. } => {
@@ -122,19 +126,41 @@ pub(super) fn read_outputs(
                         frame,
                     })
                 }
+                #[cfg(target_os = "linux")]
+                OutputTexture::Nv12DmaBuf(output) => {
+                    let resolution = output.resolution();
+                    let (texture, frame) = output.next_frame();
+                    ctx.wgpu_ctx.format.rgba_to_nv12.convert(
+                        ctx.wgpu_ctx,
+                        node.output_texture_bind_group(),
+                        texture,
+                    );
+
+                    partial_textures.push(PartialOutputFrame::CompleteFrame {
+                        output_id: output_id.clone(),
+                        frame: Frame {
+                            resolution,
+                            data: FrameData::Nv12DmaBuf(frame),
+                            pts,
+                        },
+                    })
+                }
             },
             // fallback if root node in render graph is empty
-            None => match &output.output_texture {
+            None => match &mut output.output_texture {
                 OutputTexture::PlanarYuvTextures(yuv_output) => {
                     yuv_output
                         .yuv_textures()
                         .fill_with_color(ctx.wgpu_ctx, RGBColor::BLACK);
 
+                    let resolution = yuv_output.resolution();
+                    let variant = yuv_output.yuv_textures().variant();
                     let pending_download = yuv_output.start_download(ctx.wgpu_ctx);
                     partial_textures.push(PartialOutputFrame::PendingYuvDownload {
                         output_id: output_id.clone(),
                         pending_download,
-                        resolution: yuv_output.resolution(),
+                        resolution,
+                        variant,
                     });
                 }
                 OutputTexture::Rgba8UnormWgpuTexture { resolution } => {
@@ -170,6 +196,20 @@ pub(super) fn read_outputs(
                         },
                     });
                 }
+                #[cfg(target_os = "linux")]
+                OutputTexture::Nv12DmaBuf(output) => {
+                    let resolution = output.resolution();
+                    let (texture, frame) = output.next_frame();
+                    texture.fill_with_color(ctx.wgpu_ctx, RGBColor::BLACK);
+                    partial_textures.push(PartialOutputFrame::CompleteFrame {
+                        output_id: output_id.clone(),
+                        frame: Frame {
+                            data: FrameData::Nv12DmaBuf(frame),
+                            resolution,
+                            pts,
+                        },
+                    });
+                }
             },
         };
     }
@@ -189,6 +229,7 @@ pub(super) fn read_outputs(
                 output_id,
                 pending_download,
                 resolution,
+                variant,
             } => {
                 let yuv_planes = match pending_download.wait() {
                     Ok(data) => data,
@@ -198,20 +239,11 @@ pub(super) fn read_outputs(
                     }
                 };
 
-                let Some(output) = &scene.outputs.get(&output_id) else {
-                    error!("Output_id {} not found", output_id);
-                    continue;
-                };
-                let data = match &output.output_texture {
-                    OutputTexture::PlanarYuvTextures(planar_yuv_output) => {
-                        match planar_yuv_output.yuv_textures().variant() {
-                            PlanarYuvVariant::YUV420 => FrameData::PlanarYuv420(yuv_planes),
-                            PlanarYuvVariant::YUV422 => FrameData::PlanarYuv422(yuv_planes),
-                            PlanarYuvVariant::YUV444 => FrameData::PlanarYuv444(yuv_planes),
-                            PlanarYuvVariant::YUVJ420 => FrameData::PlanarYuvJ420(yuv_planes),
-                        }
-                    }
-                    _ => FrameData::PlanarYuv420(yuv_planes),
+                let data = match variant {
+                    PlanarYuvVariant::YUV420 => FrameData::PlanarYuv420(yuv_planes),
+                    PlanarYuvVariant::YUV422 => FrameData::PlanarYuv422(yuv_planes),
+                    PlanarYuvVariant::YUV444 => FrameData::PlanarYuv444(yuv_planes),
+                    PlanarYuvVariant::YUVJ420 => FrameData::PlanarYuvJ420(yuv_planes),
                 };
                 let frame = Frame {
                     data,

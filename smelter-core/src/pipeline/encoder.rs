@@ -13,6 +13,7 @@ pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
 pub mod ffmpeg_vp9;
 pub mod libopus;
+pub mod vaapi_h264;
 
 #[cfg(feature = "gpu-video")]
 pub mod vulkan_h264;

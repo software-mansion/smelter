@@ -56,6 +56,26 @@ pub enum VulkanH264EncoderPreset {
     LowLatency,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct VaapiH264EncoderOptions {
+    pub resolution: Resolution,
+    pub bitrate: Option<VaapiH264EncoderRateControl>,
+    pub keyframe_interval: Duration,
+    pub preset: VaapiH264EncoderPreset,
+    pub bitstream_format: H264BitstreamFormat,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum VaapiH264EncoderRateControl {
+    ConstantBitrate(u64),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum VaapiH264EncoderPreset {
+    HighQuality,
+    LowLatency,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum H264AvcDecoderConfigError {
     #[error("Incorrect AVCDecoderConfig. Expected more bytes.")]

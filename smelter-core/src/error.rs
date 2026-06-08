@@ -221,6 +221,9 @@ pub enum EncoderInitError {
         "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video encoder"
     )]
     VulkanContextRequiredForVulkanEncoder,
+
+    #[error("VA-API H264 encoder unavailable: {0}")]
+    VaapiH264EncoderUnavailable(String),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -273,6 +276,9 @@ pub enum DecoderInitError {
         "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video decoder"
     )]
     VulkanContextRequiredForVulkanDecoder,
+
+    #[error("VA-API H264 decoder is unavailable: {0}")]
+    VaapiH264DecoderUnavailable(String),
 
     #[error(transparent)]
     OpusError(#[from] opus::Error),
@@ -537,6 +543,10 @@ impl From<&UpdateSceneError> for PipelineErrorInfo {
             UpdateSceneError::AudioVideoNotMatching(_) => PipelineErrorInfo {
                 error_code: AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING,
                 error_type: ErrorType::UserError,
+            },
+            UpdateSceneError::OutputTexture(_) => PipelineErrorInfo {
+                error_code: BUILD_SCENE_ERROR,
+                error_type: ErrorType::ServerError,
             },
         }
     }

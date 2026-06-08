@@ -5,7 +5,8 @@ use tracing::error;
 
 use crate::pipeline::decoder::{
     EncodedInputEvent, VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
-    ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder,
+    ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder,
+    vaapi_h264::VaapiH264Decoder, vulkan_h264::VulkanH264Decoder,
 };
 
 use crate::prelude::*;
@@ -122,6 +123,10 @@ where
                 Some(self.keyframe_request_sender.clone()),
             )?),
             VideoDecoderOptions::VulkanH264 => Box::new(VulkanH264Decoder::new(
+                &self.ctx,
+                Some(self.keyframe_request_sender.clone()),
+            )?),
+            VideoDecoderOptions::VaapiH264 => Box::new(VaapiH264Decoder::new(
                 &self.ctx,
                 Some(self.keyframe_request_sender.clone()),
             )?),

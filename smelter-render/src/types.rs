@@ -5,6 +5,12 @@ use std::{
     time::Duration,
 };
 
+#[cfg(target_os = "linux")]
+use std::os::fd::OwnedFd;
+
+#[cfg(target_os = "linux")]
+pub const DRM_FORMAT_NV12: u32 = u32::from_le_bytes(*b"NV12");
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum RenderingMode {
     // - Leverage multiple views per texture
@@ -34,9 +40,239 @@ pub enum FrameData {
     InterleavedYuyv422(bytes::Bytes),
     Rgba8UnormWgpuTexture(Arc<wgpu::Texture>),
     Nv12WgpuTexture(Arc<wgpu::Texture>),
+    #[cfg(target_os = "linux")]
+    Nv12DmaBuf(Arc<DmaBufFrame>),
     Nv12(NvPlanes),
     Bgra(bytes::Bytes),
     Argb(bytes::Bytes),
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Clone)]
+pub struct DmaBufFrame {
+    fourcc: u32,
+    width: u32,
+    height: u32,
+    objects: Vec<DmaBufObject>,
+    layers: Vec<DmaBufLayer>,
+    texture: Arc<wgpu::Texture>,
+    _owner: Option<Arc<dyn Send + Sync>>,
+}
+
+#[cfg(target_os = "linux")]
+impl DmaBufFrame {
+    pub(crate) fn new_with_owner(
+        texture: Arc<wgpu::Texture>,
+        fourcc: u32,
+        width: u32,
+        height: u32,
+        objects: Vec<DmaBufObject>,
+        layers: Vec<DmaBufLayer>,
+        owner: Option<Arc<dyn Send + Sync>>,
+    ) -> Self {
+        assert!(
+            !objects.is_empty() && objects.len() <= 4,
+            "DMA-BUF frame must have 1..=4 objects"
+        );
+        assert!(
+            !layers.is_empty() && layers.len() <= 4,
+            "DMA-BUF frame must have 1..=4 layers"
+        );
+        for layer in &layers {
+            assert!(
+                !layer.planes.is_empty() && layer.planes.len() <= 4,
+                "DMA-BUF layer must have 1..=4 planes"
+            );
+            for plane in &layer.planes {
+                assert!(
+                    plane.object_index < objects.len(),
+                    "DMA-BUF plane references a missing object"
+                );
+                assert!(
+                    plane.offset <= objects[plane.object_index].size,
+                    "DMA-BUF plane offset exceeds object size"
+                );
+            }
+        }
+        Self { fourcc, width, height, objects, layers, texture, _owner: owner }
+    }
+
+    pub(crate) fn texture_arc(&self) -> Arc<wgpu::Texture> {
+        Arc::clone(&self.texture)
+    }
+
+    pub fn texture(&self) -> &wgpu::Texture {
+        &self.texture
+    }
+
+    pub fn fourcc(&self) -> u32 {
+        self.fourcc
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn resolution(&self) -> Resolution {
+        Resolution { width: self.width as usize, height: self.height as usize }
+    }
+
+    pub fn objects(&self) -> &[DmaBufObject] {
+        &self.objects
+    }
+
+    pub fn layers(&self) -> &[DmaBufLayer] {
+        &self.layers
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn validate_nv12_dmabuf_frame(
+    frame: &DmaBufFrame,
+    expected_resolution: Resolution,
+) -> Result<(), String> {
+    if frame.resolution() != expected_resolution {
+        return Err(format!(
+            "expected NV12 DMA-BUF resolution {:?}, got {:?}",
+            expected_resolution,
+            frame.resolution()
+        ));
+    }
+
+    validate_nv12_dmabuf_layout(
+        frame.fourcc(),
+        frame.width(),
+        frame.height(),
+        frame.objects(),
+        frame.layers(),
+    )
+}
+
+#[cfg(target_os = "linux")]
+pub fn validate_nv12_dmabuf_layout(
+    fourcc: u32,
+    width: u32,
+    height: u32,
+    objects: &[DmaBufObject],
+    layers: &[DmaBufLayer],
+) -> Result<(), String> {
+    if fourcc != DRM_FORMAT_NV12 {
+        return Err(format!(
+            "expected NV12 DMA-BUF fourcc {DRM_FORMAT_NV12}, got {fourcc}"
+        ));
+    }
+    if width == 0 || height == 0 {
+        return Err(format!("NV12 DMA-BUF has invalid size {width}x{height}"));
+    }
+    if objects.is_empty() || objects.len() > 4 {
+        return Err(format!(
+            "NV12 DMA-BUF object count {} is outside supported limit 1..=4",
+            objects.len()
+        ));
+    }
+    if layers.len() != 1 {
+        return Err(format!("NV12 DMA-BUF requires one layer, got {}", layers.len()));
+    }
+
+    let layer = &layers[0];
+    if layer.drm_format != DRM_FORMAT_NV12 {
+        return Err(format!(
+            "expected NV12 DMA-BUF layer drm format {DRM_FORMAT_NV12}, got {}",
+            layer.drm_format
+        ));
+    }
+    if layer.planes.len() != 2 {
+        return Err(format!(
+            "NV12 DMA-BUF requires two planes, got {}",
+            layer.planes.len()
+        ));
+    }
+
+    validate_nv12_plane("Y", &layer.planes[0], objects, width, height)?;
+    validate_nv12_plane("UV", &layer.planes[1], objects, width, height.div_ceil(2))
+}
+
+#[cfg(target_os = "linux")]
+fn validate_nv12_plane(
+    name: &str,
+    plane: &DmaBufPlane,
+    objects: &[DmaBufObject],
+    min_pitch: u32,
+    rows: u32,
+) -> Result<(), String> {
+    let object = objects.get(plane.object_index).ok_or_else(|| {
+        format!(
+            "NV12 DMA-BUF {name} plane references object {}, but only {} objects exist",
+            plane.object_index,
+            objects.len()
+        )
+    })?;
+    if plane.pitch < min_pitch {
+        return Err(format!(
+            "NV12 DMA-BUF {name} plane pitch {} is smaller than required width {min_pitch}",
+            plane.pitch
+        ));
+    }
+    let plane_end = u64::from(plane.offset)
+        .checked_add(u64::from(plane.pitch) * u64::from(rows))
+        .ok_or_else(|| format!("NV12 DMA-BUF {name} plane byte range overflows"))?;
+    if plane_end > u64::from(object.size) {
+        return Err(format!(
+            "NV12 DMA-BUF {name} plane range {plane_end} exceeds object {} size {}",
+            plane.object_index, object.size
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+impl fmt::Debug for DmaBufFrame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DMA-BUF frame")
+            .field("fourcc", &self.fourcc)
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("objects", &self.objects)
+            .field("layers", &self.layers)
+            .finish()
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Clone)]
+pub struct DmaBufObject {
+    pub fd: Arc<OwnedFd>,
+    pub size: u32,
+    pub modifier: u64,
+}
+
+#[cfg(target_os = "linux")]
+impl fmt::Debug for DmaBufObject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DMA-BUF object")
+            .field("size", &self.size)
+            .field("modifier", &self.modifier)
+            .finish()
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone)]
+pub struct DmaBufLayer {
+    pub drm_format: u32,
+    pub planes: Vec<DmaBufPlane>,
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone)]
+pub struct DmaBufPlane {
+    pub object_index: usize,
+    pub offset: u32,
+    pub pitch: u32,
 }
 
 #[derive(Clone)]
@@ -191,4 +427,6 @@ pub enum OutputFrameFormat {
     PlanarYuv444Bytes,
     RgbaWgpuTexture,
     Nv12WgpuTexture,
+    #[cfg(target_os = "linux")]
+    Nv12DmaBuf,
 }

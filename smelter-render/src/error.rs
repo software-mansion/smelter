@@ -1,3 +1,4 @@
+use crate::state::output_texture::CreateOutputTextureError;
 use crate::transformations::web_renderer::CreateWebRendererError;
 pub use crate::wgpu::CreateWgpuCtxError;
 use crate::wgpu::common_pipeline::CreateShaderError;
@@ -47,6 +48,9 @@ pub enum RenderSceneError {
 pub enum UpdateSceneError {
     #[error(transparent)]
     WgpuError(#[from] WgpuError),
+
+    #[error("Failed to create output texture.")]
+    OutputTexture(#[from] CreateOutputTextureError),
 
     #[error(
         "Output \"{0}\" does not exist, register it first before using it in the scene definition."

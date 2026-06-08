@@ -75,6 +75,7 @@ pub(super) fn video_params_compliant_with_offer(
             VideoDecoderOptions::VulkanH264 => {
                 filter_h264_codecs_for_vulkan_decoder(ctx, offer_codecs.h264.clone())
             }
+            VideoDecoderOptions::VaapiH264 => offer_codecs.h264.clone(),
             VideoDecoderOptions::FfmpegVp8 => offer_codecs.vp8.clone(),
             VideoDecoderOptions::FfmpegVp9 => offer_codecs.vp9.clone(),
         })

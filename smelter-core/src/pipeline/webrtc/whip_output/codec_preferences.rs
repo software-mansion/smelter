@@ -135,7 +135,9 @@ pub(super) fn codec_params_from_preferences(
         Some(video_preferences) => video_preferences
             .iter()
             .flat_map(|pref| match pref {
-                VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+                VideoEncoderOptions::FfmpegH264(_)
+                | VideoEncoderOptions::VulkanH264(_)
+                | VideoEncoderOptions::VaapiH264(_) => {
                     // Constrained baseline 3.1 included for Twitch compatibility (rejects SDP offers without it)
                     [h264_cb_31_codec_params(), h264_codec_params()].concat()
                 }
