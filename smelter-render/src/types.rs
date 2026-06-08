@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "dmabuf", target_os = "linux"))]
 pub use gpu_video::DmaBufFrame;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -37,7 +37,7 @@ pub enum FrameData {
     InterleavedYuyv422(bytes::Bytes),
     Rgba8UnormWgpuTexture(Arc<wgpu::Texture>),
     Nv12WgpuTexture(Arc<wgpu::Texture>),
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "dmabuf", target_os = "linux"))]
     Nv12DmaBuf(Arc<DmaBufFrame>),
     Nv12(NvPlanes),
     Bgra(bytes::Bytes),
@@ -196,6 +196,6 @@ pub enum OutputFrameFormat {
     PlanarYuv444Bytes,
     RgbaWgpuTexture,
     Nv12WgpuTexture,
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "dmabuf", target_os = "linux"))]
     Nv12DmaBuf,
 }

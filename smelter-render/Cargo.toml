@@ -6,6 +6,7 @@ license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
+dmabuf = ["dep:gpu-video"]
 web-renderer = ["dep:libcef", "dep:shared_memory"]
 
 [dependencies]
@@ -27,9 +28,7 @@ tracing = { workspace = true }
 shared_memory = { workspace = true, optional = true }
 itertools = { workspace = true }
 sys-locale = "0.3.1"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-gpu-video = { workspace = true, features = ["dmabuf"] }
+gpu-video = { workspace = true, features = ["dmabuf"], optional = true }
 
 [lints]
 workspace = true

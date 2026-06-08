@@ -7,7 +7,7 @@ use crate::parser::{
 };
 
 #[derive(Debug, Clone)]
-pub enum DecoderInstruction {
+pub(crate) enum DecoderInstruction {
     Decode {
         decode_info: DecodeInformation,
         reference_id: ReferenceId,
@@ -27,7 +27,7 @@ pub enum DecoderInstruction {
     Pps(PicParameterSet),
 }
 
-pub fn compile_to_decoder_instructions(
+pub(crate) fn compile_to_decoder_instructions(
     reference_ctx: &mut ReferenceContext,
     access_units: Vec<AccessUnit>,
 ) -> Result<Vec<DecoderInstruction>, ReferenceManagementError> {

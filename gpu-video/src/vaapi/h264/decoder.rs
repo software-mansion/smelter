@@ -78,6 +78,15 @@ mod imp {
         resolution: VideoResolution,
     }
 
+    #[derive(Debug, thiserror::Error)]
+    pub enum VaapiH264DecoderError {
+        #[error("VA-API H264 decoder is unavailable: {0}")]
+        Unavailable(String),
+
+        #[error("VA-API H264 decode error: {0}")]
+        Decode(String),
+    }
+
     struct DecodedSurfaceLease {
         surface_id: libva::VASurfaceID,
         release_sender: Sender<libva::VASurfaceID>,
@@ -98,9 +107,10 @@ mod imp {
         pub fn new(
             device: Arc<wgpu::Device>,
             adapter_info: Option<&wgpu::AdapterInfo>,
-        ) -> Result<Self, String> {
+        ) -> Result<Self, VaapiH264DecoderError> {
             info!("Initializing VA-API H264 decoder");
-            let display = open_display(adapter_info)?;
+            let display =
+                open_display(adapter_info).map_err(VaapiH264DecoderError::Unavailable)?;
             let (output_release_sender, output_release_receiver) =
                 crossbeam_channel::unbounded();
             Ok(Self {
@@ -127,21 +137,25 @@ mod imp {
             data: &[u8],
             pts: Option<u64>,
             present: bool,
-        ) -> Result<Vec<DecodedFrame>, String> {
+        ) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
             self.drop_frames = !present;
             if !present {
                 self.drain_released_output_surfaces();
             }
-            let instructions = self.parse_h264(data, pts)?;
-            self.process_instructions(instructions)
+            let instructions =
+                self.parse_h264(data, pts).map_err(VaapiH264DecoderError::Decode)?;
+            self.process_instructions(instructions).map_err(VaapiH264DecoderError::Decode)
         }
 
-        pub fn flush_frame(&mut self) -> Result<Vec<DecodedFrame>, String> {
-            let instructions = self.flush_parser()?;
-            self.process_instructions(instructions)
+        pub fn flush_frame(
+            &mut self,
+        ) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
+            let instructions =
+                self.flush_parser().map_err(VaapiH264DecoderError::Decode)?;
+            self.process_instructions(instructions).map_err(VaapiH264DecoderError::Decode)
         }
 
-        pub fn flush(&mut self) -> Result<Vec<DecodedFrame>, String> {
+        pub fn flush(&mut self) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
             let mut frames = self.flush_frame()?;
             frames.extend(self.flush_sorted_frames());
             Ok(frames)
@@ -1182,7 +1196,7 @@ mod imp {
             let expected_resolution =
                 VideoResolution { width: TEST_WIDTH, height: TEST_HEIGHT };
             assert_eq!(frame.resolution, expected_resolution);
-            assert_eq!(frame.data.fourcc(), crate::DRM_FORMAT_NV12);
+            assert_eq!(frame.data.fourcc(), crate::dmabuf::DRM_FORMAT_NV12);
             assert_eq!(frame.data.resolution(), expected_resolution);
             assert_eq!(frame.data.layers().len(), 1);
             assert_eq!(frame.data.layers()[0].planes.len(), 2);
@@ -1369,47 +1383,4 @@ mod imp {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
-mod imp {
-    use std::{sync::Arc, time::Duration};
-
-    use crate::VideoResolution;
-
-    pub struct H264Decoder;
-
-    pub struct DecodedFrame {
-        pub data: Arc<()>,
-        pub pts: Duration,
-        pub resolution: VideoResolution,
-    }
-
-    impl H264Decoder {
-        pub fn new(
-            _device: Arc<wgpu::Device>,
-            _adapter_info: Option<&wgpu::AdapterInfo>,
-        ) -> Result<Self, String> {
-            Err("VA-API H264 decoder is only available on Linux".into())
-        }
-
-        pub fn decode_chunk(
-            &mut self,
-            _data: &[u8],
-            _pts: Option<u64>,
-            _present: bool,
-        ) -> Result<Vec<DecodedFrame>, String> {
-            Err("VA-API H264 decoder is only available on Linux".into())
-        }
-
-        pub fn flush_frame(&mut self) -> Result<Vec<DecodedFrame>, String> {
-            Ok(Vec::new())
-        }
-
-        pub fn flush(&mut self) -> Result<Vec<DecodedFrame>, String> {
-            Ok(Vec::new())
-        }
-
-        pub fn mark_missed_frames(&mut self) {}
-    }
-}
-
-pub use imp::{DecodedFrame, H264Decoder};
+pub use imp::{DecodedFrame, H264Decoder, VaapiH264DecoderError};

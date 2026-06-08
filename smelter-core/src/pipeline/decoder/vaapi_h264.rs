@@ -31,7 +31,9 @@ mod imp {
                 Arc::clone(&ctx.graphics_context.device),
                 Some(&adapter_info),
             )
-            .map_err(DecoderInitError::VaapiH264DecoderUnavailable)?;
+            .map_err(|err| {
+                DecoderInitError::VaapiH264DecoderUnavailable(err.to_string())
+            })?;
             Ok(Self { decoder, keyframe_request_sender })
         }
     }

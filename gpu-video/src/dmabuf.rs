@@ -11,6 +11,21 @@ use crate::VideoResolution;
 
 pub const DRM_FORMAT_NV12: u32 = u32::from_le_bytes(*b"NV12");
 
+#[derive(Debug, thiserror::Error)]
+pub enum DmaBufError {
+    #[error("invalid NV12 DMA-BUF layout: {0}")]
+    InvalidLayout(String),
+
+    #[error("unsupported DMA-BUF device: {0}")]
+    UnsupportedDevice(String),
+
+    #[error("Vulkan DMA-BUF error: {0}")]
+    Vulkan(String),
+
+    #[error("failed to duplicate DMA-BUF fd: {0}")]
+    DuplicateFd(#[from] std::io::Error),
+}
+
 #[derive(Clone)]
 pub struct DmaBufFrame {
     fourcc: u32,
@@ -23,7 +38,7 @@ pub struct DmaBufFrame {
 }
 
 impl DmaBufFrame {
-    pub fn new_with_owner(
+    pub(crate) fn new_with_owner(
         texture: Arc<wgpu::Texture>,
         fourcc: u32,
         width: u32,
@@ -83,11 +98,11 @@ impl DmaBufFrame {
         VideoResolution { width: self.width, height: self.height }
     }
 
-    pub fn objects(&self) -> &[DmaBufObject] {
+    pub(crate) fn objects(&self) -> &[DmaBufObject] {
         &self.objects
     }
 
-    pub fn layers(&self) -> &[DmaBufLayer] {
+    pub(crate) fn layers(&self) -> &[DmaBufLayer] {
         &self.layers
     }
 }
@@ -105,10 +120,10 @@ impl fmt::Debug for DmaBufFrame {
 }
 
 #[derive(Clone)]
-pub struct DmaBufObject {
-    pub fd: Arc<OwnedFd>,
-    pub size: u32,
-    pub modifier: u64,
+pub(crate) struct DmaBufObject {
+    pub(crate) fd: Arc<OwnedFd>,
+    pub(crate) size: u32,
+    pub(crate) modifier: u64,
 }
 
 impl fmt::Debug for DmaBufObject {
@@ -121,28 +136,28 @@ impl fmt::Debug for DmaBufObject {
 }
 
 #[derive(Debug, Clone)]
-pub struct DmaBufLayer {
-    pub drm_format: u32,
-    pub planes: Vec<DmaBufPlane>,
+pub(crate) struct DmaBufLayer {
+    pub(crate) drm_format: u32,
+    pub(crate) planes: Vec<DmaBufPlane>,
 }
 
 #[derive(Debug, Clone)]
-pub struct DmaBufPlane {
-    pub object_index: usize,
-    pub offset: u32,
-    pub pitch: u32,
+pub(crate) struct DmaBufPlane {
+    pub(crate) object_index: usize,
+    pub(crate) offset: u32,
+    pub(crate) pitch: u32,
 }
 
-pub fn validate_nv12_dmabuf_frame(
+pub(crate) fn validate_nv12_dmabuf_frame(
     frame: &DmaBufFrame,
     expected_resolution: VideoResolution,
-) -> Result<(), String> {
+) -> Result<(), DmaBufError> {
     if frame.resolution() != expected_resolution {
-        return Err(format!(
+        return Err(DmaBufError::InvalidLayout(format!(
             "expected NV12 DMA-BUF resolution {:?}, got {:?}",
             expected_resolution,
             frame.resolution()
-        ));
+        )));
     }
 
     validate_nv12_dmabuf_layout(
@@ -154,43 +169,48 @@ pub fn validate_nv12_dmabuf_frame(
     )
 }
 
-pub fn validate_nv12_dmabuf_layout(
+pub(crate) fn validate_nv12_dmabuf_layout(
     fourcc: u32,
     width: u32,
     height: u32,
     objects: &[DmaBufObject],
     layers: &[DmaBufLayer],
-) -> Result<(), String> {
+) -> Result<(), DmaBufError> {
     if fourcc != DRM_FORMAT_NV12 {
-        return Err(format!(
+        return Err(DmaBufError::InvalidLayout(format!(
             "expected NV12 DMA-BUF fourcc {DRM_FORMAT_NV12}, got {fourcc}"
-        ));
+        )));
     }
     if width == 0 || height == 0 {
-        return Err(format!("NV12 DMA-BUF has invalid size {width}x{height}"));
+        return Err(DmaBufError::InvalidLayout(format!(
+            "NV12 DMA-BUF has invalid size {width}x{height}"
+        )));
     }
     if objects.is_empty() || objects.len() > 4 {
-        return Err(format!(
+        return Err(DmaBufError::InvalidLayout(format!(
             "NV12 DMA-BUF object count {} is outside supported limit 1..=4",
             objects.len()
-        ));
+        )));
     }
     if layers.len() != 1 {
-        return Err(format!("NV12 DMA-BUF requires one layer, got {}", layers.len()));
+        return Err(DmaBufError::InvalidLayout(format!(
+            "NV12 DMA-BUF requires one layer, got {}",
+            layers.len()
+        )));
     }
 
     let layer = &layers[0];
     if layer.drm_format != DRM_FORMAT_NV12 {
-        return Err(format!(
+        return Err(DmaBufError::InvalidLayout(format!(
             "expected NV12 DMA-BUF layer drm format {DRM_FORMAT_NV12}, got {}",
             layer.drm_format
-        ));
+        )));
     }
     if layer.planes.len() != 2 {
-        return Err(format!(
+        return Err(DmaBufError::InvalidLayout(format!(
             "NV12 DMA-BUF requires two planes, got {}",
             layer.planes.len()
-        ));
+        )));
     }
 
     validate_nv12_plane("Y", &layer.planes[0], objects, width, height)?;
@@ -203,73 +223,57 @@ fn validate_nv12_plane(
     objects: &[DmaBufObject],
     min_pitch: u32,
     rows: u32,
-) -> Result<(), String> {
+) -> Result<(), DmaBufError> {
     let object = objects.get(plane.object_index).ok_or_else(|| {
-        format!(
+        DmaBufError::InvalidLayout(format!(
             "NV12 DMA-BUF {name} plane references object {}, but only {} objects exist",
             plane.object_index,
             objects.len()
-        )
+        ))
     })?;
     if plane.pitch < min_pitch {
-        return Err(format!(
+        return Err(DmaBufError::InvalidLayout(format!(
             "NV12 DMA-BUF {name} plane pitch {} is smaller than required width {min_pitch}",
             plane.pitch
-        ));
+        )));
     }
     let plane_end = u64::from(plane.offset)
         .checked_add(u64::from(plane.pitch) * u64::from(rows))
-        .ok_or_else(|| format!("NV12 DMA-BUF {name} plane byte range overflows"))?;
+        .ok_or_else(|| {
+            DmaBufError::InvalidLayout(format!(
+                "NV12 DMA-BUF {name} plane byte range overflows"
+            ))
+        })?;
     if plane_end > u64::from(object.size) {
-        return Err(format!(
+        return Err(DmaBufError::InvalidLayout(format!(
             "NV12 DMA-BUF {name} plane range {plane_end} exceeds object {} size {}",
             plane.object_index, object.size
-        ));
+        )));
     }
     Ok(())
 }
 
-#[derive(Clone, Copy)]
-pub enum Nv12DmaBufImportUsage {
-    Sampled,
-    RenderAttachment,
+fn nv12_import_image_usage() -> vk::ImageUsageFlags {
+    vk::ImageUsageFlags::SAMPLED
+        | vk::ImageUsageFlags::TRANSFER_DST
+        | vk::ImageUsageFlags::TRANSFER_SRC
 }
 
-impl Nv12DmaBufImportUsage {
-    fn image_usage(self) -> vk::ImageUsageFlags {
-        let usage = vk::ImageUsageFlags::SAMPLED
-            | vk::ImageUsageFlags::TRANSFER_DST
-            | vk::ImageUsageFlags::TRANSFER_SRC;
-        match self {
-            Self::Sampled => usage,
-            Self::RenderAttachment => usage | vk::ImageUsageFlags::COLOR_ATTACHMENT,
-        }
-    }
-
-    fn render_attachment(self) -> bool {
-        matches!(self, Self::RenderAttachment)
-    }
-
-    fn required_format_features(self) -> vk::FormatFeatureFlags2 {
-        let features = vk::FormatFeatureFlags2::SAMPLED_IMAGE
-            | vk::FormatFeatureFlags2::TRANSFER_DST
-            | vk::FormatFeatureFlags2::TRANSFER_SRC;
-        match self {
-            Self::Sampled => features,
-            Self::RenderAttachment => {
-                features | vk::FormatFeatureFlags2::COLOR_ATTACHMENT
-            }
-        }
-    }
+fn nv12_import_format_features() -> vk::FormatFeatureFlags2 {
+    vk::FormatFeatureFlags2::SAMPLED_IMAGE
+        | vk::FormatFeatureFlags2::TRANSFER_DST
+        | vk::FormatFeatureFlags2::TRANSFER_SRC
 }
 
 pub fn export_nv12_dmabuf_texture(
     wgpu_device: &wgpu::Device,
     resolution: VideoResolution,
-) -> Result<Arc<DmaBufFrame>, String> {
+) -> Result<Arc<DmaBufFrame>, DmaBufError> {
     unsafe {
         let hal_device_guard = wgpu_device.as_hal::<VkApi>().ok_or_else(|| {
-            "NV12 DMA-BUF output requires a Vulkan wgpu device".to_string()
+            DmaBufError::UnsupportedDevice(
+                "NV12 DMA-BUF output requires a Vulkan wgpu device".into(),
+            )
         })?;
         let hal_device = &*hal_device_guard;
         let vk_device = hal_device.raw_device().clone();
@@ -308,7 +312,9 @@ pub fn export_nv12_dmabuf_texture(
             .push_next(&mut drm_info);
 
         let image = vk_device.create_image(&create_info, None).map_err(|err| {
-            format!("failed to create exportable NV12 Vulkan image: {err}")
+            DmaBufError::Vulkan(format!(
+                "failed to create exportable NV12 Vulkan image: {err}"
+            ))
         })?;
         let mem_requirements = vk_device.get_image_memory_requirements(image);
         let memory_type_index =
@@ -325,15 +331,17 @@ pub fn export_nv12_dmabuf_texture(
             Ok(memory) => memory,
             Err(err) => {
                 vk_device.destroy_image(image, None);
-                return Err(format!(
+                return Err(DmaBufError::Vulkan(format!(
                     "failed to allocate exportable NV12 Vulkan memory: {err}"
-                ));
+                )));
             }
         };
         if let Err(err) = vk_device.bind_image_memory(image, memory, 0) {
             vk_device.destroy_image(image, None);
             vk_device.free_memory(memory, None);
-            return Err(format!("failed to bind exportable NV12 Vulkan memory: {err}"));
+            return Err(DmaBufError::Vulkan(format!(
+                "failed to bind exportable NV12 Vulkan memory: {err}"
+            )));
         }
 
         let external_memory_fd =
@@ -342,9 +350,9 @@ pub fn export_nv12_dmabuf_texture(
             .memory(memory)
             .handle_type(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT);
         let fd = Arc::new(OwnedFd::from_raw_fd(
-            external_memory_fd
-                .get_memory_fd(&fd_info)
-                .map_err(|err| format!("failed to export NV12 DMA-BUF fd: {err}"))?,
+            external_memory_fd.get_memory_fd(&fd_info).map_err(|err| {
+                DmaBufError::Vulkan(format!("failed to export NV12 DMA-BUF fd: {err}"))
+            })?,
         ));
 
         let plane0 = image_plane_layout(&vk_device, image, vk::ImageAspectFlags::PLANE_0);
@@ -367,7 +375,9 @@ pub fn export_nv12_dmabuf_texture(
             vec![DmaBufObject {
                 fd,
                 size: mem_requirements.size.try_into().map_err(|_| {
-                    "DMA-BUF allocation is larger than VA-API can describe".to_string()
+                    DmaBufError::InvalidLayout(
+                        "DMA-BUF allocation is larger than VA-API can describe".into(),
+                    )
                 })?,
                 modifier,
             }],
@@ -376,25 +386,29 @@ pub fn export_nv12_dmabuf_texture(
                 planes: vec![
                     DmaBufPlane {
                         object_index: 0,
-                        offset: plane0
-                            .offset
-                            .try_into()
-                            .map_err(|_| "NV12 Y offset does not fit u32".to_string())?,
-                        pitch: plane0
-                            .row_pitch
-                            .try_into()
-                            .map_err(|_| "NV12 Y pitch does not fit u32".to_string())?,
+                        offset: plane0.offset.try_into().map_err(|_| {
+                            DmaBufError::InvalidLayout(
+                                "NV12 Y offset does not fit u32".into(),
+                            )
+                        })?,
+                        pitch: plane0.row_pitch.try_into().map_err(|_| {
+                            DmaBufError::InvalidLayout(
+                                "NV12 Y pitch does not fit u32".into(),
+                            )
+                        })?,
                     },
                     DmaBufPlane {
                         object_index: 0,
-                        offset: plane1
-                            .offset
-                            .try_into()
-                            .map_err(|_| "NV12 UV offset does not fit u32".to_string())?,
-                        pitch: plane1
-                            .row_pitch
-                            .try_into()
-                            .map_err(|_| "NV12 UV pitch does not fit u32".to_string())?,
+                        offset: plane1.offset.try_into().map_err(|_| {
+                            DmaBufError::InvalidLayout(
+                                "NV12 UV offset does not fit u32".into(),
+                            )
+                        })?,
+                        pitch: plane1.row_pitch.try_into().map_err(|_| {
+                            DmaBufError::InvalidLayout(
+                                "NV12 UV pitch does not fit u32".into(),
+                            )
+                        })?,
                     },
                 ],
             }],
@@ -403,7 +417,7 @@ pub fn export_nv12_dmabuf_texture(
     }
 }
 
-pub fn import_nv12_dmabuf_texture(
+pub(crate) fn import_nv12_dmabuf_texture(
     wgpu_device: &wgpu::Device,
     fourcc: u32,
     width: u32,
@@ -411,19 +425,20 @@ pub fn import_nv12_dmabuf_texture(
     objects: Vec<DmaBufObject>,
     layers: Vec<DmaBufLayer>,
     owner: Option<Arc<dyn Send + Sync>>,
-    import_usage: Nv12DmaBufImportUsage,
-) -> Result<Arc<DmaBufFrame>, String> {
+) -> Result<Arc<DmaBufFrame>, DmaBufError> {
     validate_nv12_dmabuf_layout(fourcc, width, height, &objects, &layers)?;
     if objects.len() != 1 {
-        return Err(format!(
+        return Err(DmaBufError::UnsupportedDevice(format!(
             "WGPU NV12 DMA-BUF import supports one object, got {}",
             objects.len()
-        ));
+        )));
     }
 
     unsafe {
         let hal_device_guard = wgpu_device.as_hal::<VkApi>().ok_or_else(|| {
-            "NV12 DMA-BUF import requires a Vulkan wgpu device".to_string()
+            DmaBufError::UnsupportedDevice(
+                "NV12 DMA-BUF import requires a Vulkan wgpu device".into(),
+            )
         })?;
         let hal_device = &*hal_device_guard;
         let vk_device = hal_device.raw_device().clone();
@@ -435,7 +450,7 @@ pub fn import_nv12_dmabuf_texture(
             instance,
             physical_device,
             modifier,
-            import_usage.required_format_features(),
+            nv12_import_format_features(),
         )?;
         let plane_layouts = layers[0]
             .planes
@@ -467,23 +482,21 @@ pub fn import_nv12_dmabuf_texture(
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT)
-            .usage(import_usage.image_usage())
+            .usage(nv12_import_image_usage())
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .push_next(&mut external_info)
             .push_next(&mut drm_info);
 
         let image = vk_device.create_image(&create_info, None).map_err(|err| {
-            format!("failed to create imported NV12 Vulkan image: {err}")
+            DmaBufError::Vulkan(format!(
+                "failed to create imported NV12 Vulkan image: {err}"
+            ))
         })?;
         let mem_requirements = vk_device.get_image_memory_requirements(image);
         let memory_type_index =
             find_memory_type_index(instance, physical_device, &mem_requirements)?;
-        let import_fd = objects[0]
-            .fd
-            .as_fd()
-            .try_clone_to_owned()
-            .map_err(|err| format!("failed to duplicate DMA-BUF fd: {err}"))?;
+        let import_fd = objects[0].fd.as_fd().try_clone_to_owned()?;
         let mut import_info = vk::ImportMemoryFdInfoKHR::default()
             .handle_type(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT)
             .fd(import_fd.as_raw_fd());
@@ -500,13 +513,17 @@ pub fn import_nv12_dmabuf_texture(
             }
             Err(err) => {
                 vk_device.destroy_image(image, None);
-                return Err(format!("failed to import NV12 DMA-BUF memory: {err}"));
+                return Err(DmaBufError::Vulkan(format!(
+                    "failed to import NV12 DMA-BUF memory: {err}"
+                )));
             }
         };
         if let Err(err) = vk_device.bind_image_memory(image, memory, 0) {
             vk_device.destroy_image(image, None);
             vk_device.free_memory(memory, None);
-            return Err(format!("failed to bind imported NV12 DMA-BUF memory: {err}"));
+            return Err(DmaBufError::Vulkan(format!(
+                "failed to bind imported NV12 DMA-BUF memory: {err}"
+            )));
         }
 
         let texture = Arc::new(wrap_nv12_image_as_wgpu_texture(
@@ -516,7 +533,7 @@ pub fn import_nv12_dmabuf_texture(
             vk_device,
             VideoResolution { width, height },
             "imported nv12 dma-buf texture",
-            import_usage.render_attachment(),
+            false,
         )?);
 
         Ok(Arc::new(DmaBufFrame::new_with_owner(
@@ -533,11 +550,13 @@ unsafe fn wrap_nv12_image_as_wgpu_texture(
     resolution: VideoResolution,
     label: &'static str,
     render_attachment: bool,
-) -> Result<wgpu::Texture, String> {
+) -> Result<wgpu::Texture, DmaBufError> {
     let hal_device_guard = unsafe {
-        wgpu_device
-            .as_hal::<VkApi>()
-            .ok_or_else(|| "NV12 DMA-BUF requires a Vulkan wgpu device".to_string())?
+        wgpu_device.as_hal::<VkApi>().ok_or_else(|| {
+            DmaBufError::UnsupportedDevice(
+                "NV12 DMA-BUF requires a Vulkan wgpu device".into(),
+            )
+        })?
     };
     let hal_texture = unsafe {
         let mut hal_usage = wgpu::TextureUses::RESOURCE
@@ -628,8 +647,8 @@ unsafe fn image_plane_layout(
 fn select_nv12_modifier(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
-) -> Result<u64, String> {
-    let required = Nv12DmaBufImportUsage::Sampled.required_format_features();
+) -> Result<u64, DmaBufError> {
+    let required = nv12_import_format_features();
     let modifiers = nv12_modifier_properties(instance, physical_device);
     modifiers
         .iter()
@@ -643,8 +662,10 @@ fn select_nv12_modifier(
         .copied()
         .map(|modifier| modifier.drm_format_modifier)
         .ok_or_else(|| {
-            "no exportable NV12 DRM modifier with sampled and transfer support available"
-                .to_string()
+            DmaBufError::UnsupportedDevice(
+                "no exportable NV12 DRM modifier with sampled and transfer support available"
+                    .into(),
+            )
         })
 }
 
@@ -653,26 +674,26 @@ fn validate_nv12_modifier_support(
     physical_device: vk::PhysicalDevice,
     modifier: u64,
     required: vk::FormatFeatureFlags2,
-) -> Result<(), String> {
+) -> Result<(), DmaBufError> {
     let modifiers = nv12_modifier_properties(instance, physical_device);
     let Some(properties) =
         modifiers.iter().find(|properties| properties.drm_format_modifier == modifier)
     else {
-        return Err(format!(
+        return Err(DmaBufError::UnsupportedDevice(format!(
             "NV12 DMA-BUF modifier {modifier:#x} is not supported by the WGPU Vulkan device; available modifiers: {}",
             format_nv12_modifiers(&modifiers)
-        ));
+        )));
     };
 
     if supports_nv12_modifier(properties, required) {
         return Ok(());
     }
 
-    Err(format!(
+    Err(DmaBufError::UnsupportedDevice(format!(
         "NV12 DMA-BUF modifier {modifier:#x} has {:?} with {} planes, but import requires {required:?}",
         properties.drm_format_modifier_tiling_features,
         properties.drm_format_modifier_plane_count,
-    ))
+    )))
 }
 
 fn supports_nv12_modifier(
@@ -732,7 +753,7 @@ fn find_memory_type_index(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
     mem_requirements: &vk::MemoryRequirements,
-) -> Result<u32, String> {
+) -> Result<u32, DmaBufError> {
     let memory_properties =
         unsafe { instance.get_physical_device_memory_properties(physical_device) };
 
@@ -743,6 +764,8 @@ fn find_memory_type_index(
             allowed && flags.contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
         })
         .ok_or_else(|| {
-            "no device-local memory type available for NV12 DMA-BUF image".into()
+            DmaBufError::UnsupportedDevice(
+                "no device-local memory type available for NV12 DMA-BUF image".into(),
+            )
         })
 }

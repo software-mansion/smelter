@@ -1,20 +1,18 @@
 use std::io::Write;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "dmabuf", target_os = "linux"))]
 use std::sync::Arc;
 
 use bytes::BufMut;
 use crossbeam_channel::bounded;
-#[cfg(target_os = "linux")]
-use gpu_video::{
-    DmaBufFrame, VideoResolution, export_nv12_dmabuf_texture, validate_nv12_dmabuf_frame,
-};
+#[cfg(all(feature = "dmabuf", target_os = "linux"))]
+use gpu_video::{DmaBufError, DmaBufFrame, VideoResolution, export_nv12_dmabuf_texture};
 use tracing::error;
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "dmabuf", target_os = "linux"))]
 use tracing::{info, warn};
 use wgpu::{Buffer, BufferAsyncError};
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "dmabuf", target_os = "linux"))]
 use crate::wgpu::texture::NV12Texture;
 use crate::{
     OutputFrameFormat, Resolution,
@@ -35,14 +33,15 @@ pub enum OutputTexture {
     Nv12WgpuTexture {
         resolution: Resolution,
     },
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "dmabuf", target_os = "linux"))]
     Nv12DmaBuf(Box<Nv12DmaBufOutput>),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum CreateOutputTextureError {
+    #[cfg(all(feature = "dmabuf", target_os = "linux"))]
     #[error("failed to create NV12 DMA-BUF output frame: {0}")]
-    DmaBuf(String),
+    DmaBuf(#[from] DmaBufError),
 
     #[error("NV12 DMA-BUF output frame has a non-NV12 wgpu texture")]
     InvalidDmaBufTexture,
@@ -70,7 +69,7 @@ impl OutputTexture {
             OutputFrameFormat::Nv12WgpuTexture => {
                 Ok(Self::Nv12WgpuTexture { resolution })
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(all(feature = "dmabuf", target_os = "linux"))]
             OutputFrameFormat::Nv12DmaBuf => {
                 info!(?resolution, "creating zero-copy NV12 DMA-BUF output texture");
                 Ok(Self::Nv12DmaBuf(Box::new(Nv12DmaBufOutput::new(ctx, resolution)?)))
@@ -79,7 +78,7 @@ impl OutputTexture {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "dmabuf", target_os = "linux"))]
 pub struct Nv12DmaBufOutput {
     device: Arc<wgpu::Device>,
     frames: Vec<PooledNv12DmaBufFrame>,
@@ -87,13 +86,13 @@ pub struct Nv12DmaBufOutput {
     resolution: Resolution,
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "dmabuf", target_os = "linux"))]
 struct PooledNv12DmaBufFrame {
     dmabuf: Arc<DmaBufFrame>,
     texture: NV12Texture,
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "dmabuf", target_os = "linux"))]
 impl Nv12DmaBufOutput {
     const POOL_SIZE: usize = 16;
 
@@ -147,25 +146,14 @@ impl Nv12DmaBufOutput {
         device: &wgpu::Device,
         resolution: Resolution,
     ) -> Result<PooledNv12DmaBufFrame, CreateOutputTextureError> {
-        let dmabuf = export_nv12_dmabuf_texture(device, video_resolution(resolution))
-            .map_err(CreateOutputTextureError::DmaBuf)?;
-        validate_nv12_dmabuf(&dmabuf, resolution)?;
+        let dmabuf = export_nv12_dmabuf_texture(device, video_resolution(resolution))?;
         let texture = NV12Texture::from_wgpu_texture(dmabuf.texture_arc())
             .map_err(|_| CreateOutputTextureError::InvalidDmaBufTexture)?;
         Ok(PooledNv12DmaBufFrame { dmabuf, texture })
     }
 }
 
-#[cfg(target_os = "linux")]
-fn validate_nv12_dmabuf(
-    dmabuf: &DmaBufFrame,
-    expected: Resolution,
-) -> Result<(), CreateOutputTextureError> {
-    validate_nv12_dmabuf_frame(dmabuf, video_resolution(expected))
-        .map_err(CreateOutputTextureError::DmaBuf)
-}
-
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "dmabuf", target_os = "linux"))]
 fn video_resolution(resolution: Resolution) -> VideoResolution {
     VideoResolution { width: resolution.width as u32, height: resolution.height as u32 }
 }

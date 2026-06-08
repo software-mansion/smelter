@@ -1093,7 +1093,7 @@ dependencies = [
 [[package]]
 name = "cros-libva"
 version = "0.0.13"
-source = "git+https://github.com/michael-dm/cros-libva?branch=export-prime-options#24c9e2993dcf2eb97762db586821c6e602e71fc2"
+source = "git+https://github.com/chromeos/cros-libva#ed9c63b743ce9490e1079a8b0c1a24b8e879324f"
 dependencies = [
  "bindgen 0.70.1",
  "bitflags 2.11.0",

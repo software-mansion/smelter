@@ -29,17 +29,16 @@ pub use types::{VideoFramerate, VideoResolution};
 
 #[cfg(feature = "expose-parsers")]
 pub mod parser;
-#[cfg(not(feature = "expose-parsers"))]
+#[cfg(all(
+    not(feature = "expose-parsers"),
+    any(vulkan, all(feature = "vaapi", target_os = "linux"))
+))]
 pub(crate) mod parser;
 
 #[cfg(all(feature = "dmabuf", target_os = "linux"))]
 mod dmabuf;
 #[cfg(all(feature = "dmabuf", target_os = "linux"))]
-pub use dmabuf::{
-    DRM_FORMAT_NV12, DmaBufFrame, DmaBufLayer, DmaBufObject, DmaBufPlane,
-    Nv12DmaBufImportUsage, export_nv12_dmabuf_texture, import_nv12_dmabuf_texture,
-    validate_nv12_dmabuf_frame, validate_nv12_dmabuf_layout,
-};
+pub use dmabuf::{DmaBufError, DmaBufFrame, export_nv12_dmabuf_texture};
 
 #[cfg(all(feature = "vaapi", target_os = "linux"))]
 pub mod vaapi;
@@ -70,9 +69,3 @@ fn test_wgpu_device_and_queue() -> TestWgpuDeviceAndQueue {
         .expect("failed to create WGPU device");
     (std::sync::Arc::new(device), queue, adapter.get_info())
 }
-
-#[cfg(all(feature = "dmabuf", not(target_os = "linux")))]
-compile_error!("gpu-video DMA-BUF support can be only compiled on Linux.");
-
-#[cfg(all(feature = "vaapi", not(target_os = "linux")))]
-compile_error!("gpu-video VA-API support can be only compiled on Linux.");

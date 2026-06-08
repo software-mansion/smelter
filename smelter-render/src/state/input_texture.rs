@@ -173,7 +173,7 @@ impl InputTexture {
                     }
                 };
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(all(feature = "dmabuf", target_os = "linux"))]
             FrameData::Nv12DmaBuf(frame) => match &mut self.0 {
                 Some(InputTextureState::Nv12(input)) => {
                     input.update(ctx, frame.texture_arc()).unwrap();

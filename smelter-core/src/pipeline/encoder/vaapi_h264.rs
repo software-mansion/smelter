@@ -67,7 +67,7 @@ mod imp {
             })
             .map_err(|err| {
                 error!("Failed to initialize VA-API H264 encoder: {err}");
-                EncoderInitError::VaapiH264EncoderUnavailable(err)
+                EncoderInitError::VaapiH264EncoderUnavailable(err.to_string())
             })?;
             let extradata = (options.bitstream_format == H264BitstreamFormat::Avcc)
                 .then(|| build_avc_decoder_config(encoder.parameter_sets()))

@@ -10,7 +10,7 @@ mod imp {
     };
 
     use crate::{
-        DmaBufFrame, VideoFramerate, VideoResolution, validate_nv12_dmabuf_frame,
+        DmaBufFrame, VideoFramerate, VideoResolution, dmabuf::validate_nv12_dmabuf_frame,
     };
     use bytes::Bytes;
     use libva::{
@@ -80,11 +80,21 @@ mod imp {
         pub is_keyframe: bool,
     }
 
+    #[derive(Debug, thiserror::Error)]
+    pub enum VaapiH264EncoderError {
+        #[error("VA-API H264 encoder is unavailable: {0}")]
+        Unavailable(String),
+
+        #[error("VA-API H264 encode error: {0}")]
+        Encode(String),
+    }
+
     impl H264Encoder {
-        pub fn new(config: H264EncoderConfig) -> Result<Self, String> {
+        pub fn new(config: H264EncoderConfig) -> Result<Self, VaapiH264EncoderError> {
             info!("Initializing VA-API H264 encoder");
 
-            let display = open_display(config.adapter_info.as_ref())?;
+            let display = open_display(config.adapter_info.as_ref())
+                .map_err(VaapiH264EncoderError::Unavailable)?;
             let parameter_sets = main_parameter_sets(config.resolution, config.framerate);
 
             let encoder = IntelVaapiH264Encoder::new(
@@ -95,7 +105,8 @@ mod imp {
                 config.framerate,
                 config.max_pending_frames,
                 parameter_sets.clone(),
-            )?;
+            )
+            .map_err(VaapiH264EncoderError::Unavailable)?;
 
             info!(
                 width = config.resolution.width,
@@ -117,12 +128,14 @@ mod imp {
             frame: Arc<DmaBufFrame>,
             pts: Duration,
             force_keyframe: bool,
-        ) -> Result<Vec<EncodedFrame>, String> {
-            self.encoder.encode(frame, pts, force_keyframe)
+        ) -> Result<Vec<EncodedFrame>, VaapiH264EncoderError> {
+            self.encoder
+                .encode(frame, pts, force_keyframe)
+                .map_err(VaapiH264EncoderError::Encode)
         }
 
-        pub fn flush(&mut self) -> Result<Vec<EncodedFrame>, String> {
-            self.encoder.flush()
+        pub fn flush(&mut self) -> Result<Vec<EncodedFrame>, VaapiH264EncoderError> {
+            self.encoder.flush().map_err(VaapiH264EncoderError::Encode)
         }
     }
 
@@ -300,7 +313,8 @@ mod imp {
             &mut self,
             frame: Arc<DmaBufFrame>,
         ) -> Result<VaapiInputSurface, String> {
-            validate_nv12_dmabuf_frame(&frame, self.resolution)?;
+            validate_nv12_dmabuf_frame(&frame, self.resolution)
+                .map_err(|err| err.to_string())?;
             let frame_key = DmaBufFrameKey::from_frame(&frame);
             let mut surface = match self
                 .free_input_surfaces
@@ -1366,57 +1380,4 @@ mod imp {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
-mod imp {
-    use std::{sync::Arc, time::Duration};
-
-    use crate::{VideoFramerate, VideoResolution};
-    use bytes::Bytes;
-
-    #[derive(Debug, Clone)]
-    pub struct H264EncoderConfig {
-        pub device: Arc<wgpu::Device>,
-        pub queue: Arc<wgpu::Queue>,
-        pub adapter_info: Option<wgpu::AdapterInfo>,
-        pub resolution: VideoResolution,
-        pub bitrate: u32,
-        pub gop_size: u16,
-        pub framerate: VideoFramerate,
-        pub max_pending_frames: usize,
-    }
-
-    pub struct H264Encoder {
-        parameter_sets: Bytes,
-    }
-
-    pub struct EncodedFrame {
-        pub data: Bytes,
-        pub pts: Duration,
-        pub is_keyframe: bool,
-    }
-
-    impl H264Encoder {
-        pub fn new(_config: H264EncoderConfig) -> Result<Self, String> {
-            Err("VA-API H264 encoder is only available on Linux".into())
-        }
-
-        pub fn parameter_sets(&self) -> &Bytes {
-            &self.parameter_sets
-        }
-
-        pub fn encode(
-            &mut self,
-            _frame: Arc<()>,
-            _pts: Duration,
-            _force_keyframe: bool,
-        ) -> Result<Vec<EncodedFrame>, String> {
-            Err("VA-API H264 encoder is only available on Linux".into())
-        }
-
-        pub fn flush(&mut self) -> Result<Vec<EncodedFrame>, String> {
-            Ok(Vec::new())
-        }
-    }
-}
-
-pub use imp::{EncodedFrame, H264Encoder, H264EncoderConfig};
+pub use imp::{EncodedFrame, H264Encoder, H264EncoderConfig, VaapiH264EncoderError};

@@ -10,7 +10,7 @@ default = []
 decklink = ["dep:decklink"]
 web-renderer = ["smelter-render/web-renderer"]
 gpu-video = []
-vaapi = ["gpu-video/vaapi"]
+vaapi = ["gpu-video/vaapi", "smelter-render/dmabuf"]
 
 [dependencies]
 smelter-render = { workspace = true }

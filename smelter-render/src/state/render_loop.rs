@@ -126,7 +126,7 @@ pub(super) fn read_outputs(
                         frame,
                     })
                 }
-                #[cfg(target_os = "linux")]
+                #[cfg(all(feature = "dmabuf", target_os = "linux"))]
                 OutputTexture::Nv12DmaBuf(output) => {
                     let resolution = output.resolution();
                     let (texture, frame) = match output.next_frame() {
@@ -202,7 +202,7 @@ pub(super) fn read_outputs(
                         },
                     });
                 }
-                #[cfg(target_os = "linux")]
+                #[cfg(all(feature = "dmabuf", target_os = "linux"))]
                 OutputTexture::Nv12DmaBuf(output) => {
                     let resolution = output.resolution();
                     let (texture, frame) = match output.next_frame() {

@@ -47,7 +47,7 @@ ash = "0.38.0"
 vk-mem = "0.4.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libva = { package = "cros-libva", git = "https://github.com/michael-dm/cros-libva", branch = "export-prime-options", optional = true }
+libva = { package = "cros-libva", git = "https://github.com/chromeos/cros-libva", optional = true }
 
 [dev-dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
