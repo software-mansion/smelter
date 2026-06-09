@@ -29,6 +29,8 @@ impl MoqInput {
             "ffmpeg -re -readrate_initial_burst 7 -i <SOURCE_MP4> -c copy -movflags cmaf -f mp4 - | moq-cli publish --tls-disable-verify --url https://localhost:4443 --broadcast {} fmp4",
             self.name
         );
+        println!("OR");
+        println!("https://smelter-labs.github.io/tools/#moq-streamer");
         println!();
         Ok(())
     }

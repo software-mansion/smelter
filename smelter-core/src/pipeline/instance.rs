@@ -589,7 +589,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
 
     let moq_state = match opts.moq_server {
         PipelineMoqServerOptions::Enable { port, tls_config } => {
-            Some(MoqPipelineState::new(port, tls_config))
+            Some(MoqPipelineState::new(port, tls_config)?)
         }
         PipelineMoqServerOptions::Disable => None,
     };
