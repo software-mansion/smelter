@@ -353,7 +353,7 @@ enum MoqConnectionError {
 
 /// Normalizes a raw track timestamp against the first PTS observed across all
 /// tracks of the broadcast, so audio and video share the same zero point.
-fn normalize_pts(first_pts: &Mutex<Option<Duration>>, raw_pts: Duration) -> Duration {
+fn normalize_pts(first_pts: &Arc<Mutex<Option<Duration>>>, raw_pts: Duration) -> Duration {
     let mut first_pts = first_pts.lock().unwrap();
     let first = *first_pts.get_or_insert(raw_pts);
     raw_pts.saturating_sub(first)
