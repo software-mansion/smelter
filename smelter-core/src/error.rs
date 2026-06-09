@@ -62,6 +62,9 @@ pub enum InitPipelineError {
     #[error("Failed to initialize MoQ server.")]
     MoqServerInitError(#[source] anyhow::Error),
 
+    #[error("Failed to set up self-signed MoQ TLS certificate.")]
+    MoqSelfSignedTlsError(#[from] SelfSignedTlsError),
+
     #[error("Failed to bind UDP socket for WebRTC mux on port {0}.")]
     BindUdpMuxSocket(u16, #[source] std::io::Error),
 }

@@ -36,8 +36,7 @@ use crate::prelude::*;
 
 mod catalog;
 
-// This seems to be a safe value even for large groups
-const MOQ_BUFFER: Duration = Duration::from_secs(5);
+const MOQ_BUFFER: Duration = Duration::from_secs(1);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct DiscoveredVideo {

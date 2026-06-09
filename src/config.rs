@@ -359,7 +359,10 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => true,
     };
 
-    let moq_tls_config = moq_tls_config();
+    let moq_tls_config = match moq_enable {
+        true => moq_tls_config(),
+        false => None,
+    };
 
     let log_file = match env::var("SMELTER_LOG_FILE") {
         Ok(path) => Some(Arc::from(PathBuf::from(path))),
@@ -429,17 +432,16 @@ fn moq_tls_config() -> Option<moq_native::ServerTlsConfig> {
             tls.key = vec![key];
             Some(tls)
         }
-        // For easier debugging
-        _ if cfg!(debug_assertions) => {
-            tracing::debug!(
-                "TLS certificate for MoQ not specified. Self signed one will be generated."
+        (Some(_), None) | (None, Some(_)) => {
+            warn!(
+                "Both \"SMELTER_MOQ_TLS_CERT_FILE\" and \"SMELTER_MOQ_TLS_KEY_FILE\" must be set. Falling back to auto-generated certs. Make sure to use properly configured certs in production."
             );
-            let mut tls = moq_native::ServerTlsConfig::default();
-            tls.generate = vec!["localhost".into()];
-            Some(tls)
+            None
         }
         _ => {
-            warn!("MoQ TLS cert/key not configured, MoQ server will not start");
+            // No cert/key configured. smelter-core will fall back to a persisted,
+            // insecure self-signed certificate (dev/test only) and log a warning
+            // with its SHA-256 fingerprint.
             None
         }
     }
