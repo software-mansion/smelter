@@ -14,9 +14,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@swmansion/smelter": "workspace:0.4.0-rc.2",
-    "@swmansion/smelter-core": "workspace:0.4.0-rc.2",
-    "@swmansion/smelter-node": "workspace:0.4.0-rc.3",
+    "@swmansion/smelter": "workspace:0.4.0",
+    "@swmansion/smelter-core": "workspace:0.4.0",
+    "@swmansion/smelter-node": "workspace:0.4.0",
     "pino": "^9.5.0",
     "react": "^18.3.1",
     "ts-node": "^10.9.2"
