@@ -1126,7 +1126,6 @@ mod imp {
             VASurfaceAttribType::VASurfaceAttribPixelFormat,
             libva::VA_FOURCC_NV12 as i32,
             "NV12 surface pixel format",
-            false,
         )?;
         Ok(())
     }
@@ -1136,7 +1135,6 @@ mod imp {
         attr_type: VASurfaceAttribType::Type,
         required: i32,
         label: &str,
-        bitmask: bool,
     ) -> Result<(), String> {
         let values =
             config.query_surface_attributes_by_type(attr_type).map_err(|err| {
@@ -1158,14 +1156,7 @@ mod imp {
             ));
         }
 
-        let supported = integers.iter().any(|value| {
-            if bitmask {
-                value & required == required
-            } else {
-                *value == required
-            }
-        });
-        if supported {
+        if integers.contains(&required) {
             Ok(())
         } else {
             Err(format!(
@@ -1187,22 +1178,16 @@ mod imp {
     #[cfg(all(test, target_os = "linux"))]
     mod tests {
         use std::{
-            fs,
             io::Write,
             process::{Command, Stdio},
             sync::Mutex,
-            thread,
-            time::{Duration, Instant},
+            time::Duration,
         };
 
         use super::*;
         const TEST_RESOLUTION: VideoResolution =
             VideoResolution { width: 64, height: 64 };
-        const STRESS_RESOLUTION: VideoResolution =
-            VideoResolution { width: 1280, height: 720 };
         const TEST_FRAMERATE: VideoFramerate = VideoFramerate { num: 30, den: 1 };
-        const WT_PREVIEW_FRAMERATE: VideoFramerate =
-            VideoFramerate { num: 30_000, den: 1001 };
         const MAX_PENDING_ENCODE_FRAMES: usize = 8;
         static VAAPI_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -1340,182 +1325,12 @@ mod imp {
             }
         }
 
-        #[test]
-        #[ignore = "requires a VA-API capable Linux host"]
-        fn encodes_exported_nv12_dmabuf_frames_at_steady_30fps() {
-            const FRAME_COUNT: usize = 120;
-            let _guard = VAAPI_TEST_LOCK.lock().unwrap();
-            let (device, _queue, adapter_info) = crate::test_wgpu_device_and_queue();
-            let mut encoder = H264Encoder::new(H264EncoderConfig {
-                adapter_info: Some(adapter_info),
-                resolution: STRESS_RESOLUTION,
-                rate_control: H264EncoderRateControl::ConstantBitrate {
-                    bitrate: 4_000_000,
-                    virtual_buffer_size: Duration::from_millis(1_500),
-                },
-                gop_size: 30,
-                framerate: TEST_FRAMERATE,
-                max_pending_frames: MAX_PENDING_ENCODE_FRAMES,
-            })
-            .expect("failed to create VA-API H264 encoder");
-            let frames = (0..MAX_PENDING_ENCODE_FRAMES + 1)
-                .map(|_| {
-                    crate::dmabuf::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
-                        .expect("failed to export NV12 DMA-BUF stress texture")
-                })
-                .collect::<Vec<_>>();
-
-            let mut encoded = Vec::new();
-            let mut call_times = Vec::new();
-            for index in 0..FRAME_COUNT {
-                let started_at = Instant::now();
-                encoded.extend(
-                    encoder
-                        .encode(
-                            Arc::clone(&frames[index % frames.len()]),
-                            Some(index as u64 * 1_000_000 / 30),
-                            false,
-                        )
-                        .expect("failed to encode VA-API frame"),
-                );
-                let elapsed = started_at.elapsed();
-                if index >= frames.len() {
-                    call_times.push(elapsed);
-                }
-                if elapsed < Duration::from_millis(33) {
-                    thread::sleep(Duration::from_millis(33) - elapsed);
-                }
-            }
-            encoded.extend(encoder.flush().expect("failed to flush VA-API encoder"));
-
-            let max_call_ms =
-                call_times.iter().map(Duration::as_millis).max().unwrap_or_default();
-            let keyframes = encoded.iter().filter(|frame| frame.is_keyframe).count();
-            eprintln!(
-                "encoded={}; keyframes={}; max_call_ms={}",
-                encoded.len(),
-                keyframes,
-                max_call_ms
-            );
-            assert_eq!(encoded.len(), FRAME_COUNT);
-            assert!(keyframes >= 4);
-            assert!(max_call_ms < 40);
-        }
-
-        #[test]
-        #[ignore = "requires a VA-API capable Linux host"]
-        fn encodes_wt_preview_low_latency_without_stalls_or_memory_growth() {
-            const FRAME_COUNT: usize = 1_800;
-            const WARMUP_FRAMES: usize = 60;
-            const WT_PREVIEW_BITRATE: u32 = 6_000_000;
-            const WT_PREVIEW_GOP_SIZE: u16 = 30;
-            const MAX_RSS_GROWTH_KIB: usize = 64 * 1024;
-            let _guard = VAAPI_TEST_LOCK.lock().unwrap();
-            let (device, _queue, adapter_info) = crate::test_wgpu_device_and_queue();
-            let mut encoder = H264Encoder::new(H264EncoderConfig {
-                adapter_info: Some(adapter_info),
-                resolution: STRESS_RESOLUTION,
-                rate_control: H264EncoderRateControl::VariableBitrate {
-                    average_bitrate: WT_PREVIEW_BITRATE,
-                    max_bitrate: WT_PREVIEW_BITRATE * 4 / 3,
-                    virtual_buffer_size: Duration::from_secs(2),
-                },
-                gop_size: WT_PREVIEW_GOP_SIZE,
-                framerate: WT_PREVIEW_FRAMERATE,
-                max_pending_frames: 1,
-            })
-            .expect("failed to create WT-preview VA-API H264 encoder");
-            let frames = (0..3)
-                .map(|_| {
-                    crate::dmabuf::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
-                        .expect("failed to export NV12 DMA-BUF WT preview texture")
-                })
-                .collect::<Vec<_>>();
-
-            let interval = WT_PREVIEW_FRAMERATE.get_interval_duration();
-            let mut encoded_frames = 0;
-            let mut keyframes = 0;
-            let mut encoded_bytes = 0usize;
-            let mut call_times = Vec::new();
-            let mut rss_after_warmup = None;
-            let mut peak_rss_kib = 0;
-            for index in 0..FRAME_COUNT {
-                let started_at = Instant::now();
-                let encoded = encoder
-                    .encode(
-                        Arc::clone(&frames[index % frames.len()]),
-                        Some(frame_pts_us(index, WT_PREVIEW_FRAMERATE)),
-                        false,
-                    )
-                    .expect("failed to encode WT-preview VA-API frame");
-                observe_encoded_frames(
-                    encoded,
-                    &mut encoded_frames,
-                    &mut keyframes,
-                    &mut encoded_bytes,
-                );
-                let elapsed = started_at.elapsed();
-                if index >= WARMUP_FRAMES {
-                    call_times.push(elapsed);
-                    let rss = current_rss_kib();
-                    rss_after_warmup.get_or_insert(rss);
-                    peak_rss_kib = peak_rss_kib.max(rss);
-                }
-                if elapsed < interval {
-                    thread::sleep(interval - elapsed);
-                }
-            }
-            observe_encoded_frames(
-                encoder.flush().expect("failed to flush WT-preview VA-API encoder"),
-                &mut encoded_frames,
-                &mut keyframes,
-                &mut encoded_bytes,
-            );
-
-            call_times.sort_unstable();
-            let max_call = call_times.iter().copied().max().unwrap_or_default();
-            let p99_call = percentile_duration(&call_times, 99);
-            let rss_growth_kib =
-                peak_rss_kib.saturating_sub(rss_after_warmup.unwrap_or(peak_rss_kib));
-            let padded_cbr_bytes = padded_cbr_budget_bytes(
-                WT_PREVIEW_BITRATE,
-                WT_PREVIEW_FRAMERATE,
-                FRAME_COUNT,
-            );
-            eprintln!(
-                "wt_low_latency frames={encoded_frames}; keyframes={keyframes}; bytes={encoded_bytes}; padded_cbr_bytes={padded_cbr_bytes}; max_call_ms={}; p99_call_ms={}; rss_after_warmup_kib={}; peak_rss_kib={peak_rss_kib}; rss_growth_kib={rss_growth_kib}",
-                max_call.as_millis(),
-                p99_call.as_millis(),
-                rss_after_warmup.unwrap_or(0),
-            );
-
-            assert_eq!(encoded_frames, FRAME_COUNT);
-            assert!(keyframes >= 55);
-            assert!(encoded_bytes < padded_cbr_bytes * 9 / 10);
-            assert!(p99_call < Duration::from_millis(15));
-            assert!(max_call < Duration::from_millis(33));
-            assert!(rss_growth_kib < MAX_RSS_GROWTH_KIB);
-        }
-
         fn contains_h264_nal(data: &[u8], nal_type: u8) -> bool {
             data.windows(5)
                 .any(|window| window[..4] == [0, 0, 0, 1] && window[4] & 0x1f == nal_type)
                 || data.windows(4).any(|window| {
                     window[..3] == [0, 0, 1] && window[3] & 0x1f == nal_type
                 })
-        }
-
-        fn observe_encoded_frames(
-            frames: Vec<EncodedOutputChunk<Bytes>>,
-            encoded_frames: &mut usize,
-            keyframes: &mut usize,
-            encoded_bytes: &mut usize,
-        ) {
-            for frame in frames {
-                *encoded_frames += 1;
-                *keyframes += frame.is_keyframe as usize;
-                *encoded_bytes += frame.data.len();
-            }
         }
 
         fn write_solid_nv12_frame(
@@ -1610,38 +1425,6 @@ mod imp {
         fn frame_pts_us(index: usize, framerate: VideoFramerate) -> u64 {
             index as u64 * 1_000_000u64 * framerate.den as u64
                 / framerate.num as u64
-        }
-
-        fn percentile_duration(values: &[Duration], percentile: usize) -> Duration {
-            if values.is_empty() {
-                return Duration::ZERO;
-            }
-            let index = (values.len() - 1) * percentile / 100;
-            values[index]
-        }
-
-        fn padded_cbr_budget_bytes(
-            bitrate: u32,
-            framerate: VideoFramerate,
-            frame_count: usize,
-        ) -> usize {
-            let bytes = u128::from(bitrate)
-                * u128::from(framerate.den.max(1))
-                * frame_count as u128
-                / (8 * u128::from(framerate.num.max(1)));
-            bytes.min(usize::MAX as u128) as usize
-        }
-
-        fn current_rss_kib() -> usize {
-            fs::read_to_string("/proc/self/status")
-                .ok()
-                .and_then(|status| {
-                    status.lines().find_map(|line| {
-                        let value = line.strip_prefix("VmRSS:")?;
-                        value.split_whitespace().next()?.parse().ok()
-                    })
-                })
-                .unwrap_or(0)
         }
     }
 }

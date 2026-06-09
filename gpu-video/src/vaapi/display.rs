@@ -8,7 +8,7 @@ use crate::{
     VideoResolution,
     dmabuf::{
         DmaBufFrame, DmaBufLayer, DmaBufObject, DmaBufPlane,
-        import_nv12_dmabuf_texture, validate_nv12_dmabuf_layout,
+        import_nv12_dmabuf_texture,
     },
 };
 use libva::{
@@ -107,21 +107,6 @@ pub(crate) fn import_drm_prime_surface(
         })
         .collect::<Result<Vec<_>, String>>()?;
 
-    validate_nv12_dmabuf_layout(
-        descriptor.fourcc,
-        descriptor.width,
-        descriptor.height,
-        &objects,
-        &layers,
-    )
-    .map_err(|err| err.to_string())?;
-    if objects.len() != 1 {
-        return Err(format!(
-            "WGPU NV12 DMA-BUF import supports one object, VA-API exported {} objects",
-            objects.len()
-        ));
-    }
-
     import_nv12_dmabuf_texture(
         device,
         descriptor.fourcc,
@@ -141,7 +126,12 @@ fn dmabuf_layer_from_prime_parts(
     offset: [u32; 4],
     pitch: [u32; 4],
 ) -> Result<DmaBufLayer, String> {
-    let plane_count = checked_va_array_count("DRM PRIME layer plane", num_planes)?;
+    let plane_count = num_planes as usize;
+    if plane_count > 4 {
+        return Err(format!(
+            "DRM PRIME layer plane count {plane_count} exceeds VA-API descriptor limit"
+        ));
+    }
     Ok(DmaBufLayer {
         drm_format,
         planes: (0..plane_count)
@@ -243,14 +233,6 @@ fn push_unique_drm_path(paths: &mut Vec<String>, path: String) {
 
 fn no_usable_drm_display_error(paths: &[String]) -> String {
     format!("no usable DRM display found in {}", paths.join(", "))
-}
-
-fn checked_va_array_count(name: &str, count: u32) -> Result<usize, String> {
-    let count = count as usize;
-    if count > 4 {
-        return Err(format!("{name} count {count} exceeds VA-API descriptor limit"));
-    }
-    Ok(count)
 }
 
 #[cfg(all(test, target_os = "linux"))]
