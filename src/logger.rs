@@ -2,7 +2,6 @@ use std::{
     fmt::Debug,
     fs::{self, File},
     str::FromStr,
-    sync::OnceLock,
 };
 
 use tracing_subscriber::{
@@ -12,7 +11,7 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
 };
 
-use crate::config::{LoggerConfig, LoggerFormat, read_config};
+use crate::config::{LoggerConfig, LoggerFormat};
 
 #[derive(Debug, Clone, Copy)]
 pub enum FfmpegLogLevel {
