@@ -1,6 +1,7 @@
 #[cfg(target_os = "linux")]
 mod imp {
     use std::{
+        any::Any,
         collections::{HashMap, HashSet},
         rc::Rc,
         sync::Arc,
@@ -8,10 +9,9 @@ mod imp {
     };
 
     use crate::{
-        DmaBufFrame, OutputFrame, VideoResolution,
         device::{ColorRange, ColorSpace, MissedFrameHandling},
         parser::{
-            decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
+            decoder_instructions::{compile_to_decoder_instructions, DecoderInstruction},
             h264::H264Parser,
             reference_manager::{
                 DecodeInformation, ReferenceContext, ReferenceId,
@@ -23,6 +23,7 @@ mod imp {
             take_nv12_surface,
         },
         vulkan_decoder::{DecodeResult, DecodeResultMetadata, FrameSorter},
+        DmaBufFrame, OutputFrame, VideoResolution,
     };
     use crossbeam_channel::{Receiver, Sender};
     use h264_reader::nal::{
@@ -40,10 +41,9 @@ mod imp {
         BufferType, Config, Context, Display, H264PicFields, H264SeqFields, IQMatrix,
         IQMatrixBufferH264, Picture, PictureH264, PictureNew, PictureParameter,
         PictureParameterBufferH264, SliceParameter, SliceParameterBufferH264, Surface,
-        UsageHint, VA_PICTURE_H264_LONG_TERM_REFERENCE,
-        VA_PICTURE_H264_SHORT_TERM_REFERENCE, VA_RT_FORMAT_YUV420,
-        VA_SLICE_DATA_FLAG_ALL, VAConfigAttrib, VAConfigAttribType, VAEntrypoint,
-        VAProfile,
+        UsageHint, VAConfigAttrib, VAConfigAttribType, VAEntrypoint, VAProfile,
+        VA_PICTURE_H264_LONG_TERM_REFERENCE, VA_PICTURE_H264_SHORT_TERM_REFERENCE,
+        VA_RT_FORMAT_YUV420, VA_SLICE_DATA_FLAG_ALL,
     };
     use tracing::info;
 
@@ -71,6 +71,17 @@ mod imp {
         pub data: Arc<DmaBufFrame>,
         pub pts: Duration,
         pub resolution: VideoResolution,
+    }
+
+    pub struct WgpuDecodedFrame {
+        pub data: Arc<wgpu::Texture>,
+        pub owner: Arc<dyn Any + Send + Sync>,
+        pub pts: Duration,
+        pub resolution: VideoResolution,
+    }
+
+    pub struct WgpuTexturesDecoder {
+        decoder: H264Decoder,
     }
 
     struct DecodedFrameData {
@@ -594,6 +605,53 @@ mod imp {
                 }
             }
         }
+    }
+
+    impl WgpuTexturesDecoder {
+        pub fn new(
+            device: Arc<wgpu::Device>,
+            adapter_info: Option<&wgpu::AdapterInfo>,
+        ) -> Result<Self, VaapiH264DecoderError> {
+            Ok(Self { decoder: H264Decoder::new(device, adapter_info)? })
+        }
+
+        pub fn decode_chunk(
+            &mut self,
+            data: &[u8],
+            pts: Option<u64>,
+            present: bool,
+        ) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
+            self.decoder.decode_chunk(data, pts, present).map(frames_to_wgpu_textures)
+        }
+
+        pub fn flush_frame(
+            &mut self,
+        ) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
+            self.decoder.flush_frame().map(frames_to_wgpu_textures)
+        }
+
+        pub fn flush(&mut self) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
+            self.decoder.flush().map(frames_to_wgpu_textures)
+        }
+
+        pub fn mark_missed_frames(&mut self) {
+            self.decoder.mark_missed_frames();
+        }
+    }
+
+    fn frames_to_wgpu_textures(frames: Vec<DecodedFrame>) -> Vec<WgpuDecodedFrame> {
+        frames
+            .into_iter()
+            .map(|frame| {
+                let owner: Arc<dyn Any + Send + Sync> = frame.data.clone();
+                WgpuDecodedFrame {
+                data: frame.data.texture_arc(),
+                owner,
+                pts: frame.pts,
+                resolution: frame.resolution,
+                }
+            })
+            .collect()
     }
 
     fn from_sorted_frame(frame: OutputFrame<DecodedFrameData>) -> DecodedFrame {
@@ -1135,8 +1193,8 @@ mod imp {
             fs,
             path::{Path, PathBuf},
             process::Command,
-            sync::Mutex,
             sync::mpsc,
+            sync::Mutex,
             time::{SystemTime, UNIX_EPOCH},
         };
 
@@ -1383,4 +1441,6 @@ mod imp {
     }
 }
 
-pub use imp::{DecodedFrame, H264Decoder, VaapiH264DecoderError};
+pub use imp::{
+    VaapiH264DecoderError, WgpuDecodedFrame, WgpuTexturesDecoder,
+};

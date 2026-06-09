@@ -152,11 +152,11 @@ impl InputTexture {
             FrameData::Rgba8UnormWgpuTexture(texture) => {
                 match &mut self.0 {
                     Some(InputTextureState::Rgba8Unorm(input)) => {
-                        input.update(texture);
+                        input.update(texture.texture_arc());
                     }
                     state => {
                         *state = Some(InputTextureState::Rgba8Unorm(RgbaTextureInput::new(
-                            texture,
+                            texture.texture_arc(),
                         )));
                     }
                 };
@@ -164,26 +164,15 @@ impl InputTexture {
             FrameData::Nv12WgpuTexture(texture) => {
                 match &mut self.0 {
                     Some(InputTextureState::Nv12(input)) => {
-                        input.update(ctx, texture).unwrap();
+                        input.update(ctx, texture.texture_arc()).unwrap();
                     }
                     state => {
                         *state = Some(InputTextureState::Nv12(
-                            NV12Input::new_from_texture(ctx, texture).unwrap(),
+                            NV12Input::new_from_texture(ctx, texture.texture_arc()).unwrap(),
                         ));
                     }
                 };
             }
-            #[cfg(all(feature = "dmabuf", target_os = "linux"))]
-            FrameData::Nv12DmaBuf(frame) => match &mut self.0 {
-                Some(InputTextureState::Nv12(input)) => {
-                    input.update(ctx, frame.texture_arc()).unwrap();
-                }
-                state => {
-                    *state = Some(InputTextureState::Nv12(
-                        NV12Input::new_from_texture(ctx, frame.texture_arc()).unwrap(),
-                    ));
-                }
-            },
             FrameData::Bgra(data) => {
                 match &mut self.0 {
                     Some(InputTextureState::Bgra(input)) => {

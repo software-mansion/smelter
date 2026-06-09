@@ -2,8 +2,8 @@
 mod imp {
     use std::{sync::Arc, time::Duration};
 
-    use gpu_video::vaapi::h264::{DecodedFrame, H264Decoder};
-    use smelter_render::{Frame, FrameData, Resolution};
+    use gpu_video::vaapi::h264::{WgpuDecodedFrame, WgpuTexturesDecoder};
+    use smelter_render::{Frame, FrameData, Resolution, WgpuTextureFrame};
     use tracing::{debug, info, trace, warn};
 
     use crate::{
@@ -14,7 +14,7 @@ mod imp {
     };
 
     pub struct VaapiH264Decoder {
-        decoder: H264Decoder,
+        decoder: WgpuTexturesDecoder,
         keyframe_request_sender: Option<KeyframeRequestSender>,
     }
 
@@ -27,7 +27,7 @@ mod imp {
         ) -> Result<Self, DecoderInitError> {
             info!("Initializing VA-API H264 decoder");
             let adapter_info = ctx.graphics_context.adapter.get_info();
-            let decoder = H264Decoder::new(
+            let decoder = WgpuTexturesDecoder::new(
                 Arc::clone(&ctx.graphics_context.device),
                 Some(&adapter_info),
             )
@@ -93,9 +93,13 @@ mod imp {
         }
     }
 
-    fn from_va_frame(frame: DecodedFrame) -> Frame {
+    fn from_va_frame(frame: WgpuDecodedFrame) -> Frame {
+        let data = WgpuTextureFrame::new_with_owner(
+            Arc::clone(&frame.data),
+            frame.owner,
+        );
         Frame {
-            data: FrameData::Nv12DmaBuf(frame.data),
+            data: FrameData::Nv12WgpuTexture(data),
             pts: frame.pts,
             resolution: Resolution {
                 width: frame.resolution.width as usize,

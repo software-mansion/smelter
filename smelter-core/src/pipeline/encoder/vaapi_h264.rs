@@ -3,10 +3,11 @@ mod imp {
     use std::sync::Arc;
 
     use gpu_video::{
-        VideoFramerate, VideoResolution,
         vaapi::h264::{
-            EncodedFrame, H264Encoder, H264EncoderConfig, H264EncoderRateControl,
+            EncodedFrame, H264EncoderConfig, H264EncoderRateControl,
+            WgpuTexturesEncoderH264,
         },
+        InputFrame, VideoFramerate, VideoResolution,
     };
     use smelter_render::{FrameData, Framerate, OutputFrameFormat, Resolution};
     use tracing::{error, info};
@@ -14,8 +15,8 @@ mod imp {
     use crate::{
         pipeline::{
             encoder::{
-                VideoEncoder, VideoEncoderConfig,
                 utils::{bitrate_from_resolution_framerate, gop_size_from_ms_framerate},
+                VideoEncoder, VideoEncoderConfig,
             },
             utils::{annexb_to_avcc, build_avc_decoder_config},
         },
@@ -23,7 +24,7 @@ mod imp {
     };
 
     pub struct VaapiH264Encoder {
-        encoder: H264Encoder,
+        encoder: WgpuTexturesEncoderH264,
         bitstream_format: H264BitstreamFormat,
     }
 
@@ -68,16 +69,18 @@ mod imp {
             let video_resolution = video_resolution(options.resolution);
             let video_framerate = video_framerate(framerate);
 
-            let encoder = H264Encoder::new(H264EncoderConfig {
-                device: Arc::clone(&ctx.graphics_context.device),
-                queue: Arc::clone(&ctx.graphics_context.queue),
-                adapter_info: Some(ctx.graphics_context.adapter.get_info()),
-                resolution: video_resolution,
-                rate_control,
-                gop_size,
-                framerate: video_framerate,
-                max_pending_frames,
-            })
+            let encoder = WgpuTexturesEncoderH264::new(
+                Arc::clone(&ctx.graphics_context.device),
+                Arc::clone(&ctx.graphics_context.queue),
+                H264EncoderConfig {
+                    adapter_info: Some(ctx.graphics_context.adapter.get_info()),
+                    resolution: video_resolution,
+                    rate_control,
+                    gop_size,
+                    framerate: video_framerate,
+                    max_pending_frames,
+                },
+            )
             .map_err(|err| {
                 error!("Failed to initialize VA-API H264 encoder: {err}");
                 EncoderInitError::VaapiH264EncoderUnavailable(err.to_string())
@@ -85,7 +88,7 @@ mod imp {
             let extradata = (options.bitstream_format == H264BitstreamFormat::Avcc)
                 .then(|| build_avc_decoder_config(encoder.parameter_sets()))
                 .flatten();
-            let output_format = OutputFrameFormat::Nv12DmaBuf;
+            let output_format = OutputFrameFormat::Nv12WgpuTexture;
 
             info!(
                 width = options.resolution.width,
@@ -112,12 +115,18 @@ mod imp {
             frame: Frame,
             force_keyframe: bool,
         ) -> Vec<EncodedOutputChunk> {
-            let FrameData::Nv12DmaBuf(dmabuf) = frame.data else {
+            let FrameData::Nv12WgpuTexture(texture) = frame.data else {
                 error!("Unsupported pixel format {:?}. Dropping frame.", frame.data);
                 return Vec::new();
             };
 
-            match self.encoder.encode(dmabuf, frame.pts, force_keyframe) {
+            match self.encoder.encode(
+                InputFrame {
+                    data: (*texture).clone(),
+                    pts: Some(duration_micros(frame.pts)),
+                },
+                force_keyframe,
+            ) {
                 Ok(frames) => {
                     frames.into_iter().map(|frame| self.chunk_from_frame(frame)).collect()
                 }
@@ -167,6 +176,10 @@ mod imp {
 
     fn video_framerate(framerate: Framerate) -> VideoFramerate {
         VideoFramerate { num: framerate.num, den: framerate.den }
+    }
+
+    fn duration_micros(duration: std::time::Duration) -> u64 {
+        duration.as_micros().try_into().unwrap_or(u64::MAX)
     }
 }
 

@@ -10,7 +10,8 @@ mod imp {
     };
 
     use crate::{
-        DmaBufFrame, VideoFramerate, VideoResolution, dmabuf::validate_nv12_dmabuf_frame,
+        dmabuf::validate_nv12_dmabuf_frame, export_nv12_dmabuf_texture, DmaBufFrame,
+        InputFrame, VideoFramerate, VideoResolution,
     };
     use bytes::Bytes;
     use libva::{
@@ -20,11 +21,10 @@ mod imp {
         EncSequenceParameterBufferH264, EncSliceParameter, EncSliceParameterBufferH264,
         ExternalBufferDescriptor, H264EncFrameCropOffsets, H264EncPicFields,
         H264EncSeqFields, H264VuiFields, MappedCodedBuffer, MemoryType, Picture,
-        PictureH264, PictureNew, RcFlags, Surface, UsageHint, VA_ATTRIB_NOT_SUPPORTED,
-        VA_INVALID_ID, VA_PICTURE_H264_SHORT_TERM_REFERENCE, VA_RC_CBR, VA_RC_VBR,
-        VA_RT_FORMAT_YUV420, VAConfigAttrib, VAConfigAttribType,
-        VADRMPRIMESurfaceDescriptor, VAEntrypoint, VAProfile, VASurfaceAttribType,
-        VASurfaceStatus,
+        PictureH264, PictureNew, RcFlags, Surface, UsageHint, VAConfigAttrib,
+        VAConfigAttribType, VADRMPRIMESurfaceDescriptor, VAEntrypoint, VAProfile,
+        VASurfaceAttribType, VASurfaceStatus, VA_ATTRIB_NOT_SUPPORTED, VA_INVALID_ID,
+        VA_PICTURE_H264_SHORT_TERM_REFERENCE, VA_RC_CBR, VA_RC_VBR, VA_RT_FORMAT_YUV420,
     };
     use tracing::{info, warn};
 
@@ -33,8 +33,8 @@ mod imp {
     };
 
     use super::super::parameter_sets::{
-        H264_LEVEL_4_0, LOG2_MAX_FRAME_NUM_MINUS4, LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4,
-        main_parameter_sets,
+        main_parameter_sets, H264_LEVEL_4_0, LOG2_MAX_FRAME_NUM_MINUS4,
+        LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4,
     };
 
     const RECONSTRUCTED_SURFACE_ALLOCATION_BATCH: usize = 4;
@@ -69,10 +69,22 @@ mod imp {
         parameter_sets: Bytes,
     }
 
+    /// H.264 encoder that accepts NV12 [`wgpu::Texture`] inputs.
+    ///
+    /// VA-API consumes DMA-BUF-backed surfaces, so each input texture is copied into
+    /// an internal DMA-BUF pool before encode. The copy is synchronously waited on
+    /// before submitting the frame to VA-API.
+    pub struct WgpuTexturesEncoderH264 {
+        encoder: H264Encoder,
+        device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
+        input_pool: Vec<Arc<DmaBufFrame>>,
+        next_input_index: usize,
+        resolution: VideoResolution,
+    }
+
     #[derive(Debug, Clone)]
     pub struct H264EncoderConfig {
-        pub device: Arc<wgpu::Device>,
-        pub queue: Arc<wgpu::Queue>,
         pub adapter_info: Option<wgpu::AdapterInfo>,
         pub resolution: VideoResolution,
         pub rate_control: H264EncoderRateControl,
@@ -139,6 +151,17 @@ mod imp {
 
         #[error("VA-API H264 encode error: {0}")]
         Encode(String),
+
+        #[error("VA-API H264 encoder requires COPY_SRC texture usage, got {0:?}")]
+        NoCopySrcTextureUsage(wgpu::TextureUsages),
+
+        #[error("VA-API H264 encoder requires NV12 textures, got {0:?}")]
+        NotNv12Texture(wgpu::TextureFormat),
+
+        #[error(
+            "VA-API H264 encoder expected texture size {expected:?}, got {provided:?}"
+        )]
+        InconsistentTextureSize { expected: wgpu::Extent3d, provided: wgpu::Extent3d },
     }
 
     impl H264Encoder {
@@ -188,6 +211,107 @@ mod imp {
 
         pub fn flush(&mut self) -> Result<Vec<EncodedFrame>, VaapiH264EncoderError> {
             self.encoder.flush().map_err(VaapiH264EncoderError::Encode)
+        }
+    }
+
+    impl WgpuTexturesEncoderH264 {
+        pub fn new(
+            device: Arc<wgpu::Device>,
+            queue: Arc<wgpu::Queue>,
+            config: H264EncoderConfig,
+        ) -> Result<Self, VaapiH264EncoderError> {
+            let resolution = config.resolution;
+            let pool_size = config.max_pending_frames + 2;
+            let encoder = H264Encoder::new(config)?;
+            let input_pool = (0..pool_size)
+                .map(|_| export_nv12_dmabuf_texture(&device, resolution))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|err| VaapiH264EncoderError::Unavailable(err.to_string()))?;
+            Ok(Self {
+                encoder,
+                device,
+                queue,
+                input_pool,
+                next_input_index: 0,
+                resolution,
+            })
+        }
+
+        pub fn parameter_sets(&self) -> &Bytes {
+            self.encoder.parameter_sets()
+        }
+
+        pub fn encode(
+            &mut self,
+            frame: InputFrame<wgpu::Texture>,
+            force_keyframe: bool,
+        ) -> Result<Vec<EncodedFrame>, VaapiH264EncoderError> {
+            let pts = frame.pts.map(Duration::from_micros).unwrap_or_default();
+            let frame = self.copy_input_to_dmabuf(frame.data)?;
+            self.encoder.encode(frame, pts, force_keyframe)
+        }
+
+        pub fn flush(&mut self) -> Result<Vec<EncodedFrame>, VaapiH264EncoderError> {
+            self.encoder.flush()
+        }
+
+        fn copy_input_to_dmabuf(
+            &mut self,
+            texture: wgpu::Texture,
+        ) -> Result<Arc<DmaBufFrame>, VaapiH264EncoderError> {
+            let expected_size = wgpu::Extent3d {
+                width: self.resolution.width,
+                height: self.resolution.height,
+                depth_or_array_layers: 1,
+            };
+            if !texture.usage().contains(wgpu::TextureUsages::COPY_SRC) {
+                return Err(VaapiH264EncoderError::NoCopySrcTextureUsage(
+                    texture.usage(),
+                ));
+            }
+            if texture.format() != wgpu::TextureFormat::NV12 {
+                return Err(VaapiH264EncoderError::NotNv12Texture(texture.format()));
+            }
+            if texture.size() != expected_size {
+                return Err(VaapiH264EncoderError::InconsistentTextureSize {
+                    expected: expected_size,
+                    provided: texture.size(),
+                });
+            }
+
+            let input = self.next_input_frame()?;
+            let mut encoder =
+                self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("VA-API H264 encoder input copy"),
+                });
+            encoder.copy_texture_to_texture(
+                texture.as_image_copy(),
+                input.texture().as_image_copy(),
+                expected_size,
+            );
+            self.queue.submit([encoder.finish()]);
+            self.device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .map_err(|err| VaapiH264EncoderError::Encode(err.to_string()))?;
+            Ok(input)
+        }
+
+        fn next_input_frame(
+            &mut self,
+        ) -> Result<Arc<DmaBufFrame>, VaapiH264EncoderError> {
+            for _ in 0..self.input_pool.len() {
+                let index = self.next_input_index;
+                self.next_input_index =
+                    (self.next_input_index + 1) % self.input_pool.len();
+                if Arc::strong_count(&self.input_pool[index]) == 1 {
+                    return Ok(Arc::clone(&self.input_pool[index]));
+                }
+            }
+
+            let frame = export_nv12_dmabuf_texture(&self.device, self.resolution)
+                .map_err(|err| VaapiH264EncoderError::Encode(err.to_string()))?;
+            self.input_pool.push(Arc::clone(&frame));
+            Ok(frame)
         }
     }
 
@@ -778,7 +902,11 @@ mod imp {
         }
 
         fn frame_num_for(&self, is_keyframe: bool) -> u16 {
-            if is_keyframe { 0 } else { self.frame_num }
+            if is_keyframe {
+                0
+            } else {
+                self.frame_num
+            }
         }
 
         fn poc_for(&self, is_keyframe: bool) -> u16 {
@@ -1031,7 +1159,11 @@ mod imp {
         }
 
         let supported = integers.iter().any(|value| {
-            if bitmask { value & required == required } else { *value == required }
+            if bitmask {
+                value & required == required
+            } else {
+                *value == required
+            }
         });
         if supported {
             Ok(())
@@ -1102,8 +1234,6 @@ mod imp {
             let _guard = VAAPI_TEST_LOCK.lock().unwrap();
             let (device, queue, adapter_info) = crate::test_wgpu_device_and_queue();
             let mut encoder = H264Encoder::new(H264EncoderConfig {
-                device: Arc::clone(&device),
-                queue: Arc::new(queue),
                 adapter_info: Some(adapter_info),
                 resolution: TEST_RESOLUTION,
                 rate_control: H264EncoderRateControl::ConstantBitrate {
@@ -1155,8 +1285,6 @@ mod imp {
             let (device, queue, adapter_info) = crate::test_wgpu_device_and_queue();
             let queue = Arc::new(queue);
             let mut encoder = H264Encoder::new(H264EncoderConfig {
-                device: Arc::clone(&device),
-                queue: Arc::clone(&queue),
                 adapter_info: Some(adapter_info),
                 resolution: TEST_RESOLUTION,
                 rate_control: H264EncoderRateControl::ConstantBitrate {
@@ -1219,8 +1347,6 @@ mod imp {
             let _guard = VAAPI_TEST_LOCK.lock().unwrap();
             let (device, queue, adapter_info) = crate::test_wgpu_device_and_queue();
             let mut encoder = H264Encoder::new(H264EncoderConfig {
-                device: Arc::clone(&device),
-                queue: Arc::new(queue),
                 adapter_info: Some(adapter_info),
                 resolution: STRESS_RESOLUTION,
                 rate_control: H264EncoderRateControl::ConstantBitrate {
@@ -1287,8 +1413,6 @@ mod imp {
             let _guard = VAAPI_TEST_LOCK.lock().unwrap();
             let (device, queue, adapter_info) = crate::test_wgpu_device_and_queue();
             let mut encoder = H264Encoder::new(H264EncoderConfig {
-                device: Arc::clone(&device),
-                queue: Arc::new(queue),
                 adapter_info: Some(adapter_info),
                 resolution: STRESS_RESOLUTION,
                 rate_control: H264EncoderRateControl::VariableBitrate {
@@ -1525,6 +1649,6 @@ mod imp {
 }
 
 pub use imp::{
-    EncodedFrame, H264Encoder, H264EncoderConfig, H264EncoderRateControl,
-    VaapiH264EncoderError,
+    EncodedFrame, H264EncoderConfig, H264EncoderRateControl, VaapiH264EncoderError,
+    WgpuTexturesEncoderH264,
 };

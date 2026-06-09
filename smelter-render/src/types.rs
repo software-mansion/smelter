@@ -1,12 +1,11 @@
 use std::{
+    any::Any,
     collections::HashMap,
     fmt::{self, Display},
+    ops::Deref,
     sync::Arc,
     time::Duration,
 };
-
-#[cfg(all(feature = "dmabuf", target_os = "linux"))]
-pub use gpu_video::DmaBufFrame;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum RenderingMode {
@@ -35,13 +34,67 @@ pub enum FrameData {
     PlanarYuvJ420(YuvPlanes),
     InterleavedUyvy422(bytes::Bytes),
     InterleavedYuyv422(bytes::Bytes),
-    Rgba8UnormWgpuTexture(Arc<wgpu::Texture>),
-    Nv12WgpuTexture(Arc<wgpu::Texture>),
-    #[cfg(all(feature = "dmabuf", target_os = "linux"))]
-    Nv12DmaBuf(Arc<DmaBufFrame>),
+    Rgba8UnormWgpuTexture(WgpuTextureFrame),
+    Nv12WgpuTexture(WgpuTextureFrame),
     Nv12(NvPlanes),
     Bgra(bytes::Bytes),
     Argb(bytes::Bytes),
+}
+
+#[derive(Clone)]
+pub struct WgpuTextureFrame {
+    texture: Arc<wgpu::Texture>,
+    _owner: Option<Arc<dyn Any + Send + Sync>>,
+}
+
+impl WgpuTextureFrame {
+    pub fn new(texture: Arc<wgpu::Texture>) -> Self {
+        Self { texture, _owner: None }
+    }
+
+    pub fn new_with_owner(
+        texture: Arc<wgpu::Texture>,
+        owner: Arc<dyn Any + Send + Sync>,
+    ) -> Self {
+        Self { texture, _owner: Some(owner) }
+    }
+
+    pub fn texture_arc(&self) -> Arc<wgpu::Texture> {
+        Arc::clone(&self.texture)
+    }
+
+    pub fn texture(&self) -> &wgpu::Texture {
+        &self.texture
+    }
+}
+
+impl From<wgpu::Texture> for WgpuTextureFrame {
+    fn from(texture: wgpu::Texture) -> Self {
+        Self::new(Arc::new(texture))
+    }
+}
+
+impl From<Arc<wgpu::Texture>> for WgpuTextureFrame {
+    fn from(texture: Arc<wgpu::Texture>) -> Self {
+        Self::new(texture)
+    }
+}
+
+impl Deref for WgpuTextureFrame {
+    type Target = wgpu::Texture;
+
+    fn deref(&self) -> &Self::Target {
+        self.texture()
+    }
+}
+
+impl fmt::Debug for WgpuTextureFrame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WGPU texture frame")
+            .field("size", &self.texture.size())
+            .field("format", &self.texture.format())
+            .finish()
+    }
 }
 
 #[derive(Clone)]
@@ -196,6 +249,4 @@ pub enum OutputFrameFormat {
     PlanarYuv444Bytes,
     RgbaWgpuTexture,
     Nv12WgpuTexture,
-    #[cfg(all(feature = "dmabuf", target_os = "linux"))]
-    Nv12DmaBuf,
 }

@@ -126,31 +126,6 @@ pub(super) fn read_outputs(
                         frame,
                     })
                 }
-                #[cfg(all(feature = "dmabuf", target_os = "linux"))]
-                OutputTexture::Nv12DmaBuf(output) => {
-                    let resolution = output.resolution();
-                    let (texture, frame) = match output.next_frame() {
-                        Ok(frame) => frame,
-                        Err(err) => {
-                            error!("Failed to prepare NV12 DMA-BUF output frame: {err}");
-                            continue;
-                        }
-                    };
-                    ctx.wgpu_ctx.format.rgba_to_nv12.convert(
-                        ctx.wgpu_ctx,
-                        node.output_texture_bind_group(),
-                        texture,
-                    );
-
-                    partial_textures.push(PartialOutputFrame::CompleteFrame {
-                        output_id: output_id.clone(),
-                        frame: Frame {
-                            resolution,
-                            data: FrameData::Nv12DmaBuf(frame),
-                            pts,
-                        },
-                    })
-                }
             },
             // fallback if root node in render graph is empty
             None => match &mut output.output_texture {
@@ -184,7 +159,9 @@ pub(super) fn read_outputs(
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
                         output_id: output_id.clone(),
                         frame: Frame {
-                            data: FrameData::Rgba8UnormWgpuTexture(Arc::new(wgpu_texture)),
+                            data: FrameData::Rgba8UnormWgpuTexture(
+                                Arc::new(wgpu_texture).into(),
+                            ),
                             resolution: *resolution,
                             pts,
                         },
@@ -196,28 +173,10 @@ pub(super) fn read_outputs(
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
                         output_id: output_id.clone(),
                         frame: Frame {
-                            data: FrameData::Nv12WgpuTexture(Arc::new(texture.texture().clone())),
+                            data: FrameData::Nv12WgpuTexture(
+                                Arc::new(texture.texture().clone()).into(),
+                            ),
                             resolution: *resolution,
-                            pts,
-                        },
-                    });
-                }
-                #[cfg(all(feature = "dmabuf", target_os = "linux"))]
-                OutputTexture::Nv12DmaBuf(output) => {
-                    let resolution = output.resolution();
-                    let (texture, frame) = match output.next_frame() {
-                        Ok(frame) => frame,
-                        Err(err) => {
-                            error!("Failed to prepare NV12 DMA-BUF fallback frame: {err}");
-                            continue;
-                        }
-                    };
-                    texture.fill_with_color(ctx.wgpu_ctx, RGBColor::BLACK);
-                    partial_textures.push(PartialOutputFrame::CompleteFrame {
-                        output_id: output_id.clone(),
-                        frame: Frame {
-                            data: FrameData::Nv12DmaBuf(frame),
-                            resolution,
                             pts,
                         },
                     });
