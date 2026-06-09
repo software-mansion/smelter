@@ -259,7 +259,7 @@ fn nv12_import_format_features() -> vk::FormatFeatureFlags2 {
         | vk::FormatFeatureFlags2::TRANSFER_SRC
 }
 
-pub fn export_nv12_dmabuf_texture(
+pub(crate) fn export_nv12_dmabuf_texture(
     wgpu_device: &wgpu::Device,
     resolution: VideoResolution,
 ) -> Result<Arc<DmaBufFrame>, DmaBufError> {

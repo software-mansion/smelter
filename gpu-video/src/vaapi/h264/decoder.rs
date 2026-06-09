@@ -3,7 +3,8 @@ mod imp {
     use std::{collections::HashMap, rc::Rc, sync::Arc};
 
     use crate::{
-        EncodedInputChunk, FrameMetadata, H264DecoderEvent, OutputFrame, VideoResolution,
+        EncodedInputChunk, H264DecoderEvent, OutputFrame, VideoResolution,
+        codec::h264::parameters::h264_max_num_reorder_frames,
         device::{ColorRange, ColorSpace, MissedFrameHandling},
         parser::{
             decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
@@ -56,12 +57,6 @@ mod imp {
         pps: HashMap<u8, PicParameterSet>,
     }
 
-    struct DecodedFrame {
-        surface_id: libva::VASurfaceID,
-        metadata: FrameMetadata,
-        pub resolution: VideoResolution,
-    }
-
     pub struct WgpuTexturesDecoder {
         decoder: H264Decoder,
         device: Arc<wgpu::Device>,
@@ -89,6 +84,34 @@ mod imp {
         reusable: bool,
     }
 
+    impl DecodedSurface {
+        fn new(surface: Surface<()>, reference: DecodedPictureInfo) -> Self {
+            Self {
+                surface,
+                reference: Some(reference),
+                output_pending: true,
+                reusable: true,
+            }
+        }
+
+        fn clear_reference(&mut self) {
+            self.reference = None;
+        }
+
+        fn release_output(&mut self) {
+            self.output_pending = false;
+        }
+
+        fn retire_session(&mut self, reusable: bool) {
+            self.reusable &= reusable;
+            self.clear_reference();
+        }
+
+        fn is_recyclable(&self) -> bool {
+            self.reference.is_none() && !self.output_pending
+        }
+    }
+
     impl H264Decoder {
         fn new(
             adapter_info: Option<&wgpu::AdapterInfo>,
@@ -113,7 +136,7 @@ mod imp {
         fn process_event(
             &mut self,
             event: H264DecoderEvent<'_>,
-        ) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
+        ) -> Result<Vec<OutputFrame<DecodedFrameData>>, VaapiH264DecoderError> {
             match event {
                 H264DecoderEvent::DecodeChunk(chunk) => {
                     let instructions = self
@@ -144,13 +167,15 @@ mod imp {
 
         fn signal_frame_end(
             &mut self,
-        ) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
+        ) -> Result<Vec<OutputFrame<DecodedFrameData>>, VaapiH264DecoderError> {
             let instructions =
                 self.flush_parser().map_err(VaapiH264DecoderError::Decode)?;
             self.process_instructions(instructions).map_err(VaapiH264DecoderError::Decode)
         }
 
-        fn flush(&mut self) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
+        fn flush(
+            &mut self,
+        ) -> Result<Vec<OutputFrame<DecodedFrameData>>, VaapiH264DecoderError> {
             let mut frames = self.signal_frame_end()?;
             frames.extend(self.flush_sorted_frames());
             Ok(frames)
@@ -181,7 +206,7 @@ mod imp {
         fn process_instructions(
             &mut self,
             instructions: Vec<DecoderInstruction>,
-        ) -> Result<Vec<DecodedFrame>, String> {
+        ) -> Result<Vec<OutputFrame<DecodedFrameData>>, String> {
             let mut frames = Vec::new();
             for instruction in instructions {
                 match instruction {
@@ -192,7 +217,7 @@ mod imp {
                         self.pps.insert(pps.pic_parameter_set_id.id(), pps);
                     }
                     DecoderInstruction::Idr { decode_info, reference_id } => {
-                        self.retain_references();
+                        self.retain_references()?;
                         if let Some(frame) =
                             self.decode_picture(decode_info, reference_id, true)?
                         {
@@ -208,7 +233,7 @@ mod imp {
                     }
                     DecoderInstruction::Drop { reference_ids } => {
                         for reference_id in reference_ids {
-                            self.drop_reference(reference_id);
+                            self.drop_reference(reference_id)?;
                         }
                     }
                 }
@@ -219,7 +244,7 @@ mod imp {
         fn process_sps(
             &mut self,
             sps: SeqParameterSet,
-        ) -> Result<Vec<DecodedFrame>, String> {
+        ) -> Result<Vec<OutputFrame<DecodedFrameData>>, String> {
             let stream = VaapiStreamInfo::from_sps(&sps)?;
             let mut frames = Vec::new();
             if self.session.as_ref().is_none_or(|session| session.stream != stream) {
@@ -281,12 +306,7 @@ mod imp {
                 self.active_surfaces
                     .insert(
                         surface_id,
-                        DecodedSurface {
-                            surface,
-                            reference: Some(decoded_picture),
-                            output_pending: true,
-                            reusable: true,
-                        },
+                        DecodedSurface::new(surface, decoded_picture),
                     )
                     .is_none(),
                 "decoded VA surface was reused while still active"
@@ -511,12 +531,12 @@ mod imp {
         fn sort_frame(
             &mut self,
             frame: DecodeResult<DecodedFrameData>,
-        ) -> Vec<DecodedFrame> {
-            self.frame_sorter.put(frame).into_iter().map(from_sorted_frame).collect()
+        ) -> Vec<OutputFrame<DecodedFrameData>> {
+            self.frame_sorter.put(frame)
         }
 
-        fn flush_sorted_frames(&mut self) -> Vec<DecodedFrame> {
-            self.frame_sorter.flush().into_iter().map(from_sorted_frame).collect()
+        fn flush_sorted_frames(&mut self) -> Vec<OutputFrame<DecodedFrameData>> {
+            self.frame_sorter.flush()
         }
 
         fn discard_sorted_frames(&mut self) {
@@ -525,32 +545,30 @@ mod imp {
             }
         }
 
-        fn drop_reference(&mut self, reference_id: ReferenceId) {
-            if let Some(index) =
-                self.references.iter().position(|(id, _)| *id == reference_id)
-            {
-                let (_, surface_id) = self.references.remove(index);
-                if let Some(surface) = self.active_surfaces.get_mut(&surface_id) {
-                    surface.reference = None;
-                }
-                self.recycle_surface(surface_id);
-            }
+        fn drop_reference(&mut self, reference_id: ReferenceId) -> Result<(), String> {
+            let index = self
+                .references
+                .iter()
+                .position(|(id, _)| *id == reference_id)
+                .ok_or_else(|| format!("missing VA-API H264 reference {reference_id:?}"))?;
+            let (_, surface_id) = self.references.remove(index);
+            self.active_surface_mut(surface_id)?.clear_reference();
+            self.recycle_surface(surface_id);
+            Ok(())
         }
 
-        fn retain_references(&mut self) {
+        fn retain_references(&mut self) -> Result<(), String> {
             let references = std::mem::take(&mut self.references);
             for (_, surface_id) in references {
-                if let Some(surface) = self.active_surfaces.get_mut(&surface_id) {
-                    surface.reference = None;
-                }
+                self.active_surface_mut(surface_id)?.clear_reference();
                 self.recycle_surface(surface_id);
             }
+            Ok(())
         }
 
         fn retire_session_surfaces(&mut self, reusable: bool) {
             for surface in self.active_surfaces.values_mut() {
-                surface.reusable &= reusable;
-                surface.reference = None;
+                surface.retire_session(reusable);
             }
             let surface_ids = self.active_surfaces.keys().copied().collect::<Vec<_>>();
             self.references.clear();
@@ -572,9 +590,18 @@ mod imp {
                 .ok_or_else(|| format!("missing decoded VA surface {surface_id}"))
         }
 
+        fn active_surface_mut(
+            &mut self,
+            surface_id: libva::VASurfaceID,
+        ) -> Result<&mut DecodedSurface, String> {
+            self.active_surfaces
+                .get_mut(&surface_id)
+                .ok_or_else(|| format!("missing decoded VA surface {surface_id}"))
+        }
+
         fn release_output_surface(&mut self, surface_id: libva::VASurfaceID) {
             if let Some(surface) = self.active_surfaces.get_mut(&surface_id) {
-                surface.output_pending = false;
+                surface.release_output();
             }
             self.recycle_surface(surface_id);
         }
@@ -583,7 +610,7 @@ mod imp {
             let Some(surface) = self.active_surfaces.get(&surface_id) else {
                 return;
             };
-            if surface.reference.is_some() || surface.output_pending {
+            if !surface.is_recyclable() {
                 return;
             }
             let surface = self.active_surfaces.remove(&surface_id).unwrap();
@@ -635,26 +662,27 @@ mod imp {
 
         fn copy_frames(
             &mut self,
-            frames: Vec<DecodedFrame>,
+            frames: Vec<OutputFrame<DecodedFrameData>>,
         ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VaapiH264DecoderError> {
             frames.into_iter().map(|frame| self.copy_frame(frame)).collect()
         }
 
         fn copy_frame(
             &mut self,
-            frame: DecodedFrame,
+            frame: OutputFrame<DecodedFrameData>,
         ) -> Result<OutputFrame<wgpu::Texture>, VaapiH264DecoderError> {
+            let surface_id = frame.data.surface_id;
             let result = (|| {
                 let dmabuf = export_surface_as_frame(
                     &self.device,
                     self.decoder
-                        .surface(frame.surface_id)
+                        .surface(surface_id)
                         .map_err(VaapiH264DecoderError::Decode)?,
                 )
                 .map_err(VaapiH264DecoderError::Decode)?;
                 let size = wgpu::Extent3d {
-                    width: frame.resolution.width,
-                    height: frame.resolution.height,
+                    width: frame.data.resolution.width,
+                    height: frame.data.resolution.height,
                     depth_or_array_layers: 1,
                 };
                 let texture = self.device.create_texture(&wgpu::TextureDescriptor {
@@ -684,16 +712,8 @@ mod imp {
                     .map_err(|err| VaapiH264DecoderError::Decode(err.to_string()))?;
                 Ok(OutputFrame { data: texture, metadata: frame.metadata })
             })();
-            self.decoder.release_output_surface(frame.surface_id);
+            self.decoder.release_output_surface(surface_id);
             result
-        }
-    }
-
-    fn from_sorted_frame(frame: OutputFrame<DecodedFrameData>) -> DecodedFrame {
-        DecodedFrame {
-            surface_id: frame.data.surface_id,
-            metadata: frame.metadata,
-            resolution: frame.data.resolution,
         }
     }
 
@@ -774,7 +794,7 @@ mod imp {
                 rt_format,
                 coded_resolution,
                 display_resolution: VideoResolution { width, height },
-                max_num_reorder_frames: max_num_reorder_frames(sps)?,
+                max_num_reorder_frames: h264_max_num_reorder_frames(sps)?,
             })
         }
     }
@@ -914,46 +934,6 @@ mod imp {
             (depth, format) => Err(format!(
                 "unsupported H264 VA-API surface format: {depth}-bit {format:?}"
             )),
-        }
-    }
-
-    fn max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, String> {
-        let fallback = if [44u8, 86, 100, 110, 122, 244].contains(&sps.profile_idc.into())
-            && sps.constraint_flags.flag3()
-        {
-            0
-        } else if let Profile::Baseline = sps.profile() {
-            0
-        } else {
-            h264_level_idc_to_max_dpb_mbs(sps.level_idc)?
-                / ((sps.pic_width_in_mbs_minus1 as u64 + 1)
-                    * (sps.pic_height_in_map_units_minus1 as u64 + 1))
-        };
-
-        Ok(sps
-            .vui_parameters
-            .as_ref()
-            .and_then(|vui| vui.bitstream_restrictions.as_ref())
-            .map(|restriction| restriction.max_num_reorder_frames as u64)
-            .unwrap_or(fallback)
-            .min(16))
-    }
-
-    fn h264_level_idc_to_max_dpb_mbs(level_idc: u8) -> Result<u64, String> {
-        match level_idc {
-            10 => Ok(396),
-            11 => Ok(900),
-            12 | 13 | 20 => Ok(2_376),
-            21 => Ok(4_752),
-            22 | 30 => Ok(8_100),
-            31 => Ok(18_000),
-            32 => Ok(20_480),
-            40 | 41 => Ok(32_768),
-            42 => Ok(34_816),
-            50 => Ok(110_400),
-            51 | 52 => Ok(184_320),
-            60 | 61 | 62 => Ok(696_320),
-            _ => Err(format!("unknown H264 level_idc {level_idc}")),
         }
     }
 

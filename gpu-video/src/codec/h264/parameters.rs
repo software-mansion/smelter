@@ -1,5 +1,5 @@
 use ash::vk;
-use h264_reader::nal::sps::{FrameMbsFlags, SeqParameterSet};
+use h264_reader::nal::sps::{FrameMbsFlags, Profile, SeqParameterSet};
 
 use crate::{
     VulkanDecoderError, VulkanEncoderError,
@@ -477,9 +477,33 @@ pub(crate) fn vk_to_h264_level_idc(
     }
 }
 
-/// As per __Table A-1 Level limits__ in the H.264 spec
-/// `mbs` means macroblocks here
-pub(crate) fn h264_level_idc_to_max_dpb_mbs(level_idc: u8) -> Result<u64, VulkanDecoderError> {
+pub(crate) fn h264_max_num_reorder_frames(
+    sps: &SeqParameterSet,
+) -> Result<u64, String> {
+    let fallback = if [44u8, 86, 100, 110, 122, 244].contains(&sps.profile_idc.into())
+        && sps.constraint_flags.flag3()
+    {
+        0
+    } else if let Profile::Baseline = sps.profile() {
+        0
+    } else {
+        h264_level_idc_to_max_dpb_mbs(sps.level_idc)?
+            / ((sps.pic_width_in_mbs_minus1 as u64 + 1)
+                * (sps.pic_height_in_map_units_minus1 as u64 + 1))
+    };
+
+    Ok(sps
+        .vui_parameters
+        .as_ref()
+        .and_then(|vui| vui.bitstream_restrictions.as_ref())
+        .map(|restriction| restriction.max_num_reorder_frames as u64)
+        .unwrap_or(fallback)
+        .min(16))
+}
+
+/// As per __Table A-1 Level limits__ in the H.264 spec.
+/// `mbs` means macroblocks here.
+fn h264_level_idc_to_max_dpb_mbs(level_idc: u8) -> Result<u64, String> {
     match level_idc {
         10 => Ok(396),
         11 => Ok(900),
@@ -500,9 +524,7 @@ pub(crate) fn h264_level_idc_to_max_dpb_mbs(level_idc: u8) -> Result<u64, Vulkan
         60 => Ok(696_320),
         61 => Ok(696_320),
         62 => Ok(696_320),
-        _ => Err(VulkanDecoderError::InvalidInputData(format!(
-            "unknown h264 level_idc: {level_idc}"
-        ))),
+        _ => Err(format!("unknown H264 level_idc {level_idc}")),
     }
 }
 

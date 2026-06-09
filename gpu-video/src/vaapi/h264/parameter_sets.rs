@@ -3,16 +3,16 @@ use bytes::Bytes;
 use crate::{VideoFramerate, VideoResolution};
 
 const H264_PROFILE_MAIN: u8 = 77;
-pub const H264_LEVEL_4_0: u8 = 40;
-pub const LOG2_MAX_FRAME_NUM_MINUS4: u32 = 12;
-pub const LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4: u32 = 12;
+pub(super) const H264_LEVEL_4_0: u8 = 40;
+pub(super) const LOG2_MAX_FRAME_NUM_MINUS4: u32 = 12;
+pub(super) const LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4: u32 = 12;
 const MAX_NUM_REF_FRAMES: u32 = 1;
 const MAX_NUM_REORDER_FRAMES: u32 = 0;
 const MAX_DEC_FRAME_BUFFERING: u32 = MAX_NUM_REF_FRAMES;
 const LOG2_MAX_MV_LENGTH: u32 = 16;
 const PPS_NAL: &[u8] = &[0, 0, 0, 1, 0x68, 0xce, 0x3c, 0x80];
 
-pub fn main_parameter_sets(
+pub(super) fn main_parameter_sets(
     resolution: VideoResolution,
     framerate: VideoFramerate,
 ) -> Bytes {

@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use ash::vk;
 use h264_reader::nal::{
     pps::PicParameterSet,
-    sps::{Profile, SeqParameterSet},
+    sps::SeqParameterSet,
 };
 use images::DecodingImages;
 use parameters::{SessionParams, VideoSessionParametersManager};
@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     VulkanDecoderError,
     codec::h264::parameters::{
-        H264DecodeProfileInfo, SeqParameterSetExt as _, h264_level_idc_to_max_dpb_mbs,
+        H264DecodeProfileInfo, SeqParameterSetExt as _, h264_max_num_reorder_frames,
         vk_to_h264_level_idc,
     },
     device::DecodingDevice,
@@ -34,31 +34,6 @@ pub(super) struct VideoSessionResources<'a> {
     pub(crate) decode_buffer_pool: DecodeInputBufferPool<'a>,
     parameters_scheduled_for_reset: Option<SessionParams<'a>>,
     image_modifiers: ImageModifiers,
-}
-
-fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, VulkanDecoderError> {
-    let fallback_max_num_reorder_frames = if [44u8, 86, 100, 110, 122, 244]
-        .contains(&sps.profile_idc.into())
-        && sps.constraint_flags.flag3()
-    {
-        0
-    } else if let Profile::Baseline = sps.profile() {
-        0
-    } else {
-        h264_level_idc_to_max_dpb_mbs(sps.level_idc)?
-            / ((sps.pic_width_in_mbs_minus1 as u64 + 1)
-                * (sps.pic_height_in_map_units_minus1 as u64 + 1))
-    };
-
-    let max_num_reorder_frames = sps
-        .vui_parameters
-        .as_ref()
-        .and_then(|v| v.bitstream_restrictions.as_ref())
-        .map(|b| b.max_num_reorder_frames as u64)
-        .unwrap_or(fallback_max_num_reorder_frames)
-        .min(16);
-
-    Ok(max_num_reorder_frames)
 }
 
 impl<'a> VideoSessionResources<'a> {
@@ -90,7 +65,8 @@ impl<'a> VideoSessionResources<'a> {
         // +1 for current frame
         let max_dpb_slots = sps.max_num_ref_frames + 1;
         let max_active_references = sps.max_num_ref_frames;
-        let max_num_reorder_frames = calculate_max_num_reorder_frames(&sps)?;
+        let max_num_reorder_frames =
+            h264_max_num_reorder_frames(&sps).map_err(VulkanDecoderError::InvalidInputData)?;
 
         let video_session = Arc::new(VideoSession::new(
             &decoding_device.vulkan_device,
@@ -169,7 +145,8 @@ impl<'a> VideoSessionResources<'a> {
             max_coded_extent: sps.size()?,
             max_dpb_slots: sps.max_num_ref_frames + 1, // +1 for current frame
             max_active_references: sps.max_num_ref_frames,
-            max_num_reorder_frames: calculate_max_num_reorder_frames(&sps)?,
+            max_num_reorder_frames: h264_max_num_reorder_frames(&sps)
+                .map_err(VulkanDecoderError::InvalidInputData)?,
             profile_info: Arc::new(H264DecodeProfileInfo::from_sps_decode(&sps, usage_info)?),
             level_idc: sps.level_idc,
         };
