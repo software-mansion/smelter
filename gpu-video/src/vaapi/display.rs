@@ -7,8 +7,7 @@ use std::{
 use crate::{
     VideoResolution,
     dmabuf::{
-        DmaBufFrame, DmaBufLayer, DmaBufObject, DmaBufPlane,
-        import_nv12_dmabuf_texture,
+        DmaBufFrame, DmaBufLayer, DmaBufObject, DmaBufPlane, import_nv12_dmabuf_texture,
     },
 };
 use libva::{
@@ -34,15 +33,14 @@ pub(crate) fn open_display(
     Err(no_usable_drm_display_error(&paths))
 }
 
-pub(crate) fn export_surface_as_frame_with_owner(
+pub(crate) fn export_surface_as_frame(
     device: &wgpu::Device,
     surface: &Surface<()>,
-    owner: Option<Arc<dyn Send + Sync>>,
 ) -> Result<Arc<DmaBufFrame>, String> {
     let descriptor = surface
         .export_prime()
         .map_err(|err| format!("failed to export VA surface: {err}"))?;
-    import_drm_prime_surface(device, descriptor, owner)
+    import_drm_prime_surface(device, descriptor)
 }
 
 pub(crate) fn take_nv12_surface(
@@ -82,7 +80,6 @@ pub(crate) fn invalid_h264_pictures<const N: usize>() -> [PictureH264; N] {
 pub(crate) fn import_drm_prime_surface(
     device: &wgpu::Device,
     descriptor: DrmPrimeSurfaceDescriptor,
-    owner: Option<Arc<dyn Send + Sync>>,
 ) -> Result<Arc<DmaBufFrame>, String> {
     let objects: Vec<DmaBufObject> = descriptor
         .objects
@@ -114,7 +111,6 @@ pub(crate) fn import_drm_prime_surface(
         descriptor.height,
         objects,
         layers,
-        owner,
     )
     .map_err(|err| err.to_string())
 }

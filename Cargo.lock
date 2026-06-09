@@ -2102,7 +2102,6 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "clap",
  "cros-libva",
- "crossbeam-channel",
  "derivative",
  "h264-reader",
  "memchr",

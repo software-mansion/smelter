@@ -21,8 +21,7 @@ keywords = ["vulkan", "video", "wgpu", "decoding", "encoding"]
 
 [features]
 expose-parsers = []
-dmabuf = ["wgpu"]
-vaapi = ["dmabuf", "dep:crossbeam-channel", "dep:libva"]
+vaapi = ["wgpu", "dep:libva"]
 vk-api-dump = []
 vk-validation = []
 wgpu = ["dep:wgpu"]
@@ -32,7 +31,6 @@ default = ["wgpu"]
 [dependencies]
 bytemuck = { version = "1.19.0", features = ["derive"], optional = true }
 bytes = "1"
-crossbeam-channel = { version = "0.5.15", optional = true }
 derivative = "2.2.0"
 h264-reader = { workspace = true }
 memchr = "2.7.4"

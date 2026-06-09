@@ -34,18 +34,16 @@ pub struct DmaBufFrame {
     objects: Vec<DmaBufObject>,
     layers: Vec<DmaBufLayer>,
     texture: Arc<wgpu::Texture>,
-    _owner: Option<Arc<dyn Send + Sync>>,
 }
 
 impl DmaBufFrame {
-    pub(crate) fn new_with_owner(
+    pub(crate) fn new(
         texture: Arc<wgpu::Texture>,
         fourcc: u32,
         width: u32,
         height: u32,
         objects: Vec<DmaBufObject>,
         layers: Vec<DmaBufLayer>,
-        owner: Option<Arc<dyn Send + Sync>>,
     ) -> Self {
         assert!(
             !objects.is_empty() && objects.len() <= 4,
@@ -71,7 +69,7 @@ impl DmaBufFrame {
                 );
             }
         }
-        Self { fourcc, width, height, objects, layers, texture, _owner: owner }
+        Self { fourcc, width, height, objects, layers, texture }
     }
 
     pub fn texture(&self) -> &wgpu::Texture {
@@ -363,7 +361,7 @@ pub fn export_nv12_dmabuf_texture(
             true,
         )?);
 
-        Ok(Arc::new(DmaBufFrame::new_with_owner(
+        Ok(Arc::new(DmaBufFrame::new(
             texture,
             DRM_FORMAT_NV12,
             resolution.width,
@@ -408,7 +406,6 @@ pub fn export_nv12_dmabuf_texture(
                     },
                 ],
             }],
-            None,
         )))
     }
 }
@@ -420,7 +417,6 @@ pub(crate) fn import_nv12_dmabuf_texture(
     height: u32,
     objects: Vec<DmaBufObject>,
     layers: Vec<DmaBufLayer>,
-    owner: Option<Arc<dyn Send + Sync>>,
 ) -> Result<Arc<DmaBufFrame>, DmaBufError> {
     validate_nv12_dmabuf_layout(fourcc, width, height, &objects, &layers)?;
     if objects.len() != 1 {
@@ -532,9 +528,7 @@ pub(crate) fn import_nv12_dmabuf_texture(
             false,
         )?);
 
-        Ok(Arc::new(DmaBufFrame::new_with_owner(
-            texture, fourcc, width, height, objects, layers, owner,
-        )))
+        Ok(Arc::new(DmaBufFrame::new(texture, fourcc, width, height, objects, layers)))
     }
 }
 

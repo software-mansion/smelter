@@ -35,14 +35,15 @@ pub mod parser;
 ))]
 pub(crate) mod parser;
 
-#[cfg(all(feature = "dmabuf", target_os = "linux"))]
+#[cfg(all(feature = "vaapi", target_os = "linux"))]
 mod dmabuf;
 
 #[cfg(all(feature = "vaapi", target_os = "linux"))]
 pub mod vaapi;
 
 #[cfg(all(test, target_os = "linux", feature = "wgpu"))]
-type TestWgpuDeviceAndQueue = (std::sync::Arc<wgpu::Device>, wgpu::Queue, wgpu::AdapterInfo);
+type TestWgpuDeviceAndQueue =
+    (std::sync::Arc<wgpu::Device>, wgpu::Queue, wgpu::AdapterInfo);
 
 #[cfg(all(test, target_os = "linux", feature = "wgpu"))]
 fn test_wgpu_device_and_queue() -> TestWgpuDeviceAndQueue {
