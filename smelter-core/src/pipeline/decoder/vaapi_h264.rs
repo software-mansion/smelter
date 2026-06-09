@@ -2,7 +2,7 @@
 mod imp {
     use std::{sync::Arc, time::Duration};
 
-    use gpu_video::vaapi::h264::{WgpuDecodedFrame, WgpuTexturesDecoder};
+    use gpu_video::vaapi::h264::WgpuTexturesDecoder;
     use smelter_render::{Frame, FrameData, Resolution};
     use tracing::{debug, info, trace, warn};
 
@@ -94,14 +94,17 @@ mod imp {
         }
     }
 
-    fn from_va_frame(frame: WgpuDecodedFrame) -> Frame {
+    fn from_va_frame(frame: gpu_video::OutputFrame<wgpu::Texture>) -> Frame {
+        let gpu_video::OutputFrame { data, metadata } = frame;
+        let resolution = Resolution {
+            width: data.width() as usize,
+            height: data.height() as usize,
+        };
+
         Frame {
-            data: FrameData::Nv12WgpuTexture(Arc::new(frame.data)),
-            pts: frame.pts,
-            resolution: Resolution {
-                width: frame.resolution.width as usize,
-                height: frame.resolution.height as usize,
-            },
+            data: FrameData::Nv12WgpuTexture(data.into()),
+            pts: Duration::from_micros(metadata.pts.unwrap()),
+            resolution,
         }
     }
 

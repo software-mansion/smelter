@@ -5144,7 +5144,6 @@ dependencies = [
  "bytes",
  "crossbeam-channel",
  "glyphon",
- "gpu-video",
  "image",
  "itertools 0.14.0",
  "libcef",

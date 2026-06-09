@@ -3,10 +3,7 @@ mod imp {
     use std::sync::Arc;
 
     use gpu_video::{
-        vaapi::h264::{
-            EncodedFrame, H264EncoderConfig, H264EncoderRateControl,
-            WgpuTexturesEncoderH264,
-        },
+        vaapi::h264::{H264EncoderConfig, H264EncoderRateControl, WgpuTexturesEncoderH264},
         InputFrame, VideoFramerate, VideoResolution,
     };
     use smelter_render::{FrameData, Framerate, OutputFrameFormat, Resolution};
@@ -151,7 +148,10 @@ mod imp {
     }
 
     impl VaapiH264Encoder {
-        fn chunk_from_frame(&self, frame: EncodedFrame) -> EncodedOutputChunk {
+        fn chunk_from_frame(
+            &self,
+            frame: gpu_video::EncodedOutputChunk<bytes::Bytes>,
+        ) -> EncodedOutputChunk {
             let data = if self.bitstream_format == H264BitstreamFormat::Avcc {
                 annexb_to_avcc(&frame.data)
             } else {
@@ -159,7 +159,7 @@ mod imp {
             };
             EncodedOutputChunk {
                 data,
-                pts: frame.pts,
+                pts: frame.pts.map(std::time::Duration::from_micros).unwrap_or_default(),
                 dts: None,
                 is_keyframe: frame.is_keyframe,
                 kind: MediaKind::Video(VideoCodec::H264),

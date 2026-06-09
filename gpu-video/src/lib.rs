@@ -37,8 +37,6 @@ pub(crate) mod parser;
 
 #[cfg(all(feature = "dmabuf", target_os = "linux"))]
 mod dmabuf;
-#[cfg(all(feature = "dmabuf", target_os = "linux"))]
-pub use dmabuf::{DmaBufError, DmaBufFrame, export_nv12_dmabuf_texture};
 
 #[cfg(all(feature = "vaapi", target_os = "linux"))]
 pub mod vaapi;

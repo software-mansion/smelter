@@ -10,8 +10,10 @@ mod imp {
     };
 
     use crate::{
-        dmabuf::validate_nv12_dmabuf_frame, export_nv12_dmabuf_texture, DmaBufFrame,
-        InputFrame, VideoFramerate, VideoResolution,
+        dmabuf::{
+            export_nv12_dmabuf_texture, validate_nv12_dmabuf_frame, DmaBufFrame,
+        },
+        EncodedOutputChunk, InputFrame, VideoFramerate, VideoResolution,
     };
     use bytes::Bytes;
     use libva::{
@@ -29,7 +31,7 @@ mod imp {
     use tracing::{info, warn};
 
     use crate::vaapi::display::{
-        duration_micros, invalid_h264_pictures, open_display, take_nv12_surface,
+        invalid_h264_pictures, open_display, take_nv12_surface,
     };
 
     use super::super::parameter_sets::{
@@ -138,12 +140,6 @@ mod imp {
         }
     }
 
-    pub struct EncodedFrame {
-        pub data: Bytes,
-        pub pts: Duration,
-        pub is_keyframe: bool,
-    }
-
     #[derive(Debug, thiserror::Error)]
     pub enum VaapiH264EncoderError {
         #[error("VA-API H264 encoder is unavailable: {0}")]
@@ -201,15 +197,15 @@ mod imp {
         pub fn encode(
             &mut self,
             frame: Arc<DmaBufFrame>,
-            pts: Duration,
+            pts: Option<u64>,
             force_keyframe: bool,
-        ) -> Result<Vec<EncodedFrame>, VaapiH264EncoderError> {
+        ) -> Result<Vec<EncodedOutputChunk<Bytes>>, VaapiH264EncoderError> {
             self.encoder
                 .encode(frame, pts, force_keyframe)
                 .map_err(VaapiH264EncoderError::Encode)
         }
 
-        pub fn flush(&mut self) -> Result<Vec<EncodedFrame>, VaapiH264EncoderError> {
+        pub fn flush(&mut self) -> Result<Vec<EncodedOutputChunk<Bytes>>, VaapiH264EncoderError> {
             self.encoder.flush().map_err(VaapiH264EncoderError::Encode)
         }
     }
@@ -245,13 +241,13 @@ mod imp {
             &mut self,
             frame: InputFrame<wgpu::Texture>,
             force_keyframe: bool,
-        ) -> Result<Vec<EncodedFrame>, VaapiH264EncoderError> {
-            let pts = frame.pts.map(Duration::from_micros).unwrap_or_default();
+        ) -> Result<Vec<EncodedOutputChunk<Bytes>>, VaapiH264EncoderError> {
+            let pts = frame.pts;
             let frame = self.copy_input_to_dmabuf(frame.data)?;
             self.encoder.encode(frame, pts, force_keyframe)
         }
 
-        pub fn flush(&mut self) -> Result<Vec<EncodedFrame>, VaapiH264EncoderError> {
+        pub fn flush(&mut self) -> Result<Vec<EncodedOutputChunk<Bytes>>, VaapiH264EncoderError> {
             self.encoder.flush()
         }
 
@@ -405,9 +401,9 @@ mod imp {
         fn encode(
             &mut self,
             frame: Arc<DmaBufFrame>,
-            pts: Duration,
+            pts: Option<u64>,
             force_keyframe: bool,
-        ) -> Result<Vec<EncodedFrame>, String> {
+        ) -> Result<Vec<EncodedOutputChunk<Bytes>>, String> {
             let mut completed = self.collect_ready()?;
             let pending = self.submit(frame, pts, force_keyframe)?;
             self.pending.push_back(pending);
@@ -417,7 +413,7 @@ mod imp {
             Ok(completed)
         }
 
-        fn flush(&mut self) -> Result<Vec<EncodedFrame>, String> {
+        fn flush(&mut self) -> Result<Vec<EncodedOutputChunk<Bytes>>, String> {
             let mut completed = self.collect_ready()?;
             while !self.pending.is_empty() {
                 completed.push(self.complete_oldest()?);
@@ -428,7 +424,7 @@ mod imp {
         fn submit(
             &mut self,
             frame: Arc<DmaBufFrame>,
-            pts: Duration,
+            pts: Option<u64>,
             force_keyframe: bool,
         ) -> Result<PendingEncode, String> {
             let started_at = Instant::now();
@@ -443,7 +439,7 @@ mod imp {
                 .map_err(|err| format!("failed to create VA-API coded buffer: {err}"))?;
 
             let mut picture =
-                Picture::new(duration_micros(pts), Rc::clone(&self.context), input);
+                Picture::new(pts.unwrap_or_default(), Rc::clone(&self.context), input);
             self.add_buffers(&mut picture, &coded_buffer, &reconstructed, is_keyframe)?;
 
             let picture = picture
@@ -458,7 +454,7 @@ mod imp {
                 warn!(
                     submit_ms = elapsed.as_millis(),
                     is_keyframe,
-                    pts_us = pts.as_micros(),
+                    pts_us = pts,
                     "slow VA-API H264 encode submit"
                 );
             }
@@ -770,7 +766,7 @@ mod imp {
             self.pending.iter().any(|pending| pending.reconstructed_id == surface_id)
         }
 
-        fn collect_ready(&mut self) -> Result<Vec<EncodedFrame>, String> {
+        fn collect_ready(&mut self) -> Result<Vec<EncodedOutputChunk<Bytes>>, String> {
             let mut completed = Vec::new();
             while self.pending.front().is_some_and(PendingEncode::is_ready) {
                 completed.push(self.complete_oldest()?);
@@ -778,7 +774,7 @@ mod imp {
             Ok(completed)
         }
 
-        fn complete_oldest(&mut self) -> Result<EncodedFrame, String> {
+        fn complete_oldest(&mut self) -> Result<EncodedOutputChunk<Bytes>, String> {
             let pending = self
                 .pending
                 .pop_front()
@@ -789,7 +785,7 @@ mod imp {
         fn complete_pending(
             &mut self,
             pending: PendingEncode,
-        ) -> Result<EncodedFrame, String> {
+        ) -> Result<EncodedOutputChunk<Bytes>, String> {
             let sync_started_at = Instant::now();
             let picture = pending
                 .picture
@@ -815,7 +811,7 @@ mod imp {
                     map_ms = map_elapsed.as_millis(),
                     is_keyframe = pending.is_keyframe,
                     bytes = data.len(),
-                    pts_us = pending.pts.as_micros(),
+                    pts_us = pending.pts,
                     "completed VA-API H264 encode frame"
                 );
             }
@@ -825,7 +821,11 @@ mod imp {
             }
             self.release_retired_producer(pending.reconstructed_id);
 
-            Ok(EncodedFrame { data, pts: pending.pts, is_keyframe: pending.is_keyframe })
+            Ok(EncodedOutputChunk {
+                data,
+                pts: pending.pts,
+                is_keyframe: pending.is_keyframe,
+            })
         }
 
         fn release_retired_producer(&mut self, surface_id: libva::VASurfaceID) {
@@ -1055,7 +1055,7 @@ mod imp {
         coded_buffer: EncCodedBuffer,
         reconstructed_id: libva::VASurfaceID,
         retired_after_sync: Option<Surface<()>>,
-        pts: Duration,
+        pts: Option<u64>,
         is_keyframe: bool,
         submitted_at: Instant,
     }
@@ -1247,7 +1247,7 @@ mod imp {
             .expect("failed to create VA-API H264 encoder");
             let mut frames = (0..2)
                 .map(|_| {
-                    crate::export_nv12_dmabuf_texture(&device, TEST_RESOLUTION)
+                    crate::dmabuf::export_nv12_dmabuf_texture(&device, TEST_RESOLUTION)
                         .expect("failed to export NV12 DMA-BUF test texture")
                 })
                 .collect::<Vec<_>>();
@@ -1298,7 +1298,7 @@ mod imp {
             .expect("failed to create VA-API H264 encoder");
             let frames = (0..FRAME_POOL_SIZE)
                 .map(|_| {
-                    crate::export_nv12_dmabuf_texture(&device, TEST_RESOLUTION)
+                    crate::dmabuf::export_nv12_dmabuf_texture(&device, TEST_RESOLUTION)
                         .expect("failed to export NV12 DMA-BUF test texture")
                 })
                 .collect::<Vec<_>>();
@@ -1360,7 +1360,7 @@ mod imp {
             .expect("failed to create VA-API H264 encoder");
             let frames = (0..MAX_PENDING_ENCODE_FRAMES + 1)
                 .map(|_| {
-                    crate::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
+                    crate::dmabuf::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
                         .expect("failed to export NV12 DMA-BUF stress texture")
                 })
                 .collect::<Vec<_>>();
@@ -1427,7 +1427,7 @@ mod imp {
             .expect("failed to create WT-preview VA-API H264 encoder");
             let frames = (0..3)
                 .map(|_| {
-                    crate::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
+                    crate::dmabuf::export_nv12_dmabuf_texture(&device, STRESS_RESOLUTION)
                         .expect("failed to export NV12 DMA-BUF WT preview texture")
                 })
                 .collect::<Vec<_>>();
@@ -1506,7 +1506,7 @@ mod imp {
         }
 
         fn observe_encoded_frames(
-            frames: Vec<EncodedFrame>,
+            frames: Vec<EncodedOutputChunk<Bytes>>,
             encoded_frames: &mut usize,
             keyframes: &mut usize,
             encoded_bytes: &mut usize,
@@ -1649,6 +1649,5 @@ mod imp {
 }
 
 pub use imp::{
-    EncodedFrame, H264EncoderConfig, H264EncoderRateControl, VaapiH264EncoderError,
-    WgpuTexturesEncoderH264,
+    H264EncoderConfig, H264EncoderRateControl, VaapiH264EncoderError, WgpuTexturesEncoderH264,
 };

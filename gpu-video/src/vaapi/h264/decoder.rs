@@ -4,7 +4,6 @@ mod imp {
         collections::{HashMap, HashSet},
         rc::Rc,
         sync::Arc,
-        time::Duration,
     };
 
     use crate::{
@@ -22,8 +21,9 @@ mod imp {
             take_nv12_surface,
         },
         vulkan_decoder::{DecodeResult, DecodeResultMetadata, FrameSorter},
-        DmaBufFrame, OutputFrame, VideoResolution,
+        FrameMetadata, OutputFrame, VideoResolution,
     };
+    use crate::dmabuf::DmaBufFrame;
     use crossbeam_channel::{Receiver, Sender};
     use h264_reader::nal::{
         pps::PicParameterSet,
@@ -66,15 +66,9 @@ mod imp {
         drop_frames: bool,
     }
 
-    pub struct DecodedFrame {
+    struct DecodedFrame {
         pub data: Arc<DmaBufFrame>,
-        pub pts: Duration,
-        pub resolution: VideoResolution,
-    }
-
-    pub struct WgpuDecodedFrame {
-        pub data: wgpu::Texture,
-        pub pts: Duration,
+        pub pts: Option<u64>,
         pub resolution: VideoResolution,
     }
 
@@ -115,7 +109,7 @@ mod imp {
     }
 
     impl H264Decoder {
-        pub fn new(
+        fn new(
             device: Arc<wgpu::Device>,
             adapter_info: Option<&wgpu::AdapterInfo>,
         ) -> Result<Self, VaapiH264DecoderError> {
@@ -143,7 +137,7 @@ mod imp {
             })
         }
 
-        pub fn decode_chunk(
+        fn decode_chunk(
             &mut self,
             data: &[u8],
             pts: Option<u64>,
@@ -158,7 +152,7 @@ mod imp {
             self.process_instructions(instructions).map_err(VaapiH264DecoderError::Decode)
         }
 
-        pub fn flush_frame(
+        fn flush_frame(
             &mut self,
         ) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
             let instructions =
@@ -166,13 +160,13 @@ mod imp {
             self.process_instructions(instructions).map_err(VaapiH264DecoderError::Decode)
         }
 
-        pub fn flush(&mut self) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
+        fn flush(&mut self) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
             let mut frames = self.flush_frame()?;
             frames.extend(self.flush_sorted_frames());
             Ok(frames)
         }
 
-        pub fn mark_missed_frames(&mut self) {
+        fn mark_missed_frames(&mut self) {
             self.frame_sorter.clear();
             self.drain_released_output_surfaces();
             self.reference_ctx.mark_missed_frames();
@@ -625,19 +619,19 @@ mod imp {
             data: &[u8],
             pts: Option<u64>,
             present: bool,
-        ) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
+        ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VaapiH264DecoderError> {
             let frames = self.decoder.decode_chunk(data, pts, present)?;
             self.copy_frames(frames)
         }
 
         pub fn flush_frame(
             &mut self,
-        ) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
+        ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VaapiH264DecoderError> {
             let frames = self.decoder.flush_frame()?;
             self.copy_frames(frames)
         }
 
-        pub fn flush(&mut self) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
+        pub fn flush(&mut self) -> Result<Vec<OutputFrame<wgpu::Texture>>, VaapiH264DecoderError> {
             let frames = self.decoder.flush()?;
             self.copy_frames(frames)
         }
@@ -649,7 +643,7 @@ mod imp {
         fn copy_frames(
             &self,
             frames: Vec<DecodedFrame>,
-        ) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
+        ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VaapiH264DecoderError> {
             frames
                 .into_iter()
                 .map(|frame| self.copy_frame(frame))
@@ -659,7 +653,7 @@ mod imp {
         fn copy_frame(
             &self,
             frame: DecodedFrame,
-        ) -> Result<WgpuDecodedFrame, VaapiH264DecoderError> {
+        ) -> Result<OutputFrame<wgpu::Texture>, VaapiH264DecoderError> {
             let size = wgpu::Extent3d {
                 width: frame.resolution.width,
                 height: frame.resolution.height,
@@ -690,10 +684,13 @@ mod imp {
             self.device
                 .poll(wgpu::PollType::wait_indefinitely())
                 .map_err(|err| VaapiH264DecoderError::Decode(err.to_string()))?;
-            Ok(WgpuDecodedFrame {
+            Ok(OutputFrame {
                 data: texture,
-                pts: frame.pts,
-                resolution: frame.resolution,
+                metadata: FrameMetadata {
+                    pts: frame.pts,
+                    color_space: ColorSpace::Unspecified,
+                    color_range: ColorRange::Limited,
+                },
             })
         }
     }
@@ -701,7 +698,7 @@ mod imp {
     fn from_sorted_frame(frame: OutputFrame<DecodedFrameData>) -> DecodedFrame {
         DecodedFrame {
             data: frame.data.data,
-            pts: Duration::from_micros(frame.metadata.pts.unwrap_or_default()),
+            pts: frame.metadata.pts,
             resolution: frame.data.resolution,
         }
     }
@@ -1485,6 +1482,4 @@ mod imp {
     }
 }
 
-pub use imp::{
-    VaapiH264DecoderError, WgpuDecodedFrame, WgpuTexturesDecoder,
-};
+pub use imp::{VaapiH264DecoderError, WgpuTexturesDecoder};

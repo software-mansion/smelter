@@ -10,34 +10,29 @@ use crate::{
     wgpu::{
         WgpuCtx,
         texture::{
-            PlanarYuvPendingDownload, PlanarYuvTextures, PlanarYuvVariant,
-            utils::pad_to_256,
+            PlanarYuvPendingDownload, PlanarYuvTextures, PlanarYuvVariant, utils::pad_to_256,
         },
     },
 };
 
 pub enum OutputTexture {
     PlanarYuvTextures(Box<PlanarYuvOutput>),
-    Rgba8UnormWgpuTexture {
-        resolution: Resolution,
-    },
-    Nv12WgpuTexture {
-        resolution: Resolution,
-    },
+    Rgba8UnormWgpuTexture { resolution: Resolution },
+    Nv12WgpuTexture { resolution: Resolution },
 }
 
 impl OutputTexture {
     pub fn new(ctx: &WgpuCtx, resolution: Resolution, format: OutputFrameFormat) -> Self {
         match format {
-            OutputFrameFormat::PlanarYuv420Bytes => Self::PlanarYuvTextures(
-                Box::new(PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV420)),
-            ),
-            OutputFrameFormat::PlanarYuv422Bytes => Self::PlanarYuvTextures(
-                Box::new(PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV422)),
-            ),
-            OutputFrameFormat::PlanarYuv444Bytes => Self::PlanarYuvTextures(
-                Box::new(PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV444)),
-            ),
+            OutputFrameFormat::PlanarYuv420Bytes => Self::PlanarYuvTextures(Box::new(
+                PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV420),
+            )),
+            OutputFrameFormat::PlanarYuv422Bytes => Self::PlanarYuvTextures(Box::new(
+                PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV422),
+            )),
+            OutputFrameFormat::PlanarYuv444Bytes => Self::PlanarYuvTextures(Box::new(
+                PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV444),
+            )),
             OutputFrameFormat::RgbaWgpuTexture => Self::Rgba8UnormWgpuTexture { resolution },
             OutputFrameFormat::Nv12WgpuTexture => Self::Nv12WgpuTexture { resolution },
         }
@@ -51,15 +46,15 @@ pub struct PlanarYuvOutput {
 }
 
 impl PlanarYuvOutput {
-    pub fn new(
-        ctx: &WgpuCtx,
-        resolution: Resolution,
-        pixel_format: PlanarYuvVariant,
-    ) -> Self {
+    pub fn new(ctx: &WgpuCtx, resolution: Resolution, pixel_format: PlanarYuvVariant) -> Self {
         let textures = PlanarYuvTextures::new(ctx, resolution, pixel_format);
         let buffers = textures.new_download_buffers(ctx);
 
-        Self { textures, buffers, resolution }
+        Self {
+            textures,
+            buffers,
+            resolution,
+        }
     }
 
     pub fn yuv_textures(&self) -> &PlanarYuvTextures {
@@ -94,11 +89,13 @@ impl PlanarYuvOutput {
     ) -> impl FnOnce() -> Result<bytes::Bytes, BufferAsyncError> + 'a {
         let buffer = bytes::BytesMut::with_capacity((size.width * size.height) as usize);
         let (s, r) = bounded(1);
-        source.slice(..).map_async(wgpu::MapMode::Read, move |result| {
-            if let Err(err) = s.send(result) {
-                error!("channel send error: {err}")
-            }
-        });
+        source
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |result| {
+                if let Err(err) = s.send(result) {
+                    error!("channel send error: {err}")
+                }
+            });
 
         move || {
             r.recv().unwrap()?;

@@ -2,10 +2,9 @@ mod decoder;
 mod encoder;
 mod parameter_sets;
 
-pub use decoder::{VaapiH264DecoderError, WgpuDecodedFrame, WgpuTexturesDecoder};
+pub use decoder::{VaapiH264DecoderError, WgpuTexturesDecoder};
 pub use encoder::{
-    EncodedFrame, H264EncoderConfig, H264EncoderRateControl, VaapiH264EncoderError,
-    WgpuTexturesEncoderH264,
+    H264EncoderConfig, H264EncoderRateControl, VaapiH264EncoderError, WgpuTexturesEncoderH264,
 };
 pub use parameter_sets::{
     main_parameter_sets, H264_LEVEL_4_0, LOG2_MAX_FRAME_NUM_MINUS4,

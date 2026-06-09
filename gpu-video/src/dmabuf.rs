@@ -74,10 +74,6 @@ impl DmaBufFrame {
         Self { fourcc, width, height, objects, layers, texture, _owner: owner }
     }
 
-    pub fn texture_arc(&self) -> Arc<wgpu::Texture> {
-        Arc::clone(&self.texture)
-    }
-
     pub fn texture(&self) -> &wgpu::Texture {
         &self.texture
     }

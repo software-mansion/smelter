@@ -2,14 +2,13 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
-    time::Duration,
 };
 
 use crate::{
-    DmaBufFrame, VideoResolution,
+    VideoResolution,
     dmabuf::{
-        DmaBufLayer, DmaBufObject, DmaBufPlane, import_nv12_dmabuf_texture,
-        validate_nv12_dmabuf_layout,
+        DmaBufFrame, DmaBufLayer, DmaBufObject, DmaBufPlane,
+        import_nv12_dmabuf_texture, validate_nv12_dmabuf_layout,
     },
 };
 use libva::{
@@ -78,10 +77,6 @@ pub(crate) fn invalid_h264_pictures<const N: usize>() -> [PictureH264; N] {
     std::array::from_fn(|_| {
         PictureH264::new(VA_INVALID_ID, 0, VA_PICTURE_H264_INVALID, 0, 0)
     })
-}
-
-pub(crate) fn duration_micros(duration: Duration) -> u64 {
-    duration.as_micros().try_into().unwrap_or(u64::MAX)
 }
 
 pub(crate) fn import_drm_prime_surface(
