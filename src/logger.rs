@@ -37,13 +37,6 @@ impl FfmpegLogLevel {
     }
 }
 
-fn ffmpeg_logger_level() -> FfmpegLogLevel {
-    static LOG_LEVEL: OnceLock<FfmpegLogLevel> = OnceLock::new();
-
-    // This will read config second time
-    *LOG_LEVEL.get_or_init(|| read_config().logger.ffmpeg_logger_level)
-}
-
 impl FromStr for FfmpegLogLevel {
     type Err = &'static str;
 
@@ -95,6 +88,6 @@ pub fn init_logger(opts: LoggerConfig) {
     }
 
     unsafe {
-        ffmpeg_next::sys::av_log_set_level(ffmpeg_logger_level().into_i32());
+        ffmpeg_next::sys::av_log_set_level(opts.ffmpeg_logger_level.into_i32());
     }
 }
