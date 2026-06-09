@@ -20,10 +20,11 @@ mod imp {
         EncSequenceParameterBufferH264, EncSliceParameter, EncSliceParameterBufferH264,
         ExternalBufferDescriptor, H264EncFrameCropOffsets, H264EncPicFields,
         H264EncSeqFields, H264VuiFields, MappedCodedBuffer, MemoryType, Picture,
-        PictureH264, PictureNew, RcFlags, Surface, UsageHint, VA_INVALID_ID,
-        VA_PICTURE_H264_SHORT_TERM_REFERENCE, VA_RC_CBR, VA_RT_FORMAT_YUV420,
-        VAConfigAttrib, VAConfigAttribType, VADRMPRIMESurfaceDescriptor, VAEntrypoint,
-        VAProfile, VASurfaceAttribType, VASurfaceStatus,
+        PictureH264, PictureNew, RcFlags, Surface, UsageHint, VA_ATTRIB_NOT_SUPPORTED,
+        VA_INVALID_ID, VA_PICTURE_H264_SHORT_TERM_REFERENCE, VA_RC_CBR, VA_RC_VBR,
+        VA_RT_FORMAT_YUV420, VAConfigAttrib, VAConfigAttribType,
+        VADRMPRIMESurfaceDescriptor, VAEntrypoint, VAProfile, VASurfaceAttribType,
+        VASurfaceStatus,
     };
     use tracing::{info, warn};
 
@@ -39,21 +40,27 @@ mod imp {
     const RECONSTRUCTED_SURFACE_ALLOCATION_BATCH: usize = 4;
     const DEFAULT_CODED_BUFFER_SIZE: usize = 1_500_000;
     const CBR_RATE_CONTROL: VaapiRateControlConfig = VaapiRateControlConfig {
+        mode: VA_RC_CBR,
+        bits_per_second: 0,
         target_percentage: 100,
         window_size: 1_500,
         initial_qp: 26,
         min_qp: 10,
         basic_unit_size: 0,
+        disable_bit_stuffing: false,
         max_qp: 51,
     };
 
     #[derive(Clone, Copy)]
     struct VaapiRateControlConfig {
+        mode: u32,
+        bits_per_second: u32,
         target_percentage: u32,
         window_size: u32,
         initial_qp: u32,
         min_qp: u32,
         basic_unit_size: u32,
+        disable_bit_stuffing: bool,
         max_qp: u32,
     }
 
@@ -68,10 +75,55 @@ mod imp {
         pub queue: Arc<wgpu::Queue>,
         pub adapter_info: Option<wgpu::AdapterInfo>,
         pub resolution: VideoResolution,
-        pub bitrate: u32,
+        pub rate_control: H264EncoderRateControl,
         pub gop_size: u16,
         pub framerate: VideoFramerate,
         pub max_pending_frames: usize,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub enum H264EncoderRateControl {
+        VariableBitrate {
+            average_bitrate: u32,
+            max_bitrate: u32,
+            virtual_buffer_size: Duration,
+        },
+        ConstantBitrate {
+            bitrate: u32,
+            virtual_buffer_size: Duration,
+        },
+    }
+
+    impl H264EncoderRateControl {
+        fn config(self) -> VaapiRateControlConfig {
+            match self {
+                Self::VariableBitrate {
+                    average_bitrate,
+                    max_bitrate,
+                    virtual_buffer_size,
+                } => {
+                    let max_bitrate = max_bitrate.max(average_bitrate).max(1);
+                    let target_percentage = ((u64::from(average_bitrate) * 100)
+                        / u64::from(max_bitrate))
+                    .clamp(1, 100) as u32;
+                    VaapiRateControlConfig {
+                        mode: VA_RC_VBR,
+                        bits_per_second: max_bitrate,
+                        target_percentage,
+                        window_size: duration_millis_u32(virtual_buffer_size),
+                        disable_bit_stuffing: true,
+                        ..CBR_RATE_CONTROL
+                    }
+                }
+                Self::ConstantBitrate { bitrate, virtual_buffer_size } => {
+                    VaapiRateControlConfig {
+                        bits_per_second: bitrate.max(1),
+                        window_size: duration_millis_u32(virtual_buffer_size),
+                        ..CBR_RATE_CONTROL
+                    }
+                }
+            }
+        }
     }
 
     pub struct EncodedFrame {
@@ -100,7 +152,7 @@ mod imp {
             let encoder = IntelVaapiH264Encoder::new(
                 display,
                 config.resolution,
-                config.bitrate,
+                config.rate_control,
                 config.gop_size.max(1),
                 config.framerate,
                 config.max_pending_frames,
@@ -111,7 +163,7 @@ mod imp {
             info!(
                 width = config.resolution.width,
                 height = config.resolution.height,
-                bitrate = config.bitrate,
+                rate_control = ?config.rate_control,
                 max_pending_frames = config.max_pending_frames,
                 "Initialized VA-API H264 encoder with direct NV12 DMA-BUF input"
             );
@@ -149,7 +201,7 @@ mod imp {
         retired_after_producer: Vec<Surface<()>>,
         reference: Option<EncodedReference>,
         resolution: VideoResolution,
-        bitrate: u32,
+        rate_control: VaapiRateControlConfig,
         gop_size: u16,
         max_pending_frames: usize,
         frames_since_keyframe: u16,
@@ -163,7 +215,7 @@ mod imp {
         fn new(
             display: Rc<Display>,
             resolution: VideoResolution,
-            bitrate: u32,
+            rate_control: H264EncoderRateControl,
             gop_size: u16,
             framerate: VideoFramerate,
             max_pending_frames: usize,
@@ -171,6 +223,13 @@ mod imp {
         ) -> Result<Self, String> {
             let profile = VAProfile::VAProfileH264Main;
             let entrypoint = h264_encode_entrypoint(&display, profile)?;
+            let rate_control = rate_control.config();
+            validate_h264_rate_control_support(
+                &display,
+                profile,
+                entrypoint,
+                rate_control.mode,
+            )?;
             let mut config = display
                 .create_config(
                     vec![
@@ -180,7 +239,7 @@ mod imp {
                         },
                         VAConfigAttrib {
                             type_: VAConfigAttribType::VAConfigAttribRateControl,
-                            value: VA_RC_CBR,
+                            value: rate_control.mode,
                         },
                     ],
                     profile,
@@ -208,7 +267,7 @@ mod imp {
                 retired_after_producer: Vec::new(),
                 reference: None,
                 resolution,
-                bitrate,
+                rate_control,
                 gop_size,
                 max_pending_frames,
                 frames_since_keyframe: 0,
@@ -411,7 +470,7 @@ mod imp {
                     self.gop_size.into(),
                     self.gop_size.into(),
                     1,
-                    self.bitrate,
+                    self.rate_control.bits_per_second,
                     1,
                     width_mbs as u16,
                     height_mbs as u16,
@@ -516,16 +575,26 @@ mod imp {
         }
 
         fn rate_control_parameter(&self) -> BufferType {
-            let rc = CBR_RATE_CONTROL;
+            let rc = self.rate_control;
             BufferType::EncMiscParameter(EncMiscParameter::RateControl(
                 EncMiscParameterRateControl::new(
-                    self.bitrate,
+                    rc.bits_per_second,
                     rc.target_percentage,
                     rc.window_size,
                     rc.initial_qp,
                     rc.min_qp,
                     rc.basic_unit_size,
-                    RcFlags::new(0, 1, 0, 0, 0, 0, 0, 0, 0),
+                    RcFlags::new(
+                        0,
+                        1,
+                        if rc.disable_bit_stuffing { 1 } else { 0 },
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                    ),
                     0,
                     rc.max_qp,
                     0,
@@ -686,7 +755,9 @@ mod imp {
         fn coded_buffer_size(&self) -> usize {
             let raw_size =
                 self.resolution.width as usize * self.resolution.height as usize * 3 / 2;
-            ((self.bitrate as usize / 8) * 2).max(DEFAULT_CODED_BUFFER_SIZE).max(raw_size)
+            ((self.rate_control.bits_per_second as usize / 8) * 2)
+                .max(DEFAULT_CODED_BUFFER_SIZE)
+                .max(raw_size)
         }
 
         fn macroblocks(&self) -> (u32, u32) {
@@ -898,6 +969,29 @@ mod imp {
         }
     }
 
+    fn validate_h264_rate_control_support(
+        display: &Display,
+        profile: VAProfile::Type,
+        entrypoint: VAEntrypoint::Type,
+        rate_control: u32,
+    ) -> Result<(), String> {
+        let mut attrs = [VAConfigAttrib {
+            type_: VAConfigAttribType::VAConfigAttribRateControl,
+            value: 0,
+        }];
+        display.get_config_attributes(profile, entrypoint, &mut attrs).map_err(
+            |err| format!("failed to query VA-API H264 rate-control support: {err}"),
+        )?;
+        let supported = attrs[0].value;
+        if supported == VA_ATTRIB_NOT_SUPPORTED || supported & rate_control == 0 {
+            Err(format!(
+                "VA-API H264 encode config does not support rate-control mode 0x{rate_control:x}; got 0x{supported:x}"
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     fn validate_h264_encode_surface_support(config: &mut Config) -> Result<(), String> {
         validate_config_int_attr(
             config,
@@ -948,6 +1042,10 @@ mod imp {
         }
     }
 
+    fn duration_millis_u32(duration: Duration) -> u32 {
+        duration.as_millis().clamp(1, u128::from(u32::MAX)) as u32
+    }
+
     fn rounded_framerate(framerate: VideoFramerate) -> u32 {
         let den = u64::from(framerate.den.max(1));
         let rounded = (u64::from(framerate.num) + den / 2) / den;
@@ -984,6 +1082,21 @@ mod imp {
         }
 
         #[test]
+        fn converts_vaapi_vbr_rate_control_to_libva_parameters() {
+            let rc = H264EncoderRateControl::VariableBitrate {
+                average_bitrate: 6_000_000,
+                max_bitrate: 8_000_000,
+                virtual_buffer_size: Duration::from_secs(2),
+            }
+            .config();
+            assert_eq!(rc.mode, VA_RC_VBR);
+            assert_eq!(rc.bits_per_second, 8_000_000);
+            assert_eq!(rc.target_percentage, 75);
+            assert_eq!(rc.window_size, 2_000);
+            assert!(rc.disable_bit_stuffing);
+        }
+
+        #[test]
         #[ignore = "requires a VA-API capable Linux host"]
         fn encodes_exported_nv12_dmabuf_frames_to_h264() {
             let _guard = VAAPI_TEST_LOCK.lock().unwrap();
@@ -993,7 +1106,10 @@ mod imp {
                 queue: Arc::new(queue),
                 adapter_info: Some(adapter_info),
                 resolution: TEST_RESOLUTION,
-                bitrate: 500_000,
+                rate_control: H264EncoderRateControl::ConstantBitrate {
+                    bitrate: 500_000,
+                    virtual_buffer_size: Duration::from_millis(1_500),
+                },
                 gop_size: 30,
                 framerate: TEST_FRAMERATE,
                 max_pending_frames: MAX_PENDING_ENCODE_FRAMES,
@@ -1043,7 +1159,10 @@ mod imp {
                 queue: Arc::clone(&queue),
                 adapter_info: Some(adapter_info),
                 resolution: TEST_RESOLUTION,
-                bitrate: 2_000_000,
+                rate_control: H264EncoderRateControl::ConstantBitrate {
+                    bitrate: 2_000_000,
+                    virtual_buffer_size: Duration::from_millis(1_500),
+                },
                 gop_size: 1,
                 framerate: TEST_FRAMERATE,
                 max_pending_frames: 1,
@@ -1104,7 +1223,10 @@ mod imp {
                 queue: Arc::new(queue),
                 adapter_info: Some(adapter_info),
                 resolution: STRESS_RESOLUTION,
-                bitrate: 4_000_000,
+                rate_control: H264EncoderRateControl::ConstantBitrate {
+                    bitrate: 4_000_000,
+                    virtual_buffer_size: Duration::from_millis(1_500),
+                },
                 gop_size: 30,
                 framerate: TEST_FRAMERATE,
                 max_pending_frames: MAX_PENDING_ENCODE_FRAMES,
@@ -1169,7 +1291,11 @@ mod imp {
                 queue: Arc::new(queue),
                 adapter_info: Some(adapter_info),
                 resolution: STRESS_RESOLUTION,
-                bitrate: WT_PREVIEW_BITRATE,
+                rate_control: H264EncoderRateControl::VariableBitrate {
+                    average_bitrate: WT_PREVIEW_BITRATE,
+                    max_bitrate: WT_PREVIEW_BITRATE * 4 / 3,
+                    virtual_buffer_size: Duration::from_secs(2),
+                },
                 gop_size: WT_PREVIEW_GOP_SIZE,
                 framerate: WT_PREVIEW_FRAMERATE,
                 max_pending_frames: 1,
@@ -1227,8 +1353,13 @@ mod imp {
             let p99_call = percentile_duration(&call_times, 99);
             let rss_growth_kib =
                 peak_rss_kib.saturating_sub(rss_after_warmup.unwrap_or(peak_rss_kib));
+            let padded_cbr_bytes = padded_cbr_budget_bytes(
+                WT_PREVIEW_BITRATE,
+                WT_PREVIEW_FRAMERATE,
+                FRAME_COUNT,
+            );
             eprintln!(
-                "wt_low_latency frames={encoded_frames}; keyframes={keyframes}; bytes={encoded_bytes}; max_call_ms={}; p99_call_ms={}; rss_after_warmup_kib={}; peak_rss_kib={peak_rss_kib}; rss_growth_kib={rss_growth_kib}",
+                "wt_low_latency frames={encoded_frames}; keyframes={keyframes}; bytes={encoded_bytes}; padded_cbr_bytes={padded_cbr_bytes}; max_call_ms={}; p99_call_ms={}; rss_after_warmup_kib={}; peak_rss_kib={peak_rss_kib}; rss_growth_kib={rss_growth_kib}",
                 max_call.as_millis(),
                 p99_call.as_millis(),
                 rss_after_warmup.unwrap_or(0),
@@ -1236,6 +1367,7 @@ mod imp {
 
             assert_eq!(encoded_frames, FRAME_COUNT);
             assert!(keyframes >= 55);
+            assert!(encoded_bytes < padded_cbr_bytes * 9 / 10);
             assert!(p99_call < Duration::from_millis(15));
             assert!(max_call < Duration::from_millis(33));
             assert!(rss_growth_kib < MAX_RSS_GROWTH_KIB);
@@ -1366,6 +1498,18 @@ mod imp {
             values[index]
         }
 
+        fn padded_cbr_budget_bytes(
+            bitrate: u32,
+            framerate: VideoFramerate,
+            frame_count: usize,
+        ) -> usize {
+            let bytes = u128::from(bitrate)
+                * u128::from(framerate.den.max(1))
+                * frame_count as u128
+                / (8 * u128::from(framerate.num.max(1)));
+            bytes.min(usize::MAX as u128) as usize
+        }
+
         fn current_rss_kib() -> usize {
             fs::read_to_string("/proc/self/status")
                 .ok()
@@ -1380,4 +1524,7 @@ mod imp {
     }
 }
 
-pub use imp::{EncodedFrame, H264Encoder, H264EncoderConfig, VaapiH264EncoderError};
+pub use imp::{
+    EncodedFrame, H264Encoder, H264EncoderConfig, H264EncoderRateControl,
+    VaapiH264EncoderError,
+};

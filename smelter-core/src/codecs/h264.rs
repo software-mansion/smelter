@@ -67,6 +67,7 @@ pub struct VaapiH264EncoderOptions {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum VaapiH264EncoderRateControl {
+    VariableBitrate(VideoEncoderBitrate),
     ConstantBitrate(u64),
 }
 

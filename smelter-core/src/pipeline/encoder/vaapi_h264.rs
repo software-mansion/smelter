@@ -4,7 +4,9 @@ mod imp {
 
     use gpu_video::{
         VideoFramerate, VideoResolution,
-        vaapi::h264::{EncodedFrame, H264Encoder, H264EncoderConfig},
+        vaapi::h264::{
+            EncodedFrame, H264Encoder, H264EncoderConfig, H264EncoderRateControl,
+        },
     };
     use smelter_render::{FrameData, Framerate, OutputFrameFormat, Resolution};
     use tracing::{error, info};
@@ -38,13 +40,24 @@ mod imp {
             let gop_size =
                 gop_size_from_ms_framerate(options.keyframe_interval, framerate)
                     .clamp(1, u16::MAX as u64) as u16;
-            let bitrate = match options.bitrate.unwrap_or_else(|| {
-                let bitrate =
-                    bitrate_from_resolution_framerate(options.resolution, framerate);
-                VaapiH264EncoderRateControl::ConstantBitrate(bitrate.average_bitrate)
+            let rate_control = match options.bitrate.unwrap_or_else(|| {
+                VaapiH264EncoderRateControl::VariableBitrate(
+                    bitrate_from_resolution_framerate(options.resolution, framerate),
+                )
             }) {
+                VaapiH264EncoderRateControl::VariableBitrate(bitrate) => {
+                    H264EncoderRateControl::VariableBitrate {
+                        average_bitrate: bitrate.average_bitrate.min(u32::MAX as u64)
+                            as u32,
+                        max_bitrate: bitrate.max_bitrate.min(u32::MAX as u64) as u32,
+                        virtual_buffer_size: std::time::Duration::from_secs(2),
+                    }
+                }
                 VaapiH264EncoderRateControl::ConstantBitrate(bitrate) => {
-                    bitrate.min(u32::MAX as u64) as u32
+                    H264EncoderRateControl::ConstantBitrate {
+                        bitrate: bitrate.min(u32::MAX as u64) as u32,
+                        virtual_buffer_size: std::time::Duration::from_secs(2),
+                    }
                 }
             };
 
@@ -60,7 +73,7 @@ mod imp {
                 queue: Arc::clone(&ctx.graphics_context.queue),
                 adapter_info: Some(ctx.graphics_context.adapter.get_info()),
                 resolution: video_resolution,
-                bitrate,
+                rate_control,
                 gop_size,
                 framerate: video_framerate,
                 max_pending_frames,
@@ -77,7 +90,7 @@ mod imp {
             info!(
                 width = options.resolution.width,
                 height = options.resolution.height,
-                bitrate,
+                rate_control = ?rate_control,
                 bitstream_format = ?options.bitstream_format,
                 preset = ?options.preset,
                 max_pending_frames,
