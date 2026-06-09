@@ -52,7 +52,7 @@ impl RenderGraph {
 
         let output_tree = OutputRenderTree {
             root: Self::create_node(ctx, output.node)?,
-            output_texture: OutputTexture::new(ctx.wgpu_ctx, output.resolution, output_format)?,
+            output_texture: OutputTexture::new(ctx.wgpu_ctx, output.resolution, output_format),
         };
 
         scope.pop()?;

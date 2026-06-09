@@ -544,10 +544,6 @@ impl From<&UpdateSceneError> for PipelineErrorInfo {
                 error_code: AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING,
                 error_type: ErrorType::UserError,
             },
-            UpdateSceneError::OutputTexture(_) => PipelineErrorInfo {
-                error_code: BUILD_SCENE_ERROR,
-                error_type: ErrorType::ServerError,
-            },
         }
     }
 }

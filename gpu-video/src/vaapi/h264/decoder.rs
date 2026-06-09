@@ -1,7 +1,6 @@
 #[cfg(target_os = "linux")]
 mod imp {
     use std::{
-        any::Any,
         collections::{HashMap, HashSet},
         rc::Rc,
         sync::Arc,
@@ -74,14 +73,15 @@ mod imp {
     }
 
     pub struct WgpuDecodedFrame {
-        pub data: Arc<wgpu::Texture>,
-        pub owner: Arc<dyn Any + Send + Sync>,
+        pub data: wgpu::Texture,
         pub pts: Duration,
         pub resolution: VideoResolution,
     }
 
     pub struct WgpuTexturesDecoder {
         decoder: H264Decoder,
+        device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
     }
 
     struct DecodedFrameData {
@@ -610,9 +610,14 @@ mod imp {
     impl WgpuTexturesDecoder {
         pub fn new(
             device: Arc<wgpu::Device>,
+            queue: Arc<wgpu::Queue>,
             adapter_info: Option<&wgpu::AdapterInfo>,
         ) -> Result<Self, VaapiH264DecoderError> {
-            Ok(Self { decoder: H264Decoder::new(device, adapter_info)? })
+            Ok(Self {
+                decoder: H264Decoder::new(Arc::clone(&device), adapter_info)?,
+                device,
+                queue,
+            })
         }
 
         pub fn decode_chunk(
@@ -621,37 +626,76 @@ mod imp {
             pts: Option<u64>,
             present: bool,
         ) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
-            self.decoder.decode_chunk(data, pts, present).map(frames_to_wgpu_textures)
+            let frames = self.decoder.decode_chunk(data, pts, present)?;
+            self.copy_frames(frames)
         }
 
         pub fn flush_frame(
             &mut self,
         ) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
-            self.decoder.flush_frame().map(frames_to_wgpu_textures)
+            let frames = self.decoder.flush_frame()?;
+            self.copy_frames(frames)
         }
 
         pub fn flush(&mut self) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
-            self.decoder.flush().map(frames_to_wgpu_textures)
+            let frames = self.decoder.flush()?;
+            self.copy_frames(frames)
         }
 
         pub fn mark_missed_frames(&mut self) {
             self.decoder.mark_missed_frames();
         }
-    }
 
-    fn frames_to_wgpu_textures(frames: Vec<DecodedFrame>) -> Vec<WgpuDecodedFrame> {
-        frames
-            .into_iter()
-            .map(|frame| {
-                let owner: Arc<dyn Any + Send + Sync> = frame.data.clone();
-                WgpuDecodedFrame {
-                data: frame.data.texture_arc(),
-                owner,
+        fn copy_frames(
+            &self,
+            frames: Vec<DecodedFrame>,
+        ) -> Result<Vec<WgpuDecodedFrame>, VaapiH264DecoderError> {
+            frames
+                .into_iter()
+                .map(|frame| self.copy_frame(frame))
+                .collect()
+        }
+
+        fn copy_frame(
+            &self,
+            frame: DecodedFrame,
+        ) -> Result<WgpuDecodedFrame, VaapiH264DecoderError> {
+            let size = wgpu::Extent3d {
+                width: frame.resolution.width,
+                height: frame.resolution.height,
+                depth_or_array_layers: 1,
+            };
+            let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("VA-API H264 decoder output texture"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::NV12,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_SRC
+                    | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            let mut encoder =
+                self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("VA-API H264 decoder output copy"),
+                });
+            encoder.copy_texture_to_texture(
+                frame.data.texture().as_image_copy(),
+                texture.as_image_copy(),
+                size,
+            );
+            self.queue.submit([encoder.finish()]);
+            self.device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .map_err(|err| VaapiH264DecoderError::Decode(err.to_string()))?;
+            Ok(WgpuDecodedFrame {
+                data: texture,
                 pts: frame.pts,
                 resolution: frame.resolution,
-                }
             })
-            .collect()
+        }
     }
 
     fn from_sorted_frame(frame: OutputFrame<DecodedFrameData>) -> DecodedFrame {

@@ -26,32 +26,20 @@ pub enum OutputTexture {
     },
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("failed to create output texture")]
-pub struct CreateOutputTextureError;
-
 impl OutputTexture {
-    pub fn new(
-        ctx: &WgpuCtx,
-        resolution: Resolution,
-        format: OutputFrameFormat,
-    ) -> Result<Self, CreateOutputTextureError> {
+    pub fn new(ctx: &WgpuCtx, resolution: Resolution, format: OutputFrameFormat) -> Self {
         match format {
-            OutputFrameFormat::PlanarYuv420Bytes => Ok(Self::PlanarYuvTextures(
+            OutputFrameFormat::PlanarYuv420Bytes => Self::PlanarYuvTextures(
                 Box::new(PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV420)),
-            )),
-            OutputFrameFormat::PlanarYuv422Bytes => Ok(Self::PlanarYuvTextures(
+            ),
+            OutputFrameFormat::PlanarYuv422Bytes => Self::PlanarYuvTextures(
                 Box::new(PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV422)),
-            )),
-            OutputFrameFormat::PlanarYuv444Bytes => Ok(Self::PlanarYuvTextures(
+            ),
+            OutputFrameFormat::PlanarYuv444Bytes => Self::PlanarYuvTextures(
                 Box::new(PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV444)),
-            )),
-            OutputFrameFormat::RgbaWgpuTexture => {
-                Ok(Self::Rgba8UnormWgpuTexture { resolution })
-            }
-            OutputFrameFormat::Nv12WgpuTexture => {
-                Ok(Self::Nv12WgpuTexture { resolution })
-            }
+            ),
+            OutputFrameFormat::RgbaWgpuTexture => Self::Rgba8UnormWgpuTexture { resolution },
+            OutputFrameFormat::Nv12WgpuTexture => Self::Nv12WgpuTexture { resolution },
         }
     }
 }

@@ -3,7 +3,7 @@ mod imp {
     use std::{sync::Arc, time::Duration};
 
     use gpu_video::vaapi::h264::{WgpuDecodedFrame, WgpuTexturesDecoder};
-    use smelter_render::{Frame, FrameData, Resolution, WgpuTextureFrame};
+    use smelter_render::{Frame, FrameData, Resolution};
     use tracing::{debug, info, trace, warn};
 
     use crate::{
@@ -29,6 +29,7 @@ mod imp {
             let adapter_info = ctx.graphics_context.adapter.get_info();
             let decoder = WgpuTexturesDecoder::new(
                 Arc::clone(&ctx.graphics_context.device),
+                Arc::clone(&ctx.graphics_context.queue),
                 Some(&adapter_info),
             )
             .map_err(|err| {
@@ -94,12 +95,8 @@ mod imp {
     }
 
     fn from_va_frame(frame: WgpuDecodedFrame) -> Frame {
-        let data = WgpuTextureFrame::new_with_owner(
-            Arc::clone(&frame.data),
-            frame.owner,
-        );
         Frame {
-            data: FrameData::Nv12WgpuTexture(data),
+            data: FrameData::Nv12WgpuTexture(Arc::new(frame.data)),
             pts: frame.pts,
             resolution: Resolution {
                 width: frame.resolution.width as usize,

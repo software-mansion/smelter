@@ -152,11 +152,11 @@ impl InputTexture {
             FrameData::Rgba8UnormWgpuTexture(texture) => {
                 match &mut self.0 {
                     Some(InputTextureState::Rgba8Unorm(input)) => {
-                        input.update(texture.texture_arc());
+                        input.update(texture);
                     }
                     state => {
                         *state = Some(InputTextureState::Rgba8Unorm(RgbaTextureInput::new(
-                            texture.texture_arc(),
+                            texture,
                         )));
                     }
                 };
@@ -164,11 +164,11 @@ impl InputTexture {
             FrameData::Nv12WgpuTexture(texture) => {
                 match &mut self.0 {
                     Some(InputTextureState::Nv12(input)) => {
-                        input.update(ctx, texture.texture_arc()).unwrap();
+                        input.update(ctx, texture).unwrap();
                     }
                     state => {
                         *state = Some(InputTextureState::Nv12(
-                            NV12Input::new_from_texture(ctx, texture.texture_arc()).unwrap(),
+                            NV12Input::new_from_texture(ctx, texture).unwrap(),
                         ));
                     }
                 };
