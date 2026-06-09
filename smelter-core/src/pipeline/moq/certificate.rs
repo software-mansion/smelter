@@ -35,7 +35,7 @@ pub enum SelfSignedTlsError {
     Rcgen(#[from] rcgen::Error),
 }
 
-/// Load a previously persisted self-signed certificate from `~/.smelter`, or
+/// Load a previously persisted auto-generated certificate from `~/.smelter`, or
 /// generate (and persist) a new one if it is missing, expired, or corrupted.
 ///
 /// Returns a [`ServerTlsConfig`] pointing at the cert/key files on disk; moq loads
@@ -66,8 +66,8 @@ pub fn load_or_create_self_signed_tls() -> Result<ServerTlsConfig, SelfSignedTls
 
     let fingerprint = fingerprint(&cert_der);
     warn!(
-        "Using INSECURE self-signed MoQ TLS certificate. Generated/loaded from {}. \
-         NEVER use in production. Cert SHA-256 (for client serverCertificateHashes): {fingerprint}",
+        "Using auto-generated, self-signed MoQ TLS certificate. Generated/loaded from {}. \
+         Make sure to configure proper certs in production. Cert SHA-256 (for client serverCertificateHashes): {fingerprint}",
         dir.display()
     );
 
