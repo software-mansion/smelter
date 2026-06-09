@@ -10,7 +10,6 @@ use rand::Rng;
 use rtmp::TlsConfig;
 use smelter_core::DEFAULT_BUFFER_DURATION;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures};
-use tracing::{error, warn};
 
 use crate::logger::FfmpegLogLevel;
 
@@ -266,7 +265,7 @@ fn try_read_config() -> Result<Config, String> {
         match env::var("SMELTER_WEBRTC_STUN_SERVERS").or(env::var("SMELTER_STUN_SERVERS")) {
             Ok(var) => {
                 if var.is_empty() {
-                    error!("empty stun servers env");
+                    println!("CONFIG ERROR: empty stun servers env");
                     Arc::new(Vec::new())
                 } else {
                     Arc::new(var.split(',').map(String::from).collect())
@@ -279,7 +278,7 @@ fn try_read_config() -> Result<Config, String> {
         Ok(port_range) => match port_range_from_str(&port_range) {
             Ok(port_range) => Some(port_range),
             Err(err) => {
-                warn!("\"{port_range}\" is not a valid port range: {err}");
+                println!("CONFIG ERROR: \"{port_range}\" is not a valid port range: {err}");
                 None
             }
         },
@@ -290,7 +289,9 @@ fn try_read_config() -> Result<Config, String> {
         Ok(mux_port) => mux_port
             .parse::<u16>()
             .inspect_err(|err| {
-                warn!("SMELTER_WEBRTC_UDP_MUX_PORT has to be valid port number: {err}")
+                println!(
+                    "CONFIG ERROR: SMELTER_WEBRTC_UDP_MUX_PORT has to be valid port number: {err}"
+                )
             })
             .ok(),
         Err(_) => None,
@@ -301,8 +302,8 @@ fn try_read_config() -> Result<Config, String> {
         (None, Some((start, end))) => Some(WebrtcUdpPortStrategy::PortRange(start, end)),
         (Some(port), None) => Some(WebrtcUdpPortStrategy::Mux(port)),
         (Some(port), Some(_)) => {
-            warn!(
-                "Options \"SMELTER_WEBRTC_UDP_MUX_PORT\" and \"SMELTER_WEBRTC_UDP_PORT_RANGE\" are conflicting. Ignoring \"SMELTER_WEBRTC_UDP_PORT_RANGE\""
+            println!(
+                "CONFIG ERROR: Options \"SMELTER_WEBRTC_UDP_MUX_PORT\" and \"SMELTER_WEBRTC_UDP_PORT_RANGE\" are conflicting. Ignoring \"SMELTER_WEBRTC_UDP_PORT_RANGE\""
             );
             Some(WebrtcUdpPortStrategy::Mux(port))
         }
