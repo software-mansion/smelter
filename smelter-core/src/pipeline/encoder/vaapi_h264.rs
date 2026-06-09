@@ -63,7 +63,7 @@ mod imp {
 
             let max_pending_frames = match options.preset {
                 VaapiH264EncoderPreset::HighQuality => 8,
-                VaapiH264EncoderPreset::LowLatency => 1,
+                VaapiH264EncoderPreset::LowLatency => 3,
             };
             let video_resolution = video_resolution(options.resolution);
             let video_framerate = video_framerate(framerate);
