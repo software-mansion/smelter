@@ -6,6 +6,10 @@ const H264_PROFILE_MAIN: u8 = 77;
 pub const H264_LEVEL_4_0: u8 = 40;
 pub const LOG2_MAX_FRAME_NUM_MINUS4: u32 = 12;
 pub const LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4: u32 = 12;
+const MAX_NUM_REF_FRAMES: u32 = 1;
+const MAX_NUM_REORDER_FRAMES: u32 = 0;
+const MAX_DEC_FRAME_BUFFERING: u32 = MAX_NUM_REF_FRAMES;
+const LOG2_MAX_MV_LENGTH: u32 = 16;
 const PPS_NAL: &[u8] = &[0, 0, 0, 1, 0x68, 0xce, 0x3c, 0x80];
 
 pub fn main_parameter_sets(
@@ -44,7 +48,7 @@ fn sps_rbsp(
     bits.ue(LOG2_MAX_FRAME_NUM_MINUS4);
     bits.ue(0);
     bits.ue(LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4);
-    bits.ue(1);
+    bits.ue(MAX_NUM_REF_FRAMES);
     bits.bit(false);
     bits.ue(width_mbs - 1);
     bits.ue(height_mbs - 1);
@@ -70,7 +74,14 @@ fn sps_rbsp(
     bits.bit(false);
     bits.bit(false);
     bits.bit(false);
-    bits.bit(false);
+    bits.bit(true);
+    bits.bit(true);
+    bits.ue(0);
+    bits.ue(0);
+    bits.ue(LOG2_MAX_MV_LENGTH);
+    bits.ue(LOG2_MAX_MV_LENGTH);
+    bits.ue(MAX_NUM_REORDER_FRAMES);
+    bits.ue(MAX_DEC_FRAME_BUFFERING);
     bits.finish_rbsp()
 }
 
@@ -135,6 +146,7 @@ fn append_annexb_nal(out: &mut Vec<u8>, header: u8, rbsp: Vec<u8>) {
 #[cfg(test)]
 mod tests {
     use bytes::{BufMut, BytesMut};
+    use h264_reader::nal::{Nal, RefNal, sps::SeqParameterSet};
 
     use super::*;
 
@@ -166,9 +178,24 @@ mod tests {
         );
         let expected_sps = [
             0x00, 0x00, 0x00, 0x01, 0x67, 0x4d, 0x00, 0x28, 0x8d, 0x8d, 0x40, 0x3c, 0x01,
-            0x13, 0xf2, 0xe0, 0x22, 0x00, 0x00, 0x07, 0xd2, 0x00, 0x01, 0xd4, 0xc1, 0x08,
+            0x13, 0xf2, 0xe0, 0x22, 0x00, 0x00, 0x07, 0xd2, 0x00, 0x01, 0xd4, 0xc1, 0x1e,
+            0x11, 0x08, 0xd4,
         ];
         assert!(parameter_sets.starts_with(&expected_sps));
+    }
+
+    #[test]
+    fn main_profile_sps_declares_no_reordering() {
+        let parameter_sets = main_parameter_sets(
+            VideoResolution { width: 1280, height: 720 },
+            VideoFramerate { num: 30, den: 1 },
+        );
+        let sps = parse_sps(&parameter_sets);
+        let restrictions = sps.vui_parameters.unwrap().bitstream_restrictions.unwrap();
+
+        assert_eq!(sps.max_num_ref_frames, MAX_NUM_REF_FRAMES);
+        assert_eq!(restrictions.max_num_reorder_frames, MAX_NUM_REORDER_FRAMES);
+        assert_eq!(restrictions.max_dec_frame_buffering, MAX_DEC_FRAME_BUFFERING);
     }
 
     fn build_avc_decoder_config(data: &[u8]) -> Option<bytes::Bytes> {
@@ -218,5 +245,14 @@ mod tests {
             nalus.push(&data[nalu_start..]);
         }
         nalus
+    }
+
+    fn parse_sps(data: &[u8]) -> SeqParameterSet {
+        let sps = split_annexb_nalus(data)
+            .into_iter()
+            .find(|nalu| nalu.first().is_some_and(|byte| byte & 0x1f == 7))
+            .unwrap();
+        let nal = RefNal::new(sps, &[], true);
+        SeqParameterSet::from_bits(nal.rbsp_bits()).unwrap()
     }
 }
