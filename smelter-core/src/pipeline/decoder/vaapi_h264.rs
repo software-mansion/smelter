@@ -2,7 +2,9 @@
 mod imp {
     use std::{sync::Arc, time::Duration};
 
-    use gpu_video::vaapi::h264::WgpuTexturesDecoder;
+    use gpu_video::{
+        EncodedInputChunk, H264DecoderEvent, vaapi::h264::WgpuTexturesDecoder,
+    };
     use smelter_render::{Frame, FrameData, Resolution};
     use tracing::{debug, info, trace, warn};
 
@@ -16,6 +18,7 @@ mod imp {
     pub struct VaapiH264Decoder {
         decoder: WgpuTexturesDecoder,
         keyframe_request_sender: Option<KeyframeRequestSender>,
+        drop_frames: bool,
     }
 
     impl VideoDecoder for VaapiH264Decoder {
@@ -35,14 +38,15 @@ mod imp {
             .map_err(|err| {
                 DecoderInitError::VaapiH264DecoderUnavailable(err.to_string())
             })?;
-            Ok(Self { decoder, keyframe_request_sender })
+            Ok(Self { decoder, keyframe_request_sender, drop_frames: false })
         }
     }
 
     impl VideoDecoderInstance for VaapiH264Decoder {
         fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
             trace!(?event, "VA-API H264 decoder received an event.");
-            let result = match event {
+
+            let decoder_event = match &event {
                 EncodedInputEvent::Chunk(chunk) => {
                     if MediaKind::Video(VideoCodec::H264) != chunk.kind {
                         warn!(
@@ -51,22 +55,24 @@ mod imp {
                         );
                         return Vec::new();
                     }
-                    self.decoder.decode_chunk(
-                        &chunk.data,
-                        Some(duration_micros(chunk.pts)),
-                        chunk.present,
-                    )
+                    self.drop_frames = !chunk.present;
+                    H264DecoderEvent::DecodeChunk(EncodedInputChunk {
+                        data: chunk.data.as_ref(),
+                        pts: Some(duration_micros(chunk.pts)),
+                    })
                 }
                 EncodedInputEvent::LostData => {
-                    self.decoder.mark_missed_frames();
                     self.request_keyframe();
-                    return Vec::new();
+                    H264DecoderEvent::SignalDataLoss
                 }
-                EncodedInputEvent::AuDelimiter => self.decoder.flush_frame(),
+                EncodedInputEvent::AuDelimiter => H264DecoderEvent::SignalFrameEnd,
             };
 
-            match result {
-                Ok(frames) => frames.into_iter().map(from_va_frame).collect(),
+            match self.decoder.process_event(decoder_event) {
+                Ok(frames) if !self.drop_frames => {
+                    frames.into_iter().map(from_va_frame).collect()
+                }
+                Ok(_) => Vec::new(),
                 Err(err) => {
                     self.request_keyframe();
                     debug!("VA-API H264 parser/decode error: {err}");
@@ -76,6 +82,9 @@ mod imp {
         }
 
         fn flush(&mut self) -> Vec<Frame> {
+            if self.drop_frames {
+                return Vec::new();
+            }
             match self.decoder.flush() {
                 Ok(frames) => frames.into_iter().map(from_va_frame).collect(),
                 Err(err) => {

@@ -1232,7 +1232,7 @@ mod imp {
         #[ignore = "requires a VA-API capable Linux host"]
         fn encodes_exported_nv12_dmabuf_frames_to_h264() {
             let _guard = VAAPI_TEST_LOCK.lock().unwrap();
-            let (device, queue, adapter_info) = crate::test_wgpu_device_and_queue();
+            let (device, _queue, adapter_info) = crate::test_wgpu_device_and_queue();
             let mut encoder = H264Encoder::new(H264EncoderConfig {
                 adapter_info: Some(adapter_info),
                 resolution: TEST_RESOLUTION,
@@ -1255,12 +1255,12 @@ mod imp {
             let mut encoded = Vec::new();
             encoded.extend(
                 encoder
-                    .encode(frames.remove(0), Duration::ZERO, true)
+                    .encode(frames.remove(0), Some(0), true)
                     .expect("failed to encode VA-API keyframe"),
             );
             encoded.extend(
                 encoder
-                    .encode(frames.remove(0), Duration::from_millis(33), false)
+                    .encode(frames.remove(0), Some(33_000), false)
                     .expect("failed to encode VA-API delta frame"),
             );
             encoded.extend(encoder.flush().expect("failed to flush VA-API encoder"));
@@ -1314,7 +1314,7 @@ mod imp {
                     .expect("failed to wait for WGPU producer write");
                 encoded.extend(
                     encoder
-                        .encode(frame, frame_pts(index, TEST_FRAMERATE), true)
+                        .encode(frame, Some(frame_pts_us(index, TEST_FRAMERATE)), true)
                         .expect("failed to encode VA-API frame after WGPU write"),
                 );
             }
@@ -1345,7 +1345,7 @@ mod imp {
         fn encodes_exported_nv12_dmabuf_frames_at_steady_30fps() {
             const FRAME_COUNT: usize = 120;
             let _guard = VAAPI_TEST_LOCK.lock().unwrap();
-            let (device, queue, adapter_info) = crate::test_wgpu_device_and_queue();
+            let (device, _queue, adapter_info) = crate::test_wgpu_device_and_queue();
             let mut encoder = H264Encoder::new(H264EncoderConfig {
                 adapter_info: Some(adapter_info),
                 resolution: STRESS_RESOLUTION,
@@ -1373,7 +1373,7 @@ mod imp {
                     encoder
                         .encode(
                             Arc::clone(&frames[index % frames.len()]),
-                            Duration::from_micros(index as u64 * 1_000_000 / 30),
+                            Some(index as u64 * 1_000_000 / 30),
                             false,
                         )
                         .expect("failed to encode VA-API frame"),
@@ -1411,7 +1411,7 @@ mod imp {
             const WT_PREVIEW_GOP_SIZE: u16 = 30;
             const MAX_RSS_GROWTH_KIB: usize = 64 * 1024;
             let _guard = VAAPI_TEST_LOCK.lock().unwrap();
-            let (device, queue, adapter_info) = crate::test_wgpu_device_and_queue();
+            let (device, _queue, adapter_info) = crate::test_wgpu_device_and_queue();
             let mut encoder = H264Encoder::new(H264EncoderConfig {
                 adapter_info: Some(adapter_info),
                 resolution: STRESS_RESOLUTION,
@@ -1444,7 +1444,7 @@ mod imp {
                 let encoded = encoder
                     .encode(
                         Arc::clone(&frames[index % frames.len()]),
-                        frame_pts(index, WT_PREVIEW_FRAMERATE),
+                        Some(frame_pts_us(index, WT_PREVIEW_FRAMERATE)),
                         false,
                     )
                     .expect("failed to encode WT-preview VA-API frame");
@@ -1607,11 +1607,9 @@ mod imp {
             output.stdout
         }
 
-        fn frame_pts(index: usize, framerate: VideoFramerate) -> Duration {
-            Duration::from_nanos(
-                index as u64 * 1_000_000_000u64 * framerate.den as u64
-                    / framerate.num as u64,
-            )
+        fn frame_pts_us(index: usize, framerate: VideoFramerate) -> u64 {
+            index as u64 * 1_000_000u64 * framerate.den as u64
+                / framerate.num as u64
         }
 
         fn percentile_duration(values: &[Duration], percentile: usize) -> Duration {

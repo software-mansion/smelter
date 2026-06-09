@@ -21,7 +21,8 @@ mod imp {
             take_nv12_surface,
         },
         vulkan_decoder::{DecodeResult, DecodeResultMetadata, FrameSorter},
-        FrameMetadata, OutputFrame, VideoResolution,
+        EncodedInputChunk, FrameMetadata, H264DecoderEvent, OutputFrame,
+        VideoResolution,
     };
     use crate::dmabuf::DmaBufFrame;
     use crossbeam_channel::{Receiver, Sender};
@@ -63,7 +64,6 @@ mod imp {
         sps: HashMap<u8, SeqParameterSet>,
         pps: HashMap<u8, PicParameterSet>,
         device: Arc<wgpu::Device>,
-        drop_frames: bool,
     }
 
     struct DecodedFrame {
@@ -133,26 +133,43 @@ mod imp {
                 sps: HashMap::new(),
                 pps: HashMap::new(),
                 device,
-                drop_frames: false,
             })
         }
 
-        fn decode_chunk(
+        fn process_event(
             &mut self,
-            data: &[u8],
-            pts: Option<u64>,
-            present: bool,
+            event: H264DecoderEvent<'_>,
         ) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
-            self.drop_frames = !present;
-            if !present {
-                self.drain_released_output_surfaces();
+            match event {
+                H264DecoderEvent::DecodeChunk(chunk) => {
+                    let instructions = self
+                        .parse_h264(chunk.data, chunk.pts)
+                        .map_err(VaapiH264DecoderError::Decode)?;
+                    self.process_instructions(instructions)
+                        .map_err(VaapiH264DecoderError::Decode)
+                }
+                H264DecoderEvent::DecodeParsedFrame(access_unit) => {
+                    let instructions =
+                        compile_to_decoder_instructions(
+                            &mut self.reference_ctx,
+                            vec![access_unit],
+                        )
+                        .map_err(|err: ReferenceManagementError| {
+                            VaapiH264DecoderError::Decode(err.to_string())
+                        })?;
+                    self.process_instructions(instructions)
+                        .map_err(VaapiH264DecoderError::Decode)
+                }
+                H264DecoderEvent::SignalFrameEnd => self.signal_frame_end(),
+                H264DecoderEvent::SignalDataLoss => {
+                    self.signal_data_loss();
+                    Ok(Vec::new())
+                }
+                H264DecoderEvent::Flush => self.flush(),
             }
-            let instructions =
-                self.parse_h264(data, pts).map_err(VaapiH264DecoderError::Decode)?;
-            self.process_instructions(instructions).map_err(VaapiH264DecoderError::Decode)
         }
 
-        fn flush_frame(
+        fn signal_frame_end(
             &mut self,
         ) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
             let instructions =
@@ -161,12 +178,12 @@ mod imp {
         }
 
         fn flush(&mut self) -> Result<Vec<DecodedFrame>, VaapiH264DecoderError> {
-            let mut frames = self.flush_frame()?;
+            let mut frames = self.signal_frame_end()?;
             frames.extend(self.flush_sorted_frames());
             Ok(frames)
         }
 
-        fn mark_missed_frames(&mut self) {
+        fn signal_data_loss(&mut self) {
             self.frame_sorter.clear();
             self.drain_released_output_surfaces();
             self.reference_ctx.mark_missed_frames();
@@ -291,25 +308,22 @@ mod imp {
                 .take_surface()
                 .map_err(|_| "VA-API picture kept a shared output surface".to_string())?;
 
-            let frame = (!self.drop_frames)
-                .then(|| self.frame_from_surface(&surface, display_resolution))
-                .transpose()?
-                .map(|frame| DecodeResult {
-                    frame,
-                    metadata: DecodeResultMetadata {
-                        pts,
-                        pic_order_cnt,
-                        max_num_reorder_frames,
-                        is_idr,
-                        color_space,
-                        color_range,
-                    },
-                });
+            let frame = DecodeResult {
+                frame: self.frame_from_surface(&surface, display_resolution)?,
+                metadata: DecodeResultMetadata {
+                    pts,
+                    pic_order_cnt,
+                    max_num_reorder_frames,
+                    is_idr,
+                    color_space,
+                    color_range,
+                },
+            };
             self.references.push((
                 reference_id,
                 DecodedReference { surface, picture: decoded_picture },
             ));
-            Ok(frame)
+            Ok(Some(frame))
         }
 
         fn add_buffers(
@@ -614,30 +628,35 @@ mod imp {
             })
         }
 
-        pub fn decode_chunk(
+        /// The produced textures have the [`wgpu::TextureFormat::NV12`] format and can be used as texture bindings.
+        pub fn decode(
             &mut self,
-            data: &[u8],
-            pts: Option<u64>,
-            present: bool,
+            frame: EncodedInputChunk<'_>,
         ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VaapiH264DecoderError> {
-            let frames = self.decoder.decode_chunk(data, pts, present)?;
-            self.copy_frames(frames)
+            self.process_event(H264DecoderEvent::DecodeChunk(frame))
         }
 
-        pub fn flush_frame(
+        /// Flush all frames from the decoder.
+        ///
+        /// Make sure this is done only when no more frames are coming that need
+        /// to be presented before the already decoded frames.
+        pub fn flush(
             &mut self,
         ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VaapiH264DecoderError> {
-            let frames = self.decoder.flush_frame()?;
-            self.copy_frames(frames)
+            self.process_event(H264DecoderEvent::Flush)
         }
 
-        pub fn flush(&mut self) -> Result<Vec<OutputFrame<wgpu::Texture>>, VaapiH264DecoderError> {
-            let frames = self.decoder.flush()?;
+        /// Process a [`H264DecoderEvent`]. For most use cases, [`Self::decode`]
+        /// and [`Self::flush`] are enough.
+        ///
+        /// Use this when you need fine-grained control over parser frame
+        /// boundaries, parsed access units, or data-loss signaling.
+        pub fn process_event(
+            &mut self,
+            event: H264DecoderEvent<'_>,
+        ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VaapiH264DecoderError> {
+            let frames = self.decoder.process_event(event)?;
             self.copy_frames(frames)
-        }
-
-        pub fn mark_missed_frames(&mut self) {
-            self.decoder.mark_missed_frames();
         }
 
         fn copy_frames(
@@ -1269,9 +1288,16 @@ mod imp {
                 .expect("failed to create decoder");
 
             let mut frames = decoder
-                .decode_chunk(&stream, Some(0), true)
+                .process_event(H264DecoderEvent::DecodeChunk(EncodedInputChunk {
+                    data: &stream,
+                    pts: Some(0),
+                }))
                 .expect("failed to decode stream");
-            frames.extend(decoder.flush_frame().expect("failed to flush frame"));
+            frames.extend(
+                decoder
+                    .process_event(H264DecoderEvent::SignalFrameEnd)
+                    .expect("failed to flush frame"),
+            );
             frames.extend(decoder.flush().expect("failed to flush decoder"));
 
             assert_eq!(frames.len(), TEST_FRAME_COUNT);
