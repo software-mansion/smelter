@@ -358,7 +358,7 @@ async fn read_video_track(
         .await
         .map_err(MoqConnectionError::ContainerError)?
     {
-        stats_sender.bytes_reveived_event(frame.payload.len(), StatsTrackKind::Video);
+        stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Video);
 
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
@@ -393,7 +393,7 @@ async fn read_audio_track(
         .await
         .map_err(MoqConnectionError::ContainerError)?
     {
-        stats_sender.bytes_reveived_event(frame.payload.len(), StatsTrackKind::Audio);
+        stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Audio);
 
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
@@ -431,7 +431,7 @@ impl MoqStatsSender {
         }
     }
 
-    fn bytes_reveived_event(&self, size: usize, track_kind: StatsTrackKind) {
+    fn bytes_received_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
             MoqServerInputTrackStatsEvent::BytesReceived(size)
                 .into_event(&self.input_ref, track_kind),
