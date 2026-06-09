@@ -1,10 +1,11 @@
-//! Pairs decoded video frames from two RTP dumps, decoding lazily.
+//! Pairs decoded video frames from two output dumps.
 //!
-//! [`RtpVideoDiffIter::from_rtp_dumps`] reads two `.rtp` dumps, filters
-//! to the H.264 video payload type, and yields pairs of decoded
-//! frames as the iterator is advanced. Decoding only runs as far as
-//! necessary to satisfy each step — useful for huge dumps where the
-//! caller may stop after a handful of frames.
+//! [`VideoDiffIter::from_dumps`] reads two dumps, demuxes the H.264
+//! video, and yields pairs of decoded frames as the iterator is
+//! advanced. For `.rtp` dumps decoding is lazy — it only runs as far
+//! as necessary to satisfy each step, useful for huge dumps where the
+//! caller may stop after a handful of frames. `.mp4` dumps are demuxed
+//! and decoded up front and replayed through the same pairing logic.
 //!
 //! ## Pairing strategy
 //!
@@ -31,7 +32,11 @@ use bytes::Bytes;
 use smelter_render::Frame;
 use webrtc::rtp;
 
-use crate::{unmarshal_packets, video_decoder::VideoDecoder};
+use crate::{
+    media_dump::{DumpFormat, decode_video_dump, decode_video_dump_path},
+    unmarshal_packets,
+    video_decoder::VideoDecoder,
+};
 
 /// RTP payload type smelter uses for H.264 video.
 pub(crate) const VIDEO_PAYLOAD_TYPE: u8 = 96;
@@ -45,14 +50,14 @@ pub struct FramePair {
     pub right: Option<Frame>,
 }
 
-/// Iterator over paired decoded frames from two RTP dumps. Construct
-/// via [`RtpVideoDiffIter::from_rtp_dumps`] for the on-disk path, or
-/// [`RtpVideoDiffIter::from_frames`] for tests.
+/// Iterator over paired decoded frames from two output dumps. Construct
+/// via [`VideoDiffIter::from_dumps`] for the on-disk path, or
+/// [`VideoDiffIter::from_frames`] for tests.
 ///
 /// `Item = Result<FramePair>` because decoding happens lazily during
 /// iteration and can fail at any point. Once an error is yielded the
 /// iterator fuses (returns `None` thereafter).
-pub struct RtpVideoDiffIter {
+pub struct VideoDiffIter {
     left: LazyFrameStream,
     right: LazyFrameStream,
     state: State,
@@ -65,29 +70,46 @@ enum State {
     Done,
 }
 
-impl RtpVideoDiffIter {
-    /// Read both dumps from disk, but do not decode anything yet.
-    /// Decoding runs lazily as the iterator is advanced. Either side
-    /// pointing at a non-existent file is treated as an empty stream
-    /// so the inspector can still surface the side that does exist —
-    /// useful when there is no committed snapshot to diff against yet.
-    pub fn from_rtp_dumps(left: &Path, right: &Path) -> Result<Self> {
-        Ok(Self {
-            left: LazyFrameStream::from_dump_path_or_empty(left)?,
-            right: LazyFrameStream::from_dump_path_or_empty(right)?,
-            state: State::NotStarted,
-        })
+impl VideoDiffIter {
+    /// Read both dumps from disk, but (for RTP) do not decode anything
+    /// yet — decoding runs lazily as the iterator is advanced. Either
+    /// side pointing at a non-existent file is treated as an empty
+    /// stream so the inspector can still surface the side that does
+    /// exist — useful when there is no committed snapshot to diff
+    /// against yet.
+    ///
+    /// MP4 dumps are demuxed and decoded eagerly (the container needs a
+    /// seekable view of the whole file anyway), then fed through the
+    /// same pairing logic via [`Self::from_frames`].
+    pub fn from_dumps(left: &Path, right: &Path, format: DumpFormat) -> Result<Self> {
+        match format {
+            DumpFormat::Rtp => Ok(Self {
+                left: LazyFrameStream::from_dump_path_or_empty(left)?,
+                right: LazyFrameStream::from_dump_path_or_empty(right)?,
+                state: State::NotStarted,
+            }),
+            DumpFormat::Mp4 => Ok(Self::from_frames(
+                decode_video_dump_path(left, format)?,
+                decode_video_dump_path(right, format)?,
+            )),
+        }
     }
 
-    /// Same as [`Self::from_rtp_dumps`] but consumes already-loaded
-    /// dumps instead of paths. Used by the test harness, which has the
+    /// Same as [`Self::from_dumps`] but consumes already-loaded dumps
+    /// instead of paths. Used by the test harness, which has the
     /// `actual` dump in memory and only the `expected` on disk.
-    pub fn from_bytes(left: &Bytes, right: &Bytes) -> Result<Self> {
-        Ok(Self {
-            left: LazyFrameStream::from_bytes(left)?,
-            right: LazyFrameStream::from_bytes(right)?,
-            state: State::NotStarted,
-        })
+    pub fn from_dump_bytes(left: &Bytes, right: &Bytes, format: DumpFormat) -> Result<Self> {
+        match format {
+            DumpFormat::Rtp => Ok(Self {
+                left: LazyFrameStream::from_bytes(left)?,
+                right: LazyFrameStream::from_bytes(right)?,
+                state: State::NotStarted,
+            }),
+            DumpFormat::Mp4 => Ok(Self::from_frames(
+                decode_video_dump(left, format)?,
+                decode_video_dump(right, format)?,
+            )),
+        }
     }
 
     /// Build directly from already-decoded frames. Useful for tests.
@@ -101,7 +123,7 @@ impl RtpVideoDiffIter {
     }
 }
 
-impl Iterator for RtpVideoDiffIter {
+impl Iterator for VideoDiffIter {
     type Item = Result<FramePair>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -117,7 +139,7 @@ impl Iterator for RtpVideoDiffIter {
     }
 }
 
-impl RtpVideoDiffIter {
+impl VideoDiffIter {
     fn step(&mut self) -> Result<Option<FramePair>> {
         match self.state {
             State::Done => Ok(None),
@@ -197,7 +219,7 @@ impl LazyFrameStream {
     fn from_dump_path_or_empty(path: &Path) -> Result<Self> {
         if !path.exists() {
             tracing::warn!(
-                "rtp_video_diff_iter: dump {} not found, treating as empty",
+                "video_diff_iter: dump {} not found, treating as empty",
                 path.display()
             );
             return Ok(Self::from_frames(Vec::new()));
@@ -316,7 +338,7 @@ mod tests {
         )
     }
 
-    fn collect_pairs(it: RtpVideoDiffIter) -> Vec<(Option<u64>, Option<u64>)> {
+    fn collect_pairs(it: VideoDiffIter) -> Vec<(Option<u64>, Option<u64>)> {
         it.map(|r| pts_pair(&r.unwrap())).collect()
     }
 
@@ -327,7 +349,7 @@ mod tests {
         let left = vec![frame(1), frame(6), frame(11)];
         let right = vec![frame(2), frame(7), frame(12)];
         assert_eq!(
-            collect_pairs(RtpVideoDiffIter::from_frames(left, right)),
+            collect_pairs(VideoDiffIter::from_frames(left, right)),
             vec![(Some(1), Some(2)), (Some(6), Some(7)), (Some(11), Some(12)),],
         );
     }
@@ -339,7 +361,7 @@ mod tests {
         let left = vec![frame(0), frame(33), frame(66), frame(99)];
         let right = vec![frame(5), frame(38), frame(71)];
         assert_eq!(
-            collect_pairs(RtpVideoDiffIter::from_frames(left, right)),
+            collect_pairs(VideoDiffIter::from_frames(left, right)),
             vec![
                 (Some(0), Some(5)),
                 (Some(33), Some(38)),
@@ -357,7 +379,7 @@ mod tests {
         let left = vec![frame(0), frame(33), frame(66)];
         let right = vec![frame(0), frame(16), frame(33), frame(50), frame(66)];
         assert_eq!(
-            collect_pairs(RtpVideoDiffIter::from_frames(left, right)),
+            collect_pairs(VideoDiffIter::from_frames(left, right)),
             vec![
                 (Some(0), Some(0)),
                 (Some(0), Some(16)),
@@ -370,7 +392,7 @@ mod tests {
 
     #[test]
     fn one_side_empty() {
-        let pairs = collect_pairs(RtpVideoDiffIter::from_frames(
+        let pairs = collect_pairs(VideoDiffIter::from_frames(
             vec![frame(0), frame(33)],
             vec![],
         ));
@@ -379,7 +401,7 @@ mod tests {
 
     #[test]
     fn both_empty() {
-        let mut it = RtpVideoDiffIter::from_frames(vec![], vec![]);
+        let mut it = VideoDiffIter::from_frames(vec![], vec![]);
         assert!(it.next().is_none());
     }
 }

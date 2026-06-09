@@ -5,7 +5,7 @@
 //! on every frame using the current layout and mouse position.
 //!
 //! Intended to be shared between tools that need to diff two streams
-//! of frames visually (e.g. the RTP dump inspector today, render-test
+//! of frames visually (e.g. the output dump inspector today, render-test
 //! comparisons in the future). Labels and captions live on [`Pair`]
 //! so callers can use any nomenclature — "expected"/"actual",
 //! "reference"/"candidate", etc.

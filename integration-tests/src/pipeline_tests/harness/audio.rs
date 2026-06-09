@@ -1,6 +1,7 @@
-//! New audio-dump comparison logic for pipeline tests.
+//! Audio-dump comparison logic for pipeline tests.
 //!
-//! Compares the OPUS audio payload of two RTP dumps by:
+//! Compares the audio payload of two output dumps (OPUS-in-RTP or
+//! AAC-in-MP4) by:
 //!   1. Decoding both sides into PCM chunks (PTS preserved).
 //!   2. Running the [`super::audio_analysis`] gap and artifact
 //!      detectors on each side independently.
@@ -11,7 +12,7 @@
 //!      flagged.
 //!   4. Optionally running the FFT-based spectrum comparison from
 //!      [`super::fft`] over caller-provided time ranges. We compare
-//!      spectra rather than raw samples because OPUS round-trips
+//!      spectra rather than raw samples because lossy round-trips
 //!      routinely shift the actual stream by a handful of samples;
 //!      a per-index MSE would explode on that even though the
 //!      streams sound identical.
@@ -24,8 +25,8 @@ use bytes::Bytes;
 use tracing::warn;
 
 use crate::{
-    audio_decoder::{AudioChannels, AudioDecoder, AudioSampleBatch},
-    find_packets_for_payload_type,
+    audio_decoder::AudioSampleBatch,
+    media_dump::{DumpFormat, decode_audio_dump},
     pipeline_tests::harness::{
         audio_analysis::{
             SAMPLE_RATE, compute_gaps, detect_artifacts, peak_abs, subtract_intervals,
@@ -33,11 +34,7 @@ use crate::{
         },
         fft::{self, FftCompareConfig},
     },
-    unmarshal_packets,
 };
-
-/// RTP payload type smelter uses for OPUS audio.
-const AUDIO_PAYLOAD_TYPE: u8 = 97;
 
 /// Caller-tunable thresholds for the new audio comparison.
 ///
@@ -78,10 +75,16 @@ impl Default for AudioCompareConfig {
     }
 }
 
-/// Decode `expected` and `actual` and run the comparison.
-pub fn compare(expected: &Bytes, actual: &Bytes, config: AudioCompareConfig) -> Result<()> {
-    let expected_chunks = decode(expected)?;
-    let actual_chunks = decode(actual)?;
+/// Decode `expected` and `actual` and run the comparison. `format`
+/// selects the demuxer/decoder (OPUS-in-RTP vs AAC-in-MP4).
+pub fn compare(
+    expected: &Bytes,
+    actual: &Bytes,
+    config: AudioCompareConfig,
+    format: DumpFormat,
+) -> Result<()> {
+    let expected_chunks = decode_audio_dump(expected, format)?;
+    let actual_chunks = decode_audio_dump(actual, format)?;
     compare_chunks(&expected_chunks, &actual_chunks, &config)
 }
 
@@ -165,14 +168,4 @@ fn chunks_peak(chunks: &[AudioSampleBatch]) -> f32 {
         .iter()
         .map(|c| peak_abs(&c.samples))
         .fold(0.0_f32, f32::max)
-}
-
-fn decode(dump: &Bytes) -> Result<Vec<AudioSampleBatch>> {
-    let packets = unmarshal_packets(dump)?;
-    let packets = find_packets_for_payload_type(&packets, AUDIO_PAYLOAD_TYPE);
-    let mut decoder = AudioDecoder::new(SAMPLE_RATE, AudioChannels::Stereo)?;
-    for packet in packets {
-        decoder.decode(packet)?;
-    }
-    Ok(decoder.take_samples())
 }

@@ -96,6 +96,19 @@ pub fn save_failed_actual_dump<P: AsRef<Path>>(actual_dump: &Bytes, snapshot_fil
         .file_name()
         .unwrap()
         .to_string_lossy();
+    // There is no expected snapshot to diff against, so drop any
+    // `expected_dump_` left over from an earlier run with a different
+    // snapshot state — otherwise the inspector would pair this actual
+    // dump against a stale expected.
+    let stale_expected = path.join(format!("expected_dump_{file_name}"));
+    if stale_expected.exists()
+        && let Err(e) = fs::remove_file(&stale_expected)
+    {
+        tracing::warn!(
+            "Failed to remove stale expected dump {}: {e}",
+            stale_expected.display()
+        );
+    }
     let dest = path.join(format!("actual_dump_{file_name}"));
     if let Err(e) = fs::write(&dest, actual_dump) {
         tracing::warn!("Failed to write actual dump to {}: {e}", dest.display());

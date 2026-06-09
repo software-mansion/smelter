@@ -1,12 +1,12 @@
-//! Play an RTP dump back through GStreamer, auto-detecting which
-//! media kinds it contains.
+//! Play an output dump back through GStreamer.
 //!
-//! Inspects the dump's RTP payload types once, picks one of three
-//! `gst-launch-1.0` pipelines (video, audio, or video+audio), and
-//! spawns it as a child of `bash -c`. The child is launched with its
-//! own process group so the caller can SIGINT the whole subtree (bash
-//! → gst-launch and any of its workers) at once when the user asks
-//! for playback to stop.
+//! MP4 dumps are handed to `playbin`, which demuxes them itself. RTP
+//! dumps are inspected for their payload types once and routed into one
+//! of three `gst-launch-1.0` pipelines (video, audio, or video+audio).
+//! Either way the pipeline is spawned as a child of `bash -c`, launched
+//! with its own process group so the caller can SIGINT the whole
+//! subtree (bash → gst-launch and any of its workers) at once when the
+//! user asks for playback to stop.
 
 use std::{
     collections::HashSet,
@@ -34,8 +34,13 @@ const AUDIO_PAYLOAD_TYPE: u8 = 97;
 /// watch their own stdin (audit_tests's Esc/q key handler) don't
 /// race the child for keystrokes.
 pub fn spawn(path: &Path) -> Result<Child> {
-    let kind = detect(path)?;
-    let pipeline = build_pipeline(path, kind);
+    // MP4 dumps are self-describing containers; let `playbin` pick the
+    // demuxers/decoders rather than reconstructing an RTP pipeline.
+    let pipeline = if path.extension().and_then(|e| e.to_str()) == Some("mp4") {
+        format!("gst-launch-1.0 -v playbin uri=file://{}", path.display())
+    } else {
+        build_pipeline(path, detect(path)?)
+    };
     Command::new("bash")
         .arg("-c")
         .arg(pipeline)

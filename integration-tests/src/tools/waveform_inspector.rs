@@ -1,5 +1,5 @@
 //! Interactive waveform inspection tool — audio counterpart to
-//! [`crate::tools::rtp_inspector`]'s video flow.
+//! [`crate::tools::dump_inspector`]'s video flow.
 //!
 //! Receives the fully-decoded expected and actual streams as a list of
 //! decoder chunks (each carrying its original timestamp). Chunks are
@@ -115,7 +115,7 @@ const CH_R: usize = 1;
 
 /// Launch the interactive waveform inspector. Blocks until the user
 /// exits. `expected` and `actual` are the decoded chunk streams from
-/// the two RTP dumps, with timestamps preserved per chunk.
+/// the two output dumps, with timestamps preserved per chunk.
 pub fn run(expected: Vec<AudioSampleBatch>, actual: Vec<AudioSampleBatch>) -> Result<()> {
     info!(
         "waveform_inspector: expected={} chunks, actual={} chunks",

@@ -1,19 +1,37 @@
-use std::{
-    fs::{self},
-    path::Path,
-    process::Command,
-};
+use std::{fs, path::Path, time::Duration};
 
-use anyhow::{Result, anyhow};
-use regex::Regex;
+use anyhow::Result;
+use integration_tests_macros::pipeline_test;
 use serde_json::json;
 use smelter::config::read_config;
-use tokio_tungstenite::tungstenite;
-use tracing::info;
 
-use crate::{CompositorInstance, media::TestSample, pipeline_tests::start_server_msg_listener};
+use crate::{
+    CompositorInstance, Mp4OutputReceiver,
+    media::TestSample,
+    pipeline_tests::{
+        PipelineTest,
+        harness::{
+            AudioCompareConfig, FftCompareConfig, VideoCompareConfig, compare_audio_dumps,
+            compare_video_dumps,
+            fft::{Mode, RealTolerance},
+        },
+    },
+};
 
-#[test]
+#[allow(dead_code)]
+pub const TESTS: &[PipelineTest] = &[OFFLINE_PROCESSING];
+
+#[pipeline_test(
+    description = "
+        Offline (ahead-of-time) processing of an MP4 input into an MP4
+        output.
+
+        Rescale a 2-second slice of an MP4 input into a 640x320 H.264 +
+        AAC MP4 file and compare the decoded frames/audio against the
+        committed snapshot.
+    ",
+    snapshot_name = "offline_processing_output.mp4"
+)]
 pub fn offline_processing() -> Result<()> {
     const OUTPUT_FILE: &str = "/tmp/offline_processing_output.mp4";
     if Path::new(OUTPUT_FILE).exists() {
@@ -24,8 +42,9 @@ pub fn offline_processing() -> Result<()> {
     config.ahead_of_time_processing = true;
     config.never_drop_output_frames = true;
     let instance = CompositorInstance::start(Some(config));
-    let (msg_sender, msg_receiver) = crossbeam_channel::unbounded();
-    start_server_msg_listener(instance.api_port, msg_sender);
+
+    let output_receiver =
+        Mp4OutputReceiver::start(instance.api_port, "output_1", OUTPUT_FILE.into());
 
     instance.send_request(
         "input/input_1/register",
@@ -69,6 +88,10 @@ pub fn offline_processing() -> Result<()> {
                 "channels": "stereo",
                 "encoder": {
                     "type": "aac",
+                    // Pin to the harness analysis sample rate so the
+                    // decoded audio lines up with the 48 kHz timeline
+                    // the gap/FFT detectors assume.
+                    "sample_rate": 48000,
                 },
                 "initial": {
                     "inputs": [{ "input_id": "input_1" }]
@@ -93,55 +116,34 @@ pub fn offline_processing() -> Result<()> {
 
     instance.send_request("start", json!({}))?;
 
-    for msg in msg_receiver.iter() {
-        if let tungstenite::Message::Text(msg) = msg
-            && msg.contains("\"type\":\"OUTPUT_DONE\",\"output_id\":\"output_1\"")
-        {
-            info!("breaking");
-            break;
-        }
-    }
+    let output_dump = output_receiver.wait_for_output()?;
 
-    let command_output = Command::new("ffprobe")
-        .args(["-v", "error", "-show_format", OUTPUT_FILE])
-        .output()
-        .map_err(|e| anyhow!("Invalid mp4 file. FFprobe error: {}", e))?;
+    compare_video_dumps(
+        OUTPUT_DUMP_FILE,
+        &output_dump,
+        VideoCompareConfig {
+            validation_intervals: vec![Duration::ZERO..Duration::from_millis(1800)],
+            ..Default::default()
+        },
+    )?;
 
-    if !command_output.status.success() {
-        return Err(anyhow!(
-            "Invalid mp4 file. FFprobe error: {}",
-            String::from_utf8_lossy(&command_output.stderr)
-        ));
-    }
+    let mut fft_cfg = FftCompareConfig::real(vec![Duration::ZERO..Duration::from_secs(1)]);
+    fft_cfg.mode = Mode::Real(RealTolerance {
+        max_frequency_level: 5.0,
+        average_level: 15.0,
+        median_level: 15.0,
+        general_level: 5.0,
+        ..Default::default()
+    });
 
-    let output_str = String::from_utf8_lossy(&command_output.stdout);
-    let (duration, bit_rate) = extract_ffprobe_info(&output_str)?;
-
-    if !(1.9..=2.1).contains(&duration) {
-        return Err(anyhow!("Invalid duration: {}", duration));
-    }
-    if !(850_000..=960_000).contains(&bit_rate) {
-        return Err(anyhow!("Invalid bit rate: {}", bit_rate));
-    }
+    compare_audio_dumps(
+        OUTPUT_DUMP_FILE,
+        &output_dump,
+        AudioCompareConfig {
+            fft: Some(fft_cfg),
+            ..Default::default()
+        },
+    )?;
 
     Ok(())
-}
-
-fn extract_ffprobe_info(output: &str) -> Result<(f64, u64)> {
-    let re_duration = Regex::new(r"duration=(\d+\.\d+)").unwrap();
-    let re_bit_rate = Regex::new(r"bit_rate=(\d+)").unwrap();
-
-    let duration: f64 = re_duration
-        .captures(output)
-        .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str().parse().unwrap_or(0.0))
-        .ok_or_else(|| anyhow!("Failed to extract duration"))?;
-
-    let bit_rate: u64 = re_bit_rate
-        .captures(output)
-        .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str().parse().unwrap_or(0))
-        .ok_or_else(|| anyhow!("Failed to extract bit rate"))?;
-
-    Ok((duration, bit_rate))
 }

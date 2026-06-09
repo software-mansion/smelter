@@ -58,9 +58,24 @@ impl VideoDecoder {
             return Ok(());
         }
 
+        self.send_chunk(&chunk_data, pts as i64)
+    }
+
+    /// Decode an already-depayloaded Annex-B access unit at the given
+    /// presentation timestamp. Used by the MP4 dump path, which demuxes
+    /// stored samples and rebuilds the Annex-B stream itself rather than
+    /// going through the RTP depayloader.
+    pub fn decode_annex_b(&mut self, data: &[u8], pts: Duration) -> Result<()> {
+        if data.is_empty() {
+            return Ok(());
+        }
+        self.send_chunk(data, pts.as_micros() as i64)
+    }
+
+    fn send_chunk(&mut self, chunk_data: &[u8], pts_us: i64) -> Result<()> {
         let mut packet = ffmpeg_next::Packet::new(chunk_data.len());
-        packet.data_mut().unwrap().copy_from_slice(&chunk_data);
-        packet.set_pts(Some(pts as i64));
+        packet.data_mut().unwrap().copy_from_slice(chunk_data);
+        packet.set_pts(Some(pts_us));
         packet.set_dts(None);
 
         self.decoder.send_packet(&packet)?;
@@ -70,6 +85,14 @@ impl VideoDecoder {
     /// Take frames decoded so far without consuming the decoder.
     /// Lets callers pump packets and pull frames incrementally.
     pub fn drain_frames(&mut self) -> Result<Vec<Frame>> {
+        self.receive_decoded_frames()?;
+        Ok(std::mem::take(&mut self.decoded_frames))
+    }
+
+    /// Flush the decoder by signalling end-of-stream and draining any
+    /// frames the decoder was still holding back (e.g. for reordering).
+    pub fn flush(&mut self) -> Result<Vec<Frame>> {
+        self.decoder.send_eof()?;
         self.receive_decoded_frames()?;
         Ok(std::mem::take(&mut self.decoded_frames))
     }

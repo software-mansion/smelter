@@ -29,6 +29,7 @@ serde_json = { workspace = true }
 ffmpeg-next = { workspace = true }
 socket2 = { workspace = true }
 bytes = { workspace = true }
+mp4 = { git = "https://github.com/smelter-labs/mp4-rust.git", branch = "preserve-asc" }
 webrtc = {workspace = true }
 webrtc-util = { workspace = true }
 crossbeam-channel = { workspace = true }

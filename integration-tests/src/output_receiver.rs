@@ -1,15 +1,18 @@
 use std::{
+    fs,
     io::Read,
     net::{Ipv4Addr, SocketAddr},
+    path::PathBuf,
     thread,
     time::Duration,
 };
 
-use crate::common::CommunicationProtocol;
+use crate::{common::CommunicationProtocol, pipeline_tests::start_server_msg_listener};
 use anyhow::{Context, Result};
 use bytes::{Bytes, BytesMut};
 use crossbeam_channel::Receiver;
-use tracing::error;
+use tokio_tungstenite::tungstenite;
+use tracing::{error, info};
 use webrtc::{rtcp, rtp};
 use webrtc_util::Unmarshal;
 
@@ -107,6 +110,57 @@ impl OutputReceiver {
                 unmarshal_packet(buffer.freeze())
             }
         }
+    }
+}
+
+/// Collects a muxed MP4 output written by the pipeline to a file.
+///
+/// Unlike [`OutputReceiver`], which reads RTP packets off a socket, the
+/// MP4 muxer writes straight to disk and only finalises the container
+/// (writing the `moov` trailer) once the output reaches end-of-stream.
+/// We therefore watch the server's event websocket for the
+/// `OUTPUT_DONE` event for our output id, then read the completed file.
+pub struct Mp4OutputReceiver {
+    path: PathBuf,
+    output_id: String,
+    msg_receiver: Receiver<tungstenite::Message>,
+}
+
+impl Mp4OutputReceiver {
+    /// Start listening for output-completion events. Call this before
+    /// `start`ing the pipeline so no event is missed.
+    pub fn start(api_port: u16, output_id: &str, path: PathBuf) -> Self {
+        let (sender, msg_receiver) = crossbeam_channel::unbounded();
+        start_server_msg_listener(api_port, sender);
+        Self {
+            path,
+            output_id: output_id.to_string(),
+            msg_receiver,
+        }
+    }
+
+    /// Block until the output finishes and the MP4 file is finalised,
+    /// then read it back.
+    pub fn wait_for_output(self) -> Result<Bytes> {
+        let needle = format!(
+            "\"type\":\"OUTPUT_DONE\",\"output_id\":\"{}\"",
+            self.output_id
+        );
+        loop {
+            let msg = self
+                .msg_receiver
+                .recv_timeout(Duration::from_secs(120))
+                .context("Timed out waiting for OUTPUT_DONE event")?;
+            if let tungstenite::Message::Text(text) = msg
+                && text.contains(&needle)
+            {
+                info!("Received OUTPUT_DONE for output `{}`", self.output_id);
+                break;
+            }
+        }
+        let bytes = fs::read(&self.path)
+            .with_context(|| format!("Failed to read MP4 output {}", self.path.display()))?;
+        Ok(Bytes::from(bytes))
     }
 }
 

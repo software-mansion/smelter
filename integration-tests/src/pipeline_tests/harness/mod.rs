@@ -21,7 +21,9 @@ use std::{fmt, path::Path};
 use anyhow::Result;
 use bytes::Bytes;
 
-use crate::{output_dump_from_disk, save_failed_actual_dump, save_failed_test_dumps};
+use crate::{
+    media_dump::DumpFormat, output_dump_from_disk, save_failed_actual_dump, save_failed_test_dumps,
+};
 
 pub mod audio;
 pub mod audio_analysis;
@@ -42,11 +44,12 @@ pub fn compare_video_dumps<P: AsRef<Path> + fmt::Debug>(
     actual: &Bytes,
     config: VideoCompareConfig,
 ) -> Result<()> {
+    let format = DumpFormat::from_path(&snapshot_filename)?;
     let expected = match output_dump_from_disk(&snapshot_filename) {
         Ok(b) => b,
         Err(err) => return handle_missing_expected(err, snapshot_filename, actual),
     };
-    let result = video::compare(&expected, actual, config);
+    let result = video::compare(&expected, actual, config, format);
     finalize(result, &expected, actual, &snapshot_filename)
 }
 
@@ -55,11 +58,12 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
     actual: &Bytes,
     config: AudioCompareConfig,
 ) -> Result<()> {
+    let format = DumpFormat::from_path(&snapshot_filename)?;
     let expected = match output_dump_from_disk(&snapshot_filename) {
         Ok(b) => b,
         Err(err) => return handle_missing_expected(err, snapshot_filename, actual),
     };
-    let result = audio::compare(&expected, actual, config);
+    let result = audio::compare(&expected, actual, config, format);
     finalize(result, &expected, actual, &snapshot_filename)
 }
 

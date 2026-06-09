@@ -1,7 +1,7 @@
 use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::{Context, Result};
-use integration_tests::tools::rtp_player;
+use integration_tests::tools::dump_player;
 
 fn main() -> ExitCode {
     match run() {
@@ -19,5 +19,5 @@ fn run() -> Result<std::process::ExitStatus> {
         .nth(1)
         .context("Usage: play_rtp_dump <input_file>")?
         .into();
-    rtp_player::play(&path)
+    dump_player::play(&path)
 }

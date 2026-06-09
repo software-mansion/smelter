@@ -1,15 +1,16 @@
-//! Interactive RTP dump inspection tool.
+//! Interactive output-dump inspection tool.
 //!
-//! Opens two RTP dumps (expected vs actual) and lets the user step
-//! through the paired decoded video frames. Intended to be launched
-//! from `audit_tests` after a snapshot mismatch.
+//! Opens two dumps (expected vs actual) and lets the user step through
+//! the paired decoded video frames. Both RTP and MP4 dumps are
+//! supported — the demuxer is chosen from the snapshot's file
+//! extension. Intended to be launched from `audit_tests` after a
+//! snapshot mismatch.
 //!
 //! On launch the inspector spawns a persistent
 //! [`crate::tools::frame_inspector`] window that is updated in place
 //! every time the playhead advances.
 
 use std::{
-    collections::HashSet,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -17,49 +18,46 @@ use std::{
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use inquire::{InquireError, Select};
-use smelter_render::{Frame, FrameData, YuvPlanes};
+use smelter_render::{Frame, FrameData, Resolution, YuvPlanes};
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{info, warn};
 
 use crate::{
-    audio_decoder::{AudioChannels, AudioDecoder, AudioSampleBatch},
+    media_dump::{DumpFormat, MediaKinds, decode_audio_dump_path, dump_media_kinds},
     tools::{
         frame_inspector::{self, FrameInspector},
-        rtp_video_diff_iter::{FramePair, RtpVideoDiffIter, VIDEO_PAYLOAD_TYPE},
+        video_diff_iter::{FramePair, VideoDiffIter},
         waveform_inspector,
     },
-    unmarshal_packets,
 };
-
-/// RTP payload type smelter uses for OPUS audio.
-const AUDIO_PAYLOAD_TYPE: u8 = 97;
-/// OPUS clock rate used everywhere in this crate.
-const AUDIO_SAMPLE_RATE: u32 = 48_000;
 
 /// Launch the interactive inspect tool. Diffs `actual` (the dump
 /// just produced by a test run) against `expected` (the committed
 /// snapshot). Blocks until the user exits.
 pub fn run(expected: &Path, actual: &Path) -> Result<()> {
-    info!("rtp_inspector: expected = {}", expected.display());
-    info!("rtp_inspector: actual = {}", actual.display());
+    info!("inspector: expected = {}", expected.display());
+    info!("inspector: actual = {}", actual.display());
 
-    let types = scan_payload_types(&[expected, actual])?;
+    // Both sides share the snapshot's extension; prefer whichever path
+    // actually exists to derive the format.
+    let format_source = if actual.exists() { actual } else { expected };
+    let format = DumpFormat::from_path(format_source)?;
+
+    let kinds = scan_media_kinds(&[expected, actual], format)?;
     let mut options = Vec::new();
-    if types.contains(&VIDEO_PAYLOAD_TYPE) {
+    if kinds.video {
         options.push(MediaKind::Video);
     }
-    if types.contains(&AUDIO_PAYLOAD_TYPE) {
+    if kinds.audio {
         options.push(MediaKind::Audio);
     }
     let kind = match options.len() {
-        0 => anyhow::bail!(
-            "no video (pt={VIDEO_PAYLOAD_TYPE}) or audio (pt={AUDIO_PAYLOAD_TYPE}) packets in either dump"
-        ),
+        0 => anyhow::bail!("no video or audio media found in either dump"),
         1 => {
-            info!("rtp_inspector: only {} found, skipping prompt", options[0]);
+            info!("inspector: only {} found, skipping prompt", options[0]);
             options[0]
         }
-        _ => match Select::new("rtp_inspector — what to inspect?", options).prompt() {
+        _ => match Select::new("inspector — what to inspect?", options).prompt() {
             Ok(k) => k,
             Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
                 return Ok(());
@@ -68,32 +66,31 @@ pub fn run(expected: &Path, actual: &Path) -> Result<()> {
         },
     };
     match kind {
-        MediaKind::Video => run_video(expected, actual),
-        MediaKind::Audio => run_audio(expected, actual),
+        MediaKind::Video => run_video(expected, actual, format),
+        MediaKind::Audio => run_audio(expected, actual, format),
     }
 }
 
-/// Read each dump once and collect the set of RTP payload types
-/// present, used to gate the Video / Audio prompt. Missing files are
-/// skipped with a warning so the inspector can still launch when one
-/// side (typically the committed `expected` snapshot) doesn't exist.
-fn scan_payload_types(paths: &[&Path]) -> Result<HashSet<u8>> {
-    let mut types = HashSet::new();
+/// Read each dump once and collect the union of media kinds present,
+/// used to gate the Video / Audio prompt. Missing files are skipped
+/// with a warning so the inspector can still launch when one side
+/// (typically the committed `expected` snapshot) doesn't exist.
+fn scan_media_kinds(paths: &[&Path], format: DumpFormat) -> Result<MediaKinds> {
+    let mut kinds = MediaKinds::default();
     for path in paths {
         if !path.exists() {
-            warn!("rtp_inspector: dump {} not found, skipping", path.display());
+            warn!("inspector: dump {} not found, skipping", path.display());
             continue;
         }
         let bytes = Bytes::from(
             std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
         );
-        let packets = unmarshal_packets(&bytes)
-            .with_context(|| format!("Failed to parse RTP dump {}", path.display()))?;
-        for packet in packets {
-            types.insert(packet.header.payload_type);
-        }
+        let found = dump_media_kinds(&bytes, format)
+            .with_context(|| format!("Failed to inspect dump {}", path.display()))?;
+        kinds.video |= found.video;
+        kinds.audio |= found.audio;
     }
-    Ok(types)
+    Ok(kinds)
 }
 
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
@@ -104,12 +101,12 @@ enum MediaKind {
     Audio,
 }
 
-fn run_video(expected: &Path, actual: &Path) -> Result<()> {
+fn run_video(expected: &Path, actual: &Path, format: DumpFormat) -> Result<()> {
     let output_dir = expected
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
-    let mut iter = RtpVideoDiffIter::from_rtp_dumps(expected, actual)?;
+    let mut iter = VideoDiffIter::from_dumps(expected, actual, format)?;
     let mut state = SessionState::default();
     let viewer = FrameInspector::spawn();
 
@@ -119,7 +116,7 @@ fn run_video(expected: &Path, actual: &Path) -> Result<()> {
     advance_one(&mut iter, &mut state, &viewer)?;
 
     loop {
-        let prompt = format!("rtp_inspector [t = {:.3}s]", state.position.as_secs_f64());
+        let prompt = format!("inspector [t = {:.3}s]", state.position.as_secs_f64());
         let action = match Select::new(&prompt, Action::iter().collect()).prompt() {
             Ok(a) => a,
             Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
@@ -142,42 +139,10 @@ fn run_video(expected: &Path, actual: &Path) -> Result<()> {
     }
 }
 
-fn run_audio(expected: &Path, actual: &Path) -> Result<()> {
-    let expected_chunks = decode_audio_dump(expected)?;
-    let actual_chunks = decode_audio_dump(actual)?;
+fn run_audio(expected: &Path, actual: &Path, format: DumpFormat) -> Result<()> {
+    let expected_chunks = decode_audio_dump_path(expected, format)?;
+    let actual_chunks = decode_audio_dump_path(actual, format)?;
     waveform_inspector::run(expected_chunks, actual_chunks)
-}
-
-/// Read an RTP dump from disk, keep only the OPUS audio packets, and
-/// run them all through a fresh decoder. Each decoder output chunk is
-/// returned with its original presentation timestamp; chunks are
-/// intentionally not flattened so the waveform inspector can show
-/// per-chunk boundaries. A missing file yields an empty chunk list
-/// rather than an error so the inspector can still surface the other
-/// side.
-fn decode_audio_dump(path: &Path) -> Result<Vec<AudioSampleBatch>> {
-    if !path.exists() {
-        warn!(
-            "rtp_inspector: audio dump {} not found, treating as empty",
-            path.display()
-        );
-        return Ok(Vec::new());
-    }
-    let bytes = Bytes::from(
-        std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
-    );
-    let packets = unmarshal_packets(&bytes)
-        .with_context(|| format!("Failed to parse RTP dump {}", path.display()))?
-        .into_iter()
-        .filter(|p| p.header.payload_type == AUDIO_PAYLOAD_TYPE);
-    let mut decoder = AudioDecoder::new(AUDIO_SAMPLE_RATE, AudioChannels::Stereo)
-        .with_context(|| format!("Failed to initialize OPUS decoder for {}", path.display()))?;
-    for packet in packets {
-        decoder
-            .decode(packet)
-            .with_context(|| format!("Failed to decode audio packet from {}", path.display()))?;
-    }
-    Ok(decoder.take_samples())
 }
 
 /// MSE threshold used by [`Action::NextHighMse`]. Anything below this
@@ -223,7 +188,7 @@ impl SessionState {
 }
 
 fn advance_one(
-    iter: &mut RtpVideoDiffIter,
+    iter: &mut VideoDiffIter,
     state: &mut SessionState,
     viewer: &FrameInspector,
 ) -> Result<()> {
@@ -249,7 +214,7 @@ fn advance_one(
 }
 
 fn advance_until(
-    iter: &mut RtpVideoDiffIter,
+    iter: &mut VideoDiffIter,
     state: &mut SessionState,
     by: Duration,
     viewer: &FrameInspector,
@@ -292,7 +257,7 @@ fn advance_until(
 /// [`HIGH_MSE_THRESHOLD`], then surface that pair. Skipped pairs are
 /// silently consumed — only the landing pair is logged and shown.
 fn advance_until_high_mse(
-    iter: &mut RtpVideoDiffIter,
+    iter: &mut VideoDiffIter,
     state: &mut SessionState,
     viewer: &FrameInspector,
 ) -> Result<()> {
@@ -338,40 +303,91 @@ fn advance_until_high_mse(
 /// Convert the most recent pair to RGBA and push it to the viewer
 /// thread. Composition (side-by-side / over-under / slider) happens
 /// inside the viewer.
+///
+/// A side may be absent — e.g. when there is no committed snapshot yet,
+/// the `expected` side never produces frames. Rather than skip the
+/// update (which would leave the window blank), the missing side is
+/// drawn as a placeholder sized to match the side that does exist.
 fn push_to_viewer(state: &SessionState, viewer: &FrameInspector, mse: Option<f64>) {
     let Some(pair) = state.last_pair.as_ref() else {
         return;
     };
-    let (Some(left), Some(right)) = (pair.left.as_ref(), pair.right.as_ref()) else {
+    // Size placeholders to whichever side has a real frame.
+    let Some(reference_res) = pair
+        .left
+        .as_ref()
+        .or(pair.right.as_ref())
+        .map(|f| f.resolution)
+    else {
         return;
     };
-    let left_rgba = match frame_to_rgba(left) {
-        Ok(buf) => buf,
-        Err(e) => {
-            warn!("expected: failed to convert to RGBA: {e:#}");
-            return;
-        }
+
+    let Some(left) = side_visual(pair.left.as_ref(), "expected", reference_res) else {
+        return;
     };
-    let right_rgba = match frame_to_rgba(right) {
-        Ok(buf) => buf,
-        Err(e) => {
-            warn!("actual: failed to convert to RGBA: {e:#}");
-            return;
-        }
+    let Some(right) = side_visual(pair.right.as_ref(), "actual", reference_res) else {
+        return;
     };
+
     viewer.update(frame_inspector::Pair {
-        left_label: "expected".to_string(),
-        left_lines: vec![format!("pts={:.6}s", left.pts.as_secs_f64())],
-        left_rgba,
-        left_w: left.resolution.width,
-        left_h: left.resolution.height,
-        right_label: "actual".to_string(),
-        right_lines: vec![format!("pts={:.6}s", right.pts.as_secs_f64())],
-        right_rgba,
-        right_w: right.resolution.width,
-        right_h: right.resolution.height,
+        left_label: left.label,
+        left_lines: left.lines,
+        left_rgba: left.rgba,
+        left_w: left.width,
+        left_h: left.height,
+        right_label: right.label,
+        right_lines: right.lines,
+        right_rgba: right.rgba,
+        right_w: right.width,
+        right_h: right.height,
         mse,
     });
+}
+
+struct SideVisual {
+    label: String,
+    lines: Vec<String>,
+    rgba: Vec<u8>,
+    width: usize,
+    height: usize,
+}
+
+/// Build the viewer payload for one side. Present frames are converted
+/// to RGBA; an absent side becomes a neutral placeholder sized to
+/// `fallback_res` and labelled "(missing)". Returns `None` only when a
+/// present frame can't be converted to RGBA.
+fn side_visual(frame: Option<&Frame>, label: &str, fallback_res: Resolution) -> Option<SideVisual> {
+    match frame {
+        Some(frame) => match frame_to_rgba(frame) {
+            Ok(rgba) => Some(SideVisual {
+                label: label.to_string(),
+                lines: vec![format!("pts={:.6}s", frame.pts.as_secs_f64())],
+                rgba,
+                width: frame.resolution.width,
+                height: frame.resolution.height,
+            }),
+            Err(e) => {
+                warn!("{label}: failed to convert to RGBA: {e:#}");
+                None
+            }
+        },
+        None => Some(SideVisual {
+            label: format!("{label} (missing)"),
+            lines: vec!["no dump".to_string()],
+            rgba: placeholder_rgba(fallback_res),
+            width: fallback_res.width,
+            height: fallback_res.height,
+        }),
+    }
+}
+
+/// A flat dark-grey RGBA buffer used to stand in for a missing side.
+fn placeholder_rgba(res: Resolution) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(res.width * res.height * 4);
+    for _ in 0..(res.width * res.height) {
+        buf.extend_from_slice(&[40, 40, 40, 255]);
+    }
+    buf
 }
 
 fn save_last_pair(state: &SessionState, output_dir: &Path) -> Result<()> {

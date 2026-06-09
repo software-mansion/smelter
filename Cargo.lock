@@ -2604,6 +2604,7 @@ dependencies = [
  "libc",
  "libcef",
  "minifb",
+ "mp4",
  "opus",
  "rand 0.9.3",
  "regex",

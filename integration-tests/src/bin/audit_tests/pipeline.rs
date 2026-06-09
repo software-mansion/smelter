@@ -6,7 +6,7 @@ use inquire::{InquireError, Select};
 use integration_tests::{
     paths::{pipeline_tests_workdir, submodule_root_path},
     pipeline_tests::{PipelineTest, pipeline_tests},
-    tools::{rtp_inspector, rtp_player},
+    tools::{dump_inspector, dump_player},
 };
 use tracing::{error, info, warn};
 
@@ -292,7 +292,7 @@ fn play_dump(test: &PipelineTest, kind: DumpKind) -> Result<()> {
         return Ok(());
     }
     info!("Press Esc or q to stop playback");
-    run_with_kill_on_key(rtp_player::spawn(&path)?)
+    run_with_kill_on_key(dump_player::spawn(&path)?)
 }
 
 /// Watches our own stdin in raw mode for Esc or `q`. On either key,
@@ -334,7 +334,7 @@ fn run_with_kill_on_key(mut child: std::process::Child) -> Result<()> {
 
     let status = result?;
     if !status.success() {
-        warn!("play_rtp_dump exited with {status}");
+        warn!("dump player exited with {status}");
     }
     Ok(())
 }
@@ -344,7 +344,7 @@ fn compare_pipeline_dumps(test: &PipelineTest) -> Result<()> {
     let actual = dir.join(format!("actual_dump_{}", test.snapshot_name));
     let expected = dir.join(format!("expected_dump_{}", test.snapshot_name));
 
-    rtp_inspector::run(&expected, &actual)
+    dump_inspector::run(&expected, &actual)
 }
 
 fn update_pipeline_test_snapshot(test: &PipelineTest) -> Result<()> {

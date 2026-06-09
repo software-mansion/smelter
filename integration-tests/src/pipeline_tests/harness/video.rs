@@ -1,12 +1,12 @@
-//! New video-dump comparison logic for pipeline tests.
+//! Video-dump comparison logic for pipeline tests.
 //!
-//! Walks paired decoded frames from two RTP dumps using
-//! [`RtpVideoDiffIter`] (PTS-aligned, lazy) and fails the test if too
-//! many pairs disagree by more than the configured MSE inside any of
-//! the validation intervals.
+//! Walks paired decoded frames from two output dumps (RTP or MP4) using
+//! [`VideoDiffIter`] (PTS-aligned) and fails the test if too many pairs
+//! disagree by more than the configured MSE inside any of the
+//! validation intervals.
 //!
 //! The pairing strategy already accounts for differing framerates (see
-//! `RtpVideoDiffIter` docs), so the harness can compare without
+//! `VideoDiffIter` docs), so the harness can compare without
 //! assuming both sides advance in lockstep.
 
 use std::{ops::Range, time::Duration};
@@ -16,7 +16,10 @@ use bytes::Bytes;
 use smelter_render::{Frame, FrameData, YuvPlanes};
 use tracing::warn;
 
-use crate::tools::rtp_video_diff_iter::{FramePair, RtpVideoDiffIter};
+use crate::{
+    media_dump::DumpFormat,
+    tools::video_diff_iter::{FramePair, VideoDiffIter},
+};
 
 pub struct VideoCompareConfig {
     /// Time ranges (in PTS space) over which paired frames are
@@ -47,10 +50,15 @@ impl Default for VideoCompareConfig {
     }
 }
 
-/// Decode `expected` and `actual` lazily, pair by PTS, and check the
-/// resulting pairs.
-pub fn compare(expected: &Bytes, actual: &Bytes, config: VideoCompareConfig) -> Result<()> {
-    let iter = RtpVideoDiffIter::from_bytes(expected, actual)?;
+/// Decode `expected` and `actual`, pair by PTS, and check the
+/// resulting pairs. `format` selects the demuxer (RTP vs MP4).
+pub fn compare(
+    expected: &Bytes,
+    actual: &Bytes,
+    config: VideoCompareConfig,
+    format: DumpFormat,
+) -> Result<()> {
+    let iter = VideoDiffIter::from_dump_bytes(expected, actual, format)?;
 
     let mut failed_pairs = 0usize;
     let mut total_pairs = 0usize;
