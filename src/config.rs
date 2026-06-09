@@ -433,8 +433,8 @@ fn moq_tls_config() -> Option<moq_native::ServerTlsConfig> {
             Some(tls)
         }
         (Some(_), None) | (None, Some(_)) => {
-            warn!(
-                "Both \"SMELTER_MOQ_TLS_CERT_FILE\" and \"SMELTER_MOQ_TLS_KEY_FILE\" must be set. Falling back to auto-generated certs. Make sure to use properly configured certs in production."
+            println!(
+                "CONFIG ERROR: Both \"SMELTER_MOQ_TLS_CERT_FILE\" and \"SMELTER_MOQ_TLS_KEY_FILE\" must be set. Falling back to auto-generated certs. Make sure to use properly configured certs in production."
             );
             None
         }
