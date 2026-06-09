@@ -150,12 +150,12 @@ pub fn pipeline_options_from_config(
             false => PipelineRtmpServerOptions::Disable,
         },
 
-        moq_server: match (opt.moq_enable, &opt.moq_tls_config) {
-            (true, Some(tls_config)) => PipelineMoqServerOptions::Enable {
+        moq_server: match opt.moq_enable {
+            true => PipelineMoqServerOptions::Enable {
                 port: opt.moq_server_port,
-                tls_config: tls_config.clone(),
+                tls_config: opt.moq_tls_config.clone(),
             },
-            _ => PipelineMoqServerOptions::Disable,
+            false => PipelineMoqServerOptions::Disable,
         },
     }
 }

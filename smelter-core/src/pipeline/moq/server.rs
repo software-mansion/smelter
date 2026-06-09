@@ -8,7 +8,10 @@ use moq_native::{ServerConfig, ServerTlsConfig};
 use smelter_render::error::ErrorStack;
 use tracing::{debug, info, warn};
 
-use crate::pipeline::moq::{connection::spawn_broadcast_handler, state::MoqInputsState};
+use crate::pipeline::moq::{
+    certificate::load_or_create_self_signed_tls, connection::spawn_broadcast_handler,
+    state::MoqInputsState,
+};
 
 use crate::prelude::*;
 
@@ -20,13 +23,21 @@ pub struct MoqPipelineState {
 }
 
 impl MoqPipelineState {
-    pub fn new(port: u16, tls_config: ServerTlsConfig) -> Arc<Self> {
-        Arc::new(Self {
+    pub fn new(
+        port: u16,
+        tls_config: Option<ServerTlsConfig>,
+    ) -> Result<Arc<Self>, InitPipelineError> {
+        let tls_config = match tls_config {
+            Some(tc) => tc,
+            None => load_or_create_self_signed_tls()?,
+        };
+
+        Ok(Arc::new(Self {
             port,
             origin: Origin::random().produce(),
             inputs: MoqInputsState::default(),
             tls_config,
-        })
+        }))
     }
 }
 

@@ -46,6 +46,7 @@ mod output;
 pub(crate) mod utils;
 
 pub use instance::Pipeline;
+pub(crate) use moq::SelfSignedTlsError;
 
 #[cfg(target_os = "linux")]
 pub use v4l2::{V4l2DeviceInfo, V4l2FormatInfo, V4l2ResolutionInfo, list_v4l2_devices};
@@ -112,7 +113,7 @@ pub enum PipelineRtmpServerOptions {
 pub enum PipelineMoqServerOptions {
     Enable {
         port: u16,
-        tls_config: moq_native::ServerTlsConfig,
+        tls_config: Option<moq_native::ServerTlsConfig>,
     },
     Disable,
 }
