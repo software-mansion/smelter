@@ -2,7 +2,6 @@ use std::{
     fmt::Debug,
     fs::{self, File},
     str::FromStr,
-    sync::OnceLock,
 };
 
 use tracing_subscriber::{
@@ -12,7 +11,7 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
 };
 
-use crate::config::{LoggerConfig, LoggerFormat, read_config};
+use crate::config::{LoggerConfig, LoggerFormat};
 
 #[derive(Debug, Clone, Copy)]
 pub enum FfmpegLogLevel {
@@ -35,13 +34,6 @@ impl FfmpegLogLevel {
             FfmpegLogLevel::Trace => 56,
         }
     }
-}
-
-fn ffmpeg_logger_level() -> FfmpegLogLevel {
-    static LOG_LEVEL: OnceLock<FfmpegLogLevel> = OnceLock::new();
-
-    // This will read config second time
-    *LOG_LEVEL.get_or_init(|| read_config().logger.ffmpeg_logger_level)
 }
 
 impl FromStr for FfmpegLogLevel {
@@ -95,6 +87,6 @@ pub fn init_logger(opts: LoggerConfig) {
     }
 
     unsafe {
-        ffmpeg_next::sys::av_log_set_level(ffmpeg_logger_level().into_i32());
+        ffmpeg_next::sys::av_log_set_level(opts.ffmpeg_logger_level.into_i32());
     }
 }
