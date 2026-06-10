@@ -53,8 +53,8 @@ async fn read_hang_catalog(
     debug!(?catalog, "Received MoQ Hang catalog");
 
     let video = match catalog.video.renditions.first_key_value() {
-        Some((name, config)) if let VideoCodec::H264(_) = config.codec => match &config.container {
-            CatalogContainer::Cmaf { init, .. } => {
+        Some((name, config)) => match (&config.container, &config.codec) {
+            (CatalogContainer::Cmaf { init, .. }, VideoCodec::H264(_)) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let container = Container::Cmaf(wire);
 
@@ -65,20 +65,16 @@ async fn read_hang_catalog(
                 })
             }
             _ => {
-                warn!("Only CMAF container is supported.");
+                warn!("Only CMAF container with H264 encoded video is supported.");
                 None
             }
         },
-        Some((name, config)) => {
-            warn!(track=%name, codec=%config.codec, "Unsupported video codec, skipping track");
-            None
-        }
         None => None,
     };
 
     let audio = match catalog.audio.renditions.first_key_value() {
-        Some((name, config)) if let AudioCodec::AAC(_) = config.codec => match &config.container {
-            CatalogContainer::Cmaf { init, .. } => {
+        Some((name, config)) => match (&config.container, &config.codec) {
+            (CatalogContainer::Cmaf { init, .. }, AudioCodec::AAC(_)) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let container = Container::Cmaf(wire);
 
@@ -89,14 +85,10 @@ async fn read_hang_catalog(
                 })
             }
             _ => {
-                warn!("Only CMAF container is supported.");
+                warn!("Only CMAF container with AAC encoded audio is supported.");
                 None
             }
         },
-        Some((name, config)) => {
-            warn!(track=%name, codec=%config.codec, "Unsupported audio codec, skipping track");
-            None
-        }
         None => None,
     };
 
@@ -124,8 +116,8 @@ async fn read_msf_catalog(
     debug!(?catalog, "Received MoQ MSF catalog");
 
     let video = match catalog.video.renditions.first_key_value() {
-        Some((name, config)) if let VideoCodec::H264(_) = config.codec => match &config.container {
-            CatalogContainer::Cmaf { init, .. } => {
+        Some((track, config)) => match (&config.container, &config.codec) {
+            (CatalogContainer::Cmaf { init, .. }, VideoCodec::H264(_)) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let description = match extract_codec_description(&wire) {
                     Ok(config) => Some(config),
@@ -137,26 +129,22 @@ async fn read_msf_catalog(
                 let container = Container::Cmaf(wire);
 
                 Some(DiscoveredVideo {
-                    name: name.clone(),
+                    name: track.clone(),
                     container,
                     description,
                 })
             }
             _ => {
-                warn!("Only CMAF container is supported.");
+                warn!("Only CMAF container with H264 encoded video is supported.");
                 None
             }
         },
-        Some((name, config)) => {
-            warn!(track=%name, codec=%config.codec, "Unsupported video codec, skipping track");
-            None
-        }
         None => None,
     };
 
     let audio = match catalog.audio.renditions.first_key_value() {
-        Some((name, config)) if let AudioCodec::AAC(_) = config.codec => match &config.container {
-            CatalogContainer::Cmaf { init, .. } => {
+        Some((track, config)) => match (&config.container, &config.codec) {
+            (CatalogContainer::Cmaf { init, .. }, AudioCodec::AAC(_)) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let description = match extract_codec_description(&wire) {
                     Ok(config) => Some(config),
@@ -168,20 +156,16 @@ async fn read_msf_catalog(
                 let container = Container::Cmaf(wire);
 
                 Some(DiscoveredAudio {
-                    name: name.clone(),
+                    name: track.clone(),
                     container,
                     description,
                 })
             }
             _ => {
-                warn!("Only CMAF container is supported.");
+                warn!("Only CMAF container with AAC encoded audio is supported.");
                 None
             }
         },
-        Some((name, config)) => {
-            warn!(track=%name, codec=%config.codec, "Unsupported audio codec, skipping track");
-            None
-        }
         None => None,
     };
 
