@@ -45,6 +45,9 @@ async fn read_hang_catalog(
 
     let mut consumer = HangConsumer::new(catalog_track);
 
+    // The `.next()` method of the catalog consumer yields the next available catalog update.
+    // We do not handle catalog updates, so we wall it only once, reading the initial track
+    // information.
     let catalog = consumer
         .next()
         .await
@@ -108,6 +111,9 @@ async fn read_msf_catalog(
 
     let mut consumer = MsfConsumer::new(catalog_track);
 
+    // The `.next()` method of the catalog consumer yields the next available catalog update.
+    // We do not handle catalog updates, so we wall it only once, reading the initial track
+    // information.
     let catalog = consumer
         .next()
         .await
