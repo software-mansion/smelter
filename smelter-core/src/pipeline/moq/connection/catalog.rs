@@ -1,4 +1,4 @@
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use hang::catalog::{AudioCodec, Container as CatalogContainer, VideoCodec};
 use moq_mux::{
     catalog::{hang::Consumer as HangConsumer, hang::Container, msf::Consumer as MsfConsumer},
@@ -183,14 +183,16 @@ fn extract_codec_description(cmaf: &fmp4::Wire) -> Result<Bytes, MoqCatalogError
         MoqCatalogError::CodecConfigExtractionError("CMAF init segment contains no codec entries"),
     )?;
 
-    let mut buf = Vec::new();
     match codec {
         mp4_atom::Codec::Avc1(avc1) => {
+            let mut buf = BytesMut::new();
             avc1.avcc.encode_body(&mut buf).map_err(|_| {
                 MoqCatalogError::CodecConfigExtractionError("failed to encode AVCDecoderConfig")
             })?;
+            Ok(buf.freeze())
         }
         mp4_atom::Codec::Mp4a(mp4a) => {
+            let mut buf = BytesMut::new();
             mp4a.esds
                 .es_desc
                 .dec_config
@@ -201,13 +203,10 @@ fn extract_codec_description(cmaf: &fmp4::Wire) -> Result<Bytes, MoqCatalogError
                         "failed to encode AudioSpecificConfig",
                     )
                 })?;
+            Ok(buf.freeze())
         }
-        _ => {
-            return Err(MoqCatalogError::CodecConfigExtractionError(
-                "unsupported codec in CMAF init segment",
-            ));
-        }
+        _ => Err(MoqCatalogError::CodecConfigExtractionError(
+            "unsupported codec in CMAF init segment",
+        )),
     }
-
-    Ok(Bytes::from(buf))
 }
