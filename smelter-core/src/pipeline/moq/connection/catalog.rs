@@ -76,8 +76,15 @@ async fn read_hang_catalog(
     };
 
     let audio = match catalog.audio.renditions.first_key_value() {
-        Some((name, config)) => match (&config.container, &config.codec) {
-            (CatalogContainer::Cmaf { init, .. }, AudioCodec::AAC(_)) => {
+        Some((track_name, config)) if let AudioCodec::Unknown(codec) = &config.codec => {
+            warn!(
+                track_name,
+                codec, "Unsupported audio codec. Use Opus or AAC.",
+            );
+            None
+        }
+        Some((name, config)) => match &config.container {
+            CatalogContainer::Cmaf { init, .. } => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let container = Container::Cmaf(wire);
 
@@ -149,15 +156,25 @@ async fn read_msf_catalog(
     };
 
     let audio = match catalog.audio.renditions.first_key_value() {
-        Some((name, config)) => match (&config.container, &config.codec) {
-            (CatalogContainer::Cmaf { init, .. }, AudioCodec::AAC(_)) => {
+        Some((track_name, config)) if let AudioCodec::Unknown(codec) = &config.codec => {
+            warn!(
+                track_name,
+                codec, "Unsupported audio codec. Use Opus or AAC.",
+            );
+            None
+        }
+        Some((name, config)) => match &config.container {
+            CatalogContainer::Cmaf { init, .. } => {
                 let wire = fmp4::Wire::from_init(init)?;
-                let description = match extract_codec_description(&wire) {
-                    Ok(config) => Some(config),
-                    Err(error) => {
-                        warn!(%error, "Failed to extract audio config from CMAF container.");
-                        None
-                    }
+                let description = match &config.codec {
+                    AudioCodec::AAC(_) => match extract_codec_description(&wire) {
+                        Ok(config) => Some(config),
+                        Err(error) => {
+                            warn!(%error, "Failed to extract AAC audio config from CMAF container.");
+                            None
+                        }
+                    },
+                    _ => None,
                 };
                 let container = Container::Cmaf(wire);
 
