@@ -249,15 +249,8 @@ async fn run_video_track(
 ) {
     match broadcast.subscribe_track(&Track::new(&video.name)) {
         Ok(track) => {
-            // The `.with_latency()` call sets the tolerated latency between groups
-            // E.g.
-            // - Group A starts at 200ms
-            // - Group B starts at 400ms
-            // - Group C starts at 600ms and its last timestamp is 790ms
-            //
-            // If `.with_latency()` is set to e.g. 150ms AND if during reading group A we stall at any moment (do not get frame on poll)
-            // then we check 790ms - 150ms = 550ms. 550ms > 200ms so we skip group A ONLY and
-            // proceed to the next one.
+            // .with_latency() defines how long we wait for a stalled group. Group dalay is a difference between
+            // group start timestamp and highest received timestamp.
             let consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
             if let Err(err) = read_video_track(consumer, decoder_handle, first_pts).await {
                 warn!(
@@ -280,15 +273,8 @@ async fn run_audio_track(
 ) {
     match broadcast.subscribe_track(&Track::new(&audio.name)) {
         Ok(track) => {
-            // The `.with_latency()` call sets the tolerated latency between groups
-            // E.g.
-            // - Group A starts at 200ms
-            // - Group B starts at 400ms
-            // - Group C starts at 600ms and its last timestamp is 790ms
-            //
-            // If `.with_latency()` is set to e.g. 150ms AND if during reading group A we stall at any moment (do not get frame on poll)
-            // then we check 790ms - 150ms = 550ms. 550ms > 200ms so we skip group A ONLY and
-            // proceed to the next one.
+            // .with_latency() defines how long we wait for a stalled group. Group dalay is a difference between
+            // group start timestamp and highest received timestamp.
             let consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
             if let Err(err) = read_audio_track(consumer, decoder_handle, first_pts).await {
                 warn!(
