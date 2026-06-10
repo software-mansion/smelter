@@ -15,7 +15,6 @@ use libva::{
     VA_PICTURE_H264_INVALID,
 };
 
-const DEFAULT_DRM_RENDER_NODE: &str = "/dev/dri/renderD128";
 const DRM_BY_PATH_DIR: &str = "/dev/dri/by-path";
 
 pub(crate) fn open_display(
@@ -24,7 +23,10 @@ pub(crate) fn open_display(
     let paths = vaapi_drm_paths(adapter_info);
     for path in &paths {
         match Display::open_drm_display(path) {
-            Ok(display) => return Ok(display),
+            Ok(display) => {
+                tracing::info!("Using VA-API DRM display {path}");
+                return Ok(display);
+            }
             Err(err) => {
                 tracing::error!("Failed to open VA-API DRM display {path}: {err}")
             }
@@ -215,9 +217,6 @@ fn vaapi_drm_paths_from(
     for path in discovered {
         push_unique_drm_path(&mut paths, path);
     }
-    if paths.is_empty() {
-        paths.push(DEFAULT_DRM_RENDER_NODE.to_string());
-    }
     paths
 }
 
@@ -228,7 +227,11 @@ fn push_unique_drm_path(paths: &mut Vec<String>, path: String) {
 }
 
 fn no_usable_drm_display_error(paths: &[String]) -> String {
-    format!("no usable DRM display found in {}", paths.join(", "))
+    if paths.is_empty() {
+        "no VA-API DRM render node found".to_string()
+    } else {
+        format!("no usable VA-API DRM display found in {}", paths.join(", "))
+    }
 }
 
 #[cfg(all(test, target_os = "linux"))]
@@ -250,9 +253,10 @@ mod tests {
     }
 
     #[test]
-    fn drm_paths_use_default_when_no_render_nodes_are_discovered() {
+    fn drm_paths_are_empty_when_no_render_nodes_are_discovered() {
         let paths = vaapi_drm_paths_from(None, None, []);
 
-        assert_eq!(paths, vec![DEFAULT_DRM_RENDER_NODE]);
+        assert!(paths.is_empty());
+        assert_eq!(no_usable_drm_display_error(&paths), "no VA-API DRM render node found");
     }
 }
