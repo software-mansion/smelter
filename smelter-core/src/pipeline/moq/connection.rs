@@ -249,7 +249,7 @@ async fn run_video_track(
 ) {
     match broadcast.subscribe_track(&Track::new(&video.name)) {
         Ok(track) => {
-            // .with_latency() defines how long we wait for a stalled group. Group dalay is a difference between
+            // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
             // group start timestamp and highest received timestamp.
             let consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
             if let Err(err) = read_video_track(consumer, decoder_handle, first_pts).await {
@@ -273,7 +273,7 @@ async fn run_audio_track(
 ) {
     match broadcast.subscribe_track(&Track::new(&audio.name)) {
         Ok(track) => {
-            // .with_latency() defines how long we wait for a stalled group. Group dalay is a difference between
+            // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
             // group start timestamp and highest received timestamp.
             let consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
             if let Err(err) = read_audio_track(consumer, decoder_handle, first_pts).await {
