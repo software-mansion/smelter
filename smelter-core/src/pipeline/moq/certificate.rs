@@ -64,11 +64,12 @@ pub fn load_or_create_self_signed_tls() -> Result<ServerTlsConfig, SelfSignedTls
         generate(&cert_path, &key_path)?
     };
 
-    let fingerprint = fingerprint(&cert_der);
+    let sha256_fingerprint = fingerprint(&cert_der);
+    let location = dir.display();
     warn!(
-        "Using auto-generated, self-signed MoQ TLS certificate. Generated/loaded from {}. \
-         Make sure to configure proper certs in production. Cert SHA-256 (for client serverCertificateHashes): {fingerprint}",
-        dir.display()
+        sha256_fingerprint,
+        %location,
+        "Using auto-generated, self-signed MoQ TLS certificate. Make sure to configure proper certs in production."
     );
 
     let mut tls = ServerTlsConfig::default();
