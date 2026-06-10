@@ -38,6 +38,7 @@ struct DiscoveredVideo {
 
 struct DiscoveredAudio {
     name: String,
+    codec: AudioCodec,
     container: Container,
     description: Option<Bytes>,
 }
@@ -231,13 +232,18 @@ fn process_audio_config(
     samples_sender: QueueSender<InputAudioSamples>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
     // Only AAC is allowed right now, different codecs are rejected before this function is called
-    let asc = audio
-        .description
-        .clone()
-        .ok_or(MoqConnectionError::MissingAsc)?;
-    let aac_decoder_options = AudioDecoderOptions::FdkAac(FdkAacDecoderOptions { asc: Some(asc) });
+    let audio_decoder_options = match &audio.codec {
+        AudioCodec::Aac => {
+            let asc = audio
+                .description
+                .clone()
+                .ok_or(MoqConnectionError::MissingAsc)?;
+            AudioDecoderOptions::FdkAac(FdkAacDecoderOptions { asc: Some(asc) })
+        }
+        AudioCodec::Opus => todo!(),
+    };
 
-    match aac_decoder_options {
+    match audio_decoder_options {
         AudioDecoderOptions::FdkAac(decoder_options) => {
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
