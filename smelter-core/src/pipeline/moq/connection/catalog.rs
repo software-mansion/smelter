@@ -79,18 +79,18 @@ async fn read_hang_catalog(
     };
 
     let audio = match catalog.audio.renditions.first_key_value() {
-        Some((track_name, config)) if let MoqAudioCodec::Unknown(codec) = &config.codec => {
-            warn!(
-                track_name,
-                codec, "Unsupported audio codec. Use Opus or AAC.",
-            );
-            None
-        }
-        Some((name, config)) => match &config.container {
-            CatalogContainer::Cmaf { init, .. } => {
+        Some((name, config)) => match (&config.container, &config.codec) {
+            (_, MoqAudioCodec::Unknown(codec)) => {
+                warn!(
+                    codec,
+                    "Unknown audio codec. Only Opus and AAC are supported."
+                );
+                None
+            }
+            (CatalogContainer::Cmaf { init, .. }, codec) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let container = Container::Cmaf(wire);
-                let codec = match config.codec {
+                let codec = match codec {
                     MoqAudioCodec::AAC(_) => AudioCodec::Aac,
                     MoqAudioCodec::Opus => AudioCodec::Opus,
                     _ => unreachable!(),
@@ -104,7 +104,7 @@ async fn read_hang_catalog(
                 })
             }
             _ => {
-                warn!("Only CMAF container with AAC encoded audio is supported.");
+                warn!("Only CMAF container is supported.");
                 None
             }
         },
@@ -165,15 +165,15 @@ async fn read_msf_catalog(
     };
 
     let audio = match catalog.audio.renditions.first_key_value() {
-        Some((track_name, config)) if let MoqAudioCodec::Unknown(codec) = &config.codec => {
-            warn!(
-                track_name,
-                codec, "Unsupported audio codec. Use Opus or AAC.",
-            );
-            None
-        }
-        Some((name, config)) => match &config.container {
-            CatalogContainer::Cmaf { init, .. } => {
+        Some((name, config)) => match (&config.container, &config.codec) {
+            (_, MoqAudioCodec::Unknown(codec)) => {
+                warn!(
+                    codec,
+                    "Unknown audio codec. Only Opus and AAC are supported."
+                );
+                None
+            }
+            (CatalogContainer::Cmaf { init, .. }, codec) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let description = match &config.codec {
                     MoqAudioCodec::AAC(_) => match extract_codec_description(&wire) {
@@ -186,7 +186,7 @@ async fn read_msf_catalog(
                     _ => None,
                 };
                 let container = Container::Cmaf(wire);
-                let codec = match config.codec {
+                let codec = match codec {
                     MoqAudioCodec::AAC(_) => AudioCodec::Aac,
                     MoqAudioCodec::Opus => AudioCodec::Opus,
                     _ => unreachable!(),
