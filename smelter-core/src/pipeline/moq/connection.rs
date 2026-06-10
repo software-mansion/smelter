@@ -4,35 +4,26 @@ use std::{
 };
 
 use bytes::Bytes;
-use moq_mux::catalog::hang::Container;
-use moq_mux::container::Consumer as ContainerConsumer;
+use moq_mux::{catalog::hang::Container, container::Consumer as ContainerConsumer};
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
 use tracing::{info, trace, warn};
 
-use crate::pipeline::moq::connection::catalog::{MoqCatalogError, read_catalog};
-use crate::utils::{H264AvcDecoderConfig, H264AvccToAnnexB};
-use crate::{
-    MediaKind, PipelineCtx, PipelineEvent,
-    codecs::{
-        AudioCodec, AudioDecoderOptions, FdkAacDecoderOptions, VideoCodec, VideoDecoderOptions,
+use crate::pipeline::{
+    decoder::{
+        DecoderThreadHandle,
+        decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
+        decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
+        fdk_aac::FdkAacDecoder,
+        ffmpeg_h264, vulkan_h264,
     },
-    error::DecoderInitError,
-    pipeline::{
-        decoder::{
-            DecoderThreadHandle,
-            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
-            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
-            fdk_aac::FdkAacDecoder,
-            ffmpeg_h264, vulkan_h264,
-        },
-        moq::state::MoqInputState,
-    },
-    queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
-    utils::InitializableThread,
+    moq::state::MoqInputState,
 };
-
 use crate::prelude::*;
+use crate::queue::{QueueSender, QueueTrackOffset, QueueTrackOptions};
+use crate::utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread};
+
+use self::catalog::{MoqCatalogError, read_catalog};
 
 mod catalog;
 

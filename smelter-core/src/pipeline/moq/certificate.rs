@@ -9,12 +9,12 @@
 //! stays stable across restarts. WebTransport caps self-signed cert validity at 14
 //! days, so the cert is regenerated once it expires (or if it is missing/corrupted).
 
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
 
-use moq_native::ServerTlsConfig;
-use moq_native::rustls::pki_types::pem::PemObject;
-use moq_native::rustls::pki_types::{CertificateDer, PrivateKeyDer, UnixTime};
+use moq_native::{
+    ServerTlsConfig,
+    rustls::pki_types::{CertificateDer, PrivateKeyDer, UnixTime, pem::PemObject},
+};
 use sha2::{Digest, Sha256};
 use time::{Duration, OffsetDateTime};
 use tracing::warn;
