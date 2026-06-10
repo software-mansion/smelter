@@ -15,7 +15,9 @@ use crate::pipeline::{
         decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
         decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
         fdk_aac::FdkAacDecoder,
-        ffmpeg_h264, vulkan_h264,
+        ffmpeg_h264,
+        libopus::OpusDecoder,
+        vulkan_h264,
     },
     moq::state::MoqInputState,
 };
@@ -231,30 +233,31 @@ fn process_audio_config(
     audio: &DiscoveredAudio,
     samples_sender: QueueSender<InputAudioSamples>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    // Only AAC is allowed right now, different codecs are rejected before this function is called
-    let audio_decoder_options = match &audio.codec {
+    match &audio.codec {
         AudioCodec::Aac => {
             let asc = audio
                 .description
                 .clone()
                 .ok_or(MoqConnectionError::MissingAsc)?;
-            AudioDecoderOptions::FdkAac(FdkAacDecoderOptions { asc: Some(asc) })
-        }
-        AudioCodec::Opus => todo!(),
-    };
-
-    match audio_decoder_options {
-        AudioDecoderOptions::FdkAac(decoder_options) => {
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
-                decoder_options,
+                decoder_options: FdkAacDecoderOptions { asc: Some(asc) },
                 samples_sender,
                 input_buffer_size: MOQ_MAX_BUFFER,
             };
             AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref.clone(), options)
                 .map_err(MoqConnectionError::InitAudioDecoder)
         }
-        _ => Err(MoqConnectionError::UnsupportedAudioCodec),
+        AudioCodec::Opus => {
+            let options = AudioDecoderThreadOptions {
+                ctx: ctx.clone(),
+                decoder_options: (),
+                samples_sender,
+                input_buffer_size: MOQ_MAX_BUFFER,
+            };
+            AudioDecoderThread::<OpusDecoder>::spawn(input_ref.clone(), options)
+                .map_err(MoqConnectionError::InitAudioDecoder)
+        }
     }
 }
 
@@ -297,8 +300,14 @@ async fn run_audio_track(
             // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
             // group start timestamp and highest received timestamp.
             let consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
-            if let Err(err) =
-                read_audio_track(consumer, decoder_handle, first_pts, stats_sender).await
+            if let Err(err) = read_audio_track(
+                consumer,
+                decoder_handle,
+                audio.codec,
+                first_pts,
+                stats_sender,
+            )
+            .await
             {
                 warn!(
                     "MoQ audio track error: {}",
@@ -329,11 +338,8 @@ enum MoqConnectionError {
     #[error("Invalid H264 decoder config.")]
     InvalidAvcc,
 
-    #[error("Failed to initialize AAC decoder")]
+    #[error("Failed to initialize audio decoder")]
     InitAudioDecoder(#[source] DecoderInitError),
-
-    #[error("Unsupported audio codec, AAC expected.")]
-    UnsupportedAudioCodec,
 
     #[error("Missing AAC decoder config.")]
     MissingAsc,
@@ -391,6 +397,7 @@ async fn read_video_track(
 async fn read_audio_track(
     mut consumer: ContainerConsumer<Container>,
     decoder_handle: DecoderThreadHandle,
+    codec: AudioCodec,
     first_pts: Arc<Mutex<Option<Duration>>>,
     stats_sender: MoqStatsSender,
 ) -> Result<(), MoqConnectionError> {
@@ -410,7 +417,7 @@ async fn read_audio_track(
             data: payload,
             pts,
             dts: None,
-            kind: MediaKind::Audio(AudioCodec::Aac),
+            kind: MediaKind::Audio(codec),
             present: true,
         };
 
