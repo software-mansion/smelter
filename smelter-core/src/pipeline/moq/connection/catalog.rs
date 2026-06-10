@@ -35,7 +35,13 @@ pub(super) async fn read_catalog(
 ) -> Result<DiscoveredTracks, MoqCatalogError> {
     match read_hang_catalog(broadcast).await {
         Ok(tracks) => Ok(tracks),
-        Err(_) => read_msf_catalog(broadcast).await,
+        Err(error) => {
+            debug!(
+                %error,
+                "Failed to read Hang catalog, fallback to MSF catalog."
+            );
+            read_msf_catalog(broadcast).await
+        }
     }
 }
 
