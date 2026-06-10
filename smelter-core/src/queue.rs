@@ -3,6 +3,8 @@ mod audio_queue;
 mod queue_input;
 mod queue_thread;
 mod side_channel;
+#[cfg(test)]
+mod tests;
 mod utils;
 mod video_input;
 mod video_queue;
