@@ -1,17 +1,23 @@
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, Weak};
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc, Mutex, Weak,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 
-use moq_native::moq_net::{Origin, OriginConsumer, OriginProducer, Session};
-use moq_native::{ServerConfig, ServerTlsConfig};
-use smelter_render::error::ErrorStack;
+use moq_native::{
+    ServerConfig, ServerTlsConfig,
+    moq_net::{Origin, OriginConsumer, OriginProducer, Session},
+};
 use tracing::{debug, info, warn};
 
 use crate::pipeline::moq::{
     certificate::load_or_create_self_signed_tls, connection::spawn_broadcast_handler,
     state::MoqInputsState,
 };
+use smelter_render::error::ErrorStack;
 
 use crate::prelude::*;
 
