@@ -116,7 +116,7 @@ async fn read_msf_catalog(
     debug!(?catalog, "Received MoQ MSF catalog");
 
     let video = match catalog.video.renditions.first_key_value() {
-        Some((track, config)) => match (&config.container, &config.codec) {
+        Some((name, config)) => match (&config.container, &config.codec) {
             (CatalogContainer::Cmaf { init, .. }, VideoCodec::H264(_)) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let description = match extract_codec_description(&wire) {
@@ -129,7 +129,7 @@ async fn read_msf_catalog(
                 let container = Container::Cmaf(wire);
 
                 Some(DiscoveredVideo {
-                    name: track.clone(),
+                    name: name.clone(),
                     container,
                     description,
                 })
@@ -143,7 +143,7 @@ async fn read_msf_catalog(
     };
 
     let audio = match catalog.audio.renditions.first_key_value() {
-        Some((track, config)) => match (&config.container, &config.codec) {
+        Some((name, config)) => match (&config.container, &config.codec) {
             (CatalogContainer::Cmaf { init, .. }, AudioCodec::AAC(_)) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let description = match extract_codec_description(&wire) {
@@ -156,7 +156,7 @@ async fn read_msf_catalog(
                 let container = Container::Cmaf(wire);
 
                 Some(DiscoveredAudio {
-                    name: track.clone(),
+                    name: name.clone(),
                     container,
                     description,
                 })
