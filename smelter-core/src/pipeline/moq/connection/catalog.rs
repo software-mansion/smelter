@@ -5,9 +5,9 @@ use moq_mux::{
     container::fmp4,
 };
 use moq_native::moq_net::{self, BroadcastConsumer, Error as MoqError};
+use tracing::{debug, warn};
 
 use crate::pipeline::moq::connection::{DiscoveredAudio, DiscoveredTracks, DiscoveredVideo};
-use tracing::{debug, warn};
 
 #[derive(thiserror::Error, Debug)]
 pub(super) enum MoqCatalogError {
