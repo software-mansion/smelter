@@ -81,6 +81,24 @@ impl GraphicsContext {
         false
     }
 
+    #[cfg(all(feature = "vaapi", target_os = "linux"))]
+    pub fn has_vaapi_decoder_support(&self) -> bool {
+        gpu_video::vaapi::h264::supports_decoding(Some(&self.adapter.get_info()))
+    }
+    #[cfg(not(all(feature = "vaapi", target_os = "linux")))]
+    pub fn has_vaapi_decoder_support(&self) -> bool {
+        false
+    }
+
+    #[cfg(all(feature = "vaapi", target_os = "linux"))]
+    pub fn has_vaapi_encoder_support(&self) -> bool {
+        gpu_video::vaapi::h264::supports_encoding(Some(&self.adapter.get_info()))
+    }
+    #[cfg(not(all(feature = "vaapi", target_os = "linux")))]
+    pub fn has_vaapi_encoder_support(&self) -> bool {
+        false
+    }
+
     #[cfg(feature = "gpu-video")]
     pub fn vulkan_h264_decode_profile_level_support(&self) -> Option<H264ProfileLevelSupport> {
         let vulkan_ctx = self.vulkan_ctx.as_ref()?;
