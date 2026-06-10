@@ -219,7 +219,7 @@ impl RtpInput {
                         Some(VideoDecoder::FfmpegVp8) => TestSample::BigBuckBunnyVP8Opus,
                         _ => TestSample::BigBuckBunnyH264Opus,
                     }
-                    .file(),
+                    .path(),
                 };
                 let cmd = build_gst_send_udp_cmd(video_codec, has_audio, self.port, &file_path);
                 match (video, audio) {
@@ -265,7 +265,7 @@ impl RtpInput {
                         Some(VideoDecoder::FfmpegVp8) => TestSample::BigBuckBunnyVP8Opus,
                         _ => TestSample::BigBuckBunnyH264Opus,
                     }
-                    .file(),
+                    .path(),
                 };
                 let cmd = build_gst_send_tcp_cmd(video_codec, has_audio, self.port, &file_path);
                 match (video, audio) {
@@ -346,7 +346,7 @@ impl RtpInputBuilder {
 
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(RTP_INPUT_PATH).unwrap_or_default();
-        let default_path = TestSample::BigBuckBunnyH264Opus.file();
+        let default_path = TestSample::BigBuckBunnyH264Opus.path();
 
         loop {
             let path_input = Text::new(&format!(

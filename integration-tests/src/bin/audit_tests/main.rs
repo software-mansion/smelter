@@ -7,7 +7,9 @@ use tracing::{error, info};
 
 mod cleanup;
 mod pipeline;
+mod pipeline_tests_inspector;
 mod render;
+mod render_tests_inspector;
 mod restore_gh;
 mod restore_submodule;
 

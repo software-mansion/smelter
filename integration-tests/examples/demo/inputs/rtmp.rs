@@ -88,7 +88,7 @@ impl RtmpInput {
                 let input_path = match &self.options.path {
                     Some(path) => path.to_str().unwrap().to_string(),
                     None => TestSample::BigBuckBunnyH264Opus
-                        .file()
+                        .path()
                         .to_str()
                         .unwrap()
                         .to_string(),
@@ -148,7 +148,7 @@ impl RtmpInputBuilder {
 
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(RTMP_INPUT_PATH).unwrap_or_default();
-        let default_path = TestSample::BigBuckBunnyH264Opus.file();
+        let default_path = TestSample::BigBuckBunnyH264Opus.path();
 
         loop {
             let path_input = Text::new(&format!(

@@ -1,6 +1,7 @@
 //! New audio-dump comparison logic for pipeline tests.
 //!
-//! Compares the OPUS audio payload of two RTP dumps by:
+//! Compares the audio payload of two output dumps — OPUS for `.rtp`
+//! dumps, AAC for `.mp4` dumps — by:
 //!   1. Decoding both sides into PCM chunks (PTS preserved).
 //!   2. Running the [`super::audio_analysis`] gap and artifact
 //!      detectors on each side independently.
@@ -24,8 +25,8 @@ use bytes::Bytes;
 use tracing::warn;
 
 use crate::{
-    audio_decoder::{AudioChannels, AudioDecoder, AudioSampleBatch},
-    find_packets_for_payload_type,
+    DumpFormat,
+    audio_decoder::AudioSampleBatch,
     pipeline_tests::harness::{
         audio_analysis::{
             SAMPLE_RATE, compute_gaps, detect_artifacts, peak_abs, subtract_intervals,
@@ -33,11 +34,8 @@ use crate::{
         },
         fft::{self, FftCompareConfig},
     },
-    unmarshal_packets,
+    tools::{mp4_source, rtp_source},
 };
-
-/// RTP payload type smelter uses for OPUS audio.
-const AUDIO_PAYLOAD_TYPE: u8 = 97;
 
 /// Caller-tunable thresholds for the new audio comparison.
 ///
@@ -79,9 +77,14 @@ impl Default for AudioCompareConfig {
 }
 
 /// Decode `expected` and `actual` and run the comparison.
-pub fn compare(expected: &Bytes, actual: &Bytes, config: AudioCompareConfig) -> Result<()> {
-    let expected_chunks = decode(expected)?;
-    let actual_chunks = decode(actual)?;
+pub fn compare(
+    expected: &Bytes,
+    actual: &Bytes,
+    config: AudioCompareConfig,
+    format: DumpFormat,
+) -> Result<()> {
+    let expected_chunks = decode(expected, format)?;
+    let actual_chunks = decode(actual, format)?;
     compare_chunks(&expected_chunks, &actual_chunks, &config)
 }
 
@@ -167,12 +170,9 @@ fn chunks_peak(chunks: &[AudioSampleBatch]) -> f32 {
         .fold(0.0_f32, f32::max)
 }
 
-fn decode(dump: &Bytes) -> Result<Vec<AudioSampleBatch>> {
-    let packets = unmarshal_packets(dump)?;
-    let packets = find_packets_for_payload_type(&packets, AUDIO_PAYLOAD_TYPE);
-    let mut decoder = AudioDecoder::new(SAMPLE_RATE, AudioChannels::Stereo)?;
-    for packet in packets {
-        decoder.decode(packet)?;
+fn decode(dump: &Bytes, format: DumpFormat) -> Result<Vec<AudioSampleBatch>> {
+    match format {
+        DumpFormat::Rtp => rtp_source::decode_opus_audio(dump, SAMPLE_RATE),
+        DumpFormat::Mp4 => mp4_source::decode_aac_audio(dump, SAMPLE_RATE),
     }
-    Ok(decoder.take_samples())
 }

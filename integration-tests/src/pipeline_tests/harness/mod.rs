@@ -21,15 +21,19 @@ use std::{fmt, path::Path};
 use anyhow::Result;
 use bytes::Bytes;
 
-use crate::{output_dump_from_disk, save_failed_actual_dump, save_failed_test_dumps};
+use crate::{dump_format, output_dump_from_disk, save_failed_actual_dump, save_failed_test_dumps};
 
 pub mod audio;
 pub mod audio_analysis;
 pub mod fft;
+pub mod output_receiver;
+pub mod packet_sender;
 pub mod video;
 
 pub use audio::AudioCompareConfig;
 pub use fft::FftCompareConfig;
+pub use output_receiver::OutputReceiver;
+pub use packet_sender::PacketSender;
 pub use video::VideoCompareConfig;
 
 /// Env var that, when set to a non-empty value, makes the harness
@@ -42,11 +46,12 @@ pub fn compare_video_dumps<P: AsRef<Path> + fmt::Debug>(
     actual: &Bytes,
     config: VideoCompareConfig,
 ) -> Result<()> {
+    let format = dump_format(&snapshot_filename)?;
     let expected = match output_dump_from_disk(&snapshot_filename) {
         Ok(b) => b,
         Err(err) => return handle_missing_expected(err, snapshot_filename, actual),
     };
-    let result = video::compare(&expected, actual, config);
+    let result = video::compare(&expected, actual, config, format);
     finalize(result, &expected, actual, &snapshot_filename)
 }
 
@@ -55,11 +60,12 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
     actual: &Bytes,
     config: AudioCompareConfig,
 ) -> Result<()> {
+    let format = dump_format(&snapshot_filename)?;
     let expected = match output_dump_from_disk(&snapshot_filename) {
         Ok(b) => b,
         Err(err) => return handle_missing_expected(err, snapshot_filename, actual),
     };
-    let result = audio::compare(&expected, actual, config);
+    let result = audio::compare(&expected, actual, config, format);
     finalize(result, &expected, actual, &snapshot_filename)
 }
 

@@ -2606,7 +2606,6 @@ dependencies = [
  "minifb",
  "opus",
  "rand 0.9.3",
- "regex",
  "reqwest",
  "serde",
  "serde_json",

@@ -30,7 +30,7 @@ fn client_code() -> Result<()> {
         "input/input_1/register",
         &json!({
             "type": "mp4",
-            "path": TestSample::BigBuckBunnyH264AAC.file(),
+            "path": TestSample::BigBuckBunnyH264AAC.path(),
         }),
     )?;
 

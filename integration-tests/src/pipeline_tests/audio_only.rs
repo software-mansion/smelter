@@ -5,11 +5,13 @@ use integration_tests_macros::pipeline_test;
 use serde_json::json;
 
 use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, input_dump_from_disk,
+    CommunicationProtocol, CompositorInstance, input_dump_from_disk,
     paths::submodule_root_path,
     pipeline_tests::{
         PipelineTest,
-        harness::{AudioCompareConfig, FftCompareConfig, compare_audio_dumps},
+        harness::{
+            AudioCompareConfig, FftCompareConfig, OutputReceiver, PacketSender, compare_audio_dumps,
+        },
     },
 };
 

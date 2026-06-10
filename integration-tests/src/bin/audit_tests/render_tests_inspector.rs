@@ -3,8 +3,8 @@
 //! Render tests produce a single PNG per snapshot. After a failed
 //! run, the harness writes `actual_<name>.png` and `expected_<name>.png`
 //! to the render-test workdir. This tool loads both, pushes them into
-//! [`crate::tools::frame_inspector`], and blocks until the user closes
-//! the window.
+//! [`integration_tests::tools::frame_inspector`], and blocks until the
+//! user closes the window.
 //!
 //! Either side may be missing — for example a brand-new test has no
 //! committed `expected`, and a test that panicked before rendering has
@@ -14,26 +14,16 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use integration_tests::tools::frame_inspector::{FrameInspector, Pair};
 use tracing::{info, warn};
 
-use crate::tools::frame_inspector::{FrameInspector, Pair};
-
-pub type InspectorHandle = FrameInspector;
-
-/// Open the inspector with `expected` on the left and `actual` on the
-/// right. Blocks the calling thread until the user closes the window
-/// (Esc or window close).
-pub fn run(expected: &Path, actual: &Path) -> Result<()> {
-    let inspector = open(expected, actual)?;
-    inspector.wait();
-    Ok(())
-}
+pub(crate) type InspectorHandle = FrameInspector;
 
 /// Open the inspector without blocking. Returns the handle so the
 /// caller can keep the window alive and push updates via [`refresh`].
-pub fn open(expected: &Path, actual: &Path) -> Result<FrameInspector> {
-    info!("render_inspector: expected = {}", expected.display());
-    info!("render_inspector: actual = {}", actual.display());
+pub(crate) fn open(expected: &Path, actual: &Path) -> Result<FrameInspector> {
+    info!("inspector: expected = {}", expected.display());
+    info!("inspector: actual = {}", actual.display());
 
     let pair = load_pair(expected, actual)?;
     let inspector = FrameInspector::spawn();
@@ -45,11 +35,11 @@ pub fn open(expected: &Path, actual: &Path) -> Result<FrameInspector> {
 /// inspector. Returns `true` if the update reached the window,
 /// `false` if the window was already closed or the images could not
 /// be loaded.
-pub fn refresh(inspector: &FrameInspector, expected: &Path, actual: &Path) -> bool {
+pub(crate) fn refresh(inspector: &FrameInspector, expected: &Path, actual: &Path) -> bool {
     match load_pair(expected, actual) {
         Ok(pair) => inspector.update(pair),
         Err(e) => {
-            warn!("render_inspector refresh failed: {e:#}");
+            warn!("inspector refresh failed: {e:#}");
             false
         }
     }
@@ -122,7 +112,7 @@ struct Image {
 fn load_optional(path: &Path, side: &str) -> Result<Option<Image>> {
     if !path.exists() {
         warn!(
-            "render_inspector: {side} snapshot {} not found, will show a placeholder",
+            "inspector: {side} snapshot {} not found, will show a placeholder",
             path.display()
         );
         return Ok(None);

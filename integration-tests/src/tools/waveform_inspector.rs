@@ -1,5 +1,5 @@
 //! Interactive waveform inspection tool — audio counterpart to
-//! [`crate::tools::rtp_inspector`]'s video flow.
+//! the audit binary's pipeline-tests inspector video flow.
 //!
 //! Receives the fully-decoded expected and actual streams as a list of
 //! decoder chunks (each carrying its original timestamp). Chunks are
