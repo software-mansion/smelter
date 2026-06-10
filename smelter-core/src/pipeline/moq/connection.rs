@@ -101,15 +101,6 @@ pub(crate) fn spawn_broadcast_handler(
             info!(input_id = %input_ref, track = %a.name, "Discovered MoQ audio track");
         }
 
-        let (video_decoder_handle, audio_decoder_handle) = spawn_decoders(
-            &ctx,
-            &input_ref,
-            &decoders,
-            &discovered,
-            video_sender,
-            audio_sender,
-        );
-
         let video = discovered.video.take();
         let audio = discovered.audio.take();
 
@@ -118,9 +109,25 @@ pub(crate) fn spawn_broadcast_handler(
         // produces the first frame sets the common zero point for both.
         let first_pts = Arc::new(Mutex::new(None));
 
-        let video_fut = run_video_track(video, video_decoder_handle, &broadcast, first_pts.clone());
+        let first_pts_inner = first_pts.clone();
+        let video_fut = async {
+            if let (Some(video), Some(frame_sender)) = (video, video_sender) {
+                let decoder_handle =
+                    spawn_video_decoder(&ctx, &input_ref, &decoders, &video, frame_sender);
+                if let Some(decoder_handle) = decoder_handle {
+                    run_video_track(video, decoder_handle, &broadcast, first_pts_inner).await;
+                }
+            }
+        };
 
-        let audio_fut = run_audio_track(audio, audio_decoder_handle, &broadcast, first_pts);
+        let audio_fut = async {
+            if let (Some(audio), Some(sample_sender)) = (audio, audio_sender) {
+                let decoder_handle = spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender);
+                if let Some(decoder_handle) = decoder_handle {
+                    run_audio_track(audio, decoder_handle, &broadcast, first_pts).await;
+                }
+            }
+        };
 
         tokio::join!(video_fut, audio_fut);
         info!(input_id = %input_ref, "MoQ broadcast connection closed");
@@ -129,44 +136,41 @@ pub(crate) fn spawn_broadcast_handler(
     Some(handle)
 }
 
-fn spawn_decoders(
+fn spawn_video_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     decoders: &MoqServerInputDecoders,
-    discovered: &DiscoveredTracks,
-    video_sender: Option<QueueSender<Frame>>,
-    audio_sender: Option<QueueSender<InputAudioSamples>>,
-) -> (Option<DecoderThreadHandle>, Option<DecoderThreadHandle>) {
-    let video_decoder_handle = match (&discovered.video, video_sender) {
-        (Some(video), Some(sender)) => {
-            match process_video_config(ctx, input_ref, decoders, video, sender) {
-                Ok(handle) => Some(handle),
-                Err(err) => {
-                    warn!(
-                        "MoQ video config error: {}",
-                        ErrorStack::new(&err).into_string()
-                    );
-                    None
-                }
-            }
+    discovered: &DiscoveredVideo,
+    frame_sender: QueueSender<Frame>,
+) -> Option<DecoderThreadHandle> {
+    match process_video_config(ctx, input_ref, decoders, discovered, frame_sender) {
+        Ok(handle) => Some(handle),
+        Err(err) => {
+            warn!(
+                "MoQ video config error: {}",
+                ErrorStack::new(&err).into_string()
+            );
+            None
         }
-        _ => None,
-    };
+    }
+}
 
-    let audio_decoder_handle = match (&discovered.audio, audio_sender) {
-        (Some(audio), Some(sender)) => match process_audio_config(ctx, input_ref, audio, sender) {
-            Ok(handle) => Some(handle),
-            Err(err) => {
-                warn!(
-                    "MoQ audio config error: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-                None
-            }
-        },
-        _ => None,
-    };
-    (video_decoder_handle, audio_decoder_handle)
+fn spawn_audio_decoder(
+    ctx: &Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
+    discovered: &DiscoveredAudio,
+    sample_sender: QueueSender<InputAudioSamples>,
+) -> Option<DecoderThreadHandle> {
+    match process_audio_config(ctx, input_ref, discovered, sample_sender) {
+        Ok(handle) => Some(handle),
+        Err(err) => {
+            warn!(
+                "MoQ audio config error: {}",
+                ErrorStack::new(&err).into_string()
+            );
+            None
+        }
+    }
 }
 
 fn process_video_config(
@@ -247,73 +251,63 @@ fn process_audio_config(
 }
 
 async fn run_video_track(
-    video: Option<DiscoveredVideo>,
-    decoder_handle: Option<DecoderThreadHandle>,
+    video: DiscoveredVideo,
+    decoder_handle: DecoderThreadHandle,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
 ) {
-    if let Some(video) = video
-        && let Some(decoder_handle) = decoder_handle
-    {
-        match broadcast.subscribe_track(&Track::new(&video.name)) {
-            Ok(track) => {
-                // The `.with_latency()` call sets the tolerated latency between groups
-                // E.g.
-                // - Group A starts at 200ms
-                // - Group B starts at 400ms
-                // - Group C starts at 600ms and its last timestamp is 790ms
-                //
-                // If `.with_latency()` is set to e.g. 150ms AND if during reading group A we stall at any moment (do not get frame on poll)
-                // then we check 790ms - 150ms = 550ms. 550ms > 200ms so we skip group A ONLY and
-                // proceed to the next one.
-                let consumer =
-                    ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
-                if let Err(err) = read_video_track(consumer, decoder_handle, first_pts).await {
-                    warn!(
-                        "MoQ video track error: {}",
-                        ErrorStack::new(&err).into_string()
-                    );
-                }
+    match broadcast.subscribe_track(&Track::new(&video.name)) {
+        Ok(track) => {
+            // The `.with_latency()` call sets the tolerated latency between groups
+            // E.g.
+            // - Group A starts at 200ms
+            // - Group B starts at 400ms
+            // - Group C starts at 600ms and its last timestamp is 790ms
+            //
+            // If `.with_latency()` is set to e.g. 150ms AND if during reading group A we stall at any moment (do not get frame on poll)
+            // then we check 790ms - 150ms = 550ms. 550ms > 200ms so we skip group A ONLY and
+            // proceed to the next one.
+            let consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
+            if let Err(err) = read_video_track(consumer, decoder_handle, first_pts).await {
+                warn!(
+                    "MoQ video track error: {}",
+                    ErrorStack::new(&err).into_string()
+                );
             }
-            Err(err) => {
-                warn!("Failed to subscribe to MoQ video track: {err}");
-            }
+        }
+        Err(err) => {
+            warn!("Failed to subscribe to MoQ video track: {err}");
         }
     }
 }
 
 async fn run_audio_track(
-    audio: Option<DiscoveredAudio>,
-    decoder_handle: Option<DecoderThreadHandle>,
+    audio: DiscoveredAudio,
+    decoder_handle: DecoderThreadHandle,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
 ) {
-    if let Some(audio) = audio
-        && let Some(decoder_handle) = decoder_handle
-    {
-        match broadcast.subscribe_track(&Track::new(&audio.name)) {
-            Ok(track) => {
-                // The `.with_latency()` call sets the tolerated latency between groups
-                // E.g.
-                // - Group A starts at 200ms
-                // - Group B starts at 400ms
-                // - Group C starts at 600ms and its last timestamp is 790ms
-                //
-                // If `.with_latency()` is set to e.g. 150ms AND if during reading group A we stall at any moment (do not get frame on poll)
-                // then we check 790ms - 150ms = 550ms. 550ms > 200ms so we skip group A ONLY and
-                // proceed to the next one.
-                let consumer =
-                    ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
-                if let Err(err) = read_audio_track(consumer, decoder_handle, first_pts).await {
-                    warn!(
-                        "MoQ audio track error: {}",
-                        ErrorStack::new(&err).into_string()
-                    );
-                }
+    match broadcast.subscribe_track(&Track::new(&audio.name)) {
+        Ok(track) => {
+            // The `.with_latency()` call sets the tolerated latency between groups
+            // E.g.
+            // - Group A starts at 200ms
+            // - Group B starts at 400ms
+            // - Group C starts at 600ms and its last timestamp is 790ms
+            //
+            // If `.with_latency()` is set to e.g. 150ms AND if during reading group A we stall at any moment (do not get frame on poll)
+            // then we check 790ms - 150ms = 550ms. 550ms > 200ms so we skip group A ONLY and
+            // proceed to the next one.
+            let consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
+            if let Err(err) = read_audio_track(consumer, decoder_handle, first_pts).await {
+                warn!(
+                    "MoQ audio track error: {}",
+                    ErrorStack::new(&err).into_string()
+                );
             }
-            Err(err) => {
-                warn!("Failed to subscribe to MoQ audio track: {err}");
-            }
+        }
+        Err(err) => {
+            warn!("Failed to subscribe to MoQ audio track: {err}");
         }
     }
 }
