@@ -39,7 +39,7 @@ export default function InputControls(props: InputProps) {
       await props.smelter.unregisterInput(MP4_AUDIO_ID).catch(() => {});
       await props.smelter.registerInput(MP4_AUDIO_ID, {
         type: 'mp4',
-        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+        url: 'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4',
       });
     }
     props.setInputs({ ...props.inputs, mp4WithAudio: !props.inputs.mp4WithAudio });

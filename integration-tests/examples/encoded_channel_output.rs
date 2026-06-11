@@ -1,7 +1,7 @@
 use core::panic;
 use std::{fs::File, io::Write, sync::Arc, time::Duration};
 
-use integration_tests::{media::download_to, paths::integration_tests_root};
+use integration_tests::{media::TestSample, paths::integration_tests_root};
 use smelter::{config::read_config, logger, state::ApiState};
 use smelter_core::{codecs::*, protocols::*, *};
 use smelter_render::{
@@ -10,10 +10,6 @@ use smelter_render::{
     scene::{Component, InputStreamComponent},
 };
 use tokio::runtime::Runtime;
-
-const BUNNY_FILE_URL: &str =
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-const BUNNY_FILE_PATH: &str = "examples/assets/BigBuckBunny.mp4";
 
 // Start simple pipeline with output that sends encoded video/audio via Rust channel.
 //
@@ -34,8 +30,6 @@ fn main() {
     });
     let output_id = OutputId("output_1".into());
     let input_id = InputId("input_id".into());
-
-    download_to(BUNNY_FILE_URL, BUNNY_FILE_PATH).unwrap();
 
     let output_options = RegisterEncodedDataOutputOptions {
         output_options: EncodedDataOutputOptions {
@@ -80,7 +74,12 @@ fn main() {
     };
 
     let input_options = RegisterInputOptions::Mp4(Mp4InputOptions {
-        source: Mp4InputSource::File(root_dir.join(BUNNY_FILE_PATH).into()),
+        source: Mp4InputSource::File(
+            TestSample::BigBuckBunnyH264AAC
+                .ensure_path()
+                .unwrap()
+                .into(),
+        ),
         should_loop: false,
         video_decoders: Mp4InputVideoDecoders {
             h264: Some(VideoDecoderOptions::FfmpegH264),

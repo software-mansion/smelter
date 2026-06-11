@@ -146,9 +146,7 @@ fn read_frames(path: &PathBuf, count: usize, resolution: Resolution) -> Vec<YuvP
         .collect()
 }
 
-const DEFAULT_MP4_URL: &str =
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-
+const DEFAULT_MP4_URL: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fps490s.mp4";
 const BBB_480P_24FPS: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny480p24fpsStereo30s.mp4";
 const BBB_720P_24FPS: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4";
 const BBB_1080P_30FPS: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny1080p30fpsStereo30s.mp4";

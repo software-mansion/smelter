@@ -58,8 +58,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 }
 `;
 
-const MP4_URL =
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
+const MP4_URL = 'https://smelter.dev/videos/template-scene-race.mp4';
 
 function ShaderExample() {
   const smelter = useSmelter();

@@ -74,7 +74,7 @@ function DemoExample() {
 }
 
 const MP4_URL =
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+  'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4';
 
 function Scene() {
   const inputs = useInputStreams();
