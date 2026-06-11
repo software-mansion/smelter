@@ -669,6 +669,13 @@ impl<'a> VulkanDecoder<'a> {
                 .as_hal::<wgpu::hal::vulkan::Api>()
                 .unwrap()
         };
+        let wgpu_queue = unsafe {
+            self.decoding_device
+                .wgpu_queue()
+                .as_hal::<wgpu::hal::vulkan::Api>()
+                .unwrap()
+        };
+
         let copy_extent = vk::Extent3D {
             width: decode_output.cropped_extent.width,
             height: decode_output.cropped_extent.height,
@@ -784,7 +791,11 @@ impl<'a> VulkanDecoder<'a> {
                 DecoderTrackerWaitState::DownloadImageToBuffer,
             )?;
 
-        self.tracker.wait_for(semaphore_wait_value, u64::MAX)?;
+        wgpu_queue.add_wait_semaphore(
+            self.tracker.semaphore_tracker.semaphore.semaphore,
+            Some(semaphore_wait_value.0),
+            vk::PipelineStageFlags::ALL_COMMANDS,
+        );
 
         let image = Arc::new(image);
         let image_clone = image.clone();
