@@ -103,6 +103,11 @@ impl AudioQueue {
     }
 
     pub(super) fn drop_old_samples_before_start(&mut self) {
+        self.inputs
+            .values()
+            .filter_map(|input| input.upgrade())
+            .for_each(|input| input.maybe_start_next_track());
+
         for weak in self.inputs.values() {
             weak.audio(|input| input.drop_old_samples_before_start());
         }

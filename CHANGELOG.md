@@ -8,6 +8,8 @@
 
 ### 🐛 Bug fixes
 
+- Fix `VIDEO_INPUT_DELIVERED`/`AUDIO_INPUT_DELIVERED` events not being sent before queue start ([#2068](https://github.com/software-mansion/smelter/pull/2068) by [@wkozyra95](https://github.com/wkozyra95))
+
 ### 🔧 Others
 
 ## [v0.6.0](https://github.com/software-mansion/smelter/releases/tag/v0.6.0)
