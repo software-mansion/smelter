@@ -144,7 +144,9 @@ impl VideoQueueInput {
 
         let offset = self.resolve_offset(pts, queue_start_pts)?;
 
-        let input_pts = pts.saturating_sub(offset);
+        let Some(input_pts) = pts.checked_sub(offset) else {
+            return None;
+        };
         trace!(queue_pts=?pts, ?input_pts, "Try get frame");
 
         match self.receiver.get_for_pts(input_pts) {

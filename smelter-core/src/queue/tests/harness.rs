@@ -34,7 +34,8 @@ use crate::{
     types::Ref,
 };
 
-const RECV_TIMEOUT: Duration = Duration::from_secs(5);
+/// Distance between queue creation and start to desync clocks
+pub const OFFSET: Duration = Duration::from_micros(123_456);
 
 pub const OUTPUT_FRAMERATE: Framerate = Framerate { num: 50, den: 1 };
 /// Duration of a single video batch at [`OUTPUT_FRAMERATE`]; equal to the audio
@@ -113,20 +114,35 @@ pub fn frames<const N: usize>(frames: [(&str, InputFrame); N]) -> HashMap<InputI
         .collect()
 }
 
-/// Assert that batch lists are equal, comparing frame PTS with `pts_tolerance`.
-/// Batch PTS, ids and required flags are always compared exactly; tolerance is
+/// Assert that batches are exactly equal.
+#[track_caller]
+pub fn assert_video_batch_eq(actual: &VideoBatch, expected: &VideoBatch) {
+    assert_eq!(actual, expected);
+}
+
+/// Assert that the batch was produced at `pts` with no input delivering anything.
+#[track_caller]
+pub fn assert_empty_video_batch(actual: &VideoBatch, pts: Duration) {
+    assert_eq!(
+        actual,
+        &VideoBatch {
+            pts,
+            required: false,
+            frames: frames([]),
+        }
+    );
+}
+
+/// Like [`assert_video_batch_eq`], but compares frame PTS with `pts_tolerance`.
+/// Batch PTS, ids and required flags are still compared exactly; tolerance is
 /// only for frame PTS that depend on the real clock (offsets resolved relative
 /// to `sync_point` or initialized on the first received frame).
 #[track_caller]
-pub fn assert_video_batches_eq(
-    actual: &[VideoBatch],
-    expected: &[VideoBatch],
+pub fn assert_video_batch_eq_with_tolerance(
+    actual: &VideoBatch,
+    expected: &VideoBatch,
     pts_tolerance: Duration,
 ) {
-    if pts_tolerance.is_zero() {
-        assert_eq!(actual, expected);
-        return;
-    }
     let frame_matches =
         |actual: Option<&InputFrame>, expected: &InputFrame| match (actual, expected) {
             (Some(InputFrame::Eos), InputFrame::Eos) => true,
@@ -139,21 +155,14 @@ pub fn assert_video_batches_eq(
             ) => id == expected_id && pts.abs_diff(*expected_pts) <= pts_tolerance,
             _ => false,
         };
-    let batch_matches = |actual: &VideoBatch, expected: &VideoBatch| {
+    assert!(
         actual.pts == expected.pts
             && actual.required == expected.required
             && actual.frames.len() == expected.frames.len()
             && expected
                 .frames
                 .iter()
-                .all(|(input_id, frame)| frame_matches(actual.frames.get(input_id), frame))
-    };
-    assert!(
-        actual.len() == expected.len()
-            && actual
-                .iter()
-                .zip(expected)
-                .all(|(actual, expected)| batch_matches(actual, expected)),
+                .all(|(input_id, frame)| frame_matches(actual.frames.get(input_id), frame)),
         "batches don't match (PTS tolerance {pts_tolerance:?})\nactual: {actual:#?}\nexpected: {expected:#?}",
     );
 }
@@ -168,14 +177,10 @@ pub fn samples<const N: usize>(
         .collect()
 }
 
-/// Audio variant of [`assert_video_batches_eq`]: chunk PTS ranges and required
+/// Audio variant of [`assert_video_batch_eq`]: chunk PTS ranges and required
 /// flags are compared exactly, sample batch PTS ranges with `pts_tolerance`.
 #[track_caller]
-pub fn assert_audio_batches_eq(
-    actual: &[AudioBatch],
-    expected: &[AudioBatch],
-    pts_tolerance: Duration,
-) {
+pub fn assert_audio_batch_eq(actual: &AudioBatch, expected: &AudioBatch, pts_tolerance: Duration) {
     if pts_tolerance.is_zero() {
         assert_eq!(actual, expected);
         return;
@@ -195,7 +200,7 @@ pub fn assert_audio_batches_eq(
             }
             _ => false,
         };
-    let batch_matches = |actual: &AudioBatch, expected: &AudioBatch| {
+    assert!(
         actual.start_pts == expected.start_pts
             && actual.end_pts == expected.end_pts
             && actual.required == expected.required
@@ -203,14 +208,7 @@ pub fn assert_audio_batches_eq(
             && expected
                 .samples
                 .iter()
-                .all(|(input_id, samples)| samples_match(actual.samples.get(input_id), samples))
-    };
-    assert!(
-        actual.len() == expected.len()
-            && actual
-                .iter()
-                .zip(expected)
-                .all(|(actual, expected)| batch_matches(actual, expected)),
+                .all(|(input_id, samples)| samples_match(actual.samples.get(input_id), samples)),
         "batches don't match (PTS tolerance {pts_tolerance:?})\nactual: {actual:#?}\nexpected: {expected:#?}",
     );
 }
@@ -228,12 +226,19 @@ pub struct TestQueue {
 
 impl TestQueue {
     pub fn new(opts: TestQueueOptions) -> Self {
+        // ignore the error when a subscriber is already set (multiple tests
+        // in one process)
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .with_test_writer()
+            .try_init();
         let queue = Queue::new(QueueOptions {
             output_framerate: opts.output_framerate,
             ahead_of_time_processing: opts.ahead_of_time_processing,
             run_late_scheduled_events: opts.run_late_scheduled_events,
             never_drop_output_frames: opts.never_drop_output_frames,
             side_channel_socket_dir: None,
+            tick_duration: Duration::from_micros(100),
         });
         let event_emitter = Arc::new(EventEmitter::new());
         let events = event_emitter.subscribe();
@@ -297,57 +302,16 @@ impl TestQueue {
         self.queue_ctx.start_pts.value().expect("queue not started")
     }
 
-    /// Block until the next video batch is produced.
-    pub fn next_video_batch(&self) -> VideoBatch {
-        let batch = self
-            .video_receiver
-            .recv_timeout(RECV_TIMEOUT)
-            .expect("waiting for a video batch");
-        self.summarize_video(batch)
+    /// Next video batch if one was already produced.
+    pub fn next_video_batch(&self) -> Option<VideoBatch> {
+        let batch = self.video_receiver.try_recv().ok()?;
+        Some(self.summarize_video(batch))
     }
 
-    pub fn next_video_batches(&self, count: usize) -> Vec<VideoBatch> {
-        (0..count).map(|_| self.next_video_batch()).collect()
-    }
-
-    /// Collect video batches up to and including the first one that contains an EOS.
-    pub fn video_batches_until_eos(&self) -> Vec<VideoBatch> {
-        let mut batches = Vec::new();
-        loop {
-            let batch = self.next_video_batch();
-            let has_eos = batch.frames.values().any(|frame| *frame == InputFrame::Eos);
-            batches.push(batch);
-            if has_eos {
-                return batches;
-            }
-            assert!(
-                batches.len() < 100,
-                "no EOS in the first 100 batches: {batches:#?}"
-            );
-        }
-    }
-
-    /// Block until the next audio batch is produced.
-    pub fn next_audio_batch(&self) -> AudioBatch {
-        let batch = self
-            .audio_receiver
-            .recv_timeout(RECV_TIMEOUT)
-            .expect("waiting for an audio batch");
-        self.summarize_audio(batch)
-    }
-
-    pub fn next_audio_batches(&self, count: usize) -> Vec<AudioBatch> {
-        (0..count).map(|_| self.next_audio_batch()).collect()
-    }
-
-    /// Assert that the queue does not produce any video batch for `duration`.
-    pub fn expect_no_video_batch(&self, duration: Duration) {
-        if let Ok(batch) = self.video_receiver.recv_timeout(duration) {
-            panic!(
-                "expected no video batch, got {:?}",
-                self.summarize_video(batch)
-            );
-        }
+    /// Next audio batch if one was already produced.
+    pub fn next_audio_batch(&self) -> Option<AudioBatch> {
+        let batch = self.audio_receiver.try_recv().ok()?;
+        Some(self.summarize_audio(batch))
     }
 
     /// Events emitted by queue inputs so far (delivered/playing/paused/EOS).
@@ -362,20 +326,6 @@ impl TestQueue {
         let actual = self.drain_events();
         // Event does not implement PartialEq, compare debug representations
         assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
-    }
-
-    /// Block until `expected` events are emitted, in order (panics on timeout).
-    /// Like `expect_events`, but waits for the events instead of requiring
-    /// them to have fired already.
-    #[track_caller]
-    pub fn wait_for_events(&self, expected: &[Event]) {
-        for expected in expected {
-            let actual = self
-                .events
-                .recv_timeout(RECV_TIMEOUT)
-                .unwrap_or_else(|_| panic!("timed out waiting for event {expected:?}"));
-            assert_eq!(format!("[{actual:?}]"), format!("[{expected:?}]"));
-        }
     }
 
     /// Like `expect_events`, but ignores the order. Use when events from
@@ -483,13 +433,6 @@ impl TestInput {
             .send(test_frame(id, pts))
             .expect("video channel closed");
         id
-    }
-
-    /// Send `count` frames starting at `first_pts`, `interval` apart.
-    pub fn send_frames(&mut self, first_pts: Duration, interval: Duration, count: u32) {
-        for index in 0..count {
-            self.send_frame(first_pts + interval * index);
-        }
     }
 
     /// Close the video track; the queue emits EOS once buffered frames drain.
