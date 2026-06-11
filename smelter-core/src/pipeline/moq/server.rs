@@ -11,7 +11,7 @@ use moq_native::{
     ServerConfig, ServerTlsConfig,
     moq_net::{Origin, OriginConsumer, OriginProducer, Session},
 };
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::pipeline::moq::{
     certificate::load_or_create_self_signed_tls, connection::spawn_broadcast_handler,
@@ -106,9 +106,8 @@ async fn try_start_server(config: ServerConfig) -> Result<moq_native::Server, an
             Ok(server) => {
                 return Ok(server);
             }
-            Err(error) => {
+            Err(_) => {
                 warn!("Failed to start MoQ server. Retrying ...");
-                debug!(%error, "Failed to start MoQ server.");
             }
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
