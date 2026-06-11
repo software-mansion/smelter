@@ -11,7 +11,8 @@ use std::time::Duration;
 
 use crate::audio_decoder::AudioSampleBatch;
 
-/// OPUS clock rate used everywhere in this crate.
+/// Audio sample rate the analysis runs at — the OPUS clock rate.
+/// AAC tracks in MP4 dumps must be encoded at this rate too.
 pub const SAMPLE_RATE: u32 = 48_000;
 
 /// Gaps shorter than this are ignored — they're well within the noise

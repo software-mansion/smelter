@@ -6,11 +6,10 @@ use inquire::{InquireError, Select};
 use integration_tests::{
     paths::{render_snapshots_dir_path, render_tests_workdir},
     render_tests::{RenderTest, render_tests},
-    tools::render_inspector,
 };
 use tracing::{error, info, warn};
 
-use crate::{RunOptions, run_test, walk_dir};
+use crate::{RunOptions, render_tests_inspector, run_test, walk_dir};
 
 pub(crate) fn run_all_render() -> Result<()> {
     let workdir = render_tests_workdir();
@@ -71,7 +70,7 @@ pub(crate) fn run_specific_render() -> Result<()> {
     // to look at this one.
     let _status = run_test(&filter, RunOptions { save_dumps: true })?;
 
-    let mut inspector: Option<render_inspector::InspectorHandle> = None;
+    let mut inspector: Option<render_tests_inspector::InspectorHandle> = None;
     let _ = audit_render_test(test, &mut inspector)?;
     Ok(())
 }
@@ -96,7 +95,7 @@ pub(crate) fn audit_existing_render() -> Result<()> {
 /// Drive the per-test audit UI across a list of tests. The inspector
 /// is kept alive across tests so the same window is reused.
 fn audit_render_tests(tests: &[&'static RenderTest]) -> Result<ControlFlow<()>> {
-    let mut inspector: Option<render_inspector::InspectorHandle> = None;
+    let mut inspector: Option<render_tests_inspector::InspectorHandle> = None;
     for test in tests {
         info!("Auditing render test: {}", test.full_test_name);
         match audit_render_test(test, &mut inspector)? {
@@ -115,7 +114,7 @@ fn audit_render_tests(tests: &[&'static RenderTest]) -> Result<ControlFlow<()>> 
 /// whichever PTS was last opened.
 fn audit_render_test(
     test: &RenderTest,
-    inspector: &mut Option<render_inspector::InspectorHandle>,
+    inspector: &mut Option<render_tests_inspector::InspectorHandle>,
 ) -> Result<ControlFlow<()>> {
     let mut opened_snapshot_name: Option<String> = None;
     let mut cursor: usize = 0;
@@ -150,7 +149,7 @@ fn audit_render_test(
                     let workdir = render_tests_workdir();
                     let expected = workdir.join(format!("expected_{name}"));
                     let actual = workdir.join(format!("actual_{name}"));
-                    if !render_inspector::refresh(insp, &expected, &actual) {
+                    if !render_tests_inspector::refresh(insp, &expected, &actual) {
                         *inspector = None;
                     }
                 }
@@ -159,10 +158,10 @@ fn audit_render_test(
                 let snapshot = &pairs[idx];
                 opened_snapshot_name = Some(snapshot.snapshot_name.clone());
                 let alive = inspector.as_ref().is_some_and(|insp| {
-                    render_inspector::refresh(insp, &snapshot.expected, &snapshot.actual)
+                    render_tests_inspector::refresh(insp, &snapshot.expected, &snapshot.actual)
                 });
                 if !alive {
-                    match render_inspector::open(&snapshot.expected, &snapshot.actual) {
+                    match render_tests_inspector::open(&snapshot.expected, &snapshot.actual) {
                         Ok(insp) => *inspector = Some(insp),
                         Err(e) => error!("Failed to launch render inspector: {e:#}"),
                     }

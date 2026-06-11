@@ -6,7 +6,7 @@ use inquire::{InquireError, Select};
 use integration_tests::{
     paths::{pipeline_tests_workdir, submodule_root_path},
     pipeline_tests::{PipelineTest, pipeline_tests},
-    tools::{rtp_inspector, rtp_player},
+    tools::{mp4_player, rtp_player},
 };
 use tracing::{error, info, warn};
 
@@ -68,6 +68,11 @@ pub(crate) fn run_specific() -> Result<()> {
     };
     let test = tests[selected_idx];
     let filter = pipeline_test_filter(test);
+    // Clear results from previous runs so the audit menu reflects
+    // only what this run produced.
+    if let Err(e) = clear_pipeline_test_dumps(test) {
+        error!("Failed to clear previous test dumps: {e:#}");
+    }
     // Single-test runs always preserve dumps so the audit menu is
     // available regardless of pass/fail — the user explicitly asked
     // to look at this one.
@@ -187,9 +192,11 @@ fn pipeline_test_result_action_loop(test: &PipelineTest, filter: &str) -> Result
                 }
             }
             Some(PipelineTestResultAction::UpdateSnapshot) => {
-                match update_pipeline_test_snapshot(test) {
-                    Ok(()) => return Ok(ControlFlow::Continue(())),
-                    Err(e) => error!("Failed to update snapshot: {e:#}"),
+                // Stay in the menu: the user may still want to rerun
+                // the test against the freshly updated snapshot or
+                // keep inspecting; Skip moves on.
+                if let Err(e) = update_pipeline_test_snapshot(test) {
+                    error!("Failed to update snapshot: {e:#}");
                 }
             }
             Some(PipelineTestResultAction::Rerun) => {
@@ -292,7 +299,12 @@ fn play_dump(test: &PipelineTest, kind: DumpKind) -> Result<()> {
         return Ok(());
     }
     info!("Press Esc or q to stop playback");
-    run_with_kill_on_key(rtp_player::spawn(&path)?)
+    let child = if test.snapshot_name.ends_with(".mp4") {
+        mp4_player::spawn(&path)?
+    } else {
+        rtp_player::spawn(&path)?
+    };
+    run_with_kill_on_key(child)
 }
 
 /// Watches our own stdin in raw mode for Esc or `q`. On either key,
@@ -344,7 +356,7 @@ fn compare_pipeline_dumps(test: &PipelineTest) -> Result<()> {
     let actual = dir.join(format!("actual_dump_{}", test.snapshot_name));
     let expected = dir.join(format!("expected_dump_{}", test.snapshot_name));
 
-    rtp_inspector::run(&expected, &actual)
+    crate::pipeline_tests_inspector::run(&expected, &actual)
 }
 
 fn update_pipeline_test_snapshot(test: &PipelineTest) -> Result<()> {

@@ -117,7 +117,7 @@ impl Mp4InputBuilder {
     pub fn new() -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("mp4_input_{suffix}");
-        let source = Mp4InputSource::Path(TestSample::BigBuckBunnyH264Opus.file());
+        let source = Mp4InputSource::Path(TestSample::BigBuckBunnyH264Opus.path());
         Self {
             name,
             source,

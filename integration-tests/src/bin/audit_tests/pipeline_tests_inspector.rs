@@ -1,15 +1,15 @@
-//! Interactive RTP dump inspection tool.
+//! Interactive inspector for pipeline-test output dumps.
 //!
-//! Opens two RTP dumps (expected vs actual) and lets the user step
-//! through the paired decoded video frames. Intended to be launched
-//! from `audit_tests` after a snapshot mismatch.
+//! Opens two dumps (expected vs actual) — either `.rtp` packet dumps
+//! or `.mp4` files — and lets the user step through the paired
+//! decoded video frames. Launched from the audit menu after a
+//! snapshot mismatch.
 //!
 //! On launch the inspector spawns a persistent
-//! [`crate::tools::frame_inspector`] window that is updated in place
-//! every time the playhead advances.
+//! [`frame_inspector`] window that is updated in place every time the
+//! playhead advances.
 
 use std::{
-    collections::HashSet,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -17,49 +17,44 @@ use std::{
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use inquire::{InquireError, Select};
-use smelter_render::{Frame, FrameData, YuvPlanes};
+use integration_tests::{
+    AudioSampleBatch, DumpFormat, dump_format,
+    tools::{
+        frame_inspector::{self, FrameInspector},
+        mp4_source,
+        pixel_format::{frame_to_rgba, mean_square_error},
+        rtp_source::{self, MediaKind, available_media_kinds},
+        video_diff_iter::{FramePair, VideoDiffIter},
+        waveform_inspector,
+    },
+};
+use smelter_render::{Frame, Resolution};
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{info, warn};
 
-use crate::{
-    audio_decoder::{AudioChannels, AudioDecoder, AudioSampleBatch},
-    tools::{
-        frame_inspector::{self, FrameInspector},
-        rtp_video_diff_iter::{FramePair, RtpVideoDiffIter, VIDEO_PAYLOAD_TYPE},
-        waveform_inspector,
-    },
-    unmarshal_packets,
-};
-
-/// RTP payload type smelter uses for OPUS audio.
-const AUDIO_PAYLOAD_TYPE: u8 = 97;
-/// OPUS clock rate used everywhere in this crate.
+/// Audio sample rate the inspector decodes to — the OPUS clock rate.
+/// AAC tracks in MP4 dumps must be encoded at this rate too.
 const AUDIO_SAMPLE_RATE: u32 = 48_000;
 
 /// Launch the interactive inspect tool. Diffs `actual` (the dump
 /// just produced by a test run) against `expected` (the committed
-/// snapshot). Blocks until the user exits.
-pub fn run(expected: &Path, actual: &Path) -> Result<()> {
-    info!("rtp_inspector: expected = {}", expected.display());
-    info!("rtp_inspector: actual = {}", actual.display());
+/// snapshot). Both dumps must share the format implied by their file
+/// extension. Blocks until the user exits.
+pub(crate) fn run(expected: &Path, actual: &Path) -> Result<()> {
+    info!("inspector: expected = {}", expected.display());
+    info!("inspector: actual = {}", actual.display());
 
-    let types = scan_payload_types(&[expected, actual])?;
-    let mut options = Vec::new();
-    if types.contains(&VIDEO_PAYLOAD_TYPE) {
-        options.push(MediaKind::Video);
-    }
-    if types.contains(&AUDIO_PAYLOAD_TYPE) {
-        options.push(MediaKind::Audio);
-    }
+    // Both sides are the same snapshot under different prefixes, so
+    // either path yields the same format.
+    let format = dump_format(actual)?;
+    let options = available_media_kinds(format, &[expected, actual])?;
     let kind = match options.len() {
-        0 => anyhow::bail!(
-            "no video (pt={VIDEO_PAYLOAD_TYPE}) or audio (pt={AUDIO_PAYLOAD_TYPE}) packets in either dump"
-        ),
+        0 => anyhow::bail!("no video or audio found in either dump"),
         1 => {
-            info!("rtp_inspector: only {} found, skipping prompt", options[0]);
+            info!("inspector: only {} found, skipping prompt", options[0]);
             options[0]
         }
-        _ => match Select::new("rtp_inspector — what to inspect?", options).prompt() {
+        _ => match Select::new("inspector — what to inspect?", options).prompt() {
             Ok(k) => k,
             Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
                 return Ok(());
@@ -68,48 +63,17 @@ pub fn run(expected: &Path, actual: &Path) -> Result<()> {
         },
     };
     match kind {
-        MediaKind::Video => run_video(expected, actual),
-        MediaKind::Audio => run_audio(expected, actual),
+        MediaKind::Video => run_video(expected, actual, format),
+        MediaKind::Audio => run_audio(expected, actual, format),
     }
 }
 
-/// Read each dump once and collect the set of RTP payload types
-/// present, used to gate the Video / Audio prompt. Missing files are
-/// skipped with a warning so the inspector can still launch when one
-/// side (typically the committed `expected` snapshot) doesn't exist.
-fn scan_payload_types(paths: &[&Path]) -> Result<HashSet<u8>> {
-    let mut types = HashSet::new();
-    for path in paths {
-        if !path.exists() {
-            warn!("rtp_inspector: dump {} not found, skipping", path.display());
-            continue;
-        }
-        let bytes = Bytes::from(
-            std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
-        );
-        let packets = unmarshal_packets(&bytes)
-            .with_context(|| format!("Failed to parse RTP dump {}", path.display()))?;
-        for packet in packets {
-            types.insert(packet.header.payload_type);
-        }
-    }
-    Ok(types)
-}
-
-#[derive(Debug, Clone, Copy, Display, EnumIter)]
-enum MediaKind {
-    #[strum(to_string = "Video")]
-    Video,
-    #[strum(to_string = "Audio")]
-    Audio,
-}
-
-fn run_video(expected: &Path, actual: &Path) -> Result<()> {
+fn run_video(expected: &Path, actual: &Path, format: DumpFormat) -> Result<()> {
     let output_dir = expected
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
-    let mut iter = RtpVideoDiffIter::from_rtp_dumps(expected, actual)?;
+    let mut iter = new_video_diff_iter(expected, actual, format)?;
     let mut state = SessionState::default();
     let viewer = FrameInspector::spawn();
 
@@ -119,7 +83,7 @@ fn run_video(expected: &Path, actual: &Path) -> Result<()> {
     advance_one(&mut iter, &mut state, &viewer)?;
 
     loop {
-        let prompt = format!("rtp_inspector [t = {:.3}s]", state.position.as_secs_f64());
+        let prompt = format!("inspector [t = {:.3}s]", state.position.as_secs_f64());
         let action = match Select::new(&prompt, Action::iter().collect()).prompt() {
             Ok(a) => a,
             Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
@@ -136,29 +100,47 @@ fn run_video(expected: &Path, actual: &Path) -> Result<()> {
                 advance_until(&mut iter, &mut state, Duration::from_secs(5), &viewer)?
             }
             Action::NextHighMse => advance_until_high_mse(&mut iter, &mut state, &viewer)?,
+            Action::Restart => {
+                iter = new_video_diff_iter(expected, actual, format)?;
+                state = SessionState::default();
+                advance_one(&mut iter, &mut state, &viewer)?;
+            }
             Action::SaveLastPair => save_last_pair(&state, &output_dir)?,
             Action::Exit => return Ok(()),
         }
     }
 }
 
-fn run_audio(expected: &Path, actual: &Path) -> Result<()> {
-    let expected_chunks = decode_audio_dump(expected)?;
-    let actual_chunks = decode_audio_dump(actual)?;
+/// The diff iterator can only move forward; restarting playback means
+/// building a fresh one over the same dumps.
+fn new_video_diff_iter(
+    expected: &Path,
+    actual: &Path,
+    format: DumpFormat,
+) -> Result<VideoDiffIter> {
+    match format {
+        DumpFormat::Rtp => VideoDiffIter::from_rtp_dumps(expected, actual),
+        DumpFormat::Mp4 => VideoDiffIter::from_mp4_dumps(expected, actual),
+    }
+}
+
+fn run_audio(expected: &Path, actual: &Path, format: DumpFormat) -> Result<()> {
+    let expected_chunks = decode_audio_dump(expected, format)?;
+    let actual_chunks = decode_audio_dump(actual, format)?;
     waveform_inspector::run(expected_chunks, actual_chunks)
 }
 
-/// Read an RTP dump from disk, keep only the OPUS audio packets, and
-/// run them all through a fresh decoder. Each decoder output chunk is
+/// Read a dump from disk and decode its audio track (OPUS for `.rtp`
+/// dumps, AAC for `.mp4` dumps). Each decoder output chunk is
 /// returned with its original presentation timestamp; chunks are
 /// intentionally not flattened so the waveform inspector can show
 /// per-chunk boundaries. A missing file yields an empty chunk list
 /// rather than an error so the inspector can still surface the other
 /// side.
-fn decode_audio_dump(path: &Path) -> Result<Vec<AudioSampleBatch>> {
+fn decode_audio_dump(path: &Path, format: DumpFormat) -> Result<Vec<AudioSampleBatch>> {
     if !path.exists() {
         warn!(
-            "rtp_inspector: audio dump {} not found, treating as empty",
+            "inspector: audio dump {} not found, treating as empty",
             path.display()
         );
         return Ok(Vec::new());
@@ -166,18 +148,12 @@ fn decode_audio_dump(path: &Path) -> Result<Vec<AudioSampleBatch>> {
     let bytes = Bytes::from(
         std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
     );
-    let packets = unmarshal_packets(&bytes)
-        .with_context(|| format!("Failed to parse RTP dump {}", path.display()))?
-        .into_iter()
-        .filter(|p| p.header.payload_type == AUDIO_PAYLOAD_TYPE);
-    let mut decoder = AudioDecoder::new(AUDIO_SAMPLE_RATE, AudioChannels::Stereo)
-        .with_context(|| format!("Failed to initialize OPUS decoder for {}", path.display()))?;
-    for packet in packets {
-        decoder
-            .decode(packet)
-            .with_context(|| format!("Failed to decode audio packet from {}", path.display()))?;
+    match format {
+        DumpFormat::Rtp => rtp_source::decode_opus_audio(&bytes, AUDIO_SAMPLE_RATE)
+            .with_context(|| format!("Failed to decode audio from {}", path.display())),
+        DumpFormat::Mp4 => mp4_source::decode_aac_audio(&bytes, AUDIO_SAMPLE_RATE)
+            .with_context(|| format!("Failed to decode audio from {}", path.display())),
     }
-    Ok(decoder.take_samples())
 }
 
 /// MSE threshold used by [`Action::NextHighMse`]. Anything below this
@@ -195,6 +171,8 @@ enum Action {
     Skip5s,
     #[strum(to_string = "Next frame with mse > 1")]
     NextHighMse,
+    #[strum(to_string = "Start from the beginning")]
+    Restart,
     #[strum(to_string = "Save last pair as PNG")]
     SaveLastPair,
     #[strum(to_string = "Exit")]
@@ -223,7 +201,7 @@ impl SessionState {
 }
 
 fn advance_one(
-    iter: &mut RtpVideoDiffIter,
+    iter: &mut VideoDiffIter,
     state: &mut SessionState,
     viewer: &FrameInspector,
 ) -> Result<()> {
@@ -249,7 +227,7 @@ fn advance_one(
 }
 
 fn advance_until(
-    iter: &mut RtpVideoDiffIter,
+    iter: &mut VideoDiffIter,
     state: &mut SessionState,
     by: Duration,
     viewer: &FrameInspector,
@@ -292,7 +270,7 @@ fn advance_until(
 /// [`HIGH_MSE_THRESHOLD`], then surface that pair. Skipped pairs are
 /// silently consumed — only the landing pair is logged and shown.
 fn advance_until_high_mse(
-    iter: &mut RtpVideoDiffIter,
+    iter: &mut VideoDiffIter,
     state: &mut SessionState,
     viewer: &FrameInspector,
 ) -> Result<()> {
@@ -337,41 +315,75 @@ fn advance_until_high_mse(
 
 /// Convert the most recent pair to RGBA and push it to the viewer
 /// thread. Composition (side-by-side / over-under / slider) happens
-/// inside the viewer.
+/// inside the viewer. A side without a frame (stream exhausted, or
+/// the dump missing entirely — e.g. no committed snapshot yet) is
+/// shown as a placeholder so the other side is still inspectable.
 fn push_to_viewer(state: &SessionState, viewer: &FrameInspector, mse: Option<f64>) {
     let Some(pair) = state.last_pair.as_ref() else {
         return;
     };
-    let (Some(left), Some(right)) = (pair.left.as_ref(), pair.right.as_ref()) else {
+    // The iterator never yields a pair with both sides missing, so
+    // there is always a resolution to size the placeholder after.
+    let Some(placeholder_resolution) = pair
+        .left
+        .as_ref()
+        .or(pair.right.as_ref())
+        .map(|f| f.resolution)
+    else {
         return;
     };
-    let left_rgba = match frame_to_rgba(left) {
-        Ok(buf) => buf,
-        Err(e) => {
-            warn!("expected: failed to convert to RGBA: {e:#}");
-            return;
-        }
+    let Some(left) = side_view(pair.left.as_ref(), "expected", placeholder_resolution) else {
+        return;
     };
-    let right_rgba = match frame_to_rgba(right) {
-        Ok(buf) => buf,
-        Err(e) => {
-            warn!("actual: failed to convert to RGBA: {e:#}");
-            return;
-        }
+    let Some(right) = side_view(pair.right.as_ref(), "actual", placeholder_resolution) else {
+        return;
     };
     viewer.update(frame_inspector::Pair {
         left_label: "expected".to_string(),
-        left_lines: vec![format!("pts={:.6}s", left.pts.as_secs_f64())],
-        left_rgba,
-        left_w: left.resolution.width,
-        left_h: left.resolution.height,
+        left_lines: left.lines,
+        left_rgba: left.rgba,
+        left_w: left.width,
+        left_h: left.height,
         right_label: "actual".to_string(),
-        right_lines: vec![format!("pts={:.6}s", right.pts.as_secs_f64())],
-        right_rgba,
-        right_w: right.resolution.width,
-        right_h: right.resolution.height,
+        right_lines: right.lines,
+        right_rgba: right.rgba,
+        right_w: right.width,
+        right_h: right.height,
         mse,
     });
+}
+
+struct SideView {
+    rgba: Vec<u8>,
+    width: usize,
+    height: usize,
+    lines: Vec<String>,
+}
+
+/// One side of a viewer update. `None` only when an existing frame
+/// fails to convert to RGBA; a missing frame becomes a dark-gray
+/// placeholder captioned "(no frame)".
+fn side_view(frame: Option<&Frame>, side: &str, placeholder: Resolution) -> Option<SideView> {
+    match frame {
+        Some(frame) => match frame_to_rgba(frame) {
+            Ok(rgba) => Some(SideView {
+                rgba,
+                width: frame.resolution.width,
+                height: frame.resolution.height,
+                lines: vec![format!("pts={:.6}s", frame.pts.as_secs_f64())],
+            }),
+            Err(e) => {
+                warn!("{side}: failed to convert to RGBA: {e:#}");
+                None
+            }
+        },
+        None => Some(SideView {
+            rgba: [40, 40, 40, 255].repeat(placeholder.width * placeholder.height),
+            width: placeholder.width,
+            height: placeholder.height,
+            lines: vec!["(no frame)".to_string()],
+        }),
+    }
 }
 
 fn save_last_pair(state: &SessionState, output_dir: &Path) -> Result<()> {
@@ -426,87 +438,4 @@ fn format_pts(frame: Option<&Frame>) -> String {
         Some(f) => format!("{:.6}s", f.pts.as_secs_f64()),
         None => "—".to_string(),
     }
-}
-
-/// Convert a decoded frame to packed 8-bit RGBA. Only handles the
-/// planar YUV formats the H.264 decoder used by the inspector ever
-/// produces.
-fn frame_to_rgba(frame: &Frame) -> Result<Vec<u8>> {
-    let planes = match &frame.data {
-        FrameData::PlanarYuv420(p)
-        | FrameData::PlanarYuv422(p)
-        | FrameData::PlanarYuv444(p)
-        | FrameData::PlanarYuvJ420(p) => p,
-        other => {
-            anyhow::bail!("frame_to_rgba: unsupported frame format {other:?}");
-        }
-    };
-    Ok(yuv420_to_rgba(
-        planes,
-        frame.resolution.width,
-        frame.resolution.height,
-    ))
-}
-
-/// BT.709 limited-range YUV → RGBA. Mirrors the conversion used by
-/// the render-test snapshotting code.
-fn yuv420_to_rgba(planes: &YuvPlanes, width: usize, height: usize) -> Vec<u8> {
-    // Renderer output is occasionally odd-sized; clamp to even.
-    let w = width - (width % 2);
-    let h = height - (height % 2);
-    let chroma_w = width / 2;
-
-    let mut rgba = Vec::with_capacity(w * h * 4);
-    for (i, y_row) in planes.y_plane.chunks(width).enumerate().take(h) {
-        for (j, y) in y_row.iter().enumerate().take(w) {
-            let mut y = *y as f32;
-            let mut u = planes.u_plane[(i / 2) * chroma_w + (j / 2)] as f32;
-            let mut v = planes.v_plane[(i / 2) * chroma_w + (j / 2)] as f32;
-            y = ((y - 16.0) / 0.858_823_54).clamp(0.0, 255.0);
-            u = ((u - 16.0) / 0.878_431_4).clamp(0.0, 255.0);
-            v = ((v - 16.0) / 0.878_431_4).clamp(0.0, 255.0);
-            let r = (y + 1.5748 * (v - 128.0)).clamp(0.0, 255.0);
-            let g = (y - 0.1873 * (u - 128.0) - 0.4681 * (v - 128.0)).clamp(0.0, 255.0);
-            let b = (y + 1.8556 * (u - 128.0)).clamp(0.0, 255.0);
-            rgba.extend_from_slice(&[r as u8, g as u8, b as u8, 255]);
-        }
-    }
-    rgba
-}
-
-/// Per-pixel mean square error between two YUV planar frames.
-/// Returns `None` when the frames have different resolutions or
-/// formats that the inspector doesn't know how to compare.
-fn mean_square_error(expected: &Frame, actual: &Frame) -> Option<f64> {
-    if expected.resolution != actual.resolution {
-        return None;
-    }
-    let (e, a) = match (&expected.data, &actual.data) {
-        (FrameData::PlanarYuv420(e), FrameData::PlanarYuv420(a)) => (e, a),
-        (FrameData::PlanarYuv422(e), FrameData::PlanarYuv422(a)) => (e, a),
-        (FrameData::PlanarYuv444(e), FrameData::PlanarYuv444(a)) => (e, a),
-        (FrameData::PlanarYuvJ420(e), FrameData::PlanarYuvJ420(a)) => (e, a),
-        _ => return None,
-    };
-    let planes = [
-        (&e.y_plane, &a.y_plane),
-        (&e.u_plane, &a.u_plane),
-        (&e.v_plane, &a.v_plane),
-    ];
-    let mut sum_sq: u64 = 0;
-    let mut count: u64 = 0;
-    for (lhs, rhs) in planes {
-        if lhs.len() != rhs.len() {
-            return None;
-        }
-        for (l, r) in lhs.iter().zip(rhs.iter()) {
-            let d = i32::from(*l) - i32::from(*r);
-            sum_sq += (d * d) as u64;
-        }
-        count += lhs.len() as u64;
-    }
-    if count == 0 {
-        return None;
-    }
-    Some(sum_sq as f64 / count as f64)
 }

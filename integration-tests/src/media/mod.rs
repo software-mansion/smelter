@@ -270,10 +270,8 @@ impl Asset {
         match self {
             Asset::Sample(sample) => {
                 let info = sample_info(*sample);
-                let path = integration_tests_root().join(info.path);
-                download(info.url, &path)?;
                 Ok(ResolvedAsset {
-                    kind: ResolvedKind::File(path),
+                    kind: ResolvedKind::File(sample.ensure_path()?),
                     video: Some(info.video),
                     audio: info.audio,
                 })
@@ -362,10 +360,17 @@ impl TestSample {
 
     /// On-disk path of the sample. The file is expected to be already downloaded
     /// (either by `run_example`/`run_example_server` or an explicit call to
-    /// [`download_all_samples`]); senders/receivers also download on demand via
-    /// [`Asset::resolve`].
-    pub fn file(self) -> PathBuf {
+    /// [`download_all_samples`]); use [`Self::ensure_path`] to fetch it on demand.
+    pub fn path(self) -> PathBuf {
         integration_tests_root().join(sample_info(self).path)
+    }
+
+    /// On-disk path of the sample, downloading the file first if it is
+    /// not there yet.
+    pub fn ensure_path(self) -> Result<PathBuf> {
+        let path = self.path();
+        download(self.url(), &path)?;
+        Ok(path)
     }
 
     /// Video codec of the sample.

@@ -1,10 +1,10 @@
 use std::{thread, time::Duration};
 
 use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, input_dump_from_disk,
+    CommunicationProtocol, CompositorInstance, input_dump_from_disk,
     pipeline_tests::{
         PipelineTest,
-        harness::{VideoCompareConfig, compare_video_dumps},
+        harness::{OutputReceiver, PacketSender, VideoCompareConfig, compare_video_dumps},
     },
 };
 

@@ -20,7 +20,7 @@ pub fn test_workdir() -> PathBuf {
 }
 
 /// Per-suite subdirectory under [`test_workdir`] for pipeline tests
-/// (RTP dump comparisons driven by `audit_tests`).
+/// (output dump comparisons driven by `audit_tests`).
 pub fn pipeline_tests_workdir() -> PathBuf {
     test_workdir().join("pipeline_tests")
 }

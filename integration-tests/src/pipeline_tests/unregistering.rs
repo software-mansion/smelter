@@ -5,11 +5,11 @@ use integration_tests_macros::pipeline_test;
 use serde_json::json;
 
 use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, input_dump_from_disk,
+    CommunicationProtocol, CompositorInstance, input_dump_from_disk,
     paths::integration_tests_root,
     pipeline_tests::{
         PipelineTest,
-        harness::{VideoCompareConfig, compare_video_dumps},
+        harness::{OutputReceiver, PacketSender, VideoCompareConfig, compare_video_dumps},
     },
 };
 

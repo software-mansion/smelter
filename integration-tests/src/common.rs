@@ -12,6 +12,28 @@ pub enum CommunicationProtocol {
     Tcp,
 }
 
+/// On-disk format of a pipeline-test output dump, derived from the
+/// snapshot filename extension via [`dump_format`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DumpFormat {
+    /// Length-prefixed RTP packet dump (H.264 + OPUS).
+    Rtp,
+    /// MP4 file (H.264 + AAC).
+    Mp4,
+}
+
+pub fn dump_format<P: AsRef<Path>>(path: P) -> Result<DumpFormat> {
+    let path = path.as_ref();
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("rtp") => Ok(DumpFormat::Rtp),
+        Some("mp4") => Ok(DumpFormat::Mp4),
+        _ => Err(anyhow::anyhow!(
+            "unsupported dump extension in {} (expected .rtp or .mp4)",
+            path.display()
+        )),
+    }
+}
+
 pub fn input_dump_from_disk<P: AsRef<Path>>(path: P) -> Result<Bytes> {
     let input_path = submodule_root_path()
         .join("rtp_packet_dumps")
@@ -96,21 +118,22 @@ pub fn save_failed_actual_dump<P: AsRef<Path>>(actual_dump: &Bytes, snapshot_fil
         .file_name()
         .unwrap()
         .to_string_lossy();
+    // This path runs when the expected snapshot doesn't exist, so an
+    // expected dump from a previous run is stale — remove it so the
+    // audit tooling doesn't pair the fresh actual with old data.
+    let stale_expected = path.join(format!("expected_dump_{file_name}"));
+    if stale_expected.exists()
+        && let Err(e) = fs::remove_file(&stale_expected)
+    {
+        tracing::warn!(
+            "Failed to remove stale expected dump {}: {e}",
+            stale_expected.display()
+        );
+    }
     let dest = path.join(format!("actual_dump_{file_name}"));
     if let Err(e) = fs::write(&dest, actual_dump) {
         tracing::warn!("Failed to write actual dump to {}: {e}", dest.display());
     }
-}
-
-pub fn find_packets_for_payload_type(
-    packets: &[rtp::packet::Packet],
-    payload_type: u8,
-) -> Vec<rtp::packet::Packet> {
-    packets
-        .iter()
-        .filter(|p| p.header.payload_type == payload_type)
-        .cloned()
-        .collect()
 }
 
 pub fn unmarshal_packets(data: &Bytes) -> Result<Vec<rtp::packet::Packet>> {

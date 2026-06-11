@@ -4,12 +4,12 @@ use serde_json::json;
 use std::time::Duration;
 
 use crate::{
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, input_dump_from_disk,
+    CommunicationProtocol, CompositorInstance, input_dump_from_disk,
     pipeline_tests::{
         PipelineTest,
         harness::{
-            AudioCompareConfig, FftCompareConfig, VideoCompareConfig, compare_audio_dumps,
-            compare_video_dumps,
+            AudioCompareConfig, FftCompareConfig, OutputReceiver, PacketSender, VideoCompareConfig,
+            compare_audio_dumps, compare_video_dumps,
             fft::{Mode, RealTolerance},
         },
     },

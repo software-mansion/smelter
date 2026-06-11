@@ -44,7 +44,6 @@ libc = "0.2"
 tokio-tungstenite = "0.21.0"
 wgpu = { workspace = true }
 image = { workspace = true }
-regex = { workspace = true }
 inquire = "0.7.5"
 crossterm = "0.25"
 strum = { version = "0.27", features = ["derive"] }

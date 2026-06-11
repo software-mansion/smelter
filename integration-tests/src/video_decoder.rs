@@ -102,7 +102,7 @@ impl VideoDecoder {
     }
 }
 
-fn copy_plane_from_av(decoded: &frame::Video, plane: usize) -> bytes::Bytes {
+pub(crate) fn copy_plane_from_av(decoded: &frame::Video, plane: usize) -> bytes::Bytes {
     let mut output_buffer = BytesMut::with_capacity(
         decoded.plane_width(plane) as usize * decoded.plane_height(plane) as usize,
     );
