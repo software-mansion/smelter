@@ -90,6 +90,8 @@ pub mod parameters {
 
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
+use std::sync::Arc;
+
 #[cfg(feature = "wgpu")]
 pub use wgpu_api::*;
 
@@ -97,7 +99,7 @@ use crate::codec::h264::H264Codec;
 use crate::codec::h264::encode::H264WriteParametersInfo;
 use crate::codec::h265::H265Codec;
 use crate::codec::h265::encode::H265WriteParametersInfo;
-use crate::device::{ColorRange, ColorSpace};
+use crate::device::{ColorRange, ColorSpace, VideoDeviceHandle};
 use crate::parser::h264::AccessUnit;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use ash::vk;
@@ -105,10 +107,11 @@ use ash::vk;
 #[cfg(feature = "wgpu")]
 pub use crate::adapter::VideoAdapterExt;
 #[cfg(feature = "wgpu")]
-pub use crate::device::VideoDeviceExt;
+pub use crate::device::WgpuVideoDeviceExt;
 
 pub use crate::adapter::VideoAdapter;
-pub use crate::device::VideoDevice;
+pub use crate::device::VideoDeviceExt;
+pub use crate::global_registry::RegistryError;
 pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 pub use crate::vulkan_decoder::VulkanDecoderError;
@@ -118,7 +121,7 @@ pub use crate::vulkan_transcoder::{Transcoder, TranscoderError};
 
 #[cfg(feature = "wgpu")]
 pub use crate::wgpu_helpers::{
-    RegistryError, WgpuConverterInitError, WgpuNv12ToRgbaConverter, WgpuRgbaToNv12Converter,
+    WgpuConverterInitError, WgpuNv12ToRgbaConverter, WgpuRgbaToNv12Converter,
 };
 
 use crate::parser::{
@@ -139,7 +142,6 @@ pub enum DecoderError {
     #[error("Reference management error: {0}")]
     ReferenceManagementError(#[from] ReferenceManagementError),
 
-    #[cfg(feature = "wgpu")]
     #[error(transparent)]
     RegistryError(#[from] RegistryError),
 }
@@ -168,7 +170,6 @@ pub enum VulkanInitError {
     #[error(transparent)]
     WgpuError(#[from] WgpuInitError),
 
-    #[cfg(feature = "wgpu")]
     #[error(transparent)]
     RegistryError(#[from] RegistryError),
 }
@@ -204,6 +205,12 @@ pub enum VulkanCommonError {
 
     #[error("Unsupported image aspect: {0:?}")]
     UnsupportedImageAspect(vk::ImageAspectFlags),
+}
+
+/// Open connection to a coding-capable device
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct VideoDevice {
+    pub(crate) handle: Arc<VideoDeviceHandle>,
 }
 
 /// Represents a chunk of encoded video data used for decoding.

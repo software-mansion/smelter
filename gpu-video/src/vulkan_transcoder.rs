@@ -3,10 +3,10 @@ use std::{num::NonZeroU32, sync::Arc};
 use ash::vk;
 
 use crate::{
-    DecoderError, EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoDevice,
-    VulkanCommonError, VulkanEncoderError,
+    DecoderError, EncodedInputChunk, EncodedOutputChunk, OutputFrame, VulkanCommonError,
+    VulkanEncoderError,
     codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
-    device::{EncoderOutputParameters, Rational},
+    device::{EncoderOutputParameters, Rational, VideoDevice},
     parameters::{H264Profile, H265Profile, ScalingAlgorithm},
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},

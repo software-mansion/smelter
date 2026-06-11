@@ -7,6 +7,8 @@ pub(crate) mod codec;
 #[cfg(vulkan)]
 mod device;
 #[cfg(vulkan)]
+mod global_registry;
+#[cfg(vulkan)]
 mod instance;
 #[cfg(vulkan)]
 mod vulkan_decoder;

@@ -3,7 +3,7 @@ use std::{io::Cursor, sync::Arc};
 use ash::vk;
 
 use crate::{
-    VideoDevice,
+    device::VideoDevice,
     parameters::ScalingAlgorithm,
     vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
     vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},

@@ -1,7 +1,7 @@
 use std::{num::NonZero, ops::Deref, sync::Arc};
 
 use gpu_video::{
-    VideoDeviceExt, WgpuTexturesEncoderH264,
+    VideoDeviceExt, WgpuTexturesEncoderH264, WgpuVideoDeviceExt,
     parameters::{EncoderParametersH264, RateControl, Rational, VideoParameters},
 };
 use smelter_render::{FrameData, OutputFrameFormat};

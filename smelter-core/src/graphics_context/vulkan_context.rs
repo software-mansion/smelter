@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ash::{Entry, vk};
 use gpu_video::{
     VideoAdapterExt, VideoInstance,
@@ -34,8 +32,8 @@ pub fn create_vulkan_graphics_ctx(
     let limits = set_required_wgpu_limits(limits);
 
     let entry = match libvulkan_path {
-        Some(lib_path) => Arc::new(unsafe { Entry::load_from(lib_path)? }),
-        None => Arc::new(unsafe { Entry::load()? }),
+        Some(lib_path) => unsafe { Entry::load_from(lib_path)? },
+        None => unsafe { Entry::load()? },
     };
     let mut extensions =
         wgpu::hal::vulkan::Instance::desired_extensions(&entry, api_version, instance_flags)?;
@@ -52,7 +50,7 @@ pub fn create_vulkan_graphics_ctx(
 
     let hal_instance = unsafe {
         wgpu::hal::vulkan::Instance::from_raw(
-            entry.as_ref().clone(),
+            entry,
             video_instance.raw_instance(),
             api_version,
             0,

@@ -3,7 +3,7 @@ fn main() {
     use std::io::Write;
 
     use gpu_video::{
-        EncodedInputChunk, OutputFrame, VideoAdapterExt, VideoDeviceExt,
+        EncodedInputChunk, OutputFrame, VideoAdapterExt, WgpuVideoDeviceExt,
         parameters::{DecoderParameters, VideoDeviceDescriptor},
     };
 

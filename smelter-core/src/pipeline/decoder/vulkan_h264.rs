@@ -1,7 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use gpu_video::{
-    DecoderError, H264DecoderEvent, ReferenceManagementError, VideoDeviceExt, WgpuTexturesDecoder,
+    DecoderError, H264DecoderEvent, ReferenceManagementError, WgpuTexturesDecoder,
+    WgpuVideoDeviceExt,
     parameters::{DecoderParameters, DecoderUsageFlags, MissedFrameHandling},
 };
 use smelter_render::{Frame, FrameData, Resolution};

@@ -1,7 +1,9 @@
 use std::{io::Read, sync::mpsc::SyncSender, time::Duration};
 
 use bytes::BytesMut;
-use gpu_video::{EncodedInputChunk, OutputFrame, VideoDeviceExt, parameters::DecoderParameters};
+use gpu_video::{
+    EncodedInputChunk, OutputFrame, WgpuVideoDeviceExt, parameters::DecoderParameters,
+};
 
 use super::FrameWithPts;
 

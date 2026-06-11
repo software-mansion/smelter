@@ -65,7 +65,6 @@ pub enum VulkanEncoderError {
     #[error(transparent)]
     WgpuTextureEncoderError(#[from] WgpuTextureEncoderError),
 
-    #[cfg(feature = "wgpu")]
     #[error(transparent)]
     RegistryError(#[from] crate::RegistryError),
 }

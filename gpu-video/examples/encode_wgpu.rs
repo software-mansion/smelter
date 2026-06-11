@@ -1,13 +1,13 @@
 #[cfg(vulkan)]
 use gpu_video::{
-    VideoAdapterExt, WgpuRgbaToNv12Converter,
+    VideoAdapterExt, VideoDeviceExt, WgpuRgbaToNv12Converter,
     parameters::{EncoderParametersH264, EncoderParametersH265},
 };
 
 #[cfg(vulkan)]
 fn main() {
     use gpu_video::{
-        InputFrame, VideoDeviceExt,
+        InputFrame, WgpuVideoDeviceExt,
         parameters::{RateControl, VideoDeviceDescriptor, VideoParameters},
     };
     use std::{io::Write, num::NonZeroU32};

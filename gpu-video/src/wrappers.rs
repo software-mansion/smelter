@@ -24,7 +24,7 @@ use crate::VulkanCommonError;
 
 pub(crate) struct Instance {
     pub(crate) instance: ash::Instance,
-    pub(crate) _entry: Arc<Entry>,
+    pub(crate) _entry: Entry,
     pub(crate) video_queue_instance_ext: ash::khr::video_queue::Instance,
     pub(crate) video_encode_queue_instance_ext: ash::khr::video_encode_queue::Instance,
     pub(crate) debug_utils_instance_ext: Option<ash::ext::debug_utils::Instance>,
@@ -34,7 +34,7 @@ pub(crate) struct Instance {
 impl Instance {
     pub fn new(
         instance: ash::Instance,
-        entry: Arc<Entry>,
+        entry: Entry,
         load_debug_utils: bool,
         destroy_instance_on_drop: bool,
     ) -> Self {

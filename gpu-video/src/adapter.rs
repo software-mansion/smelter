@@ -2,16 +2,15 @@ use ash::vk;
 use std::{
     ffi::CStr,
     fmt::{self, Debug},
-    sync::Arc,
 };
 use tracing::{debug, debug_span, warn};
 
 use crate::{
-    VideoDevice, VideoInstance, VulkanInitError,
+    VideoInstance, VulkanInitError,
     capabilities::EncodeCapabilities,
     device::{
         DECODE_CODEC_EXTENSIONS, DECODE_EXTENSIONS, ENCODE_CODEC_EXTENSIONS, ENCODE_EXTENSIONS,
-        REQUIRED_EXTENSIONS, VideoDeviceDescriptor,
+        REQUIRED_EXTENSIONS, VideoDevice, VideoDeviceDescriptor,
         caps::{DecodeCapabilities, NativeDecodeCapabilities, NativeEncodeCapabilities},
         queues::{QueueIndex, QueueIndices},
     },
@@ -280,8 +279,8 @@ impl<'a> VideoAdapter<'a> {
     pub fn create_device(
         self,
         desc: &VideoDeviceDescriptor,
-    ) -> Result<Arc<VideoDevice>, VulkanInitError> {
-        VideoDevice::new(self.instance, self, desc.clone())
+    ) -> Result<crate::VideoDevice, VulkanInitError> {
+        VideoDevice::create_and_register(self.instance, self, desc.clone())
     }
 
     pub fn info(&self) -> &VideoAdapterInfo {

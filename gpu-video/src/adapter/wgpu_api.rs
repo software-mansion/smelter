@@ -1,6 +1,7 @@
 use crate::{
-    VideoAdapter, VideoDevice, VideoInstance, VulkanInitError, adapter::VideoAdapterInfo,
-    device::VideoDeviceDescriptor,
+    VideoAdapter, VideoInstance, VulkanInitError,
+    adapter::VideoAdapterInfo,
+    device::{VideoDevice, VideoDeviceDescriptor},
 };
 use wgpu::hal::vulkan::Api as VkApi;
 
@@ -29,7 +30,7 @@ impl VideoAdapterExt for wgpu::Adapter {
         let instance = hal_adapter.shared_instance();
         let instance = VideoInstance::new_unowned(
             instance.raw_instance().clone(),
-            instance.entry().clone().into(),
+            instance.entry().clone(),
             &VideoInstanceDescriptor {
                 enable_validations: instance.extensions().contains(&vk::EXT_DEBUG_UTILS_NAME),
                 ..Default::default()
@@ -52,8 +53,7 @@ impl VideoAdapterExt for wgpu::Adapter {
         let instance = hal_adapter.shared_instance();
         let instance = VideoInstance::new_unowned(
             instance.raw_instance().clone(),
-            // TODO: does entry even need arc?
-            instance.entry().clone().into(),
+            instance.entry().clone(),
             &VideoInstanceDescriptor {
                 enable_validations: instance.extensions().contains(&vk::EXT_DEBUG_UTILS_NAME),
                 ..Default::default()
@@ -63,6 +63,6 @@ impl VideoAdapterExt for wgpu::Adapter {
         let video_adapter =
             VideoAdapter::new(&instance, physical_device).ok_or(VulkanInitError::NoDevice)?;
 
-        VideoDevice::new_with_wgpu(&instance, self, video_adapter, desc.clone())
+        VideoDevice::create_and_register_wgpu(&instance, self, video_adapter, desc.clone())
     }
 }

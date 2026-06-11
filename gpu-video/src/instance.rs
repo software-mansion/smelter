@@ -20,20 +20,20 @@ pub struct VideoInstanceDescriptor {
 
 /// Context for all encoders and decoders.
 pub struct VideoInstance {
-    _entry: Arc<Entry>,
+    _entry: Entry,
     pub(crate) instance: Arc<Instance>,
     _debug_messenger: Option<DebugMessenger>,
 }
 
 impl VideoInstance {
     pub fn new(desc: &VideoInstanceDescriptor) -> Result<Arc<Self>, VulkanInitError> {
-        let entry = Arc::new(unsafe { Entry::load()? });
+        let entry = unsafe { Entry::load()? };
         Self::new_from_entry(entry, &mut Vec::new(), desc)
     }
 
     #[cfg(vulkan)]
     pub fn new_from_entry(
-        entry: Arc<Entry>,
+        entry: Entry,
         extensions: &mut Vec<&'static CStr>,
         desc: &VideoInstanceDescriptor,
     ) -> Result<Arc<Self>, VulkanInitError> {
@@ -104,7 +104,7 @@ impl VideoInstance {
     #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
     pub(crate) fn new_unowned(
         instance: ash::Instance,
-        entry: Arc<Entry>,
+        entry: Entry,
         desc: &VideoInstanceDescriptor,
     ) -> Self {
         let instance = Arc::new(Instance::new(

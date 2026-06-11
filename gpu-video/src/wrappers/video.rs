@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 use ash::vk;
 
 use crate::{
-    VideoDevice, VulkanCommonError,
+    VulkanCommonError,
     codec::Codec,
-    device::queues::VideoQueues,
+    device::{VideoDevice, queues::VideoQueues},
     parser::reference_manager::{PictureInfo, ReferencePictureInfo},
     wrappers::{ImageLayoutTracker, OpenCommandBuffer},
 };

@@ -8,7 +8,7 @@ fn main() {
     };
 
     use gpu_video::{
-        EncodedInputChunk, VideoInstance,
+        EncodedInputChunk, VideoDeviceExt, VideoInstance,
         parameters::{
             AnyEncoderParameters, RateControl, ScalingAlgorithm, TranscoderOutputParameters,
             TranscoderParameters, VideoAdapterDescriptor, VideoDeviceDescriptor,

@@ -1,99 +1,37 @@
-use std::{
-    ffi::CStr,
-    sync::{Arc, OnceLock},
-};
+use std::sync::Arc;
 
-#[cfg(feature = "transcoder")]
-use crate::parameters::TranscoderParameters;
 use crate::{
-    BytesDecoder, BytesEncoderH264, BytesEncoderH265, DecoderError, RegistryError, VideoDevice,
-    VulkanEncoderError, WgpuInitError,
-    capabilities::{DecodeCapabilities, EncodeCapabilities},
-    device::{
-        DecoderParameters, EncoderOutputParameters, EncoderParametersH264, EncoderParametersH265,
-        VideoDeviceDescriptor,
-    },
-    parameters::{H264Profile, H265Profile, RateControl},
+    DecoderError, VideoDeviceExt, VulkanEncoderError,
+    device::{DecoderParameters, EncoderParametersH264, EncoderParametersH265},
+    global_registry::GlobalRegistry,
     parser::{h264::H264Parser, reference_manager::ReferenceContext},
     vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder},
     vulkan_encoder::VulkanEncoder,
-    wgpu_helpers::{GlobalRegistry, VideoDeviceKey},
 };
 
+// TODO: add methods from VideoDeviceExt as well?
 /// [`wgpu::Device`] extension that exposes video capabilities of a device.
 /// The device must be created with [`VideoAdapterExt::request_device_with_video_support`](`crate::VideoAdapterExt::request_device_with_video_support`).
-pub trait VideoDeviceExt {
-    fn create_bytes_decoder_h264(
-        &self,
-        parameters: DecoderParameters,
-    ) -> Result<BytesDecoder, DecoderError>;
-    #[cfg(feature = "wgpu")]
+pub trait WgpuVideoDeviceExt: VideoDeviceExt {
     fn create_wgpu_textures_decoder_h264(
         &self,
         parameters: DecoderParameters,
     ) -> Result<crate::WgpuTexturesDecoder, DecoderError>;
 
-    /// Create a single-input multiple-output transcoder.
-    /// Each item in `parameters.output_parameters` corresponds to one output.
-    #[cfg(feature = "transcoder")]
-    fn create_transcoder(
-        &self,
-        parameters: TranscoderParameters,
-    ) -> Result<crate::vulkan_transcoder::Transcoder, crate::vulkan_transcoder::TranscoderError>;
-
-    fn create_bytes_encoder_h264(
-        &self,
-        parameters: EncoderParametersH264,
-    ) -> Result<BytesEncoderH264, VulkanEncoderError>;
-    fn create_bytes_encoder_h265(
-        &self,
-        parameters: EncoderParametersH265,
-    ) -> Result<BytesEncoderH265, VulkanEncoderError>;
     fn create_wgpu_textures_encoder_h264(
         &self,
         queue: &wgpu::Queue,
         parameters: EncoderParametersH264,
     ) -> Result<crate::WgpuTexturesEncoderH264, VulkanEncoderError>;
+
     fn create_wgpu_textures_encoder_h265(
         &self,
         queue: &wgpu::Queue,
         parameters: EncoderParametersH265,
     ) -> Result<crate::WgpuTexturesEncoderH265, VulkanEncoderError>;
-
-    fn decode_capabilities(&self) -> Result<DecodeCapabilities, crate::RegistryError>;
-    fn encode_capabilities(&self) -> Result<EncodeCapabilities, crate::RegistryError>;
-
-    fn encoder_output_parameters_h265_low_latency(
-        &self,
-        rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H265Profile>, VulkanEncoderError>;
-    fn encoder_output_parameters_h264_low_latency(
-        &self,
-        rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H264Profile>, VulkanEncoderError>;
-    fn encoder_output_parameters_h265_high_quality(
-        &self,
-        rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H265Profile>, VulkanEncoderError>;
-    fn encoder_output_parameters_h264_high_quality(
-        &self,
-        rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H264Profile>, VulkanEncoderError>;
-
-    fn supports_decoding(&self) -> Result<bool, crate::RegistryError>;
-    fn supports_encoding(&self) -> Result<bool, crate::RegistryError>;
 }
 
-#[cfg(vulkan)]
-impl VideoDeviceExt for wgpu::Device {
-    fn create_bytes_decoder_h264(
-        &self,
-        parameters: DecoderParameters,
-    ) -> Result<BytesDecoder, DecoderError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        video_device.create_bytes_decoder_h264(parameters)
-    }
-
+impl WgpuVideoDeviceExt for wgpu::Device {
     fn create_wgpu_textures_decoder_h264(
         &self,
         parameters: DecoderParameters,
@@ -121,32 +59,6 @@ impl VideoDeviceExt for wgpu::Device {
             vulkan_decoder,
             frame_sorter,
         })
-    }
-
-    #[cfg(feature = "transcoder")]
-    fn create_transcoder(
-        &self,
-        parameters: TranscoderParameters,
-    ) -> Result<crate::vulkan_transcoder::Transcoder, crate::vulkan_transcoder::TranscoderError>
-    {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        video_device.create_transcoder(parameters)
-    }
-
-    fn create_bytes_encoder_h264(
-        &self,
-        parameters: EncoderParametersH264,
-    ) -> Result<BytesEncoderH264, VulkanEncoderError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        video_device.create_bytes_encoder_h264(parameters)
-    }
-
-    fn create_bytes_encoder_h265(
-        &self,
-        parameters: EncoderParametersH265,
-    ) -> Result<BytesEncoderH265, VulkanEncoderError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        video_device.create_bytes_encoder_h265(parameters)
     }
 
     fn create_wgpu_textures_encoder_h264(
@@ -188,121 +100,4 @@ impl VideoDeviceExt for wgpu::Device {
             vulkan_encoder: encoder,
         })
     }
-
-    fn decode_capabilities(&self) -> Result<DecodeCapabilities, RegistryError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        Ok(video_device.decode_capabilities())
-    }
-
-    fn encode_capabilities(&self) -> Result<EncodeCapabilities, RegistryError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        Ok(video_device.encode_capabilities())
-    }
-
-    fn encoder_output_parameters_h265_low_latency(
-        &self,
-        rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H265Profile>, VulkanEncoderError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        video_device.encoder_output_parameters_h265_low_latency(rate_control)
-    }
-
-    fn encoder_output_parameters_h264_low_latency(
-        &self,
-        rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H264Profile>, VulkanEncoderError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        video_device.encoder_output_parameters_h264_low_latency(rate_control)
-    }
-
-    fn encoder_output_parameters_h265_high_quality(
-        &self,
-        rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H265Profile>, VulkanEncoderError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        video_device.encoder_output_parameters_h265_high_quality(rate_control)
-    }
-
-    fn encoder_output_parameters_h264_high_quality(
-        &self,
-        rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H264Profile>, VulkanEncoderError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        video_device.encoder_output_parameters_h264_high_quality(rate_control)
-    }
-
-    fn supports_decoding(&self) -> Result<bool, RegistryError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        Ok(video_device.supports_decoding())
-    }
-
-    fn supports_encoding(&self) -> Result<bool, RegistryError> {
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        Ok(video_device.supports_encoding())
-    }
-}
-
-// TODO: metal equivalent?
-pub(crate) fn create_and_register_wgpu_device(
-    video_device: Arc<VideoDevice>,
-    wgpu_adapter: &wgpu::Adapter,
-    desc: VideoDeviceDescriptor,
-    required_extensions: &[&'static CStr],
-    wgpu_queue_family_index: u32,
-) -> Result<(wgpu::Device, wgpu::Queue), WgpuInitError> {
-    let VideoDeviceDescriptor {
-        wgpu_features,
-        wgpu_experimental_features,
-        wgpu_limits,
-    } = desc;
-
-    let wgpu_features = wgpu_features | wgpu::Features::TEXTURE_FORMAT_NV12;
-    let device_key_for_dropping = Arc::new(OnceLock::new());
-    let device_key_for_dropping_clone = device_key_for_dropping.clone();
-
-    let hal_adapter = unsafe { wgpu_adapter.as_hal::<wgpu::hal::vulkan::Api>().unwrap() };
-    let device_clone = video_device.device.clone();
-    let wgpu_device = unsafe {
-        hal_adapter.device_from_raw(
-            device_clone.device.clone(),
-            Some(Box::new(move || {
-                match device_key_for_dropping_clone.get() {
-                    Some(key) => GlobalRegistry::unregister_device(key),
-                    None => {
-                        tracing::debug!(
-                            "Tried to drop device not registered in the global registry"
-                        )
-                    }
-                }
-
-                drop(device_clone);
-            })),
-            required_extensions,
-            wgpu_features,
-            &wgpu_limits,
-            &wgpu::MemoryHints::default(),
-            wgpu_queue_family_index,
-            0,
-        )?
-    };
-
-    let (wgpu_device, wgpu_queue) = unsafe {
-        wgpu_adapter.create_device_from_hal(
-            wgpu_device,
-            &wgpu::DeviceDescriptor {
-                label: Some("wgpu device created by the vulkan video decoder"),
-                memory_hints: wgpu::MemoryHints::default(),
-                required_limits: wgpu_limits,
-                required_features: wgpu_features,
-                trace: wgpu::Trace::Off,
-                experimental_features: wgpu_experimental_features,
-            },
-        )?
-    };
-
-    let device_key = VideoDeviceKey::from(&wgpu_device);
-    device_key_for_dropping.set(device_key).unwrap();
-    GlobalRegistry::register_device(device_key, video_device);
-
-    Ok((wgpu_device, wgpu_queue))
 }

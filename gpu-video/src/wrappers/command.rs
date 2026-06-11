@@ -7,7 +7,8 @@ use ash::vk::{self, Handle};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    VideoDevice, VulkanCommonError,
+    VulkanCommonError,
+    device::VideoDevice,
     wrappers::{ImageKey, ImageLayoutTracker, SemaphoreWaitValue},
 };
 
