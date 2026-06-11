@@ -103,27 +103,41 @@ pub(crate) fn spawn_broadcast_handler(
         let first_pts_inner = first_pts.clone();
         let video_fut = async {
             if let (Some(video), Some(frame_sender)) = (video, video_sender) {
-                let decoder_handle =
-                    spawn_video_decoder(&ctx, &input_ref, &decoders, &video, frame_sender);
-                if let Some(decoder_handle) = decoder_handle {
-                    if let Err(error) =
-                        run_video_track(video, decoder_handle, &broadcast, first_pts_inner).await
-                    {
-                        warn!(%error, "MoQ video track error.");
-                    }
+                let video_result = run_video_track(
+                    &ctx,
+                    &input_ref,
+                    &decoders,
+                    video,
+                    frame_sender,
+                    &broadcast,
+                    first_pts_inner,
+                )
+                .await;
+                if let Err(error) = video_result {
+                    warn!(
+                        "MoQ video track error: {}",
+                        ErrorStack::new(&error).into_string(),
+                    );
                 }
             }
         };
 
         let audio_fut = async {
             if let (Some(audio), Some(sample_sender)) = (audio, audio_sender) {
-                let decoder_handle = spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender);
-                if let Some(decoder_handle) = decoder_handle {
-                    if let Err(error) =
-                        run_audio_track(audio, decoder_handle, &broadcast, first_pts).await
-                    {
-                        warn!(%error, "MoQ audio track error.");
-                    }
+                let audio_result = run_audio_track(
+                    &ctx,
+                    &input_ref,
+                    audio,
+                    sample_sender,
+                    &broadcast,
+                    first_pts,
+                )
+                .await;
+                if let Err(error) = audio_result {
+                    warn!(
+                        "MoQ audio track error: {}",
+                        ErrorStack::new(&error).into_string(),
+                    )
                 }
             }
         };
@@ -133,43 +147,6 @@ pub(crate) fn spawn_broadcast_handler(
     });
 
     Some(handle)
-}
-
-fn spawn_video_decoder(
-    ctx: &Arc<PipelineCtx>,
-    input_ref: &Ref<InputId>,
-    decoders: &MoqServerInputDecoders,
-    discovered: &DiscoveredVideo,
-    frame_sender: QueueSender<Frame>,
-) -> Option<DecoderThreadHandle> {
-    match process_video_config(ctx, input_ref, decoders, discovered, frame_sender) {
-        Ok(handle) => Some(handle),
-        Err(err) => {
-            warn!(
-                "MoQ video config error: {}",
-                ErrorStack::new(&err).into_string()
-            );
-            None
-        }
-    }
-}
-
-fn spawn_audio_decoder(
-    ctx: &Arc<PipelineCtx>,
-    input_ref: &Ref<InputId>,
-    discovered: &DiscoveredAudio,
-    sample_sender: QueueSender<InputAudioSamples>,
-) -> Option<DecoderThreadHandle> {
-    match process_audio_config(ctx, input_ref, discovered, sample_sender) {
-        Ok(handle) => Some(handle),
-        Err(err) => {
-            warn!(
-                "MoQ audio config error: {}",
-                ErrorStack::new(&err).into_string()
-            );
-            None
-        }
-    }
 }
 
 fn process_video_config(
@@ -225,7 +202,7 @@ fn process_audio_config(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     audio: &DiscoveredAudio,
-    samples_sender: QueueSender<InputAudioSamples>,
+    sample_sender: QueueSender<InputAudioSamples>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
     // Only AAC is allowed right now, different codecs are rejected before this function is called
     let asc = audio
@@ -239,7 +216,7 @@ fn process_audio_config(
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
                 decoder_options,
-                samples_sender,
+                samples_sender: sample_sender,
                 input_buffer_size: MOQ_MAX_BUFFER,
             };
             AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref.clone(), options)
@@ -250,11 +227,15 @@ fn process_audio_config(
 }
 
 async fn run_video_track(
+    ctx: &Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
+    decoders: &MoqServerInputDecoders,
     video: DiscoveredVideo,
-    decoder_handle: DecoderThreadHandle,
+    frame_sender: QueueSender<Frame>,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
 ) -> Result<(), MoqConnectionError> {
+    let decoder_handle = process_video_config(ctx, input_ref, decoders, &video, frame_sender)?;
     let mut consumer = match broadcast.subscribe_track(&Track::new(&video.name)) {
         Ok(track) => {
             // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
@@ -292,11 +273,14 @@ async fn run_video_track(
 }
 
 async fn run_audio_track(
+    ctx: &Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
     audio: DiscoveredAudio,
-    decoder_handle: DecoderThreadHandle,
+    sample_sender: QueueSender<InputAudioSamples>,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
 ) -> Result<(), MoqConnectionError> {
+    let decoder_handle = process_audio_config(ctx, input_ref, &audio, sample_sender)?;
     let mut consumer = match broadcast.subscribe_track(&Track::new(&audio.name)) {
         Ok(track) => {
             // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
