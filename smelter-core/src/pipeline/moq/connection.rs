@@ -106,7 +106,11 @@ pub(crate) fn spawn_broadcast_handler(
                 let decoder_handle =
                     spawn_video_decoder(&ctx, &input_ref, &decoders, &video, frame_sender);
                 if let Some(decoder_handle) = decoder_handle {
-                    run_video_track(video, decoder_handle, &broadcast, first_pts_inner).await;
+                    if let Err(error) =
+                        run_video_track(video, decoder_handle, &broadcast, first_pts_inner).await
+                    {
+                        warn!(%error, "MoQ video track error.");
+                    }
                 }
             }
         };
@@ -115,7 +119,11 @@ pub(crate) fn spawn_broadcast_handler(
             if let (Some(audio), Some(sample_sender)) = (audio, audio_sender) {
                 let decoder_handle = spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender);
                 if let Some(decoder_handle) = decoder_handle {
-                    run_audio_track(audio, decoder_handle, &broadcast, first_pts).await;
+                    if let Err(error) =
+                        run_audio_track(audio, decoder_handle, &broadcast, first_pts).await
+                    {
+                        warn!(%error, "MoQ audio track error.");
+                    }
                 }
             }
         };
@@ -246,23 +254,41 @@ async fn run_video_track(
     decoder_handle: DecoderThreadHandle,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
-) {
-    match broadcast.subscribe_track(&Track::new(&video.name)) {
+) -> Result<(), MoqConnectionError> {
+    let mut consumer = match broadcast.subscribe_track(&Track::new(&video.name)) {
         Ok(track) => {
             // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
             // group start timestamp and highest received timestamp.
-            let consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
-            if let Err(err) = read_video_track(consumer, decoder_handle, first_pts).await {
-                warn!(
-                    "MoQ video track error: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-            }
+            ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER)
         }
-        Err(err) => {
-            warn!("Failed to subscribe to MoQ video track: {err}");
-        }
+        Err(error) => return Err(error.into()),
+    };
+
+    while let Some(frame) = consumer
+        .read()
+        .await
+        .map_err(MoqConnectionError::ContainerError)?
+    {
+        let raw_pts: Duration = frame.timestamp.into();
+        let pts = normalize_pts(&first_pts, raw_pts);
+        trace!(?pts, "MoQ video frame");
+        let payload = frame.payload;
+
+        let chunk = EncodedInputChunk {
+            data: payload,
+            pts,
+            dts: None,
+            kind: MediaKind::Video(VideoCodec::H264),
+            present: true,
+        };
+
+        decoder_handle
+            .chunk_sender
+            .send(PipelineEvent::Data(chunk))
+            .map_err(|_| MoqConnectionError::ChannelClosed)?;
     }
+
+    Ok(())
 }
 
 async fn run_audio_track(
@@ -270,23 +296,43 @@ async fn run_audio_track(
     decoder_handle: DecoderThreadHandle,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
-) {
-    match broadcast.subscribe_track(&Track::new(&audio.name)) {
+) -> Result<(), MoqConnectionError> {
+    let mut consumer = match broadcast.subscribe_track(&Track::new(&audio.name)) {
         Ok(track) => {
             // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
             // group start timestamp and highest received timestamp.
-            let consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
-            if let Err(err) = read_audio_track(consumer, decoder_handle, first_pts).await {
-                warn!(
-                    "MoQ audio track error: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-            }
+            ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER)
         }
-        Err(err) => {
-            warn!("Failed to subscribe to MoQ audio track: {err}");
+        Err(error) => {
+            return Err(error.into());
         }
+    };
+
+    while let Some(frame) = consumer
+        .read()
+        .await
+        .map_err(MoqConnectionError::ContainerError)?
+    {
+        let raw_pts: Duration = frame.timestamp.into();
+        let pts = normalize_pts(&first_pts, raw_pts);
+        trace!(?pts, "MoQ audio frame");
+        let payload = frame.payload;
+
+        let chunk = EncodedInputChunk {
+            data: payload,
+            pts,
+            dts: None,
+            kind: MediaKind::Audio(AudioCodec::Aac),
+            present: true,
+        };
+
+        decoder_handle
+            .chunk_sender
+            .send(PipelineEvent::Data(chunk))
+            .map_err(|_| MoqConnectionError::ChannelClosed)?;
     }
+
+    Ok(())
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -328,68 +374,4 @@ fn normalize_pts(first_pts: &Arc<Mutex<Option<Duration>>>, raw_pts: Duration) ->
     let mut first_pts = first_pts.lock().unwrap();
     let first = *first_pts.get_or_insert(raw_pts);
     raw_pts.saturating_sub(first)
-}
-
-async fn read_video_track(
-    mut consumer: ContainerConsumer<Container>,
-    decoder_handle: DecoderThreadHandle,
-    first_pts: Arc<Mutex<Option<Duration>>>,
-) -> Result<(), MoqConnectionError> {
-    while let Some(frame) = consumer
-        .read()
-        .await
-        .map_err(MoqConnectionError::ContainerError)?
-    {
-        let raw_pts: Duration = frame.timestamp.into();
-        let pts = normalize_pts(&first_pts, raw_pts);
-        trace!(?pts, "MoQ video frame");
-        let payload = frame.payload;
-
-        let chunk = EncodedInputChunk {
-            data: payload,
-            pts,
-            dts: None,
-            kind: MediaKind::Video(VideoCodec::H264),
-            present: true,
-        };
-
-        decoder_handle
-            .chunk_sender
-            .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
-    }
-
-    Ok(())
-}
-
-async fn read_audio_track(
-    mut consumer: ContainerConsumer<Container>,
-    decoder_handle: DecoderThreadHandle,
-    first_pts: Arc<Mutex<Option<Duration>>>,
-) -> Result<(), MoqConnectionError> {
-    while let Some(frame) = consumer
-        .read()
-        .await
-        .map_err(MoqConnectionError::ContainerError)?
-    {
-        let raw_pts: Duration = frame.timestamp.into();
-        let pts = normalize_pts(&first_pts, raw_pts);
-        trace!(?pts, "MoQ audio frame");
-        let payload = frame.payload;
-
-        let chunk = EncodedInputChunk {
-            data: payload,
-            pts,
-            dts: None,
-            kind: MediaKind::Audio(AudioCodec::Aac),
-            present: true,
-        };
-
-        decoder_handle
-            .chunk_sender
-            .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
-    }
-
-    Ok(())
 }
