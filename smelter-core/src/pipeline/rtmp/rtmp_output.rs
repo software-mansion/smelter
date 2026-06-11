@@ -6,8 +6,8 @@ use smelter_render::error::ErrorStack;
 use tracing::{debug, warn};
 
 use rtmp::{
-    AudioData, RtmpAudioCodec, RtmpClient, RtmpClientConfig, RtmpStreamError, RtmpVideoCodec,
-    TrackId, VideoData, VpCodecConfig,
+    AudioData, RtmpAudioCodec, RtmpClient, RtmpStreamError, RtmpVideoCodec, TrackId, VideoData,
+    VpCodecConfig,
 };
 use smelter_render::OutputFrameFormat;
 
@@ -114,7 +114,7 @@ impl RtmpClientOutput {
         video_config: &Option<VideoConfig>,
         audio_config: &Option<AudioConfig>,
     ) -> Result<RtmpClient, RtmpClientError> {
-        let mut client = RtmpClient::connect(RtmpClientConfig {
+        let mut client = RtmpClient::connect(rtmp::RtmpConnectionOptions {
             host: connection_opts.host,
             port: connection_opts.port,
             app: connection_opts.app,

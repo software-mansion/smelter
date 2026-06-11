@@ -7,6 +7,7 @@ mod ex_capabilities;
 mod flv;
 mod message;
 mod protocol;
+mod reconnect;
 mod server;
 mod track;
 mod transport;
@@ -16,12 +17,12 @@ pub use client::*;
 pub use error::*;
 pub use events::*;
 pub use flv::{AudioChannels, VpCodecConfig};
+pub use reconnect::ReconnectRequest;
 pub use server::*;
 pub use track::TrackId;
 
 pub(crate) use ex_capabilities::*;
 pub(crate) use flv::*;
-pub(crate) use track::TrackKey;
 
 pub(crate) const VIDEO_FOURCC_LIST: [&str; 3] = ["avc1", "vp09", "vp08"];
 pub(crate) const AUDIO_FOURCC_LIST: [&str; 2] = ["mp4a", "Opus"];

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     CAPS_EX_MODEX, CAPS_EX_RECONNECT, CAPS_EX_TIMESTAMP_NANO, ExCapabilities,
-    FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD, RtmpClientConfig, RtmpConnectionError,
+    FOURCC_INFO_CAN_ENCODE, FOURCC_INFO_CAN_FORWARD, RtmpConnectionError, RtmpConnectionOptions,
     RtmpMessageParseError,
     amf0::AmfValue,
     error::RtmpStreamError,
@@ -134,7 +134,7 @@ impl NegotiationProgress {
 
 pub(super) fn send_connect(
     stream: &mut RtmpMessageStream,
-    config: &RtmpClientConfig,
+    connection_opts: &RtmpConnectionOptions,
 ) -> Result<(), RtmpConnectionError> {
     let encode_forward_caps =
         AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64);
@@ -162,8 +162,8 @@ pub(super) fn send_connect(
         .collect();
     let props = HashMap::from_iter(
         [
-            ("app", config.app.clone().into()),
-            ("tcUrl", config.tc_url().into()),
+            ("app", connection_opts.app.clone().into()),
+            ("tcUrl", connection_opts.tc_url().into()),
             ("flashVer", "FMS/3,0,1,123".into()),
             ("fpad", AmfValue::Boolean(false)),
             // legacy RTMP codecs
