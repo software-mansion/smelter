@@ -85,32 +85,24 @@ async fn read_hang_catalog(
     };
 
     let audio = match catalog.audio.renditions.first_key_value() {
-        Some((name, config)) => match (&config.container, &config.codec) {
-            (_, MoqAudioCodec::Unknown(codec)) => {
-                warn!(
-                    codec,
-                    "Unknown audio codec. Only Opus and AAC are supported."
-                );
-                None
-            }
-            (CatalogContainer::Cmaf { init, .. }, codec) => {
+        Some((name, config)) => match (audio_codec(&config.codec), &config.container) {
+            (Some(codec), CatalogContainer::Cmaf { init, .. }) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let container = Container::Cmaf(wire);
-                let codec = match codec {
-                    MoqAudioCodec::AAC(_) => AudioCodec::Aac,
-                    MoqAudioCodec::Opus => AudioCodec::Opus,
-                    _ => unreachable!(),
-                };
 
                 Some(DiscoveredAudio {
                     name: name.clone(),
-                    container,
                     codec,
+                    container,
                     description: config.description.clone(),
                 })
             }
-            _ => {
-                warn!("Only CMAF container is supported.");
+            (Some(_), _container) => {
+                warn!("Unsupported audio container, only CMAF container is supported.");
+                None
+            }
+            (None, _) => {
+                warn!("Unsupported audio codec only Opus and AAC is supported.");
                 None
             }
         },
@@ -252,5 +244,13 @@ fn extract_codec_description(cmaf: &fmp4::Wire) -> Result<Bytes, MoqCatalogError
         _ => Err(MoqCatalogError::CodecConfigExtractionError(
             "unsupported codec in CMAF init segment",
         )),
+    }
+}
+
+fn audio_codec(codec: &MoqAudioCodec) -> Option<AudioCodec> {
+    match codec {
+        MoqAudioCodec::Opus => Some(AudioCodec::Opus),
+        MoqAudioCodec::AAC(_) => Some(AudioCodec::Aac),
+        _ => None,
     }
 }
