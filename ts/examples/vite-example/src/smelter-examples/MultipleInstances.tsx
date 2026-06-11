@@ -5,7 +5,7 @@ import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
 import { useSmelter } from '@swmansion/smelter-web-wasm';
 
 const MP4_URL =
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
+  'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4';
 
 function MultipleCompositors() {
   const smelter1 = useSmelter();

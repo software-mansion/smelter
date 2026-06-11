@@ -3,10 +3,10 @@ import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
 import { useSmelter } from '@swmansion/smelter-web-wasm';
 
 const FIRST_MP4_URL =
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
+  'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4';
 
 const SECOND_MP4_URL =
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+  'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/ElephantsDream720p24fps60s.mp4';
 
 const NO_AUDIO_MP4_URL = 'https://smelter.dev/videos/template-scene-race.mp4';
 

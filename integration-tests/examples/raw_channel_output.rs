@@ -9,7 +9,7 @@ use std::{
 
 use crossbeam_channel::bounded;
 use image::{ColorType, ImageEncoder, codecs::png::PngEncoder};
-use integration_tests::{media::download_to, paths::integration_tests_root, read_rgba_texture};
+use integration_tests::{media::TestSample, paths::integration_tests_root, read_rgba_texture};
 use smelter::{
     config::read_config,
     logger::{self},
@@ -24,10 +24,6 @@ use smelter_render::{
     scene::{Component, InputStreamComponent},
 };
 use tokio::runtime::Runtime;
-
-const BUNNY_FILE_URL: &str =
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-const BUNNY_FILE_PATH: &str = "examples/assets/BigBuckBunny.mp4";
 
 // Start simple pipeline with output that sends PCM audio and wgpu::Textures via Rust channel.
 //
@@ -55,8 +51,6 @@ fn main() {
     let pipeline = Arc::new(Mutex::new(pipeline));
     let output_id = OutputId("output_1".into());
     let input_id = InputId("input_id".into());
-
-    download_to(BUNNY_FILE_URL, BUNNY_FILE_PATH).unwrap();
 
     let output_options = RegisterRawDataOutputOptions {
         output_options: RawDataOutputOptions {
@@ -89,7 +83,12 @@ fn main() {
     };
 
     let input_options = RegisterInputOptions::Mp4(Mp4InputOptions {
-        source: Mp4InputSource::File(integration_tests_root().join(BUNNY_FILE_PATH).into()),
+        source: Mp4InputSource::File(
+            TestSample::BigBuckBunnyH264AAC
+                .ensure_path()
+                .unwrap()
+                .into(),
+        ),
         should_loop: false,
         video_decoders: Mp4InputVideoDecoders {
             h264: Some(VideoDecoderOptions::FfmpegH264),

@@ -39,9 +39,9 @@ function ExampleScene() {
           <TitleSlide text="Part 2" />
         </Slide>
         <Slide>
-          <SlideWithLabel label="ForBiggerEscapes sample video as <Mp4 />">
+          <SlideWithLabel label="BigBuckBunny sample video as <Mp4 />">
             <Mp4
-              source="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
+              source="https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4"
               volume={0.8}
             />
           </SlideWithLabel>
@@ -50,9 +50,9 @@ function ExampleScene() {
           <TitleSlide text="Part 3" />
         </Slide>
         <Slide>
-          <SlideWithLabel label="ForBiggerBlazes sample video as <Mp4 />">
+          <SlideWithLabel label="ElephantsDream sample video as <Mp4 />">
             <Mp4
-              source="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+              source="https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/ElephantsDream720p24fps60s.mp4"
               volume={0.8}
             />
           </SlideWithLabel>
