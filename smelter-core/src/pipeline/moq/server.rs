@@ -125,8 +125,7 @@ async fn run_accept_loop(mut server: moq_native::Server, weak_sessions: WeakMoqS
         tokio::spawn(async move {
             match request.ok().await {
                 Ok(session) => {
-                    info!("MoQ session established");
-                    debug!(moq_version=?session.version());
+                    info!(moq_version=?session.version(), "MoQ session established");
                     let session_id = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
                     {
                         let mut sessions = moq_sessions.lock().unwrap();
