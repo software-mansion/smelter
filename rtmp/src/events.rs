@@ -18,11 +18,32 @@ pub enum RtmpVideoCodec {
     Vp9,
 }
 
+impl RtmpVideoCodec {
+    /// E-RTMP FOURCC string used during `connect` negotiation.
+    pub fn fourcc(self) -> &'static str {
+        match self {
+            Self::H264 => "avc1",
+            Self::Vp8 => "vp08",
+            Self::Vp9 => "vp09",
+        }
+    }
+}
+
 /// Public audio codec identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RtmpAudioCodec {
     Aac,
     Opus,
+}
+
+impl RtmpAudioCodec {
+    /// E-RTMP FOURCC string used during `connect` negotiation.
+    pub fn fourcc(self) -> &'static str {
+        match self {
+            Self::Aac => "mp4a",
+            Self::Opus => "Opus",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
