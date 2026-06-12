@@ -26,26 +26,28 @@ mod negotiation;
 const OUTGOING_CHUNK_SIZE: u32 = 4096;
 
 pub struct RtmpClientConfig {
-    pub host: String,
-    pub port: u16,
-    pub app: String,
-    pub stream_key: String,
-    pub use_tls: bool,
-    /// Video codecs advertised to the server during `connect`. Defaults to [H264, VP8, VP9].
-    pub video_codecs: Vec<RtmpVideoCodec>,
-    /// Audio codecs advertised to the server during `connect`. Defaults to [AAC, Opus].
-    pub audio_codecs: Vec<RtmpAudioCodec>,
+    host: String,
+    port: Option<u16>,
+    app: String,
+    stream_key: String,
+    use_tls: bool,
+    video_codecs: Vec<RtmpVideoCodec>,
+    audio_codecs: Vec<RtmpAudioCodec>,
 }
 
 impl RtmpClientConfig {
-    /// Build a config with all known codecs advertised.
-    pub fn new(host: String, port: u16, app: String, stream_key: String, use_tls: bool) -> Self {
+    /// Build a config with default options:
+    /// - port: 1935, or 443 when TLS is enabled
+    /// - TLS: disabled
+    /// - advertised video codecs: [H264, VP8, VP9]
+    /// - advertised audio codecs: [AAC, Opus]
+    pub fn new(host: String, app: String, stream_key: String) -> Self {
         Self {
             host,
-            port,
+            port: None,
             app,
             stream_key,
-            use_tls,
+            use_tls: false,
             video_codecs: vec![
                 RtmpVideoCodec::H264,
                 RtmpVideoCodec::Vp8,
@@ -55,23 +57,42 @@ impl RtmpClientConfig {
         }
     }
 
+    /// Override the port. Defaults to 1935, or 443 when TLS is enabled.
+    pub fn with_port(mut self, port: u16) -> Self {
+        self.port = Some(port);
+        self
+    }
+
+    /// Enable or disable TLS (RTMPS). Defaults to disabled.
+    pub fn with_tls(mut self, use_tls: bool) -> Self {
+        self.use_tls = use_tls;
+        self
+    }
+
     /// Override the video codecs advertised to the server during `connect`.
+    /// Defaults to [H264, VP8, VP9].
     pub fn with_video_codecs(mut self, video_codecs: Vec<RtmpVideoCodec>) -> Self {
         self.video_codecs = video_codecs;
         self
     }
 
     /// Override the audio codecs advertised to the server during `connect`.
+    /// Defaults to [AAC, Opus].
     pub fn with_audio_codecs(mut self, audio_codecs: Vec<RtmpAudioCodec>) -> Self {
         self.audio_codecs = audio_codecs;
         self
     }
-}
 
-impl RtmpClientConfig {
+    fn port(&self) -> u16 {
+        self.port.unwrap_or(match self.use_tls {
+            true => 443,
+            false => 1935,
+        })
+    }
+
     fn tc_url(&self) -> String {
         let scheme = if self.use_tls { "rtmps" } else { "rtmp" };
-        format!("{}://{}:{}/{}", scheme, self.host, self.port, self.app)
+        format!("{}://{}:{}/{}", scheme, self.host, self.port(), self.app)
     }
 }
 
@@ -95,9 +116,9 @@ impl RtmpClient {
         let shutdown_condition = ShutdownCondition::default();
 
         let transport = if config.use_tls {
-            RtmpTransport::tls_client(&config.host, config.port)?
+            RtmpTransport::tls_client(&config.host, config.port())?
         } else {
-            RtmpTransport::tcp_client(&config.host, config.port)?
+            RtmpTransport::tcp_client(&config.host, config.port())?
         };
         let mut socket = RtmpByteStream::new(transport, shutdown_condition.clone());
 

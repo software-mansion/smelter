@@ -15,20 +15,21 @@ pub type OnConnectionCallback = Box<dyn FnMut(RtmpServerConnection) + Send + 'st
 
 #[derive(Debug, Clone)]
 pub struct RtmpServerConfig {
-    pub port: u16,
-    pub tls: Option<TlsConfig>,
-    /// Video codecs advertised to clients during `connect`. Defaults to [H264, VP8, VP9].
-    pub video_codecs: Vec<RtmpVideoCodec>,
-    /// Audio codecs advertised to clients during `connect`. Defaults to [AAC, Opus].
-    pub audio_codecs: Vec<RtmpAudioCodec>,
+    port: u16,
+    tls: Option<TlsConfig>,
+    video_codecs: Vec<RtmpVideoCodec>,
+    audio_codecs: Vec<RtmpAudioCodec>,
 }
 
 impl RtmpServerConfig {
-    /// Build a config with all known codecs advertised.
-    pub fn new(port: u16, tls: Option<TlsConfig>) -> Self {
+    /// Build a config with default options:
+    /// - TLS: disabled
+    /// - advertised video codecs: [H264, VP8, VP9]
+    /// - advertised audio codecs: [AAC, Opus]
+    pub fn new(port: u16) -> Self {
         Self {
             port,
-            tls,
+            tls: None,
             video_codecs: vec![
                 RtmpVideoCodec::H264,
                 RtmpVideoCodec::Vp8,
@@ -38,13 +39,21 @@ impl RtmpServerConfig {
         }
     }
 
+    /// Enable TLS (RTMPS). Defaults to disabled.
+    pub fn with_tls(mut self, tls: TlsConfig) -> Self {
+        self.tls = Some(tls);
+        self
+    }
+
     /// Override the video codecs advertised to clients during `connect`.
+    /// Defaults to [H264, VP8, VP9].
     pub fn with_video_codecs(mut self, video_codecs: Vec<RtmpVideoCodec>) -> Self {
         self.video_codecs = video_codecs;
         self
     }
 
     /// Override the audio codecs advertised to clients during `connect`.
+    /// Defaults to [AAC, Opus].
     pub fn with_audio_codecs(mut self, audio_codecs: Vec<RtmpAudioCodec>) -> Self {
         self.audio_codecs = audio_codecs;
         self

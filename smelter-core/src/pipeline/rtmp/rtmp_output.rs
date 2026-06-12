@@ -116,11 +116,11 @@ impl RtmpClientOutput {
     ) -> Result<RtmpClient, RtmpClientError> {
         let config = RtmpClientConfig::new(
             connection_opts.host,
-            connection_opts.port,
             connection_opts.app,
             connection_opts.stream_key,
-            connection_opts.use_tls,
         )
+        .with_port(connection_opts.port)
+        .with_tls(connection_opts.use_tls)
         .with_video_codecs(video_config.iter().map(|c| c.codec).collect())
         .with_audio_codecs(audio_config.iter().map(|c| c.codec).collect());
         let mut client = RtmpClient::connect(config)?;
