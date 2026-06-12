@@ -18,7 +18,7 @@ pub(crate) struct MoqInputsState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>
 pub(crate) struct MoqInputState {
     pub queue_input: WeakQueueInput,
     pub decoders: MoqServerInputDecoders,
-    pub connection_handle: Option<JoinHandle<()>>,
+    pub broadcast_handle: Option<JoinHandle<()>>,
 }
 
 pub(crate) struct MoqInputStateOptions {
@@ -31,7 +31,7 @@ impl MoqInputState {
         Self {
             queue_input: options.queue_input,
             decoders: options.decoders,
-            connection_handle: None,
+            broadcast_handle: None,
         }
     }
 }
@@ -68,7 +68,7 @@ impl MoqInputsState {
         let mut guard = self.0.lock().unwrap();
         match guard.remove(input_ref) {
             Some(mut input) => {
-                if let Some(handle) = input.connection_handle.take() {
+                if let Some(handle) = input.broadcast_handle.take() {
                     handle.abort();
                 }
             }
@@ -97,7 +97,7 @@ impl MoqInputState {
         &self,
         input_ref: &Ref<InputId>,
     ) -> Result<(), MoqServerError> {
-        match &self.connection_handle {
+        match &self.broadcast_handle {
             Some(handle) if !handle.is_finished() => Err(MoqServerError::BroadcastAlreadyActive(
                 input_ref.id().clone(),
             )),

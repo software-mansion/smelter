@@ -171,7 +171,7 @@ async fn run_announce_loop(
                 if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
                     input.ensure_no_active_connection(&input_ref)?;
                     let handle = spawn_broadcast_handler(ctx, &input_ref, input, broadcast);
-                    input.connection_handle = handle;
+                    input.broadcast_handle = handle;
                     Ok(())
                 }) {
                     warn!(
