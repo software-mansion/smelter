@@ -7,7 +7,7 @@ use smelter_render::{
 };
 
 #[cfg(feature = "gpu-video")]
-use gpu_video::VulkanEncoderError;
+use gpu_video::VideoEncoderError;
 
 use crate::{graphics_context::CreateGraphicsContextError, prelude::*};
 
@@ -215,7 +215,7 @@ pub enum EncoderInitError {
 
     #[cfg(feature = "gpu-video")]
     #[error(transparent)]
-    VulkanEncoderError(#[from] gpu_video::VulkanEncoderError),
+    VulkanEncoderError(#[from] gpu_video::VideoEncoderError),
 
     #[error(
         "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video encoder"
@@ -267,7 +267,7 @@ pub enum InputInitError {
 pub enum DecoderInitError {
     #[cfg(feature = "gpu-video")]
     #[error(transparent)]
-    VulkanDecoderError(#[from] gpu_video::DecoderError),
+    VulkanDecoderError(#[from] gpu_video::VideoDecoderError),
 
     #[error(
         "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video decoder"
@@ -445,7 +445,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
             RegisterOutputError::OutputError(
                 _,
                 OutputInitError::EncoderError(EncoderInitError::VulkanEncoderError(
-                    VulkanEncoderError::ParametersError { .. },
+                    VideoEncoderError::ParametersError { .. },
                 )),
             ) => PipelineErrorInfo::new(INVALID_VULKAN_VIDEO_PARAMETERS, ErrorType::UserError),
 

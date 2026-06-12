@@ -58,7 +58,7 @@ impl EncodeCodec for H265Codec {
     fn codec_parameters(
         parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
-    ) -> Result<Self::OwnedParameters, crate::VulkanEncoderError> {
+    ) -> Result<Self::OwnedParameters, crate::VideoEncoderError> {
         Ok(Self::OwnedParameters {
             vps: vec![VkH265VideoParameterSet::new_encode(parameters)],
             sps: vec![VkH265SequenceParameterSet::new_encode(

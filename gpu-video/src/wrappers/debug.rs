@@ -3,7 +3,7 @@ use std::{ffi::c_void, sync::Arc};
 use ash::vk::{self, QueryType};
 use tracing::{error, info, trace, warn};
 
-use crate::{VulkanCommonError, VulkanDecoderError, VulkanInitError};
+use crate::{VideoInitError, VulkanCommonError, VulkanDecoderError};
 
 use super::{Device, Instance};
 
@@ -13,9 +13,9 @@ pub(crate) struct DebugMessenger {
 }
 
 impl DebugMessenger {
-    pub(crate) fn new(instance: Arc<Instance>) -> Result<Self, VulkanInitError> {
+    pub(crate) fn new(instance: Arc<Instance>) -> Result<Self, VideoInitError> {
         let Some(debug_utils) = &instance.debug_utils_instance_ext else {
-            return Err(VulkanInitError::MissingExtension(
+            return Err(VideoInitError::MissingExtension(
                 vk::EXT_DEBUG_UTILS_NAME.to_string_lossy().to_string(),
             ));
         };

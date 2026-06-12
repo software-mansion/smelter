@@ -2,7 +2,6 @@ use std::sync::{Arc, LazyLock, RwLock};
 
 use ash::vk;
 use rustc_hash::FxHashMap;
-use wgpu::hal::vulkan::Api as VkApi;
 
 use crate::device::VideoDevice;
 
@@ -51,24 +50,18 @@ impl GlobalRegistry {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub(crate) struct VideoDeviceKey(pub(crate) vk::Device, pub(crate) vk::Queue);
 
-#[cfg(vulkan)]
+#[cfg(all(vulkan, feature = "wgpu"))]
 impl From<&wgpu::Device> for VideoDeviceKey {
     fn from(device: &wgpu::Device) -> Self {
-        let hal_device = unsafe { device.as_hal::<VkApi>().unwrap() };
+        let hal_device = unsafe { device.as_hal::<wgpu::hal::vulkan::Api>().unwrap() };
         Self(hal_device.raw_device().handle(), hal_device.raw_queue())
-    }
-}
-
-impl From<&crate::VideoDevice> for VideoDeviceKey {
-    fn from(device: &crate::VideoDevice) -> Self {
-        device.handle.0
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum RegistryError {
     #[error(
-        "Could not find the device in registry. Make sure the device was created with video capabilities"
+        "Could not find the device in the registry. Make sure the device was created with video capabilities"
     )]
     DeviceNotFound,
 }

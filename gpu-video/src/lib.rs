@@ -7,6 +7,7 @@ pub(crate) mod codec;
 #[cfg(vulkan)]
 mod device;
 #[cfg(vulkan)]
+#[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
 mod global_registry;
 #[cfg(vulkan)]
 mod instance;

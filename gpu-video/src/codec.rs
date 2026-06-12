@@ -3,7 +3,7 @@ use std::{collections::VecDeque, num::NonZeroU32};
 use ash::vk;
 
 use crate::{
-    VulkanEncoderError,
+    VideoEncoderError,
     device::caps::{
         NativeEncodeCapabilities, NativeEncodeProfileCapabilities,
         NativeEncodeQualityLevelProperties,
@@ -25,16 +25,16 @@ pub(crate) trait EncodeCodec: Codec {
     fn encode_codec_profile_capabilities(
         caps: &NativeEncodeCapabilities,
         profile: Self::Profile,
-    ) -> Result<&NativeEncodeProfileCapabilities<Self>, VulkanEncoderError> {
+    ) -> Result<&NativeEncodeProfileCapabilities<Self>, VideoEncoderError> {
         let codec_caps = Self::encode_codec_capabilities(caps)
-            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+            .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?;
         Self::encode_profile_capabilities(codec_caps, profile)
-            .ok_or_else(|| VulkanEncoderError::ProfileUnsupported(format!("{profile:?}")))
+            .ok_or_else(|| VideoEncoderError::ProfileUnsupported(format!("{profile:?}")))
     }
     fn codec_parameters(
         parameters: &FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
-    ) -> Result<Self::OwnedParameters, VulkanEncoderError>;
+    ) -> Result<Self::OwnedParameters, VideoEncoderError>;
     fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters) -> Self::VkParameters<'a>;
 
     type BitstreamUnitData;

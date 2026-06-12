@@ -3,7 +3,7 @@ fn main() {
     use std::io::Write;
 
     use gpu_video::{
-        EncodedInputChunk, OutputFrame, VideoAdapterExt, WgpuVideoDeviceExt,
+        EncodedInputChunk, OutputFrame, VideoAdapterExt, VideoDeviceExt,
         parameters::{DecoderParameters, VideoDeviceDescriptor},
     };
 
@@ -33,6 +33,8 @@ fn main() {
         .unwrap();
 
     let mut decoder = device
+        .video()
+        .unwrap()
         .create_wgpu_textures_decoder_h264(DecoderParameters::default())
         .unwrap();
 

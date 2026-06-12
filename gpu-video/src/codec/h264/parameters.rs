@@ -2,7 +2,7 @@ use ash::vk;
 use h264_reader::nal::sps::{FrameMbsFlags, SeqParameterSet};
 
 use crate::{
-    VulkanDecoderError, VulkanEncoderError,
+    VideoEncoderError, VulkanDecoderError,
     device::{CodecColorDescription, ColorRange, ColorSpace, Rational},
     parameters::H264Profile,
     wrappers::ProfileInfo,
@@ -244,7 +244,7 @@ impl VkH264SequenceParameterSet {
         color_space: ColorSpace,
         color_range: ColorRange,
         framerate: Rational,
-    ) -> Result<VkH264SequenceParameterSet, VulkanEncoderError> {
+    ) -> Result<VkH264SequenceParameterSet, VideoEncoderError> {
         // separate_colour_plane_flag is 0 so the crop units are based on SubWidthC and SubHeightC for YUV420
         // with enabled frame_mbs_only_flag
         let (CropUnitX, CropUnitY) = (2, 2);
@@ -265,7 +265,7 @@ impl VkH264SequenceParameterSet {
         let time_scale = framerate
             .numerator
             .checked_mul(2)
-            .ok_or(VulkanEncoderError::FramerateOverflow)?;
+            .ok_or(VideoEncoderError::FramerateOverflow)?;
 
         let vui = Box::new(vk::native::StdVideoH264SequenceParameterSetVui {
             flags: vk::native::StdVideoH264SpsVuiFlags {

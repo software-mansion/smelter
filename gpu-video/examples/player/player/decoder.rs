@@ -1,9 +1,7 @@
 use std::{io::Read, sync::mpsc::SyncSender, time::Duration};
 
 use bytes::BytesMut;
-use gpu_video::{
-    EncodedInputChunk, OutputFrame, WgpuVideoDeviceExt, parameters::DecoderParameters,
-};
+use gpu_video::{EncodedInputChunk, OutputFrame, VideoDeviceExt, parameters::DecoderParameters};
 
 use super::FrameWithPts;
 
@@ -14,6 +12,8 @@ pub fn run_decoder(
     mut bytestream_reader: impl Read,
 ) {
     let mut decoder = device
+        .video()
+        .unwrap()
         .create_wgpu_textures_decoder_h264(DecoderParameters::default())
         .unwrap();
     let frame_interval = 1.0 / (framerate as f64);

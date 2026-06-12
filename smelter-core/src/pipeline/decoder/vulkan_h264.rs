@@ -1,8 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use gpu_video::{
-    DecoderError, H264DecoderEvent, ReferenceManagementError, WgpuTexturesDecoder,
-    WgpuVideoDeviceExt,
+    H264DecoderEvent, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
+    WgpuTexturesDecoder,
     parameters::{DecoderParameters, DecoderUsageFlags, MissedFrameHandling},
 };
 use smelter_render::{Frame, FrameData, Resolution};
@@ -31,13 +31,13 @@ impl VideoDecoder for VulkanH264Decoder {
         }
 
         info!("Initializing Vulkan H264 decoder");
-        let decoder = ctx
-            .wgpu_ctx
-            .device
-            .create_wgpu_textures_decoder_h264(DecoderParameters {
-                missed_frame_handling: MissedFrameHandling::Strict,
-                usage_flags: DecoderUsageFlags::DEFAULT,
-            })?;
+        let device = ctx.wgpu_ctx.device.video().map_err(|_| {
+            DecoderInitError::VulkanDecoderError(VideoDecoderError::VideoDeviceWithoutWgpu)
+        })?;
+        let decoder = device.create_wgpu_textures_decoder_h264(DecoderParameters {
+            missed_frame_handling: MissedFrameHandling::Strict,
+            usage_flags: DecoderUsageFlags::DEFAULT,
+        })?;
         Ok(Self {
             decoder,
             keyframe_request_sender,
@@ -64,7 +64,9 @@ impl VideoDecoderInstance for VulkanH264Decoder {
 
         let frames = match self.decoder.process_event(decoder_event) {
             Ok(frames) => frames,
-            Err(DecoderError::ReferenceManagementError(ReferenceManagementError::MissingFrame)) => {
+            Err(VideoDecoderError::ReferenceManagementError(
+                ReferenceManagementError::MissingFrame,
+            )) => {
                 if let Some(s) = self.keyframe_request_sender.as_ref() {
                     s.send()
                 }

@@ -3,7 +3,7 @@ use std::{ffi::CStr, sync::Arc};
 use ash::{Entry, vk};
 
 use crate::{
-    VulkanInitError,
+    VideoInitError,
     adapter::{VideoAdapter, VideoAdapterDescriptor},
     wrappers::*,
 };
@@ -26,7 +26,7 @@ pub struct VideoInstance {
 }
 
 impl VideoInstance {
-    pub fn new(desc: &VideoInstanceDescriptor) -> Result<Arc<Self>, VulkanInitError> {
+    pub fn new(desc: &VideoInstanceDescriptor) -> Result<Arc<Self>, VideoInitError> {
         let entry = unsafe { Entry::load()? };
         Self::new_from_entry(entry, &mut Vec::new(), desc)
     }
@@ -36,7 +36,7 @@ impl VideoInstance {
         entry: Entry,
         extensions: &mut Vec<&'static CStr>,
         desc: &VideoInstanceDescriptor,
-    ) -> Result<Arc<Self>, VulkanInitError> {
+    ) -> Result<Arc<Self>, VideoInitError> {
         let api_version = vk::make_api_version(0, 1, 3, 0);
         let app_info = vk::ApplicationInfo {
             api_version,
@@ -124,19 +124,19 @@ impl VideoInstance {
     pub fn create_adapter<'a>(
         &'a self,
         descriptor: &VideoAdapterDescriptor,
-    ) -> Result<VideoAdapter<'a>, VulkanInitError> {
+    ) -> Result<VideoAdapter<'a>, VideoInitError> {
         self.iter_adapters()?
             .find(|adapter| {
                 (!descriptor.supports_decoding || adapter.supports_decoding())
                     && (!descriptor.supports_encoding || adapter.supports_encoding())
             })
-            .ok_or(VulkanInitError::NoDevice)
+            .ok_or(VideoInitError::NoDevice)
     }
 
     /// Iterator over all available [`VideoAdapter`]s that support at least decoding or encoding.
     pub fn iter_adapters<'a>(
         &'a self,
-    ) -> Result<impl Iterator<Item = VideoAdapter<'a>> + 'a, VulkanInitError> {
+    ) -> Result<impl Iterator<Item = VideoAdapter<'a>> + 'a, VideoInitError> {
         crate::adapter::iter_adapters(self)
     }
 

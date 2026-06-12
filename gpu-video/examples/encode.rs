@@ -6,7 +6,7 @@ fn main() {
     };
 
     use gpu_video::{
-        InputFrame, RawFrameData, VideoDeviceExt, VideoInstance,
+        InputFrame, RawFrameData, VideoInstance,
         parameters::{
             EncoderParametersH264, EncoderParametersH265, RateControl, VideoAdapterDescriptor,
             VideoDeviceDescriptor, VideoInstanceDescriptor, VideoParameters,

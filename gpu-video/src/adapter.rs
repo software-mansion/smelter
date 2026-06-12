@@ -6,7 +6,7 @@ use std::{
 use tracing::{debug, debug_span, warn};
 
 use crate::{
-    VideoInstance, VulkanInitError,
+    VideoInitError, VideoInstance,
     capabilities::EncodeCapabilities,
     device::{
         DECODE_CODEC_EXTENSIONS, DECODE_EXTENSIONS, ENCODE_CODEC_EXTENSIONS, ENCODE_EXTENSIONS,
@@ -22,7 +22,7 @@ mod wgpu_api;
 pub use wgpu_api::*;
 
 /// Represents a handle to a physical device.
-/// Can be used to create [`VideoDevice`].
+/// Can be used to create [`VideoDevice`](crate::VideoDevice).
 pub struct VideoAdapter<'a> {
     pub(crate) instance: &'a VideoInstance,
     pub(crate) physical_device: vk::PhysicalDevice,
@@ -279,8 +279,8 @@ impl<'a> VideoAdapter<'a> {
     pub fn create_device(
         self,
         desc: &VideoDeviceDescriptor,
-    ) -> Result<crate::VideoDevice, VulkanInitError> {
-        VideoDevice::create_and_register(self.instance, self, desc.clone())
+    ) -> Result<crate::VideoDevice, VideoInitError> {
+        VideoDevice::create_and_register(self, desc.clone())
     }
 
     pub fn info(&self) -> &VideoAdapterInfo {
@@ -395,7 +395,7 @@ macro_rules! find_ext {
 
 pub(crate) fn iter_adapters<'a>(
     vulkan_instance: &'a VideoInstance,
-) -> Result<impl Iterator<Item = VideoAdapter<'a>> + 'a, VulkanInitError> {
+) -> Result<impl Iterator<Item = VideoAdapter<'a>> + 'a, VideoInitError> {
     let physical_devices = unsafe { vulkan_instance.instance.enumerate_physical_devices()? };
     Ok(physical_devices
         .into_iter()

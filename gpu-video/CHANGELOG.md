@@ -7,7 +7,7 @@
   - There are now 2 initialization paths:
     - with `wgpu` support:
       You can follow the typical `wgpu` initialization path, but to create a `wgpu::Device`, you need to use `VideoAdapterExt::request_device_with_video_support`.
-      Decoders and encoders can be created from `wgpu::Device` via `VideoDeviceExt` trait (the device has to be created from `VideoAdapterExt`).
+      Decoders and encoders can be created from `wgpu::Device` via `VideoDeviceExt::video` (the device has to be created from `VideoAdapterExt`).
     - without `wgpu` support:
       For the most part the API remains unchanged, but some structs have been renamed:
       - `VulkanInstance` -> `VideoInstance`

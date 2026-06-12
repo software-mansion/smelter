@@ -7,7 +7,7 @@ use gpu_video::{
 #[cfg(vulkan)]
 fn main() {
     use gpu_video::{
-        InputFrame, WgpuVideoDeviceExt,
+        InputFrame,
         parameters::{RateControl, VideoDeviceDescriptor, VideoParameters},
     };
     use std::{io::Write, num::NonZeroU32};
@@ -49,7 +49,9 @@ fn main() {
         })
         .unwrap();
 
-    let mut encoder_h264 = device
+    let video_device = device.video().unwrap();
+
+    let mut encoder_h264 = video_device
         .create_wgpu_textures_encoder_h264(
             &queue,
             EncoderParametersH264 {
@@ -58,7 +60,7 @@ fn main() {
                     height,
                     target_framerate: 30.into(),
                 },
-                output_parameters: device
+                output_parameters: video_device
                     .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
                         average_bitrate: 500_000,
                         max_bitrate: 2_000_000,
@@ -69,7 +71,7 @@ fn main() {
         )
         .unwrap();
 
-    let mut encoder_h265 = device
+    let mut encoder_h265 = video_device
         .create_wgpu_textures_encoder_h265(
             &queue,
             EncoderParametersH265 {
@@ -78,7 +80,7 @@ fn main() {
                     height,
                     target_framerate: 30.into(),
                 },
-                output_parameters: device
+                output_parameters: video_device
                     .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
                         average_bitrate: 500_000,
                         max_bitrate: 2_000_000,

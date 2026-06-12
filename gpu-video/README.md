@@ -60,11 +60,11 @@ async fn decode_video(
     let (device, queue) = adapter
         .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
+    let video_device = device.video().unwrap();
 
-    let mut decoder = device
-        .create_wgpu_textures_decoder_h264(
-            gpu_video::parameters::DecoderParameters::default()
-        ).unwrap();
+    let mut decoder = video_device.create_wgpu_textures_decoder_h264(
+        gpu_video::parameters::DecoderParameters::default()
+    ).unwrap();
         
     let mut buffer = vec![0; 4096];
 
@@ -109,12 +109,13 @@ async fn encode_video(
     let (device, queue) = adapter
         .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
+    let video_device = device.video().unwrap();
 
-    let mut encoder = device
+    let mut encoder = video_device
         .create_wgpu_textures_encoder_h264(
             &queue,
             gpu_video::parameters::EncoderParametersH264 {
-                output_parameters: device
+                output_parameters: video_device
                     .encoder_output_parameters_h264_high_quality(
                         gpu_video::parameters::RateControl::VariableBitrate {
                             average_bitrate: 500_000,

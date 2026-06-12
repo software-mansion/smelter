@@ -1,6 +1,6 @@
 use crate::{
-    DecoderError, DecoderEvent, EncodedInputChunk, EncodedOutputChunk, InputFrame, OutputFrame,
-    VulkanEncoderError,
+    DecoderEvent, EncodedInputChunk, EncodedOutputChunk, InputFrame, OutputFrame,
+    VideoDecoderError, VideoEncoderError,
     codec::{
         h264::{H264Codec, encode::H264WriteParametersInfo},
         h265::{H265Codec, encode::H265WriteParametersInfo},
@@ -28,7 +28,7 @@ impl WgpuTexturesDecoder {
     pub fn decode(
         &mut self,
         frame: EncodedInputChunk<'_>,
-    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
+    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VideoDecoderError> {
         self.process_event(DecoderEvent::DecodeChunk(frame))
     }
 
@@ -36,7 +36,7 @@ impl WgpuTexturesDecoder {
     ///
     /// Make sure that this is done when you have the knowledge that no more frames will be coming
     /// that need to be presented before the already decoded frames.
-    pub fn flush(&mut self) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
+    pub fn flush(&mut self) -> Result<Vec<OutputFrame<wgpu::Texture>>, VideoDecoderError> {
         self.process_event(DecoderEvent::Flush)
     }
 
@@ -46,7 +46,7 @@ impl WgpuTexturesDecoder {
     pub fn process_event(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
-    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
+    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VideoDecoderError> {
         match event {
             DecoderEvent::DecodeChunk(chunk) => {
                 let nalus = self.parser.parse(chunk.data, chunk.pts)?;
@@ -73,7 +73,7 @@ impl WgpuTexturesDecoder {
     fn decode_access_units(
         &mut self,
         access_units: Vec<AccessUnit>,
-    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
+    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VideoDecoderError> {
         let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
         let unsorted_frames = self
             .vulkan_decoder
@@ -100,7 +100,7 @@ impl WgpuTexturesEncoderH265 {
         &mut self,
         frame: InputFrame<wgpu::Texture>,
         force_keyframe: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
         self.vulkan_encoder.encode_texture(
             &self.wgpu_device,
             &self.wgpu_queue,
@@ -113,7 +113,7 @@ impl WgpuTexturesEncoderH265 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn vps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+    pub fn vps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.vulkan_encoder
             .stream_parameters(H265WriteParametersInfo {
                 write_vps: true,
@@ -126,7 +126,7 @@ impl WgpuTexturesEncoderH265 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+    pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.vulkan_encoder
             .stream_parameters(H265WriteParametersInfo {
                 write_vps: false,
@@ -139,7 +139,7 @@ impl WgpuTexturesEncoderH265 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+    pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.vulkan_encoder
             .stream_parameters(H265WriteParametersInfo {
                 write_vps: false,
@@ -166,7 +166,7 @@ impl WgpuTexturesEncoderH264 {
         &mut self,
         frame: InputFrame<wgpu::Texture>,
         force_keyframe: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
         self.vulkan_encoder.encode_texture(
             &self.wgpu_device,
             &self.wgpu_queue,
@@ -179,7 +179,7 @@ impl WgpuTexturesEncoderH264 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+    pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.vulkan_encoder
             .stream_parameters(H264WriteParametersInfo {
                 write_sps: true,
@@ -191,7 +191,7 @@ impl WgpuTexturesEncoderH264 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+    pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.vulkan_encoder
             .stream_parameters(H264WriteParametersInfo {
                 write_sps: false,
