@@ -149,7 +149,7 @@ pub(crate) fn spawn_broadcast_handler(
     Some(handle)
 }
 
-fn process_video_config(
+fn spawn_video_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     decoders: &MoqServerInputDecoders,
@@ -198,7 +198,7 @@ fn process_video_config(
     }
 }
 
-fn process_audio_config(
+fn spawn_audio_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     audio: &DiscoveredAudio,
@@ -235,7 +235,7 @@ async fn run_video_track(
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
 ) -> Result<(), MoqConnectionError> {
-    let decoder_handle = process_video_config(ctx, input_ref, decoders, &video, frame_sender)?;
+    let decoder_handle = spawn_video_decoder(ctx, input_ref, decoders, &video, frame_sender)?;
     let mut consumer = match broadcast.subscribe_track(&Track::new(&video.name)) {
         Ok(track) => {
             // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
@@ -280,7 +280,7 @@ async fn run_audio_track(
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
 ) -> Result<(), MoqConnectionError> {
-    let decoder_handle = process_audio_config(ctx, input_ref, &audio, sample_sender)?;
+    let decoder_handle = spawn_audio_decoder(ctx, input_ref, &audio, sample_sender)?;
     let mut consumer = match broadcast.subscribe_track(&Track::new(&audio.name)) {
         Ok(track) => {
             // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
