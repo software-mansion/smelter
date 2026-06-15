@@ -59,10 +59,6 @@ impl Drop for MoqServer {
     fn drop(&mut self) {
         self.accept_task.abort();
 
-        // The single `Session` instance is shared via `Arc` between this map, the
-        // input state, and the per-session task. Dropping the map's `Arc` no longer
-        // closes the transport (the input state may still hold an `Arc`), so close
-        // each session explicitly. This ends all tasks awaiting the session to close.
         let mut sessions = self.sessions.lock().unwrap();
         for session in sessions.values() {
             session.lock().unwrap().close(Error::Cancel);
@@ -160,14 +156,6 @@ async fn handle_session(
     moq_inputs: MoqInputsState,
     ctx: Arc<PipelineCtx>,
 ) {
-    // Per-session origin: the session↔path link is known at the point of
-    // matching. This is also the future home of authentication
-    // (`request.url()` / `request.peer_identity()` before `.ok()`).
-
-    // A single `Session` instance, never cloned: `Drop for Session` closes the
-    // transport unless that clone was explicitly closed, so any stray live
-    // clone dropping would kill the connection. Sharing one instance via `Arc`
-    // structurally removes that hazard; closing is always explicit.
     info!(moq_version=?session.version(), "MoQ session established");
     let session = Arc::new(Mutex::new(session));
 
