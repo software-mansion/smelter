@@ -12,7 +12,7 @@ use crate::queue::WeakQueueInput;
 
 use crate::prelude::*;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub(crate) struct MoqInputsState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>>);
 
 pub(crate) struct MoqInputState {
@@ -20,17 +20,6 @@ pub(crate) struct MoqInputState {
     pub decoders: MoqServerInputDecoders,
     pub broadcast_handle: Option<JoinHandle<()>>,
     pub session: Option<Arc<Mutex<Session>>>,
-}
-
-impl std::fmt::Debug for MoqInputState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MoqInputState")
-            .field("queue_input", &self.queue_input)
-            .field("decoders", &self.decoders)
-            .field("broadcast_handle", &self.broadcast_handle)
-            .field("session", &self.session.is_some())
-            .finish()
-    }
 }
 
 pub(crate) struct MoqInputStateOptions {
@@ -82,6 +71,7 @@ impl MoqInputsState {
         match guard.remove(input_ref) {
             Some(mut input) => {
                 if let Some(handle) = input.broadcast_handle.take() {
+                    // FIXME: This cannot be done with abort, use should close atomic bool.
                     handle.abort();
                 }
                 if let Some(session) = input.session.take() {
