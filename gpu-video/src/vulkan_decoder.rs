@@ -97,7 +97,9 @@ pub(crate) struct InFlightDecodeResources {
 }
 
 pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
+    // TODO: this can drop before decoding finishes
     pub(crate) decode_result: DecodeResult<DecodeSubmissionImageInfo>,
+    // TODO: what if decoder will be dropped before queue submition finishes
     pub(crate) decoder: &'borrow mut VulkanDecoder<'decoder>,
     pub(crate) input_buffer: DecodeInputBuffer,
     pub(crate) decode_query_pool: Option<Arc<DecodingQueryPool>>,

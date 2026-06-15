@@ -113,6 +113,7 @@ impl CommandBufferPool {
             buffer,
             pool: self.0.clone(),
             image_layout_transitions: Default::default(),
+            on_finish_callbacks: Vec::new(),
             reset_on_drop: true,
         }))
     }
@@ -136,6 +137,15 @@ impl CommandBufferPool {
             .free
             .extend(inner.submitted.drain(..=last).map(|b| b.buffer));
     }
+
+    fn collect_finished_buffers(&mut self, semaphore: &Time) {
+        let mut guard = self.0.lock().unwrap();
+        let inner = &mut *guard;
+
+        for buffer in inner.submitted.iter() {
+            buffer.semaphore_value
+        }
+    }
 }
 
 struct ImageLayoutChange {
@@ -147,6 +157,7 @@ struct UnfinishedCommandBuffer {
     buffer: vk::CommandBuffer,
     pool: Arc<Mutex<CommandBufferPoolInner>>,
     image_layout_transitions: FxHashMap<ImageKey, ImageLayoutChange>,
+    on_finish_callbacks: Vec<Box<dyn FnOnce()>>,
     reset_on_drop: bool,
 }
 
@@ -229,6 +240,7 @@ impl OpenCommandBuffer {
     }
 }
 
+// TODO: store in flight resoursces in command buffers and free them one the buffer is finished
 pub(crate) struct RecordedCommandBuffer(UnfinishedCommandBuffer);
 
 impl RecordedCommandBuffer {
