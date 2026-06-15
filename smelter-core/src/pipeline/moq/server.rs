@@ -162,8 +162,8 @@ async fn handle_session(
     let session_id = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
     match weak_sessions.upgrade() {
         Some(moq_sessions) => {
-            let mut sessions = moq_sessions.lock().unwrap();
-            sessions.insert(session_id, session.clone());
+            let mut guard = moq_sessions.lock().unwrap();
+            guard.insert(session_id, session.clone());
         }
         None => return,
     }
@@ -187,8 +187,8 @@ async fn handle_session(
                 let session = session.clone();
                 if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
                     input.ensure_no_active_connection(&input_ref)?;
-                    let handle = spawn_broadcast_handler(ctx, &input_ref, input, broadcast);
-                    input.broadcast_handle = handle;
+                    input.connection_handle =
+                        spawn_broadcast_handler(ctx, &input_ref, input, broadcast);
                     input.session = Some(session);
                     Ok(())
                 }) {
@@ -206,7 +206,7 @@ async fn handle_session(
 
     info!("MoQ session closed");
     if let Some(moq_sessions) = weak_sessions.upgrade() {
-        let mut sessions = moq_sessions.lock().unwrap();
-        sessions.remove(&session_id);
+        let mut guard = moq_sessions.lock().unwrap();
+        guard.remove(&session_id);
     }
 }

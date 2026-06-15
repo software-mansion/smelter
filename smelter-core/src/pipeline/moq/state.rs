@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
 use hang::moq_net::Path;
@@ -18,7 +18,8 @@ pub(crate) struct MoqInputsState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>
 pub(crate) struct MoqInputState {
     pub queue_input: WeakQueueInput,
     pub decoders: MoqServerInputDecoders,
-    pub broadcast_handle: Option<JoinHandle<()>>,
+    pub should_close: Arc<AtomicBool>,
+    pub connection_handle: Option<JoinHandle<()>>,
     pub session: Option<Arc<Mutex<Session>>>,
 }
 
@@ -32,7 +33,8 @@ impl MoqInputState {
         Self {
             queue_input: options.queue_input,
             decoders: options.decoders,
-            broadcast_handle: None,
+            should_close: Arc::new(false.into()),
+            connection_handle: None,
             session: None,
         }
     }
@@ -70,10 +72,9 @@ impl MoqInputsState {
         let mut guard = self.0.lock().unwrap();
         match guard.remove(input_ref) {
             Some(mut input) => {
-                if let Some(handle) = input.broadcast_handle.take() {
-                    // FIXME: This cannot be done with abort, use should close atomic bool.
-                    handle.abort();
-                }
+                input
+                    .should_close
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 if let Some(session) = input.session.take() {
                     session.lock().unwrap().close(Error::Cancel);
                 }
@@ -103,7 +104,7 @@ impl MoqInputState {
         &self,
         input_ref: &Ref<InputId>,
     ) -> Result<(), MoqServerError> {
-        match &self.broadcast_handle {
+        match &self.connection_handle {
             Some(handle) if !handle.is_finished() => Err(MoqServerError::BroadcastAlreadyActive(
                 input_ref.id().clone(),
             )),
