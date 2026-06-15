@@ -15,6 +15,7 @@ pub(crate) fn resolve_video_preferences(
     video_preferences: Vec<WebrtcVideoDecoderOptions>,
 ) -> Result<(Vec<VideoDecoderOptions>, Vec<RTCRtpCodecParameters>), WebrtcClientError> {
     let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
+    let quicksync_supported = ctx.graphics_context.has_quicksync_decoder_support();
     let only_vulkan_in_preferences = video_preferences
         .iter()
         .all(|pref| matches!(pref, WebrtcVideoDecoderOptions::VulkanH264));
@@ -23,6 +24,17 @@ pub(crate) fn resolve_video_preferences(
             DecoderInitError::VulkanContextRequiredForVulkanDecoder,
         ));
     };
+    let only_quicksync_in_preferences = video_preferences
+        .iter()
+        .all(|pref| matches!(pref, WebrtcVideoDecoderOptions::QuickSyncH264));
+    if !quicksync_supported && only_quicksync_in_preferences {
+        return Err(WebrtcClientError::DecoderInitError(
+            DecoderInitError::QuickSyncH264DecoderUnavailable(
+                "Intel Quick Sync H264 decoder is not supported by the selected graphics context"
+                    .into(),
+            ),
+        ));
+    }
 
     let video_preferences: Vec<VideoDecoderOptions> = video_preferences
         .into_iter()
@@ -33,6 +45,16 @@ pub(crate) fn resolve_video_preferences(
                     vec![VideoDecoderOptions::VulkanH264]
                 } else {
                     warn!("Vulkan is not supported, skipping \"vulkan_h264\" preference");
+                    vec![]
+                }
+            }
+            WebrtcVideoDecoderOptions::QuickSyncH264 => {
+                if quicksync_supported {
+                    vec![VideoDecoderOptions::QuickSyncH264]
+                } else {
+                    warn!(
+                        "Intel Quick Sync is not supported, skipping \"quicksync_h264\" preference"
+                    );
                     vec![]
                 }
             }
@@ -72,6 +94,9 @@ pub(crate) fn resolve_video_preferences(
                         video_codecs_params.extend(h264_codec_params());
                     }
                 }
+            }
+            VideoDecoderOptions::QuickSyncH264 => {
+                video_codecs_params.extend(h264_codec_params());
             }
             VideoDecoderOptions::FfmpegVp8 => {
                 video_codecs_params.extend(vp8_codec_params());

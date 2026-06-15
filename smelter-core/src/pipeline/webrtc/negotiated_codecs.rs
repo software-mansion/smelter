@@ -40,7 +40,8 @@ fn h264_decoder_info(
     track_codecs: &[RTCRtpCodecParameters],
     video_preferences: &[VideoDecoderOptions],
 ) -> Option<VideoDecoderOptions> {
-    const H264_OPTIONS: [VideoDecoderOptions; 2] = [
+    const H264_OPTIONS: [VideoDecoderOptions; 3] = [
+        VideoDecoderOptions::QuickSyncH264,
         VideoDecoderOptions::VulkanH264,
         VideoDecoderOptions::FfmpegH264,
     ];

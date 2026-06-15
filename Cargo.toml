@@ -30,6 +30,7 @@ default = ["web-renderer"]
 update-snapshots = []
 decklink = ["smelter-api/decklink"]
 web-renderer = ["dep:libcef", "smelter-api/web-renderer"]
+quicksync = ["smelter-core/quicksync"]
 
 [workspace.dependencies]
 smelter = { path = ".", default-features = false }

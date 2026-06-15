@@ -7,7 +7,8 @@ use crate::{
     AudioChannels,
     codecs::{
         AudioEncoderOptions, FfmpegH264EncoderOptions, FfmpegVp8EncoderOptions,
-        FfmpegVp9EncoderOptions, OpusEncoderOptions, VideoEncoderOptions, VulkanH264EncoderOptions,
+        FfmpegVp9EncoderOptions, OpusEncoderOptions, QuickSyncH264EncoderOptions,
+        VideoEncoderOptions, VulkanH264EncoderOptions,
     },
     error::{DecoderInitError, EncoderInitError},
     queue::QueueInputOptions,
@@ -42,6 +43,7 @@ pub enum WebrtcVideoDecoderOptions {
     FfmpegVp8,
     FfmpegVp9,
     VulkanH264,
+    QuickSyncH264,
     Any,
 }
 
@@ -71,6 +73,7 @@ pub enum WhipVideoEncoderOptions {
     FfmpegVp8(FfmpegVp8EncoderOptions),
     FfmpegVp9(FfmpegVp9EncoderOptions),
     VulkanH264(VulkanH264EncoderOptions),
+    QuickSyncH264(QuickSyncH264EncoderOptions),
     Any(Resolution),
 }
 

@@ -27,7 +27,7 @@ use crate::{
             DecoderThreadHandle,
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
-            fdk_aac, ffmpeg_h264, vulkan_h264,
+            fdk_aac, ffmpeg_h264, quicksync_h264, vulkan_h264,
         },
         input::Input,
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread},
@@ -275,6 +275,12 @@ impl HlsDemuxerThread {
                     ));
                 }
                 VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
+                    &self.input_ref,
+                    decoder_thread_options,
+                )?
+            }
+            VideoDecoderOptions::QuickSyncH264 => {
+                VideoDecoderThread::<quicksync_h264::QuickSyncH264Decoder, _>::spawn(
                     &self.input_ref,
                     decoder_thread_options,
                 )?

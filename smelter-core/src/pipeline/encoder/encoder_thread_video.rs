@@ -46,10 +46,10 @@ where
         } = options;
 
         let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
-        let (encoded_stream, encoder_ctx) = VideoEncoderStream::<Encoder, _>::new(
+        let (encoded_stream, encoder_ctx) = VideoEncoderStream::<Encoder>::new(
             ctx,
             encoder_options,
-            frame_receiver.into_iter(),
+            frame_receiver,
         )?;
 
         let stream = encoded_stream.flatten().map(|event| match event {

@@ -33,6 +33,7 @@ pub enum VideoDecoderOptions {
     FfmpegVp8,
     FfmpegVp9,
     VulkanH264,
+    QuickSyncH264,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +48,7 @@ pub enum VideoEncoderOptions {
     FfmpegVp8(FfmpegVp8EncoderOptions),
     FfmpegVp9(FfmpegVp9EncoderOptions),
     VulkanH264(VulkanH264EncoderOptions),
+    QuickSyncH264(QuickSyncH264EncoderOptions),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -73,13 +75,36 @@ pub(crate) trait AudioEncoderOptionsExt {
     fn channels(&self) -> AudioChannels;
 }
 
+impl VideoDecoderOptions {
+    pub fn codec(&self) -> VideoCodec {
+        match self {
+            VideoDecoderOptions::FfmpegH264
+            | VideoDecoderOptions::VulkanH264
+            | VideoDecoderOptions::QuickSyncH264 => VideoCodec::H264,
+            VideoDecoderOptions::FfmpegVp8 => VideoCodec::Vp8,
+            VideoDecoderOptions::FfmpegVp9 => VideoCodec::Vp9,
+        }
+    }
+}
+
 impl VideoEncoderOptions {
+    pub fn codec(&self) -> VideoCodec {
+        match self {
+            VideoEncoderOptions::FfmpegH264(_)
+            | VideoEncoderOptions::VulkanH264(_)
+            | VideoEncoderOptions::QuickSyncH264(_) => VideoCodec::H264,
+            VideoEncoderOptions::FfmpegVp8(_) => VideoCodec::Vp8,
+            VideoEncoderOptions::FfmpegVp9(_) => VideoCodec::Vp9,
+        }
+    }
+
     pub fn resolution(&self) -> Resolution {
         match self {
             VideoEncoderOptions::FfmpegH264(opt) => opt.resolution,
             VideoEncoderOptions::FfmpegVp8(opt) => opt.resolution,
             VideoEncoderOptions::FfmpegVp9(opt) => opt.resolution,
             VideoEncoderOptions::VulkanH264(opt) => opt.resolution,
+            VideoEncoderOptions::QuickSyncH264(opt) => opt.resolution,
         }
     }
 }

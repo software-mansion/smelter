@@ -10,6 +10,7 @@ default = []
 decklink = ["dep:decklink"]
 web-renderer = ["smelter-render/web-renderer"]
 gpu-video = []
+quicksync = ["gpu-video/quicksync", "wgpu/vulkan"]
 
 [dependencies]
 smelter-render = { workspace = true }
