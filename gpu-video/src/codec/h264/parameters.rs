@@ -12,10 +12,23 @@ const MACROBLOCK_SIZE: u32 = 16;
 const LOG2_MAX_FRAME_NUM: u8 = 7;
 
 pub(crate) trait SeqParameterSetExt {
+    /// Macroblock-aligned frame size
+    fn coded_size(&self) -> Result<vk::Extent2D, VulkanDecoderError>;
+
+    /// Frame size with frame-cropping taken into account
     fn size(&self) -> Result<vk::Extent2D, VulkanDecoderError>;
 }
 
 impl SeqParameterSetExt for SeqParameterSet {
+    fn coded_size(&self) -> Result<vk::Extent2D, VulkanDecoderError> {
+        let width = (self.pic_width_in_mbs_minus1 + 1) * MACROBLOCK_SIZE;
+        let height = (self.pic_height_in_map_units_minus1 + 1)
+            * (2 - (self.frame_mbs_flags == FrameMbsFlags::Frames) as u32)
+            * MACROBLOCK_SIZE;
+
+        Ok(vk::Extent2D { width, height })
+    }
+
     #[allow(non_snake_case)]
     fn size(&self) -> Result<vk::Extent2D, VulkanDecoderError> {
         let chroma_array_type = if self.chroma_info.separate_colour_plane_flag {

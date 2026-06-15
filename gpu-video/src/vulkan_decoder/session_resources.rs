@@ -86,7 +86,7 @@ impl<'a> VideoSessionResources<'a> {
             )));
         }
 
-        let max_coded_extent = sps.size()?;
+        let max_coded_extent = sps.coded_size()?;
         // +1 for current frame
         let max_dpb_slots = sps.max_num_ref_frames + 1;
         let max_active_references = sps.max_num_ref_frames;
@@ -166,7 +166,7 @@ impl<'a> VideoSessionResources<'a> {
         usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
     ) -> Result<(), VulkanDecoderError> {
         let new_session_params = SessionParams {
-            max_coded_extent: sps.size()?,
+            max_coded_extent: sps.coded_size()?,
             max_dpb_slots: sps.max_num_ref_frames + 1, // +1 for current frame
             max_active_references: sps.max_num_ref_frames,
             max_num_reorder_frames: calculate_max_num_reorder_frames(&sps)?,
