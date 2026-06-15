@@ -7,8 +7,9 @@ use std::{
     time::Duration,
 };
 
+use hang::moq_net::OriginConsumer;
 use moq_native::{
-    ServerConfig, ServerTlsConfig,
+    Request, ServerConfig, ServerTlsConfig,
     moq_net::{Error, Origin, Session},
 };
 use tracing::{info, warn};
@@ -123,82 +124,101 @@ async fn run_accept_loop(
     ctx: Arc<PipelineCtx>,
 ) {
     while let Some(request) = server.accept().await {
-        let moq_sessions = match weak_sessions.clone().upgrade() {
-            Some(s) => s,
-            None => break,
+        if weak_sessions.clone().upgrade().is_none() {
+            break;
+        }
+
+        let origin = Origin::random().produce();
+        let consumer = origin.consume();
+        let session = match request.with_consume(origin).ok().await {
+            Ok(session) => session,
+            Err(error) => {
+                warn!(%error, "MoQ handshake failed.");
+                return;
+            }
         };
+
         let moq_inputs = moq_inputs.clone();
         let ctx = ctx.clone();
-        tokio::spawn(async move {
-            // Per-session origin: the session↔path link is known at the point of
-            // matching. This is also the future home of authentication
-            // (`request.url()` / `request.peer_identity()` before `.ok()`).
-            let origin = Origin::random().produce();
-            let mut announced = origin.consume();
+        let weak_sessions = weak_sessions.clone();
 
-            let session = match request.with_consume(origin).ok().await {
-                Ok(session) => session,
-                Err(err) => {
-                    warn!("MoQ handshake failed: {err}");
-                    return;
-                }
-            };
-
-            // A single `Session` instance, never cloned: `Drop for Session` closes the
-            // transport unless that clone was explicitly closed, so any stray live
-            // clone dropping would kill the connection. Sharing one instance via `Arc`
-            // structurally removes that hazard; closing is always explicit.
-            let session = Arc::new(Mutex::new(session));
-            info!(moq_version=?session.lock().unwrap().version(), "MoQ session established");
-
-            let session_id = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
-            {
-                let mut sessions = moq_sessions.lock().unwrap();
-                sessions.insert(session_id, session.clone());
-            }
-
-            while let Some((path, broadcast)) = announced.announced().await {
-                match broadcast {
-                    Some(broadcast) => {
-                        info!(%path, "MoQ broadcast announced");
-                        let input_ref = match moq_inputs.find_by_broadcast_path(&path) {
-                            Ok(r) => r,
-                            Err(err) => {
-                                warn!(
-                                    "MoQ broadcast path not matched: {}",
-                                    ErrorStack::new(&err).into_string()
-                                );
-                                continue;
-                            }
-                        };
-
-                        let ctx = ctx.clone();
-                        let session = session.clone();
-                        if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
-                            input.ensure_no_active_connection(&input_ref)?;
-                            let handle = spawn_broadcast_handler(ctx, &input_ref, input, broadcast);
-                            input.broadcast_handle = handle;
-                            input.session = Some(session);
-                            Ok(())
-                        }) {
-                            warn!(
-                                "Failed to handle MoQ broadcast: {}",
-                                ErrorStack::new(&err).into_string()
-                            );
-                        }
-                    }
-                    None => {
-                        info!(%path, "MoQ broadcast unannounced");
-                    }
-                }
-            }
-
-            info!("MoQ session closed");
-            {
-                let mut sessions = moq_sessions.lock().unwrap();
-                sessions.remove(&session_id);
-            }
-        });
+        tokio::spawn(handle_session(
+            session,
+            consumer,
+            weak_sessions,
+            moq_inputs,
+            ctx,
+        ));
     }
     server.close().await;
+}
+
+async fn handle_session(
+    session: Session,
+    mut origin_consumer: OriginConsumer,
+    weak_sessions: WeakMoqSessions,
+    moq_inputs: MoqInputsState,
+    ctx: Arc<PipelineCtx>,
+) {
+    // Per-session origin: the session↔path link is known at the point of
+    // matching. This is also the future home of authentication
+    // (`request.url()` / `request.peer_identity()` before `.ok()`).
+
+    // A single `Session` instance, never cloned: `Drop for Session` closes the
+    // transport unless that clone was explicitly closed, so any stray live
+    // clone dropping would kill the connection. Sharing one instance via `Arc`
+    // structurally removes that hazard; closing is always explicit.
+    info!(moq_version=?session.version(), "MoQ session established");
+    let session = Arc::new(Mutex::new(session));
+
+    let session_id = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
+    match weak_sessions.upgrade() {
+        Some(moq_sessions) => {
+            let mut sessions = moq_sessions.lock().unwrap();
+            sessions.insert(session_id, session.clone());
+        }
+        None => return,
+    }
+
+    while let Some((path, broadcast)) = origin_consumer.announced().await {
+        match broadcast {
+            Some(broadcast) => {
+                info!(%path, "MoQ broadcast announced");
+                let input_ref = match moq_inputs.find_by_broadcast_path(&path) {
+                    Ok(r) => r,
+                    Err(err) => {
+                        warn!(
+                            "MoQ broadcast path not matched: {}",
+                            ErrorStack::new(&err).into_string()
+                        );
+                        continue;
+                    }
+                };
+
+                let ctx = ctx.clone();
+                let session = session.clone();
+                if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
+                    input.ensure_no_active_connection(&input_ref)?;
+                    let handle = spawn_broadcast_handler(ctx, &input_ref, input, broadcast);
+                    input.broadcast_handle = handle;
+                    input.session = Some(session);
+                    Ok(())
+                }) {
+                    warn!(
+                        "Failed to handle MoQ broadcast: {}",
+                        ErrorStack::new(&err).into_string()
+                    );
+                }
+            }
+            None => {
+                info!(%path, "MoQ broadcast unannounced");
+            }
+        }
+    }
+
+    info!("MoQ session closed");
+    if let Some(moq_sessions) = weak_sessions.upgrade() {
+        let mut sessions = moq_sessions.lock().unwrap();
+        sessions.remove(&session_id);
+    }
 }
