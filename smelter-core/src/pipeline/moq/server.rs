@@ -9,7 +9,7 @@ use std::{
 
 use hang::moq_net::OriginConsumer;
 use moq_native::{
-    Request, ServerConfig, ServerTlsConfig,
+    ServerConfig, ServerTlsConfig,
     moq_net::{Error, Origin, Session},
 };
 use tracing::{info, warn};
