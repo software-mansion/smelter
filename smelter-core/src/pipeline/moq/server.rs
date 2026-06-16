@@ -51,13 +51,13 @@ static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(0);
 type MoqSessions = Arc<Mutex<HashMap<u64, Arc<Mutex<Session>>>>>;
 type WeakMoqSessions = Weak<Mutex<HashMap<u64, Arc<Mutex<Session>>>>>;
 pub struct MoqServer {
-    should_close: Arc<AtomicBool>,
+    accept_task: tokio::task::JoinHandle<()>,
     sessions: MoqSessions,
 }
 
 impl Drop for MoqServer {
     fn drop(&mut self) {
-        self.should_close.store(true, Ordering::Relaxed);
+        self.accept_task.abort();
 
         let mut sessions = self.sessions.lock().unwrap();
         for session in sessions.values() {
@@ -83,19 +83,17 @@ pub async fn spawn_moq_server(
     };
 
     let moq_sessions: MoqSessions = Arc::new(Mutex::new(HashMap::new()));
-    let should_close: Arc<AtomicBool> = Arc::new(false.into());
-    tokio::spawn(run_accept_loop(
+    let accept_task = tokio::spawn(run_accept_loop(
         server,
         Arc::downgrade(&moq_sessions),
         state.inputs.clone(),
         ctx.clone(),
-        should_close.clone(),
     ));
 
     info!(port, "MoQ server started");
 
     Ok(MoqServer {
-        should_close,
+        accept_task,
         sessions: moq_sessions,
     })
 }
@@ -120,11 +118,8 @@ async fn run_accept_loop(
     weak_sessions: WeakMoqSessions,
     moq_inputs: MoqInputsState,
     ctx: Arc<PipelineCtx>,
-    should_close: Arc<AtomicBool>,
 ) {
-    while !should_close.load(Ordering::Relaxed)
-        && let Some(request) = server.accept().await
-    {
+    while let Some(request) = server.accept().await {
         if weak_sessions.clone().upgrade().is_none() {
             break;
         }
@@ -135,7 +130,7 @@ async fn run_accept_loop(
             Ok(session) => session,
             Err(error) => {
                 warn!(%error, "MoQ handshake failed.");
-                return;
+                continue;
             }
         };
 
