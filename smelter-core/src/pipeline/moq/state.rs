@@ -4,11 +4,10 @@ use std::{
 };
 
 use hang::moq_net::Path;
-use moq_native::moq_net::{Error, Session};
 use tokio::task::JoinHandle;
 use tracing::error;
 
-use crate::queue::WeakQueueInput;
+use crate::{pipeline::moq::server::MoqSession, queue::WeakQueueInput};
 
 use crate::prelude::*;
 
@@ -20,7 +19,7 @@ pub(crate) struct MoqInputState {
     pub decoders: MoqServerInputDecoders,
     pub should_close: Arc<AtomicBool>,
     pub connection_handle: Option<JoinHandle<()>>,
-    pub session: Option<Arc<Mutex<Session>>>,
+    pub session: Option<MoqSession>,
 }
 
 pub(crate) struct MoqInputStateOptions {
@@ -71,13 +70,10 @@ impl MoqServerState {
     pub(crate) fn remove_input(&self, input_ref: &Ref<InputId>) {
         let mut guard = self.0.lock().unwrap();
         match guard.remove(input_ref) {
-            Some(mut input) => {
+            Some(input) => {
                 input
                     .should_close
                     .store(true, std::sync::atomic::Ordering::Relaxed);
-                if let Some(session) = input.session.take() {
-                    session.lock().unwrap().close(Error::Cancel);
-                }
             }
             None => {
                 error!(?input_ref, "Failed to remove MoQ input, ID not found");

@@ -1,16 +1,9 @@
-use std::{
-    collections::HashMap,
-    sync::{
-        Arc, Mutex, Weak,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use hang::moq_net::OriginConsumer;
 use moq_native::{
     ServerConfig, ServerTlsConfig,
-    moq_net::{Error, Origin, Session},
+    moq_net::{Origin, Session},
 };
 use tracing::{info, warn};
 
@@ -21,6 +14,28 @@ use crate::pipeline::moq::{
 use smelter_render::error::ErrorStack;
 
 use crate::prelude::*;
+
+pub struct MoqSession {
+    session: Session,
+    rt: Arc<tokio::runtime::Runtime>,
+}
+
+impl MoqSession {
+    fn new(session: Session, rt: Arc<tokio::runtime::Runtime>) -> Self {
+        Self { session, rt }
+    }
+
+    fn session(&self) -> &Session {
+        &self.session
+    }
+}
+
+impl Drop for MoqSession {
+    fn drop(&mut self) {
+        let _guard = self.rt.enter();
+        self.session.close(hang::moq_net::Error::Cancel);
+    }
+}
 
 pub struct MoqPipelineState {
     pub port: u16,
@@ -46,24 +61,13 @@ impl MoqPipelineState {
     }
 }
 
-static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(0);
-
-type MoqSessions = Arc<Mutex<HashMap<u64, Arc<Mutex<Session>>>>>;
-type WeakMoqSessions = Weak<Mutex<HashMap<u64, Arc<Mutex<Session>>>>>;
 pub struct MoqServer {
     accept_task: tokio::task::JoinHandle<()>,
-    sessions: MoqSessions,
 }
 
 impl Drop for MoqServer {
     fn drop(&mut self) {
         self.accept_task.abort();
-
-        let mut sessions = self.sessions.lock().unwrap();
-        for session in sessions.values() {
-            session.lock().unwrap().close(Error::Cancel);
-        }
-        sessions.clear();
     }
 }
 
@@ -82,20 +86,11 @@ pub async fn spawn_moq_server(
         Err(error) => return Err(InitPipelineError::MoqServerInitError(error)),
     };
 
-    let moq_sessions: MoqSessions = Arc::new(Mutex::new(HashMap::new()));
-    let accept_task = tokio::spawn(run_accept_loop(
-        server,
-        Arc::downgrade(&moq_sessions),
-        state.inputs.clone(),
-        ctx.clone(),
-    ));
+    let accept_task = tokio::spawn(run_accept_loop(server, state.inputs.clone(), ctx.clone()));
 
     info!(port, "MoQ server started");
 
-    Ok(MoqServer {
-        accept_task,
-        sessions: moq_sessions,
-    })
+    Ok(MoqServer { accept_task })
 }
 
 async fn try_start_server(config: ServerConfig) -> Result<moq_native::Server, anyhow::Error> {
@@ -115,19 +110,14 @@ async fn try_start_server(config: ServerConfig) -> Result<moq_native::Server, an
 
 async fn run_accept_loop(
     mut server: moq_native::Server,
-    weak_sessions: WeakMoqSessions,
     moq_inputs: MoqServerState,
     ctx: Arc<PipelineCtx>,
 ) {
     while let Some(request) = server.accept().await {
-        if weak_sessions.clone().upgrade().is_none() {
-            break;
-        }
-
         let origin = Origin::random().produce();
         let consumer = origin.consume();
         let session = match request.with_consume(origin).ok().await {
-            Ok(session) => session,
+            Ok(session) => MoqSession::new(session, ctx.tokio_rt.clone()),
             Err(error) => {
                 warn!(%error, "MoQ handshake failed.");
                 continue;
@@ -136,37 +126,19 @@ async fn run_accept_loop(
 
         let moq_inputs = moq_inputs.clone();
         let ctx = ctx.clone();
-        let weak_sessions = weak_sessions.clone();
 
-        tokio::spawn(handle_session(
-            session,
-            consumer,
-            weak_sessions,
-            moq_inputs,
-            ctx,
-        ));
+        tokio::spawn(handle_session(session, consumer, moq_inputs, ctx));
     }
     server.close().await;
 }
 
 async fn handle_session(
-    session: Session,
+    session: MoqSession,
     mut origin_consumer: OriginConsumer,
-    weak_sessions: WeakMoqSessions,
     moq_inputs: MoqServerState,
     ctx: Arc<PipelineCtx>,
 ) {
-    info!(moq_version=?session.version(), "MoQ session established");
-    let session = Arc::new(Mutex::new(session));
-
-    let session_id = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
-    match weak_sessions.upgrade() {
-        Some(moq_sessions) => {
-            let mut guard = moq_sessions.lock().unwrap();
-            guard.insert(session_id, session.clone());
-        }
-        None => return,
-    }
+    info!(moq_version=?session.session().version(), "MoQ session established");
 
     while let Some((path, broadcast)) = origin_consumer.announced().await {
         match broadcast {
@@ -184,7 +156,6 @@ async fn handle_session(
                 };
 
                 let ctx = ctx.clone();
-                let session = session.clone();
                 if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
                     input.ensure_no_active_connection(&input_ref)?;
                     input.connection_handle =
@@ -197,6 +168,7 @@ async fn handle_session(
                         ErrorStack::new(&err).into_string()
                     );
                 }
+                break;
             }
             None => {
                 info!(%path, "MoQ broadcast unannounced");
@@ -205,8 +177,4 @@ async fn handle_session(
     }
 
     info!("MoQ session closed");
-    if let Some(moq_sessions) = weak_sessions.upgrade() {
-        let mut guard = moq_sessions.lock().unwrap();
-        guard.remove(&session_id);
-    }
 }
