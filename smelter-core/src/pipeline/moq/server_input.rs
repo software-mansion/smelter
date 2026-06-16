@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     pipeline::{
         input::Input,
-        moq::state::{MoqInputStateOptions, MoqInputsState},
+        moq::state::{MoqInputStateOptions, MoqServerState},
     },
     queue::QueueInput,
 };
@@ -11,7 +11,7 @@ use crate::{
 use crate::prelude::*;
 
 pub struct MoqServerInput {
-    moq_inputs_state: MoqInputsState,
+    moq_inputs_state: MoqServerState,
     input_ref: Ref<InputId>,
 }
 

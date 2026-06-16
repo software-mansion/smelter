@@ -13,7 +13,7 @@ use crate::queue::WeakQueueInput;
 use crate::prelude::*;
 
 #[derive(Clone, Default)]
-pub(crate) struct MoqInputsState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>>);
+pub(crate) struct MoqServerState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>>);
 
 pub(crate) struct MoqInputState {
     pub queue_input: WeakQueueInput,
@@ -40,7 +40,7 @@ impl MoqInputState {
     }
 }
 
-impl MoqInputsState {
+impl MoqServerState {
     pub fn get_mut_with<T, F: FnOnce(&mut MoqInputState) -> Result<T, MoqServerError>>(
         &self,
         input_ref: &Ref<InputId>,

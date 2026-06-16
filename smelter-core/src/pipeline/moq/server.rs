@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 use crate::pipeline::moq::{
     certificate::load_or_create_self_signed_tls, connection::spawn_broadcast_handler,
-    state::MoqInputsState,
+    state::MoqServerState,
 };
 use smelter_render::error::ErrorStack;
 
@@ -24,7 +24,7 @@ use crate::prelude::*;
 
 pub struct MoqPipelineState {
     pub port: u16,
-    pub inputs: MoqInputsState,
+    pub inputs: MoqServerState,
     pub tls_config: ServerTlsConfig,
 }
 
@@ -40,7 +40,7 @@ impl MoqPipelineState {
 
         Ok(Arc::new(Self {
             port,
-            inputs: MoqInputsState::default(),
+            inputs: MoqServerState::default(),
             tls_config,
         }))
     }
@@ -116,7 +116,7 @@ async fn try_start_server(config: ServerConfig) -> Result<moq_native::Server, an
 async fn run_accept_loop(
     mut server: moq_native::Server,
     weak_sessions: WeakMoqSessions,
-    moq_inputs: MoqInputsState,
+    moq_inputs: MoqServerState,
     ctx: Arc<PipelineCtx>,
 ) {
     while let Some(request) = server.accept().await {
@@ -153,7 +153,7 @@ async fn handle_session(
     session: Session,
     mut origin_consumer: OriginConsumer,
     weak_sessions: WeakMoqSessions,
-    moq_inputs: MoqInputsState,
+    moq_inputs: MoqServerState,
     ctx: Arc<PipelineCtx>,
 ) {
     info!(moq_version=?session.version(), "MoQ session established");
