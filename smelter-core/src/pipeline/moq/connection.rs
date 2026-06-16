@@ -230,6 +230,7 @@ fn spawn_audio_decoder(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_video_track(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
