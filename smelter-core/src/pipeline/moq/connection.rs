@@ -1,5 +1,5 @@
 use std::{
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicBool},
     time::Duration,
 };
 
@@ -58,6 +58,7 @@ pub(crate) fn spawn_broadcast_handler(
     let input_ref = input_ref.clone();
     let decoders = input.decoders.clone();
     let rt = ctx.tokio_rt.clone();
+    let should_close = input.should_close.clone();
 
     let handle = rt.spawn(async move {
         info!(input_id = %input_ref, "MoQ broadcast connection established");
@@ -101,6 +102,7 @@ pub(crate) fn spawn_broadcast_handler(
         let first_pts = Arc::new(Mutex::new(None));
 
         let first_pts_inner = first_pts.clone();
+        let should_close_inner = should_close.clone();
         let video_fut = async {
             if let (Some(video), Some(frame_sender)) = (video, video_sender) {
                 let video_result = run_video_track(
@@ -111,6 +113,7 @@ pub(crate) fn spawn_broadcast_handler(
                     frame_sender,
                     &broadcast,
                     first_pts_inner,
+                    should_close_inner,
                 )
                 .await;
                 if let Err(error) = video_result {
@@ -131,6 +134,7 @@ pub(crate) fn spawn_broadcast_handler(
                     sample_sender,
                     &broadcast,
                     first_pts,
+                    should_close,
                 )
                 .await;
                 if let Err(error) = audio_result {
@@ -226,6 +230,7 @@ fn spawn_audio_decoder(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_video_track(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
@@ -234,6 +239,7 @@ async fn run_video_track(
     frame_sender: QueueSender<Frame>,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
+    should_close: Arc<AtomicBool>,
 ) -> Result<(), MoqConnectionError> {
     let decoder_handle = spawn_video_decoder(ctx, input_ref, decoders, &video, frame_sender)?;
     let mut consumer = match broadcast.subscribe_track(&Track::new(&video.name)) {
@@ -245,10 +251,11 @@ async fn run_video_track(
         Err(error) => return Err(error.into()),
     };
 
-    while let Some(frame) = consumer
-        .read()
-        .await
-        .map_err(MoqConnectionError::ContainerError)?
+    while !should_close.load(std::sync::atomic::Ordering::Relaxed)
+        && let Some(frame) = consumer
+            .read()
+            .await
+            .map_err(MoqConnectionError::ContainerError)?
     {
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
@@ -279,6 +286,7 @@ async fn run_audio_track(
     sample_sender: QueueSender<InputAudioSamples>,
     broadcast: &BroadcastConsumer,
     first_pts: Arc<Mutex<Option<Duration>>>,
+    should_close: Arc<AtomicBool>,
 ) -> Result<(), MoqConnectionError> {
     let decoder_handle = spawn_audio_decoder(ctx, input_ref, &audio, sample_sender)?;
     let mut consumer = match broadcast.subscribe_track(&Track::new(&audio.name)) {
@@ -292,10 +300,11 @@ async fn run_audio_track(
         }
     };
 
-    while let Some(frame) = consumer
-        .read()
-        .await
-        .map_err(MoqConnectionError::ContainerError)?
+    while !should_close.load(std::sync::atomic::Ordering::Relaxed)
+        && let Some(frame) = consumer
+            .read()
+            .await
+            .map_err(MoqConnectionError::ContainerError)?
     {
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
