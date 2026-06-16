@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex, Weak,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -51,13 +51,13 @@ static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(0);
 type MoqSessions = Arc<Mutex<HashMap<u64, Arc<Mutex<Session>>>>>;
 type WeakMoqSessions = Weak<Mutex<HashMap<u64, Arc<Mutex<Session>>>>>;
 pub struct MoqServer {
-    accept_task: tokio::task::JoinHandle<()>,
+    should_close: Arc<AtomicBool>,
     sessions: MoqSessions,
 }
 
 impl Drop for MoqServer {
     fn drop(&mut self) {
-        self.accept_task.abort();
+        self.should_close.store(true, Ordering::Relaxed);
 
         let mut sessions = self.sessions.lock().unwrap();
         for session in sessions.values() {
@@ -83,17 +83,19 @@ pub async fn spawn_moq_server(
     };
 
     let moq_sessions: MoqSessions = Arc::new(Mutex::new(HashMap::new()));
-    let accept_task = tokio::spawn(run_accept_loop(
+    let should_close: Arc<AtomicBool> = Arc::new(false.into());
+    tokio::spawn(run_accept_loop(
         server,
         Arc::downgrade(&moq_sessions),
         state.inputs.clone(),
         ctx.clone(),
+        should_close.clone(),
     ));
 
     info!(port, "MoQ server started");
 
     Ok(MoqServer {
-        accept_task,
+        should_close,
         sessions: moq_sessions,
     })
 }
@@ -118,8 +120,11 @@ async fn run_accept_loop(
     weak_sessions: WeakMoqSessions,
     moq_inputs: MoqInputsState,
     ctx: Arc<PipelineCtx>,
+    should_close: Arc<AtomicBool>,
 ) {
-    while let Some(request) = server.accept().await {
+    while !should_close.load(Ordering::Relaxed)
+        && let Some(request) = server.accept().await
+    {
         if weak_sessions.clone().upgrade().is_none() {
             break;
         }
