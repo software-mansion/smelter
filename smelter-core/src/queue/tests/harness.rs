@@ -238,7 +238,7 @@ impl TestQueue {
             run_late_scheduled_events: opts.run_late_scheduled_events,
             never_drop_output_frames: opts.never_drop_output_frames,
             side_channel_socket_dir: None,
-            tick_duration: Duration::from_micros(100),
+            tick_duration: Duration::from_micros(50),
         });
         let event_emitter = Arc::new(EventEmitter::new());
         let events = event_emitter.subscribe();

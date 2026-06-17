@@ -46,6 +46,7 @@ pub(crate) struct AudioQueueInput {
 }
 
 impl AudioQueueInput {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         queue_ctx: &QueueContext,
         event_emitter: &Arc<EventEmitter>,

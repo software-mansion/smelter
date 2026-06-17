@@ -44,6 +44,7 @@ pub(crate) struct VideoQueueInput {
 }
 
 impl VideoQueueInput {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         queue_ctx: &QueueContext,
         event_emitter: &Arc<EventEmitter>,
@@ -99,7 +100,8 @@ impl VideoQueueInput {
             // Partially duplicate get_frame logic, we can't call it directly
             // because we don't want to tiger eos event.
             let offset = self.resolve_offset(pts, queue_start_pts)?;
-            self.receiver.get_for_pts(pts.saturating_sub(offset))
+            let input_pts = pts.checked_sub(offset)?;
+            self.receiver.get_for_pts(input_pts)
         });
 
         self.paused_frame = frame;
@@ -144,9 +146,7 @@ impl VideoQueueInput {
 
         let offset = self.resolve_offset(pts, queue_start_pts)?;
 
-        let Some(input_pts) = pts.checked_sub(offset) else {
-            return None;
-        };
+        let input_pts = pts.checked_sub(offset)?;
         trace!(queue_pts=?pts, ?input_pts, "Try get frame");
 
         match self.receiver.get_for_pts(input_pts) {
