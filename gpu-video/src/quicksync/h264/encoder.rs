@@ -122,11 +122,6 @@ pub enum QuickSyncH264EncoderError {
     #[error("Intel Quick Sync H264 encoder requires COPY_SRC texture usage, got {0:?}")]
     NoCopySrcTextureUsage(wgpu::TextureUsages),
 
-    #[error(
-        "Intel Quick Sync H264 encoder requires TEXTURE_BINDING texture usage, got {0:?}"
-    )]
-    NoTextureBindingUsage(wgpu::TextureUsages),
-
     #[error("Intel Quick Sync H264 encoder requires RGBA textures, got {0:?}")]
     UnsupportedInputTexture(wgpu::TextureFormat),
 
@@ -166,7 +161,6 @@ impl WgpuTexturesEncoderH264 {
         let pool_size = (config.max_pending_frames + 2)
             .max(usize::from(QUICKSYNC_ENCODER_ASYNC_DEPTH) + 1);
         let mut encoder = QuickSyncH264Encoder::new(config, layout)?;
-        encoder.init_rgb4_vpp(layout).map_err(QuickSyncH264EncoderError::Encode)?;
         let input_pool = (0..pool_size)
             .map(|_| encoder.create_input_surface(&device))
             .collect::<Result<VecDeque<_>, _>>()
@@ -242,11 +236,6 @@ impl WgpuTexturesEncoderH264 {
                 texture.usage(),
             ));
         }
-        if !texture.usage().contains(wgpu::TextureUsages::TEXTURE_BINDING) {
-            return Err(QuickSyncH264EncoderError::NoTextureBindingUsage(
-                texture.usage(),
-            ));
-        }
         if texture.format() != wgpu::TextureFormat::Rgba8Unorm {
             return Err(QuickSyncH264EncoderError::UnsupportedInputTexture(
                 texture.format(),
@@ -278,7 +267,7 @@ impl WgpuTexturesEncoderH264 {
                 "Intel Quick Sync H264 RGB4 input render",
             )
             .map_err(|err| QuickSyncH264EncoderError::Encode(err.to_string()))?;
-        self.encoder.convert_input(input).map_err(QuickSyncH264EncoderError::Encode)
+        Ok(())
     }
 
     fn retire_completed(
@@ -352,57 +341,25 @@ impl QuickSyncH264Encoder {
         })
     }
 
-    fn init_rgb4_vpp(&self, layout: H264EncoderLayout) -> Result<(), String> {
-        self.quicksync
-            .session
-            .init_vpp_rgb4_to_nv12(
-                vpl_u16_dimension("VPP coded width", layout.coded.width)?,
-                vpl_u16_dimension("VPP coded height", layout.coded.height)?,
-                vpl_u16_dimension("VPP crop width", layout.visible.width)?,
-                vpl_u16_dimension("VPP crop height", layout.visible.height)?,
-            )
-            .map_err(|err| err.to_string())
-    }
-
     fn create_input_surface(
         &mut self,
         device: &wgpu::Device,
     ) -> Result<InputSurface, String> {
-        let rgb4_surface = self
+        let surface = self
             .quicksync
             .session
-            .get_surface_for_vpp_input()
+            .get_surface_for_encode()
             .map_err(|err| err.to_string())?;
         let rgb4 = self
             .quicksync
             .import_rgb4_surface(
                 device,
-                &rgb4_surface,
+                &surface,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
                 wgpu::TextureUses::COLOR_TARGET,
             )
             .map_err(|err| err.to_string())?;
-        let nv12_surface = self
-            .quicksync
-            .session
-            .get_surface_for_vpp_output()
-            .map_err(|err| err.to_string())?;
-        Ok(InputSurface {
-            rgb4: Rgb4InputSurface { rgb4, surface: rgb4_surface, nv12_surface },
-        })
-    }
-
-    fn convert_input(&self, input: &Rgb4InputSurface) -> Result<(), String> {
-        let syncp = self
-            .quicksync
-            .session
-            .run_vpp(&input.surface, &input.nv12_surface)
-            .map_err(|err| err.to_string())?;
-        self.quicksync
-            .session
-            .sync_status(syncp, SyncWait::Block)
-            .map(|_| ())
-            .map_err(|err| err.to_string())
+        Ok(InputSurface { rgb4: Rgb4InputSurface { rgb4, surface } })
     }
 
     fn encode(
@@ -412,11 +369,11 @@ impl QuickSyncH264Encoder {
         force_keyframe: bool,
     ) -> Result<(), String> {
         let frame_index = self.frame_index;
-        input.rgb4.nv12_surface.set_timestamp(frame_index);
+        input.rgb4.surface.set_timestamp(frame_index);
 
         self.submit_bitstream(EncodeSubmit::Input {
             force_keyframe,
-            surface: &input.rgb4.nv12_surface,
+            surface: &input.rgb4.surface,
         })?;
         self.pending_frames.insert(
             frame_index,
@@ -501,7 +458,6 @@ struct InputSurface {
 struct Rgb4InputSurface {
     rgb4: ImportedRgb4Surface,
     surface: FrameSurface,
-    nv12_surface: FrameSurface,
 }
 
 struct OutputBitstream {
@@ -609,6 +565,8 @@ fn encoder_video_param(
     layout: H264EncoderLayout,
 ) -> Result<H264EncoderVideoParam, String> {
     let mut frame_info = nv12_progressive_frame_info();
+    frame_info.FourCC = vpl::MFX_FOURCC_RGB4;
+    frame_info.ChromaFormat = vpl::MFX_CHROMAFORMAT_YUV444 as u16;
     frame_info.BitDepthLuma = 8;
     frame_info.BitDepthChroma = 8;
     frame_info.FrameRateExtN = config.framerate.num.get();

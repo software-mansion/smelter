@@ -183,7 +183,7 @@ impl QuickSyncDmaBufSync {
             hal_queue.add_wait_semaphore(
                 semaphore.raw(),
                 None,
-                vk::PipelineStageFlags::TRANSFER,
+                vk::PipelineStageFlags::ALL_COMMANDS,
             );
             waits.push(semaphore.raw());
         }

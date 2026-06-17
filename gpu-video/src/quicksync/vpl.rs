@@ -189,6 +189,14 @@ impl Session {
         FrameSurface::new(surface)
     }
 
+    pub(super) fn get_surface_for_encode(&self) -> Result<FrameSurface, VplError> {
+        let mut surface = std::ptr::null_mut();
+        check_status("MFXMemory_GetSurfaceForEncode", unsafe {
+            vpl::MFXMemory_GetSurfaceForEncode(self.raw(), &mut surface)
+        })?;
+        FrameSurface::new(surface)
+    }
+
     pub(super) fn init_vpp_rgb4_to_nv12(
         &self,
         coded_width: u16,
