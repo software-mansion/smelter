@@ -159,9 +159,15 @@ async fn handle_session(
                 let ctx = ctx.clone();
                 if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
                     input.ensure_no_active_connection(&input_ref)?;
-                    input.connection_handle =
-                        spawn_broadcast_handler(ctx, &input_ref, input, broadcast);
-                    input.session = Some(session);
+                    match spawn_broadcast_handler(ctx, &input_ref, input, broadcast) {
+                        Some(handle) => {
+                            input.connection_handle = Some(handle);
+                            input.session = Some(session);
+                        }
+                        None => {
+                            warn!("Failed to handle MoQ broadcast, input queue was dropped.");
+                        }
+                    }
                     Ok(())
                 }) {
                     warn!(
