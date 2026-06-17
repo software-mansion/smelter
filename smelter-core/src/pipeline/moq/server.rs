@@ -115,6 +115,40 @@ async fn run_accept_loop(
     ctx: Arc<PipelineCtx>,
 ) {
     while let Some(request) = server.accept().await {
+        let Some(url) = request.url() else {
+            if let Err(error) = request.close(400).await {
+                warn!(%error, "Error while rejecting MoQ connection.");
+            }
+            warn!("Rejected MoQ connection, unable to extract URL from the request.");
+            continue;
+        };
+
+        let path = url.path().trim_start_matches('/');
+        let decoded = match urlencoding::decode(path) {
+            Ok(decoded) => decoded.into_owned(),
+            Err(error) => {
+                if let Err(error) = request.close(400).await {
+                    warn!(%error, "Error while rejecting MoQ connection.");
+                }
+                warn!(%error, "Rejected MoQ connection, unable to decode URL path.");
+                continue;
+            }
+        };
+
+        let input_ref = match moq_inputs.find_by_path(&decoded) {
+            Ok(input_ref) => input_ref,
+            Err(error) => {
+                if let Err(error) = request.close(404).await {
+                    warn!(%error, "Error while rejecting MoQ connection.");
+                }
+                warn!(
+                    "Rejected MoQ connection, no input matched the URL path: {}",
+                    ErrorStack::new(&error).into_string()
+                );
+                continue;
+            }
+        };
+
         let origin = Origin::random().produce();
         let consumer = origin.consume();
         let session = match request.with_consume(origin).ok().await {
@@ -128,7 +162,7 @@ async fn run_accept_loop(
         let moq_inputs = moq_inputs.clone();
         let ctx = ctx.clone();
 
-        tokio::spawn(handle_session(session, consumer, moq_inputs, ctx));
+        tokio::spawn(handle_session(session, consumer, moq_inputs, ctx, input_ref));
     }
     server.close().await;
 }
@@ -138,48 +172,32 @@ async fn handle_session(
     mut origin_consumer: OriginConsumer,
     moq_inputs: MoqServerState,
     ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
 ) {
     info!(moq_version=?session.session().version(), "MoQ session established");
 
-    while let Some((path, broadcast)) = origin_consumer.announced().await {
-        match broadcast {
-            Some(broadcast) => {
-                info!(%path, "MoQ broadcast announced");
-                let input_ref = match moq_inputs.find_by_broadcast_path(&path) {
-                    Ok(r) => r,
-                    Err(err) => {
-                        warn!(
-                            "MoQ broadcast path not matched: {}",
-                            ErrorStack::new(&err).into_string()
-                        );
-                        continue;
-                    }
-                };
+    let Some((path, Some(broadcast))) = origin_consumer.announced().await else {
+        warn!("MoQ session closed before announcing a broadcast");
+        return;
+    };
+    info!(%path, "MoQ broadcast announced");
 
-                let ctx = ctx.clone();
-                if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
-                    input.ensure_no_active_connection(&input_ref)?;
-                    match spawn_broadcast_handler(ctx, &input_ref, input, broadcast) {
-                        Some(handle) => {
-                            input.connection_handle = Some(handle);
-                            input.session = Some(session);
-                        }
-                        None => {
-                            warn!("Failed to handle MoQ broadcast, input queue was dropped.");
-                        }
-                    }
-                    Ok(())
-                }) {
-                    warn!(
-                        "Failed to handle MoQ broadcast: {}",
-                        ErrorStack::new(&err).into_string()
-                    );
-                }
-                break;
+    if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
+        input.ensure_no_active_connection(&input_ref)?;
+        match spawn_broadcast_handler(ctx, &input_ref, input, broadcast) {
+            Some(handle) => {
+                input.connection_handle = Some(handle);
+                input.session = Some(session);
             }
             None => {
-                info!(%path, "MoQ broadcast unannounced");
+                warn!("Failed to handle MoQ broadcast, input queue was dropped.");
             }
         }
+        Ok(())
+    }) {
+        warn!(
+            "Failed to handle MoQ broadcast: {}",
+            ErrorStack::new(&err).into_string()
+        );
     }
 }

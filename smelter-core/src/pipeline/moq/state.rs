@@ -3,7 +3,6 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
-use hang::moq_net::Path;
 use tokio::task::JoinHandle;
 use tracing::error;
 
@@ -81,17 +80,13 @@ impl MoqServerState {
         }
     }
 
-    pub(crate) fn find_by_broadcast_path(
-        &self,
-        broadcast_path: &Path<'static>,
-    ) -> Result<Ref<InputId>, MoqServerError> {
-        let broadcast_path = broadcast_path.to_string();
+    pub(crate) fn find_by_path(&self, path: &str) -> Result<Ref<InputId>, MoqServerError> {
         let guard = self.0.lock().unwrap();
-        let (input_ref, _) = guard
-            .iter()
-            .find(|(input_ref, _)| input_ref.id().0.as_ref() == broadcast_path)
-            .ok_or_else(|| MoqServerError::BroadcastPathNotFound(Arc::from(broadcast_path)))?;
-        Ok(input_ref.clone())
+        guard
+            .keys()
+            .find(|input_ref| input_ref.id().0.as_ref() == path)
+            .cloned()
+            .ok_or_else(|| MoqServerError::BroadcastPathNotFound(Arc::from(path)))
     }
 }
 
@@ -106,5 +101,52 @@ impl MoqInputState {
             )),
             _ => Ok(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::queue::WeakQueueInput;
+
+    fn register(state: &MoqServerState, id: &str) -> Ref<InputId> {
+        let input_ref = Ref::new(&InputId(Arc::from(id)));
+        state
+            .add_input(
+                &input_ref,
+                MoqInputStateOptions {
+                    queue_input: WeakQueueInput::dangling(),
+                    decoders: MoqServerInputDecoders { h264: None },
+                },
+            )
+            .unwrap();
+        input_ref
+    }
+
+    #[test]
+    fn find_by_path_matches_weird_ids() {
+        let state = MoqServerState::default();
+        let input_ref = register(&state, "my input/2");
+
+        assert_eq!(state.find_by_path("my input/2").unwrap(), input_ref);
+
+        assert!(matches!(
+            state.find_by_path("nope"),
+            Err(MoqServerError::BroadcastPathNotFound(_))
+        ));
+        assert!(matches!(
+            state.find_by_path(""),
+            Err(MoqServerError::BroadcastPathNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn client_encoded_path_resolves() {
+        let state = MoqServerState::default();
+        let input_ref = register(&state, "my input/2");
+
+        let decoded = urlencoding::decode("my%20input%2F2").unwrap();
+        assert_eq!(decoded, "my input/2");
+        assert_eq!(state.find_by_path(&decoded).unwrap(), input_ref);
     }
 }
