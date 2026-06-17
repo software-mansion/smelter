@@ -292,11 +292,6 @@ impl QueueInput {
 }
 
 impl WeakQueueInput {
-    #[cfg(test)]
-    pub(crate) fn dangling() -> Self {
-        WeakQueueInput(Weak::new())
-    }
-
     pub(super) fn video<F, R>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut VideoQueueInput) -> R,

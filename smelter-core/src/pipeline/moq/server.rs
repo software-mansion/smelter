@@ -162,7 +162,9 @@ async fn run_accept_loop(
         let moq_inputs = moq_inputs.clone();
         let ctx = ctx.clone();
 
-        tokio::spawn(handle_session(session, consumer, moq_inputs, ctx, input_ref));
+        tokio::spawn(handle_session(
+            session, consumer, moq_inputs, ctx, input_ref,
+        ));
     }
     server.close().await;
 }
@@ -180,7 +182,7 @@ async fn handle_session(
         warn!("MoQ session closed before announcing a broadcast");
         return;
     };
-    info!(%path, "MoQ broadcast announced");
+    info!(%path, input_id=%input_ref, "MoQ broadcast announced");
 
     if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
         input.ensure_no_active_connection(&input_ref)?;
