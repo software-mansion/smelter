@@ -4,8 +4,10 @@ use crate::quicksync::sys as vpl;
 
 use crate::quicksync::va::{DisplayHandle, SurfaceId};
 
-type FrameSurfaceRelease = unsafe extern "C" fn(*mut vpl::mfxFrameSurface1) -> vpl::mfxStatus;
-type ExportedSurfaceRelease = unsafe extern "C" fn(*mut vpl::mfxSurfaceInterface) -> vpl::mfxStatus;
+type FrameSurfaceRelease =
+    unsafe extern "C" fn(*mut vpl::mfxFrameSurface1) -> vpl::mfxStatus;
+type ExportedSurfaceRelease =
+    unsafe extern "C" fn(*mut vpl::mfxSurfaceInterface) -> vpl::mfxStatus;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum Codec {
@@ -24,6 +26,7 @@ impl Codec {
 pub(super) enum Component {
     Encode,
     Decode,
+    VppInput,
 }
 
 impl Component {
@@ -31,13 +34,19 @@ impl Component {
         match self {
             Self::Encode => vpl::mfxSurfaceComponent_MFX_SURFACE_COMPONENT_ENCODE,
             Self::Decode => vpl::mfxSurfaceComponent_MFX_SURFACE_COMPONENT_DECODE,
+            Self::VppInput => vpl::mfxSurfaceComponent_MFX_SURFACE_COMPONENT_VPP_INPUT,
         }
     }
 
-    fn codec_filter(self) -> &'static [u8] {
+    fn codec_filter(self) -> Option<&'static [u8]> {
         match self {
-            Self::Encode => b"mfxImplDescription.mfxEncoderDescription.encoder.CodecID\0",
-            Self::Decode => b"mfxImplDescription.mfxDecoderDescription.decoder.CodecID\0",
+            Self::Encode => {
+                Some(b"mfxImplDescription.mfxEncoderDescription.encoder.CodecID\0")
+            }
+            Self::Decode => {
+                Some(b"mfxImplDescription.mfxDecoderDescription.decoder.CodecID\0")
+            }
+            Self::VppInput => None,
         }
     }
 }
@@ -97,17 +106,16 @@ impl Session {
                 vpl::mfxImplType_MFX_IMPL_TYPE_HARDWARE,
             ),
             (b"mfxExtendedDeviceId.DRMRenderNodeNum\0", render_node),
-            (component.codec_filter(), codec.id()),
-            (
-                b"mfxImplDescription.ApiVersion.Version\0",
-                vpl_version(2, 10),
-            ),
+            (b"mfxImplDescription.ApiVersion.Version\0", vpl_version(2, 10)),
             (
                 b"mfxImplDescription.AccelerationMode\0",
                 vpl::mfxAccelerationMode_MFX_ACCEL_MODE_VIA_VAAPI,
             ),
         ] {
             set_filter_u32(loader.raw(), name, value)?;
+        }
+        if let Some(codec_filter) = component.codec_filter() {
+            set_filter_u32(loader.raw(), codec_filter, codec.id())?;
         }
 
         for (name, value) in [
@@ -129,10 +137,7 @@ impl Session {
             vpl::MFXCreateSession(loader.raw(), 0, &mut raw)
         })?;
         let raw = non_null(raw, "MFXCreateSession")?;
-        let session = Self {
-            _loader: loader,
-            raw,
-        };
+        let session = Self { _loader: loader, raw };
         session.set_va_display(va_display)?;
         Ok(session)
     }
@@ -156,24 +161,122 @@ impl Session {
         syncp: vpl::mfxSyncPoint,
         wait: SyncWait,
     ) -> Result<SyncStatus, VplError> {
-        let status = unsafe { vpl::MFXVideoCORE_SyncOperation(self.raw(), syncp, wait.timeout()) };
+        let status =
+            unsafe { vpl::MFXVideoCORE_SyncOperation(self.raw(), syncp, wait.timeout()) };
         match status {
             vpl::mfxStatus_MFX_ERR_NONE => Ok(SyncStatus::Complete),
             vpl::mfxStatus_MFX_WRN_IN_EXECUTION => Ok(SyncStatus::Pending),
             status if status > vpl::mfxStatus_MFX_ERR_NONE => Ok(SyncStatus::Complete),
-            status => Err(VplError::Status {
-                function: "MFXVideoCORE_SyncOperation",
-                status,
-            }),
+            status => {
+                Err(VplError::Status { function: "MFXVideoCORE_SyncOperation", status })
+            }
         }
     }
 
-    pub(super) fn get_surface_for_encode(&self) -> Result<FrameSurface, VplError> {
+    pub(super) fn get_surface_for_vpp_input(&self) -> Result<FrameSurface, VplError> {
         let mut surface = std::ptr::null_mut();
-        check_status("MFXMemory_GetSurfaceForEncode", unsafe {
-            vpl::MFXMemory_GetSurfaceForEncode(self.raw(), &mut surface)
+        check_status("MFXMemory_GetSurfaceForVPP", unsafe {
+            vpl::MFXMemory_GetSurfaceForVPP(self.raw(), &mut surface)
         })?;
         FrameSurface::new(surface)
+    }
+
+    pub(super) fn get_surface_for_vpp_output(&self) -> Result<FrameSurface, VplError> {
+        let mut surface = std::ptr::null_mut();
+        check_status("MFXMemory_GetSurfaceForVPPOut", unsafe {
+            vpl::MFXMemory_GetSurfaceForVPPOut(self.raw(), &mut surface)
+        })?;
+        FrameSurface::new(surface)
+    }
+
+    pub(super) fn init_vpp_rgb4_to_nv12(
+        &self,
+        coded_width: u16,
+        coded_height: u16,
+        crop_width: u16,
+        crop_height: u16,
+    ) -> Result<(), VplError> {
+        let mut params: vpl::mfxVideoParam = unsafe { std::mem::zeroed() };
+        params.IOPattern = (vpl::MFX_IOPATTERN_IN_VIDEO_MEMORY
+            | vpl::MFX_IOPATTERN_OUT_VIDEO_MEMORY) as u16;
+        unsafe {
+            let vpp = &mut params.__bindgen_anon_1.vpp;
+            fill_vpp_frame_info(
+                &mut vpp.In,
+                vpl::MFX_FOURCC_RGB4,
+                0,
+                coded_width,
+                coded_height,
+                crop_width,
+                crop_height,
+            );
+            fill_vpp_frame_info(
+                &mut vpp.Out,
+                vpl::MFX_FOURCC_NV12,
+                vpl::MFX_CHROMAFORMAT_YUV420 as u16,
+                coded_width,
+                coded_height,
+                crop_width,
+                crop_height,
+            );
+        }
+        check_status_allow_warnings("MFXVideoVPP_Init", unsafe {
+            vpl::MFXVideoVPP_Init(self.raw(), &mut params)
+        })
+    }
+
+    pub(super) fn init_vpp_nv12_to_rgb4(
+        &self,
+        coded_width: u16,
+        coded_height: u16,
+        crop_width: u16,
+        crop_height: u16,
+    ) -> Result<(), VplError> {
+        let mut params: vpl::mfxVideoParam = unsafe { std::mem::zeroed() };
+        params.IOPattern = (vpl::MFX_IOPATTERN_IN_VIDEO_MEMORY
+            | vpl::MFX_IOPATTERN_OUT_VIDEO_MEMORY) as u16;
+        unsafe {
+            let vpp = &mut params.__bindgen_anon_1.vpp;
+            fill_vpp_frame_info(
+                &mut vpp.In,
+                vpl::MFX_FOURCC_NV12,
+                vpl::MFX_CHROMAFORMAT_YUV420 as u16,
+                coded_width,
+                coded_height,
+                crop_width,
+                crop_height,
+            );
+            fill_vpp_frame_info(
+                &mut vpp.Out,
+                vpl::MFX_FOURCC_RGB4,
+                0,
+                coded_width,
+                coded_height,
+                crop_width,
+                crop_height,
+            );
+        }
+        check_status_allow_warnings("MFXVideoVPP_Init", unsafe {
+            vpl::MFXVideoVPP_Init(self.raw(), &mut params)
+        })
+    }
+
+    pub(super) fn run_vpp(
+        &self,
+        input: &FrameSurface,
+        output: &FrameSurface,
+    ) -> Result<vpl::mfxSyncPoint, VplError> {
+        let mut syncp = std::ptr::null_mut();
+        check_status_allow_warnings("MFXVideoVPP_RunFrameVPPAsync", unsafe {
+            vpl::MFXVideoVPP_RunFrameVPPAsync(
+                self.raw(),
+                input.raw(),
+                output.raw(),
+                std::ptr::null_mut(),
+                &mut syncp,
+            )
+        })?;
+        Ok(syncp)
     }
 
     pub(super) fn export_va_surface(
@@ -193,7 +296,8 @@ impl Session {
         check_status("mfxFrameSurfaceInterface::Export", unsafe {
             export(surface.raw(), header, &mut exported)
         })?;
-        let mut surface = non_null(exported.cast::<vpl::mfxSurfaceVAAPI>(), "exported surface")?;
+        let mut surface =
+            non_null(exported.cast::<vpl::mfxSurfaceVAAPI>(), "exported surface")?;
         let release = required_function(
             unsafe { surface.as_mut().SurfaceInterface.Release },
             "mfxSurfaceInterface::Release",
@@ -269,6 +373,29 @@ impl Drop for ExportedSurface {
     }
 }
 
+fn fill_vpp_frame_info(
+    frame_info: &mut vpl::mfxFrameInfo,
+    fourcc: u32,
+    chroma_format: u16,
+    coded_width: u16,
+    coded_height: u16,
+    crop_width: u16,
+    crop_height: u16,
+) {
+    frame_info.FourCC = fourcc;
+    frame_info.ChromaFormat = chroma_format;
+    frame_info.PicStruct = vpl::MFX_PICSTRUCT_PROGRESSIVE as u16;
+    frame_info.FrameRateExtN = 30;
+    frame_info.FrameRateExtD = 1;
+    unsafe {
+        let dims = &mut frame_info.__bindgen_anon_1.__bindgen_anon_1;
+        dims.Width = coded_width;
+        dims.Height = coded_height;
+        dims.CropW = crop_width;
+        dims.CropH = crop_height;
+    }
+}
+
 fn frame_surface_interface(
     surface: NonNull<vpl::mfxFrameSurface1>,
 ) -> Result<NonNull<vpl::mfxFrameSurfaceInterface>, VplError> {
@@ -295,7 +422,11 @@ impl Drop for Loader {
     }
 }
 
-fn set_filter_u32(loader: vpl::mfxLoader, name: &'static [u8], value: u32) -> Result<(), VplError> {
+fn set_filter_u32(
+    loader: vpl::mfxLoader,
+    name: &'static [u8],
+    value: u32,
+) -> Result<(), VplError> {
     let cfg = create_config(loader)?;
     set_config_filter_u32(cfg, name, value)
 }

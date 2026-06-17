@@ -10,6 +10,9 @@ mod sys;
 mod va;
 mod vpl;
 
+#[cfg(feature = "wgpu")]
+pub use probe::{Rgb4VppSurfaceSharingProbe, probe_rgb4_vpp_surface_sharing};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Nv12Plane {
     Y,
@@ -82,14 +85,16 @@ pub fn create_wgpu_device(
     descriptor: &wgpu::DeviceDescriptor<'_>,
 ) -> Result<(wgpu::Device, wgpu::Queue), String> {
     let hal_adapter = unsafe {
-        adapter
-            .as_hal::<VkApi>()
-            .ok_or_else(|| "Intel Quick Sync requires a Vulkan wgpu adapter".to_string())?
+        adapter.as_hal::<VkApi>().ok_or_else(|| {
+            "Intel Quick Sync requires a Vulkan wgpu adapter".to_string()
+        })?
     };
     let capabilities = hal_adapter.physical_device_capabilities();
-    if let Some(extension) = crate::dmabuf::missing_required_vulkan_device_extension(|extension| {
-        capabilities.supports_extension(extension)
-    }) {
+    if let Some(extension) =
+        crate::dmabuf::missing_required_vulkan_device_extension(|extension| {
+            capabilities.supports_extension(extension)
+        })
+    {
         return Err(format!(
             "Intel Quick Sync requires Vulkan device extension {}",
             extension.to_string_lossy()

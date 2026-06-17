@@ -14,20 +14,18 @@ use tracing::info;
 use crate::{
     InputFrame, VideoFramerate, VideoResolution,
     device::CodecColorDescription,
-    dmabuf::{DmaBufFrame, DmaBufInterop, QuickSyncDmaBufSync},
+    dmabuf::QuickSyncDmaBufSync,
     parameters::{ColorRange, ColorSpace},
     quicksync::{
-        Nv12Plane,
         h264::{
-            H264Session, H264SessionError, ImportedSurface, VplSyncQueue,
-            init_dmabuf_interop, nv12_progressive_frame_info, retry_device_busy,
+            H264Session, H264SessionError, ImportedRgb4Surface, TextureSwizzleRenderer,
+            VplSyncQueue, init_dmabuf_interop, nv12_progressive_frame_info,
+            retry_device_busy,
         },
         vpl::{Component, FrameSurface, Session, SyncWait, check_status_allow_warnings},
     },
 };
 
-const H264_PADDING_LUMA: u8 = 16;
-const H264_PADDING_CHROMA: u8 = 128;
 const H264_DIMENSION_ALIGNMENT: u32 = 16;
 const MIN_H264_BITSTREAM_BUFFER_SIZE: u32 = 1_500_000;
 const H264_ENCODER_MAX_DIMENSION: u32 =
@@ -40,9 +38,8 @@ pub struct WgpuTexturesEncoderH264 {
     encoder: QuickSyncH264Encoder,
     sync: QuickSyncDmaBufSync,
     device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
     resolution: VideoResolution,
-    padding_rects: Box<[PaddingRect]>,
+    rgba_to_bgra: TextureSwizzleRenderer,
 }
 
 pub struct H264EncodedOutputChunk<T> {
@@ -125,8 +122,13 @@ pub enum QuickSyncH264EncoderError {
     #[error("Intel Quick Sync H264 encoder requires COPY_SRC texture usage, got {0:?}")]
     NoCopySrcTextureUsage(wgpu::TextureUsages),
 
-    #[error("Intel Quick Sync H264 encoder requires NV12 textures, got {0:?}")]
-    NotNv12Texture(wgpu::TextureFormat),
+    #[error(
+        "Intel Quick Sync H264 encoder requires TEXTURE_BINDING texture usage, got {0:?}"
+    )]
+    NoTextureBindingUsage(wgpu::TextureUsages),
+
+    #[error("Intel Quick Sync H264 encoder requires RGBA textures, got {0:?}")]
+    UnsupportedInputTexture(wgpu::TextureFormat),
 
     #[error(
         "Intel Quick Sync H264 encoder expected texture size {expected:?}, got {provided:?}"
@@ -158,17 +160,22 @@ impl WgpuTexturesEncoderH264 {
     ) -> Result<Self, QuickSyncH264EncoderError> {
         let layout = h264_encoder_layout(config.resolution)?;
         info!("Initializing Intel Quick Sync H264 encoder");
-        let (interop, sync) = init_dmabuf_interop(&device, &queue)?;
+        let (_interop, sync) = init_dmabuf_interop(&device, &queue)?;
 
         let resolution = layout.visible;
-        let padding_rects = h264_coded_padding_rects(layout.visible, layout.coded);
         let pool_size = (config.max_pending_frames + 2)
             .max(usize::from(QUICKSYNC_ENCODER_ASYNC_DEPTH) + 1);
         let mut encoder = QuickSyncH264Encoder::new(config, layout)?;
+        encoder.init_rgb4_vpp(layout).map_err(QuickSyncH264EncoderError::Encode)?;
         let input_pool = (0..pool_size)
-            .map(|_| encoder.create_input_surface(&interop))
+            .map(|_| encoder.create_input_surface(&device))
             .collect::<Result<VecDeque<_>, _>>()
             .map_err(QuickSyncH264EncoderError::Encode)?;
+        let rgba_to_bgra = TextureSwizzleRenderer::new(
+            &device,
+            "Intel Quick Sync RGBA/BGRA input swizzle",
+            wgpu::TextureFormat::Bgra8Unorm,
+        );
 
         info!(
             width = resolution.width,
@@ -179,7 +186,7 @@ impl WgpuTexturesEncoderH264 {
             "Initialized Intel Quick Sync H264 encoder"
         );
 
-        Ok(Self { input_pool, encoder, sync, device, queue, resolution, padding_rects })
+        Ok(Self { input_pool, encoder, sync, device, resolution, rgba_to_bgra })
     }
 
     pub fn parameter_sets(&self) -> &Bytes {
@@ -203,7 +210,7 @@ impl WgpuTexturesEncoderH264 {
             .input_pool
             .pop_front()
             .ok_or(QuickSyncH264EncoderError::InputSurfacePoolExhausted)?;
-        self.copy_input_to_surface(&frame.data, &input.imported.frame)?;
+        self.copy_input_to_surface(&frame.data, &input.rgb4)?;
         self.encoder
             .encode(input, pts, force_keyframe)
             .map_err(QuickSyncH264EncoderError::Encode)?;
@@ -235,8 +242,15 @@ impl WgpuTexturesEncoderH264 {
                 texture.usage(),
             ));
         }
-        if texture.format() != wgpu::TextureFormat::NV12 {
-            return Err(QuickSyncH264EncoderError::NotNv12Texture(texture.format()));
+        if !texture.usage().contains(wgpu::TextureUsages::TEXTURE_BINDING) {
+            return Err(QuickSyncH264EncoderError::NoTextureBindingUsage(
+                texture.usage(),
+            ));
+        }
+        if texture.format() != wgpu::TextureFormat::Rgba8Unorm {
+            return Err(QuickSyncH264EncoderError::UnsupportedInputTexture(
+                texture.format(),
+            ));
         }
         if texture.size() != expected {
             return Err(QuickSyncH264EncoderError::InconsistentTextureSize {
@@ -250,59 +264,21 @@ impl WgpuTexturesEncoderH264 {
     fn copy_input_to_surface(
         &self,
         texture: &wgpu::Texture,
-        input: &DmaBufFrame,
+        input: &Rgb4InputSurface,
     ) -> Result<(), QuickSyncH264EncoderError> {
         let mut encoder =
             self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Intel Quick Sync H264 input copy"),
             });
-        encoder.copy_texture_to_texture(
-            texture.as_image_copy(),
-            input.texture().as_image_copy(),
-            self.resolution.extent_2d(),
-        );
+        self.rgba_to_bgra.render(&mut encoder, texture, input.rgb4.frame.texture());
         self.sync
-            .submit_dma_buf_write(input, encoder, "Intel Quick Sync H264 input copy")
-            .map_err(|err| QuickSyncH264EncoderError::Encode(err.to_string()))?;
-        self.write_coded_padding(input)
-    }
-
-    fn write_coded_padding(
-        &self,
-        frame: &DmaBufFrame,
-    ) -> Result<(), QuickSyncH264EncoderError> {
-        if self.padding_rects.is_empty() {
-            return Ok(());
-        }
-        let texture = frame.texture();
-        for rect in &self.padding_rects {
-            self.write_padding_rect(texture, rect);
-        }
-
-        self.sync
-            .submit_pending_dma_buf_writes(
-                frame,
-                "Intel Quick Sync H264 coded padding write",
+            .submit_target_write(
+                input.rgb4.frame.as_ref(),
+                encoder,
+                "Intel Quick Sync H264 RGB4 input render",
             )
-            .map_err(|err| QuickSyncH264EncoderError::Encode(err.to_string()))
-    }
-
-    fn write_padding_rect(&self, texture: &wgpu::Texture, rect: &PaddingRect) {
-        self.queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: rect.origin,
-                aspect: rect.plane.aspect(),
-            },
-            &rect.data,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(rect.bytes_per_row),
-                rows_per_image: Some(rect.size.height),
-            },
-            rect.size,
-        );
+            .map_err(|err| QuickSyncH264EncoderError::Encode(err.to_string()))?;
+        self.encoder.convert_input(input).map_err(QuickSyncH264EncoderError::Encode)
     }
 
     fn retire_completed(
@@ -326,6 +302,14 @@ impl WgpuTexturesEncoderH264 {
             chunks.push(completion.chunk);
         }
         chunks
+    }
+}
+
+impl Drop for WgpuTexturesEncoderH264 {
+    fn drop(&mut self) {
+        self.input_pool.clear();
+        let _ = self.encoder.flush();
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
     }
 }
 
@@ -368,20 +352,57 @@ impl QuickSyncH264Encoder {
         })
     }
 
+    fn init_rgb4_vpp(&self, layout: H264EncoderLayout) -> Result<(), String> {
+        self.quicksync
+            .session
+            .init_vpp_rgb4_to_nv12(
+                vpl_u16_dimension("VPP coded width", layout.coded.width)?,
+                vpl_u16_dimension("VPP coded height", layout.coded.height)?,
+                vpl_u16_dimension("VPP crop width", layout.visible.width)?,
+                vpl_u16_dimension("VPP crop height", layout.visible.height)?,
+            )
+            .map_err(|err| err.to_string())
+    }
+
     fn create_input_surface(
         &mut self,
-        interop: &DmaBufInterop,
+        device: &wgpu::Device,
     ) -> Result<InputSurface, String> {
-        let surface = self
+        let rgb4_surface = self
             .quicksync
             .session
-            .get_surface_for_encode()
+            .get_surface_for_vpp_input()
             .map_err(|err| err.to_string())?;
-        let imported = self
+        let rgb4 = self
             .quicksync
-            .import_surface(interop, &surface)
+            .import_rgb4_surface(
+                device,
+                &rgb4_surface,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                wgpu::TextureUses::COLOR_TARGET,
+            )
             .map_err(|err| err.to_string())?;
-        Ok(InputSurface { imported, surface })
+        let nv12_surface = self
+            .quicksync
+            .session
+            .get_surface_for_vpp_output()
+            .map_err(|err| err.to_string())?;
+        Ok(InputSurface {
+            rgb4: Rgb4InputSurface { rgb4, surface: rgb4_surface, nv12_surface },
+        })
+    }
+
+    fn convert_input(&self, input: &Rgb4InputSurface) -> Result<(), String> {
+        let syncp = self
+            .quicksync
+            .session
+            .run_vpp(&input.surface, &input.nv12_surface)
+            .map_err(|err| err.to_string())?;
+        self.quicksync
+            .session
+            .sync_status(syncp, SyncWait::Block)
+            .map(|_| ())
+            .map_err(|err| err.to_string())
     }
 
     fn encode(
@@ -391,11 +412,11 @@ impl QuickSyncH264Encoder {
         force_keyframe: bool,
     ) -> Result<(), String> {
         let frame_index = self.frame_index;
-        input.surface.set_timestamp(frame_index);
+        input.rgb4.nv12_surface.set_timestamp(frame_index);
 
         self.submit_bitstream(EncodeSubmit::Input {
             force_keyframe,
-            surface: &input.surface,
+            surface: &input.rgb4.nv12_surface,
         })?;
         self.pending_frames.insert(
             frame_index,
@@ -470,15 +491,17 @@ impl QuickSyncH264Encoder {
 impl Drop for QuickSyncH264Encoder {
     fn drop(&mut self) {
         let _ = self.flush();
-        unsafe {
-            let _ = vpl::MFXVideoENCODE_Close(self.quicksync.session.raw());
-        }
     }
 }
 
 struct InputSurface {
-    imported: ImportedSurface,
+    rgb4: Rgb4InputSurface,
+}
+
+struct Rgb4InputSurface {
+    rgb4: ImportedRgb4Surface,
     surface: FrameSurface,
+    nv12_surface: FrameSurface,
 }
 
 struct OutputBitstream {
@@ -557,42 +580,6 @@ enum EncodeSubmit<'a> {
 enum EncodeAsyncStatus {
     Submitted(vpl::mfxSyncPoint),
     NeedsMoreData,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PaddingRect {
-    plane: Nv12Plane,
-    origin: wgpu::Origin3d,
-    size: wgpu::Extent3d,
-    bytes_per_row: u32,
-    data: Vec<u8>,
-}
-
-impl PaddingRect {
-    fn new(plane: Nv12Plane, x: u32, y: u32, width: u32, height: u32, value: u8) -> Self {
-        let bytes_per_row = width * plane.bytes_per_texel();
-        Self {
-            plane,
-            origin: wgpu::Origin3d { x, y, z: 0 },
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
-            bytes_per_row,
-            data: vec![value; (bytes_per_row * height) as usize],
-        }
-    }
-
-    fn from_luma_rect(x: u32, y: u32, width: u32, height: u32) -> [Self; 2] {
-        [
-            Self::new(Nv12Plane::Y, x, y, width, height, H264_PADDING_LUMA),
-            Self::new(
-                Nv12Plane::Uv,
-                x / 2,
-                y / 2,
-                width / 2,
-                height / 2,
-                H264_PADDING_CHROMA,
-            ),
-        ]
-    }
 }
 
 fn complete_bitstream(
@@ -970,33 +957,6 @@ fn h264_bitstream_buffer_size(
     })
 }
 
-fn h264_coded_padding_rects(
-    visible: VideoResolution,
-    coded: VideoResolution,
-) -> Box<[PaddingRect]> {
-    assert!(coded.width >= visible.width);
-    assert!(coded.height >= visible.height);
-
-    let mut rects = Vec::with_capacity(4);
-    if coded.width > visible.width {
-        rects.extend(PaddingRect::from_luma_rect(
-            visible.width,
-            0,
-            coded.width - visible.width,
-            visible.height,
-        ));
-    }
-    if coded.height > visible.height {
-        rects.extend(PaddingRect::from_luma_rect(
-            0,
-            visible.height,
-            coded.width,
-            coded.height - visible.height,
-        ));
-    }
-    rects.into_boxed_slice()
-}
-
 fn align_to(value: u32, alignment: u32) -> u32 {
     value.div_ceil(alignment) * alignment
 }
@@ -1007,41 +967,6 @@ mod tests {
 
     fn resolution(width: u32, height: u32) -> VideoResolution {
         VideoResolution { width, height }
-    }
-
-    #[test]
-    fn h264_padding_rects_cover_right_coded_columns() {
-        assert_eq!(
-            h264_coded_padding_rects(resolution(34, 32), resolution(48, 32)).as_ref(),
-            &[
-                PaddingRect::new(Nv12Plane::Y, 34, 0, 14, 32, H264_PADDING_LUMA),
-                PaddingRect::new(Nv12Plane::Uv, 17, 0, 7, 16, H264_PADDING_CHROMA),
-            ]
-        );
-    }
-
-    #[test]
-    fn h264_padding_rects_cover_bottom_coded_rows() {
-        assert_eq!(
-            h264_coded_padding_rects(resolution(48, 34), resolution(48, 48)).as_ref(),
-            &[
-                PaddingRect::new(Nv12Plane::Y, 0, 34, 48, 14, H264_PADDING_LUMA),
-                PaddingRect::new(Nv12Plane::Uv, 0, 17, 24, 7, H264_PADDING_CHROMA),
-            ]
-        );
-    }
-
-    #[test]
-    fn h264_padding_rects_cover_right_columns_before_bottom_rows() {
-        assert_eq!(
-            h264_coded_padding_rects(resolution(34, 34), resolution(48, 48)).as_ref(),
-            &[
-                PaddingRect::new(Nv12Plane::Y, 34, 0, 14, 34, H264_PADDING_LUMA),
-                PaddingRect::new(Nv12Plane::Uv, 17, 0, 7, 17, H264_PADDING_CHROMA),
-                PaddingRect::new(Nv12Plane::Y, 0, 34, 48, 14, H264_PADDING_LUMA),
-                PaddingRect::new(Nv12Plane::Uv, 0, 17, 24, 7, H264_PADDING_CHROMA),
-            ]
-        );
     }
 
     #[test]

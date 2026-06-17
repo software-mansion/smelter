@@ -1,4 +1,7 @@
-use std::{os::fd::AsFd, sync::Arc};
+use std::{
+    os::fd::AsFd,
+    sync::{Arc, MutexGuard},
+};
 
 use ash::vk;
 use wgpu::hal::api::Vulkan as VkApi;
@@ -9,6 +12,21 @@ use super::{
     semaphore::{VulkanSemaphore, VulkanSemaphoreError},
     sync_file::{self, DmaBufAccess, SyncFile},
 };
+
+pub(crate) trait DmaBufSyncTarget: Clone + Send + 'static {
+    fn objects(&self) -> &[super::DmaBufObject];
+    fn sync_guard(&self) -> MutexGuard<'_, ()>;
+}
+
+impl DmaBufSyncTarget for DmaBufFrame {
+    fn objects(&self) -> &[super::DmaBufObject] {
+        self.objects()
+    }
+
+    fn sync_guard(&self) -> MutexGuard<'_, ()> {
+        self.sync_guard()
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum QuickSyncDmaBufSyncError {
@@ -25,18 +43,12 @@ pub(crate) enum QuickSyncDmaBufSyncError {
     MissingVulkanQueue,
 
     #[error("{label}: {source}")]
-    Labeled {
-        label: &'static str,
-        source: Box<Self>,
-    },
+    Labeled { label: &'static str, source: Box<Self> },
 }
 
 impl QuickSyncDmaBufSyncError {
     fn labeled(self, label: &'static str) -> Self {
-        Self::Labeled {
-            label,
-            source: Box::new(self),
-        }
+        Self::Labeled { label, source: Box::new(self) }
     }
 }
 
@@ -54,10 +66,7 @@ pub(crate) struct QuickSyncDmaBufSync {
 
 impl QuickSyncDmaBufSync {
     pub(crate) fn new(interop: &DmaBufInterop, queue: &wgpu::Queue) -> Self {
-        Self {
-            queue: queue.clone(),
-            vulkan: Arc::clone(&interop.vulkan),
-        }
+        Self { queue: queue.clone(), vulkan: Arc::clone(&interop.vulkan) }
     }
 
     pub(crate) fn submit_dma_buf_write(
@@ -69,12 +78,13 @@ impl QuickSyncDmaBufSync {
         self.submit_dma_buf_access(frame, DmaBufAccess::Write, [encoder.finish()], label)
     }
 
-    pub(crate) fn submit_pending_dma_buf_writes(
+    pub(crate) fn submit_target_write<T: DmaBufSyncTarget>(
         &self,
-        frame: &DmaBufFrame,
+        target: &T,
+        encoder: wgpu::CommandEncoder,
         label: &'static str,
     ) -> Result<(), QuickSyncDmaBufSyncError> {
-        self.submit_dma_buf_access(frame, DmaBufAccess::Write, [], label)
+        self.submit_dma_buf_access(target, DmaBufAccess::Write, [encoder.finish()], label)
     }
 
     pub(crate) fn submit_dma_buf_read(
@@ -86,20 +96,27 @@ impl QuickSyncDmaBufSync {
         self.submit_dma_buf_access(frame, DmaBufAccess::Read, [encoder.finish()], label)
     }
 
-    fn submit_dma_buf_access(
+    pub(crate) fn submit_target_read<T: DmaBufSyncTarget>(
         &self,
-        frame: &DmaBufFrame,
+        target: &T,
+        encoder: wgpu::CommandEncoder,
+        label: &'static str,
+    ) -> Result<(), QuickSyncDmaBufSyncError> {
+        self.submit_dma_buf_access(target, DmaBufAccess::Read, [encoder.finish()], label)
+    }
+
+    fn submit_dma_buf_access<T: DmaBufSyncTarget>(
+        &self,
+        frame: &T,
         access: DmaBufAccess,
         command_buffers: impl IntoIterator<Item = wgpu::CommandBuffer>,
         label: &'static str,
     ) -> Result<(), QuickSyncDmaBufSyncError> {
         let submitted_frame = frame.clone();
         let sync_guard = frame.sync_guard();
-        let acquired = self
-            .acquire_frame(frame, access)
+        let acquired = self.acquire_frame(frame, access).map_err(label_error(label))?;
+        let release = VulkanSemaphore::exportable(Arc::clone(&self.vulkan))
             .map_err(label_error(label))?;
-        let release =
-            VulkanSemaphore::exportable(Arc::clone(&self.vulkan)).map_err(label_error(label))?;
         let staged_submission = self
             .stage_submission_sync(&acquired, release.raw())
             .map_err(label_error(label))?;
@@ -118,15 +135,16 @@ impl QuickSyncDmaBufSync {
         release_result
     }
 
-    fn acquire_frame(
+    fn acquire_frame<T: DmaBufSyncTarget>(
         &self,
-        frame: &DmaBufFrame,
+        frame: &T,
         access: DmaBufAccess,
     ) -> Result<Box<[VulkanSemaphore]>, QuickSyncDmaBufSyncError> {
         let mut semaphores = Vec::with_capacity(frame.objects().len());
         for object in frame.objects() {
-            let sync_file = sync_file::export_sync_file(object.fd.as_ref().as_fd(), access)
-                .map_err(QuickSyncDmaBufSyncError::ExportSyncFile)?;
+            let sync_file =
+                sync_file::export_sync_file(object.fd.as_ref().as_fd(), access)
+                    .map_err(QuickSyncDmaBufSyncError::ExportSyncFile)?;
             if let SyncFile::Pending(sync_file) = sync_file {
                 semaphores.push(VulkanSemaphore::import_sync_file(
                     Arc::clone(&self.vulkan),
@@ -137,9 +155,9 @@ impl QuickSyncDmaBufSync {
         Ok(semaphores.into_boxed_slice())
     }
 
-    fn release_frame(
+    fn release_frame<T: DmaBufSyncTarget>(
         &self,
-        frame: &DmaBufFrame,
+        frame: &T,
         access: DmaBufAccess,
         sync_file: &SyncFile,
     ) -> Result<(), QuickSyncDmaBufSyncError> {
@@ -162,7 +180,11 @@ impl QuickSyncDmaBufSync {
         };
         let mut waits = Vec::with_capacity(acquire.len());
         for semaphore in acquire {
-            hal_queue.add_wait_semaphore(semaphore.raw(), None, vk::PipelineStageFlags::TRANSFER);
+            hal_queue.add_wait_semaphore(
+                semaphore.raw(),
+                None,
+                vk::PipelineStageFlags::TRANSFER,
+            );
             waits.push(semaphore.raw());
         }
         hal_queue.add_signal_semaphore(release, None);

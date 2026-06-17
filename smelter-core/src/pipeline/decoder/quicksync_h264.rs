@@ -39,7 +39,7 @@ impl VideoDecoder for QuickSyncH264Decoder {
     }
 }
 
-fn frames_from_gpu_video_nv12(
+fn frames_from_gpu_video_rgba(
     frames: impl IntoIterator<Item = gpu_video::OutputFrame<wgpu::Texture>>,
 ) -> Vec<Frame> {
     frames
@@ -51,7 +51,7 @@ fn frames_from_gpu_video_nv12(
                     width: data.width() as usize,
                     height: data.height() as usize,
                 },
-                data: FrameData::Nv12WgpuTexture(data.into()),
+                data: FrameData::Rgba8UnormWgpuTexture(data.into()),
                 pts: Duration::from_micros(metadata.pts.expect(MISSING_PTS)),
             }
         })
@@ -89,7 +89,7 @@ impl VideoDecoderInstance for QuickSyncH264Decoder {
         if self.drop_frames {
             Vec::new()
         } else {
-            frames_from_gpu_video_nv12(frames)
+            frames_from_gpu_video_rgba(frames)
         }
     }
 
@@ -105,7 +105,7 @@ impl VideoDecoderInstance for QuickSyncH264Decoder {
         if self.drop_frames {
             Vec::new()
         } else {
-            frames_from_gpu_video_nv12(frames)
+            frames_from_gpu_video_rgba(frames)
         }
     }
 }

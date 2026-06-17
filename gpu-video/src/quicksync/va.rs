@@ -2,18 +2,7 @@ use std::{
     os::fd::{AsRawFd, FromRawFd, OwnedFd},
     path::{Path, PathBuf},
     ptr::NonNull,
-    sync::Arc,
 };
-
-use drm_fourcc::DrmFourcc;
-
-use crate::{
-    VideoResolution,
-    dmabuf::{DmaBufError, DmaBufObject, DmaBufPlane, Nv12DmaBufDescriptor, Nv12DmaBufLayer},
-};
-
-const DRM_FORMAT_R8: u32 = DrmFourcc::R8 as u32;
-const DRM_FORMAT_GR88: u32 = DrmFourcc::Gr88 as u32;
 
 pub(super) type DisplayHandle = NonNull<std::ffi::c_void>;
 pub(super) type SurfaceId = ffi::VASurfaceID;
@@ -21,10 +10,7 @@ pub(super) type SurfaceId = ffi::VASurfaceID;
 #[derive(Debug, thiserror::Error)]
 pub(super) enum VaError {
     #[error("failed to open DRM render node {}: {source}", path.display())]
-    OpenDrm {
-        path: PathBuf,
-        source: std::io::Error,
-    },
+    OpenDrm { path: PathBuf, source: std::io::Error },
 
     #[error("vaGetDisplayDRM returned null for {}", .0.display())]
     NullDisplay(PathBuf),
@@ -35,14 +21,8 @@ pub(super) enum VaError {
     #[error("DRM PRIME descriptor has invalid object count {0}")]
     InvalidObjectCount(u32),
 
-    #[error("DRM PRIME descriptor has unsupported fourcc {0}")]
-    UnsupportedFourcc(u32),
-
-    #[error("DRM PRIME NV12 descriptor must have either one 2-plane layer or two 1-plane layers")]
-    UnsupportedNv12Layout,
-
-    #[error(transparent)]
-    InvalidNv12Descriptor(#[from] DmaBufError),
+    #[error("DRM PRIME descriptor must contain exactly one single-plane layer")]
+    UnsupportedSinglePlaneLayout,
 }
 
 pub(super) struct VaDisplay {
@@ -57,13 +37,11 @@ impl VaDisplay {
             .read(true)
             .write(true)
             .open(path)
-            .map_err(|source| VaError::OpenDrm {
-                path: path.to_owned(),
-                source,
-            })?;
+            .map_err(|source| VaError::OpenDrm { path: path.to_owned(), source })?;
         let drm = OwnedFd::from(drm);
         let handle = unsafe { ffi::vaGetDisplayDRM(drm.as_raw_fd()) };
-        let handle = NonNull::new(handle).ok_or_else(|| VaError::NullDisplay(path.to_owned()))?;
+        let handle =
+            NonNull::new(handle).ok_or_else(|| VaError::NullDisplay(path.to_owned()))?;
 
         let mut major = 0;
         let mut minor = 0;
@@ -78,11 +56,12 @@ impl VaDisplay {
         self.handle
     }
 
-    pub(super) fn export_surface(
+    pub(super) fn export_surface_layout(
         &self,
         surface_id: SurfaceId,
-    ) -> Result<DrmPrimeDescriptor, VaError> {
-        let mut descriptor = unsafe { std::mem::zeroed::<ffi::VADRMPRIMESurfaceDescriptor>() };
+    ) -> Result<DrmPrimeSurfaceLayout, VaError> {
+        let mut descriptor =
+            unsafe { std::mem::zeroed::<ffi::VADRMPRIMESurfaceDescriptor>() };
         check_status("vaExportSurfaceHandle", unsafe {
             ffi::vaExportSurfaceHandle(
                 self.handle.as_ptr(),
@@ -92,7 +71,25 @@ impl VaDisplay {
                 &mut descriptor as *mut _ as *mut std::ffi::c_void,
             )
         })?;
-        DrmPrimeDescriptor::new(descriptor)
+        DrmPrimeSurfaceLayout::new(descriptor)
+    }
+
+    pub(super) fn export_single_plane_surface(
+        &self,
+        surface_id: SurfaceId,
+    ) -> Result<DrmPrimeSinglePlaneSurface, VaError> {
+        let mut descriptor =
+            unsafe { std::mem::zeroed::<ffi::VADRMPRIMESurfaceDescriptor>() };
+        check_status("vaExportSurfaceHandle", unsafe {
+            ffi::vaExportSurfaceHandle(
+                self.handle.as_ptr(),
+                surface_id,
+                ffi::VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
+                ffi::VA_EXPORT_SURFACE_READ_WRITE,
+                &mut descriptor as *mut _ as *mut std::ffi::c_void,
+            )
+        })?;
+        DrmPrimeSinglePlaneSurface::new(descriptor)
     }
 }
 
@@ -104,11 +101,66 @@ impl Drop for VaDisplay {
     }
 }
 
-pub(super) struct DrmPrimeDescriptor {
-    pub(super) nv12: Nv12DmaBufDescriptor,
+#[derive(Debug, Clone)]
+pub(super) struct DrmPrimeSurfaceLayout {
+    pub(super) fourcc: u32,
+    pub(super) width: u32,
+    pub(super) height: u32,
+    pub(super) objects: Box<[DrmPrimeObjectLayout]>,
+    pub(super) layers: Box<[DrmPrimeLayerLayout]>,
 }
 
-impl DrmPrimeDescriptor {
+pub(super) struct DrmPrimeSinglePlaneSurface {
+    pub(super) fd: OwnedFd,
+    pub(super) fourcc: u32,
+    pub(super) width: u32,
+    pub(super) height: u32,
+    pub(super) size: u32,
+    pub(super) modifier: u64,
+    pub(super) offset: u32,
+    pub(super) pitch: u32,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct DrmPrimeObjectLayout {
+    pub(super) modifier: u64,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct DrmPrimeLayerLayout {
+    pub(super) planes: Box<[DrmPrimePlaneLayout]>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct DrmPrimePlaneLayout {
+    pub(super) object_index: u32,
+    pub(super) pitch: u32,
+}
+
+impl DrmPrimeSinglePlaneSurface {
+    fn new(descriptor: ffi::VADRMPRIMESurfaceDescriptor) -> Result<Self, VaError> {
+        if descriptor.num_objects != 1 {
+            return Err(VaError::InvalidObjectCount(descriptor.num_objects));
+        }
+        if descriptor.num_layers != 1 || descriptor.layers[0].num_planes != 1 {
+            return Err(VaError::UnsupportedSinglePlaneLayout);
+        }
+        let object = &descriptor.objects[0];
+        let layer = &descriptor.layers[0];
+        Ok(Self {
+            fd: unsafe { OwnedFd::from_raw_fd(object.fd) },
+            fourcc: descriptor.fourcc,
+            width: descriptor.width,
+            height: descriptor.height,
+            size: object.size,
+            modifier: object.drm_format_modifier,
+            offset: layer.offset[0],
+            pitch: layer.pitch[0],
+        })
+    }
+}
+
+impl DrmPrimeSurfaceLayout {
     fn new(descriptor: ffi::VADRMPRIMESurfaceDescriptor) -> Result<Self, VaError> {
         if !(1..=4).contains(&descriptor.num_objects) {
             return Err(VaError::InvalidObjectCount(descriptor.num_objects));
@@ -116,60 +168,44 @@ impl DrmPrimeDescriptor {
         let object_count = descriptor.num_objects as usize;
         let objects = descriptor.objects[..object_count]
             .iter()
-            .map(|object| DmaBufObject {
-                fd: Arc::new(unsafe { OwnedFd::from_raw_fd(object.fd) }),
-                size: object.size,
-                modifier: object.drm_format_modifier,
+            .map(|object| {
+                let _fd = unsafe { OwnedFd::from_raw_fd(object.fd) };
+                DrmPrimeObjectLayout { modifier: object.drm_format_modifier }
             })
-            .collect::<Box<_>>();
-        let layer = nv12_layer(&descriptor)?;
-        let resolution = VideoResolution {
+            .collect();
+        let layers = descriptor.layers[..descriptor.num_layers as usize]
+            .iter()
+            .map(|layer| DrmPrimeLayerLayout { planes: layer.planes() })
+            .collect();
+        Ok(Self {
+            fourcc: descriptor.fourcc,
             width: descriptor.width,
             height: descriptor.height,
-        };
-        Ok(Self {
-            nv12: Nv12DmaBufDescriptor::new(resolution, objects, layer)?,
+            objects,
+            layers,
         })
+    }
+
+    pub(super) fn is_single_plane(&self) -> bool {
+        self.objects.len() == 1
+            && self.layers.len() == 1
+            && self.layers[0].planes.len() == 1
+            && self.layers[0].planes[0].object_index == 0
     }
 }
 
-fn nv12_layer(descriptor: &ffi::VADRMPRIMESurfaceDescriptor) -> Result<Nv12DmaBufLayer, VaError> {
-    if descriptor.fourcc != crate::dmabuf::DRM_FORMAT_NV12 {
-        return Err(VaError::UnsupportedFourcc(descriptor.fourcc));
-    }
-    let prime_plane = |layer_index: usize, plane: usize| {
-        let layer = &descriptor.layers[layer_index];
-        DmaBufPlane {
-            object_index: layer.object_index[plane] as usize,
-            offset: layer.offset[plane],
-            pitch: layer.pitch[plane],
-        }
-    };
+trait VaDrmPrimeLayerExt {
+    fn planes(&self) -> Box<[DrmPrimePlaneLayout]>;
+}
 
-    match descriptor.num_layers {
-        1 if descriptor.layers[0].num_planes == 2 => {
-            let layer = &descriptor.layers[0];
-            if layer.drm_format != crate::dmabuf::DRM_FORMAT_NV12 {
-                return Err(VaError::UnsupportedFourcc(layer.drm_format));
-            }
-            Ok(Nv12DmaBufLayer {
-                planes: [prime_plane(0, 0), prime_plane(0, 1)],
+impl VaDrmPrimeLayerExt for ffi::_VADRMPRIMESurfaceDescriptor__bindgen_ty_2 {
+    fn planes(&self) -> Box<[DrmPrimePlaneLayout]> {
+        (0..self.num_planes as usize)
+            .map(|index| DrmPrimePlaneLayout {
+                object_index: self.object_index[index],
+                pitch: self.pitch[index],
             })
-        }
-        2 if descriptor.layers[0].num_planes == 1 && descriptor.layers[1].num_planes == 1 => {
-            let y_layer = &descriptor.layers[0];
-            let uv_layer = &descriptor.layers[1];
-            if y_layer.drm_format != DRM_FORMAT_R8 {
-                return Err(VaError::UnsupportedFourcc(y_layer.drm_format));
-            }
-            if uv_layer.drm_format != DRM_FORMAT_GR88 {
-                return Err(VaError::UnsupportedFourcc(uv_layer.drm_format));
-            }
-            Ok(Nv12DmaBufLayer {
-                planes: [prime_plane(0, 0), prime_plane(1, 0)],
-            })
-        }
-        _ => Err(VaError::UnsupportedNv12Layout),
+            .collect()
     }
 }
 
@@ -190,57 +226,4 @@ mod ffi {
     #![allow(clippy::all)]
 
     include!(concat!(env!("OUT_DIR"), "/va_bindings.rs"));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn descriptor(layers: &[(u32, u32)]) -> ffi::VADRMPRIMESurfaceDescriptor {
-        let mut descriptor = unsafe { std::mem::zeroed::<ffi::VADRMPRIMESurfaceDescriptor>() };
-        descriptor.fourcc = crate::dmabuf::DRM_FORMAT_NV12;
-        descriptor.width = 64;
-        descriptor.height = 64;
-        descriptor.num_objects = 1;
-        descriptor.objects[0].fd = -1;
-        descriptor.objects[0].size = 4096;
-        descriptor.num_layers = layers.len() as u32;
-        for (index, (format, num_planes)) in layers.iter().copied().enumerate() {
-            let layer = &mut descriptor.layers[index];
-            layer.drm_format = format;
-            layer.num_planes = num_planes;
-            layer.offset = [0, 128, 0, 0];
-            layer.pitch = [64, 64, 0, 0];
-        }
-        descriptor
-    }
-
-    fn layer(format: u32, num_planes: u32) -> (u32, u32) {
-        (format, num_planes)
-    }
-
-    #[test]
-    fn nv12_layer_accepts_composed_layer() {
-        let descriptor = descriptor(&[layer(crate::dmabuf::DRM_FORMAT_NV12, 2)]);
-
-        assert!(nv12_layer(&descriptor).is_ok());
-    }
-
-    #[test]
-    fn nv12_layer_accepts_separate_r8_gr88_layers() {
-        let descriptor = descriptor(&[layer(DRM_FORMAT_R8, 1), layer(DRM_FORMAT_GR88, 1)]);
-
-        assert!(nv12_layer(&descriptor).is_ok());
-    }
-
-    #[test]
-    fn nv12_layer_rejects_wrong_separate_layer_format() {
-        let descriptor = descriptor(&[
-            layer(DRM_FORMAT_GR88, 1),
-            layer(crate::dmabuf::DRM_FORMAT_NV12, 1),
-        ]);
-
-        let err = nv12_layer(&descriptor).expect_err("separate NV12 layers must be R8 and GR88");
-        assert!(matches!(err, VaError::UnsupportedFourcc(DRM_FORMAT_GR88)));
-    }
 }

@@ -3,6 +3,7 @@ mod encoder;
 
 use std::{
     collections::VecDeque,
+    os::fd::AsFd,
     sync::{Arc, OnceLock},
     time::Duration,
 };
@@ -10,18 +11,23 @@ use std::{
 pub use decoder::{QuickSyncH264DecoderError, WgpuTexturesDecoderH264};
 pub use encoder::{
     H264EncodedOutputChunk, H264EncoderConfig, H264EncoderPreset, H264EncoderRateControl,
-    H264RateControlError, H264VariableBitrate, QuickSyncH264EncoderError, WgpuTexturesEncoderH264,
+    H264RateControlError, H264VariableBitrate, QuickSyncH264EncoderError,
+    WgpuTexturesEncoderH264,
 };
 
 use crate::{
-    dmabuf::{DmaBufFrame, DmaBufInterop, QuickSyncDmaBufSync},
+    dmabuf::{DmaBufInterop, DmaBufObject, DmaBufSyncTarget, QuickSyncDmaBufSync},
     quicksync::sys as vpl,
     quicksync::{
         display::{DrmRenderNode, quicksync_drm_render_nodes},
         va::{VaDisplay, VaError},
-        vpl::{Codec, Component, ExportedSurface, FrameSurface, Session, SyncStatus, SyncWait},
+        vpl::{
+            Codec, Component, ExportedSurface, FrameSurface, Session, SyncStatus,
+            SyncWait,
+        },
     },
 };
+use wgpu::hal::api::Vulkan as VkApi;
 
 const DEVICE_BUSY_RETRIES: usize = 100;
 const QUICKSYNC_ASYNC_DEPTH: u16 = 4;
@@ -77,19 +83,13 @@ pub enum H264SessionError {
     Probe(String),
 
     #[error("{function} failed with VA status {status}")]
-    VaStatus {
-        function: &'static str,
-        status: i32,
-    },
+    VaStatus { function: &'static str, status: i32 },
 
     #[error("VA interop failed: {0}")]
     Va(String),
 
     #[error("{function} failed with oneVPL status {status}")]
-    VplStatus {
-        function: &'static str,
-        status: i32,
-    },
+    VplStatus { function: &'static str, status: i32 },
 
     #[error("oneVPL interop failed: {0}")]
     Vpl(String),
@@ -160,25 +160,39 @@ impl H264Session {
         component: Component,
     ) -> Result<Self, H264SessionError> {
         let display = VaDisplay::open(&drm_node.path)?;
-        let session = Session::new(
-            drm_node.render_node,
-            Codec::H264,
-            component,
-            display.handle(),
-        )?;
+        let session =
+            Session::new(drm_node.render_node, Codec::H264, component, display.handle())?;
         Ok(Self { session, display })
     }
 
-    pub(super) fn import_surface(
+    pub(super) fn import_rgb4_surface(
         &self,
-        interop: &DmaBufInterop,
+        device: &wgpu::Device,
         surface: &FrameSurface,
-    ) -> Result<ImportedSurface, H264SessionError> {
+        usage: wgpu::TextureUsages,
+        initial_state: wgpu::TextureUses,
+    ) -> Result<ImportedRgb4Surface, H264SessionError> {
         let exported = self.session.export_va_surface(surface)?;
-        let descriptor = self.display.export_surface(exported.va_surface_id())?;
-        let frame = interop.import_nv12_texture(descriptor.nv12)?;
-        Ok(ImportedSurface {
-            frame,
+        let dma_buf =
+            self.display.export_single_plane_surface(exported.va_surface_id())?;
+        let sync_fd = dma_buf
+            .fd
+            .as_fd()
+            .try_clone_to_owned()
+            .map_err(|err| H264SessionError::DmaBuf(err.to_string()))?;
+        let object = DmaBufObject {
+            fd: Arc::new(sync_fd),
+            size: dma_buf.size,
+            modifier: dma_buf.modifier,
+        };
+        let texture = import_rgb4_dma_buf_texture(device, dma_buf, usage, initial_state)
+            .map_err(H264SessionError::DmaBuf)?;
+        Ok(ImportedRgb4Surface {
+            frame: Arc::new(Rgb4DmaBufFrame {
+                texture: Arc::new(texture),
+                objects: Box::new([object]),
+                sync_lock: Arc::new(std::sync::Mutex::new(())),
+            }),
             _exported: exported,
         })
     }
@@ -192,9 +206,207 @@ impl H264Session {
     }
 }
 
-pub(super) struct ImportedSurface {
-    pub(super) frame: Arc<DmaBufFrame>,
+pub(super) struct ImportedRgb4Surface {
+    pub(super) frame: Arc<Rgb4DmaBufFrame>,
     _exported: ExportedSurface,
+}
+
+#[derive(Clone)]
+pub(super) struct Rgb4DmaBufFrame {
+    texture: Arc<wgpu::Texture>,
+    objects: Box<[DmaBufObject]>,
+    sync_lock: Arc<std::sync::Mutex<()>>,
+}
+
+impl Rgb4DmaBufFrame {
+    pub(super) fn texture(&self) -> &wgpu::Texture {
+        &self.texture
+    }
+}
+
+impl DmaBufSyncTarget for Rgb4DmaBufFrame {
+    fn objects(&self) -> &[DmaBufObject] {
+        &self.objects
+    }
+
+    fn sync_guard(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.sync_lock.lock().expect("RGB4 DMA-BUF sync lock poisoned")
+    }
+}
+
+fn import_rgb4_dma_buf_texture(
+    device: &wgpu::Device,
+    dma_buf: super::va::DrmPrimeSinglePlaneSurface,
+    usage: wgpu::TextureUsages,
+    initial_state: wgpu::TextureUses,
+) -> Result<wgpu::Texture, String> {
+    if dma_buf.fourcc.to_le_bytes() != *b"ARGB" {
+        return Err(format!(
+            "expected RGB4 VA surface to export as ARGB DRM fourcc, got {:?}",
+            dma_buf.fourcc.to_le_bytes()
+        ));
+    }
+    let size = wgpu::Extent3d {
+        width: dma_buf.width,
+        height: dma_buf.height,
+        depth_or_array_layers: 1,
+    };
+    let hal_texture = unsafe {
+        let hal_device = device.as_hal::<VkApi>().ok_or_else(|| {
+            "RGB4 DMA-BUF import requires a Vulkan wgpu device".to_string()
+        })?;
+        (*hal_device)
+            .texture_from_dmabuf_fd(
+                dma_buf.fd,
+                &wgpu::hal::TextureDescriptor {
+                    label: Some("Intel Quick Sync RGB4 VPP DMA-BUF import"),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Bgra8Unorm,
+                    usage: texture_uses(usage),
+                    memory_flags: wgpu::hal::MemoryFlags::empty(),
+                    view_formats: Vec::new(),
+                },
+                dma_buf.modifier,
+                u64::from(dma_buf.pitch),
+                u64::from(dma_buf.offset),
+            )
+            .map_err(|err| {
+                format!("failed to import RGB4 DMA-BUF into wgpu-hal: {err}")
+            })?
+    };
+    Ok(unsafe {
+        device.create_texture_from_hal::<VkApi>(
+            hal_texture,
+            &wgpu::TextureDescriptor {
+                label: Some("Intel Quick Sync RGB4 VPP DMA-BUF import"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Bgra8Unorm,
+                usage,
+                view_formats: &[],
+            },
+            initial_state,
+        )
+    })
+}
+
+fn texture_uses(usage: wgpu::TextureUsages) -> wgpu::TextureUses {
+    let mut uses = wgpu::TextureUses::empty();
+    if usage.contains(wgpu::TextureUsages::TEXTURE_BINDING) {
+        uses |= wgpu::TextureUses::RESOURCE;
+    }
+    if usage.contains(wgpu::TextureUsages::COPY_SRC) {
+        uses |= wgpu::TextureUses::COPY_SRC;
+    }
+    if usage.contains(wgpu::TextureUsages::COPY_DST) {
+        uses |= wgpu::TextureUses::COPY_DST;
+    }
+    if usage.contains(wgpu::TextureUsages::RENDER_ATTACHMENT) {
+        uses |= wgpu::TextureUses::COLOR_TARGET;
+    }
+    uses
+}
+
+pub(super) struct TextureSwizzleRenderer {
+    label: &'static str,
+    device: wgpu::Device,
+    pipeline: wgpu::RenderPipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+}
+
+impl TextureSwizzleRenderer {
+    pub(super) fn new(
+        device: &wgpu::Device,
+        label: &'static str,
+        output_format: wgpu::TextureFormat,
+    ) -> Self {
+        let shader =
+            device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_bgra.wgsl"));
+        let bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some(label),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                }],
+            });
+        let pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some(label),
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: 0,
+            });
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(&pipeline_layout),
+            cache: None,
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(output_format.into())],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            multiview_mask: None,
+            multisample: wgpu::MultisampleState::default(),
+            depth_stencil: None,
+        });
+        Self { label, device: device.clone(), pipeline, bind_group_layout }
+    }
+
+    pub(super) fn render(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: &wgpu::Texture,
+        output: &wgpu::Texture,
+    ) {
+        let input_view = input.create_view(&Default::default());
+        let output_view = output.create_view(&Default::default());
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(self.label),
+            layout: &self.bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&input_view),
+            }],
+        });
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(self.label),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            depth_stencil_attachment: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &output_view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            multiview_mask: None,
+        });
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.draw(0..3, 0..1);
+    }
 }
 
 pub(super) struct VplSyncQueue<T> {
@@ -204,10 +416,7 @@ pub(super) struct VplSyncQueue<T> {
 
 impl<T> VplSyncQueue<T> {
     pub(super) fn new(capacity: usize) -> Self {
-        Self {
-            pending: VecDeque::new(),
-            capacity,
-        }
+        Self { pending: VecDeque::new(), capacity }
     }
 
     pub(super) fn push(&mut self, syncp: vpl::mfxSyncPoint, payload: T) {
@@ -262,7 +471,11 @@ impl<T> VplSyncQueue<T> {
     ) -> Result<Vec<R>, String> {
         let mut completed = Vec::new();
         while !self.is_empty() {
-            completed.extend(self.drain_completed(session, SyncWait::Block, &mut complete)?);
+            completed.extend(self.drain_completed(
+                session,
+                SyncWait::Block,
+                &mut complete,
+            )?);
         }
         Ok(completed)
     }
@@ -276,7 +489,9 @@ struct VplSync<T> {
 pub fn support(adapter_info: &wgpu::AdapterInfo) -> H264Support {
     let render_nodes = quicksync_drm_render_nodes(adapter_info);
     H264Support {
-        decoding: H264Session::from_render_nodes(render_nodes.iter(), Component::Decode).is_ok(),
-        encoding: H264Session::from_render_nodes(render_nodes.iter(), Component::Encode).is_ok(),
+        decoding: H264Session::from_render_nodes(render_nodes.iter(), Component::Decode)
+            .is_ok(),
+        encoding: H264Session::from_render_nodes(render_nodes.iter(), Component::Encode)
+            .is_ok(),
     }
 }

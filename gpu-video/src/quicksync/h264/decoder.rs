@@ -12,12 +12,12 @@ use tracing::info;
 use crate::{
     EncodedInputChunk, FrameMetadata, H264DecoderEvent, OutputFrame, VideoResolution,
     device::{ColorRange, ColorSpace},
-    dmabuf::{DmaBufInterop, QuickSyncDmaBufSync},
+    dmabuf::QuickSyncDmaBufSync,
     parser::h264::{H264Parser, ParsedNalu},
     quicksync::{
         h264::{
-            H264Session, H264SessionError, ImportedSurface, QUICKSYNC_ASYNC_DEPTH,
-            VplSyncQueue, init_dmabuf_interop, retry_device_busy,
+            H264Session, H264SessionError, ImportedRgb4Surface, QUICKSYNC_ASYNC_DEPTH,
+            TextureSwizzleRenderer, VplSyncQueue, init_dmabuf_interop, retry_device_busy,
         },
         vpl::{Component, FrameSurface, SyncWait, check_status_allow_warnings},
     },
@@ -27,10 +27,10 @@ const NO_TIMESTAMP: u64 = u64::MAX;
 
 pub struct WgpuTexturesDecoderH264 {
     decoder: QuickSyncH264Decoder,
-    interop: DmaBufInterop,
     sync: QuickSyncDmaBufSync,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
+    bgra_to_rgba: TextureSwizzleRenderer,
     completed_copy: Arc<AtomicU64>,
     next_copy: u64,
     pending_copies: VecDeque<PendingCopy>,
@@ -52,14 +52,19 @@ impl WgpuTexturesDecoderH264 {
         adapter_info: &wgpu::AdapterInfo,
     ) -> Result<Self, QuickSyncH264DecoderError> {
         info!("Initializing Intel Quick Sync H264 decoder");
-        let (interop, sync) = init_dmabuf_interop(&device, &queue)?;
+        let (_interop, sync) = init_dmabuf_interop(&device, &queue)?;
         let decoder = QuickSyncH264Decoder::new(adapter_info)?;
+        let bgra_to_rgba = TextureSwizzleRenderer::new(
+            &device,
+            "Intel Quick Sync BGRA/RGBA output swizzle",
+            wgpu::TextureFormat::Rgba8Unorm,
+        );
         Ok(Self {
             decoder,
-            interop,
             sync,
             device,
             queue,
+            bgra_to_rgba,
             completed_copy: Arc::new(AtomicU64::new(0)),
             next_copy: 1,
             pending_copies: VecDeque::new(),
@@ -113,29 +118,47 @@ impl WgpuTexturesDecoderH264 {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::NV12,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
-                | wgpu::TextureUsages::COPY_DST,
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
+        let rgb4_surface = self
+            .decoder
+            .quicksync
+            .session
+            .get_surface_for_vpp_output()
+            .map_err(|err| QuickSyncH264DecoderError::Decode(err.to_string()))?;
+        let syncp = self
+            .decoder
+            .quicksync
+            .session
+            .run_vpp(&data.surface, &rgb4_surface)
+            .map_err(|err| QuickSyncH264DecoderError::Decode(err.to_string()))?;
+        self.decoder
+            .quicksync
+            .session
+            .sync_status(syncp, SyncWait::Block)
+            .map_err(|err| QuickSyncH264DecoderError::Decode(err.to_string()))?;
+        let imported = self
+            .decoder
+            .quicksync
+            .import_rgb4_surface(
+                &self.device,
+                &rgb4_surface,
+                wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
+                wgpu::TextureUses::RESOURCE,
+            )
+            .map_err(|err| QuickSyncH264DecoderError::Decode(err.to_string()))?;
         let mut encoder =
             self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Intel Quick Sync H264 decoder output copy"),
             });
-        let imported = self
-            .decoder
-            .quicksync
-            .import_surface(&self.interop, &data.surface)
-            .map_err(|err| QuickSyncH264DecoderError::Decode(err.to_string()))?;
-        encoder.copy_texture_to_texture(
-            imported.frame.texture().as_image_copy(),
-            texture.as_image_copy(),
-            size,
-        );
+        self.bgra_to_rgba.render(&mut encoder, imported.frame.texture(), &texture);
         self.sync
-            .submit_dma_buf_read(
-                &imported.frame,
+            .submit_target_read(
+                imported.frame.as_ref(),
                 encoder,
                 "Intel Quick Sync H264 decoder output copy",
             )
@@ -150,6 +173,7 @@ impl WgpuTexturesDecoderH264 {
         self.pending_copies.push_back(PendingCopy {
             serial,
             _imported: imported,
+            _rgb4_surface: rgb4_surface,
             _decoded: data,
         });
 
@@ -176,7 +200,8 @@ impl Drop for WgpuTexturesDecoderH264 {
 
 struct PendingCopy {
     serial: u64,
-    _imported: ImportedSurface,
+    _imported: ImportedRgb4Surface,
+    _rgb4_surface: FrameSurface,
     _decoded: DecodedSurface,
 }
 
@@ -285,7 +310,17 @@ impl QuickSyncH264Decoder {
             vpl::MFXVideoDECODE_Init(self.quicksync.session.raw(), &mut video_param)
         })
         .map_err(|err| err.to_string())?;
-        let resolution = visible_resolution(video_param)?;
+        let layout = decoder_layout(&video_param)?;
+        self.quicksync
+            .session
+            .init_vpp_nv12_to_rgb4(
+                vpl_u16_dimension("VPP coded width", layout.coded.width)?,
+                vpl_u16_dimension("VPP coded height", layout.coded.height)?,
+                vpl_u16_dimension("VPP crop width", layout.visible.width)?,
+                vpl_u16_dimension("VPP crop height", layout.visible.height)?,
+            )
+            .map_err(|err| err.to_string())?;
+        let resolution = layout.visible;
         self.resolution = Some(resolution);
         Ok(resolution)
     }
@@ -409,7 +444,7 @@ impl QuickSyncH264Decoder {
             )
         })
         .map_err(|err| err.to_string())?;
-        let resolution = visible_resolution(video_param)?;
+        let resolution = decoder_layout(&video_param)?.visible;
         if current_resolution != resolution {
             return Err("Intel Quick Sync H264 stream parameters changed".into());
         }
@@ -529,6 +564,10 @@ fn set_decoder_video_param_defaults(video_param: &mut vpl::mfxVideoParam) {
     }
 }
 
+fn vpl_u16_dimension(name: &str, value: u32) -> Result<u16, String> {
+    value.try_into().map_err(|_| format!("H264 {name} {value} exceeds oneVPL limit"))
+}
+
 fn input_bitstream(data: &[u8], pts: Option<u64>) -> Result<vpl::mfxBitstream, String> {
     let len = u32::try_from(data.len()).map_err(|_| {
         format!("H264 bitstream length {} exceeds oneVPL limit", data.len())
@@ -545,16 +584,33 @@ fn output_pts(timestamp: u64, fallback_pts: Option<u64>) -> Option<u64> {
     if timestamp == NO_TIMESTAMP { fallback_pts } else { Some(timestamp) }
 }
 
-fn visible_resolution(
-    video_param: vpl::mfxVideoParam,
-) -> Result<VideoResolution, String> {
+struct DecoderLayout {
+    visible: VideoResolution,
+    coded: VideoResolution,
+}
+
+fn decoder_layout(video_param: &vpl::mfxVideoParam) -> Result<DecoderLayout, String> {
     unsafe {
         let frame_info = video_param.__bindgen_anon_1.mfx.FrameInfo;
         let dims = frame_info.__bindgen_anon_1.__bindgen_anon_1;
-        Ok(VideoResolution {
-            width: visible_dimension("width", dims.CropW, dims.Width)?,
-            height: visible_dimension("height", dims.CropH, dims.Height)?,
+        Ok(DecoderLayout {
+            visible: VideoResolution {
+                width: visible_dimension("width", dims.CropW, dims.Width)?,
+                height: visible_dimension("height", dims.CropH, dims.Height)?,
+            },
+            coded: VideoResolution {
+                width: coded_dimension("width", dims.Width)?,
+                height: coded_dimension("height", dims.Height)?,
+            },
         })
+    }
+}
+
+fn coded_dimension(name: &str, coded: u16) -> Result<u32, String> {
+    if coded == 0 {
+        Err(format!("Intel Quick Sync H264 decoder reported zero coded {name}"))
+    } else {
+        Ok(u32::from(coded))
     }
 }
 

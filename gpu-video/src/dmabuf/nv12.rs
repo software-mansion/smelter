@@ -4,14 +4,11 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use ash::vk;
-use drm_fourcc::DrmFourcc;
-
 use crate::VideoResolution;
+use ash::vk;
 
 use super::{DmaBufInterop, interop::VulkanDmaBufDevice, vulkan};
 
-pub(crate) const DRM_FORMAT_NV12: u32 = DrmFourcc::Nv12 as u32;
 const VK_NV12_FORMAT: vk::Format = vk::Format::G8_B8R8_2PLANE_420_UNORM;
 
 #[derive(Debug, thiserror::Error)]
