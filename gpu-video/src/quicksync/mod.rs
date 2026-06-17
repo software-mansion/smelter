@@ -13,41 +13,6 @@ mod vpl;
 #[cfg(feature = "wgpu")]
 pub use probe::{Rgb4VppSurfaceSharingProbe, probe_rgb4_vpp_surface_sharing};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Nv12Plane {
-    Y,
-    Uv,
-}
-
-impl Nv12Plane {
-    const ALL: [Self; 2] = [Self::Y, Self::Uv];
-
-    fn aspect(self) -> wgpu::TextureAspect {
-        match self {
-            Self::Y => wgpu::TextureAspect::Plane0,
-            Self::Uv => wgpu::TextureAspect::Plane1,
-        }
-    }
-
-    fn extent(self, resolution: crate::VideoResolution) -> wgpu::Extent3d {
-        match self {
-            Self::Y => resolution.extent_2d(),
-            Self::Uv => wgpu::Extent3d {
-                width: resolution.width / 2,
-                height: resolution.height / 2,
-                depth_or_array_layers: 1,
-            },
-        }
-    }
-
-    fn bytes_per_texel(self) -> u32 {
-        match self {
-            Self::Y => 1,
-            Self::Uv => 2,
-        }
-    }
-}
-
 #[cfg(feature = "wgpu")]
 fn required_wgpu_features() -> wgpu::Features {
     crate::dmabuf::required_wgpu_features()

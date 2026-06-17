@@ -7,7 +7,7 @@ use ash::vk;
 use wgpu::hal::api::Vulkan as VkApi;
 
 use super::{
-    DmaBufFrame, DmaBufInterop,
+    DmaBufInterop,
     interop::VulkanDmaBufDevice,
     semaphore::{VulkanSemaphore, VulkanSemaphoreError},
     sync_file::{self, DmaBufAccess, SyncFile},
@@ -16,16 +16,6 @@ use super::{
 pub(crate) trait DmaBufSyncTarget: Clone + Send + 'static {
     fn objects(&self) -> &[super::DmaBufObject];
     fn sync_guard(&self) -> MutexGuard<'_, ()>;
-}
-
-impl DmaBufSyncTarget for DmaBufFrame {
-    fn objects(&self) -> &[super::DmaBufObject] {
-        self.objects()
-    }
-
-    fn sync_guard(&self) -> MutexGuard<'_, ()> {
-        self.sync_guard()
-    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -69,15 +59,6 @@ impl QuickSyncDmaBufSync {
         Self { queue: queue.clone(), vulkan: Arc::clone(&interop.vulkan) }
     }
 
-    pub(crate) fn submit_dma_buf_write(
-        &self,
-        frame: &DmaBufFrame,
-        encoder: wgpu::CommandEncoder,
-        label: &'static str,
-    ) -> Result<(), QuickSyncDmaBufSyncError> {
-        self.submit_dma_buf_access(frame, DmaBufAccess::Write, [encoder.finish()], label)
-    }
-
     pub(crate) fn submit_target_write<T: DmaBufSyncTarget>(
         &self,
         target: &T,
@@ -85,15 +66,6 @@ impl QuickSyncDmaBufSync {
         label: &'static str,
     ) -> Result<(), QuickSyncDmaBufSyncError> {
         self.submit_dma_buf_access(target, DmaBufAccess::Write, [encoder.finish()], label)
-    }
-
-    pub(crate) fn submit_dma_buf_read(
-        &self,
-        frame: &DmaBufFrame,
-        encoder: wgpu::CommandEncoder,
-        label: &'static str,
-    ) -> Result<(), QuickSyncDmaBufSyncError> {
-        self.submit_dma_buf_access(frame, DmaBufAccess::Read, [encoder.finish()], label)
     }
 
     pub(crate) fn submit_target_read<T: DmaBufSyncTarget>(

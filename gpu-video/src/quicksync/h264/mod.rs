@@ -1,12 +1,7 @@
 mod decoder;
 mod encoder;
 
-use std::{
-    collections::VecDeque,
-    os::fd::AsFd,
-    sync::{Arc, OnceLock},
-    time::Duration,
-};
+use std::{collections::VecDeque, os::fd::AsFd, sync::Arc, time::Duration};
 
 pub use decoder::{QuickSyncH264DecoderError, WgpuTexturesDecoderH264};
 pub use encoder::{
@@ -58,16 +53,8 @@ fn init_dmabuf_interop(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
 ) -> Result<(DmaBufInterop, QuickSyncDmaBufSync), H264SessionError> {
-    static PROBE_RESULT: OnceLock<Result<(), String>> = OnceLock::new();
-
     let interop = DmaBufInterop::new(device)?;
     let sync = QuickSyncDmaBufSync::new(&interop, queue);
-    PROBE_RESULT
-        .get_or_init(|| {
-            super::probe::probe_nv12_dmabuf_wgpu_roundtrip(device, &interop, &sync, queue)
-        })
-        .clone()
-        .map_err(H264SessionError::Probe)?;
     Ok((interop, sync))
 }
 
@@ -78,9 +65,6 @@ pub enum H264SessionError {
 
     #[error("DMA-BUF interop failed: {0}")]
     DmaBuf(String),
-
-    #[error("{0}")]
-    Probe(String),
 
     #[error("{function} failed with VA status {status}")]
     VaStatus { function: &'static str, status: i32 },
@@ -171,7 +155,40 @@ impl H264Session {
         surface: &FrameSurface,
         usage: wgpu::TextureUsages,
         initial_state: wgpu::TextureUses,
-    ) -> Result<ImportedRgb4Surface, H264SessionError> {
+    ) -> Result<ImportedRgbaSurface, H264SessionError> {
+        self.import_rgba_surface(
+            device,
+            surface,
+            usage,
+            initial_state,
+            RgbaDmaBufFormat::Rgb4,
+        )
+    }
+
+    pub(super) fn import_bgr4_surface(
+        &self,
+        device: &wgpu::Device,
+        surface: &FrameSurface,
+        usage: wgpu::TextureUsages,
+        initial_state: wgpu::TextureUses,
+    ) -> Result<ImportedRgbaSurface, H264SessionError> {
+        self.import_rgba_surface(
+            device,
+            surface,
+            usage,
+            initial_state,
+            RgbaDmaBufFormat::Bgr4,
+        )
+    }
+
+    fn import_rgba_surface(
+        &self,
+        device: &wgpu::Device,
+        surface: &FrameSurface,
+        usage: wgpu::TextureUsages,
+        initial_state: wgpu::TextureUses,
+        format: RgbaDmaBufFormat,
+    ) -> Result<ImportedRgbaSurface, H264SessionError> {
         let exported = self.session.export_va_surface(surface)?;
         let dma_buf =
             self.display.export_single_plane_surface(exported.va_surface_id())?;
@@ -185,10 +202,11 @@ impl H264Session {
             size: dma_buf.size,
             modifier: dma_buf.modifier,
         };
-        let texture = import_rgb4_dma_buf_texture(device, dma_buf, usage, initial_state)
-            .map_err(H264SessionError::DmaBuf)?;
-        Ok(ImportedRgb4Surface {
-            frame: Arc::new(Rgb4DmaBufFrame {
+        let texture =
+            import_rgba_dma_buf_texture(device, dma_buf, usage, initial_state, format)
+                .map_err(H264SessionError::DmaBuf)?;
+        Ok(ImportedRgbaSurface {
+            frame: Arc::new(RgbaDmaBufFrame {
                 texture: Arc::new(texture),
                 objects: Box::new([object]),
                 sync_lock: Arc::new(std::sync::Mutex::new(())),
@@ -206,46 +224,79 @@ impl H264Session {
     }
 }
 
-pub(super) struct ImportedRgb4Surface {
-    pub(super) frame: Arc<Rgb4DmaBufFrame>,
+pub(super) struct ImportedRgbaSurface {
+    pub(super) frame: Arc<RgbaDmaBufFrame>,
     _exported: ExportedSurface,
 }
 
 #[derive(Clone)]
-pub(super) struct Rgb4DmaBufFrame {
+pub(super) struct RgbaDmaBufFrame {
     texture: Arc<wgpu::Texture>,
     objects: Box<[DmaBufObject]>,
     sync_lock: Arc<std::sync::Mutex<()>>,
 }
 
-impl Rgb4DmaBufFrame {
+impl RgbaDmaBufFrame {
     pub(super) fn texture(&self) -> &wgpu::Texture {
         &self.texture
     }
 }
 
-impl DmaBufSyncTarget for Rgb4DmaBufFrame {
+impl DmaBufSyncTarget for RgbaDmaBufFrame {
     fn objects(&self) -> &[DmaBufObject] {
         &self.objects
     }
 
     fn sync_guard(&self) -> std::sync::MutexGuard<'_, ()> {
-        self.sync_lock.lock().expect("RGB4 DMA-BUF sync lock poisoned")
+        self.sync_lock.lock().expect("RGBA DMA-BUF sync lock poisoned")
     }
 }
 
-fn import_rgb4_dma_buf_texture(
+#[derive(Debug, Clone, Copy)]
+enum RgbaDmaBufFormat {
+    Rgb4,
+    Bgr4,
+}
+
+impl RgbaDmaBufFormat {
+    fn drm_fourcc(self) -> &'static [u8; 4] {
+        match self {
+            Self::Rgb4 => b"ARGB",
+            Self::Bgr4 => b"ABGR",
+        }
+    }
+
+    fn texture_format(self) -> wgpu::TextureFormat {
+        match self {
+            Self::Rgb4 => wgpu::TextureFormat::Bgra8Unorm,
+            Self::Bgr4 => wgpu::TextureFormat::Rgba8Unorm,
+        }
+    }
+
+    fn vpl_name(self) -> &'static str {
+        match self {
+            Self::Rgb4 => "RGB4",
+            Self::Bgr4 => "BGR4",
+        }
+    }
+}
+
+fn import_rgba_dma_buf_texture(
     device: &wgpu::Device,
     dma_buf: super::va::DrmPrimeSinglePlaneSurface,
     usage: wgpu::TextureUsages,
     initial_state: wgpu::TextureUses,
+    format: RgbaDmaBufFormat,
 ) -> Result<wgpu::Texture, String> {
-    if dma_buf.fourcc.to_le_bytes() != *b"ARGB" {
+    if dma_buf.fourcc.to_le_bytes() != *format.drm_fourcc() {
         return Err(format!(
-            "expected RGB4 VA surface to export as ARGB DRM fourcc, got {:?}",
+            "expected {} VA surface to export as {} DRM fourcc, got {:?}",
+            format.vpl_name(),
+            std::str::from_utf8(format.drm_fourcc()).expect("DRM fourcc must be ASCII"),
             dma_buf.fourcc.to_le_bytes()
         ));
     }
+    let texture_format = format.texture_format();
     let size = wgpu::Extent3d {
         width: dma_buf.width,
         height: dma_buf.height,
@@ -253,18 +304,18 @@ fn import_rgb4_dma_buf_texture(
     };
     let hal_texture = unsafe {
         let hal_device = device.as_hal::<VkApi>().ok_or_else(|| {
-            "RGB4 DMA-BUF import requires a Vulkan wgpu device".to_string()
+            "RGBA DMA-BUF import requires a Vulkan wgpu device".to_string()
         })?;
         (*hal_device)
             .texture_from_dmabuf_fd(
                 dma_buf.fd,
                 &wgpu::hal::TextureDescriptor {
-                    label: Some("Intel Quick Sync RGB4 VPP DMA-BUF import"),
+                    label: Some("Intel Quick Sync RGBA VPP DMA-BUF import"),
                     size,
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Bgra8Unorm,
+                    format: texture_format,
                     usage: texture_uses(usage),
                     memory_flags: wgpu::hal::MemoryFlags::empty(),
                     view_formats: Vec::new(),
@@ -274,19 +325,19 @@ fn import_rgb4_dma_buf_texture(
                 u64::from(dma_buf.offset),
             )
             .map_err(|err| {
-                format!("failed to import RGB4 DMA-BUF into wgpu-hal: {err}")
+                format!("failed to import RGBA DMA-BUF into wgpu-hal: {err}")
             })?
     };
     Ok(unsafe {
         device.create_texture_from_hal::<VkApi>(
             hal_texture,
             &wgpu::TextureDescriptor {
-                label: Some("Intel Quick Sync RGB4 VPP DMA-BUF import"),
+                label: Some("Intel Quick Sync RGBA VPP DMA-BUF import"),
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Bgra8Unorm,
+                format: texture_format,
                 usage,
                 view_formats: &[],
             },

@@ -18,7 +18,7 @@ use crate::{
     parameters::{ColorRange, ColorSpace},
     quicksync::{
         h264::{
-            H264Session, H264SessionError, ImportedRgb4Surface, TextureSwizzleRenderer,
+            H264Session, H264SessionError, ImportedRgbaSurface, TextureSwizzleRenderer,
             VplSyncQueue, init_dmabuf_interop, nv12_progressive_frame_info,
             retry_device_busy,
         },
@@ -456,7 +456,7 @@ struct InputSurface {
 }
 
 struct Rgb4InputSurface {
-    rgb4: ImportedRgb4Surface,
+    rgb4: ImportedRgbaSurface,
     surface: FrameSurface,
 }
 

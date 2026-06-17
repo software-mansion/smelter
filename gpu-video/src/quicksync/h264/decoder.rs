@@ -16,8 +16,8 @@ use crate::{
     parser::h264::{H264Parser, ParsedNalu},
     quicksync::{
         h264::{
-            H264Session, H264SessionError, ImportedRgb4Surface, QUICKSYNC_ASYNC_DEPTH,
-            TextureSwizzleRenderer, VplSyncQueue, init_dmabuf_interop, retry_device_busy,
+            H264Session, H264SessionError, ImportedRgbaSurface, QUICKSYNC_ASYNC_DEPTH,
+            VplSyncQueue, init_dmabuf_interop, retry_device_busy,
         },
         vpl::{Component, FrameSurface, SyncWait, check_status_allow_warnings},
     },
@@ -30,7 +30,6 @@ pub struct WgpuTexturesDecoderH264 {
     sync: QuickSyncDmaBufSync,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
-    bgra_to_rgba: TextureSwizzleRenderer,
     completed_copy: Arc<AtomicU64>,
     next_copy: u64,
     pending_copies: VecDeque<PendingCopy>,
@@ -54,17 +53,11 @@ impl WgpuTexturesDecoderH264 {
         info!("Initializing Intel Quick Sync H264 decoder");
         let (_interop, sync) = init_dmabuf_interop(&device, &queue)?;
         let decoder = QuickSyncH264Decoder::new(adapter_info)?;
-        let bgra_to_rgba = TextureSwizzleRenderer::new(
-            &device,
-            "Intel Quick Sync BGRA/RGBA output swizzle",
-            wgpu::TextureFormat::Rgba8Unorm,
-        );
         Ok(Self {
             decoder,
             sync,
             device,
             queue,
-            bgra_to_rgba,
             completed_copy: Arc::new(AtomicU64::new(0)),
             next_copy: 1,
             pending_copies: VecDeque::new(),
@@ -121,10 +114,10 @@ impl WgpuTexturesDecoderH264 {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
-                | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        let rgb4_surface = self
+        let vpp_output = self
             .decoder
             .quicksync
             .session
@@ -134,7 +127,7 @@ impl WgpuTexturesDecoderH264 {
             .decoder
             .quicksync
             .session
-            .run_vpp(&data.surface, &rgb4_surface)
+            .run_vpp(&data.surface, &vpp_output)
             .map_err(|err| QuickSyncH264DecoderError::Decode(err.to_string()))?;
         self.decoder
             .quicksync
@@ -144,18 +137,22 @@ impl WgpuTexturesDecoderH264 {
         let imported = self
             .decoder
             .quicksync
-            .import_rgb4_surface(
+            .import_bgr4_surface(
                 &self.device,
-                &rgb4_surface,
-                wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
-                wgpu::TextureUses::RESOURCE,
+                &vpp_output,
+                wgpu::TextureUsages::COPY_SRC,
+                wgpu::TextureUses::COPY_SRC,
             )
             .map_err(|err| QuickSyncH264DecoderError::Decode(err.to_string()))?;
         let mut encoder =
             self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Intel Quick Sync H264 decoder output copy"),
             });
-        self.bgra_to_rgba.render(&mut encoder, imported.frame.texture(), &texture);
+        encoder.copy_texture_to_texture(
+            imported.frame.texture().as_image_copy(),
+            texture.as_image_copy(),
+            size,
+        );
         self.sync
             .submit_target_read(
                 imported.frame.as_ref(),
@@ -173,7 +170,7 @@ impl WgpuTexturesDecoderH264 {
         self.pending_copies.push_back(PendingCopy {
             serial,
             _imported: imported,
-            _rgb4_surface: rgb4_surface,
+            _vpp_output: vpp_output,
             _decoded: data,
         });
 
@@ -200,8 +197,8 @@ impl Drop for WgpuTexturesDecoderH264 {
 
 struct PendingCopy {
     serial: u64,
-    _imported: ImportedRgb4Surface,
-    _rgb4_surface: FrameSurface,
+    _imported: ImportedRgbaSurface,
+    _vpp_output: FrameSurface,
     _decoded: DecodedSurface,
 }
 
@@ -313,7 +310,7 @@ impl QuickSyncH264Decoder {
         let layout = decoder_layout(&video_param)?;
         self.quicksync
             .session
-            .init_vpp_nv12_to_rgb4(
+            .init_vpp_nv12_to_bgr4(
                 vpl_u16_dimension("VPP coded width", layout.coded.width)?,
                 vpl_u16_dimension("VPP coded height", layout.coded.height)?,
                 vpl_u16_dimension("VPP crop width", layout.visible.width)?,

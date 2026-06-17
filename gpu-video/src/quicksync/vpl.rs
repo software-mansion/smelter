@@ -197,6 +197,7 @@ impl Session {
         FrameSurface::new(surface)
     }
 
+    #[cfg(feature = "wgpu")]
     pub(super) fn init_vpp_rgb4_to_nv12(
         &self,
         coded_width: u16,
@@ -233,7 +234,7 @@ impl Session {
         })
     }
 
-    pub(super) fn init_vpp_nv12_to_rgb4(
+    pub(super) fn init_vpp_nv12_to_bgr4(
         &self,
         coded_width: u16,
         coded_height: u16,
@@ -256,7 +257,7 @@ impl Session {
             );
             fill_vpp_frame_info(
                 &mut vpp.Out,
-                vpl::MFX_FOURCC_RGB4,
+                vpl::MFX_FOURCC_BGR4,
                 0,
                 coded_width,
                 coded_height,
@@ -381,6 +382,7 @@ impl Drop for ExportedSurface {
     }
 }
 
+#[cfg(feature = "wgpu")]
 fn fill_vpp_frame_info(
     frame_info: &mut vpl::mfxFrameInfo,
     fourcc: u32,

@@ -1,19 +1,37 @@
 mod interop;
-mod nv12;
 mod semaphore;
 mod sync;
 mod sync_file;
-mod vulkan;
 
-use std::ffi::CStr;
+use std::{ffi::CStr, fmt, os::fd::OwnedFd, sync::Arc};
 
 pub(crate) use interop::DmaBufInterop;
-pub(crate) use nv12::{DmaBufError, DmaBufFrame, DmaBufObject, Nv12DmaBufDescriptor};
 pub(crate) use sync::{DmaBufSyncTarget, QuickSyncDmaBufSync};
 
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum DmaBufError {
+    #[error("unsupported DMA-BUF device: {0}")]
+    UnsupportedDevice(String),
+}
+
+#[derive(Clone)]
+pub(crate) struct DmaBufObject {
+    pub(crate) fd: Arc<OwnedFd>,
+    pub(crate) size: u32,
+    pub(crate) modifier: u64,
+}
+
+impl fmt::Debug for DmaBufObject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DMA-BUF object")
+            .field("size", &self.size)
+            .field("modifier", &self.modifier)
+            .finish()
+    }
+}
+
 pub(crate) fn required_wgpu_features() -> wgpu::Features {
-    wgpu::Features::TEXTURE_FORMAT_NV12
-        | wgpu::Features::VULKAN_EXTERNAL_MEMORY_FD
+    wgpu::Features::VULKAN_EXTERNAL_MEMORY_FD
         | wgpu::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF
 }
 
