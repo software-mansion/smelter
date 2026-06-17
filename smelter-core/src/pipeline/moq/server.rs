@@ -123,8 +123,8 @@ async fn run_accept_loop(
             continue;
         };
 
-        let path = url.path().trim_start_matches('/');
-        let decoded = match urlencoding::decode(path) {
+        let input_name_encoded = url.path().trim_start_matches('/');
+        let input_name = match urlencoding::decode(input_name_encoded) {
             Ok(decoded) => decoded.into_owned(),
             Err(error) => {
                 if let Err(error) = request.close(400).await {
@@ -135,7 +135,7 @@ async fn run_accept_loop(
             }
         };
 
-        let input_ref = match moq_inputs.find_by_path(&decoded) {
+        let input_ref = match moq_inputs.find_by_id(&input_name) {
             Ok(input_ref) => input_ref,
             Err(error) => {
                 if let Err(error) = request.close(404).await {

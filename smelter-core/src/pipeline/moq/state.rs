@@ -80,7 +80,7 @@ impl MoqServerState {
         }
     }
 
-    pub(crate) fn find_by_path(&self, path: &str) -> Result<Ref<InputId>, MoqServerError> {
+    pub(crate) fn find_by_id(&self, path: &str) -> Result<Ref<InputId>, MoqServerError> {
         let guard = self.0.lock().unwrap();
         guard
             .keys()
