@@ -34,6 +34,7 @@ impl Drop for MoqSession {
     fn drop(&mut self) {
         let _guard = self.rt.enter();
         self.session.close(hang::moq_net::Error::Cancel);
+        tracing::info!("MoQ session closed!");
     }
 }
 
@@ -86,7 +87,7 @@ pub async fn spawn_moq_server(
         Err(error) => return Err(InitPipelineError::MoqServerInitError(error)),
     };
 
-    let accept_task = tokio::spawn(run_accept_loop(server, state.inputs.clone(), ctx.clone()));
+    let accept_task = tokio::spawn(run_accept_loop(server, state.inputs.clone(), ctx));
 
     info!(port, "MoQ server started");
 
@@ -175,6 +176,4 @@ async fn handle_session(
             }
         }
     }
-
-    info!("MoQ session closed");
 }
