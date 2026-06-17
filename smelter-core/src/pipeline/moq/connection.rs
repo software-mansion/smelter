@@ -9,9 +9,6 @@ use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
 use tracing::{info, trace, warn};
 
-use crate::prelude::*;
-use crate::queue::{QueueSender, QueueTrackOffset, QueueTrackOptions};
-use crate::utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread};
 use crate::{
     pipeline::{
         decoder::{
@@ -23,8 +20,11 @@ use crate::{
         },
         moq::state::MoqInputState,
     },
-    queue::QueueInput,
+    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
+    utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread},
 };
+
+use crate::prelude::*;
 
 use self::catalog::{MoqCatalogError, read_catalog};
 
