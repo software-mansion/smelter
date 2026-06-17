@@ -85,10 +85,14 @@ fn build_quicksync_vpl() {
     let mut builder = bindgen::Builder::default()
         .header(mfx_header.display().to_string())
         .clang_arg("-DONEVPL_EXPERIMENTAL")
+        .allowlist_function("MFX.*")
+        .allowlist_type("_?mfx.*")
+        .allowlist_type("mfx.*")
+        .allowlist_var("MFX.*")
+        .allowlist_var("mfx.*")
         .generate_comments(false)
         .derive_debug(false)
-        .derive_default(false)
-        .parse_callbacks(Box::new(NoDeriveCallbacks));
+        .derive_default(false);
     for include_dir in libvpl.include_paths {
         builder = builder.clang_arg(format!("-I{}", include_dir.display()));
     }
@@ -123,8 +127,7 @@ fn build_quicksync_va() {
         )
         .generate_comments(false)
         .derive_debug(false)
-        .derive_default(false)
-        .parse_callbacks(Box::new(NoDeriveCallbacks));
+        .derive_default(false);
     for include_dir in libva
         .include_paths
         .into_iter()
@@ -137,15 +140,4 @@ fn build_quicksync_va() {
         .expect("failed to generate libva bindings");
     std::fs::write(out_dir.join("va_bindings.rs"), bindings.to_string())
         .expect("failed to write libva bindings");
-}
-
-#[cfg(all(feature = "quicksync", target_os = "linux"))]
-#[derive(Debug)]
-struct NoDeriveCallbacks;
-
-#[cfg(all(feature = "quicksync", target_os = "linux"))]
-impl bindgen::callbacks::ParseCallbacks for NoDeriveCallbacks {
-    fn add_derives(&self, _info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
-        vec![]
-    }
 }

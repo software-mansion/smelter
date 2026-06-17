@@ -17,7 +17,7 @@ use crate::{
     quicksync::{
         h264::{
             H264Session, H264SessionError, ImportedRgbaSurface, QUICKSYNC_ASYNC_DEPTH,
-            VplSyncQueue, init_dmabuf_sync, retry_device_busy,
+            VplSyncQueue, init_dmabuf_sync, retry_device_busy, vpl_u16_dimension,
         },
         vpl::{Component, FrameSurface, SyncWait, check_status_allow_warnings},
     },
@@ -83,7 +83,7 @@ impl WgpuTexturesDecoderH264 {
     ) -> Result<Vec<OutputFrame<wgpu::Texture>>, QuickSyncH264DecoderError> {
         let frames = match event {
             H264DecoderEvent::DecodeChunk(chunk) => self.decoder.decode(chunk),
-            H264DecoderEvent::SignalFrameEnd => self.decoder.drain_ready(),
+            H264DecoderEvent::SignalFrameEnd => self.decoder.drain_completed(SyncWait::Poll),
             H264DecoderEvent::Flush => self.decoder.flush(),
             H264DecoderEvent::SignalDataLoss => {
                 self.decoder.reset();
@@ -154,8 +154,8 @@ impl WgpuTexturesDecoderH264 {
             size,
         );
         self.sync
-            .submit_target_read(
-                imported.frame.as_ref(),
+            .submit_frame_read(
+                imported.frame.sync(),
                 encoder,
                 "Intel Quick Sync H264 decoder output copy",
             )
@@ -235,12 +235,8 @@ impl QuickSyncH264Decoder {
         let mut bitstream = input_bitstream(chunk.data, chunk.pts)?;
         self.pending_pts.queue(chunk.pts);
         let mut frames = self.drain_completed(SyncWait::Poll)?;
-        frames.extend(self.decode_bitstream(&mut bitstream, resolution)?);
+        frames.extend(self.submit_until_more_data(Some(&mut bitstream), resolution)?);
         Ok(frames)
-    }
-
-    fn drain_ready(&mut self) -> Result<Vec<OutputFrame<DecodedSurface>>, String> {
-        self.drain_completed(SyncWait::Poll)
     }
 
     fn flush(&mut self) -> Result<Vec<OutputFrame<DecodedSurface>>, String> {
@@ -320,14 +316,6 @@ impl QuickSyncH264Decoder {
         let resolution = layout.visible;
         self.resolution = Some(resolution);
         Ok(resolution)
-    }
-
-    fn decode_bitstream(
-        &mut self,
-        bitstream: &mut vpl::mfxBitstream,
-        resolution: VideoResolution,
-    ) -> Result<Vec<OutputFrame<DecodedSurface>>, String> {
-        self.submit_until_more_data(Some(bitstream), resolution)
     }
 
     fn submit_until_more_data(
@@ -559,10 +547,6 @@ fn set_decoder_video_param_defaults(video_param: &mut vpl::mfxVideoParam) {
         mfx.FrameInfo.ChromaFormat = vpl::MFX_CHROMAFORMAT_YUV420 as u16;
         mfx.FrameInfo.PicStruct = vpl::MFX_PICSTRUCT_PROGRESSIVE as u16;
     }
-}
-
-fn vpl_u16_dimension(name: &str, value: u32) -> Result<u16, String> {
-    value.try_into().map_err(|_| format!("H264 {name} {value} exceeds oneVPL limit"))
 }
 
 fn input_bitstream(data: &[u8], pts: Option<u64>) -> Result<vpl::mfxBitstream, String> {

@@ -11,7 +11,7 @@ pub use encoder::{
 };
 
 use crate::{
-    dmabuf::{DmaBufInterop, DmaBufObject, DmaBufSyncTarget, QuickSyncDmaBufSync},
+    dmabuf::{DmaBufInterop, DmaBufSyncFd, QuickSyncDmaBufSync},
     quicksync::sys as vpl,
     quicksync::{
         display::{DrmRenderNode, quicksync_drm_render_nodes},
@@ -41,12 +41,16 @@ fn retry_device_busy(
     Err(format!("{function} stayed busy after retries"))
 }
 
-fn nv12_progressive_frame_info() -> vpl::mfxFrameInfo {
+fn progressive_frame_info(fourcc: u32, chroma_format: u16) -> vpl::mfxFrameInfo {
     let mut frame_info = unsafe { std::mem::zeroed::<vpl::mfxFrameInfo>() };
-    frame_info.FourCC = vpl::MFX_FOURCC_NV12;
-    frame_info.ChromaFormat = vpl::MFX_CHROMAFORMAT_YUV420 as u16;
+    frame_info.FourCC = fourcc;
+    frame_info.ChromaFormat = chroma_format;
     frame_info.PicStruct = vpl::MFX_PICSTRUCT_PROGRESSIVE as u16;
     frame_info
+}
+
+fn vpl_u16_dimension(name: &str, value: u32) -> Result<u16, String> {
+    value.try_into().map_err(|_| format!("H264 {name} {value} exceeds oneVPL limit"))
 }
 
 fn init_dmabuf_sync(
@@ -196,17 +200,13 @@ impl H264Session {
             .as_fd()
             .try_clone_to_owned()
             .map_err(|err| H264SessionError::DmaBuf(err.to_string()))?;
-        let object = DmaBufObject {
-            fd: Arc::new(sync_fd),
-        };
         let texture =
             import_rgba_dma_buf_texture(device, dma_buf, usage, initial_state, format)
                 .map_err(H264SessionError::DmaBuf)?;
         Ok(ImportedRgbaSurface {
             frame: Arc::new(RgbaDmaBufFrame {
                 texture: Arc::new(texture),
-                objects: Box::new([object]),
-                sync_lock: Arc::new(std::sync::Mutex::new(())),
+                sync: DmaBufSyncFd::new(sync_fd),
             }),
             _exported: exported,
         })
@@ -229,23 +229,16 @@ pub(super) struct ImportedRgbaSurface {
 #[derive(Clone)]
 pub(super) struct RgbaDmaBufFrame {
     texture: Arc<wgpu::Texture>,
-    objects: Box<[DmaBufObject]>,
-    sync_lock: Arc<std::sync::Mutex<()>>,
+    sync: DmaBufSyncFd,
 }
 
 impl RgbaDmaBufFrame {
     pub(super) fn texture(&self) -> &wgpu::Texture {
         &self.texture
     }
-}
 
-impl DmaBufSyncTarget for RgbaDmaBufFrame {
-    fn objects(&self) -> &[DmaBufObject] {
-        &self.objects
-    }
-
-    fn sync_guard(&self) -> std::sync::MutexGuard<'_, ()> {
-        self.sync_lock.lock().expect("RGBA DMA-BUF sync lock poisoned")
+    pub(super) fn sync(&self) -> &DmaBufSyncFd {
+        &self.sync
     }
 }
 
@@ -368,103 +361,6 @@ fn texture_uses(usage: wgpu::TextureUsages) -> wgpu::TextureUses {
     uses
 }
 
-pub(super) struct TextureSwizzleRenderer {
-    label: &'static str,
-    device: wgpu::Device,
-    pipeline: wgpu::RenderPipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
-}
-
-impl TextureSwizzleRenderer {
-    pub(super) fn new(
-        device: &wgpu::Device,
-        label: &'static str,
-        output_format: wgpu::TextureFormat,
-    ) -> Self {
-        let shader =
-            device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_bgra.wgsl"));
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some(label),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                }],
-            });
-        let pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some(label),
-                bind_group_layouts: &[Some(&bind_group_layout)],
-                immediate_size: 0,
-            });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some(label),
-            layout: Some(&pipeline_layout),
-            cache: None,
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(output_format.into())],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            multiview_mask: None,
-            multisample: wgpu::MultisampleState::default(),
-            depth_stencil: None,
-        });
-        Self { label, device: device.clone(), pipeline, bind_group_layout }
-    }
-
-    pub(super) fn render(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        input: &wgpu::Texture,
-        output: &wgpu::Texture,
-    ) {
-        let input_view = input.create_view(&Default::default());
-        let output_view = output.create_view(&Default::default());
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(self.label),
-            layout: &self.bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&input_view),
-            }],
-        });
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some(self.label),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            depth_stencil_attachment: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &output_view,
-                resolve_target: None,
-                depth_slice: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            multiview_mask: None,
-        });
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.draw(0..3, 0..1);
-    }
-}
-
 pub(super) struct VplSyncQueue<T> {
     pending: VecDeque<VplSync<T>>,
     capacity: usize,
@@ -479,16 +375,12 @@ impl<T> VplSyncQueue<T> {
         self.pending.push_back(VplSync { syncp, payload });
     }
 
-    pub(super) fn len(&self) -> usize {
-        self.pending.len()
-    }
-
     pub(super) fn is_empty(&self) -> bool {
         self.pending.is_empty()
     }
 
     pub(super) fn is_full(&self) -> bool {
-        self.len() >= self.capacity
+        self.pending.len() >= self.capacity
     }
 
     pub(super) fn clear(&mut self) {

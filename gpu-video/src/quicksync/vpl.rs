@@ -36,20 +36,17 @@ impl Component {
         }
     }
 
-    fn codec_filter(self) -> Option<&'static [u8]> {
+    fn codec_filter(self) -> &'static [u8] {
         match self {
             Self::Encode => {
-                Some(b"mfxImplDescription.mfxEncoderDescription.encoder.CodecID\0")
+                b"mfxImplDescription.mfxEncoderDescription.encoder.CodecID\0"
             }
             Self::Decode => {
-                Some(b"mfxImplDescription.mfxDecoderDescription.decoder.CodecID\0")
+                b"mfxImplDescription.mfxDecoderDescription.decoder.CodecID\0"
             }
         }
     }
 }
-
-const SURFACE_COMPONENT_FILTER: &[u8] =
-    b"mfxSurfaceTypesSupported.surftype.surfcomp.SurfaceComponent\0";
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum VplError {
@@ -109,24 +106,25 @@ impl Session {
                 vpl::mfxAccelerationMode_MFX_ACCEL_MODE_VIA_VAAPI,
             ),
         ] {
-            set_filter_u32(loader.raw(), name, value)?;
+            loader.set_filter_u32(name, value)?;
         }
-        if let Some(codec_filter) = component.codec_filter() {
-            set_filter_u32(loader.raw(), codec_filter, codec.id())?;
-        }
+        loader.set_filter_u32(component.codec_filter(), codec.id())?;
 
         for (name, value) in [
             (
                 b"mfxSurfaceTypesSupported.surftype.SurfaceType\0" as &'static [u8],
                 vpl::mfxSurfaceType_MFX_SURFACE_TYPE_VAAPI,
             ),
-            (SURFACE_COMPONENT_FILTER, component.surface_component()),
+            (
+                b"mfxSurfaceTypesSupported.surftype.surfcomp.SurfaceComponent\0",
+                component.surface_component(),
+            ),
             (
                 b"mfxSurfaceTypesSupported.surftype.surfcomp.SurfaceFlags\0",
                 vpl::MFX_SURFACE_FLAG_EXPORT_SHARED,
             ),
         ] {
-            set_filter_u32(loader.raw(), name, value)?;
+            loader.set_filter_u32(name, value)?;
         }
 
         let mut raw = std::ptr::null_mut();
@@ -334,7 +332,6 @@ impl Drop for ExportedSurface {
     }
 }
 
-#[cfg(feature = "wgpu")]
 fn fill_vpp_frame_info(
     frame_info: &mut vpl::mfxFrameInfo,
     fourcc: u32,
@@ -376,6 +373,14 @@ impl Loader {
     fn raw(&self) -> vpl::mfxLoader {
         self.0.as_ptr()
     }
+
+    fn set_filter_u32(&self, name: &'static [u8], value: u32) -> Result<(), VplError> {
+        let cfg = unsafe { vpl::MFXCreateConfig(self.raw()) };
+        let cfg = non_null(cfg, "MFXCreateConfig")?.as_ptr();
+        check_status("MFXSetConfigFilterProperty", unsafe {
+            vpl::MFXSetConfigFilterProperty(cfg, name.as_ptr(), variant_u32(value))
+        })
+    }
 }
 
 impl Drop for Loader {
@@ -384,36 +389,12 @@ impl Drop for Loader {
     }
 }
 
-fn set_filter_u32(
-    loader: vpl::mfxLoader,
-    name: &'static [u8],
-    value: u32,
-) -> Result<(), VplError> {
-    let cfg = create_config(loader)?;
-    set_config_filter_u32(cfg, name, value)
-}
-
-fn create_config(loader: vpl::mfxLoader) -> Result<vpl::mfxConfig, VplError> {
-    let cfg = unsafe { vpl::MFXCreateConfig(loader) };
-    Ok(non_null(cfg, "MFXCreateConfig")?.as_ptr())
-}
-
 fn non_null<T>(ptr: *mut T, label: &'static str) -> Result<NonNull<T>, VplError> {
     NonNull::new(ptr).ok_or(VplError::Null(label))
 }
 
 fn required_function<T>(function: Option<T>, label: &'static str) -> Result<T, VplError> {
     function.ok_or(VplError::MissingFunction(label))
-}
-
-fn set_config_filter_u32(
-    cfg: vpl::mfxConfig,
-    name: &'static [u8],
-    value: u32,
-) -> Result<(), VplError> {
-    check_status("MFXSetConfigFilterProperty", unsafe {
-        vpl::MFXSetConfigFilterProperty(cfg, name.as_ptr(), variant_u32(value))
-    })
 }
 
 fn variant_u32(value: u32) -> vpl::mfxVariant {

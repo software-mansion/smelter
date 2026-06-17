@@ -3,20 +3,15 @@ mod semaphore;
 mod sync;
 mod sync_file;
 
-use std::{ffi::CStr, os::fd::OwnedFd, sync::Arc};
+use std::ffi::CStr;
 
 pub(crate) use interop::DmaBufInterop;
-pub(crate) use sync::{DmaBufSyncTarget, QuickSyncDmaBufSync};
+pub(crate) use sync::{DmaBufSyncFd, QuickSyncDmaBufSync};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum DmaBufError {
     #[error("unsupported DMA-BUF device: {0}")]
     UnsupportedDevice(String),
-}
-
-#[derive(Clone)]
-pub(crate) struct DmaBufObject {
-    pub(crate) fd: Arc<OwnedFd>,
 }
 
 pub(crate) fn required_wgpu_features() -> wgpu::Features {

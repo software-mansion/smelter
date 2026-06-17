@@ -9,10 +9,7 @@ pub(super) struct DrmRenderNode {
 }
 
 pub(super) fn quicksync_drm_render_nodes(adapter_info: &wgpu::AdapterInfo) -> Box<[DrmRenderNode]> {
-    match matching_adapter_render_node(adapter_info) {
-        Some(node) => Box::new([node]),
-        None => Box::new([]),
-    }
+    matching_adapter_render_node(adapter_info).into_iter().collect()
 }
 
 fn matching_adapter_render_node(adapter_info: &wgpu::AdapterInfo) -> Option<DrmRenderNode> {
@@ -61,10 +58,7 @@ fn drm_render_node(path: PathBuf) -> Option<DrmRenderNode> {
 
 #[cfg(test)]
 fn quicksync_drm_render_nodes_from(matched_adapter: Option<DrmRenderNode>) -> Box<[DrmRenderNode]> {
-    match matched_adapter {
-        Some(node) => Box::new([node]),
-        None => Box::new([]),
-    }
+    matched_adapter.into_iter().collect()
 }
 
 #[cfg(all(test, target_os = "linux"))]
