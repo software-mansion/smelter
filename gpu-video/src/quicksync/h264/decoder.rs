@@ -17,7 +17,7 @@ use crate::{
     quicksync::{
         h264::{
             H264Session, H264SessionError, ImportedRgbaSurface, QUICKSYNC_ASYNC_DEPTH,
-            VplSyncQueue, init_dmabuf_interop, retry_device_busy,
+            VplSyncQueue, init_dmabuf_sync, retry_device_busy,
         },
         vpl::{Component, FrameSurface, SyncWait, check_status_allow_warnings},
     },
@@ -51,7 +51,7 @@ impl WgpuTexturesDecoderH264 {
         adapter_info: &wgpu::AdapterInfo,
     ) -> Result<Self, QuickSyncH264DecoderError> {
         info!("Initializing Intel Quick Sync H264 decoder");
-        let (_interop, sync) = init_dmabuf_interop(&device, &queue)?;
+        let sync = init_dmabuf_sync(&device, &queue)?;
         let decoder = QuickSyncH264Decoder::new(adapter_info)?;
         Ok(Self {
             decoder,

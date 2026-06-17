@@ -49,13 +49,12 @@ fn nv12_progressive_frame_info() -> vpl::mfxFrameInfo {
     frame_info
 }
 
-fn init_dmabuf_interop(
+fn init_dmabuf_sync(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-) -> Result<(DmaBufInterop, QuickSyncDmaBufSync), H264SessionError> {
+) -> Result<QuickSyncDmaBufSync, H264SessionError> {
     let interop = DmaBufInterop::new(device)?;
-    let sync = QuickSyncDmaBufSync::new(&interop, queue);
-    Ok((interop, sync))
+    Ok(QuickSyncDmaBufSync::new(&interop, queue))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -199,8 +198,6 @@ impl H264Session {
             .map_err(|err| H264SessionError::DmaBuf(err.to_string()))?;
         let object = DmaBufObject {
             fd: Arc::new(sync_fd),
-            size: dma_buf.size,
-            modifier: dma_buf.modifier,
         };
         let texture =
             import_rgba_dma_buf_texture(device, dma_buf, usage, initial_state, format)
@@ -259,6 +256,13 @@ enum RgbaDmaBufFormat {
 }
 
 impl RgbaDmaBufFormat {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Rgb4 => "Intel Quick Sync RGB4 encode DMA-BUF import",
+            Self::Bgr4 => "Intel Quick Sync BGR4 decoder DMA-BUF import",
+        }
+    }
+
     fn drm_fourcc(self) -> &'static [u8; 4] {
         match self {
             Self::Rgb4 => b"ARGB",
@@ -302,15 +306,16 @@ fn import_rgba_dma_buf_texture(
         height: dma_buf.height,
         depth_or_array_layers: 1,
     };
+    let label = format.label();
     let hal_texture = unsafe {
         let hal_device = device.as_hal::<VkApi>().ok_or_else(|| {
-            "RGBA DMA-BUF import requires a Vulkan wgpu device".to_string()
+            format!("{} requires a Vulkan wgpu device", format.vpl_name())
         })?;
         (*hal_device)
             .texture_from_dmabuf_fd(
                 dma_buf.fd,
                 &wgpu::hal::TextureDescriptor {
-                    label: Some("Intel Quick Sync RGBA VPP DMA-BUF import"),
+                    label: Some(label),
                     size,
                     mip_level_count: 1,
                     sample_count: 1,
@@ -325,14 +330,14 @@ fn import_rgba_dma_buf_texture(
                 u64::from(dma_buf.offset),
             )
             .map_err(|err| {
-                format!("failed to import RGBA DMA-BUF into wgpu-hal: {err}")
+                format!("failed to import {} DMA-BUF into wgpu-hal: {err}", format.vpl_name())
             })?
     };
     Ok(unsafe {
         device.create_texture_from_hal::<VkApi>(
             hal_texture,
             &wgpu::TextureDescriptor {
-                label: Some("Intel Quick Sync RGBA VPP DMA-BUF import"),
+                label: Some(label),
                 size,
                 mip_level_count: 1,
                 sample_count: 1,

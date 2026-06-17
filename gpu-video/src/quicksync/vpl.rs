@@ -26,7 +26,6 @@ impl Codec {
 pub(super) enum Component {
     Encode,
     Decode,
-    VppInput,
 }
 
 impl Component {
@@ -34,7 +33,6 @@ impl Component {
         match self {
             Self::Encode => vpl::mfxSurfaceComponent_MFX_SURFACE_COMPONENT_ENCODE,
             Self::Decode => vpl::mfxSurfaceComponent_MFX_SURFACE_COMPONENT_DECODE,
-            Self::VppInput => vpl::mfxSurfaceComponent_MFX_SURFACE_COMPONENT_VPP_INPUT,
         }
     }
 
@@ -46,7 +44,6 @@ impl Component {
             Self::Decode => {
                 Some(b"mfxImplDescription.mfxDecoderDescription.decoder.CodecID\0")
             }
-            Self::VppInput => None,
         }
     }
 }
@@ -173,14 +170,6 @@ impl Session {
         }
     }
 
-    pub(super) fn get_surface_for_vpp_input(&self) -> Result<FrameSurface, VplError> {
-        let mut surface = std::ptr::null_mut();
-        check_status("MFXMemory_GetSurfaceForVPP", unsafe {
-            vpl::MFXMemory_GetSurfaceForVPP(self.raw(), &mut surface)
-        })?;
-        FrameSurface::new(surface)
-    }
-
     pub(super) fn get_surface_for_vpp_output(&self) -> Result<FrameSurface, VplError> {
         let mut surface = std::ptr::null_mut();
         check_status("MFXMemory_GetSurfaceForVPPOut", unsafe {
@@ -195,43 +184,6 @@ impl Session {
             vpl::MFXMemory_GetSurfaceForEncode(self.raw(), &mut surface)
         })?;
         FrameSurface::new(surface)
-    }
-
-    #[cfg(feature = "wgpu")]
-    pub(super) fn init_vpp_rgb4_to_nv12(
-        &self,
-        coded_width: u16,
-        coded_height: u16,
-        crop_width: u16,
-        crop_height: u16,
-    ) -> Result<(), VplError> {
-        let mut params: vpl::mfxVideoParam = unsafe { std::mem::zeroed() };
-        params.IOPattern = (vpl::MFX_IOPATTERN_IN_VIDEO_MEMORY
-            | vpl::MFX_IOPATTERN_OUT_VIDEO_MEMORY) as u16;
-        unsafe {
-            let vpp = &mut params.__bindgen_anon_1.vpp;
-            fill_vpp_frame_info(
-                &mut vpp.In,
-                vpl::MFX_FOURCC_RGB4,
-                0,
-                coded_width,
-                coded_height,
-                crop_width,
-                crop_height,
-            );
-            fill_vpp_frame_info(
-                &mut vpp.Out,
-                vpl::MFX_FOURCC_NV12,
-                vpl::MFX_CHROMAFORMAT_YUV420 as u16,
-                coded_width,
-                coded_height,
-                crop_width,
-                crop_height,
-            );
-        }
-        check_status_allow_warnings("MFXVideoVPP_Init", unsafe {
-            vpl::MFXVideoVPP_Init(self.raw(), &mut params)
-        })
     }
 
     pub(super) fn init_vpp_nv12_to_bgr4(

@@ -312,7 +312,7 @@ impl VulkanDevice {
 
         #[cfg(all(feature = "quicksync", target_os = "linux"))]
         if adapter.supports_quicksync_dmabuf_interop() {
-            for extension in crate::dmabuf::REQUIRED_VULKAN_DEVICE_EXTENSIONS {
+            for extension in crate::dmabuf::REQUIRED_SYNC_VULKAN_DEVICE_EXTENSIONS {
                 push_extension(&mut required_extensions, extension);
             }
         }

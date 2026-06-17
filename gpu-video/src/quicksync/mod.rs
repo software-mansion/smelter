@@ -4,14 +4,9 @@ pub mod h264;
 use wgpu::hal::api::Vulkan as VkApi;
 
 mod display;
-#[cfg(feature = "wgpu")]
-mod probe;
 mod sys;
 mod va;
 mod vpl;
-
-#[cfg(feature = "wgpu")]
-pub use probe::{Rgb4VppSurfaceSharingProbe, probe_rgb4_vpp_surface_sharing};
 
 #[cfg(feature = "wgpu")]
 fn required_wgpu_features() -> wgpu::Features {
@@ -56,12 +51,12 @@ pub fn create_wgpu_device(
     };
     let capabilities = hal_adapter.physical_device_capabilities();
     if let Some(extension) =
-        crate::dmabuf::missing_required_vulkan_device_extension(|extension| {
+        crate::dmabuf::missing_required_sync_vulkan_device_extension(|extension| {
             capabilities.supports_extension(extension)
         })
     {
         return Err(format!(
-            "Intel Quick Sync requires Vulkan device extension {}",
+            "Intel Quick Sync DMA-BUF sync requires Vulkan device extension {}",
             extension.to_string_lossy()
         ));
     }
@@ -72,7 +67,7 @@ pub fn create_wgpu_device(
             &descriptor.required_limits,
             &descriptor.memory_hints,
             Some(Box::new(move |args| {
-                for extension in crate::dmabuf::REQUIRED_VULKAN_DEVICE_EXTENSIONS {
+                for extension in crate::dmabuf::REQUIRED_SYNC_VULKAN_DEVICE_EXTENSIONS {
                     if !args.extensions.contains(&extension) {
                         args.extensions.push(extension);
                     }
@@ -93,7 +88,7 @@ fn supports_required_vulkan_device_extensions(adapter: &wgpu::Adapter) -> bool {
     };
 
     let capabilities = hal_adapter.physical_device_capabilities();
-    crate::dmabuf::missing_required_vulkan_device_extension(|extension| {
+    crate::dmabuf::missing_required_sync_vulkan_device_extension(|extension| {
         capabilities.supports_extension(extension)
     })
     .is_none()
@@ -104,7 +99,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wgpu_features_require_memory_features_and_vulkan_extensions() {
+    fn wgpu_features_require_dma_buf_import_and_sync_extensions() {
         let required = required_wgpu_features();
 
         assert_eq!(supported_wgpu_features_from(required, true), required);

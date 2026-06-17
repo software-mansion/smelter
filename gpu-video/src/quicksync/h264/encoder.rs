@@ -19,7 +19,7 @@ use crate::{
     quicksync::{
         h264::{
             H264Session, H264SessionError, ImportedRgbaSurface, TextureSwizzleRenderer,
-            VplSyncQueue, init_dmabuf_interop, nv12_progressive_frame_info,
+            VplSyncQueue, init_dmabuf_sync, nv12_progressive_frame_info,
             retry_device_busy,
         },
         vpl::{Component, FrameSurface, Session, SyncWait, check_status_allow_warnings},
@@ -34,12 +34,12 @@ const H264_VIDEO_FORMAT_UNSPECIFIED: u16 = 5;
 const QUICKSYNC_ENCODER_ASYNC_DEPTH: u16 = 1;
 
 pub struct WgpuTexturesEncoderH264 {
-    input_pool: VecDeque<InputSurface>,
+    input_pool: VecDeque<EncodeInputSurface>,
     encoder: QuickSyncH264Encoder,
     sync: QuickSyncDmaBufSync,
     device: Arc<wgpu::Device>,
     resolution: VideoResolution,
-    rgba_to_bgra: TextureSwizzleRenderer,
+    input_swizzle: TextureSwizzleRenderer,
 }
 
 pub struct H264EncodedOutputChunk<T> {
@@ -133,7 +133,7 @@ pub enum QuickSyncH264EncoderError {
     #[error("Intel Quick Sync H264 encoder requires non-zero resolution, got {0:?}")]
     ZeroResolution(VideoResolution),
 
-    #[error("Intel Quick Sync H264 encoder requires even NV12 resolution, got {0:?}")]
+    #[error("Intel Quick Sync H264 encoder requires even resolution, got {0:?}")]
     OddResolution(VideoResolution),
 
     #[error(
@@ -155,7 +155,7 @@ impl WgpuTexturesEncoderH264 {
     ) -> Result<Self, QuickSyncH264EncoderError> {
         let layout = h264_encoder_layout(config.resolution)?;
         info!("Initializing Intel Quick Sync H264 encoder");
-        let (_interop, sync) = init_dmabuf_interop(&device, &queue)?;
+        let sync = init_dmabuf_sync(&device, &queue)?;
 
         let resolution = layout.visible;
         let pool_size = (config.max_pending_frames + 2)
@@ -165,7 +165,7 @@ impl WgpuTexturesEncoderH264 {
             .map(|_| encoder.create_input_surface(&device))
             .collect::<Result<VecDeque<_>, _>>()
             .map_err(QuickSyncH264EncoderError::Encode)?;
-        let rgba_to_bgra = TextureSwizzleRenderer::new(
+        let input_swizzle = TextureSwizzleRenderer::new(
             &device,
             "Intel Quick Sync RGBA/BGRA input swizzle",
             wgpu::TextureFormat::Bgra8Unorm,
@@ -180,7 +180,7 @@ impl WgpuTexturesEncoderH264 {
             "Initialized Intel Quick Sync H264 encoder"
         );
 
-        Ok(Self { input_pool, encoder, sync, device, resolution, rgba_to_bgra })
+        Ok(Self { input_pool, encoder, sync, device, resolution, input_swizzle })
     }
 
     pub fn parameter_sets(&self) -> &Bytes {
@@ -204,7 +204,7 @@ impl WgpuTexturesEncoderH264 {
             .input_pool
             .pop_front()
             .ok_or(QuickSyncH264EncoderError::InputSurfacePoolExhausted)?;
-        self.copy_input_to_surface(&frame.data, &input.rgb4)?;
+        self.copy_input_to_surface(&frame.data, &input)?;
         self.encoder
             .encode(input, pts, force_keyframe)
             .map_err(QuickSyncH264EncoderError::Encode)?;
@@ -253,18 +253,18 @@ impl WgpuTexturesEncoderH264 {
     fn copy_input_to_surface(
         &self,
         texture: &wgpu::Texture,
-        input: &Rgb4InputSurface,
+        input: &EncodeInputSurface,
     ) -> Result<(), QuickSyncH264EncoderError> {
         let mut encoder =
             self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Intel Quick Sync H264 input copy"),
             });
-        self.rgba_to_bgra.render(&mut encoder, texture, input.rgb4.frame.texture());
+        self.input_swizzle.render(&mut encoder, texture, input.imported.frame.texture());
         self.sync
             .submit_target_write(
-                input.rgb4.frame.as_ref(),
+                input.imported.frame.as_ref(),
                 encoder,
-                "Intel Quick Sync H264 RGB4 input render",
+                "Intel Quick Sync H264 input swizzle",
             )
             .map_err(|err| QuickSyncH264EncoderError::Encode(err.to_string()))?;
         Ok(())
@@ -344,13 +344,13 @@ impl QuickSyncH264Encoder {
     fn create_input_surface(
         &mut self,
         device: &wgpu::Device,
-    ) -> Result<InputSurface, String> {
+    ) -> Result<EncodeInputSurface, String> {
         let surface = self
             .quicksync
             .session
             .get_surface_for_encode()
             .map_err(|err| err.to_string())?;
-        let rgb4 = self
+        let imported = self
             .quicksync
             .import_rgb4_surface(
                 device,
@@ -359,21 +359,21 @@ impl QuickSyncH264Encoder {
                 wgpu::TextureUses::COLOR_TARGET,
             )
             .map_err(|err| err.to_string())?;
-        Ok(InputSurface { rgb4: Rgb4InputSurface { rgb4, surface } })
+        Ok(EncodeInputSurface { imported, surface })
     }
 
     fn encode(
         &mut self,
-        mut input: InputSurface,
+        mut input: EncodeInputSurface,
         pts: u64,
         force_keyframe: bool,
     ) -> Result<(), String> {
         let frame_index = self.frame_index;
-        input.rgb4.surface.set_timestamp(frame_index);
+        input.surface.set_timestamp(frame_index);
 
         self.submit_bitstream(EncodeSubmit::Input {
             force_keyframe,
-            surface: &input.rgb4.surface,
+            surface: &input.surface,
         })?;
         self.pending_frames.insert(
             frame_index,
@@ -451,12 +451,8 @@ impl Drop for QuickSyncH264Encoder {
     }
 }
 
-struct InputSurface {
-    rgb4: Rgb4InputSurface,
-}
-
-struct Rgb4InputSurface {
-    rgb4: ImportedRgbaSurface,
+struct EncodeInputSurface {
+    imported: ImportedRgbaSurface,
     surface: FrameSurface,
 }
 
@@ -512,12 +508,12 @@ impl Drop for BitstreamBuffer {
 struct PendingFrame {
     pts: u64,
     forced_keyframe: bool,
-    input: InputSurface,
+    input: EncodeInputSurface,
 }
 
 struct EncodeCompletion {
     chunk: H264EncodedOutputChunk<Bytes>,
-    input: InputSurface,
+    input: EncodeInputSurface,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

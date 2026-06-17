@@ -56,24 +56,6 @@ impl VaDisplay {
         self.handle
     }
 
-    pub(super) fn export_surface_layout(
-        &self,
-        surface_id: SurfaceId,
-    ) -> Result<DrmPrimeSurfaceLayout, VaError> {
-        let mut descriptor =
-            unsafe { std::mem::zeroed::<ffi::VADRMPRIMESurfaceDescriptor>() };
-        check_status("vaExportSurfaceHandle", unsafe {
-            ffi::vaExportSurfaceHandle(
-                self.handle.as_ptr(),
-                surface_id,
-                ffi::VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
-                ffi::VA_EXPORT_SURFACE_READ_WRITE,
-                &mut descriptor as *mut _ as *mut std::ffi::c_void,
-            )
-        })?;
-        DrmPrimeSurfaceLayout::new(descriptor)
-    }
-
     pub(super) fn export_single_plane_surface(
         &self,
         surface_id: SurfaceId,
@@ -101,39 +83,13 @@ impl Drop for VaDisplay {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(super) struct DrmPrimeSurfaceLayout {
-    pub(super) fourcc: u32,
-    pub(super) width: u32,
-    pub(super) height: u32,
-    pub(super) objects: Box<[DrmPrimeObjectLayout]>,
-    pub(super) layers: Box<[DrmPrimeLayerLayout]>,
-}
-
 pub(super) struct DrmPrimeSinglePlaneSurface {
     pub(super) fd: OwnedFd,
     pub(super) fourcc: u32,
     pub(super) width: u32,
     pub(super) height: u32,
-    pub(super) size: u32,
     pub(super) modifier: u64,
     pub(super) offset: u32,
-    pub(super) pitch: u32,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct DrmPrimeObjectLayout {
-    pub(super) modifier: u64,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct DrmPrimeLayerLayout {
-    pub(super) planes: Box<[DrmPrimePlaneLayout]>,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct DrmPrimePlaneLayout {
-    pub(super) object_index: u32,
     pub(super) pitch: u32,
 }
 
@@ -152,60 +108,10 @@ impl DrmPrimeSinglePlaneSurface {
             fourcc: descriptor.fourcc,
             width: descriptor.width,
             height: descriptor.height,
-            size: object.size,
             modifier: object.drm_format_modifier,
             offset: layer.offset[0],
             pitch: layer.pitch[0],
         })
-    }
-}
-
-impl DrmPrimeSurfaceLayout {
-    fn new(descriptor: ffi::VADRMPRIMESurfaceDescriptor) -> Result<Self, VaError> {
-        if !(1..=4).contains(&descriptor.num_objects) {
-            return Err(VaError::InvalidObjectCount(descriptor.num_objects));
-        }
-        let object_count = descriptor.num_objects as usize;
-        let objects = descriptor.objects[..object_count]
-            .iter()
-            .map(|object| {
-                let _fd = unsafe { OwnedFd::from_raw_fd(object.fd) };
-                DrmPrimeObjectLayout { modifier: object.drm_format_modifier }
-            })
-            .collect();
-        let layers = descriptor.layers[..descriptor.num_layers as usize]
-            .iter()
-            .map(|layer| DrmPrimeLayerLayout { planes: layer.planes() })
-            .collect();
-        Ok(Self {
-            fourcc: descriptor.fourcc,
-            width: descriptor.width,
-            height: descriptor.height,
-            objects,
-            layers,
-        })
-    }
-
-    pub(super) fn is_single_plane(&self) -> bool {
-        self.objects.len() == 1
-            && self.layers.len() == 1
-            && self.layers[0].planes.len() == 1
-            && self.layers[0].planes[0].object_index == 0
-    }
-}
-
-trait VaDrmPrimeLayerExt {
-    fn planes(&self) -> Box<[DrmPrimePlaneLayout]>;
-}
-
-impl VaDrmPrimeLayerExt for ffi::_VADRMPRIMESurfaceDescriptor__bindgen_ty_2 {
-    fn planes(&self) -> Box<[DrmPrimePlaneLayout]> {
-        (0..self.num_planes as usize)
-            .map(|index| DrmPrimePlaneLayout {
-                object_index: self.object_index[index],
-                pitch: self.pitch[index],
-            })
-            .collect()
     }
 }
 

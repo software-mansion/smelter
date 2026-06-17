@@ -90,7 +90,7 @@ impl<'a> VulkanAdapter<'a> {
             extensions_to_codec_operations(&supported_encode_codec_extensions);
         #[cfg(all(feature = "quicksync", target_os = "linux"))]
         let supports_quicksync_dmabuf_interop = check_extensions(
-            &crate::dmabuf::REQUIRED_VULKAN_DEVICE_EXTENSIONS,
+            &crate::dmabuf::REQUIRED_SYNC_VULKAN_DEVICE_EXTENSIONS,
             &extensions,
         )
         .is_ok();

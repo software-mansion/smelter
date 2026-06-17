@@ -4,7 +4,7 @@ use wgpu::hal::api::Vulkan as VkApi;
 use std::sync::Arc;
 
 use super::{
-    DmaBufError, missing_required_vulkan_device_extension, required_wgpu_features,
+    DmaBufError, missing_required_sync_vulkan_device_extension, required_wgpu_features,
 };
 
 pub(crate) struct DmaBufInterop {
@@ -47,11 +47,11 @@ impl DmaBufInterop {
             instance,
             physical_device,
         };
-        if let Some(extension) = missing_required_vulkan_device_extension(|extension| {
+        if let Some(extension) = missing_required_sync_vulkan_device_extension(|extension| {
             enabled_extensions.contains(&extension)
         }) {
             return Err(DmaBufError::UnsupportedDevice(format!(
-                "Quick Sync DMA-BUF interop requires Vulkan device extension {}",
+                "Quick Sync DMA-BUF sync requires Vulkan device extension {}",
                 extension.to_string_lossy()
             )));
         }
