@@ -205,6 +205,14 @@ pub enum VulkanCommonError {
 
     #[error("Unsupported image aspect: {0:?}")]
     UnsupportedImageAspect(vk::ImageAspectFlags),
+
+    #[error(
+        "The reference image is smaller than the requested extent. Requested: {requested:?}, max allowed: {max_extent:?}"
+    )]
+    ReferenceImageTooSmall {
+        requested: vk::Extent2D,
+        max_extent: vk::Extent2D,
+    },
 }
 
 /// Open connection to a coding-capable device

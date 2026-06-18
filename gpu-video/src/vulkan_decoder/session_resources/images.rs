@@ -137,6 +137,18 @@ impl<'a> DecodingImages<'a> {
         self.dpb.video_resource_info(i)
     }
 
+    pub(crate) fn update_coded_extent(
+        &mut self,
+        coded_extent: vk::Extent2D,
+    ) -> Result<(), VulkanDecoderError> {
+        self.dpb.update_coded_extent(coded_extent)?;
+        if let Some(dst) = &mut self.dst_image {
+            dst.update_coded_extent(coded_extent)?;
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn free_reference_picture(&mut self, i: usize) {
         self.dpb.free_reference_picture(i);
     }

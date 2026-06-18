@@ -23,6 +23,7 @@
 - Fix artifacts in h264 decoder caused by unnecessary short reference deletion ([#1991](https://github.com/software-mansion/smelter/pull/1991) by @noituri)
 - `bytemuck` is now only required if compiling with the `transcoder` feature ([#1986](https://github.com/software-mansion/smelter/pull/1986) by @jerzywilczek)
 - Fix "green bar" artifact in H.264 decoder which appeared on Mesa drivers ([#2071](https://github.com/software-mansion/smelter/pull/2071) by @noituri)
+- Fix decoding video with a dynamic resolution ([#2080](https://github.com/software-mansion/smelter/pull/2080) by @noituri)
 
 ## [v0.4.0](https://github.com/software-mansion/smelter/releases/tag/gpu-video%2Fv0.4.0)
 

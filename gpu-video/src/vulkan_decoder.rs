@@ -350,6 +350,7 @@ impl<'a> VulkanDecoder<'a> {
             )))?;
 
         let cropped_extent = sps.size()?;
+        let coded_extent = sps.coded_size()?;
         let color_space = ColorSpace::from(sps);
         let color_range = ColorRange::from(sps);
 
@@ -359,6 +360,10 @@ impl<'a> VulkanDecoder<'a> {
                 self.tracker.command_buffer_pools.decode.begin_buffer()?,
                 &mut self.tracker,
             )?;
+            // TODO: Will this be safe if we start decoding without CPU wait?
+            video_session_resources
+                .decoding_images
+                .update_coded_extent(coded_extent)?;
         }
 
         // upload data to a buffer

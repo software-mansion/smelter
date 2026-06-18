@@ -513,6 +513,28 @@ impl<'a> CodingImageBundle<'a> {
     pub(crate) fn extent(&self) -> vk::Extent3D {
         self.image_with_view.extent()
     }
+
+    pub(crate) fn update_coded_extent(
+        &mut self,
+        coded_extent: vk::Extent2D,
+    ) -> Result<(), VulkanCommonError> {
+        let max_extent = self.extent();
+        if coded_extent.width > max_extent.width || coded_extent.height > max_extent.height {
+            return Err(VulkanCommonError::ReferenceImageTooSmall {
+                requested: coded_extent,
+                max_extent: vk::Extent2D {
+                    width: max_extent.width,
+                    height: max_extent.height,
+                },
+            });
+        }
+
+        for info in &mut self.video_resource_info {
+            info.coded_extent = coded_extent;
+        }
+
+        Ok(())
+    }
 }
 
 pub(crate) struct DecodedPicturesBuffer<'a> {
@@ -591,6 +613,13 @@ impl<'a> DecodedPicturesBuffer<'a> {
         i: usize,
     ) -> Option<&vk::VideoPictureResourceInfoKHR<'_>> {
         self.image.video_resource_info.get(i)
+    }
+
+    pub(crate) fn update_coded_extent(
+        &mut self,
+        coded_extent: vk::Extent2D,
+    ) -> Result<(), VulkanCommonError> {
+        self.image.update_coded_extent(coded_extent)
     }
 
     #[inline(always)]
