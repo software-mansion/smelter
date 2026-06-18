@@ -232,7 +232,10 @@ impl WgpuTexturesEncoderH264 {
                 texture.usage(),
             ));
         }
-        if texture.format() != wgpu::TextureFormat::Rgba8Unorm {
+        if !matches!(
+            texture.format(),
+            wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb
+        ) {
             return Err(QuickSyncH264EncoderError::UnsupportedInputTexture(
                 texture.format(),
             ));
@@ -614,7 +617,10 @@ impl RgbaToRgb4Renderer {
         input: &wgpu::Texture,
         output: &wgpu::Texture,
     ) {
-        let input_view = input.create_view(&Default::default());
+        let input_view = input.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            ..Default::default()
+        });
         let output_view = output.create_view(&Default::default());
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(self.label),
