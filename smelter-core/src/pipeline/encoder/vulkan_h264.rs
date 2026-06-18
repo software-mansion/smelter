@@ -1,7 +1,7 @@
 use std::{num::NonZero, ops::Deref, sync::Arc};
 
 use gpu_video::{
-    VideoDeviceExt, VideoEncoderError, WgpuTexturesEncoderH264,
+    VideoDeviceExt, WgpuTexturesEncoderH264,
     parameters::{EncoderParametersH264, RateControl, Rational, VideoParameters},
 };
 use smelter_render::{FrameData, OutputFrameFormat};
@@ -64,7 +64,7 @@ impl VideoEncoder for VulkanH264Encoder {
             .wgpu_ctx
             .device
             .video()
-            .map_err(|_| VideoEncoderError::VideoDeviceWithoutWgpu)?;
+            .map_err(|_| EncoderInitError::VulkanContextRequiredForVulkanEncoder)?;
 
         let video_params = VideoParameters {
             width,

@@ -19,10 +19,15 @@ use crate::parameters::{
 };
 use crate::vulkan_encoder::FullEncoderParameters;
 
-use crate::{RegistryError, VideoEncoderError, VideoInitError, VulkanDecoderError, wrappers::*};
+use crate::{VideoEncoderError, VideoInitError, VulkanDecoderError, wrappers::*};
 
 pub(crate) mod caps;
 pub(crate) mod queues;
+
+#[cfg(feature = "wgpu")]
+pub(crate) mod wgpu_api;
+#[cfg(feature = "wgpu")]
+pub use wgpu_api::*;
 
 pub(crate) const REQUIRED_EXTENSIONS: &[&CStr] =
     &[vk::KHR_VIDEO_QUEUE_NAME, vk::KHR_VIDEO_MAINTENANCE1_NAME];
@@ -251,25 +256,6 @@ pub struct EncoderParametersH264 {
 pub struct EncoderParametersH265 {
     pub input_parameters: VideoParameters,
     pub output_parameters: EncoderOutputParameters<H265Profile>,
-}
-
-/// Extension that exposes video capabilities of a device.
-/// The device must be created with [`VideoAdapterExt::request_device_with_video_support`](`crate::VideoAdapterExt::request_device_with_video_support`).
-pub trait VideoDeviceExt {
-    fn video(&self) -> Result<crate::VideoDevice, RegistryError>;
-}
-
-#[cfg(feature = "wgpu")]
-impl VideoDeviceExt for wgpu::Device {
-    fn video(&self) -> Result<crate::VideoDevice, RegistryError> {
-        use crate::global_registry::GlobalRegistry;
-
-        let video_device = GlobalRegistry::get_device(&self.into())?;
-        Ok(crate::VideoDevice {
-            inner: video_device,
-            wgpu_device: Some(self.clone()),
-        })
-    }
 }
 
 pub(crate) struct VideoDevice {

@@ -24,19 +24,19 @@ fn main() {
 
     let h264_bytestream = std::fs::read(&args[1]).unwrap_or_else(|_| panic!("read {}", args[1]));
 
-    let vulkan_instance = VideoInstance::new(&VideoInstanceDescriptor {
+    let video_instance = VideoInstance::new(&VideoInstanceDescriptor {
         enable_validations: true,
         ..Default::default()
     })
     .unwrap();
-    let vulkan_adapter = vulkan_instance
+    let video_adapter = video_instance
         .create_adapter(&VideoAdapterDescriptor::default())
         .unwrap();
-    let device = vulkan_adapter
+    let video_device = video_adapter
         .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
-    let mut decoder = device
+    let mut decoder = video_device
         .create_bytes_decoder_h264(DecoderParameters::default())
         .unwrap();
 

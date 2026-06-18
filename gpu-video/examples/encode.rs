@@ -30,26 +30,26 @@ fn main() {
     let mut nv12 =
         std::fs::File::open(&args[1]).unwrap_or_else(|e| panic!("open {}: {}", args[1], e));
 
-    let vulkan_instance = VideoInstance::new(&VideoInstanceDescriptor {
+    let video_instance = VideoInstance::new(&VideoInstanceDescriptor {
         enable_validations: true,
         ..Default::default()
     })
     .unwrap();
-    let vulkan_adapter = vulkan_instance
+    let video_adapter = video_instance
         .create_adapter(&VideoAdapterDescriptor::default())
         .unwrap();
-    let device = vulkan_adapter
+    let video_device = video_adapter
         .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
-    let mut encoder_h264 = device
+    let mut encoder_h264 = video_device
         .create_bytes_encoder_h264(EncoderParametersH264 {
             input_parameters: VideoParameters {
                 width,
                 height,
                 target_framerate: 24.into(),
             },
-            output_parameters: device
+            output_parameters: video_device
                 .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
                     average_bitrate: 1_000_000,
                     max_bitrate: 2_000_000,
@@ -59,14 +59,14 @@ fn main() {
         })
         .expect("create encoder");
 
-    let mut encoder_h265 = device
+    let mut encoder_h265 = video_device
         .create_bytes_encoder_h265(EncoderParametersH265 {
             input_parameters: VideoParameters {
                 width,
                 height,
                 target_framerate: 24.into(),
             },
-            output_parameters: device
+            output_parameters: video_device
                 .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
                     average_bitrate: 1_000_000,
                     max_bitrate: 2_000_000,

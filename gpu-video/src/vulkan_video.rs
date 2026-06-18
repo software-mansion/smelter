@@ -109,22 +109,20 @@ use ash::vk;
 use std::sync::Arc;
 
 #[cfg(feature = "wgpu")]
-pub use crate::adapter::VideoAdapterExt;
+pub use crate::{
+    adapter::VideoAdapterExt,
+    device::VideoDeviceExt,
+    global_registry::RegistryError,
+    wgpu_helpers::{WgpuConverterInitError, WgpuNv12ToRgbaConverter, WgpuRgbaToNv12Converter},
+};
 
 pub use crate::adapter::VideoAdapter;
-pub use crate::device::VideoDeviceExt;
-pub use crate::global_registry::RegistryError;
 pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 pub use crate::vulkan_decoder::VulkanDecoderError;
 pub use crate::vulkan_encoder::VideoEncoderError;
 #[cfg(feature = "transcoder")]
 pub use crate::vulkan_transcoder::{Transcoder, VideoTranscoderError};
-
-#[cfg(feature = "wgpu")]
-pub use crate::wgpu_helpers::{
-    WgpuConverterInitError, WgpuNv12ToRgbaConverter, WgpuRgbaToNv12Converter,
-};
 
 use crate::parser::{
     decoder_instructions::compile_to_decoder_instructions, h264::H264Parser,
