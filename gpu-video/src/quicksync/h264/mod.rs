@@ -6,20 +6,16 @@ use std::{collections::VecDeque, os::fd::AsFd, sync::Arc, time::Duration};
 pub use decoder::{QuickSyncH264DecoderError, WgpuTexturesDecoderH264};
 pub use encoder::{
     H264EncodedOutputChunk, H264EncoderConfig, H264EncoderPreset, H264EncoderRateControl,
-    H264RateControlError, H264VariableBitrate, QuickSyncH264EncoderError,
-    WgpuTexturesEncoderH264,
+    H264RateControlError, H264VariableBitrate, QuickSyncH264EncoderError, WgpuTexturesEncoderH264,
 };
 
 use crate::{
     dmabuf::{DmaBufInterop, DmaBufSyncFd, QuickSyncDmaBufSync},
     quicksync::sys as vpl,
     quicksync::{
-        display::{DrmRenderNode, quicksync_drm_render_nodes},
+        display::{DrmRenderNode, quicksync_drm_render_node},
         va::{VaDisplay, VaError},
-        vpl::{
-            Codec, Component, ExportedSurface, FrameSurface, Session, SyncStatus,
-            SyncWait,
-        },
+        vpl::{Codec, Component, ExportedSurface, FrameSurface, Session, SyncStatus, SyncWait},
     },
 };
 use wgpu::hal::api::Vulkan as VkApi;
@@ -50,7 +46,9 @@ fn progressive_frame_info(fourcc: u32, chroma_format: u16) -> vpl::mfxFrameInfo 
 }
 
 fn vpl_u16_dimension(name: &str, value: u32) -> Result<u16, String> {
-    value.try_into().map_err(|_| format!("H264 {name} {value} exceeds oneVPL limit"))
+    value
+        .try_into()
+        .map_err(|_| format!("H264 {name} {value} exceeds oneVPL limit"))
 }
 
 fn init_dmabuf_sync(
@@ -124,22 +122,9 @@ impl H264Session {
         adapter_info: &wgpu::AdapterInfo,
         component: Component,
     ) -> Result<Self, H264SessionError> {
-        let render_nodes = quicksync_drm_render_nodes(adapter_info);
-        Self::from_render_nodes(render_nodes.iter(), component)
-    }
-
-    fn from_render_nodes<'a>(
-        render_nodes: impl IntoIterator<Item = &'a DrmRenderNode>,
-        component: Component,
-    ) -> Result<Self, H264SessionError> {
-        let mut error = H264SessionError::NoRenderNode;
-        for drm_node in render_nodes {
-            match Self::for_drm_node(drm_node, component) {
-                Ok(session) => return Ok(session),
-                Err(err) => error = err,
-            }
-        }
-        Err(error)
+        let render_node =
+            quicksync_drm_render_node(adapter_info).ok_or(H264SessionError::NoRenderNode)?;
+        Self::for_drm_node(&render_node, component)
     }
 
     fn for_drm_node(
@@ -147,8 +132,12 @@ impl H264Session {
         component: Component,
     ) -> Result<Self, H264SessionError> {
         let display = VaDisplay::open(&drm_node.path)?;
-        let session =
-            Session::new(drm_node.render_node, Codec::H264, component, display.handle())?;
+        let session = Session::new(
+            drm_node.render_node,
+            Codec::H264,
+            component,
+            display.handle(),
+        )?;
         Ok(Self { session, display })
     }
 
@@ -193,19 +182,19 @@ impl H264Session {
         format: RgbaDmaBufFormat,
     ) -> Result<ImportedRgbaSurface, H264SessionError> {
         let exported = self.session.export_va_surface(surface)?;
-        let dma_buf =
-            self.display.export_single_plane_surface(exported.va_surface_id())?;
+        let dma_buf = self
+            .display
+            .export_single_plane_surface(exported.va_surface_id())?;
         let sync_fd = dma_buf
             .fd
             .as_fd()
             .try_clone_to_owned()
             .map_err(|err| H264SessionError::DmaBuf(err.to_string()))?;
-        let texture =
-            import_rgba_dma_buf_texture(device, dma_buf, usage, initial_state, format)
-                .map_err(H264SessionError::DmaBuf)?;
+        let texture = import_rgba_dma_buf_texture(device, dma_buf, usage, initial_state, format)
+            .map_err(H264SessionError::DmaBuf)?;
         Ok(ImportedRgbaSurface {
             frame: Arc::new(RgbaDmaBufFrame {
-                texture: Arc::new(texture),
+                texture,
                 sync: DmaBufSyncFd::new(sync_fd),
             }),
             _exported: exported,
@@ -226,9 +215,8 @@ pub(super) struct ImportedRgbaSurface {
     _exported: ExportedSurface,
 }
 
-#[derive(Clone)]
 pub(super) struct RgbaDmaBufFrame {
-    texture: Arc<wgpu::Texture>,
+    texture: wgpu::Texture,
     sync: DmaBufSyncFd,
 }
 
@@ -301,9 +289,9 @@ fn import_rgba_dma_buf_texture(
     };
     let label = format.label();
     let hal_texture = unsafe {
-        let hal_device = device.as_hal::<VkApi>().ok_or_else(|| {
-            format!("{} requires a Vulkan wgpu device", format.vpl_name())
-        })?;
+        let hal_device = device
+            .as_hal::<VkApi>()
+            .ok_or_else(|| format!("{} requires a Vulkan wgpu device", format.vpl_name()))?;
         (*hal_device)
             .texture_from_dmabuf_fd(
                 dma_buf.fd,
@@ -323,7 +311,10 @@ fn import_rgba_dma_buf_texture(
                 u64::from(dma_buf.offset),
             )
             .map_err(|err| {
-                format!("failed to import {} DMA-BUF into wgpu-hal: {err}", format.vpl_name())
+                format!(
+                    "failed to import {} DMA-BUF into wgpu-hal: {err}",
+                    format.vpl_name()
+                )
             })?
     };
     Ok(unsafe {
@@ -368,7 +359,10 @@ pub(super) struct VplSyncQueue<T> {
 
 impl<T> VplSyncQueue<T> {
     pub(super) fn new(capacity: usize) -> Self {
-        Self { pending: VecDeque::new(), capacity }
+        Self {
+            pending: VecDeque::new(),
+            capacity,
+        }
     }
 
     pub(super) fn push(&mut self, syncp: vpl::mfxSyncPoint, payload: T) {
@@ -387,12 +381,11 @@ impl<T> VplSyncQueue<T> {
         self.pending.clear();
     }
 
-    pub(super) fn drain_completed<R>(
+    pub(super) fn drain_completed(
         &mut self,
         session: &H264Session,
         mut wait: SyncWait,
-        mut complete: impl FnMut(T) -> Result<R, String>,
-    ) -> Result<Vec<R>, String> {
+    ) -> Result<Vec<T>, String> {
         let mut completed = Vec::new();
         while let Some(pending) = self.pending.pop_front() {
             match session
@@ -404,7 +397,7 @@ impl<T> VplSyncQueue<T> {
                     break;
                 }
                 SyncStatus::Complete => {
-                    completed.push(complete(pending.payload)?);
+                    completed.push(pending.payload);
                     wait = SyncWait::Poll;
                 }
             }
@@ -412,18 +405,10 @@ impl<T> VplSyncQueue<T> {
         Ok(completed)
     }
 
-    pub(super) fn drain_all_completed<R>(
-        &mut self,
-        session: &H264Session,
-        mut complete: impl FnMut(T) -> Result<R, String>,
-    ) -> Result<Vec<R>, String> {
+    pub(super) fn drain_all_completed(&mut self, session: &H264Session) -> Result<Vec<T>, String> {
         let mut completed = Vec::new();
         while !self.is_empty() {
-            completed.extend(self.drain_completed(
-                session,
-                SyncWait::Block,
-                &mut complete,
-            )?);
+            completed.extend(self.drain_completed(session, SyncWait::Block)?);
         }
         Ok(completed)
     }
@@ -435,11 +420,13 @@ struct VplSync<T> {
 }
 
 pub fn support(adapter_info: &wgpu::AdapterInfo) -> H264Support {
-    let render_nodes = quicksync_drm_render_nodes(adapter_info);
+    let render_node = quicksync_drm_render_node(adapter_info);
     H264Support {
-        decoding: H264Session::from_render_nodes(render_nodes.iter(), Component::Decode)
-            .is_ok(),
-        encoding: H264Session::from_render_nodes(render_nodes.iter(), Component::Encode)
-            .is_ok(),
+        decoding: render_node
+            .as_ref()
+            .is_some_and(|node| H264Session::for_drm_node(node, Component::Decode).is_ok()),
+        encoding: render_node
+            .as_ref()
+            .is_some_and(|node| H264Session::for_drm_node(node, Component::Encode).is_ok()),
     }
 }

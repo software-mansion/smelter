@@ -18,9 +18,8 @@ use crate::{
     parameters::{ColorRange, ColorSpace},
     quicksync::{
         h264::{
-            H264Session, H264SessionError, ImportedRgbaSurface, VplSyncQueue,
-            init_dmabuf_sync, progressive_frame_info, retry_device_busy,
-            vpl_u16_dimension,
+            H264Session, H264SessionError, ImportedRgbaSurface, VplSyncQueue, init_dmabuf_sync,
+            progressive_frame_info, retry_device_busy, vpl_u16_dimension,
         },
         vpl::{Component, FrameSurface, Session, SyncWait, check_status_allow_warnings},
     },
@@ -70,8 +69,14 @@ pub enum H264EncoderPreset {
 
 #[derive(Debug, Clone, Copy)]
 pub enum H264EncoderRateControl {
-    VariableBitrate { bitrate: H264VariableBitrate, virtual_buffer_size: Duration },
-    ConstantBitrate { bitrate: NonZeroU64, virtual_buffer_size: Duration },
+    VariableBitrate {
+        bitrate: H264VariableBitrate,
+        virtual_buffer_size: Duration,
+    },
+    ConstantBitrate {
+        bitrate: NonZeroU64,
+        virtual_buffer_size: Duration,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -91,7 +96,10 @@ impl H264VariableBitrate {
                 max_bitrate,
             });
         }
-        Ok(Self { average_bitrate, max_bitrate })
+        Ok(Self {
+            average_bitrate,
+            max_bitrate,
+        })
     }
 }
 
@@ -100,7 +108,10 @@ pub enum H264RateControlError {
     #[error(
         "Intel Quick Sync H264 max bitrate {max_bitrate} must be at least average bitrate {average_bitrate}"
     )]
-    MaxBelowAverage { average_bitrate: NonZeroU64, max_bitrate: NonZeroU64 },
+    MaxBelowAverage {
+        average_bitrate: NonZeroU64,
+        max_bitrate: NonZeroU64,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -111,9 +122,7 @@ pub enum QuickSyncH264EncoderError {
     #[error("Intel Quick Sync H264 encode error: {0}")]
     Encode(String),
 
-    #[error(
-        "Intel Quick Sync H264 encoder retained every input surface without producing output"
-    )]
+    #[error("Intel Quick Sync H264 encoder retained every input surface without producing output")]
     InputSurfacePoolExhausted,
 
     #[error("Intel Quick Sync H264 encoder requires input frames to carry PTS")]
@@ -125,10 +134,11 @@ pub enum QuickSyncH264EncoderError {
     #[error("Intel Quick Sync H264 encoder requires RGBA textures, got {0:?}")]
     UnsupportedInputTexture(wgpu::TextureFormat),
 
-    #[error(
-        "Intel Quick Sync H264 encoder expected texture size {expected:?}, got {provided:?}"
-    )]
-    InconsistentTextureSize { expected: wgpu::Extent3d, provided: wgpu::Extent3d },
+    #[error("Intel Quick Sync H264 encoder expected texture size {expected:?}, got {provided:?}")]
+    InconsistentTextureSize {
+        expected: wgpu::Extent3d,
+        provided: wgpu::Extent3d,
+    },
 
     #[error("Intel Quick Sync H264 encoder requires non-zero resolution, got {0:?}")]
     ZeroResolution(VideoResolution),
@@ -139,12 +149,18 @@ pub enum QuickSyncH264EncoderError {
     #[error(
         "Intel Quick Sync H264 encoder requires resolution dimensions no larger than {max}, got {resolution:?}"
     )]
-    ResolutionTooLarge { resolution: VideoResolution, max: u32 },
+    ResolutionTooLarge {
+        resolution: VideoResolution,
+        max: u32,
+    },
 
     #[error(
         "Intel Quick Sync H264 encoder bitstream buffer for coded resolution {resolution:?} exceeds oneVPL limit {max_bytes} bytes"
     )]
-    BitstreamBufferTooLarge { resolution: VideoResolution, max_bytes: u32 },
+    BitstreamBufferTooLarge {
+        resolution: VideoResolution,
+        max_bytes: u32,
+    },
 }
 
 impl WgpuTexturesEncoderH264 {
@@ -158,8 +174,8 @@ impl WgpuTexturesEncoderH264 {
         let sync = init_dmabuf_sync(&device, &queue)?;
 
         let resolution = layout.visible;
-        let pool_size = (config.max_pending_frames + 2)
-            .max(usize::from(QUICKSYNC_ENCODER_ASYNC_DEPTH) + 1);
+        let pool_size =
+            (config.max_pending_frames + 2).max(usize::from(QUICKSYNC_ENCODER_ASYNC_DEPTH) + 1);
         let mut encoder = QuickSyncH264Encoder::new(config, layout)?;
         let input_pool = (0..pool_size)
             .map(|_| encoder.create_input_surface(&device))
@@ -176,7 +192,14 @@ impl WgpuTexturesEncoderH264 {
             "Initialized Intel Quick Sync H264 encoder"
         );
 
-        Ok(Self { input_pool, encoder, sync, device, resolution, rgba_to_rgb4 })
+        Ok(Self {
+            input_pool,
+            encoder,
+            sync,
+            device,
+            resolution,
+            rgba_to_rgb4,
+        })
     }
 
     pub fn parameter_sets(&self) -> &Bytes {
@@ -211,8 +234,10 @@ impl WgpuTexturesEncoderH264 {
     pub fn flush(
         &mut self,
     ) -> Result<Vec<H264EncodedOutputChunk<Bytes>>, QuickSyncH264EncoderError> {
-        let completed =
-            self.encoder.flush().map_err(QuickSyncH264EncoderError::Encode)?;
+        let completed = self
+            .encoder
+            .flush()
+            .map_err(QuickSyncH264EncoderError::Encode)?;
         Ok(self.collect_completed(completed))
     }
 
@@ -254,11 +279,13 @@ impl WgpuTexturesEncoderH264 {
         texture: &wgpu::Texture,
         input: &EncodeInputSurface,
     ) -> Result<(), QuickSyncH264EncoderError> {
-        let mut encoder =
-            self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Intel Quick Sync H264 input copy"),
             });
-        self.rgba_to_rgb4.render(&mut encoder, texture, input.imported.frame.texture());
+        self.rgba_to_rgb4
+            .render(&mut encoder, texture, input.imported.frame.texture());
         self.sync
             .submit_frame_write(
                 input.imported.frame.sync(),
@@ -316,8 +343,8 @@ impl QuickSyncH264Encoder {
         layout: H264EncoderLayout,
     ) -> Result<Self, QuickSyncH264EncoderError> {
         let quicksync = H264Session::new(config.adapter_info, Component::Encode)?;
-        let mut video_param = encoder_video_param(&config, layout)
-            .map_err(QuickSyncH264EncoderError::Encode)?;
+        let mut video_param =
+            encoder_video_param(&config, layout).map_err(QuickSyncH264EncoderError::Encode)?;
         video_param
             .with_ext_params(|video_param| {
                 check_status_allow_warnings("MFXVideoENCODE_Init", unsafe {
@@ -333,9 +360,7 @@ impl QuickSyncH264Encoder {
             parameter_sets,
             frame_index: 0,
             bitstream_buffer_size: layout.bitstream_buffer_size,
-            pending_bitstreams: VplSyncQueue::new(usize::from(
-                QUICKSYNC_ENCODER_ASYNC_DEPTH,
-            )),
+            pending_bitstreams: VplSyncQueue::new(usize::from(QUICKSYNC_ENCODER_ASYNC_DEPTH)),
             pending_frames: HashMap::new(),
         })
     }
@@ -376,7 +401,11 @@ impl QuickSyncH264Encoder {
         })?;
         self.pending_frames.insert(
             frame_index,
-            PendingFrame { pts, forced_keyframe: force_keyframe, input },
+            PendingFrame {
+                pts,
+                forced_keyframe: force_keyframe,
+                input,
+            },
         );
         self.frame_index += 1;
         Ok(())
@@ -388,9 +417,7 @@ impl QuickSyncH264Encoder {
             if self.is_full() {
                 completed.extend(self.drain_completed(SyncWait::Block)?);
             }
-            if self.submit_bitstream(EncodeSubmit::Drain)?
-                == EncodeAsyncStatus::NeedsMoreData
-            {
+            if self.submit_bitstream(EncodeSubmit::Drain)? == EncodeAsyncStatus::NeedsMoreData {
                 break;
             }
             completed.extend(self.drain_completed(SyncWait::Poll)?);
@@ -409,38 +436,33 @@ impl QuickSyncH264Encoder {
         self.pending_bitstreams.is_full()
     }
 
-    fn submit_bitstream(
-        &mut self,
-        submit: EncodeSubmit<'_>,
-    ) -> Result<EncodeAsyncStatus, String> {
+    fn submit_bitstream(&mut self, submit: EncodeSubmit<'_>) -> Result<EncodeAsyncStatus, String> {
         let mut output = Box::new(OutputBitstream::new(self.bitstream_buffer_size));
-        let status =
-            encode_frame_async(&self.quicksync.session, submit, &mut output.bitstream)?;
+        let status = encode_frame_async(&self.quicksync.session, submit, &mut output.bitstream)?;
         if let EncodeAsyncStatus::Submitted(syncp) = status {
             self.pending_bitstreams.push(syncp, output);
         }
         Ok(status)
     }
 
-    fn drain_completed(
-        &mut self,
-        wait: SyncWait,
-    ) -> Result<Vec<EncodeCompletion>, String> {
-        let quicksync = &self.quicksync;
-        let parameter_sets = &self.parameter_sets;
-        let pending_frames = &mut self.pending_frames;
-        self.pending_bitstreams.drain_completed(quicksync, wait, |output| {
-            complete_bitstream(output, parameter_sets, pending_frames)
-        })
+    fn drain_completed(&mut self, wait: SyncWait) -> Result<Vec<EncodeCompletion>, String> {
+        self.pending_bitstreams
+            .drain_completed(&self.quicksync, wait)?
+            .into_iter()
+            .map(|output| {
+                complete_bitstream(output, &self.parameter_sets, &mut self.pending_frames)
+            })
+            .collect()
     }
 
     fn drain_all_completed(&mut self) -> Result<Vec<EncodeCompletion>, String> {
-        let quicksync = &self.quicksync;
-        let parameter_sets = &self.parameter_sets;
-        let pending_frames = &mut self.pending_frames;
-        self.pending_bitstreams.drain_all_completed(quicksync, |output| {
-            complete_bitstream(output, parameter_sets, pending_frames)
-        })
+        self.pending_bitstreams
+            .drain_all_completed(&self.quicksync)?
+            .into_iter()
+            .map(|output| {
+                complete_bitstream(output, &self.parameter_sets, &mut self.pending_frames)
+            })
+            .collect()
     }
 }
 
@@ -479,8 +501,7 @@ struct BitstreamBuffer {
 impl BitstreamBuffer {
     fn new(len: u32) -> Self {
         let len = len as usize;
-        let layout =
-            Layout::from_size_align(len.max(1), 64).expect("valid bitstream layout");
+        let layout = Layout::from_size_align(len.max(1), 64).expect("valid bitstream layout");
         let ptr = NonNull::new(unsafe { alloc_zeroed(layout) }).unwrap_or_else(|| {
             handle_alloc_error(layout);
         });
@@ -523,7 +544,10 @@ struct H264EncoderLayout {
 }
 
 enum EncodeSubmit<'a> {
-    Input { force_keyframe: bool, surface: &'a FrameSurface },
+    Input {
+        force_keyframe: bool,
+        surface: &'a FrameSurface,
+    },
     Drain,
 }
 
@@ -540,9 +564,7 @@ fn complete_bitstream(
 ) -> Result<EncodeCompletion, String> {
     let frame_index = output.bitstream.TimeStamp;
     let pending_frame = pending_frames.remove(&frame_index).ok_or_else(|| {
-        format!(
-            "Intel Quick Sync returned H264 bitstream for unknown frame {frame_index}"
-        )
+        format!("Intel Quick Sync returned H264 bitstream for unknown frame {frame_index}")
     })?;
     Ok(EncodeCompletion {
         chunk: output_chunk(
@@ -567,26 +589,24 @@ impl RgbaToRgb4Renderer {
         let label = "Intel Quick Sync RGBA to RGB4 input render";
         let shader =
             device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_rgb4.wgsl"));
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some(label),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                }],
-            });
-        let pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some(label),
-                bind_group_layouts: &[Some(&bind_group_layout)],
-                immediate_size: 0,
-            });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some(label),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            }],
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some(label),
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
+        });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(label),
             layout: Some(&pipeline_layout),
@@ -608,7 +628,12 @@ impl RgbaToRgb4Renderer {
             multisample: wgpu::MultisampleState::default(),
             depth_stencil: None,
         });
-        Self { label, device: device.clone(), pipeline, bind_group_layout }
+        Self {
+            label,
+            device: device.clone(),
+            pipeline,
+            bind_group_layout,
+        }
     }
 
     fn render(
@@ -692,7 +717,10 @@ fn encoder_video_param(
         enc.EncodedOrder = 0;
 
         match config.rate_control {
-            H264EncoderRateControl::VariableBitrate { bitrate, virtual_buffer_size } => {
+            H264EncoderRateControl::VariableBitrate {
+                bitrate,
+                virtual_buffer_size,
+            } => {
                 let average_bitrate = bitrate.average_bitrate.get();
                 let max_bitrate = bitrate.max_bitrate.get();
                 let buffer_size = virtual_buffer_kb(max_bitrate, virtual_buffer_size);
@@ -702,7 +730,10 @@ fn encoder_video_param(
                 enc.__bindgen_anon_2.TargetKbps = bitrate_kbps(average_bitrate);
                 enc.__bindgen_anon_3.MaxKbps = bitrate_kbps(max_bitrate);
             }
-            H264EncoderRateControl::ConstantBitrate { bitrate, virtual_buffer_size } => {
+            H264EncoderRateControl::ConstantBitrate {
+                bitrate,
+                virtual_buffer_size,
+            } => {
                 let bitrate = bitrate.get();
                 let buffer_size = virtual_buffer_kb(bitrate, virtual_buffer_size);
                 enc.RateControlMethod = vpl::MFX_RATECONTROL_CBR as u16;
@@ -730,10 +761,7 @@ struct H264EncoderVideoParam {
 }
 
 impl H264EncoderVideoParam {
-    fn with_ext_params<R>(
-        &mut self,
-        call: impl FnOnce(*mut vpl::mfxVideoParam) -> R,
-    ) -> R {
+    fn with_ext_params<R>(&mut self, call: impl FnOnce(*mut vpl::mfxVideoParam) -> R) -> R {
         let mut ext = [
             &mut self.coding_option.Header as *mut vpl::mfxExtBuffer,
             &mut self.coding_option2.Header as *mut vpl::mfxExtBuffer,
@@ -838,9 +866,8 @@ fn get_parameter_sets(
             })
         })
         .map_err(|err| err.to_string())?;
-    let mut out = BytesMut::with_capacity(
-        sps_pps.SPSBufSize as usize + sps_pps.PPSBufSize as usize + 8,
-    );
+    let mut out =
+        BytesMut::with_capacity(sps_pps.SPSBufSize as usize + sps_pps.PPSBufSize as usize + 8);
     out.extend_from_slice(&[0, 0, 0, 1]);
     out.extend_from_slice(&sps[..sps_pps.SPSBufSize as usize]);
     out.extend_from_slice(&[0, 0, 0, 1]);
@@ -855,11 +882,13 @@ fn encode_frame_async(
 ) -> Result<EncodeAsyncStatus, String> {
     let mut ctrl = unsafe { std::mem::zeroed::<vpl::mfxEncodeCtrl>() };
     let (ctrl, surface) = match submit {
-        EncodeSubmit::Input { force_keyframe, surface } => {
+        EncodeSubmit::Input {
+            force_keyframe,
+            surface,
+        } => {
             let ctrl = if force_keyframe {
-                ctrl.FrameType = (vpl::MFX_FRAMETYPE_IDR
-                    | vpl::MFX_FRAMETYPE_I
-                    | vpl::MFX_FRAMETYPE_REF) as u16;
+                ctrl.FrameType =
+                    (vpl::MFX_FRAMETYPE_IDR | vpl::MFX_FRAMETYPE_I | vpl::MFX_FRAMETYPE_REF) as u16;
                 &mut ctrl as *mut _
             } else {
                 std::ptr::null_mut()
@@ -870,13 +899,7 @@ fn encode_frame_async(
     };
     let mut syncp = std::ptr::null_mut();
     let status = retry_device_busy("MFXVideoENCODE_EncodeFrameAsync", || unsafe {
-        vpl::MFXVideoENCODE_EncodeFrameAsync(
-            session.raw(),
-            ctrl,
-            surface,
-            bitstream,
-            &mut syncp,
-        )
+        vpl::MFXVideoENCODE_EncodeFrameAsync(session.raw(), ctrl, surface, bitstream, &mut syncp)
     })?;
     match status {
         vpl::mfxStatus_MFX_ERR_NONE => Ok(EncodeAsyncStatus::Submitted(syncp)),
@@ -897,14 +920,14 @@ fn output_chunk(
     let bitstream = &output.bitstream;
     let buffer = &output.buffer;
     let start = bitstream.DataOffset as usize;
-    let end = start.checked_add(bitstream.DataLength as usize).ok_or_else(|| {
-        "Intel Quick Sync returned an overflowing bitstream range".to_string()
-    })?;
-    let encoded = buffer.as_slice().get(start..end).ok_or_else(|| {
-        "Intel Quick Sync returned an invalid bitstream range".to_string()
-    })?;
-    let is_keyframe =
-        forced_keyframe || bitstream.FrameType & vpl::MFX_FRAMETYPE_IDR as u16 != 0;
+    let end = start
+        .checked_add(bitstream.DataLength as usize)
+        .ok_or_else(|| "Intel Quick Sync returned an overflowing bitstream range".to_string())?;
+    let encoded = buffer
+        .as_slice()
+        .get(start..end)
+        .ok_or_else(|| "Intel Quick Sync returned an invalid bitstream range".to_string())?;
+    let is_keyframe = forced_keyframe || bitstream.FrameType & vpl::MFX_FRAMETYPE_IDR as u16 != 0;
     let data = if is_keyframe && !annexb_has_sps_pps(encoded) {
         let mut out = BytesMut::with_capacity(parameter_sets.len() + encoded.len());
         out.extend_from_slice(parameter_sets);
@@ -913,7 +936,11 @@ fn output_chunk(
     } else {
         Bytes::copy_from_slice(encoded)
     };
-    Ok(H264EncodedOutputChunk { data, pts, is_keyframe })
+    Ok(H264EncodedOutputChunk {
+        data,
+        pts,
+        is_keyframe,
+    })
 }
 
 fn annexb_has_sps_pps(data: &[u8]) -> bool {
@@ -993,8 +1020,7 @@ fn h264_encoder_layout(
 fn h264_bitstream_buffer_size(
     coded_resolution: VideoResolution,
 ) -> Result<u32, QuickSyncH264EncoderError> {
-    let raw_size =
-        u64::from(coded_resolution.width) * u64::from(coded_resolution.height) * 4;
+    let raw_size = u64::from(coded_resolution.width) * u64::from(coded_resolution.height) * 4;
     let size = raw_size.max(u64::from(MIN_H264_BITSTREAM_BUFFER_SIZE));
     u32::try_from(size).map_err(|_| QuickSyncH264EncoderError::BitstreamBufferTooLarge {
         resolution: coded_resolution,
@@ -1016,8 +1042,12 @@ mod tests {
 
     #[test]
     fn annexb_detects_parameter_sets_with_mixed_start_code_lengths() {
-        assert!(annexb_has_sps_pps(&[0, 0, 1, 0x67, 1, 2, 3, 0, 0, 0, 1, 0x68,]));
-        assert!(annexb_has_sps_pps(&[0, 0, 0, 1, 0x67, 1, 2, 3, 0, 0, 1, 0x68,]));
+        assert!(annexb_has_sps_pps(&[
+            0, 0, 1, 0x67, 1, 2, 3, 0, 0, 0, 1, 0x68,
+        ]));
+        assert!(annexb_has_sps_pps(&[
+            0, 0, 0, 1, 0x67, 1, 2, 3, 0, 0, 1, 0x68,
+        ]));
     }
 
     #[test]
@@ -1042,18 +1072,23 @@ mod tests {
 
     #[test]
     fn h264_encoder_resolution_rejects_dimensions_above_onevpl_limit() {
-        let err = h264_encoder_layout(resolution(H264_ENCODER_MAX_DIMENSION + 2, 1080))
-            .unwrap_err();
+        let err =
+            h264_encoder_layout(resolution(H264_ENCODER_MAX_DIMENSION + 2, 1080)).unwrap_err();
 
-        assert!(matches!(err, QuickSyncH264EncoderError::ResolutionTooLarge { .. }));
+        assert!(matches!(
+            err,
+            QuickSyncH264EncoderError::ResolutionTooLarge { .. }
+        ));
     }
 
     #[test]
     fn h264_encoder_resolution_rejects_oversized_bitstream_buffer() {
-        let err = h264_encoder_layout(resolution(H264_ENCODER_MAX_DIMENSION, 32768))
-            .unwrap_err();
+        let err = h264_encoder_layout(resolution(H264_ENCODER_MAX_DIMENSION, 32768)).unwrap_err();
 
-        assert!(matches!(err, QuickSyncH264EncoderError::BitstreamBufferTooLarge { .. }));
+        assert!(matches!(
+            err,
+            QuickSyncH264EncoderError::BitstreamBufferTooLarge { .. }
+        ));
     }
 
     #[test]

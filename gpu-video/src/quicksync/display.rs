@@ -8,11 +8,7 @@ pub(super) struct DrmRenderNode {
     pub(super) render_node: u32,
 }
 
-pub(super) fn quicksync_drm_render_nodes(adapter_info: &wgpu::AdapterInfo) -> Box<[DrmRenderNode]> {
-    matching_adapter_render_node(adapter_info).into_iter().collect()
-}
-
-fn matching_adapter_render_node(adapter_info: &wgpu::AdapterInfo) -> Option<DrmRenderNode> {
+pub(super) fn quicksync_drm_render_node(adapter_info: &wgpu::AdapterInfo) -> Option<DrmRenderNode> {
     let pci_bus_id = adapter_info.device_pci_bus_id.trim();
     if pci_bus_id.is_empty() {
         return None;
@@ -57,8 +53,8 @@ fn drm_render_node(path: PathBuf) -> Option<DrmRenderNode> {
 }
 
 #[cfg(test)]
-fn quicksync_drm_render_nodes_from(matched_adapter: Option<DrmRenderNode>) -> Box<[DrmRenderNode]> {
-    matched_adapter.into_iter().collect()
+fn quicksync_drm_render_node_from(matched_adapter: Option<DrmRenderNode>) -> Option<DrmRenderNode> {
+    matched_adapter
 }
 
 #[cfg(all(test, target_os = "linux"))]
@@ -73,17 +69,17 @@ mod tests {
     }
 
     #[test]
-    fn drm_render_nodes_use_matched_adapter_without_fallback() {
-        let nodes = quicksync_drm_render_nodes_from(Some(node("/dev/dri/renderD130", 130)));
+    fn drm_render_node_uses_matched_adapter_without_fallback() {
+        let render_node = quicksync_drm_render_node_from(Some(node("/dev/dri/renderD130", 130)));
 
-        assert_eq!(nodes.as_ref(), &[node("/dev/dri/renderD130", 130)]);
+        assert_eq!(render_node, Some(node("/dev/dri/renderD130", 130)));
     }
 
     #[test]
-    fn drm_render_nodes_do_not_fallback_when_adapter_is_known() {
-        let nodes = quicksync_drm_render_nodes_from(None);
+    fn drm_render_node_does_not_fallback_when_adapter_is_known() {
+        let render_node = quicksync_drm_render_node_from(None);
 
-        assert!(nodes.is_empty());
+        assert!(render_node.is_none());
     }
 
     #[test]
