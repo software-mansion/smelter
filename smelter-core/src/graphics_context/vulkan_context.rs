@@ -20,8 +20,8 @@ pub fn create_vulkan_graphics_ctx(
         ..
     } = opts;
 
-    let wgpu_features = features | required_wgpu_features() | wgpu::Features::TEXTURE_FORMAT_NV12;
-
+    let base_wgpu_features =
+        features | required_wgpu_features() | wgpu::Features::TEXTURE_FORMAT_NV12;
     let limits = set_required_wgpu_limits(limits);
 
     let instance = match libvulkan_path {
@@ -69,6 +69,11 @@ pub fn create_vulkan_graphics_ctx(
 
     let adapter_info = adapter.info();
     info!("Using {} adapter with Vulkan backend", adapter_info.name);
+    #[cfg(all(feature = "quicksync", target_os = "linux"))]
+    let wgpu_features = base_wgpu_features | adapter.quicksync_wgpu_features();
+    #[cfg(not(all(feature = "quicksync", target_os = "linux")))]
+    let wgpu_features = base_wgpu_features;
+
     let device = adapter.create_device(&VulkanDeviceDescriptor {
         wgpu_features,
         wgpu_experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },

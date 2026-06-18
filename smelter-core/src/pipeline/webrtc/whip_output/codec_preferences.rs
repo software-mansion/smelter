@@ -23,12 +23,24 @@ pub(super) fn resolve_video_preferences(
     };
 
     let vulkan_supported = ctx.graphics_context.has_vulkan_encoder_support();
+    let quicksync_supported = ctx.graphics_context.has_quicksync_encoder_support();
     let only_vulkan_in_preferences = video_preferences
         .iter()
         .all(|pref| matches!(pref, WhipVideoEncoderOptions::VulkanH264(_)));
     if !vulkan_supported && only_vulkan_in_preferences {
         return Err(WebrtcClientError::EncoderInitError(
             EncoderInitError::VulkanContextRequiredForVulkanEncoder,
+        ));
+    }
+    let only_quicksync_in_preferences = video_preferences
+        .iter()
+        .all(|pref| matches!(pref, WhipVideoEncoderOptions::QuickSyncH264(_)));
+    if !quicksync_supported && only_quicksync_in_preferences {
+        return Err(WebrtcClientError::EncoderInitError(
+            EncoderInitError::QuickSyncH264EncoderUnavailable(
+                "Intel Quick Sync H264 encoder is not supported by the selected graphics context"
+                    .into(),
+            ),
         ));
     }
 
@@ -43,6 +55,16 @@ pub(super) fn resolve_video_preferences(
                     vec![VideoEncoderOptions::VulkanH264(opts)]
                 } else {
                     warn!("Vulkan is not supported, skipping \"vulkan_h264\" preference");
+                    vec![]
+                }
+            }
+            WhipVideoEncoderOptions::QuickSyncH264(opts) => {
+                if quicksync_supported {
+                    vec![VideoEncoderOptions::QuickSyncH264(opts)]
+                } else {
+                    warn!(
+                        "Intel Quick Sync is not supported, skipping \"quicksync_h264\" preference"
+                    );
                     vec![]
                 }
             }
@@ -134,13 +156,13 @@ pub(super) fn codec_params_from_preferences(
     let video_codecs = match video_preferences {
         Some(video_preferences) => video_preferences
             .iter()
-            .flat_map(|pref| match pref {
-                VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+            .flat_map(|pref| match pref.codec() {
+                VideoCodec::H264 => {
                     // Constrained baseline 3.1 included for Twitch compatibility (rejects SDP offers without it)
                     [h264_cb_31_codec_params(), h264_codec_params()].concat()
                 }
-                VideoEncoderOptions::FfmpegVp8(_) => vp8_codec_params(),
-                VideoEncoderOptions::FfmpegVp9(_) => vp9_codec_params(),
+                VideoCodec::Vp8 => vp8_codec_params(),
+                VideoCodec::Vp9 => vp9_codec_params(),
             })
             .unique_by(|c| {
                 (
@@ -154,7 +176,7 @@ pub(super) fn codec_params_from_preferences(
     };
 
     // Opus is the only supported codec. The only negotiable option in AudioEncoderOptions is FEC.
-    // Since FEC is the only variant, we can just check the first option’s FEC value
+    // Since FEC is the only variant, we can just check the first option's FEC value
     // and register Opus with/without FEC accordingly, in the preferred order.
     // Channels field is the same for all encoder preferences.
     let (fec_first, channels) = audio_preferences

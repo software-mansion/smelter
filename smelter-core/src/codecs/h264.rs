@@ -44,14 +44,35 @@ pub struct VulkanH264EncoderOptions {
     pub bitstream_format: H264BitstreamFormat,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VulkanH264EncoderRateControl {
     VariableBitrate(VideoEncoderBitrate),
     ConstantBitrate(u64),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VulkanH264EncoderPreset {
+    HighQuality,
+    LowLatency,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct QuickSyncH264EncoderOptions {
+    pub resolution: Resolution,
+    pub bitrate: Option<QuickSyncH264EncoderRateControl>,
+    pub keyframe_interval: Duration,
+    pub preset: QuickSyncH264EncoderPreset,
+    pub bitstream_format: H264BitstreamFormat,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum QuickSyncH264EncoderRateControl {
+    VariableBitrate(VideoEncoderBitrate),
+    ConstantBitrate(u64),
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum QuickSyncH264EncoderPreset {
     HighQuality,
     LowLatency,
 }

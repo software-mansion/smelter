@@ -24,11 +24,19 @@ mod vulkan_video;
 #[cfg(vulkan)]
 pub use vulkan_video::*;
 
+mod types;
+pub use types::{VideoFramerate, VideoResolution};
+
 #[cfg(feature = "expose-parsers")]
 pub mod parser;
-#[cfg(not(feature = "expose-parsers"))]
+#[cfg(all(
+    not(feature = "expose-parsers"),
+    any(vulkan, all(feature = "quicksync", target_os = "linux"))
+))]
 pub(crate) mod parser;
 
-// If vulkan is unsupported and parsers are not exposed
-#[cfg(not(any(vulkan, feature = "expose-parsers")))]
-compile_error!("gpu-video can be only compiled on platforms supported by vulkan.");
+#[cfg(all(feature = "quicksync", target_os = "linux"))]
+mod dmabuf;
+
+#[cfg(all(feature = "quicksync", target_os = "linux"))]
+pub mod quicksync;

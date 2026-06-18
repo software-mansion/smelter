@@ -83,12 +83,10 @@ impl PeerConnection {
         &self,
         encoder: &VideoEncoderOptions,
     ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>, u32), WhipWhepServerError> {
-        let mime_type = match encoder {
-            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
-                MIME_TYPE_H264
-            }
-            VideoEncoderOptions::FfmpegVp8(_) => MIME_TYPE_VP8,
-            VideoEncoderOptions::FfmpegVp9(_) => MIME_TYPE_VP9,
+        let mime_type = match encoder.codec() {
+            VideoCodec::H264 => MIME_TYPE_H264,
+            VideoCodec::Vp8 => MIME_TYPE_VP8,
+            VideoCodec::Vp9 => MIME_TYPE_VP9,
         };
         let track = Arc::new(TrackLocalStaticRTP::new(
             RTCRtpCodecCapability {
@@ -283,8 +281,8 @@ fn register_codecs(
 ) -> Result<(), WhipWhepServerError> {
     let offer_codecs = codecs_from_offer(offer);
     if let Some(encoder) = video_encoder {
-        match encoder {
-            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+        match encoder.codec() {
+            VideoCodec::H264 => {
                 // We intentionally don't filter H264 codec subtypes from the offer.
                 // We echo all offered H264 variants in the answer to maximize
                 // negotiation success across clients. The encoder output is driven by
@@ -294,12 +292,12 @@ fn register_codecs(
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
-            VideoEncoderOptions::FfmpegVp8(_) => {
+            VideoCodec::Vp8 => {
                 for codec in offer_codecs.vp8 {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
-            VideoEncoderOptions::FfmpegVp9(_) => {
+            VideoCodec::Vp9 => {
                 for codec in offer_codecs.vp9 {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }

@@ -3,7 +3,7 @@ use smelter_render::{required_wgpu_features, set_required_wgpu_limits};
 use tracing::{error, info};
 
 use crate::graphics_context::{
-    CreateGraphicsContextError, GraphicsContext, GraphicsContextOptions,
+    CreateGraphicsContextError, GraphicsContext, GraphicsContextOptions, quicksync_wgpu_features,
 };
 
 pub fn create_wgpu_graphics_ctx(
@@ -67,7 +67,8 @@ pub fn create_wgpu_graphics_ctx(
         error!("Selected adapter is CPU based. Aborting.");
         return Err(CreateGraphicsContextError::NoAdapter);
     }
-    let required_features = features | required_wgpu_features();
+    let quicksync_features = quicksync_wgpu_features(&adapter);
+    let required_features = features | required_wgpu_features() | quicksync_features;
 
     let missing_features = required_features.difference(adapter.features());
     if !missing_features.is_empty() {
@@ -80,15 +81,16 @@ pub fn create_wgpu_graphics_ctx(
         return Err(CreateGraphicsContextError::NoAdapter);
     }
 
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+    let descriptor = wgpu::DeviceDescriptor {
         label: None,
         required_limits: set_required_wgpu_limits(limits),
         required_features,
         memory_hints: wgpu::MemoryHints::default(),
         trace: wgpu::Trace::Off,
         experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
-    }))?;
-
+    };
+    let (device, queue) =
+        request_wgpu_device(&adapter, &descriptor, !quicksync_features.is_empty())?;
     Ok(GraphicsContext {
         device: device.into(),
         queue: queue.into(),
@@ -97,6 +99,31 @@ pub fn create_wgpu_graphics_ctx(
         #[cfg(feature = "gpu-video")]
         vulkan_ctx: None,
     })
+}
+
+#[cfg(all(feature = "quicksync", target_os = "linux"))]
+fn request_wgpu_device(
+    adapter: &wgpu::Adapter,
+    descriptor: &wgpu::DeviceDescriptor<'_>,
+    quicksync: bool,
+) -> Result<(wgpu::Device, wgpu::Queue), CreateGraphicsContextError> {
+    if quicksync {
+        return gpu_video::quicksync::create_wgpu_device(adapter, descriptor).map_err(|err| {
+            error!("{err}");
+            CreateGraphicsContextError::NoAdapter
+        });
+    }
+
+    pollster::block_on(adapter.request_device(descriptor)).map_err(Into::into)
+}
+
+#[cfg(not(all(feature = "quicksync", target_os = "linux")))]
+fn request_wgpu_device(
+    adapter: &wgpu::Adapter,
+    descriptor: &wgpu::DeviceDescriptor<'_>,
+    _quicksync: bool,
+) -> Result<(wgpu::Device, wgpu::Queue), CreateGraphicsContextError> {
+    pollster::block_on(adapter.request_device(descriptor)).map_err(Into::into)
 }
 
 #[cfg(not(target_arch = "wasm32"))]

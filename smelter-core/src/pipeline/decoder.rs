@@ -23,6 +23,13 @@ pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
 pub mod ffmpeg_vp9;
 
+#[cfg(all(feature = "quicksync", target_os = "linux"))]
+pub mod quicksync_h264;
+
+#[cfg(not(all(feature = "quicksync", target_os = "linux")))]
+#[path = "./decoder/quicksync_h264_fallback.rs"]
+pub mod quicksync_h264;
+
 #[cfg(feature = "gpu-video")]
 pub mod vulkan_h264;
 

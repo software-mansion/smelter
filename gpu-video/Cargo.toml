@@ -21,6 +21,7 @@ keywords = ["vulkan", "video", "wgpu", "decoding", "encoding"]
 
 [features]
 expose-parsers = []
+quicksync = ["wgpu", "wgpu/vulkan", "dep:bindgen", "dep:libc", "dep:pkg-config"]
 vk-api-dump = []
 vk-validation = []
 wgpu = ["dep:wgpu"]
@@ -31,6 +32,7 @@ default = ["wgpu"]
 bytemuck = { version = "1.19.0", features = ["derive"], optional = true }
 bytes = "1"
 derivative = "2.2.0"
+drm-fourcc = "2.2.0"
 h264-reader = { workspace = true }
 memchr = "2.7.4"
 rustc-hash = "2.1.1"
@@ -43,12 +45,16 @@ wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", optional = tru
 ash = "0.38.0"
 vk-mem = "0.4.0"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { version = "0.2.151", optional = true }
+
 [dev-dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
 tracing-subscriber = "0.3.20"
 wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", features = ["noop"] }
 winit = "0.29"
 bytemuck = { version = "1.19.0", features = ["derive"] }
+pollster = { workspace = true }
 
 [build-dependencies]
 cfg_aliases = "0.2.1"
@@ -56,6 +62,10 @@ naga = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", features = [
   "spv-out",
   "wgsl-in",
 ], optional = true }
+
+[target.'cfg(target_os = "linux")'.build-dependencies]
+bindgen = { version = "0.72", optional = true }
+pkg-config = { version = "0.3", optional = true }
 
 [lints]
 workspace = true

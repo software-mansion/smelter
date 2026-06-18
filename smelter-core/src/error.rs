@@ -221,6 +221,12 @@ pub enum EncoderInitError {
         "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video encoder"
     )]
     VulkanContextRequiredForVulkanEncoder,
+
+    #[error("Intel Quick Sync H264 encoder unavailable: {0}")]
+    QuickSyncH264EncoderUnavailable(String),
+
+    #[error("Invalid Intel Quick Sync H264 encoder options: {0}")]
+    InvalidQuickSyncH264EncoderOptions(String),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -273,6 +279,9 @@ pub enum DecoderInitError {
         "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video decoder"
     )]
     VulkanContextRequiredForVulkanDecoder,
+
+    #[error("Intel Quick Sync H264 decoder is unavailable: {0}")]
+    QuickSyncH264DecoderUnavailable(String),
 
     #[error(transparent)]
     OpusError(#[from] opus::Error),

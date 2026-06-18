@@ -35,6 +35,24 @@ pub struct GraphicsContextOptions<'a> {
     pub libvulkan_path: Option<&'a std::ffi::OsStr>,
 }
 
+#[cfg(all(feature = "quicksync", target_os = "linux"))]
+fn quicksync_wgpu_features(adapter: &wgpu::Adapter) -> wgpu::Features {
+    gpu_video::quicksync::supported_wgpu_features(adapter)
+}
+
+#[cfg(not(all(feature = "quicksync", target_os = "linux")))]
+fn quicksync_wgpu_features(_adapter: &wgpu::Adapter) -> wgpu::Features {
+    wgpu::Features::empty()
+}
+
+#[cfg(all(feature = "quicksync", target_os = "linux"))]
+fn quicksync_h264_support(ctx: &GraphicsContext) -> gpu_video::quicksync::h264::H264Support {
+    match gpu_video::quicksync::supports_wgpu_device(&ctx.device) {
+        true => gpu_video::quicksync::h264::support(&ctx.adapter.get_info()),
+        false => gpu_video::quicksync::h264::H264Support::default(),
+    }
+}
+
 impl GraphicsContext {
     #[cfg(feature = "gpu-video")]
     pub fn new(opts: GraphicsContextOptions) -> Result<Self, CreateGraphicsContextError> {
@@ -78,6 +96,34 @@ impl GraphicsContext {
     }
     #[cfg(not(feature = "gpu-video"))]
     pub fn has_vulkan_encoder_support(&self) -> bool {
+        false
+    }
+
+    pub fn has_quicksync_decoder_support(&self) -> bool {
+        self.quicksync_h264_decoding()
+    }
+
+    pub fn has_quicksync_encoder_support(&self) -> bool {
+        self.quicksync_h264_encoding()
+    }
+
+    #[cfg(all(feature = "quicksync", target_os = "linux"))]
+    fn quicksync_h264_decoding(&self) -> bool {
+        quicksync_h264_support(self).decoding
+    }
+
+    #[cfg(not(all(feature = "quicksync", target_os = "linux")))]
+    fn quicksync_h264_decoding(&self) -> bool {
+        false
+    }
+
+    #[cfg(all(feature = "quicksync", target_os = "linux"))]
+    fn quicksync_h264_encoding(&self) -> bool {
+        quicksync_h264_support(self).encoding
+    }
+
+    #[cfg(not(all(feature = "quicksync", target_os = "linux")))]
+    fn quicksync_h264_encoding(&self) -> bool {
         false
     }
 

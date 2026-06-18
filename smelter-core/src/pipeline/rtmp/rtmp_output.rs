@@ -26,6 +26,7 @@ use crate::{
             ffmpeg_vp8::FfmpegVp8Encoder,
             ffmpeg_vp9::FfmpegVp9Encoder,
             libopus::OpusEncoder,
+            quicksync_h264::QuickSyncH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
@@ -172,6 +173,17 @@ impl RtmpClientOutput {
                     ));
                 }
                 let encoder = VideoEncoderThread::<VulkanH264Encoder>::spawn(
+                    output_id.clone(),
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender,
+                    },
+                )?;
+                (encoder, RtmpVideoCodec::H264)
+            }
+            VideoEncoderOptions::QuickSyncH264(options) => {
+                let encoder = VideoEncoderThread::<QuickSyncH264Encoder>::spawn(
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),

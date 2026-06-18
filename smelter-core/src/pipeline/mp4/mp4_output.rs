@@ -17,6 +17,7 @@ use crate::{
             },
             fdk_aac::FdkAacEncoder,
             ffmpeg_h264::FfmpegH264Encoder,
+            quicksync_h264::QuickSyncH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
         ffmpeg_utils::{FfmpegOptions, StreamMutExt, write_extradata},
@@ -181,6 +182,16 @@ impl Mp4Output {
                     ));
                 }
                 VideoEncoderThread::<VulkanH264Encoder>::spawn(
+                    output_ref.clone(),
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: encoded_chunks_sender,
+                    },
+                )?
+            }
+            VideoEncoderOptions::QuickSyncH264(options) => {
+                VideoEncoderThread::<QuickSyncH264Encoder>::spawn(
                     output_ref.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),

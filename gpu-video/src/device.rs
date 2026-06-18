@@ -310,6 +310,13 @@ impl VulkanDevice {
         #[cfg(feature = "wgpu")]
         append_wgpu_device_extensions(&adapter, descriptor.wgpu_features, &mut required_extensions);
 
+        #[cfg(all(feature = "quicksync", target_os = "linux"))]
+        if adapter.supports_quicksync_dmabuf_interop() {
+            for extension in crate::dmabuf::REQUIRED_SYNC_VULKAN_DEVICE_EXTENSIONS {
+                push_extension(&mut required_extensions, extension);
+            }
+        }
+
         #[cfg(not(feature = "wgpu"))]
         required_extensions.push(ash::khr::timeline_semaphore::NAME);
 
@@ -841,6 +848,13 @@ impl VulkanDevice {
 
     pub fn supports_encoding(&self) -> bool {
         self.adapter_info.supports_encoding
+    }
+}
+
+#[cfg(all(feature = "quicksync", target_os = "linux"))]
+fn push_extension(extensions: &mut Vec<&'static CStr>, extension: &'static CStr) {
+    if !extensions.contains(&extension) {
+        extensions.push(extension);
     }
 }
 

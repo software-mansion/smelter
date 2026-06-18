@@ -1,4 +1,4 @@
-use std::{iter, sync::Arc};
+use std::{iter, sync::Arc, time::Duration};
 
 use smelter_render::{Frame, OutputFrameFormat, Resolution};
 use tokio::sync::watch;
@@ -13,6 +13,13 @@ pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
 pub mod ffmpeg_vp9;
 pub mod libopus;
+
+#[cfg(all(feature = "quicksync", target_os = "linux"))]
+pub mod quicksync_h264;
+
+#[cfg(not(all(feature = "quicksync", target_os = "linux")))]
+#[path = "./encoder/quicksync_h264_fallback.rs"]
+pub mod quicksync_h264;
 
 #[cfg(feature = "gpu-video")]
 pub mod vulkan_h264;
@@ -34,6 +41,7 @@ pub(crate) struct VideoEncoderConfig {
 
 pub(crate) trait VideoEncoder: Sized {
     const LABEL: &'static str;
+    const OUTPUT_POLL_INTERVAL: Option<Duration> = None;
     type Options: Send + 'static;
 
     fn new(
@@ -41,6 +49,9 @@ pub(crate) trait VideoEncoder: Sized {
         options: Self::Options,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError>;
     fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedOutputChunk>;
+    fn poll_output(&mut self) -> Vec<EncodedOutputChunk> {
+        Vec::new()
+    }
     fn flush(&mut self) -> Vec<EncodedOutputChunk>;
 }
 
@@ -68,26 +79,24 @@ pub(super) struct VideoEncoderStreamContext {
     pub config: VideoEncoderConfig,
 }
 
-pub(super) struct VideoEncoderStream<Encoder, Source>
+pub(super) struct VideoEncoderStream<Encoder>
 where
     Encoder: VideoEncoder,
-    Source: Iterator<Item = PipelineEvent<Frame>>,
 {
     encoder: Encoder,
-    source: Source,
+    source: crossbeam_channel::Receiver<PipelineEvent<Frame>>,
     keyframe_request_receiver: crossbeam_channel::Receiver<()>,
     eos_sent: bool,
 }
 
-impl<Encoder, Source> VideoEncoderStream<Encoder, Source>
+impl<Encoder> VideoEncoderStream<Encoder>
 where
     Encoder: VideoEncoder,
-    Source: Iterator<Item = PipelineEvent<Frame>>,
 {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         options: Encoder::Options,
-        source: Source,
+        source: crossbeam_channel::Receiver<PipelineEvent<Frame>>,
     ) -> Result<(Self, VideoEncoderStreamContext), EncoderInitError> {
         let (keyframe_request_sender, keyframe_request_receiver) = crossbeam_channel::unbounded();
         let (encoder, config) = Encoder::new(&ctx, options)?;
@@ -114,15 +123,30 @@ where
     }
 }
 
-impl<Encoder, Source> Iterator for VideoEncoderStream<Encoder, Source>
+impl<Encoder> Iterator for VideoEncoderStream<Encoder>
 where
     Encoder: VideoEncoder,
-    Source: Iterator<Item = PipelineEvent<Frame>>,
 {
     type Item = Vec<PipelineEvent<EncodedOutputChunk>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.source.next() {
+        let event = match Encoder::OUTPUT_POLL_INTERVAL {
+            Some(interval) => loop {
+                match self.source.recv_timeout(interval) {
+                    Ok(event) => break Some(event),
+                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                        let chunks = self.encoder.poll_output();
+                        if !chunks.is_empty() {
+                            return Some(chunks.into_iter().map(PipelineEvent::Data).collect());
+                        }
+                    }
+                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break None,
+                }
+            },
+            None => self.source.recv().ok(),
+        };
+
+        match event {
             Some(PipelineEvent::Data(frame)) => {
                 let chunks = self.encoder.encode(frame, self.has_keyframe_request());
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())

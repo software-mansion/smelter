@@ -31,6 +31,8 @@ pub struct VulkanAdapter<'a> {
     pub(crate) queue_indices: QueueIndices<'static>,
     pub(crate) decode_capabilities: Option<NativeDecodeCapabilities>,
     pub(crate) encode_capabilities: Option<NativeEncodeCapabilities>,
+    #[cfg(all(feature = "quicksync", target_os = "linux"))]
+    pub(crate) supports_quicksync_dmabuf_interop: bool,
     pub(crate) info: AdapterInfo,
 }
 
@@ -86,6 +88,12 @@ impl<'a> VulkanAdapter<'a> {
             has_encode_extensions && !supported_encode_codec_extensions.is_empty();
         let supported_encode_operations =
             extensions_to_codec_operations(&supported_encode_codec_extensions);
+        #[cfg(all(feature = "quicksync", target_os = "linux"))]
+        let supports_quicksync_dmabuf_interop = check_extensions(
+            &crate::dmabuf::REQUIRED_SYNC_VULKAN_DEVICE_EXTENSIONS,
+            &extensions,
+        )
+        .is_ok();
 
         if !supports_any_decoding && !supports_any_encoding {
             debug!("device does not support encoding or decoding extensions");
@@ -274,6 +282,8 @@ impl<'a> VulkanAdapter<'a> {
             } else {
                 None
             },
+            #[cfg(all(feature = "quicksync", target_os = "linux"))]
+            supports_quicksync_dmabuf_interop,
             info,
         })
     }
@@ -284,6 +294,19 @@ impl<'a> VulkanAdapter<'a> {
 
     pub fn supports_encoding(&self) -> bool {
         self.info.supports_encoding
+    }
+
+    #[cfg(all(feature = "quicksync", target_os = "linux"))]
+    pub(crate) fn supports_quicksync_dmabuf_interop(&self) -> bool {
+        self.supports_quicksync_dmabuf_interop
+    }
+
+    #[cfg(all(feature = "wgpu", feature = "quicksync", target_os = "linux"))]
+    pub fn quicksync_wgpu_features(&self) -> wgpu::Features {
+        crate::quicksync::supported_wgpu_features_from(
+            self.wgpu_adapter.features,
+            self.supports_quicksync_dmabuf_interop,
+        )
     }
 
     #[cfg(feature = "wgpu")]
