@@ -6,6 +6,9 @@ mod adapter;
 pub(crate) mod codec;
 #[cfg(vulkan)]
 mod device;
+// TODO: cfg(vulkan) will not be needed once we add proper metal support
+#[cfg(all(vulkan, feature = "wgpu"))]
+mod global_registry;
 #[cfg(vulkan)]
 mod instance;
 #[cfg(vulkan)]

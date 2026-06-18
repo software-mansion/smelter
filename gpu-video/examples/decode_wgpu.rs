@@ -3,8 +3,8 @@ fn main() {
     use std::io::Write;
 
     use gpu_video::{
-        EncodedInputChunk, OutputFrame, VulkanInstance,
-        parameters::{DecoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor},
+        EncodedInputChunk, OutputFrame, VideoAdapterExt, VideoDeviceExt,
+        parameters::{DecoderParameters, VideoDeviceDescriptor},
     };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -20,29 +20,25 @@ fn main() {
     }
     let h264_bytestream = std::fs::read(&args[1]).unwrap_or_else(|_| panic!("read {}", args[1]));
 
-    let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_adapter = vulkan_instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
-        .unwrap();
-    let vulkan_device = vulkan_adapter
-        .create_device(&VulkanDeviceDescriptor {
-            wgpu_limits: wgpu::Limits {
-                max_binding_array_elements_per_shader_stage: 128,
-                max_immediate_size: 128,
-                ..Default::default()
-            },
-            ..Default::default()
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
+        .into_iter()
+        .find(|a| {
+            a.video_adapter_info()
+                .is_some_and(|info| info.decode_capabilities.h264.is_some())
         })
         .unwrap();
+    let (device, queue) = adapter
+        .request_device_with_video_support(&VideoDeviceDescriptor::default())
+        .unwrap();
 
-    let mut decoder = vulkan_device
+    let mut decoder = device
+        .video()
+        .unwrap()
         .create_wgpu_textures_decoder_h264(DecoderParameters::default())
         .unwrap();
 
     let mut output_file = std::fs::File::create("output.nv12").unwrap();
-
-    let device = vulkan_device.wgpu_device();
-    let queue = &vulkan_device.wgpu_queue();
 
     for chunk in h264_bytestream.chunks(256) {
         let chunk = EncodedInputChunk {
@@ -53,14 +49,14 @@ fn main() {
         let frames = decoder.decode(chunk).unwrap();
 
         for OutputFrame { data, .. } in frames {
-            let decoded_frame = download_wgpu_texture(&device, queue, data);
+            let decoded_frame = download_wgpu_texture(&device, &queue, data);
             output_file.write_all(&decoded_frame).unwrap();
         }
     }
 
     let remaining_frames = decoder.flush().unwrap();
     for OutputFrame { data, .. } in remaining_frames {
-        let decoded_frame = download_wgpu_texture(&device, queue, data);
+        let decoded_frame = download_wgpu_texture(&device, &queue, data);
         output_file.write_all(&decoded_frame).unwrap();
     }
 }

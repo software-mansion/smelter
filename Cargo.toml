@@ -62,7 +62,12 @@ glyphon = { git = "https://github.com/smelter-labs/glyphon", rev = "33b3dfe" }
 futures-util = "0.3.30"
 tokio = { version = "1", features = ["full"] }
 schemars = { version = "0.8.22", features = ["preserve_order"] }
-utoipa = { version = "5.4.0", features = ["rc_schema", "preserve_order", "preserve_path_order", "axum_extras"] }
+utoipa = { version = "5.4.0", features = [
+    "rc_schema",
+    "preserve_order",
+    "preserve_path_order",
+    "axum_extras",
+] }
 shared_memory = "0.12.4"
 h264-reader = "0.8.0"
 wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", default-features = false, features = [
@@ -72,12 +77,13 @@ wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", default-featur
     "naga-ir",
     "webgl",
     "fragile-send-sync-non-atomic-wasm",
-    "serde"
+    "serde",
 ] }
 tower-http = { version = "0.6.1", features = ["cors"] }
 tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 pollster = "0.3.0"
 regex = "1.11.2"
+ash = "0.38.0"
 
 [dependencies]
 smelter-api = { workspace = true }

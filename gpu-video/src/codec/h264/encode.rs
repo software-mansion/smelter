@@ -3,7 +3,7 @@ use std::{collections::VecDeque, num::NonZeroU32};
 use ash::vk;
 
 use crate::{
-    VulkanEncoderError,
+    VideoEncoderError,
     codec::{
         EncodeCodec,
         h264::{
@@ -61,7 +61,7 @@ impl EncodeCodec for H264Codec {
     fn codec_parameters(
         parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
-    ) -> Result<Self::OwnedParameters, VulkanEncoderError> {
+    ) -> Result<Self::OwnedParameters, VideoEncoderError> {
         let sps = VkH264SequenceParameterSet::new_encode(
             parameters.profile,
             parameters.width.get(),

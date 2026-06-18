@@ -24,15 +24,42 @@ use crate::VulkanCommonError;
 
 pub(crate) struct Instance {
     pub(crate) instance: ash::Instance,
-    pub(crate) _entry: Arc<Entry>,
+    pub(crate) _entry: Entry,
     pub(crate) video_queue_instance_ext: ash::khr::video_queue::Instance,
     pub(crate) video_encode_queue_instance_ext: ash::khr::video_encode_queue::Instance,
-    pub(crate) debug_utils_instance_ext: ash::ext::debug_utils::Instance,
+    pub(crate) debug_utils_instance_ext: Option<ash::ext::debug_utils::Instance>,
+    pub(crate) destroy_instance_on_drop: bool,
+}
+
+impl Instance {
+    pub fn new(
+        instance: ash::Instance,
+        entry: Entry,
+        load_debug_utils: bool,
+        destroy_instance_on_drop: bool,
+    ) -> Self {
+        let video_queue_instance_ext = ash::khr::video_queue::Instance::new(&entry, &instance);
+        let video_encode_queue_instance_ext =
+            ash::khr::video_encode_queue::Instance::new(&entry, &instance);
+        let debug_utils_instance_ext =
+            load_debug_utils.then(|| ash::ext::debug_utils::Instance::new(&entry, &instance));
+
+        Self {
+            instance,
+            _entry: entry,
+            video_queue_instance_ext,
+            video_encode_queue_instance_ext,
+            debug_utils_instance_ext,
+            destroy_instance_on_drop,
+        }
+    }
 }
 
 impl Drop for Instance {
     fn drop(&mut self) {
-        unsafe { self.destroy_instance(None) };
+        if self.destroy_instance_on_drop {
+            unsafe { self.destroy_instance(None) };
+        }
     }
 }
 
@@ -49,13 +76,11 @@ pub(crate) struct Device {
     pub(crate) video_queue_ext: ash::khr::video_queue::Device,
     pub(crate) video_decode_queue_ext: ash::khr::video_decode_queue::Device,
     pub(crate) video_encode_queue_ext: ash::khr::video_encode_queue::Device,
-    #[cfg(feature = "vk-validation")]
-    pub(crate) debug_utils_ext: ash::ext::debug_utils::Device,
+    pub(crate) debug_utils_ext: Option<ash::ext::debug_utils::Device>,
     pub(crate) _instance: Arc<Instance>,
 }
 
 impl Device {
-    #[cfg(feature = "vk-validation")]
     pub(crate) fn set_label<T: vk::Handle>(
         &self,
         object: T,
@@ -63,37 +88,33 @@ impl Device {
     ) -> Result<(), VulkanCommonError> {
         use std::ffi::CStr;
 
-        if let Some(label) = label {
-            let mut text = [0; 64];
-            let mut long_text = Vec::new();
+        let Some(debug_utils) = &self.debug_utils_ext else {
+            return Ok(());
+        };
+        let Some(label) = label else {
+            return Ok(());
+        };
 
-            let label = if label.len() < text.len() {
-                text[..label.len()].copy_from_slice(label.as_bytes());
-                CStr::from_bytes_until_nul(&text).unwrap()
-            } else {
-                long_text.extend_from_slice(label.as_bytes());
-                long_text.push(0);
-                CStr::from_bytes_until_nul(&long_text).unwrap()
-            };
+        let mut text = [0; 64];
+        let mut long_text = Vec::new();
 
-            unsafe {
-                self.debug_utils_ext.set_debug_utils_object_name(
-                    &vk::DebugUtilsObjectNameInfoEXT::default()
-                        .object_handle(object)
-                        .object_name(label),
-                )?
-            }
+        let label = if label.len() < text.len() {
+            text[..label.len()].copy_from_slice(label.as_bytes());
+            CStr::from_bytes_until_nul(&text).unwrap()
+        } else {
+            long_text.extend_from_slice(label.as_bytes());
+            long_text.push(0);
+            CStr::from_bytes_until_nul(&long_text).unwrap()
+        };
+
+        unsafe {
+            debug_utils.set_debug_utils_object_name(
+                &vk::DebugUtilsObjectNameInfoEXT::default()
+                    .object_handle(object)
+                    .object_name(label),
+            )?
         }
 
-        Ok(())
-    }
-
-    #[cfg(not(feature = "vk-validation"))]
-    pub(crate) fn set_label<T: vk::Handle>(
-        &self,
-        _object: T,
-        _label: Option<&str>,
-    ) -> Result<(), VulkanCommonError> {
         Ok(())
     }
 }

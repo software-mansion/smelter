@@ -8,10 +8,11 @@ fn main() {
     };
 
     use gpu_video::{
-        EncodedInputChunk, VulkanInstance,
+        EncodedInputChunk, VideoInstance,
         parameters::{
             AnyEncoderParameters, RateControl, ScalingAlgorithm, TranscoderOutputParameters,
-            TranscoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+            TranscoderParameters, VideoAdapterDescriptor, VideoDeviceDescriptor,
+            VideoInstanceDescriptor,
         },
     };
 
@@ -45,18 +46,22 @@ fn main() {
         ScalingAlgorithm::default()
     };
 
-    let instance = VulkanInstance::new().unwrap();
-    let adapter = instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
+    let video_instance = VideoInstance::new(&VideoInstanceDescriptor {
+        enable_validations: true,
+        ..Default::default()
+    })
+    .unwrap();
+    let video_adapter = video_instance
+        .create_adapter(&VideoAdapterDescriptor::default())
         .unwrap();
-    let device = adapter
-        .create_device(&VulkanDeviceDescriptor::default())
+    let video_device = video_adapter
+        .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
     let average_bitrate = 1_000_000;
     let max_bitrate = 1_200_000;
 
-    let params_h264 = device
+    let params_h264 = video_device
         .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
             average_bitrate,
             max_bitrate,
@@ -64,7 +69,7 @@ fn main() {
         })
         .unwrap();
 
-    let params_h265 = device
+    let params_h265 = video_device
         .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
             average_bitrate,
             max_bitrate,
@@ -72,7 +77,7 @@ fn main() {
         })
         .unwrap();
 
-    let mut transcoder = device
+    let mut transcoder = video_device
         .create_transcoder(TranscoderParameters {
             input_framerate: 30.into(),
             output_parameters: vec![

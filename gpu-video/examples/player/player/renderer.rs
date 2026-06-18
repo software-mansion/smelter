@@ -1,81 +1,5 @@
-use std::sync::mpsc::Receiver;
-
-use gpu_video::VulkanDevice;
 use wgpu::util::DeviceExt;
-use winit::{
-    dpi::PhysicalSize,
-    event::{ElementState, Event, KeyEvent, WindowEvent},
-    event_loop::EventLoop,
-    keyboard::{KeyCode, PhysicalKey},
-    window::Window,
-};
-
-use super::FrameWithPts;
-
-pub fn run_renderer<'a>(
-    event_loop: EventLoop<()>,
-    window: &'a Window,
-    surface: wgpu::Surface<'a>,
-    vulkan_device: &VulkanDevice,
-    rx: Receiver<FrameWithPts>,
-) {
-    let mut current_frame = rx.recv().unwrap();
-    let mut next_frame = None;
-
-    window.set_title("gpu-video example player");
-    window.set_resizable(false);
-    let _ = window.request_inner_size(PhysicalSize::new(
-        current_frame.frame.size().width,
-        current_frame.frame.size().height,
-    ));
-
-    let mut renderer = Renderer::new(surface, vulkan_device, window);
-
-    let start_timestamp = std::time::Instant::now();
-    event_loop
-        .run(move |event, cf| match event {
-            Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
-                WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            state: ElementState::Pressed,
-                            physical_key: PhysicalKey::Code(KeyCode::Escape),
-                            ..
-                        },
-                    ..
-                }
-                | WindowEvent::CloseRequested => cf.exit(),
-
-                WindowEvent::RedrawRequested => {
-                    window.request_redraw();
-                    if next_frame.is_none() {
-                        if let Ok(f) = rx.try_recv() {
-                            next_frame = Some(f);
-                        }
-                    }
-
-                    let current_pts = std::time::Instant::now() - start_timestamp;
-                    if let Some(next_frame_pts) = next_frame.as_ref().map(|f| f.pts) {
-                        if next_frame_pts < current_pts {
-                            current_frame = next_frame.take().unwrap();
-                        }
-                    }
-
-                    let _ = window.request_inner_size(PhysicalSize::new(
-                        current_frame.frame.size().width,
-                        current_frame.frame.size().height,
-                    ));
-
-                    renderer.render(&current_frame.frame, window);
-                }
-
-                WindowEvent::Resized(new_size) => renderer.resize(new_size),
-                _ => {}
-            },
-            _ => {}
-        })
-        .unwrap();
-}
+use winit::{dpi::PhysicalSize, window::Window};
 
 #[derive(Debug, Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
 #[repr(C)]
@@ -115,8 +39,8 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 3, 1, 2, 3];
 
-struct Renderer<'a> {
-    surface: wgpu::Surface<'a>,
+pub struct Renderer {
+    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface_configuration: wgpu::SurfaceConfiguration,
@@ -126,12 +50,16 @@ struct Renderer<'a> {
     pipeline: wgpu::RenderPipeline,
 }
 
-impl<'a> Renderer<'a> {
-    fn new(surface: wgpu::Surface<'a>, vulkan_device: &VulkanDevice, window: &Window) -> Self {
-        let device = vulkan_device.wgpu_device();
-        let queue = vulkan_device.wgpu_queue();
+impl Renderer {
+    pub fn new(
+        surface: wgpu::Surface<'static>,
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        window: &Window,
+    ) -> Self {
         let size = window.inner_size();
-        let surface_capabilities = surface.get_capabilities(&vulkan_device.wgpu_adapter());
+        let surface_capabilities = surface.get_capabilities(&adapter);
         let surface_texture_format = surface_capabilities
             .formats
             .iter()
@@ -270,7 +198,7 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    fn resize(&mut self, size: PhysicalSize<u32>) {
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
         if size.width > 0 && size.height > 0 {
             self.surface_configuration.width = size.width;
             self.surface_configuration.height = size.height;
@@ -279,7 +207,7 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    fn render(&mut self, frame: &wgpu::Texture, window: &Window) {
+    pub fn render(&mut self, frame: &wgpu::Texture, window: &Window) {
         let device = &self.device;
         let surface = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture)
