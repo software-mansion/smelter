@@ -1,0 +1,11 @@
+[package]
+name = "libsrt"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libsrt-sys = { path = "./libsrt-sys" }
+libc = "0.2"
+
+[lints]
+workspace = true
