@@ -2850,6 +2850,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsrt"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "libsrt-sys",
+]
+
+[[package]]
+name = "libsrt-sys"
+version = "0.1.0"
+dependencies = [
+ "bindgen 0.72.1",
+ "cmake",
+ "libc",
+ "openssl-sys",
+]
+
+[[package]]
 name = "linebender_resource_handle"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5274,6 +5292,7 @@ dependencies = [
  "glyphon",
  "gpu-video",
  "itertools 0.14.0",
+ "libsrt",
  "mp4",
  "opus",
  "pollster",
