@@ -13,10 +13,10 @@ use crate::{
         h264::H264Parser,
         reference_manager::ReferenceContext,
     },
-    vulkan_decoder::{
+    vulkan::vulkan_decoder::{
         DecodeResult, FrameSorter, ImageModifiers, InFlightDecodeResources, VulkanDecoder,
     },
-    vulkan_encoder::{Encoder, FullEncoderParameters, VulkanEncoder},
+    vulkan::vulkan_encoder::{Encoder, FullEncoderParameters, VulkanEncoder},
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
     wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
 };

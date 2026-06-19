@@ -12,9 +12,7 @@ mod global_registry;
 #[cfg(vulkan)]
 mod instance;
 #[cfg(vulkan)]
-mod vulkan_decoder;
-#[cfg(vulkan)]
-mod vulkan_encoder;
+mod vulkan;
 #[cfg(all(vulkan, feature = "transcoder"))]
 mod vulkan_transcoder;
 #[cfg(all(vulkan, feature = "wgpu"))]
@@ -23,9 +21,9 @@ pub(crate) mod wgpu_helpers;
 pub(crate) mod wrappers;
 
 #[cfg(vulkan)]
-mod vulkan_video;
+mod prelude;
 #[cfg(vulkan)]
-pub use vulkan_video::*;
+pub use prelude::*;
 
 #[cfg(feature = "expose-parsers")]
 pub mod parser;

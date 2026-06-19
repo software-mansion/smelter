@@ -9,7 +9,7 @@ use crate::{
         NativeEncodeQualityLevelProperties,
     },
     parameters::RateControl,
-    vulkan_encoder::FullEncoderParameters,
+    vulkan::vulkan_encoder::FullEncoderParameters,
     wrappers::ProfileInfo,
 };
 

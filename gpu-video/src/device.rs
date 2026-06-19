@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use ash::vk;
 
-use crate::adapter::VideoAdapter;
+use crate::vulkan::vulkan_adapter::VulkanAdapter;
 use crate::capabilities::VideoAdapterInfo;
 use crate::codec::EncodeCodec;
 use crate::codec::h264::H264Codec;
@@ -17,7 +17,7 @@ use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, H265Profile,
     RateControl,
 };
-use crate::vulkan_encoder::FullEncoderParameters;
+use crate::vulkan::vulkan_encoder::FullEncoderParameters;
 
 use crate::{VideoEncoderError, VideoInitError, VulkanDecoderError, wrappers::*};
 
@@ -270,7 +270,7 @@ pub(crate) struct VideoDevice {
 
 impl VideoDevice {
     pub(crate) fn create_and_register(
-        video_adapter: VideoAdapter<'_>,
+        video_adapter: VulkanAdapter<'_>,
         _desc: VideoDeviceDescriptor,
     ) -> Result<crate::VideoDevice, VideoInitError> {
         let mut required_extensions = video_adapter.required_extensions();
@@ -295,7 +295,7 @@ impl VideoDevice {
     #[cfg(feature = "wgpu")]
     pub(crate) fn create_and_register_wgpu(
         wgpu_adapter: &wgpu::Adapter,
-        video_adapter: VideoAdapter<'_>,
+        video_adapter: VulkanAdapter<'_>,
         desc: VideoDeviceDescriptor,
     ) -> Result<(wgpu::Device, wgpu::Queue), VideoInitError> {
         use std::sync::OnceLock;
@@ -393,11 +393,11 @@ impl VideoDevice {
     }
 
     fn new_from_create_info(
-        adapter: VideoAdapter<'_>,
+        adapter: VulkanAdapter<'_>,
         required_extensions: &[&'static CStr],
         device_create_info: vk::DeviceCreateInfo<'_>,
     ) -> Result<Arc<Self>, VideoInitError> {
-        let VideoAdapter {
+        let VulkanAdapter {
             instance,
             physical_device,
             queue_indices,

@@ -38,7 +38,7 @@ impl EncodeCodec for H264Codec {
     }
 
     fn profile_info<'a>(
-        params: &crate::vulkan_encoder::FullEncoderParameters<Self>,
+        params: &crate::vulkan::vulkan_encoder::FullEncoderParameters<Self>,
     ) -> crate::wrappers::ProfileInfo<'a> {
         let h264_profile = vk::VideoEncodeH264ProfileInfoKHR::default()
             .std_profile_idc(params.profile.to_profile_idc());
@@ -59,7 +59,7 @@ impl EncodeCodec for H264Codec {
     }
 
     fn codec_parameters(
-        parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
+        parameters: &crate::vulkan::vulkan_encoder::FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
     ) -> Result<Self::OwnedParameters, VideoEncoderError> {
         let sps = VkH264SequenceParameterSet::new_encode(

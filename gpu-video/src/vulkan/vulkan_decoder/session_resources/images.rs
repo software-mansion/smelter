@@ -6,7 +6,7 @@ use crate::{
     VulkanDecoderError,
     codec::h264::parameters::H264DecodeProfileInfo,
     device::DecodingDevice,
-    vulkan_decoder::Image,
+    vulkan::vulkan_decoder::Image,
     wrappers::{
         CodingImageBundle, DecodedPicturesBuffer, ImageLayoutTracker, ImageWithView,
         OpenCommandBuffer,

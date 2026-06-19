@@ -16,7 +16,7 @@ use crate::{
         vk_to_h264_level_idc,
     },
     device::DecodingDevice,
-    vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers},
+    vulkan::vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers},
     wrappers::{DecodeInputBufferPool, DecodingQueryPool, OpenCommandBuffer, VideoSession},
 };
 

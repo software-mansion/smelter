@@ -1,7 +1,8 @@
 use crate::{
-    VideoAdapter, VideoInitError, VideoInstance,
+    VideoInitError,
     adapter::VideoAdapterInfo,
     device::{VideoDevice, VideoDeviceDescriptor},
+    vulkan::vulkan_adapter::with_video_adapter_from_wgpu,
 };
 
 /// [`wgpu::Adapter`] extension that exposes video capabilities of an adapter.
@@ -32,28 +33,4 @@ impl VideoAdapterExt for wgpu::Adapter {
         })
         .ok_or(VideoInitError::NoDevice)?
     }
-}
-
-#[cfg(vulkan)]
-fn with_video_adapter_from_wgpu<F, R>(wgpu_adapter: &wgpu::Adapter, use_adapter: F) -> Option<R>
-where
-    F: Fn(VideoAdapter<'_>) -> R,
-{
-    use crate::instance::VideoInstanceDescriptor;
-    use ash::vk;
-    use wgpu::hal::vulkan::Api as VkApi;
-
-    let hal_adapter = unsafe { wgpu_adapter.as_hal::<VkApi>()? };
-    let physical_device = hal_adapter.raw_physical_device();
-    let instance = hal_adapter.shared_instance();
-    let instance = VideoInstance::new_unowned(
-        instance.raw_instance().clone(),
-        instance.entry().clone(),
-        &VideoInstanceDescriptor {
-            enable_validations: instance.extensions().contains(&vk::EXT_DEBUG_UTILS_NAME),
-            ..Default::default()
-        },
-    );
-
-    VideoAdapter::new(&instance, physical_device).map(use_adapter)
 }

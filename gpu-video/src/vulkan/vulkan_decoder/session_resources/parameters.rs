@@ -10,7 +10,7 @@ use crate::{
         parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
     },
     device::VideoDevice,
-    vulkan_decoder::{Device, VideoSessionParameters},
+    vulkan::vulkan_decoder::{Device, VideoSessionParameters},
 };
 
 use super::H264DecodeProfileInfo;

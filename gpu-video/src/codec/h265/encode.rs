@@ -30,7 +30,7 @@ pub(crate) struct H265WriteParametersInfo {
 
 impl EncodeCodec for H265Codec {
     fn profile_info<'a>(
-        params: &crate::vulkan_encoder::FullEncoderParameters<Self>,
+        params: &crate::vulkan::vulkan_encoder::FullEncoderParameters<Self>,
     ) -> crate::wrappers::ProfileInfo<'a> {
         let h265_profile = vk::VideoEncodeH265ProfileInfoKHR::default()
             .std_profile_idc(params.profile.to_profile_idc());
@@ -56,7 +56,7 @@ impl EncodeCodec for H265Codec {
     }
 
     fn codec_parameters(
-        parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
+        parameters: &crate::vulkan::vulkan_encoder::FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
     ) -> Result<Self::OwnedParameters, crate::VideoEncoderError> {
         Ok(Self::OwnedParameters {

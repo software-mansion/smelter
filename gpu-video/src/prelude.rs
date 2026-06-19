@@ -20,7 +20,7 @@ pub mod parameters {
 
     pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<H264Profile>;
 
-    pub use crate::vulkan_encoder::RateControl;
+    pub use crate::vulkan::vulkan_encoder::RateControl;
     #[cfg(feature = "transcoder")]
     pub use crate::vulkan_transcoder::{
         AnyEncoderParameters, TranscoderOutputParameters, TranscoderParameters,
@@ -104,7 +104,7 @@ use crate::device::{
 };
 use crate::parameters::{H264Profile, H265Profile, RateControl};
 use crate::parser::h264::AccessUnit;
-use crate::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
+use crate::vulkan::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
 use ash::vk;
 use std::sync::Arc;
 
@@ -119,8 +119,8 @@ pub use crate::{
 pub use crate::adapter::VideoAdapter;
 pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
-pub use crate::vulkan_decoder::VulkanDecoderError;
-pub use crate::vulkan_encoder::VideoEncoderError;
+pub use crate::vulkan::vulkan_decoder::VulkanDecoderError;
+pub use crate::vulkan::vulkan_encoder::VideoEncoderError;
 #[cfg(feature = "transcoder")]
 pub use crate::vulkan_transcoder::{Transcoder, VideoTranscoderError};
 
@@ -128,7 +128,7 @@ use crate::parser::{
     decoder_instructions::compile_to_decoder_instructions, h264::H264Parser,
     reference_manager::ReferenceContext,
 };
-use crate::vulkan_encoder::VulkanEncoder;
+use crate::vulkan::vulkan_encoder::VulkanEncoder;
 use crate::wrappers::ImageKey;
 
 #[derive(Debug, thiserror::Error)]

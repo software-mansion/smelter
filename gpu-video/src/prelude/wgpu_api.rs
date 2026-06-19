@@ -10,8 +10,8 @@ use crate::{
         h264::{AccessUnit, H264Parser},
         reference_manager::ReferenceContext,
     },
-    vulkan_decoder::{FrameSorter, VulkanDecoder},
-    vulkan_encoder::VulkanEncoder,
+    vulkan::vulkan_decoder::{FrameSorter, VulkanDecoder},
+    vulkan::vulkan_encoder::VulkanEncoder,
 };
 
 /// A decoder that outputs frames stored as [`wgpu::Texture`]s

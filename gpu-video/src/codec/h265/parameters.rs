@@ -4,7 +4,7 @@ use crate::{
     VulkanDecoderError,
     codec::h265::H265Codec,
     device::{CodecColorDescription, ColorRange},
-    vulkan_encoder::FullEncoderParameters,
+    vulkan::vulkan_encoder::FullEncoderParameters,
 };
 
 pub(crate) struct VkH265VideoParameterSet {

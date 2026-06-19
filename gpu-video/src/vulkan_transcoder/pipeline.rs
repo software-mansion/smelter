@@ -5,8 +5,8 @@ use ash::vk;
 use crate::{
     device::VideoDevice,
     parameters::ScalingAlgorithm,
-    vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
-    vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
+    vulkan::vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
+    vulkan::vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     vulkan_transcoder::VideoTranscoderError,
     wrappers::{
         CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
