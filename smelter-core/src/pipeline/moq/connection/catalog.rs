@@ -43,12 +43,10 @@ async fn read_hang_catalog(
         .subscribe_track(&hang::Catalog::default_track())
         .map_err(MoqCatalogError::CatalogSubscribeError)?;
 
-    let mut consumer: HangConsumer<()> = HangConsumer::new(catalog_track);
+    let mut catalog_reader: HangConsumer<()> = HangConsumer::new(catalog_track);
 
-    // The `.next()` method of the catalog consumer yields the next available catalog update.
-    // We do not handle catalog updates, so we call it only once, reading the initial track
-    // information.
-    let catalog = consumer
+    // Each `.next()` call yields the next catalog update. First call yields the initial catalog.
+    let catalog = catalog_reader
         .next()
         .await
         .map_err(|_| MoqCatalogError::CatalogEmpty)?
@@ -109,12 +107,10 @@ async fn read_msf_catalog(
         .subscribe_track(&moq_net::Track::new(moq_msf::DEFAULT_NAME))
         .map_err(MoqCatalogError::CatalogSubscribeError)?;
 
-    let mut consumer = MsfConsumer::new(catalog_track);
+    let mut catalog_reader = MsfConsumer::new(catalog_track);
 
-    // The `.next()` method of the catalog consumer yields the next available catalog update.
-    // We do not handle catalog updates, so we call it only once, reading the initial track
-    // information.
-    let catalog = consumer
+    // Each `.next()` call yields the next catalog update. First call yields the initial catalog.
+    let catalog = catalog_reader
         .next()
         .await
         .map_err(|_| MoqCatalogError::CatalogEmpty)?
