@@ -91,7 +91,7 @@ pub(crate) fn spawn_broadcast_handler(
     let should_close = input.should_close.clone();
 
     let handle = rt.spawn(async move {
-        handle_broadcast(
+        let broadcast_result = handle_broadcast(
             ctx,
             input_ref.clone(),
             decoders,
@@ -99,15 +99,14 @@ pub(crate) fn spawn_broadcast_handler(
             broadcast,
             should_close,
         )
-        .await
-        .inspect_err(|error| {
+        .await;
+        if let Err(error) = broadcast_result {
             warn!(
                 input_id = %input_ref,
                 "MoQ broadcast error: {}",
-                ErrorStack::new(error).into_string()
+                ErrorStack::new(&error).into_string()
             );
-        })
-        .ok();
+        }
     });
 
     Some(handle)
