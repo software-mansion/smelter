@@ -163,7 +163,7 @@ async fn handle_incoming_connection(
         }
     };
 
-    let input_ref = match moq_inputs.find_by_id(&input_name) {
+    let input_ref = match moq_inputs.find_by_url(&input_name) {
         Ok(input_ref) => input_ref,
         Err(error) => {
             if let Err(error) = request.close(404).await {
