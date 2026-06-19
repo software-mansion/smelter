@@ -789,9 +789,25 @@ mod optional_input {
             &batch(ms(120), frame(4, ms(120))),
         );
 
+        // queue keeps producing frameset with last frame
+
         sleep(ms(20));
-        assert!(queue.next_video_batch().is_none());
-        // frame 5 is not generated because there was not frame 6 nothing after 75ms
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(140), frame(5, ms(135))),
+        );
+
+        sleep(ms(20));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(160), frame(5, ms(135))),
+        );
+
+        sleep(ms(20));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(180), frame(5, ms(135))),
+        );
     }
 
     #[test]
@@ -825,7 +841,10 @@ mod optional_input {
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        // no frame because send_frame(ms(45)) was not sent yet
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(100), frame(2, ms(90))),
+        );
         assert!(queue.next_video_batch().is_none());
     }
 
@@ -833,28 +852,33 @@ mod optional_input {
     fn offset_from_start_delivered_late() {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
 
-        sleep(ms(200));
-        // receiving empty batches before input offset start, but not after offset
-        // because at that point we expect required input
+        sleep(ms(98));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(80));
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
         input.send_frame(ms(30));
+        input.send_frame(ms(45));
+        input.send_frame(ms(60));
+        input.send_frame(ms(75));
         // no frames will be returned until 60ms passes, just empty batches
-        sleep(ms(1));
+        sleep(ms(4));
         assert_video_batch_eq(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(60), frame(0, ms(60))),
+            &batch(ms(100), frame(2, ms(90))),
         );
+        assert!(queue.next_video_batch().is_none());
+
+        sleep(ms(20));
         assert_video_batch_eq(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(80), frame(1, ms(75))),
+            &batch(ms(120), frame(4, ms(120))),
         );
-        // no frame because send_frame(ms(45)) was not sent yet
         assert!(queue.next_video_batch().is_none());
     }
 
@@ -864,6 +888,7 @@ mod optional_input {
     // start, `Pts(OFFSET - d)` ~d before start.
     //
 
+    // TODO: stopeed here
     #[test]
     fn offset_pts_after_start_delivered_early() {
         let (queue, mut input) =
