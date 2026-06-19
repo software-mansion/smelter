@@ -34,6 +34,9 @@ pub enum MoqServerError {
     #[error("Broadcast path \"{0}\" not found among registered inputs.")]
     BroadcastPathNotFound(Arc<str>),
 
+    #[error("Unable to spawn broadcast handler, input queue was dropped.")]
+    QueueDropped,
+
     #[error("Unable to extract URL from the request.")]
     UrlNotFound,
 

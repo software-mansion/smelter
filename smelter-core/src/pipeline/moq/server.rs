@@ -207,12 +207,10 @@ async fn handle_session(
             Some(handle) => {
                 input.connection_handle = Some(handle);
                 input.session = Some(session);
+                Ok(())
             }
-            None => {
-                warn!("Failed to handle MoQ broadcast, input queue was dropped.");
-            }
+            None => Err(MoqServerError::QueueDropped),
         }
-        Ok(())
     }) {
         warn!(
             "Failed to handle MoQ broadcast: {}",
