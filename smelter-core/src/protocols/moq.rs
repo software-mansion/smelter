@@ -9,6 +9,7 @@ use crate::queue::QueueInputOptions;
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoqServerInputOptions {
     pub decoders: MoqServerInputDecoders,
+    pub auth_token: Arc<str>,
     pub queue_options: QueueInputOptions,
 }
 
@@ -27,6 +28,12 @@ pub enum MoqServerError {
 
     #[error("URL path \"{0}\" not found among registered inputs.")]
     PathNotFound(Arc<str>),
+
+    #[error("Invalid authentication token for input \"{0}\"")]
+    InvalidToken(InputId),
+
+    #[error("Missing authentication token for input \"{0}\"")]
+    MissingToken(InputId),
 
     #[error("Input {0} is already registered.")]
     InputAlreadyRegistered(InputId),

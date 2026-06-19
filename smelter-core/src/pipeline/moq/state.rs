@@ -6,7 +6,9 @@ use std::{
 use tokio::task::JoinHandle;
 use tracing::error;
 
-use crate::{pipeline::moq::server::MoqSession, queue::WeakQueueInput};
+use crate::{
+    pipeline::moq::server::MoqSession, queue::WeakQueueInput, utils::authentication::validate_token,
+};
 
 use crate::prelude::*;
 
@@ -15,6 +17,7 @@ pub(crate) struct MoqServerState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>
 
 pub(crate) struct MoqInputState {
     pub queue_input: WeakQueueInput,
+    pub auth_token: Arc<str>,
     pub decoders: MoqServerInputDecoders,
     pub should_close: Arc<AtomicBool>,
     pub connection_task_handle: Option<JoinHandle<()>>,
@@ -23,6 +26,7 @@ pub(crate) struct MoqInputState {
 
 pub(crate) struct MoqInputStateOptions {
     pub queue_input: WeakQueueInput,
+    pub auth_token: Arc<str>,
     pub decoders: MoqServerInputDecoders,
 }
 
@@ -30,6 +34,7 @@ impl MoqInputState {
     fn new(options: MoqInputStateOptions) -> Self {
         Self {
             queue_input: options.queue_input,
+            auth_token: options.auth_token,
             decoders: options.decoders,
             should_close: Arc::new(false.into()),
             connection_task_handle: None,
@@ -87,6 +92,25 @@ impl MoqServerState {
             .find(|input_ref| input_ref.id().0.as_ref() == path)
             .cloned()
             .ok_or_else(|| MoqServerError::PathNotFound(Arc::from(path)))
+    }
+
+    pub(super) fn validate_auth_token(
+        &self,
+        input_ref: &Ref<InputId>,
+        provided_token: &str,
+    ) -> Result<(), MoqServerError> {
+        let expected_token = {
+            let guard = self.0.lock().unwrap();
+            let input = guard
+                .get(input_ref)
+                .ok_or(MoqServerError::InputNotFound(input_ref.id().clone()))?;
+            input.auth_token.clone()
+        };
+
+        match validate_token(&expected_token, provided_token) {
+            true => Ok(()),
+            false => Err(MoqServerError::InvalidToken(input_ref.id().clone())),
+        }
     }
 }
 

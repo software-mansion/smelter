@@ -151,9 +151,7 @@ async fn handle_incoming_connection(
     ctx: &Arc<PipelineCtx>,
 ) -> Result<(MoqSession, OriginConsumer, Ref<InputId>), MoqServerError> {
     let Some(url) = request.url() else {
-        if let Err(error) = request.close(400).await {
-            warn!(%error, "Error while rejecting MoQ connection.");
-        }
+        reject_request(request, 400).await;
         return Err(MoqServerError::UrlNotFound);
     };
 
@@ -161,9 +159,7 @@ async fn handle_incoming_connection(
     let input_name = match urlencoding::decode(input_name_encoded) {
         Ok(decoded) => decoded.into_owned(),
         Err(error) => {
-            if let Err(error) = request.close(400).await {
-                warn!(%error, "Error while rejecting MoQ connection.");
-            }
+            reject_request(request, 400).await;
             return Err(MoqServerError::UrlDecodeFailed(error));
         }
     };
@@ -171,12 +167,31 @@ async fn handle_incoming_connection(
     let input_ref = match moq_inputs.find_by_url(&input_name) {
         Ok(input_ref) => input_ref,
         Err(error) => {
-            if let Err(error) = request.close(404).await {
-                warn!(%error, "Error while rejecting MoQ connection.");
-            }
+            reject_request(request, 404).await;
             return Err(error);
         }
     };
+
+    let auth_token = url
+        .query_pairs()
+        .find(|(key, _value)| key == "token")
+        .map(|(_key, value)| value);
+
+    let Some(auth_token) = auth_token else {
+        reject_request(request, 401).await;
+        return Err(MoqServerError::MissingToken(input_ref.id().clone()));
+    };
+
+    if let Err(auth_error) = moq_inputs.validate_auth_token(&input_ref, &auth_token) {
+        let reject_code = match auth_error {
+            MoqServerError::InvalidToken(_) => 401,
+            MoqServerError::InputNotFound(_) => 404,
+            // Should never happen
+            _ => 400,
+        };
+        reject_request(request, reject_code).await;
+        return Err(auth_error);
+    }
 
     let origin = Origin::random().produce();
     let consumer = origin.consume();
@@ -188,6 +203,12 @@ async fn handle_incoming_connection(
     };
 
     Ok((session, consumer, input_ref))
+}
+
+async fn reject_request(request: Request, code: u16) {
+    if let Err(error) = request.close(code).await {
+        warn!(%error, "Error while rejecting MoQ connection.");
+    }
 }
 
 async fn handle_session(
