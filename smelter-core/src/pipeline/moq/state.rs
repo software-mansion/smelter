@@ -80,13 +80,13 @@ impl MoqServerState {
         }
     }
 
-    pub(crate) fn find_by_id(&self, path: &str) -> Result<Ref<InputId>, MoqServerError> {
+    pub(crate) fn find_by_url(&self, path: &str) -> Result<Ref<InputId>, MoqServerError> {
         let guard = self.0.lock().unwrap();
         guard
             .keys()
             .find(|input_ref| input_ref.id().0.as_ref() == path)
             .cloned()
-            .ok_or_else(|| MoqServerError::BroadcastPathNotFound(Arc::from(path)))
+            .ok_or_else(|| MoqServerError::PathNotFound(Arc::from(path)))
     }
 }
 

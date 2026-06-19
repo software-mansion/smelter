@@ -25,14 +25,14 @@ pub enum MoqServerError {
     #[error("Input {0} not found.")]
     InputNotFound(InputId),
 
+    #[error("URL path \"{0}\" not found among registered inputs.")]
+    PathNotFound(Arc<str>),
+
     #[error("Input {0} is already registered.")]
     InputAlreadyRegistered(InputId),
 
     #[error("Input {0} already has an active broadcast connection.")]
     BroadcastAlreadyActive(InputId),
-
-    #[error("Broadcast path \"{0}\" not found among registered inputs.")]
-    BroadcastPathNotFound(Arc<str>),
 
     #[error("Unable to spawn broadcast handler, input queue was dropped.")]
     QueueDropped,
