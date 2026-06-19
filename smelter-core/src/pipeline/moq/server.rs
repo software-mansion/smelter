@@ -9,7 +9,7 @@ use smelter_render::error::ErrorStack;
 use tracing::{info, warn};
 
 use crate::pipeline::moq::{
-    certificate::load_or_create_self_signed_tls, connection::spawn_broadcast_handler,
+    certificate::load_or_create_self_signed_tls, connection::start_broadcast_handler_task,
     state::MoqServerState,
 };
 
@@ -133,9 +133,14 @@ async fn run_accept_loop(
         let moq_inputs = moq_inputs.clone();
         let ctx = ctx.clone();
 
-        tokio::spawn(handle_session(
-            session, consumer, moq_inputs, ctx, input_ref,
-        ));
+        tokio::spawn(async {
+            if let Err(err) = handle_session(session, consumer, moq_inputs, ctx, input_ref).await {
+                warn!(
+                    "Failed to handle MoQ broadcast: {}",
+                    ErrorStack::new(&err).into_string()
+                );
+            }
+        });
     }
     server.close().await;
 }
@@ -191,30 +196,23 @@ async fn handle_session(
     moq_inputs: MoqServerState,
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-) {
+) -> Result<(), MoqServerError> {
     info!(moq_version=?session.version(), "MoQ session established");
 
     // waiting for the first announced path from session
     let Some((path, Some(broadcast))) = origin_consumer.announced().await else {
         warn!("MoQ session closed before announcing a broadcast");
-        return;
+        return Ok(());
     };
     info!(%path, input_id=%input_ref, "MoQ broadcast announced");
 
-    if let Err(err) = moq_inputs.get_mut_with(&input_ref, |input| {
+    moq_inputs.get_mut_with(&input_ref, |input| {
         input.ensure_no_active_connection(&input_ref)?;
-        match spawn_broadcast_handler(ctx, &input_ref, input, broadcast) {
-            Some(handle) => {
-                input.connection_handle = Some(handle);
-                input.session = Some(session);
-                Ok(())
-            }
-            None => Err(MoqServerError::QueueDropped),
-        }
-    }) {
-        warn!(
-            "Failed to handle MoQ broadcast: {}",
-            ErrorStack::new(&err).into_string()
-        );
-    }
+        let Some(handle) = start_broadcast_handler_task(ctx, &input_ref, input, broadcast) else {
+            return Err(MoqServerError::QueueDropped);
+        };
+        input.connection_task_handle = Some(handle);
+        input.session = Some(session);
+        Ok(())
+    })
 }
