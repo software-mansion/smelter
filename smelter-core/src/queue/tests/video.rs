@@ -888,7 +888,6 @@ mod optional_input {
     // start, `Pts(OFFSET - d)` ~d before start.
     //
 
-    // TODO: stopeed here
     #[test]
     fn offset_pts_after_start_delivered_early() {
         let (queue, mut input) =
@@ -933,18 +932,16 @@ mod optional_input {
             start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(58));
-        // we don't know what will be first frame pts, so batches 0, 20, 40
-        // can't be produced at this point
-        assert!(queue.next_video_batch().is_none());
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
         input.send_frame(ms(30));
 
         sleep(ms(4));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+
 
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
@@ -962,8 +959,12 @@ mod optional_input {
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        // no frame because send_frame(ms(45)) was not sent yet
-        assert!(queue.next_video_batch().is_none());
+        // send_frame(ms(45)) was not called yet but input is not required
+        assert_video_batch_eq_with_tolerance(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(100), frame(2, ms(90))),
+            ms(2),
+        );
     }
 
     #[test]
@@ -973,16 +974,13 @@ mod optional_input {
 
         input.send_frame(ms(0));
 
-        // TODO: this packet should not be necessary so the empty batches
-        // bellow are sent early
-        input.send_frame(ms(15));
-
         sleep(ms(58));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
         assert!(queue.next_video_batch().is_none());
 
+        input.send_frame(ms(15));
         input.send_frame(ms(30));
 
         sleep(ms(4));
@@ -1003,8 +1001,12 @@ mod optional_input {
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        // no frame because send_frame(ms(45)) was not sent yet
-        assert!(queue.next_video_batch().is_none());
+        // send_frame(ms(45)) was not called yet but input is not required
+        assert_video_batch_eq_with_tolerance(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(100), frame(2, ms(90))),
+            ms(2),
+        );
     }
 
     #[test]
@@ -1012,29 +1014,30 @@ mod optional_input {
         let (queue, mut input) =
             start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
-        sleep(ms(200));
-        assert!(queue.next_video_batch().is_none());
+        sleep(ms(78));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60));
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
         input.send_frame(ms(30));
+        input.send_frame(ms(45));
 
-        sleep(ms(1));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
-        assert_video_batch_eq_with_tolerance(
-            &queue.next_video_batch().unwrap(),
-            &batch(ms(60), frame(0, ms(60))),
-            ms(2),
-        );
+        sleep(ms(4));
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
             &batch(ms(80), frame(1, ms(75))),
             ms(2),
         );
-        // no frame because send_frame(ms(45)) was not sent yet
-        assert!(queue.next_video_batch().is_none());
+
+        sleep(ms(20));
+        assert_video_batch_eq_with_tolerance(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(100), frame(2, ms(90))),
+            ms(2),
+        );
     }
 
     #[test]
@@ -1043,11 +1046,8 @@ mod optional_input {
             start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         input.send_frame(ms(0));
-        // TODO: this packet should not be necessary so the empty batches
-        // bellow are sent early
-        input.send_frame(ms(15));
 
-        sleep(ms(200));
+        sleep(ms(78));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
@@ -1058,21 +1058,22 @@ mod optional_input {
         );
         assert!(queue.next_video_batch().is_none());
 
+        input.send_frame(ms(15));
         input.send_frame(ms(30));
         input.send_frame(ms(45));
-        sleep(ms(1));
+        sleep(ms(4));
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
             &batch(ms(80), frame(1, ms(75))),
             ms(2),
         );
+
+        sleep(ms(20));
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
             &batch(ms(100), frame(2, ms(90))),
             ms(2),
         );
-        // no frame because send_frame(ms(60)) was not sent yet
-        assert!(queue.next_video_batch().is_none());
     }
 
     #[test]
@@ -1234,8 +1235,13 @@ mod optional_input {
             &batch(ms(20), frame(4, ms(10))),
             ms(2),
         );
-        // no frame newer than input PTS 100ms was sent yet
-        assert!(queue.next_video_batch().is_none());
+
+        sleep(ms(20));
+        assert_video_batch_eq_with_tolerance(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(40), frame(6, ms(40))),
+            ms(2),
+        );
     }
 
     //
@@ -1277,7 +1283,10 @@ mod optional_input {
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        // frame 2 needs a newer frame before it can be returned
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(100), frame(2, ms(90))),
+        );
         assert!(queue.next_video_batch().is_none());
     }
 
@@ -1310,7 +1319,10 @@ mod optional_input {
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        // frame 2 needs a newer frame before it can be returned
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(100), frame(2, ms(90))),
+        );
         assert!(queue.next_video_batch().is_none());
     }
 
