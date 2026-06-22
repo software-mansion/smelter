@@ -37,7 +37,7 @@ const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct DiscoveredVideo {
     name: String,
-    _codec: VideoCodec,
+    codec: VideoCodec,
     container: Container,
     description: Option<Bytes>,
 }
@@ -284,7 +284,7 @@ async fn run_video_track(
             data: payload,
             pts,
             dts: None,
-            kind: MediaKind::Video(VideoCodec::H264),
+            kind: MediaKind::Video(video.codec),
             present: true,
         };
 
@@ -347,7 +347,7 @@ async fn run_audio_track(
             data: payload,
             pts,
             dts: None,
-            kind: MediaKind::Audio(AudioCodec::Aac),
+            kind: MediaKind::Audio(audio.codec),
             present: true,
         };
 

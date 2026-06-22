@@ -67,7 +67,7 @@ async fn read_hang_catalog(
                 Some(DiscoveredVideo {
                     name: name.clone(),
                     container: Container::Cmaf(wire),
-                    _codec: codec,
+                    codec,
                     description: config.description.clone(),
                 })
             }
@@ -146,7 +146,7 @@ async fn read_msf_catalog(
                 Some(DiscoveredVideo {
                     name: name.clone(),
                     container: Container::Cmaf(wire),
-                    _codec: codec,
+                    codec,
                     description,
                 })
             }
