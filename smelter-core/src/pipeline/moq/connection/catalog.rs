@@ -137,6 +137,9 @@ async fn read_msf_catalog(
 
     let audio = match catalog.audio.renditions.first_key_value() {
         Some((name, config)) => match (&config.container, &config.codec) {
+            // TODO: (@jbrs): It needs to be reconsidered how decoder config should be handled,
+            // where should it be extracted from the container, here or in the decoder.
+            // Return to that when adding additional containers.
             (CatalogContainer::Cmaf { init, .. }, AudioCodec::AAC(_)) => {
                 let wire = fmp4::Wire::from_init(init)?;
                 let description = match extract_codec_description(&wire) {
