@@ -36,7 +36,7 @@ pub(super) async fn read_catalog(
         Err(error) => {
             debug!(
                 %error,
-                "Failed to read Hang catalog, fallback to MSF catalog."
+                "Failed to read Hang catalog, fall back to MSF catalog."
             );
             read_msf_catalog(broadcast).await
         }
