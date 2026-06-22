@@ -9,7 +9,9 @@ use smelter_render::{Frame, InputId};
 use tracing::info;
 
 use crate::{
+    event::EventEmitter,
     queue::{
+        QueueContext,
         audio_input::AudioQueueInput,
         side_channel::{AudioSideChannel, VideoSideChannel},
         utils::PauseState,
@@ -44,7 +46,8 @@ impl<T> std::fmt::Debug for QueueSender<T> {
 }
 
 pub(super) struct InnerQueueInput {
-    ctx: Arc<PipelineCtx>,
+    queue_ctx: QueueContext,
+    event_emitter: Arc<EventEmitter>,
     input_ref: Ref<InputId>,
 
     video: Option<VideoQueueInput>,
@@ -84,10 +87,10 @@ impl InnerQueueInput {
         self.audio = audio;
         self.track_offset = track_offset;
         if self.pause_state.is_paused() {
-            let pts = self.ctx.queue_ctx.effective_last_pts();
+            let pts = self.queue_ctx.effective_last_pts();
             if let Some(v) = self.video.as_mut() {
                 // trigger enqueue so new track can start with a frame
-                match self.ctx.queue_ctx.start_pts.value() {
+                match self.queue_ctx.start_pts.value() {
                     Some(start_pts) => {
                         v.is_ready_for_pts(pts, start_pts);
                     }
@@ -125,7 +128,8 @@ impl InnerQueueInput {
                 .as_ref()
                 .map(|sc| sc.with_track_offset(&track_offset));
             let (video_input, video_sender) = VideoQueueInput::new(
-                &self.ctx,
+                &self.queue_ctx,
+                &self.event_emitter,
                 &self.input_ref,
                 self.required,
                 offset_from_start,
@@ -143,7 +147,8 @@ impl InnerQueueInput {
                 .as_ref()
                 .map(|sc| sc.with_track_offset(&track_offset));
             let (audio_input, audio_sender) = AudioQueueInput::new(
-                &self.ctx,
+                &self.queue_ctx,
+                &self.event_emitter,
                 &self.input_ref,
                 self.required,
                 offset_from_start,
@@ -168,7 +173,7 @@ impl InnerQueueInput {
             return;
         }
         // zero before queue start
-        let pts = self.ctx.queue_ctx.effective_last_pts();
+        let pts = self.queue_ctx.effective_last_pts();
         self.pause_state.pause(pts);
         if let Some(v) = self.video.as_mut() {
             v.pause()
@@ -182,7 +187,7 @@ impl InnerQueueInput {
         if !self.pause_state.is_paused() {
             return;
         }
-        let pts = self.ctx.queue_ctx.effective_last_pts();
+        let pts = self.queue_ctx.effective_last_pts();
         if let Some(pause_time) = self.pause_state.resume(pts) {
             self.track_offset.map_add(pause_time);
         }
@@ -242,8 +247,27 @@ impl QueueInput {
             (true, Some(dir)) => AudioSideChannel::new(ctx, input_ref, dir),
             _ => None,
         };
+        Self::new_inner(
+            ctx.queue_ctx.clone(),
+            ctx.event_emitter.clone(),
+            input_ref,
+            opts,
+            video_side_channel,
+            audio_side_channel,
+        )
+    }
+
+    pub(super) fn new_inner(
+        queue_ctx: QueueContext,
+        event_emitter: Arc<EventEmitter>,
+        input_ref: &Ref<InputId>,
+        opts: QueueInputOptions,
+        video_side_channel: Option<VideoSideChannel>,
+        audio_side_channel: Option<AudioSideChannel>,
+    ) -> Self {
         Self(Arc::new(Mutex::new(InnerQueueInput {
-            ctx: ctx.clone(),
+            queue_ctx,
+            event_emitter,
             input_ref: input_ref.clone(),
 
             video: None,

@@ -3,6 +3,8 @@ mod audio_queue;
 mod queue_input;
 mod queue_thread;
 mod side_channel;
+#[cfg(test)]
+mod tests;
 mod utils;
 mod video_input;
 mod video_queue;
@@ -37,6 +39,7 @@ use self::{
 };
 
 const DEFAULT_AUDIO_CHUNK_DURATION: Duration = Duration::from_millis(20); // typical audio packet size
+const DEFAULT_TICK_DURATION: Duration = Duration::from_millis(5);
 
 #[derive(Debug, Clone)]
 pub struct QueueOptions {
@@ -45,6 +48,8 @@ pub struct QueueOptions {
     pub run_late_scheduled_events: bool,
     pub never_drop_output_frames: bool,
     pub side_channel_socket_dir: Option<Arc<Path>>,
+    /// Interval of the queue processing tick (both before and after start).
+    pub tick_duration: Duration,
 }
 
 impl From<&PipelineOptions> for QueueOptions {
@@ -56,6 +61,7 @@ impl From<&PipelineOptions> for QueueOptions {
             run_late_scheduled_events: opt.run_late_scheduled_events,
             never_drop_output_frames: opt.never_drop_output_frames,
             side_channel_socket_dir: opt.side_channel_socket_dir.clone(),
+            tick_duration: DEFAULT_TICK_DURATION,
         }
     }
 }
@@ -127,6 +133,10 @@ pub struct Queue {
     /// true - Event will be executed immediately.
     /// false - Event will be discarded.
     run_late_scheduled_events: bool,
+
+    /// Interval of the queue processing tick (both before and after start).
+    tick_duration: Duration,
+
     start_sender: Mutex<Option<Sender<QueueStartEvent>>>,
     scheduled_event_sender: Sender<ScheduledEvent>,
 
@@ -244,6 +254,7 @@ impl Queue {
             start_sender: Mutex::new(Some(queue_start_sender)),
             never_drop_output_frames: opts.never_drop_output_frames,
             run_late_scheduled_events: opts.run_late_scheduled_events,
+            tick_duration: opts.tick_duration,
 
             should_close: AtomicBool::new(false),
         });

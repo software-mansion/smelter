@@ -47,7 +47,7 @@ impl QueueThread {
 
     fn run(mut self) {
         let _span = info_span!("Queue").entered();
-        let ticker = tick(self.queue.output_framerate.get_interval_duration());
+        let ticker = tick(self.queue.tick_duration);
         while !self.queue.should_close.load(Ordering::Relaxed) {
             select! {
                 recv(ticker) -> _ => {
@@ -119,7 +119,7 @@ impl QueueThreadAfterStart {
     }
 
     fn run(mut self) {
-        let ticker = tick(Duration::from_millis(5));
+        let ticker = tick(self.queue.tick_duration);
 
         while !self.queue.should_close.load(Ordering::Relaxed) {
             select! {

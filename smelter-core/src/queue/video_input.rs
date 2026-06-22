@@ -5,7 +5,7 @@ use smelter_render::{Frame, InputId};
 use tracing::{debug, trace, warn};
 
 use crate::{
-    PipelineCtx, PipelineEvent, Ref,
+    PipelineEvent, Ref,
     event::{Event, EventEmitter},
     queue::{
         QueueContext, queue_input::TrackOffset, side_channel::VideoSideChannel,
@@ -44,8 +44,10 @@ pub(crate) struct VideoQueueInput {
 }
 
 impl VideoQueueInput {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
-        ctx: &Arc<PipelineCtx>,
+        queue_ctx: &QueueContext,
+        event_emitter: &Arc<EventEmitter>,
         input_ref: &Ref<InputId>,
         required: bool,
         offset_from_start: Option<Duration>,
@@ -55,7 +57,7 @@ impl VideoQueueInput {
     ) -> (Self, Sender<Frame>) {
         let (receiver, sender) = VideoInputReceiver::new(side_channel_delay, side_channel);
         let input = Self {
-            queue_ctx: ctx.queue_ctx.clone(),
+            queue_ctx: queue_ctx.clone(),
             required,
             offset_from_start,
             receiver,
@@ -64,17 +66,17 @@ impl VideoQueueInput {
             paused_frame: None,
             event_delivered_guard: EmitOnceGuard::new(
                 Event::VideoInputStreamDelivered(input_ref.id().clone()),
-                &ctx.event_emitter,
+                event_emitter,
             ),
             event_playing_guard: EmitOnceGuard::new(
                 Event::VideoInputStreamPlaying(input_ref.id().clone()),
-                &ctx.event_emitter,
+                event_emitter,
             ),
             event_eos_guard: EmitOnceGuard::new(
                 Event::VideoInputStreamEos(input_ref.id().clone()),
-                &ctx.event_emitter,
+                event_emitter,
             ),
-            event_emitter: ctx.event_emitter.clone(),
+            event_emitter: event_emitter.clone(),
             input_id: input_ref.id().clone(),
         };
         (input, sender)
@@ -98,7 +100,8 @@ impl VideoQueueInput {
             // Partially duplicate get_frame logic, we can't call it directly
             // because we don't want to tiger eos event.
             let offset = self.resolve_offset(pts, queue_start_pts)?;
-            self.receiver.get_for_pts(pts.saturating_sub(offset))
+            let input_pts = pts.checked_sub(offset)?;
+            self.receiver.get_for_pts(input_pts)
         });
 
         self.paused_frame = frame;
@@ -143,7 +146,7 @@ impl VideoQueueInput {
 
         let offset = self.resolve_offset(pts, queue_start_pts)?;
 
-        let input_pts = pts.saturating_sub(offset);
+        let input_pts = pts.checked_sub(offset)?;
         trace!(queue_pts=?pts, ?input_pts, "Try get frame");
 
         match self.receiver.get_for_pts(input_pts) {
