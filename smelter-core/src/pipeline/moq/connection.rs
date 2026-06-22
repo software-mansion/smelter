@@ -7,7 +7,7 @@ use bytes::Bytes;
 use moq_mux::{catalog::hang::Container, container::Consumer as ContainerConsumer};
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
-use tracing::{Instrument, Level, Span, info, span, trace, warn};
+use tracing::{Instrument, Level, Span, debug, info, span, trace, warn};
 
 use crate::{
     pipeline::{
@@ -278,10 +278,21 @@ async fn run_video_track(
             present: true,
         };
 
-        decoder_handle
+        if decoder_handle
             .chunk_sender
             .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
+            .is_err()
+        {
+            debug!("Failed to send chunk, channel closed.");
+            break;
+        }
+    }
+    if decoder_handle
+        .chunk_sender
+        .send(PipelineEvent::EOS)
+        .is_err()
+    {
+        debug!("Failed to send EOS, channel closed.");
     }
 
     Ok(())
@@ -328,10 +339,21 @@ async fn run_audio_track(
             present: true,
         };
 
-        decoder_handle
+        if decoder_handle
             .chunk_sender
             .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
+            .is_err()
+        {
+            debug!("Failed to send chunk, channel closed.");
+            break;
+        }
+    }
+    if decoder_handle
+        .chunk_sender
+        .send(PipelineEvent::EOS)
+        .is_err()
+    {
+        debug!("Failed to send EOS, channel closed.");
     }
 
     Ok(())
@@ -432,9 +454,6 @@ enum MoqConnectionError {
 
     #[error("Missing AAC decoder config.")]
     MissingAsc,
-
-    #[error("Decoder channel closed")]
-    ChannelClosed,
 
     #[error("Container read error")]
     ContainerError(#[from] moq_mux::Error),
