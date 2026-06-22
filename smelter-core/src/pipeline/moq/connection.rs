@@ -368,20 +368,14 @@ fn spawn_video_decoder(
     };
 
     match h264_decoder {
-        VideoDecoderOptions::FfmpegH264 => {
-            VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
-                input_ref.clone(),
-                options,
-            )
-            .map_err(MoqConnectionError::InitVideoDecoder)
-        }
-        VideoDecoderOptions::VulkanH264 => {
-            VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
-                input_ref.clone(),
-                options,
-            )
-            .map_err(MoqConnectionError::InitVideoDecoder)
-        }
+        VideoDecoderOptions::FfmpegH264 => Ok(VideoDecoderThread::<
+            ffmpeg_h264::FfmpegH264Decoder,
+            _,
+        >::spawn(input_ref.clone(), options)?),
+        VideoDecoderOptions::VulkanH264 => Ok(VideoDecoderThread::<
+            vulkan_h264::VulkanH264Decoder,
+            _,
+        >::spawn(input_ref.clone(), options)?),
         _ => Err(MoqConnectionError::UnsupportedVideoCodec),
     }
 }
@@ -407,8 +401,10 @@ fn spawn_audio_decoder(
                 samples_sender: sample_sender,
                 input_buffer_size: MOQ_MAX_BUFFER,
             };
-            AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref.clone(), options)
-                .map_err(MoqConnectionError::InitAudioDecoder)
+            Ok(AudioDecoderThread::<FdkAacDecoder>::spawn(
+                input_ref.clone(),
+                options,
+            )?)
         }
         _ => Err(MoqConnectionError::UnsupportedAudioCodec),
     }
@@ -422,17 +418,14 @@ enum MoqConnectionError {
     #[error("MoQ catalog error: {0}")]
     CatalogError(#[from] MoqCatalogError),
 
-    #[error("Failed to initialize H264 decoder")]
-    InitVideoDecoder(#[source] DecoderInitError),
+    #[error("Failed to initialize decoder: {0}")]
+    InitDecoder(#[from] DecoderInitError),
 
     #[error("Unsupported video codec, H264 expected.")]
     UnsupportedVideoCodec,
 
     #[error("Invalid H264 decoder config.")]
     InvalidAvcc,
-
-    #[error("Failed to initialize AAC decoder")]
-    InitAudioDecoder(#[source] DecoderInitError),
 
     #[error("Unsupported audio codec, AAC expected.")]
     UnsupportedAudioCodec,
