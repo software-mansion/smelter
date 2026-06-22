@@ -75,7 +75,7 @@ impl WhipInput {
         state.inputs.add_input(
             &input_ref,
             WhipInputStateOptions {
-                bearer_token: bearer_token_hash,
+                bearer_token_hash,
                 video_preferences,
                 jitter_buffer_size: options.jitter_buffer_size,
                 queue_input: queue_input.downgrade(),

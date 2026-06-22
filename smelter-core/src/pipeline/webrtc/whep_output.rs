@@ -63,7 +63,7 @@ impl WhepOutput {
             return Err(OutputInitError::WhipWhepServerNotRunning);
         };
         // Only the hash is persisted in core state; the plaintext is never stored.
-        let bearer_token = options.bearer_token.as_deref().map(hash_token);
+        let bearer_token_hash = options.bearer_token.as_deref().map(hash_token);
 
         ctx.stats_sender.send(StatsEvent::NewOutput {
             output_ref: output_ref.clone(),
@@ -85,7 +85,7 @@ impl WhepOutput {
         state.outputs.add_output(
             &output_ref,
             WhepOutputConnectionStateOptions {
-                bearer_token: bearer_token.clone(),
+                bearer_token_hash,
                 video_options: video_options.clone(),
                 audio_options: audio_options.clone(),
             },
