@@ -1,10 +1,7 @@
 use bytes::{Bytes, BytesMut};
 use hang::catalog::{AudioCodec, Container as CatalogContainer, VideoCodec};
-use moq_mux::{
-    catalog::{hang::Consumer as HangConsumer, hang::Container, msf::Consumer as MsfConsumer},
-    container::fmp4,
-};
-use moq_native::moq_net::{self, BroadcastConsumer, Error as MoqError};
+use moq_mux::container::fmp4;
+use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use tracing::{debug, warn};
 
 use crate::pipeline::moq::connection::{DiscoveredAudio, DiscoveredTracks, DiscoveredVideo};
@@ -39,29 +36,27 @@ pub(super) async fn read_catalog(
 async fn read_hang_catalog(
     broadcast: &BroadcastConsumer,
 ) -> Result<DiscoveredTracks, MoqCatalogError> {
+    use moq_mux::catalog::hang::{Catalog, Consumer, Container};
+
     let catalog_track = broadcast
         .subscribe_track(&hang::Catalog::default_track())
         .map_err(MoqCatalogError::CatalogSubscribeError)?;
 
-    let mut catalog_reader: HangConsumer<()> = HangConsumer::new(catalog_track);
-
     // Each `.next()` call yields the next catalog update. First call yields the initial catalog.
-    let catalog = catalog_reader
-        .next()
-        .await
+    let catalog = Consumer::new(catalog_track).next().await;
+    let catalog: Catalog<()> = catalog
         .map_err(|_| MoqCatalogError::CatalogEmpty)?
         .ok_or(MoqCatalogError::CatalogEmpty)?;
+
     debug!(?catalog, "Received MoQ Hang catalog");
 
     let video = match catalog.video.renditions.first_key_value() {
         Some((name, config)) => match (&config.container, &config.codec) {
             (CatalogContainer::Cmaf { init, .. }, VideoCodec::H264(_)) => {
                 let wire = fmp4::Wire::from_init(init)?;
-                let container = Container::Cmaf(wire);
-
                 Some(DiscoveredVideo {
                     name: name.clone(),
-                    container,
+                    container: Container::Cmaf(wire),
                     description: config.description.clone(),
                 })
             }
@@ -77,11 +72,9 @@ async fn read_hang_catalog(
         Some((name, config)) => match (&config.container, &config.codec) {
             (CatalogContainer::Cmaf { init, .. }, AudioCodec::AAC(_)) => {
                 let wire = fmp4::Wire::from_init(init)?;
-                let container = Container::Cmaf(wire);
-
                 Some(DiscoveredAudio {
                     name: name.clone(),
-                    container,
+                    container: Container::Cmaf(wire),
                     description: config.description.clone(),
                 })
             }
@@ -103,16 +96,15 @@ async fn read_hang_catalog(
 async fn read_msf_catalog(
     broadcast: &BroadcastConsumer,
 ) -> Result<DiscoveredTracks, MoqCatalogError> {
+    use moq_mux::catalog::{hang::Container, msf::Consumer};
+
     let catalog_track = broadcast
-        .subscribe_track(&moq_net::Track::new(moq_msf::DEFAULT_NAME))
+        .subscribe_track(&Track::new(moq_msf::DEFAULT_NAME))
         .map_err(MoqCatalogError::CatalogSubscribeError)?;
 
-    let mut catalog_reader = MsfConsumer::new(catalog_track);
-
     // Each `.next()` call yields the next catalog update. First call yields the initial catalog.
-    let catalog = catalog_reader
-        .next()
-        .await
+    let catalog = Consumer::new(catalog_track).next().await;
+    let catalog: hang::Catalog = catalog
         .map_err(|_| MoqCatalogError::CatalogEmpty)?
         .ok_or(MoqCatalogError::CatalogEmpty)?;
     debug!(?catalog, "Received MoQ MSF catalog");
@@ -128,11 +120,10 @@ async fn read_msf_catalog(
                         None
                     }
                 };
-                let container = Container::Cmaf(wire);
 
                 Some(DiscoveredVideo {
                     name: name.clone(),
-                    container,
+                    container: Container::Cmaf(wire),
                     description,
                 })
             }
@@ -155,11 +146,10 @@ async fn read_msf_catalog(
                         None
                     }
                 };
-                let container = Container::Cmaf(wire);
 
                 Some(DiscoveredAudio {
                     name: name.clone(),
-                    container,
+                    container: Container::Cmaf(wire),
                     description,
                 })
             }

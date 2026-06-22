@@ -17,7 +17,7 @@ pub(crate) struct MoqInputState {
     pub queue_input: WeakQueueInput,
     pub decoders: MoqServerInputDecoders,
     pub should_close: Arc<AtomicBool>,
-    pub connection_handle: Option<JoinHandle<()>>,
+    pub connection_task_handle: Option<JoinHandle<()>>,
     pub session: Option<MoqSession>,
 }
 
@@ -32,7 +32,7 @@ impl MoqInputState {
             queue_input: options.queue_input,
             decoders: options.decoders,
             should_close: Arc::new(false.into()),
-            connection_handle: None,
+            connection_task_handle: None,
             session: None,
         }
     }
@@ -95,7 +95,7 @@ impl MoqInputState {
         &self,
         input_ref: &Ref<InputId>,
     ) -> Result<(), MoqServerError> {
-        match &self.connection_handle {
+        match &self.connection_task_handle {
             Some(handle) if !handle.is_finished() => Err(MoqServerError::BroadcastAlreadyActive(
                 input_ref.id().clone(),
             )),

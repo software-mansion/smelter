@@ -7,7 +7,7 @@ use bytes::Bytes;
 use moq_mux::{catalog::hang::Container, container::Consumer as ContainerConsumer};
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
-use tracing::{info, trace, warn};
+use tracing::{Instrument, Level, Span, info, span, trace, warn};
 
 use crate::{
     pipeline::{
@@ -20,7 +20,7 @@ use crate::{
         },
         moq::state::MoqInputState,
     },
-    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
     utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread},
 };
 
@@ -55,59 +55,51 @@ struct TrackCtx {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
     broadcast: BroadcastConsumer,
+    decoders: MoqServerInputDecoders,
     first_pts: Arc<Mutex<Option<Duration>>>,
     should_close: Arc<AtomicBool>,
 }
 
-impl TrackCtx {
-    fn new(
-        ctx: Arc<PipelineCtx>,
-        input_ref: Ref<InputId>,
-        broadcast: BroadcastConsumer,
-        first_pts: Arc<Mutex<Option<Duration>>>,
-        should_close: Arc<AtomicBool>,
-    ) -> Self {
-        Self {
-            ctx,
-            input_ref,
-            broadcast,
-            first_pts,
-            should_close,
-        }
-    }
-}
+impl TrackCtx {}
 
-pub(crate) fn spawn_broadcast_handler(
+pub(crate) fn start_broadcast_handler_task(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     input: &MoqInputState,
     broadcast: BroadcastConsumer,
 ) -> Option<tokio::task::JoinHandle<()>> {
-    let queue_input = input.queue_input.upgrade()?;
-
+    let queue_input = input.queue_input.clone();
     let input_ref = input_ref.clone();
-    let decoders = input.decoders.clone();
+    let decoders = input.decoders;
     let rt = ctx.tokio_rt.clone();
     let should_close = input.should_close.clone();
 
-    let handle = rt.spawn(async move {
-        let broadcast_result = handle_broadcast(
-            ctx,
-            input_ref.clone(),
-            decoders,
-            queue_input,
-            broadcast,
-            should_close,
-        )
-        .await;
-        if let Err(error) = broadcast_result {
-            warn!(
-                input_id = %input_ref,
-                "MoQ broadcast error: {}",
-                ErrorStack::new(&error).into_string()
-            );
+    let span = span!(
+        Level::INFO,
+        "MoQ server input",
+        input_id = input_ref.to_string()
+    );
+
+    let handle = rt.spawn(
+        async move {
+            let broadcast_result = handle_broadcast(
+                ctx,
+                input_ref.clone(),
+                decoders,
+                queue_input,
+                broadcast,
+                should_close,
+            )
+            .await;
+            if let Err(error) = broadcast_result {
+                warn!(
+                    "broadcast failed: {}",
+                    ErrorStack::new(&error).into_string()
+                );
+            }
         }
-    });
+        .instrument(span),
+    );
 
     Some(handle)
 }
@@ -116,71 +108,234 @@ async fn handle_broadcast(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
     decoders: MoqServerInputDecoders,
-    queue_input: QueueInput,
+    queue_input: WeakQueueInput,
     broadcast: BroadcastConsumer,
     should_close: Arc<AtomicBool>,
 ) -> Result<(), MoqConnectionError> {
-    info!(input_id = %input_ref, "MoQ broadcast connection established");
+    info!("MoQ broadcast connection established");
 
-    let mut discovered = read_catalog(&broadcast).await?;
+    let discovered = read_catalog(&broadcast).await?;
 
-    let has_video = discovered.video.is_some();
-    let has_audio = discovered.audio.is_some();
+    let mut handler = BroadcastHandler::new(
+        ctx.clone(),
+        input_ref.clone(),
+        broadcast,
+        discovered,
+        decoders,
+        should_close,
+    );
 
-    // TODO: This has to be handled in a more reliable way that does not introduce high latency,
-    // probably jitter buffer.
-    let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-        video: has_video,
-        audio: has_audio,
-        offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_BUFFER),
-    });
+    let (video_sender, audio_sender) = {
+        let Some(queue_input) = queue_input.upgrade() else {
+            return Err(MoqConnectionError::InputUnregistered);
+        };
+        // TODO: This has to be handled in a more reliable way that does not introduce high latency,
+        // probably jitter buffer.
+        queue_input.queue_new_track(QueueTrackOptions {
+            video: handler.has_video(),
+            audio: handler.has_audio(),
+            offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + MOQ_BUFFER),
+        })
+    };
 
-    if let Some(v) = &discovered.video {
-        info!(input_id = %input_ref, track = %v.name, "Discovered MoQ video track");
+    let video_task = handler.handle_video_track(video_sender);
+    let audio_task = handler.handle_audio_track(audio_sender);
+
+    if let Some(video_task) = video_task {
+        _ = video_task.await;
+    };
+    if let Some(audio_task) = audio_task {
+        _ = audio_task.await;
     }
-    if let Some(a) = &discovered.audio {
-        info!(input_id = %input_ref, track = %a.name, "Discovered MoQ audio track");
+    info!("MoQ broadcast connection closed");
+    Ok(())
+}
+
+struct BroadcastHandler {
+    track_ctx: TrackCtx,
+    tracks: DiscoveredTracks,
+}
+
+impl BroadcastHandler {
+    fn new(
+        ctx: Arc<PipelineCtx>,
+        input_ref: Ref<InputId>,
+        broadcast: BroadcastConsumer,
+        tracks: DiscoveredTracks,
+        decoders: MoqServerInputDecoders,
+        should_close: Arc<AtomicBool>,
+    ) -> Self {
+        // Shared across audio and video so both tracks are normalized against
+        // the same first PTS, preserving A/V synchronization. Whichever track
+        // produces the first frame sets the common zero point for both.
+        let first_pts = Arc::new(Mutex::new(None));
+
+        let track_ctx = TrackCtx {
+            ctx,
+            input_ref,
+            broadcast,
+            decoders,
+            first_pts,
+            should_close,
+        };
+        Self { track_ctx, tracks }
     }
 
-    let video = discovered.video.take();
-    let audio = discovered.audio.take();
+    fn has_video(&self) -> bool {
+        self.tracks.video.is_some()
+    }
 
-    // Shared across audio and video so both tracks are normalized against
-    // the same first PTS, preserving A/V synchronization. Whichever track
-    // produces the first frame sets the common zero point for both.
-    let first_pts = Arc::new(Mutex::new(None));
-    let rt = ctx.tokio_rt.clone();
-    let video_track_ctx = TrackCtx::new(ctx, input_ref.clone(), broadcast, first_pts, should_close);
-    let audio_track_ctx = video_track_ctx.clone();
+    fn has_audio(&self) -> bool {
+        self.tracks.audio.is_some()
+    }
 
-    let video_task = rt.spawn(async move {
-        if let (Some(video), Some(frame_sender)) = (video, video_sender) {
-            let video_result =
-                run_video_track(video_track_ctx, decoders, video, frame_sender).await;
-            if let Err(error) = video_result {
-                warn!(
-                    "MoQ video track error: {}",
-                    ErrorStack::new(&error).into_string(),
-                );
+    fn handle_video_track(
+        &mut self,
+        frame_sender: Option<QueueSender<Frame>>,
+    ) -> Option<tokio::task::JoinHandle<()>> {
+        let (Some(video), Some(frame_sender)) = (self.tracks.video.take(), frame_sender) else {
+            return None;
+        };
+
+        info!(track = %video.name, "Discovered MoQ video track");
+        let ctx = self.track_ctx.clone();
+        let handle = self.track_ctx.ctx.tokio_rt.spawn(
+            async move {
+                if let Err(error) = run_video_track(ctx, video, frame_sender).await {
+                    warn!(
+                        "MoQ video track error: {}",
+                        ErrorStack::new(&error).into_string(),
+                    )
+                };
             }
-        }
-    });
+            .instrument(Span::current()),
+        );
+        Some(handle)
+    }
 
-    let audio_task = rt.spawn(async move {
-        if let (Some(audio), Some(sample_sender)) = (audio, audio_sender) {
-            let audio_result = run_audio_track(audio_track_ctx, audio, sample_sender).await;
-            if let Err(error) = audio_result {
-                warn!(
-                    "MoQ audio track error: {}",
-                    ErrorStack::new(&error).into_string(),
-                )
+    fn handle_audio_track(
+        &mut self,
+        sample_sender: Option<QueueSender<InputAudioSamples>>,
+    ) -> Option<tokio::task::JoinHandle<()>> {
+        let (Some(audio), Some(sample_sender)) = (self.tracks.audio.take(), sample_sender) else {
+            return None;
+        };
+
+        info!(track = %audio.name, "Discovered MoQ audio track");
+        let ctx = self.track_ctx.clone();
+        let handle = self.track_ctx.ctx.tokio_rt.spawn(
+            async move {
+                if let Err(error) = run_audio_track(ctx, audio, sample_sender).await {
+                    warn!(
+                        "MoQ audio track error: {}",
+                        ErrorStack::new(&error).into_string(),
+                    )
+                };
             }
-        }
-    });
+            .instrument(Span::current()),
+        );
+        Some(handle)
+    }
+}
 
-    _ = video_task.await;
-    _ = audio_task.await;
-    info!(input_id = %input_ref, "MoQ broadcast connection closed");
+async fn run_video_track(
+    track_ctx: TrackCtx,
+    video: DiscoveredVideo,
+    frame_sender: QueueSender<Frame>,
+) -> Result<(), MoqConnectionError> {
+    let TrackCtx {
+        ctx,
+        input_ref,
+        broadcast,
+        decoders,
+        first_pts,
+        should_close,
+    } = track_ctx;
+
+    let decoder_handle = spawn_video_decoder(&ctx, &input_ref, &decoders, &video, frame_sender)?;
+    let track = broadcast.subscribe_track(&Track::new(&video.name))?;
+
+    // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
+    // group start timestamp and highest received timestamp.
+    let mut consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
+
+    loop {
+        if should_close.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
+        };
+        let Some(frame) = consumer.read().await? else {
+            break;
+        };
+
+        let raw_pts: Duration = frame.timestamp.into();
+        let pts = normalize_pts(&first_pts, raw_pts);
+        trace!(?pts, "MoQ video frame");
+        let payload = frame.payload;
+
+        let chunk = EncodedInputChunk {
+            data: payload,
+            pts,
+            dts: None,
+            kind: MediaKind::Video(VideoCodec::H264),
+            present: true,
+        };
+
+        decoder_handle
+            .chunk_sender
+            .send(PipelineEvent::Data(chunk))
+            .map_err(|_| MoqConnectionError::ChannelClosed)?;
+    }
+
+    Ok(())
+}
+
+async fn run_audio_track(
+    track_ctx: TrackCtx,
+    audio: DiscoveredAudio,
+    sample_sender: QueueSender<InputAudioSamples>,
+) -> Result<(), MoqConnectionError> {
+    let TrackCtx {
+        ctx,
+        input_ref,
+        broadcast,
+        decoders: _,
+        first_pts,
+        should_close,
+    } = track_ctx;
+
+    let decoder_handle = spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender)?;
+    let track = broadcast.subscribe_track(&Track::new(&audio.name))?;
+    // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
+    // group start timestamp and highest received timestamp.
+    let mut consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
+
+    loop {
+        if should_close.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
+        };
+        let Some(frame) = consumer.read().await? else {
+            break;
+        };
+
+        let raw_pts: Duration = frame.timestamp.into();
+        let pts = normalize_pts(&first_pts, raw_pts);
+        trace!(?pts, "MoQ audio frame");
+        let payload = frame.payload;
+
+        let chunk = EncodedInputChunk {
+            data: payload,
+            pts,
+            dts: None,
+            kind: MediaKind::Audio(AudioCodec::Aac),
+            present: true,
+        };
+
+        decoder_handle
+            .chunk_sender
+            .send(PipelineEvent::Data(chunk))
+            .map_err(|_| MoqConnectionError::ChannelClosed)?;
+    }
+
     Ok(())
 }
 
@@ -206,13 +361,13 @@ fn spawn_video_decoder(
         input_buffer_size: MOQ_MAX_BUFFER,
     };
 
-    let h264_decoder =
-        decoders
-            .h264
-            .unwrap_or_else(|| match ctx.graphics_context.has_vulkan_decoder_support() {
-                true => VideoDecoderOptions::VulkanH264,
-                false => VideoDecoderOptions::FfmpegH264,
-            });
+    let h264_decoder = match decoders.h264 {
+        Some(decoder) => decoder,
+        None => match ctx.graphics_context.has_vulkan_decoder_support() {
+            true => VideoDecoderOptions::VulkanH264,
+            false => VideoDecoderOptions::FfmpegH264,
+        },
+    };
 
     match h264_decoder {
         VideoDecoderOptions::FfmpegH264 => {
@@ -261,111 +416,6 @@ fn spawn_audio_decoder(
     }
 }
 
-async fn run_video_track(
-    track_ctx: TrackCtx,
-    decoders: MoqServerInputDecoders,
-    video: DiscoveredVideo,
-    frame_sender: QueueSender<Frame>,
-) -> Result<(), MoqConnectionError> {
-    let TrackCtx {
-        ctx,
-        input_ref,
-        broadcast,
-        first_pts,
-        should_close,
-    } = track_ctx;
-
-    let decoder_handle = spawn_video_decoder(&ctx, &input_ref, &decoders, &video, frame_sender)?;
-    let mut consumer = match broadcast.subscribe_track(&Track::new(&video.name)) {
-        Ok(track) => {
-            // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
-            // group start timestamp and highest received timestamp.
-            ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER)
-        }
-        Err(error) => return Err(error.into()),
-    };
-
-    while !should_close.load(std::sync::atomic::Ordering::Relaxed)
-        && let Some(frame) = consumer
-            .read()
-            .await
-            .map_err(MoqConnectionError::ContainerError)?
-    {
-        let raw_pts: Duration = frame.timestamp.into();
-        let pts = normalize_pts(&first_pts, raw_pts);
-        trace!(?pts, "MoQ video frame");
-        let payload = frame.payload;
-
-        let chunk = EncodedInputChunk {
-            data: payload,
-            pts,
-            dts: None,
-            kind: MediaKind::Video(VideoCodec::H264),
-            present: true,
-        };
-
-        decoder_handle
-            .chunk_sender
-            .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
-    }
-
-    Ok(())
-}
-
-async fn run_audio_track(
-    track_ctx: TrackCtx,
-    audio: DiscoveredAudio,
-    sample_sender: QueueSender<InputAudioSamples>,
-) -> Result<(), MoqConnectionError> {
-    let TrackCtx {
-        ctx,
-        input_ref,
-        broadcast,
-        first_pts,
-        should_close,
-    } = track_ctx;
-
-    let decoder_handle = spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender)?;
-    let mut consumer = match broadcast.subscribe_track(&Track::new(&audio.name)) {
-        Ok(track) => {
-            // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
-            // group start timestamp and highest received timestamp.
-            ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER)
-        }
-        Err(error) => {
-            return Err(error.into());
-        }
-    };
-
-    while !should_close.load(std::sync::atomic::Ordering::Relaxed)
-        && let Some(frame) = consumer
-            .read()
-            .await
-            .map_err(MoqConnectionError::ContainerError)?
-    {
-        let raw_pts: Duration = frame.timestamp.into();
-        let pts = normalize_pts(&first_pts, raw_pts);
-        trace!(?pts, "MoQ audio frame");
-        let payload = frame.payload;
-
-        let chunk = EncodedInputChunk {
-            data: payload,
-            pts,
-            dts: None,
-            kind: MediaKind::Audio(AudioCodec::Aac),
-            present: true,
-        };
-
-        decoder_handle
-            .chunk_sender
-            .send(PipelineEvent::Data(chunk))
-            .map_err(|_| MoqConnectionError::ChannelClosed)?;
-    }
-
-    Ok(())
-}
-
 #[derive(thiserror::Error, Debug)]
 enum MoqConnectionError {
     #[error("MoQ track error")]
@@ -396,7 +446,10 @@ enum MoqConnectionError {
     ChannelClosed,
 
     #[error("Container read error")]
-    ContainerError(#[source] moq_mux::Error),
+    ContainerError(#[from] moq_mux::Error),
+
+    #[error("Input unregistered")]
+    InputUnregistered,
 }
 
 /// Normalizes a raw track timestamp against the first PTS observed across all

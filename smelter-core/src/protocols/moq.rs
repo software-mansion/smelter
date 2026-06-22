@@ -12,7 +12,7 @@ pub struct MoqServerInputOptions {
     pub queue_options: QueueInputOptions,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MoqServerInputDecoders {
     pub h264: Option<VideoDecoderOptions>,
 }
