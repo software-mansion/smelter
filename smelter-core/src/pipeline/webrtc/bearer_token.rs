@@ -1,9 +1,8 @@
-use std::{fmt::Write, sync::Arc, time::Duration};
+use std::{fmt::Write, sync::Arc};
 
 use axum::http::HeaderValue;
-use rand::{Rng, RngCore};
+use rand::RngCore;
 use sha3::{Digest, Sha3_512};
-use tokio::time::sleep;
 use tracing::error;
 
 use crate::pipeline::webrtc::error::WhipWhepServerError;
@@ -43,11 +42,10 @@ pub(super) async fn validate_token(
             })?;
 
             if let Some(token_from_header) = auth_str.strip_prefix("Bearer ") {
-                if *hash_token(token_from_header) == *expected_hash {
+                let hash_from_header = hash_token(token_from_header);
+                if hash_from_header.as_ref() == expected_hash {
                     Ok(())
                 } else {
-                    let nanos = rand::rng().random_range(0..1000);
-                    sleep(Duration::from_nanos(nanos)).await;
                     Err(WhipWhepServerError::Unauthorized(
                         "Invalid or mismatched token provided".to_string(),
                     ))
