@@ -340,7 +340,7 @@ impl<'a> CodingImageBundle<'a> {
         command_buffer: &mut OpenCommandBuffer,
         image_tracker: Arc<Mutex<ImageLayoutTracker>>,
         format: &vk::VideoFormatPropertiesKHR<'a>,
-        dimensions: vk::Extent2D,
+        max_coded_extent: vk::Extent2D,
         image_usage: vk::ImageUsageFlags,
         use_separate_images: bool,
         profile_info: &vk::VideoProfileInfoKHR,
@@ -356,8 +356,8 @@ impl<'a> CodingImageBundle<'a> {
             .image_type(format.image_type)
             .format(format.format)
             .extent(vk::Extent3D {
-                width: dimensions.width,
-                height: dimensions.height,
+                width: max_coded_extent.width,
+                height: max_coded_extent.height,
                 depth: 1,
             })
             .mip_levels(1)
@@ -498,7 +498,7 @@ impl<'a> CodingImageBundle<'a> {
             .map(|i| {
                 vk::VideoPictureResourceInfoKHR::default()
                     .coded_offset(vk::Offset2D { x: 0, y: 0 })
-                    .coded_extent(dimensions)
+                    .coded_extent(max_coded_extent)
                     .base_array_layer(image_with_view.base_array_layer(i))
                     .image_view_binding(image_with_view.image_view(i).view)
             })
