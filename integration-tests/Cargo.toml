@@ -29,7 +29,7 @@ serde_json = { workspace = true }
 ffmpeg-next = { workspace = true }
 socket2 = { workspace = true }
 bytes = { workspace = true }
-webrtc = {workspace = true }
+webrtc = { workspace = true }
 webrtc-util = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
@@ -51,6 +51,8 @@ fuzzy-matcher = "0.3.7"
 minifb = "0.28"
 font8x8 = "0.3"
 integration-tests-macros = { path = "macros" }
+gpu-video = { workspace = true, features = ["expose-parsers"] }
+pollster = { workspace = true }
 
 [lints]
 workspace = true

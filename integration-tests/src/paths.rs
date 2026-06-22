@@ -12,6 +12,12 @@ pub fn render_snapshots_dir_path() -> PathBuf {
     submodule_root_path().join("render_snapshots")
 }
 
+/// Directory in the snapshots submodule holding encoded bitstream dumps
+/// used as inputs for the gpu-video tests.
+pub fn gpu_video_dumps_dir_path() -> PathBuf {
+    submodule_root_path().join("gpu_video").join("dumps")
+}
+
 /// Root directory for all transient artifacts produced by the test
 /// suite — failed snapshot dumps, decoded debug bundles, etc. Cleaned
 /// up out-of-band; nothing here is committed.
