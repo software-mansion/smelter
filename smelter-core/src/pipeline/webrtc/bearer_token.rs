@@ -2,6 +2,7 @@ use std::{fmt::Write, sync::Arc, time::Duration};
 
 use axum::http::HeaderValue;
 use rand::{Rng, RngCore};
+use sha3::{Digest, Sha3_512};
 use tokio::time::sleep;
 use tracing::error;
 
@@ -19,8 +20,20 @@ pub(super) fn generate_token() -> Arc<str> {
     Arc::from(token)
 }
 
+/// Computes a SHA3-512 hash of the token and returns it as a lowercase hex string.
+pub(super) fn hash_token(token: &str) -> Arc<str> {
+    let digest = Sha3_512::digest(token.as_bytes());
+    let hash = digest.iter().fold(String::new(), |mut acc, byte| {
+        if let Err(err) = write!(acc, "{byte:02x}") {
+            error!("Cannot hash token: {err:?}")
+        }
+        acc
+    });
+    Arc::from(hash)
+}
+
 pub(super) async fn validate_token(
-    expected_token: &str,
+    expected_hash: &str,
     auth_header_value: Option<&HeaderValue>,
 ) -> Result<(), WhipWhepServerError> {
     match auth_header_value {
@@ -30,7 +43,7 @@ pub(super) async fn validate_token(
             })?;
 
             if let Some(token_from_header) = auth_str.strip_prefix("Bearer ") {
-                if token_from_header == expected_token {
+                if *hash_token(token_from_header) == *expected_hash {
                     Ok(())
                 } else {
                     let nanos = rand::rng().random_range(0..1000);

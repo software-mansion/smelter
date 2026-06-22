@@ -145,6 +145,7 @@ impl WhepOutputsState {
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhepOutputConnectionStateOptions {
+    /// SHA3-512 hash (lowercase hex) of the bearer token, not the plaintext token.
     pub bearer_token: Option<Arc<str>>,
     pub video_options: Option<WhepVideoConnectionOptions>,
     pub audio_options: Option<WhepAudioConnectionOptions>,
@@ -152,6 +153,7 @@ pub(crate) struct WhepOutputConnectionStateOptions {
 
 #[derive(Debug)]
 pub(crate) struct WhepOutputConnectionState {
+    /// SHA3-512 hash (lowercase hex) of the bearer token, not the plaintext token.
     pub bearer_token: Option<Arc<str>>,
     pub sessions: HashMap<Arc<str>, PeerConnection>,
     pub video_options: Option<WhepVideoConnectionOptions>,

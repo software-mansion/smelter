@@ -9,6 +9,7 @@ use crate::{
             ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vulkan_h264::VulkanH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
+        webrtc::bearer_token::hash_token,
         webrtc::whep_output::{
             state::{
                 WhepAudioConnectionOptions, WhepOutputConnectionStateOptions, WhepOutputsState,
@@ -61,7 +62,8 @@ impl WhepOutput {
         let Some(state) = state_clone else {
             return Err(OutputInitError::WhipWhepServerNotRunning);
         };
-        let bearer_token = options.bearer_token.clone();
+        // Only the hash is persisted in core state; the plaintext is never stored.
+        let bearer_token = options.bearer_token.as_deref().map(hash_token);
 
         ctx.stats_sender.send(StatsEvent::NewOutput {
             output_ref: output_ref.clone(),

@@ -128,6 +128,7 @@ impl WhipInputsState {
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhipInputStateOptions {
+    /// SHA3-512 hash (lowercase hex) of the bearer token, not the plaintext token.
     pub bearer_token: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub jitter_buffer_size: Option<Duration>,
@@ -136,6 +137,7 @@ pub(crate) struct WhipInputStateOptions {
 
 #[derive(Debug)]
 pub(crate) struct WhipInputState {
+    /// SHA3-512 hash (lowercase hex) of the bearer token, not the plaintext token.
     pub bearer_token: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub jitter_buffer_size: Option<Duration>,

@@ -5,7 +5,7 @@ use crate::{
         input::Input,
         webrtc::{
             WhipInputsState,
-            bearer_token::generate_token,
+            bearer_token::{generate_token, hash_token},
             whip_input::{
                 state::WhipInputStateOptions, video_preferences::resolve_video_preferences,
             },
@@ -65,14 +65,17 @@ impl WhipInput {
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
 
         let endpoint_route = Arc::from(format!("/whip/{}", urlencoding::encode(&input_ref.id().0)));
+        // Plaintext token, returned in the registration response.
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
+        // Only the hash is persisted in core state.
+        let bearer_token_hash = hash_token(&bearer_token);
 
         let video_preferences = resolve_video_preferences(&ctx, options.video_preferences)?;
 
         state.inputs.add_input(
             &input_ref,
             WhipInputStateOptions {
-                bearer_token: bearer_token.clone(),
+                bearer_token: bearer_token_hash,
                 video_preferences,
                 jitter_buffer_size: options.jitter_buffer_size,
                 queue_input: queue_input.downgrade(),
