@@ -229,7 +229,7 @@ impl TestQueue {
         // ignore the error when a subscriber is already set (multiple tests
         // in one process)
         let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::TRACE)
+            .with_max_level(tracing::Level::INFO)
             .with_test_writer()
             .try_init();
         let queue = Queue::new(QueueOptions {

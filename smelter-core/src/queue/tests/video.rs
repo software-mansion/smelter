@@ -942,7 +942,6 @@ mod optional_input {
 
         sleep(ms(4));
 
-
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
             &batch(ms(60), frame(0, ms(60))),
