@@ -60,8 +60,6 @@ struct TrackCtx {
     should_close: Arc<AtomicBool>,
 }
 
-impl TrackCtx {}
-
 pub(crate) fn start_broadcast_handler_task(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
