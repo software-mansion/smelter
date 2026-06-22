@@ -115,6 +115,7 @@ async fn handle_broadcast(
 
     let discovered = read_catalog(&broadcast).await?;
 
+    let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
     let mut handler = BroadcastHandler::new(
         ctx.clone(),
         input_ref.clone(),
@@ -122,6 +123,7 @@ async fn handle_broadcast(
         discovered,
         decoders,
         should_close,
+        stats_sender,
     );
 
     let (video_sender, audio_sender) = {
@@ -163,6 +165,7 @@ impl BroadcastHandler {
         tracks: DiscoveredTracks,
         decoders: MoqServerInputDecoders,
         should_close: Arc<AtomicBool>,
+        stats_sender: MoqStatsSender,
     ) -> Self {
         // Shared across audio and video so both tracks are normalized against
         // the same first PTS, preserving A/V synchronization. Whichever track
@@ -176,6 +179,7 @@ impl BroadcastHandler {
             decoders,
             first_pts,
             should_close,
+            stats_sender,
         };
         Self { track_ctx, tracks }
     }
@@ -249,6 +253,7 @@ async fn run_video_track(
         decoders,
         first_pts,
         should_close,
+        stats_sender,
     } = track_ctx;
 
     let decoder_handle = spawn_video_decoder(&ctx, &input_ref, &decoders, &video, frame_sender)?;
@@ -265,6 +270,7 @@ async fn run_video_track(
         let Some(frame) = consumer.read().await? else {
             break;
         };
+        stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Video);
 
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
@@ -311,6 +317,7 @@ async fn run_audio_track(
         decoders: _,
         first_pts,
         should_close,
+        stats_sender,
     } = track_ctx;
 
     let decoder_handle = spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender)?;
@@ -326,6 +333,7 @@ async fn run_audio_track(
         let Some(frame) = consumer.read().await? else {
             break;
         };
+        stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Audio);
 
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
