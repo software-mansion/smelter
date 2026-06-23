@@ -93,6 +93,30 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
             },
         };
 
+        self.send_chunks(au_chunks);
+        self.read_all_frames()
+    }
+
+    fn flush(&mut self) -> Vec<Frame> {
+        // The H264 parser inside the AU splitter holds back the last access
+        // unit — an AU is only emitted once the first slice of the next AU
+        // arrives. Flush it so the final frame in decode order is actually
+        // sent to the decoder before we drain it. Skipping this drops the
+        // last AU in decode order (often a trailing B-frame), which on a
+        // reordered tail leaves a doubled gap between the last two frames.
+        match self.au_splitter.flush() {
+            Ok(au_chunks) => self.send_chunks(au_chunks),
+            Err(err) => debug!("H264 AU splitter could not be flushed: {err}"),
+        }
+
+        // Signal end of stream so the decoder drains the frames it holds back for reordering.
+        let _ = self.decoder.send_eof();
+        self.read_all_frames()
+    }
+}
+
+impl FfmpegH264Decoder {
+    fn send_chunks(&mut self, au_chunks: Vec<EncodedInputChunk>) {
         for chunk in au_chunks {
             trace!(?chunk, "FFmpeg H264 processing AU chunk");
             let av_packet = match create_av_packet(chunk, VideoCodec::H264, TIME_BASE) {
@@ -103,26 +127,12 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
                 }
             };
 
-            match self.decoder.send_packet(&av_packet) {
-                Ok(()) => {}
-                Err(e) => {
-                    warn!("Failed to send a packet to decoder: {:?}", e);
-                    continue;
-                }
+            if let Err(e) = self.decoder.send_packet(&av_packet) {
+                warn!("Failed to send a packet to decoder: {:?}", e);
             }
         }
-
-        self.read_all_frames()
     }
 
-    fn flush(&mut self) -> Vec<Frame> {
-        // Signal end of stream so the decoder drains the frames it holds back for reordering.
-        let _ = self.decoder.send_eof();
-        self.read_all_frames()
-    }
-}
-
-impl FfmpegH264Decoder {
     fn read_all_frames(&mut self) -> Vec<Frame> {
         iter::from_fn(|| {
             match self.decoder.receive_frame(&mut self.av_frame) {
