@@ -1,5 +1,6 @@
 use tracing::error;
 
+pub(super) mod audio_mixer;
 pub(super) mod hls;
 pub(super) mod mp4;
 pub(super) mod rtmp;
@@ -10,12 +11,13 @@ pub(super) mod whip;
 use crate::{
     InputProtocolKind,
     stats::{
-        input::hls::HlsInputState, input::mp4::Mp4InputState, input::rtmp::RtmpInputState,
-        input::rtp::RtpInputState, input::whep::WhepInputState, input::whip::WhipInputState,
-        input_reports::InputStatsReport,
+        input::audio_mixer::AudioMixerStatsState, input::hls::HlsInputState,
+        input::mp4::Mp4InputState, input::rtmp::RtmpInputState, input::rtp::RtpInputState,
+        input::whep::WhepInputState, input::whip::WhipInputState, input_reports::InputStatsReport,
     },
 };
 
+pub(crate) use audio_mixer::{AudioMixerStatsEvent, AudioMixerStatsSender};
 pub(crate) use hls::{HlsInputStatsEvent, HlsInputTrackStatsEvent};
 pub(crate) use mp4::{Mp4InputStatsEvent, Mp4InputTrackStatsEvent};
 pub(crate) use rtmp::{RtmpInputStatsEvent, RtmpInputTrackStatsEvent};
@@ -69,6 +71,20 @@ impl InputStatsState {
             InputProtocolKind::V4l2 => unimplemented!(),
             InputProtocolKind::DeckLink => unimplemented!(),
             InputProtocolKind::RawDataChannel => unimplemented!(),
+        }
+    }
+
+    /// Mutable handle to the per-input audio-mixer stats sub-state, for inputs
+    /// that have audio. Unimplemented input kinds never reach this (they're
+    /// never registered with the audio mixer).
+    pub fn audio_mixer_state_mut(&mut self) -> Option<&mut AudioMixerStatsState> {
+        match self {
+            InputStatsState::Rtp(state) => Some(&mut state.audio.mixer),
+            InputStatsState::Whip(state) => Some(&mut state.audio.mixer),
+            InputStatsState::Whep(state) => Some(&mut state.audio.mixer),
+            InputStatsState::Hls(state) => Some(&mut state.audio.mixer),
+            InputStatsState::Rtmp(state) => Some(&mut state.audio.mixer),
+            InputStatsState::Mp4(state) => Some(&mut state.audio.mixer),
         }
     }
 

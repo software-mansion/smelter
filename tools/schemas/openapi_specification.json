@@ -1089,6 +1089,82 @@
           "stereo"
         ]
       },
+      "AudioMixerSlidingWindowStatsReport": {
+        "type": "object",
+        "description": "Stats report for the given time window in the per-input audio mixer.",
+        "required": [
+          "drift_avg_seconds",
+          "drift_min_seconds",
+          "drift_max_seconds",
+          "buffer_duration_avg_seconds",
+          "buffer_duration_min_seconds",
+          "buffer_duration_max_seconds",
+          "discontinuities_count"
+        ],
+        "properties": {
+          "drift_avg_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Average drift between the input buffer's earliest PTS and the\nPTS the mixer asked for. Positive = input is behind the request\n(stretching), negative = input is ahead (squashing)."
+          },
+          "drift_min_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Minimum (most-negative) drift observed in the window."
+          },
+          "drift_max_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Maximum (most-positive) drift observed in the window."
+          },
+          "buffer_duration_avg_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Average duration of audio held in the resampler input buffer\n(i.e. pending input samples not yet fed to the resampler)."
+          },
+          "buffer_duration_min_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Minimum buffer duration observed in the window."
+          },
+          "buffer_duration_max_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Maximum buffer duration observed in the window."
+          },
+          "discontinuities_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of resampler discontinuities (forced resets) in the window.",
+            "minimum": 0
+          }
+        }
+      },
+      "AudioMixerStatsReport": {
+        "type": "object",
+        "description": "Stats report for the per-input audio mixer (resampler + drift correction).\n\nThe audio mixer runs once per input audio track. It compensates for the\ndifference between the input clock and the mixing clock by stretching,\nsquashing, dropping, or zero-padding samples; this report describes how\nmuch it had to work.",
+        "required": [
+          "discontinuities_total",
+          "last_1_second",
+          "last_10_seconds"
+        ],
+        "properties": {
+          "discontinuities_total": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of discontinuities (input gaps that exceeded the\nstretch/squash range and forced a resampler reset) since the input\nwas registered.",
+            "minimum": 0
+          },
+          "last_1_second": {
+            "$ref": "#/components/schemas/AudioMixerSlidingWindowStatsReport",
+            "description": "Audio-mixer stats in the 1-second window."
+          },
+          "last_10_seconds": {
+            "$ref": "#/components/schemas/AudioMixerSlidingWindowStatsReport",
+            "description": "Audio-mixer stats in the 10-second window."
+          }
+        }
+      },
       "AudioMixingStrategy": {
         "type": "string",
         "enum": [
@@ -1507,6 +1583,24 @@
           }
         ]
       },
+      "HlsAudioInputStatsReport": {
+        "type": "object",
+        "description": "Combined stats for the audio track of an `HLS` input.",
+        "required": [
+          "track",
+          "mixer"
+        ],
+        "properties": {
+          "track": {
+            "$ref": "#/components/schemas/HlsInputTrackStatsReport",
+            "description": "Per-track HLS audio stats."
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerStatsReport",
+            "description": "Per-input audio mixer (resampler / drift correction) stats."
+          }
+        }
+      },
       "HlsInput": {
         "type": "object",
         "description": "Parameters for an input stream from HLS source.",
@@ -1576,8 +1670,8 @@
             "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/HlsInputTrackStatsReport",
-            "description": "Stats for the audio track."
+            "$ref": "#/components/schemas/HlsAudioInputStatsReport",
+            "description": "Stats for the audio track (track stats + per-input audio mixer)."
           }
         }
       },
@@ -2503,6 +2597,24 @@
           }
         ]
       },
+      "Mp4AudioInputStatsReport": {
+        "type": "object",
+        "description": "Combined stats for the audio track of an `MP4` input.",
+        "required": [
+          "track",
+          "mixer"
+        ],
+        "properties": {
+          "track": {
+            "$ref": "#/components/schemas/Mp4InputTrackStatsReport",
+            "description": "Per-track MP4 audio stats."
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerStatsReport",
+            "description": "Per-input audio mixer (resampler / drift correction) stats."
+          }
+        }
+      },
       "Mp4Input": {
         "type": "object",
         "description": "Input stream from MP4 file.\nExactly one of `url` and `path` has to be defined.",
@@ -2594,8 +2706,8 @@
             "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/Mp4InputTrackStatsReport",
-            "description": "Stats for the audio track."
+            "$ref": "#/components/schemas/Mp4AudioInputStatsReport",
+            "description": "Stats for the audio track (track stats + per-input audio mixer)."
           }
         }
       },
@@ -4149,6 +4261,24 @@
           }
         ]
       },
+      "RtmpAudioInputStatsReport": {
+        "type": "object",
+        "description": "Combined stats for the audio track of an `RTMP` input.",
+        "required": [
+          "track",
+          "mixer"
+        ],
+        "properties": {
+          "track": {
+            "$ref": "#/components/schemas/RtmpInputTrackStatsReport",
+            "description": "Per-track RTMP audio stats."
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerStatsReport",
+            "description": "Per-input audio mixer (resampler / drift correction) stats."
+          }
+        }
+      },
       "RtmpClientAudioEncoderOptions": {
         "oneOf": [
           {
@@ -4481,8 +4611,8 @@
             "description": "Stats for the video track."
           },
           "audio": {
-            "$ref": "#/components/schemas/RtmpInputTrackStatsReport",
-            "description": "Stats for the audio track."
+            "$ref": "#/components/schemas/RtmpAudioInputStatsReport",
+            "description": "Stats for the audio track (track stats + per-input audio mixer)."
           }
         }
       },
@@ -4644,6 +4774,24 @@
           }
         ]
       },
+      "RtpAudioInputStatsReport": {
+        "type": "object",
+        "description": "Combined stats for the audio track of an `RTP` / `WHIP` / `WHEP` input.",
+        "required": [
+          "rtp",
+          "mixer"
+        ],
+        "properties": {
+          "rtp": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "RTP-side jitter buffer stats."
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerStatsReport",
+            "description": "Per-input audio mixer (resampler / drift correction) stats."
+          }
+        }
+      },
       "RtpInput": {
         "type": "object",
         "description": "Parameters for an input stream from RTP source.\nAt least one of `video` and `audio` has to be defined.",
@@ -4730,16 +4878,16 @@
         "description": "Stats report for `RTP` input.",
         "required": [
           "video_rtp",
-          "audio_rtp"
+          "audio"
         ],
         "properties": {
           "video_rtp": {
             "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
             "description": "Stats for the video track."
           },
-          "audio_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
-            "description": "Stats for the audio track."
+          "audio": {
+            "$ref": "#/components/schemas/RtpAudioInputStatsReport",
+            "description": "Stats for the audio track (jitter buffer + per-input audio mixer)."
           }
         }
       },
@@ -6362,16 +6510,16 @@
         "description": "Stats report for `WHEP` input.",
         "required": [
           "video_rtp",
-          "audio_rtp"
+          "audio"
         ],
         "properties": {
           "video_rtp": {
             "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
             "description": "Stats for the video track."
           },
-          "audio_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
-            "description": "Stats for the audio track."
+          "audio": {
+            "$ref": "#/components/schemas/RtpAudioInputStatsReport",
+            "description": "Stats for the audio track (jitter buffer + per-input audio mixer)."
           }
         }
       },
@@ -6790,16 +6938,16 @@
         "description": "Stats report for `WHIP` input.",
         "required": [
           "video_rtp",
-          "audio_rtp"
+          "audio"
         ],
         "properties": {
           "video_rtp": {
             "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
             "description": "Stats for the video track."
           },
-          "audio_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
-            "description": "Stats for the audio track."
+          "audio": {
+            "$ref": "#/components/schemas/RtpAudioInputStatsReport",
+            "description": "Stats for the audio track (jitter buffer + per-input audio mixer)."
           }
         }
       },

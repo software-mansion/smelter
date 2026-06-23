@@ -12,7 +12,22 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
+use smelter_render::InputId;
+
 use super::*;
+use crate::{
+    Ref,
+    prelude::{AudioMixerStatsSender, StatsSender},
+};
+
+/// Disconnected stats sender for resampler unit tests: events go nowhere,
+/// but the resampler still emits them through the real send path.
+pub(super) fn mock_stats_sender() -> AudioMixerStatsSender {
+    AudioMixerStatsSender::new(
+        StatsSender::disconnected(),
+        Ref::new(&InputId(Arc::from("mock"))),
+    )
+}
 
 // ============================ Logging ============================
 

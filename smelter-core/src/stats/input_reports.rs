@@ -20,8 +20,8 @@ pub struct RtpInputStatsReport {
     /// Stats for the video track.
     pub video_rtp: RtpJitterBufferStatsReport,
 
-    /// Stats for the audio track.
-    pub audio_rtp: RtpJitterBufferStatsReport,
+    /// Stats for the audio track (jitter buffer + per-input audio mixer).
+    pub audio: RtpAudioInputStatsReport,
 }
 
 /// Stats report for `WHIP` input.
@@ -30,8 +30,8 @@ pub struct WhipInputStatsReport {
     /// Stats for the video track.
     pub video_rtp: RtpJitterBufferStatsReport,
 
-    /// Stats for the audio track.
-    pub audio_rtp: RtpJitterBufferStatsReport,
+    /// Stats for the audio track (jitter buffer + per-input audio mixer).
+    pub audio: RtpAudioInputStatsReport,
 }
 
 /// Stats report for `WHEP` input.
@@ -40,8 +40,17 @@ pub struct WhepInputStatsReport {
     /// Stats for the video track.
     pub video_rtp: RtpJitterBufferStatsReport,
 
-    /// Stats for the audio track.
-    pub audio_rtp: RtpJitterBufferStatsReport,
+    /// Stats for the audio track (jitter buffer + per-input audio mixer).
+    pub audio: RtpAudioInputStatsReport,
+}
+
+/// Combined stats for the audio track of an `RTP` / `WHIP` / `WHEP` input.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct RtpAudioInputStatsReport {
+    /// RTP-side jitter buffer stats.
+    pub rtp: RtpJitterBufferStatsReport,
+    /// Per-input audio mixer (resampler / drift correction) stats.
+    pub mixer: AudioMixerStatsReport,
 }
 
 /// Stats report for `RTP` jitter buffer used in `RTP`, `WHIP` and `WHEP` inputs.
@@ -106,8 +115,17 @@ pub struct RtmpInputStatsReport {
     /// Stats for the video track.
     pub video: RtmpInputTrackStatsReport,
 
-    /// Stats for the audio track.
-    pub audio: RtmpInputTrackStatsReport,
+    /// Stats for the audio track (track stats + per-input audio mixer).
+    pub audio: RtmpAudioInputStatsReport,
+}
+
+/// Combined stats for the audio track of an `RTMP` input.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct RtmpAudioInputStatsReport {
+    /// Per-track RTMP audio stats.
+    pub track: RtmpInputTrackStatsReport,
+    /// Per-input audio mixer (resampler / drift correction) stats.
+    pub mixer: AudioMixerStatsReport,
 }
 
 /// Stats report for a track in `RTMP` input.
@@ -126,8 +144,17 @@ pub struct Mp4InputStatsReport {
     /// Stats for the video track.
     pub video: Mp4InputTrackStatsReport,
 
-    /// Stats for the audio track.
-    pub audio: Mp4InputTrackStatsReport,
+    /// Stats for the audio track (track stats + per-input audio mixer).
+    pub audio: Mp4AudioInputStatsReport,
+}
+
+/// Combined stats for the audio track of an `MP4` input.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct Mp4AudioInputStatsReport {
+    /// Per-track MP4 audio stats.
+    pub track: Mp4InputTrackStatsReport,
+    /// Per-input audio mixer (resampler / drift correction) stats.
+    pub mixer: AudioMixerStatsReport,
 }
 
 /// Stats report for a track in `MP4` input.
@@ -146,8 +173,17 @@ pub struct HlsInputStatsReport {
     /// Stats for the video track.
     pub video: HlsInputTrackStatsReport,
 
-    /// Stats for the audio track.
-    pub audio: HlsInputTrackStatsReport,
+    /// Stats for the audio track (track stats + per-input audio mixer).
+    pub audio: HlsAudioInputStatsReport,
+}
+
+/// Combined stats for the audio track of an `HLS` input.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct HlsAudioInputStatsReport {
+    /// Per-track HLS audio stats.
+    pub track: HlsInputTrackStatsReport,
+    /// Per-input audio mixer (resampler / drift correction) stats.
+    pub mixer: AudioMixerStatsReport,
 }
 
 /// Stats report for a track in the `HLS` input.
@@ -165,6 +201,50 @@ pub struct HlsInputTrackStatsReport {
 
     /// Track stats in the 10-second window.
     pub last_10_seconds: HlsInputTrackSlidingWindowStatsReport,
+}
+
+/// Stats report for the per-input audio mixer (resampler + drift correction).
+///
+/// The audio mixer runs once per input audio track. It compensates for the
+/// difference between the input clock and the mixing clock by stretching,
+/// squashing, dropping, or zero-padding samples; this report describes how
+/// much it had to work.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct AudioMixerStatsReport {
+    /// Total count of discontinuities (input gaps that exceeded the
+    /// stretch/squash range and forced a resampler reset) since the input
+    /// was registered.
+    pub discontinuities_total: u32,
+
+    /// Audio-mixer stats in the 1-second window.
+    pub last_1_second: AudioMixerSlidingWindowStatsReport,
+
+    /// Audio-mixer stats in the 10-second window.
+    pub last_10_seconds: AudioMixerSlidingWindowStatsReport,
+}
+
+/// Stats report for the given time window in the per-input audio mixer.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct AudioMixerSlidingWindowStatsReport {
+    /// Average drift between the input buffer's earliest PTS and the
+    /// PTS the mixer asked for. Positive = input is behind the request
+    /// (stretching), negative = input is ahead (squashing).
+    pub drift_avg_seconds: f64,
+    /// Minimum (most-negative) drift observed in the window.
+    pub drift_min_seconds: f64,
+    /// Maximum (most-positive) drift observed in the window.
+    pub drift_max_seconds: f64,
+
+    /// Average duration of audio held in the resampler input buffer
+    /// (i.e. pending input samples not yet fed to the resampler).
+    pub buffer_duration_avg_seconds: f64,
+    /// Minimum buffer duration observed in the window.
+    pub buffer_duration_min_seconds: f64,
+    /// Maximum buffer duration observed in the window.
+    pub buffer_duration_max_seconds: f64,
+
+    /// Count of resampler discontinuities (forced resets) in the window.
+    pub discontinuities_count: u32,
 }
 
 /// Stats report for the given time window in the `HLS` input track.

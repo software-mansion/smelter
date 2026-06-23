@@ -8,6 +8,7 @@ use smelter_render::{OutputId, error::UpdateSceneError};
 use tracing::{debug, trace};
 
 use crate::{
+    Ref,
     audio_mixer::{InputSamplesSet, OutputSamplesSet, input::AudioMixerInput, mix::SampleMixer},
     prelude::OutputAudioSamples,
 };
@@ -50,8 +51,11 @@ impl AudioMixer {
         self.0.lock().unwrap().process_batch_set(samples_set)
     }
 
-    pub fn register_input(&self, input_id: InputId) {
-        self.0.lock().unwrap().register_input(input_id);
+    pub fn register_input(&self, input_id: InputId, input_ref: Ref<InputId>, ctx: &PipelineCtx) {
+        self.0
+            .lock()
+            .unwrap()
+            .register_input(input_id, input_ref, ctx);
     }
 
     pub fn register_output(
@@ -125,9 +129,18 @@ impl InternalAudioMixer {
         }
     }
 
-    pub fn register_input(&mut self, input_id: InputId) {
-        self.inputs
-            .insert(input_id, AudioMixerInput::new(self.mixing_sample_rate));
+    pub fn register_input(
+        &mut self,
+        input_id: InputId,
+        input_ref: Ref<InputId>,
+        ctx: &PipelineCtx,
+    ) {
+        let resampler_stats_sender =
+            AudioMixerStatsSender::new(ctx.stats_sender.clone(), input_ref);
+        self.inputs.insert(
+            input_id,
+            AudioMixerInput::new(self.mixing_sample_rate, resampler_stats_sender),
+        );
     }
 
     pub fn update_output(

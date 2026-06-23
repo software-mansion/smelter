@@ -5,8 +5,9 @@ use smelter_render::InputId;
 use crate::{
     Ref,
     stats::{
+        input::audio_mixer::AudioMixerStatsState,
         input_reports::{
-            RtpInputStatsReport, RtpJitterBufferSlidingWindowStatsReport,
+            RtpAudioInputStatsReport, RtpInputStatsReport, RtpJitterBufferSlidingWindowStatsReport,
             RtpJitterBufferStatsReport,
         },
         state::StatsEvent,
@@ -34,28 +35,52 @@ impl RtpInputStatsEvent {
 #[derive(Debug)]
 pub struct RtpInputState {
     pub video: RtpJitterBufferState,
-    pub audio: RtpJitterBufferState,
+    pub audio: RtpAudioInputState,
+}
+
+/// Audio-side state for RTP-family inputs (RTP / WHIP / WHEP): jitter buffer
+/// stats plus per-input audio-mixer (resampler) stats.
+#[derive(Debug)]
+pub struct RtpAudioInputState {
+    pub rtp: RtpJitterBufferState,
+    pub mixer: AudioMixerStatsState,
+}
+
+impl RtpAudioInputState {
+    pub fn new() -> Self {
+        Self {
+            rtp: RtpJitterBufferState::new(),
+            mixer: AudioMixerStatsState::new(),
+        }
+    }
+
+    pub fn report(&mut self) -> RtpAudioInputStatsReport {
+        RtpAudioInputStatsReport {
+            rtp: self.rtp.report(),
+            mixer: self.mixer.report(),
+        }
+    }
 }
 
 impl RtpInputState {
     pub fn new() -> Self {
         Self {
             video: RtpJitterBufferState::new(),
-            audio: RtpJitterBufferState::new(),
+            audio: RtpAudioInputState::new(),
         }
     }
 
     pub fn handle_event(&mut self, event: RtpInputStatsEvent) {
         match event {
             RtpInputStatsEvent::VideoRtp(event) => self.video.handle_event(event),
-            RtpInputStatsEvent::AudioRtp(event) => self.audio.handle_event(event),
+            RtpInputStatsEvent::AudioRtp(event) => self.audio.rtp.handle_event(event),
         }
     }
 
     pub fn report(&mut self) -> RtpInputStatsReport {
         RtpInputStatsReport {
             video_rtp: self.video.report(),
-            audio_rtp: self.audio.report(),
+            audio: self.audio.report(),
         }
     }
 }
