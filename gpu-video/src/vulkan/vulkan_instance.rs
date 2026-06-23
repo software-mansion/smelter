@@ -10,6 +10,7 @@ use crate::{
     wrappers::*,
 };
 
+// TODO: hal feature for all hal structs
 pub struct VulkanInstance {
     _entry: Entry,
     pub(crate) instance: Arc<Instance>,

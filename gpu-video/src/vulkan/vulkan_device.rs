@@ -447,6 +447,7 @@ impl VulkanDevice {
     }
 }
 
+// tODO: move it above impl
 impl VideoDeviceBackend for VulkanDevice {
     fn create_bytes_decoder_h264(
         self: Arc<Self>,
@@ -480,6 +481,7 @@ impl VideoDeviceBackend for VulkanDevice {
         wgpu_device: Option<wgpu::Device>,
         parameters: DecoderParameters,
     ) -> Result<crate::WgpuTexturesDecoder, VideoDecoderError> {
+        // TODO: this shouldn't be an option
         let Some(wgpu_device) = wgpu_device else {
             return Err(VideoDecoderError::VideoDeviceWithoutWgpu);
         };

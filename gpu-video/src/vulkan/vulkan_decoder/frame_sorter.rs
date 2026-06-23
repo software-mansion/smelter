@@ -42,6 +42,7 @@ impl<T> From<DecodeResult<T>> for OutputFrame<T> {
     }
 }
 
+// TODO: is this needed by metal decoder?
 pub(crate) struct FrameSorter<T> {
     frames: BinaryHeap<DecodeResult<T>>,
 }
