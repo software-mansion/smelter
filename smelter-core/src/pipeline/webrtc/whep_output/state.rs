@@ -8,7 +8,7 @@ use smelter_render::OutputId;
 use tokio::sync::broadcast;
 
 use crate::pipeline::webrtc::{
-    bearer_token::validate_token,
+    bearer_token::validate_bearer_token,
     error::WhipWhepServerError,
     whep_output::{
         peer_connection::{PeerConnection, WeakPeerConnection},
@@ -137,7 +137,7 @@ impl WhepOutputsState {
         };
 
         match bearer_token {
-            Some(token) => validate_token(&token, headers.get("Authorization")).await,
+            Some(token) => validate_bearer_token(&token, headers.get("Authorization")).await,
             None => Ok(()), // Bearer token not required, treat as validated
         }
     }

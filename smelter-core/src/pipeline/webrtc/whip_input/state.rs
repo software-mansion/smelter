@@ -11,7 +11,7 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::{
     codecs::VideoDecoderOptions,
     pipeline::webrtc::{
-        bearer_token::validate_token, error::WhipWhepServerError,
+        bearer_token::validate_bearer_token, error::WhipWhepServerError,
         peer_connection_recvonly::RecvonlyPeerConnection,
     },
     queue::WeakQueueInput,
@@ -122,7 +122,7 @@ impl WhipInputsState {
             }
         };
 
-        validate_token(&bearer_token, headers.get("Authorization")).await
+        validate_bearer_token(&bearer_token, headers.get("Authorization")).await
     }
 }
 
