@@ -6,7 +6,7 @@ use std::{
 
 use tracing::error;
 
-use crate::queue::WeakQueueInput;
+use crate::{queue::WeakQueueInput, utils::auth_token::validate_token};
 
 use crate::prelude::*;
 
@@ -89,7 +89,7 @@ impl RtmpInputsState {
         let (input_ref, _) = guard
             .iter()
             .find(|(input_ref, input)| {
-                input_ref.id().0.as_ref() == app && &input.stream_key == stream_key
+                input_ref.id().0.as_ref() == app && validate_token(&input.stream_key, stream_key)
             })
             .ok_or_else(|| RtmpServerError::NotRegisteredAppStreamKeyPair {
                 app: app.into(),
