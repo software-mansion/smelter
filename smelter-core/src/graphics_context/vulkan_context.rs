@@ -39,7 +39,8 @@ pub fn create_vulkan_graphics_ctx(
         wgpu::hal::vulkan::Instance::desired_extensions(&entry, api_version, instance_flags)?;
 
     // TODO: Hal API? lol
-    let video_instance = VideoInstance::new_from_entry(
+    // TODO: also export hal errors?
+    let video_instance = VulkanInstance::new_from_entry(
         entry.clone(),
         &mut extensions,
         &VideoInstanceDescriptor {

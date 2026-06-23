@@ -2,7 +2,6 @@ use std::ptr::null_mut;
 
 use ash::vk;
 
-use crate::VideoInitError;
 use crate::VulkanDecoderError;
 use crate::codec::CodecCapabilities;
 use crate::codec::CodecSpecificEncoderQualityLevelProperties as _;
@@ -12,6 +11,7 @@ use crate::codec::h265::H265Codec;
 use crate::codec::h265::parameters::vk_to_h265_level_idc;
 use crate::parameters::H264Profile;
 use crate::parameters::H265Profile;
+use crate::vulkan::vulkan_adapter::VulkanAdapterInitError;
 use crate::wrappers::*;
 
 pub(crate) fn query_video_format_properties<'a>(
@@ -19,7 +19,7 @@ pub(crate) fn query_video_format_properties<'a>(
     video_queue_instance_ext: &ash::khr::video_queue::Instance,
     profile_info: &vk::VideoProfileInfoKHR<'_>,
     image_usage: vk::ImageUsageFlags,
-) -> Result<Vec<vk::VideoFormatPropertiesKHR<'a>>, VideoInitError> {
+) -> Result<Vec<vk::VideoFormatPropertiesKHR<'a>>, VulkanAdapterInitError> {
     let mut profile_list_info =
         vk::VideoProfileListInfoKHR::default().profiles(std::slice::from_ref(profile_info));
 
@@ -271,6 +271,7 @@ impl NativeEncodeH264Capabilities {
     }
 }
 
+// TODO: vulkan specific, move it to vulkan/ ?
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub(crate) struct NativeEncodeProfileCapabilities<C: CodecCapabilities> {
@@ -287,7 +288,7 @@ impl<C: CodecCapabilities> NativeEncodeProfileCapabilities<C> {
         instance: &Instance,
         device: vk::PhysicalDevice,
         profile: &vk::VideoProfileInfoKHR,
-    ) -> Result<Self, VideoInitError> {
+    ) -> Result<Self, VulkanAdapterInitError> {
         let encode_dpb_properties = query_video_format_properties(
             device,
             &instance.video_queue_instance_ext,
@@ -396,7 +397,7 @@ impl<C: CodecCapabilities> NativeEncodeQualityLevelProperties<C> {
         device: vk::PhysicalDevice,
         profile_info: &vk::VideoProfileInfoKHR<'_>,
         quality_level: u32,
-    ) -> Result<Self, VideoInitError> {
+    ) -> Result<Self, VulkanAdapterInitError> {
         let quality_level_info = vk::PhysicalDeviceVideoEncodeQualityLevelInfoKHR::default()
             .video_profile(profile_info)
             .quality_level(quality_level);
@@ -666,7 +667,7 @@ impl<C: CodecCapabilities> NativeDecodeProfileCapabilities<C> {
         instance: &Instance,
         device: vk::PhysicalDevice,
         profile: &vk::VideoProfileInfoKHR,
-    ) -> Result<Self, VideoInitError> {
+    ) -> Result<Self, VulkanAdapterInitError> {
         let mut codec_decode_caps = C::CodecSpecificDecodeCapabilities::default();
         let mut decode_caps = vk::VideoDecodeCapabilitiesKHR::default();
         let mut caps = vk::VideoCapabilitiesKHR::default()
@@ -733,7 +734,7 @@ impl<C: CodecCapabilities> NativeDecodeProfileCapabilities<C> {
             .find(|f| f.format == vk::Format::G8_B8R8_2PLANE_420_UNORM)
         {
             Some(f) => f,
-            None => return Err(VideoInitError::NoNV12ProfileSupport),
+            None => return Err(VulkanAdapterInitError::NoNV12ProfileSupport),
         };
 
         let dst_format_properties = match dst_format_properties {
@@ -742,7 +743,7 @@ impl<C: CodecCapabilities> NativeDecodeProfileCapabilities<C> {
                 .find(|f| f.format == vk::Format::G8_B8R8_2PLANE_420_UNORM)
             {
                 Some(f) => Some(f),
-                None => return Err(VideoInitError::NoNV12ProfileSupport),
+                None => return Err(VulkanAdapterInitError::NoNV12ProfileSupport),
             },
             None => None,
         };

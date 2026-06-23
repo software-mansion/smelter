@@ -2,7 +2,7 @@ use ash::vk;
 use std::fmt::{self, Debug};
 
 use crate::{
-    VideoInitError,
+    VideoDeviceInitError,
     capabilities::EncodeCapabilities,
     device::{VideoDeviceDescriptor, caps::DecodeCapabilities},
 };
@@ -19,7 +19,7 @@ pub trait VideoAdapterBackend {
     fn create_device(
         self: Box<Self>,
         desc: &VideoDeviceDescriptor,
-    ) -> Result<crate::VideoDevice, VideoInitError>;
+    ) -> Result<crate::VideoDevice, VideoDeviceInitError>;
 }
 
 /// Represents a handle to a physical device.
@@ -50,7 +50,7 @@ impl<'a> VideoAdapter<'a> {
     pub fn create_device(
         self,
         desc: &VideoDeviceDescriptor,
-    ) -> Result<crate::VideoDevice, VideoInitError> {
+    ) -> Result<crate::VideoDevice, VideoDeviceInitError> {
         self.adapter.create_device(desc)
     }
 }

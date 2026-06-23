@@ -150,24 +150,35 @@ pub enum VideoDecoderError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum VideoInitError {
-    #[error("Error loading vulkan: {0}")]
-    LoadingError(#[from] ash::LoadingError),
+#[error("{message}")]
+pub struct VideoBackendError {
+    pub message: String,
+    #[source]
+    pub source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
+}
 
+#[derive(thiserror::Error, Debug)]
+pub enum VideoDeviceInitError {
+    #[error("The chosen adapter is not suitable for a video device")]
+    NotSuitableAdapter,
+
+    #[error(transparent)]
+    BackendError(VideoBackendError)
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum VideoInstanceInitError {
+    #[error("Cannot find a suitable adapter")]
+    NoAdapter,
+
+    #[error(transparent)]
+    BackendError(VideoBackendError)
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum VulkanDeviceInitError {
     #[error("Vulkan error: {0}")]
     VkError(#[from] vk::Result),
-
-    #[error("Cannot find a suitable physical device")]
-    NoDevice,
-
-    #[error("Missing required extension: {0}")]
-    MissingExtension(String),
-
-    #[error("String conversion error: {0}")]
-    StringConversionError(#[from] std::ffi::FromBytesUntilNulError),
-
-    #[error("Profile does not support NV12 texture format")]
-    NoNV12ProfileSupport,
 
     #[cfg(feature = "wgpu")]
     #[error(transparent)]

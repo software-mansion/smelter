@@ -20,6 +20,7 @@ pub(crate) mod wgpu_helpers;
 #[cfg(vulkan)]
 pub(crate) mod wrappers;
 
+// TODO: make sure it's not vulkan specific
 #[cfg(vulkan)]
 mod prelude;
 #[cfg(vulkan)]

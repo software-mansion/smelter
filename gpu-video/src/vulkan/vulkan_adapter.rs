@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use tracing::{debug, debug_span, warn};
 
 use crate::{
-    VideoInitError,
+    VideoDeviceInitError,
     adapter::{VideoAdapterBackend, VideoAdapterInfo},
     device::{
         DECODE_CODEC_EXTENSIONS, DECODE_EXTENSIONS, ENCODE_CODEC_EXTENSIONS, ENCODE_EXTENSIONS,
@@ -309,8 +309,8 @@ impl VideoAdapterBackend for VulkanAdapter<'_> {
     fn create_device(
         self: Box<Self>,
         desc: &VideoDeviceDescriptor,
-    ) -> Result<crate::VideoDevice, VideoInitError> {
-        VideoDevice::create_and_register(*self, desc.clone())
+    ) -> Result<crate::VideoDevice, VideoDeviceInitError> {
+        VideoDevice::create_and_register(*self, desc.clone()).map_err(Into::into)
     }
 }
 
@@ -437,4 +437,13 @@ fn find_video_queue_idx(
     }
 
     None
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum VulkanAdapterInitError {
+    #[error("Vulkan error: {0}")]
+    VkError(#[from] vk::Result),
+
+    #[error("Profile does not support NV12 texture format")]
+    NoNV12ProfileSupport,
 }

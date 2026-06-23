@@ -19,7 +19,7 @@ use crate::parameters::{
 };
 use crate::vulkan::vulkan_encoder::FullEncoderParameters;
 
-use crate::{VideoEncoderError, VideoInitError, VulkanDecoderError, wrappers::*};
+use crate::{VideoEncoderError, VulkanDecoderError, VulkanDeviceInitError, wrappers::*};
 
 pub(crate) mod caps;
 pub(crate) mod queues;
@@ -272,7 +272,7 @@ impl VideoDevice {
     pub(crate) fn create_and_register(
         video_adapter: VulkanAdapter<'_>,
         _desc: VideoDeviceDescriptor,
-    ) -> Result<crate::VideoDevice, VideoInitError> {
+    ) -> Result<crate::VideoDevice, VulkanDeviceInitError> {
         let mut required_extensions = video_adapter.required_extensions();
         required_extensions.push(ash::khr::timeline_semaphore::NAME);
 
@@ -297,7 +297,7 @@ impl VideoDevice {
         wgpu_adapter: &wgpu::Adapter,
         video_adapter: VulkanAdapter<'_>,
         desc: VideoDeviceDescriptor,
-    ) -> Result<(wgpu::Device, wgpu::Queue), VideoInitError> {
+    ) -> Result<(wgpu::Device, wgpu::Queue), VulkanDeviceInitError> {
         use std::sync::OnceLock;
 
         use crate::{
@@ -396,7 +396,7 @@ impl VideoDevice {
         adapter: VulkanAdapter<'_>,
         required_extensions: &[&'static CStr],
         device_create_info: vk::DeviceCreateInfo<'_>,
-    ) -> Result<Arc<Self>, VideoInitError> {
+    ) -> Result<Arc<Self>, VulkanDeviceInitError> {
         let VulkanAdapter {
             instance,
             physical_device,

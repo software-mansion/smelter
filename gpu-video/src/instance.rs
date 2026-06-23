@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    VideoInitError,
+    VideoInstanceInitError,
     adapter::{VideoAdapter, VideoAdapterDescriptor},
     vulkan::vulkan_instance::VulkanInstance,
 };
@@ -19,14 +19,9 @@ pub struct VideoInstanceDescriptor {
 // TODO: What error type should VideoInstance (it can't contain vulkan/metal specific things?)
 // TODO: orginize things
 pub trait VideoInstanceBackend {
-    fn create_adapter<'a>(
-        &'a self,
-        desc: &VideoAdapterDescriptor,
-    ) -> Result<VideoAdapter<'a>, VideoInitError>;
-
     fn iter_adapters<'a>(
         &'a self,
-    ) -> Result<Box<dyn Iterator<Item = VideoAdapter<'a>> + 'a>, VideoInitError>;
+    ) -> Result<Box<dyn Iterator<Item = VideoAdapter<'a>> + 'a>, VideoInstanceInitError>;
 }
 
 /// Context for all encoders and decoders.
@@ -36,7 +31,7 @@ pub struct VideoInstance {
 }
 
 impl VideoInstance {
-    pub fn new(desc: &VideoInstanceDescriptor) -> Result<Self, VideoInitError> {
+    pub fn new(desc: &VideoInstanceDescriptor) -> Result<Self, VideoInstanceInitError> {
         #[cfg(vulkan)]
         let instance = VulkanInstance::new(desc)?;
 
@@ -49,19 +44,19 @@ impl VideoInstance {
     pub fn create_adapter<'a>(
         &'a self,
         descriptor: &VideoAdapterDescriptor,
-    ) -> Result<VideoAdapter<'a>, VideoInitError> {
+    ) -> Result<VideoAdapter<'a>, VideoInstanceInitError> {
         self.iter_adapters()?
             .find(|adapter| {
                 (!descriptor.supports_decoding || adapter.supports_decoding())
                     && (!descriptor.supports_encoding || adapter.supports_encoding())
             })
-            .ok_or(VideoInitError::NoDevice)
+            .ok_or(VideoInstanceInitError::NoAdapter)
     }
 
     /// Iterator over all available [`VideoAdapter`]s that support at least decoding or encoding.
     pub fn iter_adapters<'a>(
         &'a self,
-    ) -> Result<impl Iterator<Item = VideoAdapter<'a>>, VideoInitError> {
+    ) -> Result<impl Iterator<Item = VideoAdapter<'a>>, VideoInstanceInitError> {
         self.instance.iter_adapters()
     }
 }

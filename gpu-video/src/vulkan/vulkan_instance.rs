@@ -3,8 +3,8 @@ use std::{ffi::CStr, sync::Arc};
 use ash::{Entry, vk};
 
 use crate::{
-    VideoInitError,
-    adapter::{VideoAdapter, VideoAdapterDescriptor},
+    VideoBackendError, VideoInstanceInitError,
+    adapter::VideoAdapter,
     instance::{VideoInstanceBackend, VideoInstanceDescriptor},
     vulkan::vulkan_adapter::VulkanAdapter,
     wrappers::*,
@@ -17,22 +17,14 @@ pub struct VulkanInstance {
 }
 
 impl VideoInstanceBackend for VulkanInstance {
-    fn create_adapter<'a>(
-        &'a self,
-        descriptor: &VideoAdapterDescriptor,
-    ) -> Result<VideoAdapter<'a>, VideoInitError> {
-        self.iter_adapters()?
-            .find(|adapter| {
-                (!descriptor.supports_decoding || adapter.supports_decoding())
-                    && (!descriptor.supports_encoding || adapter.supports_encoding())
-            })
-            .ok_or(VideoInitError::NoDevice)
-    }
-
     fn iter_adapters<'a>(
         &'a self,
-    ) -> Result<Box<dyn Iterator<Item = VideoAdapter<'a>> + 'a>, VideoInitError> {
-        let physical_devices = unsafe { self.instance.enumerate_physical_devices()? };
+    ) -> Result<Box<dyn Iterator<Item = VideoAdapter<'a>> + 'a>, VideoInstanceInitError> {
+        let physical_devices = unsafe {
+            self.instance
+                .enumerate_physical_devices()
+                .map_err(VulkanInstanceInitError::VkError)?
+        };
         Ok(Box::new(physical_devices.into_iter().filter_map(
             move |device| VulkanAdapter::new(self, device).map(VideoAdapter::from_backend),
         )))
@@ -40,7 +32,7 @@ impl VideoInstanceBackend for VulkanInstance {
 }
 
 impl VulkanInstance {
-    pub(crate) fn new(desc: &VideoInstanceDescriptor) -> Result<Self, VideoInitError> {
+    pub(crate) fn new(desc: &VideoInstanceDescriptor) -> Result<Self, VulkanInstanceInitError> {
         let entry = unsafe { Entry::load()? };
         Self::new_from_entry(entry, &mut Vec::new(), desc)
     }
@@ -49,7 +41,7 @@ impl VulkanInstance {
         entry: Entry,
         extensions: &mut Vec<&'static CStr>,
         desc: &VideoInstanceDescriptor,
-    ) -> Result<Self, VideoInitError> {
+    ) -> Result<Self, VulkanInstanceInitError> {
         let api_version = vk::make_api_version(0, 1, 3, 0);
         let app_info = vk::ApplicationInfo {
             api_version,
@@ -68,7 +60,8 @@ impl VulkanInstance {
         let instance_layer_names = instance_layer_properties
             .iter()
             .map(|layer| layer.layer_name_as_c_str())
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(VulkanInstanceInitError::InvalidLayerName)?;
 
         let layers = requested_layers
             .into_iter()
@@ -134,5 +127,29 @@ impl VulkanInstance {
 
     pub fn raw_instance(&self) -> ash::Instance {
         self.instance.instance.clone()
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum VulkanInstanceInitError {
+    #[error("Error loading vulkan: {0}")]
+    LoadingError(#[from] ash::LoadingError),
+
+    #[error("Vulkan error: {0}")]
+    VkError(#[from] vk::Result),
+
+    #[error("Missing required extension: {0}")]
+    MissingExtension(String),
+
+    #[error("Invalid layer name: {0}")]
+    InvalidLayerName(#[source] std::ffi::FromBytesUntilNulError),
+}
+
+impl From<VulkanInstanceInitError> for VideoInstanceInitError {
+    fn from(err: VulkanInstanceInitError) -> Self {
+        Self::BackendError(VideoBackendError {
+            message: err.to_string(),
+            source: Some(Box::new(err)),
+        })
     }
 }
