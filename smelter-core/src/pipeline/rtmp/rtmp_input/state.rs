@@ -6,7 +6,7 @@ use std::{
 
 use tracing::error;
 
-use crate::{queue::WeakQueueInput, utils::auth_token::validate_token};
+use crate::{queue::WeakQueueInput, utils::authentication::validate_token};
 
 use crate::prelude::*;
 

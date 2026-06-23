@@ -4,7 +4,7 @@ use axum::http::HeaderValue;
 use rand::RngCore;
 use tracing::error;
 
-use crate::pipeline::{utils::auth_token::validate_token, webrtc::error::WhipWhepServerError};
+use crate::pipeline::{utils::authentication::validate_token, webrtc::error::WhipWhepServerError};
 
 pub(super) fn generate_token() -> Arc<str> {
     let mut bytes = [0u8; 16];
