@@ -8,8 +8,7 @@ pub(super) struct FfmpegOptions(HashMap<String, String>);
 impl FfmpegOptions {
     pub fn append<T: AsRef<str>>(&mut self, options: &[(T, T)]) {
         for (key, value) in options {
-            self.0
-                .insert(key.as_ref().to_string(), value.as_ref().to_string());
+            self.0.insert(key.as_ref().to_string(), value.as_ref().to_string());
         }
     }
 

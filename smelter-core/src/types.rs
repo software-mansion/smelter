@@ -48,11 +48,13 @@ impl AudioSamples {
             // Options below are clearly errors, but I think it's better to just
             // handle it.
             (AudioSamples::Mono(first), AudioSamples::Stereo(second)) => {
-                let mut second_mono = second.into_iter().map(|(l, r)| (l + r) / 2.0).collect();
+                let mut second_mono =
+                    second.into_iter().map(|(l, r)| (l + r) / 2.0).collect();
                 first.append(&mut second_mono);
             }
             (AudioSamples::Stereo(first), AudioSamples::Mono(second)) => {
-                let mut second_stereo = second.into_iter().map(|value| (value, value)).collect();
+                let mut second_stereo =
+                    second.into_iter().map(|value| (value, value)).collect();
                 first.append(&mut second_stereo);
             }
         }

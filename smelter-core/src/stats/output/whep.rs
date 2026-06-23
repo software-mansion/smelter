@@ -19,10 +19,7 @@ use super::OutputStatsEvent;
 pub(crate) enum WhepOutputStatsEvent {
     Video(WhepOutputTrackStatsEvent),
     Audio(WhepOutputTrackStatsEvent),
-    PeerStateChanged {
-        session_id: Arc<str>,
-        state: RTCPeerConnectionState,
-    },
+    PeerStateChanged { session_id: Arc<str>, state: RTCPeerConnectionState },
 }
 
 impl WhepOutputStatsEvent {
@@ -46,8 +43,12 @@ impl WhepOutputTrackStatsEvent {
         track_kind: StatsTrackKind,
     ) -> StatsEvent {
         match track_kind {
-            StatsTrackKind::Video => WhepOutputStatsEvent::Video(self).into_event(output_ref),
-            StatsTrackKind::Audio => WhepOutputStatsEvent::Audio(self).into_event(output_ref),
+            StatsTrackKind::Video => {
+                WhepOutputStatsEvent::Video(self).into_event(output_ref)
+            }
+            StatsTrackKind::Audio => {
+                WhepOutputStatsEvent::Audio(self).into_event(output_ref)
+            }
         }
     }
 }
@@ -90,8 +91,12 @@ impl WhepOutputState {
 
     pub fn handle_event(&mut self, event: WhepOutputStatsEvent) {
         match event {
-            WhepOutputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
-            WhepOutputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+            WhepOutputStatsEvent::Video(track_event) => {
+                self.video.handle_event(track_event)
+            }
+            WhepOutputStatsEvent::Audio(track_event) => {
+                self.audio.handle_event(track_event)
+            }
             WhepOutputStatsEvent::PeerStateChanged { session_id, state } => match state {
                 RTCPeerConnectionState::Closed => {
                     self.peers.remove(&session_id);
@@ -114,9 +119,11 @@ impl WhepOutputTrackState {
 
     pub fn report(&mut self) -> WhepOutputTrackStatsReport {
         WhepOutputTrackStatsReport {
-            bitrate_1_second: self.bitrate_1_sec.sum() / self.bitrate_1_sec.window_size().as_secs(),
+            bitrate_1_second: self.bitrate_1_sec.sum()
+                / self.bitrate_1_sec.window_size().as_secs(),
 
-            bitrate_1_minute: self.bitrate_1_min.sum() / self.bitrate_1_min.window_size().as_secs(),
+            bitrate_1_minute: self.bitrate_1_min.sum()
+                / self.bitrate_1_min.window_size().as_secs(),
         }
     }
 

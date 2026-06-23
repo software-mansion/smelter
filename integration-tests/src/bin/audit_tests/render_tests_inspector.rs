@@ -35,7 +35,11 @@ pub(crate) fn open(expected: &Path, actual: &Path) -> Result<FrameInspector> {
 /// inspector. Returns `true` if the update reached the window,
 /// `false` if the window was already closed or the images could not
 /// be loaded.
-pub(crate) fn refresh(inspector: &FrameInspector, expected: &Path, actual: &Path) -> bool {
+pub(crate) fn refresh(
+    inspector: &FrameInspector,
+    expected: &Path,
+    actual: &Path,
+) -> bool {
     match load_pair(expected, actual) {
         Ok(pair) => inspector.update(pair),
         Err(e) => {
@@ -121,22 +125,18 @@ fn load_optional(path: &Path, side: &str) -> Result<Option<Image>> {
         .with_context(|| format!("Failed to open {}", path.display()))?
         .to_rgba8();
     let (w, h) = img.dimensions();
-    Ok(Some(Image {
-        rgba: img.into_raw(),
-        width: w as usize,
-        height: h as usize,
-    }))
+    Ok(Some(Image { rgba: img.into_raw(), width: w as usize, height: h as usize }))
 }
 
 /// Pick canvas dimensions for each side. When one side is missing, the
 /// placeholder takes the other side's dimensions so the layout looks
 /// balanced.
-fn pick_dimensions(left: &Option<Image>, right: &Option<Image>) -> (usize, usize, usize, usize) {
+fn pick_dimensions(
+    left: &Option<Image>,
+    right: &Option<Image>,
+) -> (usize, usize, usize, usize) {
     let (lw, lh) = left.as_ref().map(|i| (i.width, i.height)).unwrap_or((0, 0));
-    let (rw, rh) = right
-        .as_ref()
-        .map(|i| (i.width, i.height))
-        .unwrap_or((0, 0));
+    let (rw, rh) = right.as_ref().map(|i| (i.width, i.height)).unwrap_or((0, 0));
     let fallback_w = lw.max(rw).max(1);
     let fallback_h = lh.max(rh).max(1);
     (
@@ -152,11 +152,7 @@ fn black_image(width: usize, height: usize) -> Image {
     for px in rgba.chunks_exact_mut(4) {
         px[3] = 255;
     }
-    Image {
-        rgba,
-        width,
-        height,
-    }
+    Image { rgba, width, height }
 }
 
 /// Per-channel MSE matching the metric used by the render-test harness

@@ -52,10 +52,18 @@ impl TryFrom<WhepInput> for core::RegisterInputOptions {
 impl From<WhepVideoDecoderOptions> for core::WebrtcVideoDecoderOptions {
     fn from(decoder: WhepVideoDecoderOptions) -> Self {
         match decoder {
-            WhepVideoDecoderOptions::FfmpegH264 => core::WebrtcVideoDecoderOptions::FfmpegH264,
-            WhepVideoDecoderOptions::FfmpegVp8 => core::WebrtcVideoDecoderOptions::FfmpegVp8,
-            WhepVideoDecoderOptions::FfmpegVp9 => core::WebrtcVideoDecoderOptions::FfmpegVp9,
-            WhepVideoDecoderOptions::VulkanH264 => core::WebrtcVideoDecoderOptions::VulkanH264,
+            WhepVideoDecoderOptions::FfmpegH264 => {
+                core::WebrtcVideoDecoderOptions::FfmpegH264
+            }
+            WhepVideoDecoderOptions::FfmpegVp8 => {
+                core::WebrtcVideoDecoderOptions::FfmpegVp8
+            }
+            WhepVideoDecoderOptions::FfmpegVp9 => {
+                core::WebrtcVideoDecoderOptions::FfmpegVp9
+            }
+            WhepVideoDecoderOptions::VulkanH264 => {
+                core::WebrtcVideoDecoderOptions::VulkanH264
+            }
             WhepVideoDecoderOptions::Any => core::WebrtcVideoDecoderOptions::Any,
         }
     }

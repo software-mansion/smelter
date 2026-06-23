@@ -10,8 +10,9 @@ fn main() {
     use gpu_video::{
         EncodedInputChunk, VulkanInstance,
         parameters::{
-            AnyEncoderParameters, RateControl, ScalingAlgorithm, TranscoderOutputParameters,
-            TranscoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+            AnyEncoderParameters, RateControl, ScalingAlgorithm,
+            TranscoderOutputParameters, TranscoderParameters, VulkanAdapterDescriptor,
+            VulkanDeviceDescriptor,
         },
     };
 
@@ -19,7 +20,8 @@ fn main() {
         .with_max_level(tracing::Level::INFO)
         .finish();
 
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to initialize tracing");
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Failed to initialize tracing");
 
     let args = std::env::args().collect::<Vec<_>>();
     if args.len() < 4 || args.len() > 5 {
@@ -46,12 +48,8 @@ fn main() {
     };
 
     let instance = VulkanInstance::new().unwrap();
-    let adapter = instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
-        .unwrap();
-    let device = adapter
-        .create_device(&VulkanDeviceDescriptor::default())
-        .unwrap();
+    let adapter = instance.create_adapter(&VulkanAdapterDescriptor::default()).unwrap();
+    let device = adapter.create_device(&VulkanDeviceDescriptor::default()).unwrap();
 
     let average_bitrate = 1_000_000;
     let max_bitrate = 1_200_000;
@@ -100,10 +98,7 @@ fn main() {
     while let Ok(n) = input_file.read(&mut buffer)
         && n > 0
     {
-        let input = EncodedInputChunk {
-            data: &buffer[..n],
-            pts: None,
-        };
+        let input = EncodedInputChunk { data: &buffer[..n], pts: None };
         let output = transcoder.transcode(input).unwrap();
 
         for output in output {
@@ -121,7 +116,9 @@ fn main() {
 
 #[cfg(vulkan)]
 fn print_usage_and_exit(executable_name: &str) -> ! {
-    eprintln!("usage: {executable_name} INPUT OUT_WIDTH OUT_HEIGHT [nearest|bilinear|lanczos3]");
+    eprintln!(
+        "usage: {executable_name} INPUT OUT_WIDTH OUT_HEIGHT [nearest|bilinear|lanczos3]"
+    );
     std::process::exit(1);
 }
 

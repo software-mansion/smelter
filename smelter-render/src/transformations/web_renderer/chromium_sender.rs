@@ -8,7 +8,8 @@ use crossbeam_channel::{Receiver, Sender};
 use tracing::error;
 
 use super::{
-    WebRendererSpec, browser_client::BrowserClient, chromium_sender_thread::ChromiumSenderThread,
+    WebRendererSpec, browser_client::BrowserClient,
+    chromium_sender_thread::ChromiumSenderThread,
 };
 
 #[derive(Debug)]
@@ -46,10 +47,7 @@ impl ChromiumSender {
         )
         .spawn();
 
-        Self {
-            message_sender,
-            unmap_signal_receiver,
-        }
+        Self { message_sender, unmap_signal_receiver }
     }
 
     pub fn embed_sources(
@@ -59,10 +57,7 @@ impl ChromiumSender {
     ) -> Result<(), ChromiumSenderError> {
         let resolutions = sources.iter().map(|texture| texture.resolution()).collect();
         self.message_sender
-            .send(ChromiumSenderMessage::EmbedSources {
-                resolutions,
-                children_ids,
-            })
+            .send(ChromiumSenderMessage::EmbedSources { resolutions, children_ids })
             .map_err(|_| ChromiumSenderError::MessageChannelDisconnected)
     }
 
@@ -82,11 +77,7 @@ impl ChromiumSender {
         buffer: Arc<wgpu::Buffer>,
         size: wgpu::Extent3d,
     ) -> Result<(), ChromiumSenderError> {
-        let info = UpdateSharedMemoryInfo {
-            source_idx,
-            buffer,
-            size,
-        };
+        let info = UpdateSharedMemoryInfo { source_idx, buffer, size };
 
         self.message_sender
             .send(ChromiumSenderMessage::UpdateSharedMemory(info))
@@ -109,17 +100,10 @@ impl ChromiumSender {
 }
 
 pub(super) enum ChromiumSenderMessage {
-    EmbedSources {
-        resolutions: Vec<Option<Resolution>>,
-        children_ids: Vec<ComponentId>,
-    },
-    EnsureSharedMemory {
-        resolutions: Vec<Option<Resolution>>,
-    },
+    EmbedSources { resolutions: Vec<Option<Resolution>>, children_ids: Vec<ComponentId> },
+    EnsureSharedMemory { resolutions: Vec<Option<Resolution>> },
     UpdateSharedMemory(UpdateSharedMemoryInfo),
-    GetFramePositions {
-        children_ids: Vec<ComponentId>,
-    },
+    GetFramePositions { children_ids: Vec<ComponentId> },
     Quit,
 }
 

@@ -4,8 +4,9 @@ use crate::{
 };
 
 use super::{
-    V8Function, V8GenericValue, V8Null, V8Undefined, array::V8Array, array_buffer::V8ArrayBuffer,
-    bool::V8Bool, numbers::*, object::V8Object, string::V8String,
+    V8Function, V8GenericValue, V8Null, V8Undefined, array::V8Array,
+    array_buffer::V8ArrayBuffer, bool::V8Bool, numbers::*, object::V8Object,
+    string::V8String,
 };
 
 /// Represents JavaScript values
@@ -95,7 +96,9 @@ impl V8Value {
     }
 
     /// Returns a raw pointer to the V8Value without incrementing the reference count
-    pub(crate) fn get_raw_weak(&self) -> Result<*mut libcef_sys::cef_v8value_t, V8ValueError> {
+    pub(crate) fn get_raw_weak(
+        &self,
+    ) -> Result<*mut libcef_sys::cef_v8value_t, V8ValueError> {
         let raw_value = match self {
             V8Value::Undefined(V8Undefined(v)) => v.get_weak_with_validation()?,
             V8Value::Null(V8Null(v)) => v.get_weak_with_validation()?,

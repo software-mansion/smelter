@@ -19,11 +19,7 @@ pub struct VideoQueue {
 
 impl VideoQueue {
     pub fn new(sync_point: Instant, ahead_of_time_processing: bool) -> Self {
-        VideoQueue {
-            inputs: HashMap::new(),
-            sync_point,
-            ahead_of_time_processing,
-        }
+        VideoQueue { inputs: HashMap::new(), sync_point, ahead_of_time_processing }
     }
 
     pub fn add_input(&mut self, input_id: &InputId, weak: WeakQueueInput) {
@@ -53,11 +49,7 @@ impl VideoQueue {
             })
             .collect();
 
-        QueueVideoOutput {
-            frames,
-            required,
-            pts: buffer_pts,
-        }
+        QueueVideoOutput { frames, required, pts: buffer_pts }
     }
 
     pub(super) fn should_push_next_frameset(

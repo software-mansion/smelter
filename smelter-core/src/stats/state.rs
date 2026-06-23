@@ -14,22 +14,10 @@ pub(crate) struct StatsState {
 
 #[derive(Debug, Clone)]
 pub(crate) enum StatsEvent {
-    Input {
-        input_ref: Ref<InputId>,
-        event: InputStatsEvent,
-    },
-    NewInput {
-        input_ref: Ref<InputId>,
-        kind: InputProtocolKind,
-    },
-    Output {
-        output_ref: Ref<OutputId>,
-        event: OutputStatsEvent,
-    },
-    NewOutput {
-        output_ref: Ref<OutputId>,
-        kind: OutputProtocolKind,
-    },
+    Input { input_ref: Ref<InputId>, event: InputStatsEvent },
+    NewInput { input_ref: Ref<InputId>, kind: InputProtocolKind },
+    Output { output_ref: Ref<OutputId>, event: OutputStatsEvent },
+    NewOutput { output_ref: Ref<OutputId>, kind: OutputProtocolKind },
 }
 
 impl IntoIterator for StatsEvent {
@@ -43,10 +31,7 @@ impl IntoIterator for StatsEvent {
 
 impl StatsState {
     pub fn new() -> Self {
-        Self {
-            inputs: HashMap::new(),
-            outputs: HashMap::new(),
-        }
+        Self { inputs: HashMap::new(), outputs: HashMap::new() }
     }
 
     pub fn handle_event(&mut self, event: StatsEvent) {
@@ -64,8 +49,7 @@ impl StatsState {
                 }
             }
             StatsEvent::NewInput { input_ref, kind } => {
-                self.inputs
-                    .insert(input_ref, (now, InputStatsState::new(kind)));
+                self.inputs.insert(input_ref, (now, InputStatsState::new(kind)));
             }
             StatsEvent::Output { output_ref, event } => {
                 if !self.outputs.contains_key(&output_ref) {
@@ -79,8 +63,7 @@ impl StatsState {
                 }
             }
             StatsEvent::NewOutput { output_ref, kind } => {
-                self.outputs
-                    .insert(output_ref, (now, OutputStatsState::new(kind)));
+                self.outputs.insert(output_ref, (now, OutputStatsState::new(kind)));
             }
         }
 

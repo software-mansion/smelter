@@ -44,7 +44,9 @@ impl<T: TimedValue> Inner<T> {
     }
 }
 
-pub(crate) fn duration_bounded<T: TimedValue>(capacity: Duration) -> (Sender<T>, Receiver<T>) {
+pub(crate) fn duration_bounded<T: TimedValue>(
+    capacity: Duration,
+) -> (Sender<T>, Receiver<T>) {
     let shared = Arc::new(Shared {
         inner: Mutex::new(Inner {
             buffer: VecDeque::new(),
@@ -55,12 +57,7 @@ pub(crate) fn duration_bounded<T: TimedValue>(capacity: Duration) -> (Sender<T>,
         not_empty: Condvar::new(),
         not_full: Condvar::new(),
     });
-    (
-        Sender {
-            shared: shared.clone(),
-        },
-        Receiver { shared },
-    )
+    (Sender { shared: shared.clone() }, Receiver { shared })
 }
 
 // ── Sender ──────────────────────────────────────────────────────────
@@ -116,7 +113,11 @@ impl<T: TimedValue> Sender<T> {
     }
 
     /// Blocks until there is room, the receiver is dropped, or the timeout elapses.
-    pub fn send_timeout(&self, item: T, timeout: Duration) -> Result<(), SendTimeoutError<T>> {
+    pub fn send_timeout(
+        &self,
+        item: T,
+        timeout: Duration,
+    ) -> Result<(), SendTimeoutError<T>> {
         let deadline = Instant::now() + timeout;
         let mut guard = self.shared.inner.lock().unwrap();
         loop {
@@ -157,9 +158,7 @@ impl<T: TimedValue> Sender<T> {
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Self {
         self.shared.inner.lock().unwrap().sender_count += 1;
-        Self {
-            shared: self.shared.clone(),
-        }
+        Self { shared: self.shared.clone() }
     }
 }
 

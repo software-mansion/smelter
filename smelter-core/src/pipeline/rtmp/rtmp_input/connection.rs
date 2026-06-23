@@ -1,7 +1,8 @@
 use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
 use rtmp::{
-    AudioConfig, AudioData, RtmpAudioCodec, RtmpEvent, RtmpVideoCodec, VideoConfig, VideoData,
+    AudioConfig, AudioData, RtmpAudioCodec, RtmpEvent, RtmpVideoCodec, VideoConfig,
+    VideoData,
 };
 use smelter_render::{InputId, error::ErrorStack};
 use tracing::{Level, info, span, warn};
@@ -148,7 +149,10 @@ struct RtmpConnectionState {
 }
 
 impl RtmpConnectionState {
-    fn handle_rtmp_event(&mut self, rtmp_event: RtmpEvent) -> Result<(), RtmpConnectionError> {
+    fn handle_rtmp_event(
+        &mut self,
+        rtmp_event: RtmpEvent,
+    ) -> Result<(), RtmpConnectionError> {
         match rtmp_event {
             RtmpEvent::VideoConfig(config) => self.process_video_config(config)?,
             RtmpEvent::AudioConfig(config) => self.process_audio_config(config)?,
@@ -166,7 +170,10 @@ impl RtmpConnectionState {
         Ok(())
     }
 
-    fn process_video_config(&mut self, config: VideoConfig) -> Result<(), RtmpConnectionError> {
+    fn process_video_config(
+        &mut self,
+        config: VideoConfig,
+    ) -> Result<(), RtmpConnectionError> {
         let Some(frame_sender) = self.video_sender.take() else {
             return Err(RtmpConnectionError::ReceivedSecondVideoTrack);
         };
@@ -200,34 +207,41 @@ impl RtmpConnectionState {
 
         let input_ref = self.input_ref.clone();
         let handle = match decoder_opt {
-            VideoDecoderOptions::FfmpegH264 => {
-                VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitVideoDecoder)?
-            }
-            VideoDecoderOptions::VulkanH264 => {
-                VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitVideoDecoder)?
-            }
+            VideoDecoderOptions::FfmpegH264 => VideoDecoderThread::<
+                ffmpeg_h264::FfmpegH264Decoder,
+                _,
+            >::spawn(input_ref, options)
+            .map_err(RtmpConnectionError::InitVideoDecoder)?,
+            VideoDecoderOptions::VulkanH264 => VideoDecoderThread::<
+                vulkan_h264::VulkanH264Decoder,
+                _,
+            >::spawn(input_ref, options)
+            .map_err(RtmpConnectionError::InitVideoDecoder)?,
             VideoDecoderOptions::QuickSyncH264 => VideoDecoderThread::<
                 quicksync_h264::QuickSyncH264Decoder,
                 _,
             >::spawn(input_ref, options)
             .map_err(RtmpConnectionError::InitVideoDecoder)?,
-            VideoDecoderOptions::FfmpegVp8 => {
-                VideoDecoderThread::<ffmpeg_vp8::FfmpegVp8Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitVideoDecoder)?
-            }
-            VideoDecoderOptions::FfmpegVp9 => {
-                VideoDecoderThread::<ffmpeg_vp9::FfmpegVp9Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitVideoDecoder)?
-            }
+            VideoDecoderOptions::FfmpegVp8 => VideoDecoderThread::<
+                ffmpeg_vp8::FfmpegVp8Decoder,
+                _,
+            >::spawn(input_ref, options)
+            .map_err(RtmpConnectionError::InitVideoDecoder)?,
+            VideoDecoderOptions::FfmpegVp9 => VideoDecoderThread::<
+                ffmpeg_vp9::FfmpegVp9Decoder,
+                _,
+            >::spawn(input_ref, options)
+            .map_err(RtmpConnectionError::InitVideoDecoder)?,
         };
 
         self.video_track_state = TrackState::Ready(handle);
         Ok(())
     }
 
-    fn process_audio_config(&mut self, config: AudioConfig) -> Result<(), RtmpConnectionError> {
+    fn process_audio_config(
+        &mut self,
+        config: AudioConfig,
+    ) -> Result<(), RtmpConnectionError> {
         let Some(samples_sender) = self.audio_sender.take() else {
             return Err(RtmpConnectionError::ReceivedSecondAudioTrack);
         };

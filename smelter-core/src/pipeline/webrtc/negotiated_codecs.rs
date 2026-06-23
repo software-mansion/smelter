@@ -45,12 +45,11 @@ fn h264_decoder_info(
         VideoDecoderOptions::VulkanH264,
         VideoDecoderOptions::FfmpegH264,
     ];
-    let preferred_decoder = *video_preferences
-        .iter()
-        .find(|option| H264_OPTIONS.contains(option))?;
-    let h264_negotiated = track_codecs
-        .iter()
-        .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase());
+    let preferred_decoder =
+        *video_preferences.iter().find(|option| H264_OPTIONS.contains(option))?;
+    let h264_negotiated = track_codecs.iter().any(|codec| {
+        codec.capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase()
+    });
 
     h264_negotiated.then_some(preferred_decoder)
 }
@@ -62,9 +61,9 @@ fn vp8_decoder_info(
     let preferred_decoder = *video_preferences
         .iter()
         .find(|option| &&VideoDecoderOptions::FfmpegVp8 == option)?;
-    let vp8_negotiated = track_codecs
-        .iter()
-        .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase());
+    let vp8_negotiated = track_codecs.iter().any(|codec| {
+        codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase()
+    });
 
     vp8_negotiated.then_some(preferred_decoder)
 }
@@ -76,9 +75,9 @@ fn vp9_decoder_info(
     let preferred_decoder = *video_preferences
         .iter()
         .find(|option| &&VideoDecoderOptions::FfmpegVp9 == option)?;
-    let vp9_negotiated = track_codecs
-        .iter()
-        .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP9.to_lowercase());
+    let vp9_negotiated = track_codecs.iter().any(|codec| {
+        codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP9.to_lowercase()
+    });
 
     vp9_negotiated.then_some(preferred_decoder)
 }
@@ -101,30 +100,42 @@ impl WebrtcVideoPayloadTypeMapping for VideoPayloadTypeMapping {
     }
 }
 
-fn h264_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<PayloadType>> {
+fn h264_payload_type_info(
+    track_codecs: &[RTCRtpCodecParameters],
+) -> Option<Vec<PayloadType>> {
     let payload_types: Vec<PayloadType> = track_codecs
         .iter()
-        .filter(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase())
+        .filter(|codec| {
+            codec.capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase()
+        })
         .map(|codec| codec.payload_type)
         .collect();
 
     (!payload_types.is_empty()).then_some(payload_types)
 }
 
-fn vp8_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<PayloadType>> {
+fn vp8_payload_type_info(
+    track_codecs: &[RTCRtpCodecParameters],
+) -> Option<Vec<PayloadType>> {
     let payload_types: Vec<PayloadType> = track_codecs
         .iter()
-        .filter(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase())
+        .filter(|codec| {
+            codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase()
+        })
         .map(|codec| codec.payload_type)
         .collect();
 
     (!payload_types.is_empty()).then_some(payload_types)
 }
 
-fn vp9_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<PayloadType>> {
+fn vp9_payload_type_info(
+    track_codecs: &[RTCRtpCodecParameters],
+) -> Option<Vec<PayloadType>> {
     let payload_types: Vec<PayloadType> = track_codecs
         .iter()
-        .filter(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP9.to_lowercase())
+        .filter(|codec| {
+            codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP9.to_lowercase()
+        })
         .map(|codec| codec.payload_type)
         .collect();
 
@@ -133,7 +144,7 @@ fn vp9_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<P
 
 pub async fn audio_codec_negotiated(receiver: &Arc<RTCRtpReceiver>) -> bool {
     let track_codecs = receiver.get_parameters().await.codecs;
-    track_codecs
-        .iter()
-        .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase())
+    track_codecs.iter().any(|codec| {
+        codec.capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase()
+    })
 }

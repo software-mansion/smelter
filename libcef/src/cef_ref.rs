@@ -12,7 +12,9 @@ pub(crate) trait CefStruct {
 
     fn new_cef_data() -> Self::CefType;
 
-    fn base_from_cef_data(cef_data: &mut Self::CefType) -> &mut libcef_sys::cef_base_ref_counted_t;
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut libcef_sys::cef_base_ref_counted_t;
 }
 
 /// Each CEF struct with ref counting capability has a base struct as a first field,
@@ -60,11 +62,7 @@ impl<T: CefStruct> CefRefData<T> {
             has_at_least_one_ref: Some(Self::has_at_least_one_ref),
         };
 
-        let cef_ref = Self {
-            cef_data,
-            rust_data: data,
-            ref_count: AtomicUsize::new(1),
-        };
+        let cef_ref = Self { cef_data, rust_data: data, ref_count: AtomicUsize::new(1) };
 
         Box::into_raw(Box::new(cef_ref)) as *mut T::CefType
     }
@@ -79,7 +77,9 @@ impl<T: CefStruct> CefRefData<T> {
     /// # Safety
     ///
     /// Can be only used on data that is not null and was initialzed by `CefRefData::new`
-    unsafe fn from_base<'a>(base: *mut libcef_sys::cef_base_ref_counted_t) -> &'a mut Self {
+    unsafe fn from_base<'a>(
+        base: *mut libcef_sys::cef_base_ref_counted_t,
+    ) -> &'a mut Self {
         unsafe { &mut *(base as *mut Self) }
     }
 
@@ -124,7 +124,9 @@ impl<T: CefStruct> CefRefData<T> {
         is_one_ref as c_int
     }
 
-    extern "C" fn has_at_least_one_ref(base: *mut libcef_sys::cef_base_ref_counted_t) -> c_int {
+    extern "C" fn has_at_least_one_ref(
+        base: *mut libcef_sys::cef_base_ref_counted_t,
+    ) -> c_int {
         let self_ref = unsafe { Self::from_base(base) };
         // We don't really know what CEF uses it for internally so for safety we use `Ordering::Acquire`
         let has_any_refs = (self_ref.ref_count.load(Ordering::Acquire)) >= 1;

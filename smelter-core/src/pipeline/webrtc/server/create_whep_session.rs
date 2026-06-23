@@ -66,14 +66,7 @@ pub async fn handle_create_whep_session(
         (Some(encoder), Some(receiver)) => {
             let (track, sender, ssrc) = peer_connection.new_video_track(encoder).await?;
             let payloader = init_video_payloader(encoder, ssrc);
-            (
-                Some(MediaStream {
-                    receiver,
-                    track,
-                    payloader,
-                }),
-                Some(sender),
-            )
+            (Some(MediaStream { receiver, track, payloader }), Some(sender))
         }
         _ => (None, None),
     };
@@ -82,19 +75,13 @@ pub async fn handle_create_whep_session(
         (Some(encoder), Some(receiver)) => {
             let (track, sender, ssrc) = peer_connection.new_audio_track(encoder).await?;
             let payloader = init_audio_payloader(ssrc);
-            (
-                Some(MediaStream {
-                    receiver,
-                    track,
-                    payloader,
-                }),
-                Some(sender),
-            )
+            (Some(MediaStream { receiver, track, payloader }), Some(sender))
         }
         _ => (None, None),
     };
 
-    let pc_state_hdlr = ConnectionStateChangeHdlr::new(&ctx, &output_ref, &session_id, &outputs);
+    let pc_state_hdlr =
+        ConnectionStateChangeHdlr::new(&ctx, &output_ref, &session_id, &outputs);
     peer_connection.on_connection_state_change(pc_state_hdlr);
 
     let sdp_answer = peer_connection
@@ -102,7 +89,9 @@ pub async fn handle_create_whep_session(
         .await?;
     debug!("SDP answer: {}", sdp_answer.sdp);
 
-    if let (Some(sender), Some(keyframe_request_sender)) = (video_sender, keyframe_request_sender) {
+    if let (Some(sender), Some(keyframe_request_sender)) =
+        (video_sender, keyframe_request_sender)
+    {
         handle_keyframe_requests(&ctx.clone(), sender, keyframe_request_sender);
     }
 

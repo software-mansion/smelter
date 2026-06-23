@@ -5,12 +5,7 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
     fn try_from(value: RtmpInput) -> Result<Self, Self::Error> {
-        let RtmpInput {
-            stream_key,
-            required,
-            decoder_map,
-            side_channel,
-        } = value;
+        let RtmpInput { stream_key, required, decoder_map, side_channel } = value;
 
         let side_channel = side_channel.unwrap_or_default();
         let side_channel_delay = side_channel.delay()?;
@@ -19,8 +14,12 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             .as_ref()
             .and_then(|decoders| decoders.get(&InputRtmpCodec::H264))
             .map(|decoder| match decoder {
-                RtmpVideoDecoderOptions::FfmpegH264 => Ok(core::VideoDecoderOptions::FfmpegH264),
-                RtmpVideoDecoderOptions::VulkanH264 => Ok(core::VideoDecoderOptions::VulkanH264),
+                RtmpVideoDecoderOptions::FfmpegH264 => {
+                    Ok(core::VideoDecoderOptions::FfmpegH264)
+                }
+                RtmpVideoDecoderOptions::VulkanH264 => {
+                    Ok(core::VideoDecoderOptions::VulkanH264)
+                }
             })
             .transpose()?;
 

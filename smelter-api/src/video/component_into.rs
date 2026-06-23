@@ -26,10 +26,7 @@ impl TryFrom<Component> for scene::Component {
 
 impl From<InputStream> for scene::InputStreamComponent {
     fn from(input: InputStream) -> Self {
-        Self {
-            id: input.id.map(Into::into),
-            input_id: input.input_id.into(),
-        }
+        Self { id: input.id.map(Into::into), input_id: input.input_id.into() }
     }
 }
 
@@ -39,8 +36,7 @@ impl TryFrom<View> for scene::ViewComponent {
     fn try_from(view: View) -> Result<Self, Self::Error> {
         const VERTICAL_REQUIRED_MSG: &str = "\"View\" component with absolute positioning requires either \"top\" or \"bottom\" coordinate.";
         const VERTICAL_ONLY_ONE_MSG: &str = "Fields \"top\" and \"bottom\" are mutually exclusive, you can only specify one on a \"View\" component.";
-        const HORIZONTAL_REQUIRED_MSG: &str =
-            "Non-static \"View\" component requires either \"left\" or \"right\" coordinate.";
+        const HORIZONTAL_REQUIRED_MSG: &str = "Non-static \"View\" component requires either \"left\" or \"right\" coordinate.";
         const HORIZONTAL_ONLY_ONE_MSG: &str = "Fields \"left\" and \"right\" are mutually exclusive, you can only specify one on a \"View\" component.";
         let is_absolute_position = view.top.is_some()
             || view.bottom.is_some()
@@ -58,7 +54,9 @@ impl TryFrom<View> for scene::ViewComponent {
                 (Some(left), None) => scene::HorizontalPosition::LeftOffset(left),
                 (None, Some(right)) => scene::HorizontalPosition::RightOffset(right),
                 (None, None) => return Err(TypeError::new(HORIZONTAL_REQUIRED_MSG)),
-                (Some(_), Some(_)) => return Err(TypeError::new(HORIZONTAL_ONLY_ONE_MSG)),
+                (Some(_), Some(_)) => {
+                    return Err(TypeError::new(HORIZONTAL_ONLY_ONE_MSG));
+                }
             };
             Position::Absolute(scene::AbsolutePosition {
                 width: view.width,
@@ -68,10 +66,7 @@ impl TryFrom<View> for scene::ViewComponent {
                 rotation_degrees: view.rotation.unwrap_or(0.0),
             })
         } else {
-            Position::Static {
-                width: view.width,
-                height: view.height,
-            }
+            Position::Static { width: view.width, height: view.height }
         };
         let direction = match view.direction {
             Some(ViewDirection::Row) => scene::ViewChildrenDirection::Row,
@@ -107,7 +102,11 @@ impl TryFrom<View> for scene::ViewComponent {
                 .unwrap_or(0.0),
         };
 
-        if padding.top < 0.0 || padding.right < 0.0 || padding.bottom < 0.0 || padding.left < 0.0 {
+        if padding.top < 0.0
+            || padding.right < 0.0
+            || padding.bottom < 0.0
+            || padding.left < 0.0
+        {
             return Err(TypeError::new("Padding values cannot be negative."));
         }
 
@@ -127,7 +126,9 @@ impl TryFrom<View> for scene::ViewComponent {
                 .map(TryInto::try_into)
                 .unwrap_or(Ok(scene::RGBAColor(0, 0, 0, 0)))?,
             transition: view.transition.map(TryInto::try_into).transpose()?,
-            border_radius: BorderRadius::new_with_radius(view.border_radius.unwrap_or(0.0)),
+            border_radius: BorderRadius::new_with_radius(
+                view.border_radius.unwrap_or(0.0),
+            ),
             border_width: view.border_width.unwrap_or(0.0),
             border_color: view
                 .border_color
@@ -150,8 +151,7 @@ impl TryFrom<Rescaler> for scene::RescalerComponent {
     fn try_from(rescaler: Rescaler) -> Result<Self, Self::Error> {
         const VERTICAL_REQUIRED_MSG: &str = "\"Rescaler\" component with absolute positioning requires either \"top\" or \"bottom\" coordinate.";
         const VERTICAL_ONLY_ONE_MSG: &str = "Fields \"top\" and \"bottom\" are mutually exclusive, you can only specify one on a \"Rescaler\" component.";
-        const HORIZONTAL_REQUIRED_MSG: &str =
-            "Non-static \"Rescaler\" component requires either \"left\" or \"right\" coordinate.";
+        const HORIZONTAL_REQUIRED_MSG: &str = "Non-static \"Rescaler\" component requires either \"left\" or \"right\" coordinate.";
         const HORIZONTAL_ONLY_ONE_MSG: &str = "Fields \"left\" and \"right\" are mutually exclusive, you can only specify one on a \"Rescaler\" component.";
         let is_absolute_position = rescaler.top.is_some()
             || rescaler.bottom.is_some()
@@ -169,7 +169,9 @@ impl TryFrom<Rescaler> for scene::RescalerComponent {
                 (Some(left), None) => scene::HorizontalPosition::LeftOffset(left),
                 (None, Some(right)) => scene::HorizontalPosition::RightOffset(right),
                 (None, None) => return Err(TypeError::new(HORIZONTAL_REQUIRED_MSG)),
-                (Some(_), Some(_)) => return Err(TypeError::new(HORIZONTAL_ONLY_ONE_MSG)),
+                (Some(_), Some(_)) => {
+                    return Err(TypeError::new(HORIZONTAL_ONLY_ONE_MSG));
+                }
             };
             Position::Absolute(scene::AbsolutePosition {
                 width: rescaler.width,
@@ -179,10 +181,7 @@ impl TryFrom<Rescaler> for scene::RescalerComponent {
                 rotation_degrees: rescaler.rotation.unwrap_or(0.0),
             })
         } else {
-            Position::Static {
-                width: rescaler.width,
-                height: rescaler.height,
-            }
+            Position::Static { width: rescaler.width, height: rescaler.height }
         };
         let mode = match rescaler.mode {
             Some(RescaleMode::Fit) => scene::RescaleMode::Fit,
@@ -203,7 +202,9 @@ impl TryFrom<Rescaler> for scene::RescalerComponent {
                 .unwrap_or(VerticalAlign::Center)
                 .into(),
             transition: rescaler.transition.map(TryInto::try_into).transpose()?,
-            border_radius: BorderRadius::new_with_radius(rescaler.border_radius.unwrap_or(0.0)),
+            border_radius: BorderRadius::new_with_radius(
+                rescaler.border_radius.unwrap_or(0.0),
+            ),
             border_width: rescaler.border_width.unwrap_or(0.0),
             border_color: rescaler
                 .border_color
@@ -249,7 +250,9 @@ impl TryFrom<Shader> for scene::ShaderComponent {
 
 impl From<ShaderParam> for scene::ShaderParam {
     fn from(param: ShaderParam) -> Self {
-        fn from_struct_field(field: ShaderParamStructField) -> scene::ShaderParamStructField {
+        fn from_struct_field(
+            field: ShaderParamStructField,
+        ) -> scene::ShaderParamStructField {
             scene::ShaderParamStructField {
                 field_name: field.field_name,
                 value: field.value.into(),
@@ -308,8 +311,11 @@ impl TryFrom<Text> for scene::TextComponent {
             Some(TextWeight::Black) => scene::TextWeight::Black,
             None => scene::TextWeight::Normal,
         };
-        let dimensions = match (text.width, text.height, text.max_width, text.max_height) {
-            (Some(width), Some(height), _, _) => scene::TextDimensions::Fixed { width, height },
+        let dimensions = match (text.width, text.height, text.max_width, text.max_height)
+        {
+            (Some(width), Some(height), _, _) => {
+                scene::TextDimensions::Fixed { width, height }
+            }
             (None, Some(_), _, _) => {
                 return Err(TypeError::new(
                     "\"height\" property on a Text component can only be provided if \"width\" is also defined.",
@@ -326,9 +332,7 @@ impl TryFrom<Text> for scene::TextComponent {
         };
 
         if text.font_size <= 0.0 {
-            return Err(TypeError::new(
-                "\"font_size\" property has to be larger than 0",
-            ));
+            return Err(TypeError::new("\"font_size\" property has to be larger than 0"));
         }
 
         let line_height = text.line_height.unwrap_or(text.font_size);

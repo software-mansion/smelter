@@ -12,23 +12,10 @@ pub(crate) struct H264AvccToAnnexB {
 impl H264AvccToAnnexB {
     pub fn new(config: H264AvcDecoderConfig) -> Self {
         let mut sps_pps = BytesMut::new();
-        sps_pps.extend(
-            config
-                .spss
-                .iter()
-                .flat_map(|sps| [0, 0, 0, 1].iter().chain(sps)),
-        );
-        sps_pps.extend(
-            config
-                .ppss
-                .iter()
-                .flat_map(|pps| [0, 0, 0, 1].iter().chain(pps)),
-        );
+        sps_pps.extend(config.spss.iter().flat_map(|sps| [0, 0, 0, 1].iter().chain(sps)));
+        sps_pps.extend(config.ppss.iter().flat_map(|pps| [0, 0, 0, 1].iter().chain(pps)));
 
-        Self {
-            config,
-            sps_pps: Some(sps_pps.freeze()),
-        }
+        Self { config, sps_pps: Some(sps_pps.freeze()) }
     }
 }
 
@@ -95,11 +82,7 @@ impl H264AvcDecoderConfig {
             .map(|_| Self::parse_nalu(&mut config_bytes))
             .collect::<Result<_, _>>()?;
 
-        Ok(Self {
-            nalu_length_size,
-            spss,
-            ppss,
-        })
+        Ok(Self { nalu_length_size, spss, ppss })
     }
 
     fn parse_nalu(data: &mut Bytes) -> Result<Bytes, H264AvcDecoderConfigError> {

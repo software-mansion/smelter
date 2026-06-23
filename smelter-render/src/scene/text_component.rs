@@ -38,9 +38,8 @@ impl TextComponent {
         self,
         ctx: &BuildStateTreeCtx,
     ) -> Result<StatefulComponent, SceneError> {
-        let (buffer, resolution) = ctx
-            .text_renderer_ctx
-            .layout_text((&self).into(), self.dimensions);
+        let (buffer, resolution) =
+            ctx.text_renderer_ctx.layout_text((&self).into(), self.dimensions);
         Ok(StatefulComponent::Text(StatefulTextComponent {
             id: self.id,
             params: TextRenderParams {

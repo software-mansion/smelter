@@ -20,17 +20,15 @@ fn client_code() -> Result<()> {
         media::{MediaReceiver, MediaSender, Receive, Send, TestSample, VideoCodec},
     };
 
-    const VIDEO_RESOLUTION: Resolution = Resolution {
-        width: 1280,
-        height: 720,
-    };
+    const VIDEO_RESOLUTION: Resolution = Resolution { width: 1280, height: 720 };
 
     const IP: &str = "127.0.0.1";
     const INPUT_PORT: u16 = 8006;
     const OUTPUT_PORT: u16 = 8004;
 
     const VIDEOS: u16 = 6;
-    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264)).spawn()?;
+    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264))
+        .spawn()?;
 
     let mut children = Vec::new();
 

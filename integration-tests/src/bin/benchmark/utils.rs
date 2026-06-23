@@ -1,8 +1,9 @@
 use anyhow::Result;
 use integration_tests::paths::integration_tests_root;
 use smelter_core::{
-    DEFAULT_BUFFER_DURATION, PipelineOptions, PipelineRtmpServerOptions, PipelineWgpuOptions,
-    PipelineWhipWhepServerOptions, graphics_context::GraphicsContext,
+    DEFAULT_BUFFER_DURATION, PipelineOptions, PipelineRtmpServerOptions,
+    PipelineWgpuOptions, PipelineWhipWhepServerOptions,
+    graphics_context::GraphicsContext,
 };
 use std::{
     fs::{self, File},
@@ -13,7 +14,7 @@ use std::{
 };
 use tracing::warn;
 
-use smelter_render::{Framerate, RenderingMode, YuvPlanes};
+use smelter_render::{Framerate, RenderingMode, YuvPlanes, scene::ImageScalingFilter};
 
 use crate::{args::Resolution, benchmark_pass::RawInputFile};
 
@@ -24,10 +25,7 @@ pub fn benchmark_pipeline_options(
 ) -> PipelineOptions {
     PipelineOptions {
         never_drop_output_frames: true,
-        output_framerate: Framerate {
-            num: framerate as u32,
-            den: 1,
-        },
+        output_framerate: Framerate { num: framerate as u32, den: 1 },
         default_buffer_duration: DEFAULT_BUFFER_DURATION,
         ahead_of_time_processing: false,
         run_late_scheduled_events: true,
@@ -38,6 +36,7 @@ pub fn benchmark_pipeline_options(
         stream_fallback_timeout: Duration::from_millis(500),
         tokio_rt: None,
         rendering_mode,
+        scaling_filter: ImageScalingFilter::Lanczos3,
         whip_whep_server: PipelineWhipWhepServerOptions::Disable,
         webrtc_stun_servers: Vec::new().into(),
         webrtc_udp_port_strategy: None,
@@ -99,9 +98,7 @@ pub fn generate_yuv_from_mp4(source: &PathBuf) -> Result<RawInputFile, String> {
         .stderr(std::process::Stdio::null());
 
     let mut ffmpeg = convert_cmd.spawn().map_err(|e| e.to_string())?;
-    let status = ffmpeg
-        .wait()
-        .expect("wait for ffmpeg to finish yuv conversion");
+    let status = ffmpeg.wait().expect("wait for ffmpeg to finish yuv conversion");
 
     if !status.success() {
         return Err("ffmpeg for yuv conversion terminated unsuccessfully".into());
@@ -154,31 +151,32 @@ const BBB_1080P_60FPS_NO_AUDIO: &str = "https://github.com/smelter-labs/smelter-
 const BBB_2160P_30FPS: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny2160p30fpsStereo30s.mp4";
 
 pub fn ensure_bunny_480p24fps() -> Result<PathBuf> {
-    let path =
-        integration_tests_root().join("./examples/assets/BigBuckBunny480p24fpsStereo30s.mp4");
+    let path = integration_tests_root()
+        .join("./examples/assets/BigBuckBunny480p24fpsStereo30s.mp4");
     ensure_file(path, BBB_480P_24FPS)
 }
 
 pub fn ensure_bunny_720p24fps() -> Result<PathBuf> {
-    let path =
-        integration_tests_root().join("./examples/assets/BigBuckBunny720p24fpsStereo30s.mp4");
+    let path = integration_tests_root()
+        .join("./examples/assets/BigBuckBunny720p24fpsStereo30s.mp4");
     ensure_file(path, BBB_720P_24FPS)
 }
 
 pub fn ensure_bunny_1080p30fps() -> Result<PathBuf> {
-    let path =
-        integration_tests_root().join("./examples/assets/BigBuckBunny1080p30fpsStereo30s.mp4");
+    let path = integration_tests_root()
+        .join("./examples/assets/BigBuckBunny1080p30fpsStereo30s.mp4");
     ensure_file(path, BBB_1080P_30FPS)
 }
 
 pub fn ensure_bunny_1080p60fps_no_audio() -> Result<PathBuf> {
-    let path = integration_tests_root().join("./examples/assets/BigBuckBunny1080p60fps30s.mp4");
+    let path =
+        integration_tests_root().join("./examples/assets/BigBuckBunny1080p60fps30s.mp4");
     ensure_file(path, BBB_1080P_60FPS_NO_AUDIO)
 }
 
 pub fn ensure_bunny_2160p30fps() -> Result<PathBuf> {
-    let path =
-        integration_tests_root().join("./examples/assets/BigBuckBunny2160p30fpsStereo30s.mp4");
+    let path = integration_tests_root()
+        .join("./examples/assets/BigBuckBunny2160p30fpsStereo30s.mp4");
     ensure_file(path, BBB_2160P_30FPS)
 }
 

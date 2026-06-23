@@ -8,7 +8,9 @@ pub(super) struct DrmRenderNode {
     pub(super) render_node: u32,
 }
 
-pub(super) fn quicksync_drm_render_node(adapter_info: &wgpu::AdapterInfo) -> Option<DrmRenderNode> {
+pub(super) fn quicksync_drm_render_node(
+    adapter_info: &wgpu::AdapterInfo,
+) -> Option<DrmRenderNode> {
     let pci_bus_id = adapter_info.device_pci_bus_id.trim();
     if pci_bus_id.is_empty() {
         return None;
@@ -24,9 +26,7 @@ fn drm_by_path_render_node(pci_bus_id: &str) -> Option<DrmRenderNode> {
 }
 
 fn drm_sysfs_render_node(pci_bus_id: &str) -> Option<DrmRenderNode> {
-    let drm_dir = Path::new("/sys/bus/pci/devices")
-        .join(pci_bus_id)
-        .join("drm");
+    let drm_dir = Path::new("/sys/bus/pci/devices").join(pci_bus_id).join("drm");
     std::fs::read_dir(drm_dir)
         .ok()?
         .filter_map(Result::ok)
@@ -53,7 +53,9 @@ fn drm_render_node(path: PathBuf) -> Option<DrmRenderNode> {
 }
 
 #[cfg(test)]
-fn quicksync_drm_render_node_from(matched_adapter: Option<DrmRenderNode>) -> Option<DrmRenderNode> {
+fn quicksync_drm_render_node_from(
+    matched_adapter: Option<DrmRenderNode>,
+) -> Option<DrmRenderNode> {
     matched_adapter
 }
 
@@ -62,15 +64,13 @@ mod tests {
     use super::*;
 
     fn node(path: &str, render_node: u32) -> DrmRenderNode {
-        DrmRenderNode {
-            path: path.into(),
-            render_node,
-        }
+        DrmRenderNode { path: path.into(), render_node }
     }
 
     #[test]
     fn drm_render_node_uses_matched_adapter_without_fallback() {
-        let render_node = quicksync_drm_render_node_from(Some(node("/dev/dri/renderD130", 130)));
+        let render_node =
+            quicksync_drm_render_node_from(Some(node("/dev/dri/renderD130", 130)));
 
         assert_eq!(render_node, Some(node("/dev/dri/renderD130", 130)));
     }

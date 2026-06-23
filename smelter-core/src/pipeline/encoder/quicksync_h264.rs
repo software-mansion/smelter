@@ -8,8 +8,9 @@ use gpu_video::{
     InputFrame, VideoFramerate, VideoResolution,
     parameters::{ColorRange, ColorSpace},
     quicksync::h264::{
-        H264EncodedOutputChunk, H264EncoderConfig, H264EncoderPreset, H264EncoderRateControl,
-        H264VariableBitrate, QuickSyncH264EncoderError, WgpuTexturesEncoderH264,
+        H264EncodedOutputChunk, H264EncoderConfig, H264EncoderPreset,
+        H264EncoderRateControl, H264VariableBitrate, QuickSyncH264EncoderError,
+        WgpuTexturesEncoderH264,
     },
 };
 use smelter_render::{FrameData, Framerate, OutputFrameFormat, Resolution};
@@ -33,8 +34,8 @@ pub struct QuickSyncH264Encoder {
 
 const HIGH_QUALITY_VIRTUAL_BUFFER_SIZE: Duration = Duration::from_secs(2);
 const LOW_LATENCY_VIRTUAL_BUFFER_SIZE: Duration = Duration::from_millis(100);
-const QUICKSYNC_MAX_PENDING_FRAMES: usize = 3;
-const QUICKSYNC_OUTPUT_POLL_INTERVAL: Duration = Duration::from_micros(250);
+const QUICKSYNC_MAX_PENDING_FRAMES: usize = 8;
+const QUICKSYNC_OUTPUT_POLL_INTERVAL: Duration = Duration::from_millis(2);
 
 impl VideoEncoder for QuickSyncH264Encoder {
     const LABEL: &'static str = "Intel Quick Sync H264 encoder";
@@ -67,20 +68,17 @@ impl VideoEncoder for QuickSyncH264Encoder {
         };
 
         Ok((
-            Self {
-                encoder,
-                bitstream_format: options.bitstream_format,
-            },
+            Self { encoder, bitstream_format: options.bitstream_format },
             VideoEncoderConfig {
                 resolution: options.resolution,
-                output_format: OutputFrameFormat::RgbaWgpuTexture,
+                output_format: OutputFrameFormat::Nv12WgpuTexture,
                 extradata,
             },
         ))
     }
 
     fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedOutputChunk> {
-        let FrameData::Rgba8UnormWgpuTexture(texture) = frame.data else {
+        let FrameData::Nv12WgpuTexture(texture) = frame.data else {
             error!("Unsupported pixel format {:?}. Dropping frame.", frame.data);
             return Vec::new();
         };
@@ -92,10 +90,9 @@ impl VideoEncoder for QuickSyncH264Encoder {
             },
             force_keyframe,
         ) {
-            Ok(frames) => frames
-                .into_iter()
-                .map(|frame| self.chunk_from_frame(frame))
-                .collect(),
+            Ok(frames) => {
+                frames.into_iter().map(|frame| self.chunk_from_frame(frame)).collect()
+            }
             Err(err) => {
                 error!("Intel Quick Sync encoder error: {err}");
                 Vec::new()
@@ -105,10 +102,9 @@ impl VideoEncoder for QuickSyncH264Encoder {
 
     fn poll_output(&mut self) -> Vec<EncodedOutputChunk> {
         match self.encoder.poll_output() {
-            Ok(frames) => frames
-                .into_iter()
-                .map(|frame| self.chunk_from_frame(frame))
-                .collect(),
+            Ok(frames) => {
+                frames.into_iter().map(|frame| self.chunk_from_frame(frame)).collect()
+            }
             Err(err) => {
                 error!("Intel Quick Sync encoder output poll error: {err}");
                 Vec::new()
@@ -118,10 +114,9 @@ impl VideoEncoder for QuickSyncH264Encoder {
 
     fn flush(&mut self) -> Vec<EncodedOutputChunk> {
         match self.encoder.flush() {
-            Ok(frames) => frames
-                .into_iter()
-                .map(|frame| self.chunk_from_frame(frame))
-                .collect(),
+            Ok(frames) => {
+                frames.into_iter().map(|frame| self.chunk_from_frame(frame)).collect()
+            }
             Err(err) => {
                 error!("Intel Quick Sync encoder flush error: {err}");
                 Vec::new()
@@ -131,7 +126,10 @@ impl VideoEncoder for QuickSyncH264Encoder {
 }
 
 impl QuickSyncH264Encoder {
-    fn chunk_from_frame(&self, frame: H264EncodedOutputChunk<bytes::Bytes>) -> EncodedOutputChunk {
+    fn chunk_from_frame(
+        &self,
+        frame: H264EncodedOutputChunk<bytes::Bytes>,
+    ) -> EncodedOutputChunk {
         let data = match self.bitstream_format {
             H264BitstreamFormat::AnnexB => frame.data,
             H264BitstreamFormat::Avcc => annexb_to_avcc(&frame.data),
@@ -154,12 +152,12 @@ fn quicksync_h264_encoder_config<'a>(
     let framerate = ctx.output_framerate;
     let resolution = quicksync_h264_resolution(options.resolution)?;
     let gop_size = NonZeroU16::new(
-        gop_size_from_ms_framerate(options.keyframe_interval, framerate).clamp(1, u16::MAX as u64)
-            as u16,
+        gop_size_from_ms_framerate(options.keyframe_interval, framerate)
+            .clamp(1, u16::MAX as u64) as u16,
     )
     .expect("clamped Quick Sync H264 GOP size must be non-zero");
-    let quicksync_framerate =
-        VideoFramerate::new(framerate.num, framerate.den).ok_or_else(|| {
+    let quicksync_framerate = VideoFramerate::new(framerate.num, framerate.den)
+        .ok_or_else(|| {
             EncoderInitError::InvalidQuickSyncH264EncoderOptions(
                 "framerate numerator and denominator must be non-zero".into(),
             )
@@ -189,10 +187,9 @@ fn quicksync_h264_rate_control(
     framerate: Framerate,
 ) -> Result<H264EncoderRateControl, EncoderInitError> {
     let bitrate = options.bitrate.unwrap_or_else(|| {
-        QuickSyncH264EncoderRateControl::VariableBitrate(bitrate_from_resolution_framerate(
-            options.resolution,
-            framerate,
-        ))
+        QuickSyncH264EncoderRateControl::VariableBitrate(
+            bitrate_from_resolution_framerate(options.resolution, framerate),
+        )
     });
     let virtual_buffer_size = match options.preset {
         QuickSyncH264EncoderPreset::HighQuality => HIGH_QUALITY_VIRTUAL_BUFFER_SIZE,
@@ -204,9 +201,13 @@ fn quicksync_h264_rate_control(
                 quicksync_h264_bitrate(bitrate.average_bitrate, "average bitrate")?;
             let max_bitrate = quicksync_h264_bitrate(bitrate.max_bitrate, "max bitrate")?;
             Ok(H264EncoderRateControl::VariableBitrate {
-                bitrate: H264VariableBitrate::new(average_bitrate, max_bitrate).map_err(|err| {
-                    EncoderInitError::InvalidQuickSyncH264EncoderOptions(err.to_string())
-                })?,
+                bitrate: H264VariableBitrate::new(average_bitrate, max_bitrate).map_err(
+                    |err| {
+                        EncoderInitError::InvalidQuickSyncH264EncoderOptions(
+                            err.to_string(),
+                        )
+                    },
+                )?,
                 virtual_buffer_size,
             })
         }
@@ -219,13 +220,20 @@ fn quicksync_h264_rate_control(
     }
 }
 
-fn quicksync_h264_bitrate(value: u64, label: &str) -> Result<NonZeroU64, EncoderInitError> {
+fn quicksync_h264_bitrate(
+    value: u64,
+    label: &str,
+) -> Result<NonZeroU64, EncoderInitError> {
     NonZeroU64::new(value).ok_or_else(|| {
-        EncoderInitError::InvalidQuickSyncH264EncoderOptions(format!("{label} must be non-zero"))
+        EncoderInitError::InvalidQuickSyncH264EncoderOptions(format!(
+            "{label} must be non-zero"
+        ))
     })
 }
 
-fn quicksync_h264_resolution(resolution: Resolution) -> Result<VideoResolution, EncoderInitError> {
+fn quicksync_h264_resolution(
+    resolution: Resolution,
+) -> Result<VideoResolution, EncoderInitError> {
     Ok(VideoResolution {
         width: quicksync_h264_dimension(resolution.width, "width")?,
         height: quicksync_h264_dimension(resolution.height, "height")?,

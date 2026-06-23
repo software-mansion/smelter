@@ -3,10 +3,11 @@ use std::time::Duration;
 use tracing::warn;
 
 use crate::{
-    AacAudioConfig, AudioChannels, AudioConfig, AudioData, AudioTag, AudioTagAacPacketType,
-    AudioTagSampleSize, AudioTagSoundRate, ExAudioFourCc, ExAudioPacket, ExAudioTag,
-    ExCapabilities, FlvAudioData, LegacyFlvAudioCodec, OpusAudioConfig, RtmpAudioCodec,
-    RtmpMessageParseError, RtmpMessageSerializeError, TrackId,
+    AacAudioConfig, AudioChannels, AudioConfig, AudioData, AudioTag,
+    AudioTagAacPacketType, AudioTagSampleSize, AudioTagSoundRate, ExAudioFourCc,
+    ExAudioPacket, ExAudioTag, ExCapabilities, FlvAudioData, LegacyFlvAudioCodec,
+    OpusAudioConfig, RtmpAudioCodec, RtmpMessageParseError, RtmpMessageSerializeError,
+    TrackId,
     message::AUDIO_CHUNK_STREAM_ID,
     protocol::{MessageType, RawMessage},
 };
@@ -65,7 +66,10 @@ impl AudioMessage {
         }
     }
 
-    fn from_enhanced(timestamp: u32, tag: ExAudioTag) -> Result<Self, RtmpMessageParseError> {
+    fn from_enhanced(
+        timestamp: u32,
+        tag: ExAudioTag,
+    ) -> Result<Self, RtmpMessageParseError> {
         let codec = match RtmpAudioCodec::try_from(tag.four_cc) {
             Ok(codec) => codec,
             Err(err) => {
@@ -96,10 +100,14 @@ impl AudioMessage {
                 track_id: TrackId::PRIMARY,
                 codec,
                 pts: Duration::from_millis(timestamp.into())
-                    + Duration::from_nanos(u64::from(tag.timestamp_offset_nanos.unwrap_or(0))),
+                    + Duration::from_nanos(u64::from(
+                        tag.timestamp_offset_nanos.unwrap_or(0),
+                    )),
                 data,
             })),
-            ExAudioPacket::SequenceEnd | ExAudioPacket::MultichannelConfig(_) => Ok(Self::Unknown),
+            ExAudioPacket::SequenceEnd | ExAudioPacket::MultichannelConfig(_) => {
+                Ok(Self::Unknown)
+            }
         }
     }
 
@@ -110,7 +118,9 @@ impl AudioMessage {
         ex_capabilities: ExCapabilities,
     ) -> Result<RawMessage, RtmpMessageSerializeError> {
         match self {
-            Self::Data(audio) => audio_data_into_raw(audio, stream_id, channels, ex_capabilities),
+            Self::Data(audio) => {
+                audio_data_into_raw(audio, stream_id, channels, ex_capabilities)
+            }
             Self::Config(config) => audio_config_into_raw(config, stream_id),
             Self::Unknown => Err(RtmpMessageSerializeError::InternalError(
                 "Cannot serialize an unknown audio message".into(),
@@ -339,14 +349,17 @@ mod tests {
     ];
 
     const OPUS_ID_HEADER_MONO: &[u8] = &[
-        b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1, 1, 0, 0, 0x80, 0xBB, 0x00, 0x00, 0, 0, 0,
+        b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1, 1, 0, 0, 0x80, 0xBB, 0x00,
+        0x00, 0, 0, 0,
     ];
 
     #[test]
     fn parses_enhanced_opus_sequence_start_stereo() {
         let payload = FlvAudioData::Enhanced(ExAudioTag {
             four_cc: ExAudioFourCc::Opus,
-            packet: ExAudioPacket::SequenceStart(Bytes::from_static(OPUS_ID_HEADER_STEREO)),
+            packet: ExAudioPacket::SequenceStart(Bytes::from_static(
+                OPUS_ID_HEADER_STEREO,
+            )),
             timestamp_offset_nanos: None,
         })
         .serialize()

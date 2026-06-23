@@ -21,7 +21,11 @@ impl ContinuousValue for ViewComponentParam {
                 state,
             ),
             border_color: end.border_color,
-            box_shadow: ContinuousValue::interpolate(&start.box_shadow, &end.box_shadow, state),
+            box_shadow: ContinuousValue::interpolate(
+                &start.box_shadow,
+                &end.box_shadow,
+                state,
+            ),
             padding: ContinuousValue::interpolate(&start.padding, &end.padding, state),
         }
     }

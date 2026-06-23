@@ -7,8 +7,8 @@ use crate::{
     scene::RGBColor,
     state::{RenderCtx, node::RenderNode, render_graph::RenderGraph},
     wgpu::texture::{
-        NV12Texture, PlanarYuvPendingDownload, PlanarYuvVariant, RgbaLinearTexture,
-        RgbaMultiViewTexture, RgbaSrgbTexture, TextureExt,
+        PlanarYuvPendingDownload, PlanarYuvVariant, RgbaLinearTexture,
+        RgbaMultiViewTexture, RgbaSrgbTexture,
     },
 };
 
@@ -19,25 +19,62 @@ use super::{
 pub(super) fn populate_inputs(
     ctx: &RenderCtx,
     scene: &mut RenderGraph,
+    texture_upload_belt: &mut wgpu::util::StagingBelt,
     mut frame_set: FrameSet<InputId>,
 ) {
+    let mut has_staged_uploads = false;
+    let _ = ctx.wgpu_ctx.device.poll(wgpu::PollType::Poll);
+    let mut upload_encoder =
+        ctx.wgpu_ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("batched input texture upload"),
+        });
+
     for (input_id, (_node_texture, input_textures)) in &mut scene.inputs {
         let Some(frame) = frame_set.frames.remove(input_id) else {
             input_textures.clear();
             continue;
         };
-        if Duration::saturating_sub(frame_set.pts, ctx.stream_fallback_timeout) > frame.pts {
+        if Duration::saturating_sub(frame_set.pts, ctx.stream_fallback_timeout)
+            > frame.pts
+        {
             input_textures.clear();
             continue;
         }
 
-        input_textures.upload(ctx.wgpu_ctx, frame);
+        if input_textures.encode_upload(
+            ctx.wgpu_ctx,
+            &mut upload_encoder,
+            texture_upload_belt,
+            frame,
+        ) {
+            has_staged_uploads = true;
+        }
     }
 
-    ctx.wgpu_ctx.queue.submit([]);
+    if has_staged_uploads {
+        texture_upload_belt.finish();
+        ctx.wgpu_ctx.queue.submit(Some(upload_encoder.finish()));
+        texture_upload_belt.recall();
+    } else {
+        ctx.wgpu_ctx.queue.submit([]);
+    }
 
-    for (node_texture, input_textures) in scene.inputs.values_mut() {
-        input_textures.convert_to_node_texture(ctx.wgpu_ctx, node_texture);
+    let mut has_batched_conversions = false;
+    let mut encoder =
+        ctx.wgpu_ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("batched input texture conversion"),
+        });
+    for (_input_id, (node_texture, input_textures)) in &mut scene.inputs {
+        if input_textures.encode_convert_to_node_texture(
+            ctx.wgpu_ctx,
+            &mut encoder,
+            node_texture,
+        ) {
+            has_batched_conversions = true;
+        }
+    }
+    if has_batched_conversions {
+        ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
 }
 
@@ -62,8 +99,14 @@ pub(super) fn read_outputs(
     pts: Duration,
 ) -> HashMap<OutputId, Frame> {
     let mut partial_textures = Vec::with_capacity(scene.outputs.len());
+    let mut nv12_encoder =
+        ctx.wgpu_ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("batched NV12 output conversion"),
+        });
+    let mut nv12_conversions = 0usize;
     for (output_id, output) in &scene.outputs {
-        match output.root.output_texture(&scene.inputs).state() {
+        let root = &output.root;
+        match root.output_texture(&scene.inputs).state() {
             Some(node) => match &output.output_texture {
                 OutputTexture::PlanarYuvTextures(yuv_output) => {
                     ctx.wgpu_ctx.format.rgba_to_yuv.convert(
@@ -78,25 +121,24 @@ pub(super) fn read_outputs(
                         resolution: yuv_output.resolution(),
                     });
                 }
-                OutputTexture::Rgba8UnormWgpuTexture { .. } => {
-                    let texture = match ctx.wgpu_ctx.mode {
-                        RenderingMode::GpuOptimized => node.texture().clone_texture(
-                            ctx.wgpu_ctx,
-                            &[
-                                wgpu::TextureFormat::Rgba8Unorm,
-                                wgpu::TextureFormat::Rgba8UnormSrgb,
-                            ],
-                        ),
-                        RenderingMode::CpuOptimized => node
-                            .texture()
-                            .clone_texture(ctx.wgpu_ctx, &[wgpu::TextureFormat::Rgba8Unorm]),
-                        RenderingMode::WebGl => node
-                            .texture()
-                            .clone_texture(ctx.wgpu_ctx, &[wgpu::TextureFormat::Rgba8UnormSrgb]),
+                OutputTexture::Rgba8UnormWgpuTexture(rgba_output) => {
+                    let view_formats = match ctx.wgpu_ctx.mode {
+                        RenderingMode::GpuOptimized => &[
+                            wgpu::TextureFormat::Rgba8Unorm,
+                            wgpu::TextureFormat::Rgba8UnormSrgb,
+                        ][..],
+                        RenderingMode::CpuOptimized => {
+                            &[wgpu::TextureFormat::Rgba8Unorm][..]
+                        }
+                        RenderingMode::WebGl => {
+                            &[wgpu::TextureFormat::Rgba8UnormSrgb][..]
+                        }
                     };
+                    let texture =
+                        rgba_output.copy_from(ctx.wgpu_ctx, node.texture(), view_formats);
                     let frame = Frame {
                         resolution: texture.size().into(),
-                        data: FrameData::Rgba8UnormWgpuTexture(texture.into()),
+                        data: FrameData::Rgba8UnormWgpuTexture(texture),
                         pts,
                     };
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
@@ -104,17 +146,17 @@ pub(super) fn read_outputs(
                         frame,
                     })
                 }
-                OutputTexture::Nv12WgpuTexture { resolution } => {
-                    let texture = NV12Texture::new(ctx.wgpu_ctx, *resolution);
-                    ctx.wgpu_ctx.format.rgba_to_nv12.convert(
+                OutputTexture::Nv12WgpuTexture(nv12_output) => {
+                    let texture = nv12_output.convert_from_with_encoder(
                         ctx.wgpu_ctx,
+                        &mut nv12_encoder,
                         node.output_texture_bind_group(),
-                        &texture,
                     );
-
+                    nv12_conversions += 1;
+                    let resolution = nv12_output.resolution();
                     let frame = Frame {
-                        resolution: *resolution,
-                        data: FrameData::Nv12WgpuTexture(texture.texture().clone().into()),
+                        resolution,
+                        data: FrameData::Nv12WgpuTexture(texture),
                         pts,
                     };
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
@@ -137,49 +179,58 @@ pub(super) fn read_outputs(
                         resolution: yuv_output.resolution(),
                     });
                 }
-                OutputTexture::Rgba8UnormWgpuTexture { resolution } => {
+                OutputTexture::Rgba8UnormWgpuTexture(rgba_output) => {
+                    let resolution = rgba_output.resolution();
                     let wgpu_texture = match ctx.wgpu_ctx.mode {
                         RenderingMode::GpuOptimized => {
-                            RgbaMultiViewTexture::new(ctx.wgpu_ctx, *resolution).texture_owned()
+                            RgbaMultiViewTexture::new(ctx.wgpu_ctx, resolution)
+                                .texture_owned()
                         }
                         RenderingMode::WebGl => {
-                            RgbaSrgbTexture::new(ctx.wgpu_ctx, *resolution).texture_owned()
+                            RgbaSrgbTexture::new(ctx.wgpu_ctx, resolution).texture_owned()
                         }
                         RenderingMode::CpuOptimized => {
-                            RgbaLinearTexture::new(ctx.wgpu_ctx, *resolution).texture_owned()
+                            RgbaLinearTexture::new(ctx.wgpu_ctx, resolution)
+                                .texture_owned()
                         }
+                    };
+                    let frame = Frame {
+                        data: FrameData::Rgba8UnormWgpuTexture(Arc::new(wgpu_texture)),
+                        resolution,
+                        pts,
                     };
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
                         output_id: output_id.clone(),
-                        frame: Frame {
-                            data: FrameData::Rgba8UnormWgpuTexture(Arc::new(wgpu_texture)),
-                            resolution: *resolution,
-                            pts,
-                        },
+                        frame,
                     })
                 }
-                OutputTexture::Nv12WgpuTexture { resolution } => {
-                    let texture = NV12Texture::new(ctx.wgpu_ctx, *resolution);
-                    texture.fill_with_color(ctx.wgpu_ctx, RGBColor::BLACK);
+                OutputTexture::Nv12WgpuTexture(nv12_output) => {
+                    let texture =
+                        nv12_output.fill_with_color(ctx.wgpu_ctx, RGBColor::BLACK);
+                    let frame = Frame {
+                        data: FrameData::Nv12WgpuTexture(texture),
+                        resolution: nv12_output.resolution(),
+                        pts,
+                    };
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
                         output_id: output_id.clone(),
-                        frame: Frame {
-                            data: FrameData::Nv12WgpuTexture(Arc::new(texture.texture().clone())),
-                            resolution: *resolution,
-                            pts,
-                        },
+                        frame,
                     });
                 }
             },
         };
     }
 
-    while let Err(wgpu::PollError::Timeout) = ctx
-        .wgpu_ctx
-        .device
-        .poll(wgpu::PollType::wait_indefinitely())
-    {
-        warn!("Device poll failed.")
+    if nv12_conversions > 0 {
+        ctx.wgpu_ctx.queue.submit(Some(nv12_encoder.finish()));
+    }
+
+    if partial_textures.iter().any(PartialOutputFrame::needs_download) {
+        while let Err(wgpu::PollError::Timeout) =
+            ctx.wgpu_ctx.device.poll(wgpu::PollType::wait_indefinitely())
+        {
+            warn!("Device poll failed.")
+        }
     }
 
     let mut result = HashMap::new();
@@ -205,19 +256,23 @@ pub(super) fn read_outputs(
                 let data = match &output.output_texture {
                     OutputTexture::PlanarYuvTextures(planar_yuv_output) => {
                         match planar_yuv_output.yuv_textures().variant() {
-                            PlanarYuvVariant::YUV420 => FrameData::PlanarYuv420(yuv_planes),
-                            PlanarYuvVariant::YUV422 => FrameData::PlanarYuv422(yuv_planes),
-                            PlanarYuvVariant::YUV444 => FrameData::PlanarYuv444(yuv_planes),
-                            PlanarYuvVariant::YUVJ420 => FrameData::PlanarYuvJ420(yuv_planes),
+                            PlanarYuvVariant::YUV420 => {
+                                FrameData::PlanarYuv420(yuv_planes)
+                            }
+                            PlanarYuvVariant::YUV422 => {
+                                FrameData::PlanarYuv422(yuv_planes)
+                            }
+                            PlanarYuvVariant::YUV444 => {
+                                FrameData::PlanarYuv444(yuv_planes)
+                            }
+                            PlanarYuvVariant::YUVJ420 => {
+                                FrameData::PlanarYuvJ420(yuv_planes)
+                            }
                         }
                     }
                     _ => FrameData::PlanarYuv420(yuv_planes),
                 };
-                let frame = Frame {
-                    data,
-                    resolution,
-                    pts,
-                };
+                let frame = Frame { data, resolution, pts };
                 result.insert(output_id.clone(), frame);
             }
 
@@ -229,7 +284,20 @@ pub(super) fn read_outputs(
     result
 }
 
-pub(super) fn run_transforms(ctx: &mut RenderCtx, scene: &mut RenderGraph, pts: Duration) {
+impl<'a, F> PartialOutputFrame<'a, F>
+where
+    F: FnOnce() -> Result<bytes::Bytes, wgpu::BufferAsyncError>,
+{
+    fn needs_download(&self) -> bool {
+        matches!(self, Self::PendingYuvDownload { .. })
+    }
+}
+
+pub(super) fn run_transforms(
+    ctx: &mut RenderCtx,
+    scene: &mut RenderGraph,
+    pts: Duration,
+) {
     for output in scene.outputs.values_mut() {
         render_node(ctx, &scene.inputs, pts, &mut output.root);
     }
@@ -245,11 +313,7 @@ pub(super) fn render_node(
         render_node(ctx, inputs, pts, child_node);
     }
 
-    let input_textures: Vec<_> = node
-        .children
-        .iter()
-        .map(|node| node.output_texture(inputs))
-        .collect();
-    node.renderer
-        .render(ctx, &input_textures, &mut node.output, pts);
+    let input_textures: Vec<_> =
+        node.children.iter().map(|node| node.output_texture(inputs)).collect();
+    node.renderer.render(ctx, &input_textures, &mut node.output, pts);
 }

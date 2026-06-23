@@ -2,12 +2,15 @@ use std::{cmp::Ordering, iter::zip};
 
 use anyhow::{Result, anyhow};
 use spectrum_analyzer::{
-    Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue, error::SpectrumAnalyzerError,
-    samples_fft_to_spectrum, scaling::divide_by_N, windows::hann_window,
+    Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
+    error::SpectrumAnalyzerError, samples_fft_to_spectrum, scaling::divide_by_N,
+    windows::hann_window,
 };
 use tracing::error;
 
-use super::{ArtificialTolerance, Channel, SamplingInterval, find_samples, split_samples};
+use super::{
+    ArtificialTolerance, Channel, SamplingInterval, find_samples, split_samples,
+};
 
 #[derive(Debug)]
 struct SpectrumBin {
@@ -99,12 +102,18 @@ fn compare(
     Ok(())
 }
 
-fn analyze(actual: Vec<f32>, expected: Vec<f32>, sample_rate: u32) -> Result<AnalyzedSpectrum> {
+fn analyze(
+    actual: Vec<f32>,
+    expected: Vec<f32>,
+    sample_rate: u32,
+) -> Result<AnalyzedSpectrum> {
     let (expected_left, expected_right) = split_samples(expected);
     let (actual_left, actual_right) = split_samples(actual);
 
-    let mut expected_spectrum_left = calc_fft(&expected_left, sample_rate)?.data().to_vec();
-    let mut expected_spectrum_right = calc_fft(&expected_right, sample_rate)?.data().to_vec();
+    let mut expected_spectrum_left =
+        calc_fft(&expected_left, sample_rate)?.data().to_vec();
+    let mut expected_spectrum_right =
+        calc_fft(&expected_right, sample_rate)?.data().to_vec();
     let mut actual_spectrum_left = calc_fft(&actual_left, sample_rate)?.data().to_vec();
     let mut actual_spectrum_right = calc_fft(&actual_right, sample_rate)?.data().to_vec();
 
@@ -126,7 +135,10 @@ fn analyze(actual: Vec<f32>, expected: Vec<f32>, sample_rate: u32) -> Result<Ana
     })
 }
 
-fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, SpectrumAnalyzerError> {
+fn calc_fft(
+    samples: &[f32],
+    sample_rate: u32,
+) -> Result<FrequencySpectrum, SpectrumAnalyzerError> {
     let samples = hann_window(samples);
     samples_fft_to_spectrum(
         &samples,
@@ -139,10 +151,7 @@ fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, Spec
 fn prepare(spectrum_data: Vec<(Frequency, FrequencyValue)>) -> Vec<SpectrumBin> {
     spectrum_data
         .into_iter()
-        .map(|(f, v)| SpectrumBin {
-            frequency: f.val(),
-            frequency_value: v.val(),
-        })
+        .map(|(f, v)| SpectrumBin { frequency: f.val(), frequency_value: v.val() })
         .filter(|bin| bin.frequency_value > NOISE_VALUE)
         .take(COMPARED_BINS)
         .collect()

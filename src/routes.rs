@@ -48,10 +48,7 @@ pub fn routes(state: Arc<ApiState>) -> Router {
 
     let web = Router::new()
         .route("/:id/register", post(register_request::handle_web_renderer))
-        .route(
-            "/:id/unregister",
-            post(unregister_request::handle_web_renderer),
-        );
+        .route("/:id/unregister", post(unregister_request::handle_web_renderer));
 
     let shader = Router::new()
         .route("/:id/register", post(register_request::handle_shader))

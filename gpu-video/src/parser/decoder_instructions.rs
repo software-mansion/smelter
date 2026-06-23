@@ -8,19 +8,11 @@ use crate::parser::{
 
 #[derive(Debug, Clone)]
 pub(crate) enum DecoderInstruction {
-    Decode {
-        decode_info: DecodeInformation,
-        reference_id: ReferenceId,
-    },
+    Decode { decode_info: DecodeInformation, reference_id: ReferenceId },
 
-    Idr {
-        decode_info: DecodeInformation,
-        reference_id: ReferenceId,
-    },
+    Idr { decode_info: DecodeInformation, reference_id: ReferenceId },
 
-    Drop {
-        reference_ids: Vec<ReferenceId>,
-    },
+    Drop { reference_ids: Vec<ReferenceId> },
 
     Sps(SeqParameterSet),
 

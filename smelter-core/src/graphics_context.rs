@@ -1,4 +1,6 @@
-use crate::graphics_context::wgpu_context::{BoxableHasDisplayHandle, create_wgpu_graphics_ctx};
+use crate::graphics_context::wgpu_context::{
+    BoxableHasDisplayHandle, create_wgpu_graphics_ctx,
+};
 use std::sync::Arc;
 
 #[cfg(feature = "gpu-video")]
@@ -46,7 +48,9 @@ fn quicksync_wgpu_features(_adapter: &wgpu::Adapter) -> wgpu::Features {
 }
 
 #[cfg(all(feature = "quicksync", target_os = "linux"))]
-fn quicksync_h264_support(ctx: &GraphicsContext) -> gpu_video::quicksync::h264::H264Support {
+fn quicksync_h264_support(
+    ctx: &GraphicsContext,
+) -> gpu_video::quicksync::h264::H264Support {
     match gpu_video::quicksync::supports_wgpu_device(&ctx.device) {
         true => gpu_video::quicksync::h264::support(&ctx.adapter.get_info()),
         false => gpu_video::quicksync::h264::H264Support::default(),
@@ -128,7 +132,9 @@ impl GraphicsContext {
     }
 
     #[cfg(feature = "gpu-video")]
-    pub fn vulkan_h264_decode_profile_level_support(&self) -> Option<H264ProfileLevelSupport> {
+    pub fn vulkan_h264_decode_profile_level_support(
+        &self,
+    ) -> Option<H264ProfileLevelSupport> {
         let vulkan_ctx = self.vulkan_ctx.as_ref()?;
         let caps = vulkan_ctx.device.decode_capabilities().h264?;
 
@@ -140,7 +146,9 @@ impl GraphicsContext {
     }
 
     #[cfg(not(feature = "gpu-video"))]
-    pub fn vulkan_h264_decode_profile_level_support(&self) -> Option<H264ProfileLevelSupport> {
+    pub fn vulkan_h264_decode_profile_level_support(
+        &self,
+    ) -> Option<H264ProfileLevelSupport> {
         None
     }
 }

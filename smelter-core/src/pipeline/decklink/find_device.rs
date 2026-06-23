@@ -53,7 +53,8 @@ fn is_selected_decklink(
     }
 
     if let Some(persistent_id) = opts.persistent_id
-        && attr.get_integer(IntegerAttributeId::PersistentID)? != Some(persistent_id as i64)
+        && attr.get_integer(IntegerAttributeId::PersistentID)?
+            != Some(persistent_id as i64)
     {
         return Ok(false);
     }

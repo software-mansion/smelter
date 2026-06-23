@@ -97,10 +97,7 @@ impl FrameInspector {
             .name("frame_inspector".into())
             .spawn(move || run(rx))
             .expect("Failed to spawn frame_inspector thread");
-        Self {
-            tx: Some(tx),
-            join: Some(join),
-        }
+        Self { tx: Some(tx), join: Some(join) }
     }
 
     pub fn update(&self, pair: Pair) -> bool {
@@ -177,12 +174,7 @@ impl Image {
     ) -> Self {
         let mut lines = vec![label];
         lines.extend(extra_lines);
-        Self {
-            pixels: rgba_to_minifb(rgba),
-            width,
-            height,
-            lines,
-        }
+        Self { pixels: rgba_to_minifb(rgba), width, height, lines }
     }
 
     fn line_count(&self) -> usize {
@@ -222,11 +214,8 @@ fn required_canvas_size(left: &Image, right: &Image) -> (usize, usize) {
     let slider_h = single_scale * max_h + LABEL_PAD + label_block_h;
     let slider_v_h = single_scale * max_h;
     let toggle_h = single_scale * max_h + LABEL_PAD + toggle_label_block_h;
-    let content_h = over_under_h
-        .max(labels_below_h)
-        .max(slider_h)
-        .max(slider_v_h)
-        .max(toggle_h);
+    let content_h =
+        over_under_h.max(labels_below_h).max(slider_h).max(slider_v_h).max(toggle_h);
     let canvas_h = LAYOUT_BAR_H + MSE_BAR_H + content_h;
 
     (canvas_w, canvas_h)
@@ -362,12 +351,24 @@ fn run(rx: Receiver<Pair>) {
         let view_h = win_h.min(canvas_h).saturating_sub(top);
         let scale = pick_scale(layout, &left, &right, view_w, view_h);
         match layout {
-            Layout::SideBySide => {
-                render_side_by_side(&mut canvas, canvas_w, canvas_h, top, &left, &right, scale)
-            }
-            Layout::OverUnder => {
-                render_over_under(&mut canvas, canvas_w, canvas_h, top, &left, &right, scale)
-            }
+            Layout::SideBySide => render_side_by_side(
+                &mut canvas,
+                canvas_w,
+                canvas_h,
+                top,
+                &left,
+                &right,
+                scale,
+            ),
+            Layout::OverUnder => render_over_under(
+                &mut canvas,
+                canvas_w,
+                canvas_h,
+                top,
+                &left,
+                &right,
+                scale,
+            ),
             Layout::Slider => {
                 let max_w = left.width.max(right.width) * scale;
                 let mouse_x = window
@@ -431,11 +432,7 @@ fn initial_title() -> &'static str {
 fn title_for(layout: Layout, showing_right: bool, left: &Image, right: &Image) -> String {
     match layout {
         Layout::Toggle => {
-            let side = if showing_right {
-                &right.lines[0]
-            } else {
-                &left.lines[0]
-            };
+            let side = if showing_right { &right.lines[0] } else { &left.lines[0] };
             format!("frame_inspector — toggle: {side} (click to swap)")
         }
         _ => initial_title().to_string(),
@@ -547,19 +544,14 @@ fn pick_scale(
             2 * left.width + GAP + 2 * right.width,
             2 * max_h + LABEL_PAD + label_block_h,
         ),
-        Layout::OverUnder => (
-            2 * max_w + LABEL_PAD + LABEL_W,
-            2 * left.height + GAP + 2 * right.height,
-        ),
+        Layout::OverUnder => {
+            (2 * max_w + LABEL_PAD + LABEL_W, 2 * left.height + GAP + 2 * right.height)
+        }
         Layout::Slider => (2 * max_w, 2 * max_h + LABEL_PAD + label_block_h),
         Layout::SliderV => (2 * max_w + LABEL_PAD + LABEL_W, 2 * max_h),
         Layout::Toggle => (2 * max_w, 2 * max_h + LABEL_PAD + toggle_label_block_h),
     };
-    if need_w <= canvas_w && need_h <= avail_h {
-        2
-    } else {
-        1
-    }
+    if need_w <= canvas_w && need_h <= avail_h { 2 } else { 1 }
 }
 
 fn render_side_by_side(
@@ -578,15 +570,7 @@ fn render_side_by_side(
     blit_scaled(canvas, canvas_w, right, lw + GAP, top, scale);
     let label_y = top + lh.max(rh) + LABEL_PAD;
     draw_lines_left(canvas, canvas_w, canvas_h, 0, label_y, left, LABEL_COLOR);
-    draw_lines_left(
-        canvas,
-        canvas_w,
-        canvas_h,
-        lw + GAP,
-        label_y,
-        right,
-        LABEL_COLOR,
-    );
+    draw_lines_left(canvas, canvas_w, canvas_h, lw + GAP, label_y, right, LABEL_COLOR);
 }
 
 fn render_over_under(
@@ -608,15 +592,7 @@ fn render_over_under(
     let right_block_h = right.line_count() * GLYPH_H;
     let left_label_y = top + lh.saturating_sub(left_block_h) / 2;
     let right_label_y = top + (lh + GAP) + rh.saturating_sub(right_block_h) / 2;
-    draw_lines_left(
-        canvas,
-        canvas_w,
-        canvas_h,
-        label_x,
-        left_label_y,
-        left,
-        LABEL_COLOR,
-    );
+    draw_lines_left(canvas, canvas_w, canvas_h, label_x, left_label_y, left, LABEL_COLOR);
     draw_lines_left(
         canvas,
         canvas_w,
@@ -770,15 +746,7 @@ fn render_toggle(
     let left_first = format!("{}{}", left.lines[0], mark(!showing_right));
     let right_first = format!("{}{}", right.lines[0], mark(showing_right));
     let left_block_h = left.line_count().max(1) * GLYPH_H;
-    draw_text(
-        canvas,
-        canvas_w,
-        canvas_h,
-        0,
-        label_y,
-        &left_first,
-        LABEL_COLOR,
-    );
+    draw_text(canvas, canvas_w, canvas_h, 0, label_y, &left_first, LABEL_COLOR);
     for (i, line) in left.lines.iter().skip(1).enumerate() {
         draw_text(
             canvas,
@@ -812,7 +780,14 @@ fn render_toggle(
     }
 }
 
-fn blit_scaled(canvas: &mut [u32], canvas_w: usize, src: &Image, x: usize, y: usize, scale: usize) {
+fn blit_scaled(
+    canvas: &mut [u32],
+    canvas_w: usize,
+    src: &Image,
+    x: usize,
+    y: usize,
+    scale: usize,
+) {
     if scale == 1 {
         for row in 0..src.height {
             let dst_off = (y + row) * canvas_w + x;

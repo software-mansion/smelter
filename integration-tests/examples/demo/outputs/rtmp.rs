@@ -66,15 +66,12 @@ impl From<RtmpOutputOptions> for RtmpOutput {
     fn from(mut value: RtmpOutputOptions) -> Self {
         let port = get_free_port();
         let name = format!("output_rtmp_{port}");
-        if value.url.starts_with("rtmp://localhost") || value.url.starts_with("rtmp://127.") {
+        if value.url.starts_with("rtmp://localhost")
+            || value.url.starts_with("rtmp://127.")
+        {
             value.url = format!("rtmp://127.0.0.1:{port}");
         }
-        Self {
-            name,
-            port,
-            options: value,
-            stream_handles: vec![],
-        }
+        Self { name, port, options: value, stream_handles: vec![] }
     }
 }
 
@@ -179,8 +176,8 @@ impl RtmpOutputBuilder {
     }
 
     fn prompt_url(self) -> Result<Self> {
-        let url_input =
-            Text::new("Enter streaming URL (ESC for local FFmpeg server):").prompt_skippable()?;
+        let url_input = Text::new("Enter streaming URL (ESC for local FFmpeg server):")
+            .prompt_skippable()?;
         match url_input {
             Some(url) if !url.trim().is_empty() => {
                 Ok(self.with_player(OutputPlayer::External).with_url(url))
@@ -190,11 +187,10 @@ impl RtmpOutputBuilder {
     }
 
     fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![
-            RtmpRegisterOptions::SetVideoStream,
-            RtmpRegisterOptions::Skip,
-        ];
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+        let video_options =
+            vec![RtmpRegisterOptions::SetVideoStream, RtmpRegisterOptions::Skip];
+        let video_selection =
+            Select::new("Set video stream?", video_options).prompt_skippable()?;
 
         match video_selection {
             Some(RtmpRegisterOptions::SetVideoStream) => {
@@ -228,10 +224,8 @@ impl RtmpOutputBuilder {
     }
 
     fn prompt_audio(self) -> Result<Self> {
-        let audio_options = vec![
-            RtmpRegisterOptions::SetAudioStream,
-            RtmpRegisterOptions::Skip,
-        ];
+        let audio_options =
+            vec![RtmpRegisterOptions::SetAudioStream, RtmpRegisterOptions::Skip];
 
         let audio_selection =
             Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
@@ -240,8 +234,9 @@ impl RtmpOutputBuilder {
             Some(RtmpRegisterOptions::SetAudioStream) => {
                 let mut audio = RtmpOutputAudioOptions::default();
                 let encoder_options = vec![AudioEncoder::Aac, AudioEncoder::Opus];
-                let encoder_choice = Select::new("Select encoder (ESC for aac)", encoder_options)
-                    .prompt_skippable()?;
+                let encoder_choice =
+                    Select::new("Select encoder (ESC for aac)", encoder_options)
+                        .prompt_skippable()?;
                 if let Some(encoder) = encoder_choice {
                     audio.encoder = encoder;
                 }
@@ -256,7 +251,8 @@ impl RtmpOutputBuilder {
     fn prompt_player(self) -> Result<Self> {
         let player_options = vec![OutputPlayer::Ffmpeg, OutputPlayer::Manual];
         let player_choice =
-            Select::new("Select player (ESC for FFmpeg):", player_options).prompt_skippable()?;
+            Select::new("Select player (ESC for FFmpeg):", player_options)
+                .prompt_skippable()?;
         match player_choice {
             Some(player) => Ok(self.with_player(player)),
             None => Ok(self),
@@ -284,21 +280,14 @@ impl RtmpOutputBuilder {
     }
 
     pub fn build(self) -> RtmpOutput {
-        let stream_url = self
-            .url
-            .unwrap_or(format!("rtmp://127.0.0.1:{}", self.port));
+        let stream_url = self.url.unwrap_or(format!("rtmp://127.0.0.1:{}", self.port));
         let options = RtmpOutputOptions {
             video: self.video,
             audio: self.audio,
             player: self.player,
             url: stream_url,
         };
-        RtmpOutput {
-            name: self.name,
-            port: self.port,
-            options,
-            stream_handles: vec![],
-        }
+        RtmpOutput { name: self.name, port: self.port, options, stream_handles: vec![] }
     }
 }
 
@@ -333,10 +322,7 @@ impl RtmpOutputVideoOptions {
 
 impl Default for RtmpOutputVideoOptions {
     fn default() -> Self {
-        let resolution = VideoResolution {
-            width: 1920,
-            height: 1080,
-        };
+        let resolution = VideoResolution { width: 1920, height: 1080 };
         let root_id = "root".to_string();
         Self {
             root_id,
@@ -399,8 +385,6 @@ impl RtmpOutputAudioOptions {
 
 impl Default for RtmpOutputAudioOptions {
     fn default() -> Self {
-        Self {
-            encoder: AudioEncoder::Aac,
-        }
+        Self { encoder: AudioEncoder::Aac }
     }
 }

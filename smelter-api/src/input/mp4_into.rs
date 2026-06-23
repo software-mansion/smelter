@@ -38,8 +38,12 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
             .as_ref()
             .and_then(|decoders| decoders.get(&InputMp4Codec::H264))
             .map(|decoder| match decoder {
-                Mp4VideoDecoderOptions::FfmpegH264 => Ok(core::VideoDecoderOptions::FfmpegH264),
-                Mp4VideoDecoderOptions::VulkanH264 => Ok(core::VideoDecoderOptions::VulkanH264),
+                Mp4VideoDecoderOptions::FfmpegH264 => {
+                    Ok(core::VideoDecoderOptions::FfmpegH264)
+                }
+                Mp4VideoDecoderOptions::VulkanH264 => {
+                    Ok(core::VideoDecoderOptions::VulkanH264)
+                }
             })
             .transpose()?;
 

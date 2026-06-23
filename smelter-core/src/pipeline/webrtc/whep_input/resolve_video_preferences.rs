@@ -82,10 +82,7 @@ pub(crate) fn resolve_video_preferences(
                 video_codecs_params.extend(h264_codec_params());
             }
             VideoDecoderOptions::VulkanH264 => {
-                match ctx
-                    .graphics_context
-                    .vulkan_h264_decode_profile_level_support()
-                {
+                match ctx.graphics_context.vulkan_h264_decode_profile_level_support() {
                     Some(support) => {
                         video_codecs_params
                             .extend(h264_codec_params_for_profile_level_support(support));
@@ -110,10 +107,7 @@ pub(crate) fn resolve_video_preferences(
     let video_codecs_params = video_codecs_params
         .into_iter()
         .unique_by(|c| {
-            (
-                c.capability.mime_type.clone(),
-                c.capability.sdp_fmtp_line.clone(),
-            )
+            (c.capability.mime_type.clone(), c.capability.sdp_fmtp_line.clone())
         })
         .collect();
     Ok((video_preferences, video_codecs_params))

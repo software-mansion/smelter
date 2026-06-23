@@ -44,9 +44,7 @@ fn main() {
 }
 
 fn workingdir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("workingdir")
-        .join("inputs")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("workingdir").join("inputs")
 }
 
 fn generate_video(path: PathBuf, text: &str, rgba_color: &str) -> Result<()> {

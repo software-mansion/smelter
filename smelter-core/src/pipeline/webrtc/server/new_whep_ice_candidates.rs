@@ -38,10 +38,7 @@ pub async fn handle_new_whep_ice_candidates(
                 "Cannot add ice_candidate {candidate:?} for output {output_ref} session {session_id:?}: {err:?}"
             )));
         }
-        info!(
-            ?session_id,
-            output_id, "Added ICE candidate for WHEP session"
-        );
+        info!(?session_id, output_id, "Added ICE candidate for WHEP session");
     }
 
     Ok(StatusCode::NO_CONTENT)

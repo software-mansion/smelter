@@ -28,10 +28,7 @@ impl From<HlsInputOptions> for HlsInput {
     fn from(value: HlsInputOptions) -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("hls_input_{suffix}");
-        Self {
-            name,
-            options: value,
-        }
+        Self { name, options: value }
     }
 }
 
@@ -65,11 +62,7 @@ impl HlsInputBuilder {
         let suffix = rand::rng().next_u32();
         let name = format!("hls_input_{suffix}");
         let url = "https://raw.githubusercontent.com/membraneframework/membrane_http_adaptive_stream_plugin/master/test/membrane_http_adaptive_stream/integration_test/fixtures/audio_multiple_video_tracks/index.m3u8".to_string();
-        Self {
-            name,
-            url,
-            decoder: VideoDecoder::FfmpegH264,
-        }
+        Self { name, url, decoder: VideoDecoder::FfmpegH264 }
     }
 
     pub fn prompt(self) -> Result<Self> {
@@ -104,7 +97,10 @@ impl HlsInputBuilder {
                                 String::from_utf8(output.stdout)?
                             }
                             Ok(output) => {
-                                error!("`streamlink` failed with code {:?}.", output.status.code());
+                                error!(
+                                    "`streamlink` failed with code {:?}.",
+                                    output.status.code()
+                                );
                                 continue;
                             }
                             Err(error) => {
@@ -145,13 +141,7 @@ impl HlsInputBuilder {
     }
 
     pub fn build(self) -> HlsInput {
-        let options = HlsInputOptions {
-            url: self.url,
-            decoder: self.decoder,
-        };
-        HlsInput {
-            name: self.name,
-            options,
-        }
+        let options = HlsInputOptions { url: self.url, decoder: self.decoder };
+        HlsInput { name: self.name, options }
     }
 }

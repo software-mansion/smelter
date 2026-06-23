@@ -8,7 +8,8 @@ use smelter_render::{Frame, InputId};
 use tracing::{debug, info};
 
 use crate::{
-    pipeline::PipelineCtx, prelude::InputAudioSamples, queue::queue_input::TrackOffset, types::Ref,
+    pipeline::PipelineCtx, prelude::InputAudioSamples, queue::queue_input::TrackOffset,
+    types::Ref,
 };
 
 use super::SharedPts;
@@ -30,7 +31,8 @@ impl VideoSideChannel {
     ) -> Option<Self> {
         let path = socket_dir.join(format!("video_{}.sock", input_ref.id()));
         info!(?path, "Starting video side channel");
-        let server = VideoSideChannelServer::new(path, input_ref.id(), ctx.wgpu_ctx.clone())?;
+        let server =
+            VideoSideChannelServer::new(path, input_ref.id(), ctx.wgpu_ctx.clone())?;
         Some(Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),

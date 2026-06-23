@@ -4,7 +4,9 @@ use crate::{
     CommunicationProtocol, CompositorInstance, input_dump_from_disk,
     pipeline_tests::{
         PipelineTest,
-        harness::{OutputReceiver, PacketSender, VideoCompareConfig, compare_video_dumps},
+        harness::{
+            OutputReceiver, PacketSender, VideoCompareConfig, compare_video_dumps,
+        },
     },
 };
 
@@ -86,8 +88,8 @@ pub fn push_input_before_start_tcp() -> Result<()> {
     )?;
 
     let input_1_dump = input_dump_from_disk("8_colors_input_video.rtp")?;
-    let input_1_handle =
-        PacketSender::new(CommunicationProtocol::Tcp, input_port)?.send_non_blocking(input_1_dump);
+    let input_1_handle = PacketSender::new(CommunicationProtocol::Tcp, input_port)?
+        .send_non_blocking(input_1_dump);
 
     thread::sleep(Duration::from_secs(5));
 
@@ -174,8 +176,8 @@ pub fn push_input_before_start_udp() -> Result<()> {
     )?;
 
     let input_1_dump = input_dump_from_disk("8_colors_input_video.rtp")?;
-    let input_1_handle =
-        PacketSender::new(CommunicationProtocol::Udp, input_port)?.send_non_blocking(input_1_dump);
+    let input_1_handle = PacketSender::new(CommunicationProtocol::Udp, input_port)?
+        .send_non_blocking(input_1_dump);
 
     thread::sleep(Duration::from_secs(5));
 
@@ -261,8 +263,8 @@ pub fn push_input_before_start_tcp_no_offset() -> Result<()> {
     )?;
 
     let input_1_dump = input_dump_from_disk("8_colors_input_video.rtp")?;
-    let input_1_handle =
-        PacketSender::new(CommunicationProtocol::Tcp, input_port)?.send_non_blocking(input_1_dump);
+    let input_1_handle = PacketSender::new(CommunicationProtocol::Tcp, input_port)?
+        .send_non_blocking(input_1_dump);
 
     thread::sleep(Duration::from_secs(5));
 
@@ -349,8 +351,8 @@ pub fn push_input_before_start_udp_no_offset() -> Result<()> {
     )?;
 
     let input_1_dump = input_dump_from_disk("8_colors_input_video.rtp")?;
-    let input_1_handle =
-        PacketSender::new(CommunicationProtocol::Udp, input_port)?.send_non_blocking(input_1_dump);
+    let input_1_handle = PacketSender::new(CommunicationProtocol::Udp, input_port)?
+        .send_non_blocking(input_1_dump);
 
     thread::sleep(Duration::from_secs(5));
 

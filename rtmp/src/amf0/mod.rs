@@ -29,15 +29,9 @@ pub enum AmfValue {
     Undefined,
     EcmaArray(HashMap<String, AmfValue>),
     StrictArray(Vec<AmfValue>),
-    Date {
-        unix_time: f64,
-        timezone_offset: i16,
-    },
+    Date { unix_time: f64, timezone_offset: i16 },
     LongString(String),
-    TypedObject {
-        class_name: String,
-        properties: HashMap<String, AmfValue>,
-    },
+    TypedObject { class_name: String, properties: HashMap<String, AmfValue> },
 }
 
 impl From<&'_ str> for AmfValue {

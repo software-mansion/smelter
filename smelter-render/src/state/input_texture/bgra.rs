@@ -19,11 +19,7 @@ impl BgraInput {
         let upload_textures = BgraLinearTexture::new(ctx, Resolution::MIN_2X2);
         let bgra_bind_group = upload_textures.new_bind_group(ctx);
 
-        Self {
-            upload_textures,
-            bgra_bind_group,
-            color_space_converter: None,
-        }
+        Self { upload_textures, bgra_bind_group, color_space_converter: None }
     }
 
     pub fn resolution(&self) -> Resolution {
@@ -46,9 +42,11 @@ impl BgraInput {
                 );
             }
             NodeTextureState::CpuOptimized { texture, .. } => {
-                ctx.format
-                    .bgra_to_rgba_linear
-                    .convert(ctx, &self.bgra_bind_group, texture.view());
+                ctx.format.bgra_to_rgba_linear.convert(
+                    ctx,
+                    &self.bgra_bind_group,
+                    texture.view(),
+                );
             }
             NodeTextureState::WebGl { texture, .. } => {
                 let Some(color_space_converter) = &mut self.color_space_converter else {

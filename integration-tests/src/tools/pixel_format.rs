@@ -17,11 +17,7 @@ pub fn frame_to_rgba(frame: &Frame) -> Result<Vec<u8>> {
             anyhow::bail!("frame_to_rgba: unsupported frame format {other:?}");
         }
     };
-    Ok(yuv420_to_rgba(
-        planes,
-        frame.resolution.width,
-        frame.resolution.height,
-    ))
+    Ok(yuv420_to_rgba(planes, frame.resolution.width, frame.resolution.height))
 }
 
 /// BT.709 limited-range YUV → RGBA. Mirrors the conversion used by
@@ -64,11 +60,8 @@ pub fn mean_square_error(expected: &Frame, actual: &Frame) -> Option<f64> {
         (FrameData::PlanarYuvJ420(e), FrameData::PlanarYuvJ420(a)) => (e, a),
         _ => return None,
     };
-    let planes = [
-        (&e.y_plane, &a.y_plane),
-        (&e.u_plane, &a.u_plane),
-        (&e.v_plane, &a.v_plane),
-    ];
+    let planes =
+        [(&e.y_plane, &a.y_plane), (&e.u_plane, &a.u_plane), (&e.v_plane, &a.v_plane)];
     let mut sum_sq: u64 = 0;
     let mut count: u64 = 0;
     for (lhs, rhs) in planes {

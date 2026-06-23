@@ -63,12 +63,16 @@ impl StatsMonitor {
             inputs: guard
                 .inputs
                 .iter_mut()
-                .map(|(input_ref, (_, input))| (input_ref.to_unique_string(), input.report()))
+                .map(|(input_ref, (_, input))| {
+                    (input_ref.to_unique_string(), input.report())
+                })
                 .collect(),
             outputs: guard
                 .outputs
                 .iter_mut()
-                .map(|(output_ref, (_, output))| (output_ref.to_unique_string(), output.report()))
+                .map(|(output_ref, (_, output))| {
+                    (output_ref.to_unique_string(), output.report())
+                })
                 .collect(),
         }
     }
@@ -76,7 +80,9 @@ impl StatsMonitor {
 
 impl StatsSender {
     pub fn send(&self, events: impl IntoIterator<Item = StatsEvent>) {
-        if let Err(TrySendError::Full(events)) = self.0.try_send(events.into_iter().collect()) {
+        if let Err(TrySendError::Full(events)) =
+            self.0.try_send(events.into_iter().collect())
+        {
             warn!(?events, "Stats channel is full.");
         }
     }

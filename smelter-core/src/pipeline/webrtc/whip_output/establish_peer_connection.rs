@@ -24,10 +24,7 @@ pub async fn exchange_sdp_offers(
     let offer = pc.create_offer().await?;
     debug!("SDP offer: {}", offer.sdp);
 
-    let SdpAnswer {
-        session_url: location,
-        answer,
-    } = client.send_offer(&offer).await?;
+    let SdpAnswer { session_url: location, answer } = client.send_offer(&offer).await?;
     debug!("SDP answer: {}", answer.sdp);
 
     pc.set_local_description(offer).await?;
@@ -78,14 +75,14 @@ async fn handle_trickle_candidate(
             info!("Trickle ICE is not supported by WHIP server");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
-        Err(WebrtcClientError::EntityTagMissing) | Err(WebrtcClientError::EntityTagNonMatching) => {
+        Err(WebrtcClientError::EntityTagMissing)
+        | Err(WebrtcClientError::EntityTagNonMatching) => {
             info!("Entity tags not supported by WHIP output");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
-        Err(err) => warn!(
-            "Trickle ICE request failed: {}",
-            ErrorStack::new(&err).into_string()
-        ),
+        Err(err) => {
+            warn!("Trickle ICE request failed: {}", ErrorStack::new(&err).into_string())
+        }
         Ok(_) => (),
     };
 }

@@ -6,7 +6,8 @@ use tracing::error;
 
 use crate::error::ErrorStack;
 use crate::transformations::web_renderer::{
-    EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE, UNEMBED_SOURCE_FRAMES_MESSAGE,
+    EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE,
+    UNEMBED_SOURCE_FRAMES_MESSAGE,
 };
 use crate::web_renderer::process_helper::state::FrameInfo;
 
@@ -38,7 +39,9 @@ impl libcef::RenderProcessHandler for RenderProcessHandler {
             UNEMBED_SOURCE_FRAMES_MESSAGE => self.unembed_source(message),
             GET_FRAME_POSITIONS_MESSAGE => self.send_frame_positions(message, frame),
             name => {
-                error!("Error occurred while processing IPC message: Unknown message type: {name}");
+                error!(
+                    "Error occurred while processing IPC message: Unknown message type: {name}"
+                );
                 return false;
             }
         };
@@ -147,7 +150,8 @@ impl RenderProcessHandler {
         let global = ctx.global()?;
         let document = global.document()?;
 
-        let mut response = libcef::ProcessMessageBuilder::new(GET_FRAME_POSITIONS_MESSAGE);
+        let mut response =
+            libcef::ProcessMessageBuilder::new(GET_FRAME_POSITIONS_MESSAGE);
         for read_idx in 0..msg.size() {
             let id_attribute = msg.read_string(read_idx)?;
             let element = match document.element_by_id(&id_attribute, &ctx_entered) {

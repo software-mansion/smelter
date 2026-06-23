@@ -47,10 +47,7 @@ impl From<WhipOutputOptions> for WhipOutput {
     fn from(value: WhipOutputOptions) -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("output_whip_{suffix}");
-        Self {
-            name,
-            options: value,
-        }
+        Self { name, options: value }
     }
 }
 
@@ -62,12 +59,8 @@ impl From<WhipOutput> for WhipOutputOptions {
 
 impl WhipOutput {
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
-        let WhipOutputOptions {
-            endpoint_url,
-            bearer_token,
-            video,
-            audio,
-        } = &self.options;
+        let WhipOutputOptions { endpoint_url, bearer_token, video, audio } =
+            &self.options;
         json!({
             "type": "whip_client",
             "endpoint_url": endpoint_url,
@@ -85,15 +78,11 @@ impl WhipOutput {
         println!("1. Start Broadcast Box: {cmd}");
         println!("2. Open: {url}");
         println!("3. Make sure that 'I want to watch' option is selected.");
-        println!(
-            "4. Enter '{}' in 'Stream Key' field",
-            self.options.bearer_token
-        );
+        println!("4. Enter '{}' in 'Stream Key' field", self.options.bearer_token);
 
         loop {
-            let confirmation = Confirm::new("Is player running? [Y/n]")
-                .with_default(true)
-                .prompt()?;
+            let confirmation =
+                Confirm::new("Is player running? [Y/n]").with_default(true).prompt()?;
             if confirmation {
                 return Ok(());
             }
@@ -124,13 +113,7 @@ impl WhipOutputBuilder {
 
         // Broadcast Box input url
         let endpoint_url = "http://127.0.0.1:8080/api/whip".to_string();
-        Self {
-            name,
-            endpoint_url,
-            bearer_token,
-            video: None,
-            audio: None,
-        }
+        Self { name, endpoint_url, bearer_token, video: None, audio: None }
     }
 
     pub fn prompt(self) -> Result<Self> {
@@ -148,9 +131,10 @@ impl WhipOutputBuilder {
 
     fn prompt_url(self) -> Result<Self> {
         let env_url = env::var(WHIP_URL_ENV).unwrap_or_default();
-        let endpoint_url_input = Text::new("Enter the WHIP endpoint URL (ESC for BroadcastBox):")
-            .with_initial_value(&env_url)
-            .prompt_skippable()?;
+        let endpoint_url_input =
+            Text::new("Enter the WHIP endpoint URL (ESC for BroadcastBox):")
+                .with_initial_value(&env_url)
+                .prompt_skippable()?;
 
         match endpoint_url_input {
             Some(url) if !url.trim().is_empty() => Ok(self.with_endpoint_url(url)),
@@ -172,11 +156,10 @@ impl WhipOutputBuilder {
     }
 
     fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![
-            WhipRegisterOptions::SetVideoStream,
-            WhipRegisterOptions::Skip,
-        ];
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+        let video_options =
+            vec![WhipRegisterOptions::SetVideoStream, WhipRegisterOptions::Skip];
+        let video_selection =
+            Select::new("Set video stream?", video_options).prompt_skippable()?;
 
         match video_selection {
             Some(WhipRegisterOptions::SetVideoStream) => {
@@ -218,11 +201,10 @@ impl WhipOutputBuilder {
     }
 
     fn prompt_audio(self) -> Result<Self> {
-        let audio_options = vec![
-            WhipRegisterOptions::SetAudioStream,
-            WhipRegisterOptions::Skip,
-        ];
-        let audio_selection = Select::new("Set audio stream?", audio_options).prompt_skippable()?;
+        let audio_options =
+            vec![WhipRegisterOptions::SetAudioStream, WhipRegisterOptions::Skip];
+        let audio_selection =
+            Select::new("Set audio stream?", audio_options).prompt_skippable()?;
 
         match audio_selection {
             Some(WhipRegisterOptions::SetAudioStream) => {
@@ -284,10 +266,7 @@ impl WhipOutputBuilder {
             video: self.video,
             audio: self.audio,
         };
-        WhipOutput {
-            name: self.name,
-            options,
-        }
+        WhipOutput { name: self.name, options }
     }
 }
 
@@ -301,10 +280,7 @@ pub struct WhipOutputVideoOptions {
 
 impl WhipOutputVideoOptions {
     fn serialize_encoder_preferences(&self) -> Vec<serde_json::Value> {
-        self.encoder_preferences
-            .iter()
-            .map(|enc| enc.serialize())
-            .collect()
+        self.encoder_preferences.iter().map(|enc| enc.serialize()).collect()
     }
 
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
@@ -328,17 +304,9 @@ impl WhipOutputVideoOptions {
 
 impl Default for WhipOutputVideoOptions {
     fn default() -> Self {
-        let resolution = VideoResolution {
-            width: 1920,
-            height: 1080,
-        };
+        let resolution = VideoResolution { width: 1920, height: 1080 };
         let root_id = "root".to_string();
-        Self {
-            resolution,
-            encoder_preferences: vec![],
-            root_id,
-            scene: Scene::Tiles,
-        }
+        Self { resolution, encoder_preferences: vec![], root_id, scene: Scene::Tiles }
     }
 }
 

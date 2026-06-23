@@ -10,8 +10,9 @@ pub(super) mod whip;
 use crate::{
     InputProtocolKind,
     stats::{
-        input::hls::HlsInputState, input::mp4::Mp4InputState, input::rtmp::RtmpInputState,
-        input::rtp::RtpInputState, input::whep::WhepInputState, input::whip::WhipInputState,
+        input::hls::HlsInputState, input::mp4::Mp4InputState,
+        input::rtmp::RtmpInputState, input::rtp::RtpInputState,
+        input::whep::WhepInputState, input::whip::WhipInputState,
         input_reports::InputStatsReport,
     },
 };
@@ -73,7 +74,9 @@ impl InputStatsState {
 
     pub fn handle_event(&mut self, event: InputStatsEvent) {
         match (self, event) {
-            (InputStatsState::Rtp(state), InputStatsEvent::Rtp(event)) => state.handle_event(event),
+            (InputStatsState::Rtp(state), InputStatsEvent::Rtp(event)) => {
+                state.handle_event(event)
+            }
             (InputStatsState::Whip(state), InputStatsEvent::Whip(event)) => {
                 state.handle_event(event)
             }

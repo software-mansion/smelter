@@ -57,9 +57,7 @@ impl CefString {
 
         unsafe {
             let cef_str = *ptr;
-            U16CString::from_ptr(cef_str.str_, cef_str.length)
-                .unwrap()
-                .to_string_lossy()
+            U16CString::from_ptr(cef_str.str_, cef_str.length).unwrap().to_string_lossy()
         }
     }
 

@@ -90,8 +90,9 @@ pub fn mix_to_mono(left: &[f32], right: &[f32]) -> Vec<f32> {
 pub fn compute_gaps(chunks: &[AudioSampleBatch]) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     for pair in chunks.windows(2) {
-        let prev_dur =
-            Duration::from_secs_f64((pair[0].samples.len() / 2) as f64 / SAMPLE_RATE as f64);
+        let prev_dur = Duration::from_secs_f64(
+            (pair[0].samples.len() / 2) as f64 / SAMPLE_RATE as f64,
+        );
         let prev_end = pair[0].pts + prev_dur;
         let next_start = pair[1].pts;
         if next_start <= prev_end {
@@ -180,11 +181,7 @@ pub fn sliding_mean(values: &[f32], radius: usize) -> Vec<f32> {
             sum -= values[rem] as f64;
             count = count.saturating_sub(1);
         }
-        out[i] = if count > 0 {
-            (sum / count as f64) as f32
-        } else {
-            0.0
-        };
+        out[i] = if count > 0 { (sum / count as f64) as f32 } else { 0.0 };
     }
     out
 }

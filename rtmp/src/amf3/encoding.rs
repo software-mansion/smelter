@@ -25,7 +25,10 @@ where
         Self { buf }
     }
 
-    pub(crate) fn put_value(&mut self, amf3_value: &Amf3Value) -> Result<(), Amf3EncodingError> {
+    pub(crate) fn put_value(
+        &mut self,
+        amf3_value: &Amf3Value,
+    ) -> Result<(), Amf3EncodingError> {
         match amf3_value {
             Amf3Value::Undefined => self.put_undefined(),
             Amf3Value::Null => self.put_null(),
@@ -35,35 +38,29 @@ where
             Amf3Value::String(s) => self.put_string(s)?,
             Amf3Value::XmlDoc(xd) => self.put_xml_doc(xd)?,
             Amf3Value::Date(d) => self.put_date(*d)?,
-            Amf3Value::Array { associative, dense } => self.put_array(associative, dense)?,
-            Amf3Value::Object {
-                class_name,
-                sealed_count,
-                values,
-            } => self.put_object(class_name.as_ref(), *sealed_count, values)?,
+            Amf3Value::Array { associative, dense } => {
+                self.put_array(associative, dense)?
+            }
+            Amf3Value::Object { class_name, sealed_count, values } => {
+                self.put_object(class_name.as_ref(), *sealed_count, values)?
+            }
             Amf3Value::Xml(x) => self.put_xml(x)?,
             Amf3Value::ByteArray(ba) => self.put_byte_array(ba)?,
-            Amf3Value::VectorInt {
-                fixed_length,
-                values,
-            } => self.put_vector_int(*fixed_length, values)?,
-            Amf3Value::VectorUInt {
-                fixed_length,
-                values,
-            } => self.put_vector_uint(*fixed_length, values)?,
-            Amf3Value::VectorDouble {
-                fixed_length,
-                values,
-            } => self.put_vector_double(*fixed_length, values)?,
-            Amf3Value::VectorObject {
-                fixed_length,
-                class_name,
-                values,
-            } => self.put_vector_object(*fixed_length, class_name.as_ref(), values)?,
-            Amf3Value::Dictionary {
-                weak_references,
-                entries,
-            } => self.put_dictionary(*weak_references, entries)?,
+            Amf3Value::VectorInt { fixed_length, values } => {
+                self.put_vector_int(*fixed_length, values)?
+            }
+            Amf3Value::VectorUInt { fixed_length, values } => {
+                self.put_vector_uint(*fixed_length, values)?
+            }
+            Amf3Value::VectorDouble { fixed_length, values } => {
+                self.put_vector_double(*fixed_length, values)?
+            }
+            Amf3Value::VectorObject { fixed_length, class_name, values } => {
+                self.put_vector_object(*fixed_length, class_name.as_ref(), values)?
+            }
+            Amf3Value::Dictionary { weak_references, entries } => {
+                self.put_dictionary(*weak_references, entries)?
+            }
         }
         Ok(())
     }
@@ -437,13 +434,15 @@ mod encode_test {
     fn encode_integer_test() {
         let mut encoder = Amf3EncoderState::new(BytesMut::new());
         encoder.put_integer(-2137).unwrap();
-        let expected = Bytes::from_iter([INTEGER, 0b11111111, 0b11111111, 0b11110111, 0b10100111]);
+        let expected =
+            Bytes::from_iter([INTEGER, 0b11111111, 0b11111111, 0b11110111, 0b10100111]);
         let actual = encoder.buf.freeze();
         assert_eq!(actual, expected);
 
         let mut encoder = Amf3EncoderState::new(BytesMut::new());
         encoder.put_integer(-(1 << 28)).unwrap();
-        let expected = Bytes::from_iter([INTEGER, 0b11000000, 0b10000000, 0b10000000, 0b00000000]);
+        let expected =
+            Bytes::from_iter([INTEGER, 0b11000000, 0b10000000, 0b10000000, 0b00000000]);
         let actual = encoder.buf.freeze();
         assert_eq!(actual, expected);
     }

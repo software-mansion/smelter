@@ -8,43 +8,55 @@ const NALU_TYPE_PPS: u8 = 8;
 
 /// Splits Annex B byte stream into individual NALUs (without start codes).
 fn split_annexb_nalus(data: &[u8]) -> Vec<&[u8]> {
-    let mut nalus = Vec::new();
-    let mut i = 0;
+    annexb_nalus(data).collect()
+}
 
-    while i < data.len() {
-        let nalu_start = if data[i..].starts_with(&START_CODE_4) {
-            i + 4
-        } else if data[i..].starts_with(&START_CODE_3) {
-            i + 3
-        } else {
-            i += 1;
-            continue;
-        };
+fn annexb_nalus(data: &[u8]) -> AnnexBNalus<'_> {
+    AnnexBNalus { data, offset: 0 }
+}
 
-        let mut nalu_end = nalu_start + 1;
-        while nalu_end < data.len() {
-            if data[nalu_end..].starts_with(&START_CODE_4)
-                || data[nalu_end..].starts_with(&START_CODE_3)
-            {
-                break;
-            }
-            nalu_end += 1;
-        }
+struct AnnexBNalus<'a> {
+    data: &'a [u8],
+    offset: usize,
+}
 
-        nalus.push(&data[nalu_start..nalu_end]);
-        i = nalu_end;
+impl<'a> Iterator for AnnexBNalus<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (start_code, start_code_len) = find_start_code(self.data, self.offset)?;
+        let nalu_start = start_code + start_code_len;
+        let nalu_end = find_start_code(self.data, nalu_start)
+            .map(|(idx, _)| idx)
+            .unwrap_or(self.data.len());
+        self.offset = nalu_end;
+        Some(&self.data[nalu_start..nalu_end])
     }
+}
 
-    nalus
+fn find_start_code(data: &[u8], from: usize) -> Option<(usize, usize)> {
+    let mut i = from;
+    while i < data.len() {
+        if data[i..].starts_with(&START_CODE_4) {
+            return Some((i, START_CODE_4.len()));
+        }
+        if data[i..].starts_with(&START_CODE_3) {
+            return Some((i, START_CODE_3.len()));
+        }
+        i += 1;
+    }
+    None
 }
 
 /// Converts Annex B NALUs to AVCC format (4-byte length prefix per NALU).
 /// `data` needs to include whole NALUs
 pub(crate) fn annexb_to_avcc(data: &[u8]) -> Bytes {
-    let nalus = split_annexb_nalus(data);
-    let mut out = BytesMut::new();
+    let mut out = BytesMut::with_capacity(data.len());
 
-    for nalu in &nalus {
+    for nalu in annexb_nalus(data) {
+        if nalu.is_empty() {
+            continue;
+        }
         let nalu_type = nalu[0] & 0x1F;
         // Skip SPS/PPS from the data stream - they belong in the config
         if nalu_type == NALU_TYPE_SPS || nalu_type == NALU_TYPE_PPS {
@@ -122,30 +134,21 @@ mod tests {
     fn split_annexb_nalus_with_4byte_start_codes() {
         let data = [0, 0, 0, 1, 0x65, 0xAA, 0xBB, 0, 0, 0, 1, 0x06, 0xCC, 0xDD];
         let nalus = split_annexb_nalus(&data);
-        assert_eq!(
-            nalus,
-            vec![&[0x65, 0xAA, 0xBB][..], &[0x06, 0xCC, 0xDD][..]]
-        );
+        assert_eq!(nalus, vec![&[0x65, 0xAA, 0xBB][..], &[0x06, 0xCC, 0xDD][..]]);
     }
 
     #[test]
     fn split_annexb_nalus_with_3byte_start_codes() {
         let data = [0, 0, 1, 0x65, 0xAA, 0xBB, 0, 0, 1, 0x06, 0xCC, 0xDD];
         let nalus = split_annexb_nalus(&data);
-        assert_eq!(
-            nalus,
-            vec![&[0x65, 0xAA, 0xBB][..], &[0x06, 0xCC, 0xDD][..]]
-        );
+        assert_eq!(nalus, vec![&[0x65, 0xAA, 0xBB][..], &[0x06, 0xCC, 0xDD][..]]);
     }
 
     #[test]
     fn split_annexb_nalus_mixed_start_codes() {
         let data = [0, 0, 0, 1, 0x65, 0xAA, 0xBB, 0, 0, 1, 0x06, 0xCC, 0xDD];
         let nalus = split_annexb_nalus(&data);
-        assert_eq!(
-            nalus,
-            vec![&[0x65, 0xAA, 0xBB][..], &[0x06, 0xCC, 0xDD][..]]
-        );
+        assert_eq!(nalus, vec![&[0x65, 0xAA, 0xBB][..], &[0x06, 0xCC, 0xDD][..]]);
     }
 
     #[test]

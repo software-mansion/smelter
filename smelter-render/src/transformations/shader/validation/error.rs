@@ -3,7 +3,9 @@ use std::{fmt::Display, sync::Arc};
 use wgpu::naga;
 
 use crate::{
-    transformations::shader::pipeline::{USER_DEFINED_BUFFER_BINDING, USER_DEFINED_BUFFER_GROUP},
+    transformations::shader::pipeline::{
+        USER_DEFINED_BUFFER_BINDING, USER_DEFINED_BUFFER_GROUP,
+    },
     wgpu::common_pipeline::VERTEX_ENTRYPOINT_NAME,
 };
 
@@ -18,10 +20,7 @@ pub struct ShaderParseError {
 
 impl ShaderParseError {
     pub fn new(parse_error: naga::front::wgsl::ParseError, source: Arc<str>) -> Self {
-        Self {
-            parse_error,
-            source,
-        }
+        Self { parse_error, source }
     }
 }
 
@@ -155,23 +154,16 @@ pub enum ParametersValidationError {
     #[error(
         "Struct \"{struct_name}\" has {expected} field(s), but {actual} were provided via shader parameters."
     )]
-    WrongShaderFieldsAmount {
-        struct_name: String,
-        expected: usize,
-        actual: usize,
-    },
+    WrongShaderFieldsAmount { struct_name: String, expected: usize, actual: usize },
 
     #[error(
         "The field at index {index} in struct \"{struct_name}\" is named \"{expected}\", but \"{actual}\" were provided via shader parameters."
     )]
-    WrongFieldName {
-        index: usize,
-        struct_name: String,
-        expected: String,
-        actual: String,
-    },
+    WrongFieldName { index: usize, struct_name: String, expected: String, actual: String },
 
-    #[error("Error while verifying field \"{struct_field}\" in struct \"{struct_name}\".")]
+    #[error(
+        "Error while verifying field \"{struct_field}\" in struct \"{struct_name}\"."
+    )]
     WrongFieldType {
         struct_name: String,
         struct_field: String,
@@ -231,7 +223,9 @@ impl ShaderGlobalVariableExt for naga::GlobalVariable {
             naga::AddressSpace::Immediate => "<immediate>".to_string(),
             naga::AddressSpace::TaskPayload => "<task_payload>".to_string(),
             naga::AddressSpace::RayPayload => "<ray_payload>".to_string(),
-            naga::AddressSpace::IncomingRayPayload => "<incoming_ray_payload>".to_string(),
+            naga::AddressSpace::IncomingRayPayload => {
+                "<incoming_ray_payload>".to_string()
+            }
         };
         let name = self.name.clone().unwrap_or("value".to_string());
         format!("{group_and_binding}var{space} {name}")

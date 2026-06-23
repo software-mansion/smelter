@@ -18,17 +18,16 @@ pub(super) fn vertices_transformation_matrix(
     /// Calculates translation vector from origin to middle of cropped layout box
     /// in ([-output_width / 2, output_width / 2], [-output_height / 2, output_height / 2])
     /// coordinate system
-    fn translation_to_final_position(position: &Position, output_resolution: &Resolution) -> Vec3 {
+    fn translation_to_final_position(
+        position: &Position,
+        output_resolution: &Resolution,
+    ) -> Vec3 {
         let left_border_x = -(output_resolution.width as f32 / 2.0);
         let distance_left_to_middle = position.left + (position.width / 2.0);
 
         let top_border_y = output_resolution.height as f32 / 2.0;
         let top_to_middle = position.top + (position.height / 2.0);
-        vec3(
-            left_border_x + distance_left_to_middle,
-            top_border_y - top_to_middle,
-            0.0,
-        )
+        vec3(left_border_x + distance_left_to_middle, top_border_y - top_to_middle, 0.0)
     }
 
     let mut transform_position_matrix = Mat4::identity();
@@ -48,20 +47,14 @@ pub(super) fn vertices_transformation_matrix(
         &translation_to_final_position(position, output_resolution),
     );
 
-    transform_position_matrix = rotate_z(
-        &transform_position_matrix,
-        position.rotation_degrees.to_radians(),
-    );
+    transform_position_matrix =
+        rotate_z(&transform_position_matrix, position.rotation_degrees.to_radians());
 
     let x_scale = position.width / output_resolution.width as f32;
     let y_scale = position.height / output_resolution.height as f32;
     transform_position_matrix = scale(
         &transform_position_matrix,
-        &vec3(
-            x_scale_to_pixels * x_scale,
-            y_scale_to_pixels * y_scale,
-            1.0,
-        ),
+        &vec3(x_scale_to_pixels * x_scale, y_scale_to_pixels * y_scale, 1.0),
     );
 
     transform_position_matrix

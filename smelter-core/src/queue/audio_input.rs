@@ -55,7 +55,8 @@ impl AudioQueueInput {
         side_channel: Option<AudioSideChannel>,
         side_channel_delay: Duration,
     ) -> (Self, Sender<InputAudioSamples>) {
-        let (receiver, sender) = AudioInputReceiver::new(side_channel_delay, side_channel);
+        let (receiver, sender) =
+            AudioInputReceiver::new(side_channel_delay, side_channel);
         let input = Self {
             queue_ctx: ctx.queue_ctx.clone(),
             required,
@@ -92,8 +93,7 @@ impl AudioQueueInput {
     pub(super) fn pause(&mut self) {
         if !self.paused {
             self.paused = true;
-            self.event_emitter
-                .emit(Event::AudioInputStreamPaused(self.input_id.clone()));
+            self.event_emitter.emit(Event::AudioInputStreamPaused(self.input_id.clone()));
         }
     }
 
@@ -112,10 +112,7 @@ impl AudioQueueInput {
         queue_start_pts: Duration,
     ) -> AudioEvent {
         if self.paused {
-            return AudioEvent {
-                required: false,
-                event: PipelineEvent::Data(vec![]),
-            };
+            return AudioEvent { required: false, event: PipelineEvent::Data(vec![]) };
         }
 
         let Some(offset) = self.resolve_offset(pts_range.0, queue_start_pts) else {
@@ -148,16 +145,10 @@ impl AudioQueueInput {
 
         if samples.is_empty() && self.is_done() && !self.event_eos_guard.emited() {
             self.event_eos_guard.emit();
-            return AudioEvent {
-                required: true,
-                event: PipelineEvent::EOS,
-            };
+            return AudioEvent { required: true, event: PipelineEvent::EOS };
         }
 
-        AudioEvent {
-            required: self.required,
-            event: PipelineEvent::Data(samples),
-        }
+        AudioEvent { required: self.required, event: PipelineEvent::Data(samples) }
     }
 
     pub(super) fn is_ready_for_pts(
@@ -204,9 +195,9 @@ impl AudioQueueInput {
 
         self.event_delivered_guard.emit();
         let offset = match self.offset_from_start {
-            Some(offset_from_start) => self
-                .track_offset
-                .get_or_init(offset_from_start + queue_start_pts),
+            Some(offset_from_start) => {
+                self.track_offset.get_or_init(offset_from_start + queue_start_pts)
+            }
             None => self.track_offset.get_or_init(buffer_pts),
         };
         Some(offset)
@@ -305,10 +296,12 @@ impl AudioInputReceiver {
                 return;
             }
             let back = self.buffer.back();
-            let has_needed = back
-                .map(|batch| batch.end_pts() > needed_pts)
-                .unwrap_or(false);
-            if has_needed && self.size() >= self.max_size && self.size() >= side_channel_size {
+            let has_needed =
+                back.map(|batch| batch.end_pts() > needed_pts).unwrap_or(false);
+            if has_needed
+                && self.size() >= self.max_size
+                && self.size() >= side_channel_size
+            {
                 return;
             }
             match self.receiver.try_recv() {

@@ -25,12 +25,10 @@ impl CommandPool {
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue_family_index as u32);
 
-        let command_pool = unsafe { device.device.create_command_pool(&create_info, None)? };
+        let command_pool =
+            unsafe { device.device.create_command_pool(&create_info, None)? };
 
-        Ok(Self {
-            device,
-            command_pool,
-        })
+        Ok(Self { device, command_pool })
     }
 
     fn new_primary(&self) -> Result<vk::CommandBuffer, VulkanCommonError> {
@@ -39,11 +37,8 @@ impl CommandPool {
             .level(vk::CommandBufferLevel::PRIMARY)
             .command_buffer_count(1);
 
-        let buffer = unsafe {
-            self.device
-                .device
-                .allocate_command_buffers(&allocate_info)?[0]
-        };
+        let buffer =
+            unsafe { self.device.device.allocate_command_buffers(&allocate_info)?[0] };
 
         Ok(buffer)
     }
@@ -52,9 +47,7 @@ impl CommandPool {
 impl Drop for CommandPool {
     fn drop(&mut self) {
         unsafe {
-            self.device
-                .device
-                .destroy_command_pool(self.command_pool, None);
+            self.device.device.destroy_command_pool(self.command_pool, None);
         }
     }
 }
@@ -117,7 +110,10 @@ impl CommandBufferPool {
         }))
     }
 
-    pub(crate) fn mark_submitted_as_free(&self, last_waited_semaphore: SemaphoreWaitValue) {
+    pub(crate) fn mark_submitted_as_free(
+        &self,
+        last_waited_semaphore: SemaphoreWaitValue,
+    ) {
         let mut guard = self.0.lock().unwrap();
         let inner = &mut *guard;
 
@@ -132,9 +128,7 @@ impl CommandBufferPool {
             return;
         };
 
-        inner
-            .free
-            .extend(inner.submitted.drain(..=last).map(|b| b.buffer));
+        inner.free.extend(inner.submitted.drain(..=last).map(|b| b.buffer));
     }
 }
 
@@ -221,7 +215,9 @@ impl OpenCommandBuffer {
                         .unwrap()
                         .map
                         .get(&image)
-                        .ok_or(VulkanCommonError::TriedToAccessNonexistentImageState(image))?
+                        .ok_or(VulkanCommonError::TriedToAccessNonexistentImageState(
+                            image,
+                        ))?
                         .clone(),
                 })
                 .new_layout),
@@ -238,10 +234,7 @@ impl RecordedCommandBuffer {
             .lock()
             .unwrap()
             .submitted
-            .push_back(SubmittedCommandBuffer {
-                semaphore_value,
-                buffer: self.0.buffer,
-            });
+            .push_back(SubmittedCommandBuffer { semaphore_value, buffer: self.0.buffer });
 
         for (key, layout_change) in self.0.image_layout_transitions.drain() {
             layout_change

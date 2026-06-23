@@ -26,16 +26,14 @@ impl WebRendererShader {
         let sampler = Sampler::new(&wgpu_ctx.device);
 
         let pipeline_layout =
-            wgpu_ctx
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("Web renderer pipeline layout"),
-                    bind_group_layouts: &[
-                        Some(&wgpu_ctx.format.single_texture_layout),
-                        Some(&sampler.bind_group_layout),
-                    ],
-                    immediate_size: RenderInfo::size(),
-                });
+            wgpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Web renderer pipeline layout"),
+                bind_group_layouts: &[
+                    Some(&wgpu_ctx.format.single_texture_layout),
+                    Some(&sampler.bind_group_layout),
+                ],
+                immediate_size: RenderInfo::size(),
+            });
 
         let pipeline = common_pipeline::create_render_pipeline(
             "Web renderer node",
@@ -69,33 +67,29 @@ impl WebRendererShader {
                 let texture_view = texture_view.unwrap_or(wgpu_ctx.default_empty_view());
 
                 let input_texture_bg =
-                    wgpu_ctx
-                        .device
-                        .create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("Web renderer input textures bgl"),
-                            layout: &wgpu_ctx.format.single_texture_layout,
-                            entries: &[wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: wgpu::BindingResource::TextureView(texture_view),
-                            }],
-                        });
+                    wgpu_ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("Web renderer input textures bgl"),
+                        layout: &wgpu_ctx.format.single_texture_layout,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(texture_view),
+                        }],
+                    });
 
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: None,
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        ops: wgpu::Operations {
-                            load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                        view: target.view(),
-                        resolve_target: None,
-                        depth_slice: None,
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
+                let mut render_pass =
+                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: None,
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            ops: wgpu::Operations { load, store: wgpu::StoreOp::Store },
+                            view: target.view(),
+                            resolve_target: None,
+                            depth_slice: None,
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        multiview_mask: None,
+                    });
 
                 render_pass.set_pipeline(&self.pipeline);
 

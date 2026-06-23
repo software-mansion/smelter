@@ -74,10 +74,7 @@ mod tests {
         );
 
         let current_timestamp = u32::MAX / 2 + 1;
-        assert_eq!(
-            rollover_state.timestamp(current_timestamp),
-            current_timestamp as u64
-        );
+        assert_eq!(rollover_state.timestamp(current_timestamp), current_timestamp as u64);
 
         let current_timestamp = 0;
         assert_eq!(

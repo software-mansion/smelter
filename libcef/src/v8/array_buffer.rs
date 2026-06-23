@@ -46,7 +46,10 @@ impl V8ArrayBuffer {
         _context_entered: &V8ContextEntered,
     ) -> Self {
         let inner = unsafe {
-            libcef_sys::cef_v8value_create_array_buffer_with_copy(ptr as *mut c_void, ptr_len)
+            libcef_sys::cef_v8value_create_array_buffer_with_copy(
+                ptr as *mut c_void,
+                ptr_len,
+            )
         };
 
         Self(CefRc::new(inner))
@@ -62,7 +65,8 @@ impl V8ArrayBuffer {
     ) -> Result<(), V8ArrayBufferError> {
         unsafe {
             let array_buffer = self.0.get_weak_with_validation()?;
-            let get_array_buffer_len = (*array_buffer).get_array_buffer_byte_length.unwrap();
+            let get_array_buffer_len =
+                (*array_buffer).get_array_buffer_byte_length.unwrap();
             let get_data = (*array_buffer).get_array_buffer_data.unwrap();
 
             if get_array_buffer_len(array_buffer) != data_len {
@@ -102,7 +106,9 @@ impl CefStruct for V8ArrayBufferReleaseCallback {
         }
     }
 
-    fn base_from_cef_data(cef_data: &mut Self::CefType) -> &mut libcef_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut libcef_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }
@@ -115,10 +121,7 @@ impl V8ArrayBufferReleaseCallback {
         unsafe {
             let self_ref = CefRefData::<Self>::from_cef(self_);
             match (*self_ref).deref() {
-                V8ArrayBufferReleaseCallback::Delete {
-                    buffer_len,
-                    buffer_cap,
-                } => {
+                V8ArrayBufferReleaseCallback::Delete { buffer_len, buffer_cap } => {
                     Vec::from_raw_parts(buffer, *buffer_len, *buffer_cap);
                 }
                 V8ArrayBufferReleaseCallback::DoNotDelete => {}

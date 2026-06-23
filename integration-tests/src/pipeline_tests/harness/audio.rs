@@ -164,10 +164,7 @@ pub fn compare_chunks(
 }
 
 fn chunks_peak(chunks: &[AudioSampleBatch]) -> f32 {
-    chunks
-        .iter()
-        .map(|c| peak_abs(&c.samples))
-        .fold(0.0_f32, f32::max)
+    chunks.iter().map(|c| peak_abs(&c.samples)).fold(0.0_f32, f32::max)
 }
 
 fn decode(dump: &Bytes, format: DumpFormat) -> Result<Vec<AudioSampleBatch>> {

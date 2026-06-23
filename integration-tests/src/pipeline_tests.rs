@@ -48,9 +48,8 @@ pub fn start_server_msg_listener(port: u16, event_sender: Sender<tungstenite::Me
 async fn server_msg_listener(port: u16, event_sender: Sender<tungstenite::Message>) {
     let url = format!("ws://127.0.0.1:{port}/ws");
 
-    let (ws_stream, _) = tokio_tungstenite::connect_async(url)
-        .await
-        .expect("Failed to connect");
+    let (ws_stream, _) =
+        tokio_tungstenite::connect_async(url).await.expect("Failed to connect");
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let (mut outgoing, mut incoming) = ws_stream.split();

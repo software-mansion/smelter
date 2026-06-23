@@ -17,7 +17,9 @@ use crate::{
     },
     device::DecodingDevice,
     vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers},
-    wrappers::{DecodeInputBufferPool, DecodingQueryPool, OpenCommandBuffer, VideoSession},
+    wrappers::{
+        DecodeInputBufferPool, DecodingQueryPool, OpenCommandBuffer, VideoSession,
+    },
 };
 
 mod images;
@@ -36,7 +38,9 @@ pub(super) struct VideoSessionResources<'a> {
     image_modifiers: ImageModifiers,
 }
 
-fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, VulkanDecoderError> {
+fn calculate_max_num_reorder_frames(
+    sps: &SeqParameterSet,
+) -> Result<u64, VulkanDecoderError> {
     let fallback_max_num_reorder_frames = if [44u8, 86, 100, 110, 122, 244]
         .contains(&sps.profile_idc.into())
         && sps.constraint_flags.flag3()
@@ -70,14 +74,12 @@ impl<'a> VideoSessionResources<'a> {
         tracker: &mut DecoderTracker,
         image_modifiers: ImageModifiers,
     ) -> Result<Self, VulkanDecoderError> {
-        let profile_info = Arc::new(H264DecodeProfileInfo::from_sps_decode(&sps, usage_info)?);
+        let profile_info =
+            Arc::new(H264DecodeProfileInfo::from_sps_decode(&sps, usage_info)?);
 
         let level_idc = sps.level_idc;
         let max_level_idc = vk_to_h264_level_idc(
-            decoding_device
-                .profile_capabilities
-                .codec_decode_capabilities
-                .max_level_idc,
+            decoding_device.profile_capabilities.codec_decode_capabilities.max_level_idc,
         )?;
 
         if level_idc > max_level_idc {
@@ -100,10 +102,7 @@ impl<'a> VideoSessionResources<'a> {
             max_dpb_slots,
             max_active_references,
             vk::VideoSessionCreateFlagsKHR::empty(),
-            &decoding_device
-                .profile_capabilities
-                .video_capabilities
-                .std_header_version,
+            &decoding_device.profile_capabilities.video_capabilities.std_header_version,
         )?);
 
         let mut parameters_manager =
@@ -122,20 +121,20 @@ impl<'a> VideoSessionResources<'a> {
         )?;
 
         let sps = HashMap::from_iter([(sps.id().id(), sps)]);
-        let decode_query_pool = if decoding_device
-            .h264_decode_queues
-            .supports_result_status_queries()
-        {
-            Some(Arc::new(DecodingQueryPool::new(
-                decoding_device.vulkan_device.device.clone(),
-                profile_info.profile_info.profile_info,
-            )?))
-        } else {
-            None
-        };
+        let decode_query_pool =
+            if decoding_device.h264_decode_queues.supports_result_status_queries() {
+                Some(Arc::new(DecodingQueryPool::new(
+                    decoding_device.vulkan_device.device.clone(),
+                    profile_info.profile_info.profile_info,
+                )?))
+            } else {
+                None
+            };
 
-        let decode_buffer_pool =
-            DecodeInputBufferPool::new(decoding_device.allocator.clone(), profile_info.clone());
+        let decode_buffer_pool = DecodeInputBufferPool::new(
+            decoding_device.allocator.clone(),
+            profile_info.clone(),
+        );
 
         let parameters = SessionParams {
             max_coded_extent,
@@ -170,7 +169,9 @@ impl<'a> VideoSessionResources<'a> {
             max_dpb_slots: sps.max_num_ref_frames + 1, // +1 for current frame
             max_active_references: sps.max_num_ref_frames,
             max_num_reorder_frames: calculate_max_num_reorder_frames(&sps)?,
-            profile_info: Arc::new(H264DecodeProfileInfo::from_sps_decode(&sps, usage_info)?),
+            profile_info: Arc::new(H264DecodeProfileInfo::from_sps_decode(
+                &sps, usage_info,
+            )?),
             level_idc: sps.level_idc,
         };
         let current_session_params = self
@@ -178,10 +179,8 @@ impl<'a> VideoSessionResources<'a> {
             .take()
             .unwrap_or_else(|| self.parameters.clone());
 
-        self.parameters_scheduled_for_reset = Some(SessionParams::combine(
-            current_session_params,
-            new_session_params,
-        ));
+        self.parameters_scheduled_for_reset =
+            Some(SessionParams::combine(current_session_params, new_session_params));
 
         self.parameters_manager.put_sps(&sps)?;
         self.sps.insert(sps.id().id(), sps);
@@ -189,12 +188,13 @@ impl<'a> VideoSessionResources<'a> {
         Ok(())
     }
 
-    pub(crate) fn process_pps(&mut self, pps: PicParameterSet) -> Result<(), VulkanDecoderError> {
+    pub(crate) fn process_pps(
+        &mut self,
+        pps: PicParameterSet,
+    ) -> Result<(), VulkanDecoderError> {
         self.parameters_manager.put_pps(&pps)?;
-        self.pps.insert(
-            (pps.seq_parameter_set_id.id(), pps.pic_parameter_set_id.id()),
-            pps,
-        );
+        self.pps
+            .insert((pps.seq_parameter_set_id.id(), pps.pic_parameter_set_id.id()), pps);
         Ok(())
     }
 
@@ -215,10 +215,7 @@ impl<'a> VideoSessionResources<'a> {
         }
 
         let max_level_idc = vk_to_h264_level_idc(
-            decoding_device
-                .profile_capabilities
-                .codec_decode_capabilities
-                .max_level_idc,
+            decoding_device.profile_capabilities.codec_decode_capabilities.max_level_idc,
         )?;
 
         if new_params.level_idc > max_level_idc {
@@ -229,16 +226,15 @@ impl<'a> VideoSessionResources<'a> {
         }
 
         if self.parameters.profile_info != new_params.profile_info {
-            self.decode_query_pool = match decoding_device
-                .h264_decode_queues
-                .supports_result_status_queries()
-            {
-                true => Some(Arc::new(DecodingQueryPool::new(
-                    decoding_device.vulkan_device.device.clone(),
-                    new_params.profile_info.profile_info.profile_info,
-                )?)),
-                false => None,
-            };
+            self.decode_query_pool =
+                match decoding_device.h264_decode_queues.supports_result_status_queries()
+                {
+                    true => Some(Arc::new(DecodingQueryPool::new(
+                        decoding_device.vulkan_device.device.clone(),
+                        new_params.profile_info.profile_info.profile_info,
+                    )?)),
+                    false => None,
+                };
             self.decode_buffer_pool = DecodeInputBufferPool::new(
                 decoding_device.allocator.clone(),
                 new_params.profile_info.clone(),
@@ -253,14 +249,10 @@ impl<'a> VideoSessionResources<'a> {
             new_params.max_dpb_slots,
             new_params.max_active_references,
             vk::VideoSessionCreateFlagsKHR::empty(),
-            &decoding_device
-                .profile_capabilities
-                .video_capabilities
-                .std_header_version,
+            &decoding_device.profile_capabilities.video_capabilities.std_header_version,
         )?);
 
-        self.parameters_manager
-            .change_session(self.video_session.session)?;
+        self.parameters_manager.change_session(self.video_session.session)?;
 
         self.decoding_images = Self::new_decoding_images(
             decoding_device,
@@ -294,18 +286,12 @@ impl<'a> VideoSessionResources<'a> {
         let mut dpb_format = decoding_device.profile_capabilities.dpb_format_properties;
         // image modifiers are only applied to the output picture, which is the dst_image if it
         // exists, dpb otherwise
-        if decoding_device
-            .profile_capabilities
-            .dst_format_properties
-            .is_none()
-        {
+        if decoding_device.profile_capabilities.dst_format_properties.is_none() {
             dpb_format.image_create_flags |= image_modifiers.create_flags;
             dpb_format.image_usage_flags |= image_modifiers.usage_flags;
         }
-        let dst_format = decoding_device
-            .profile_capabilities
-            .dst_format_properties
-            .map(|p| {
+        let dst_format =
+            decoding_device.profile_capabilities.dst_format_properties.map(|p| {
                 p.image_create_flags(p.image_create_flags | image_modifiers.create_flags)
                     .image_usage_flags(p.image_usage_flags | image_modifiers.usage_flags)
             });

@@ -24,7 +24,8 @@ impl TimelineSemaphore {
         let mut create_type_info = vk::SemaphoreTypeCreateInfo::default()
             .semaphore_type(vk::SemaphoreType::TIMELINE)
             .initial_value(initial_value);
-        let create_info = vk::SemaphoreCreateInfo::default().push_next(&mut create_type_info);
+        let create_info =
+            vk::SemaphoreCreateInfo::default().push_next(&mut create_type_info);
         let semaphore = unsafe { device.create_semaphore(&create_info, None)? };
 
         device.set_label(semaphore, label)?;
@@ -72,10 +73,7 @@ pub(crate) struct TrackerWait<S> {
 
 impl<S: Clone> Clone for TrackerWait<S> {
     fn clone(&self) -> Self {
-        Self {
-            value: self.value,
-            _state: self._state.clone(),
-        }
+        Self { value: self.value, _state: self._state.clone() }
     }
 }
 
@@ -185,7 +183,10 @@ pub(crate) struct SemaphoreTracker<S> {
 }
 
 impl<S> SemaphoreTracker<S> {
-    pub(crate) fn new(device: Arc<Device>, label: Option<&str>) -> Result<Self, VulkanCommonError> {
+    pub(crate) fn new(
+        device: Arc<Device>,
+        label: Option<&str>,
+    ) -> Result<Self, VulkanCommonError> {
         Ok(Self {
             next_value: 1,
             wait_for: None,
@@ -200,16 +201,18 @@ impl<S> SemaphoreTracker<S> {
         SemaphoreWaitValue(val)
     }
 
-    pub(crate) fn next_submit_info(&mut self, new_state: S) -> SemaphoreSubmitInfo<'_, S> {
-        let signal = TrackerWait {
-            value: self.next_sem_value(),
-            _state: new_state,
-        };
+    pub(crate) fn next_submit_info(
+        &mut self,
+        new_state: S,
+    ) -> SemaphoreSubmitInfo<'_, S> {
+        let signal = TrackerWait { value: self.next_sem_value(), _state: new_state };
 
         SemaphoreSubmitInfo {
             signal,
             #[cfg(feature = "wgpu")]
-            wgpu_fence: wgpu::hal::vulkan::Fence::TimelineSemaphore(self.semaphore.semaphore),
+            wgpu_fence: wgpu::hal::vulkan::Fence::TimelineSemaphore(
+                self.semaphore.semaphore,
+            ),
             tracker: self,
         }
     }
@@ -288,7 +291,10 @@ impl ImageLayoutTracker {
         }
     }
 
-    pub(crate) fn unregister_image(&mut self, image: ImageKey) -> Result<(), VulkanCommonError> {
+    pub(crate) fn unregister_image(
+        &mut self,
+        image: ImageKey,
+    ) -> Result<(), VulkanCommonError> {
         if self.map.remove(&image).is_none() {
             return Err(VulkanCommonError::UnregisteredNonexistentImage(image));
         }

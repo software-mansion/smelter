@@ -3,7 +3,8 @@ use smelter_render::{required_wgpu_features, set_required_wgpu_limits};
 use tracing::{error, info};
 
 use crate::graphics_context::{
-    CreateGraphicsContextError, GraphicsContext, GraphicsContextOptions, quicksync_wgpu_features,
+    CreateGraphicsContextError, GraphicsContext, GraphicsContextOptions,
+    quicksync_wgpu_features,
 };
 
 pub fn create_wgpu_graphics_ctx(
@@ -59,10 +60,7 @@ pub fn create_wgpu_graphics_ctx(
         .ok_or(CreateGraphicsContextError::NoAdapter)?;
 
     let adapter_info = adapter.get_info();
-    info!(
-        "Using {} adapter with {:?} backend",
-        adapter_info.name, adapter_info.backend
-    );
+    info!("Using {} adapter with {:?} backend", adapter_info.name, adapter_info.backend);
     if force_gpu && adapter_info.device_type == wgpu::DeviceType::Cpu {
         error!("Selected adapter is CPU based. Aborting.");
         return Err(CreateGraphicsContextError::NoAdapter);
@@ -108,10 +106,12 @@ fn request_wgpu_device(
     quicksync: bool,
 ) -> Result<(wgpu::Device, wgpu::Queue), CreateGraphicsContextError> {
     if quicksync {
-        return gpu_video::quicksync::create_wgpu_device(adapter, descriptor).map_err(|err| {
-            error!("{err}");
-            CreateGraphicsContextError::NoAdapter
-        });
+        return gpu_video::quicksync::create_wgpu_device(adapter, descriptor).map_err(
+            |err| {
+                error!("{err}");
+                CreateGraphicsContextError::NoAdapter
+            },
+        );
     }
 
     pollster::block_on(adapter.request_device(descriptor)).map_err(Into::into)
@@ -127,18 +127,22 @@ fn request_wgpu_device(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn log_available_adapters(instance: &wgpu::Instance, compatible_surface: Option<&wgpu::Surface>) {
-    let adapters: Vec<_> = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()))
-        .iter()
-        .filter(|adapter| match compatible_surface {
-            Some(surface) => adapter.is_surface_supported(surface),
-            None => true,
-        })
-        .map(|adapter| {
-            let info = adapter.get_info();
-            format!("\n - {info:?}")
-        })
-        .collect();
+fn log_available_adapters(
+    instance: &wgpu::Instance,
+    compatible_surface: Option<&wgpu::Surface>,
+) {
+    let adapters: Vec<_> =
+        pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()))
+            .iter()
+            .filter(|adapter| match compatible_surface {
+                Some(surface) => adapter.is_surface_supported(surface),
+                None => true,
+            })
+            .map(|adapter| {
+                let info = adapter.get_info();
+                format!("\n - {info:?}")
+            })
+            .collect();
     info!("Available adapters: {}", adapters.join(""))
 }
 

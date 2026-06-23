@@ -66,9 +66,7 @@ impl WhipWhepServer {
         });
         init_result_receiver.blocking_recv().unwrap()?;
 
-        Ok(WhipWhepServerHandle {
-            shutdown_sender: Some(shutdown_sender),
-        })
+        Ok(WhipWhepServerHandle { shutdown_sender: Some(shutdown_sender) })
     }
 
     async fn new(port: u16) -> Result<Self, InitPipelineError> {
@@ -84,9 +82,7 @@ impl WhipWhepServer {
             };
             tokio::time::sleep(Duration::from_millis(1000)).await;
         }
-        Err(InitPipelineError::WhipWhepServerInitError(
-            last_error.unwrap(),
-        ))
+        Err(InitPipelineError::WhipWhepServerInitError(last_error.unwrap()))
     }
 
     async fn run(
@@ -97,23 +93,11 @@ impl WhipWhepServer {
         let app = Router::new()
             .route("/status", get((StatusCode::OK, axum::Json(json!({})))))
             .route("/whip/:input_id", post(handle_create_whip_session))
-            .route(
-                "/whip/:input_id/:session_id",
-                patch(handle_new_whip_ice_candidates),
-            )
-            .route(
-                "/whip/:input_id/:session_id",
-                delete(handle_terminate_whip_session),
-            )
+            .route("/whip/:input_id/:session_id", patch(handle_new_whip_ice_candidates))
+            .route("/whip/:input_id/:session_id", delete(handle_terminate_whip_session))
             .route("/whep/:input_id", post(handle_create_whep_session))
-            .route(
-                "/whep/:input_id/:session_id",
-                patch(handle_new_whep_ice_candidates),
-            )
-            .route(
-                "/whep/:input_id/:session_id",
-                delete(handle_terminate_whep_session),
-            )
+            .route("/whep/:input_id/:session_id", patch(handle_new_whep_ice_candidates))
+            .route("/whep/:input_id/:session_id", delete(handle_terminate_whep_session))
             .layer(CorsLayer::permissive())
             .with_state(state);
 

@@ -30,7 +30,9 @@ impl DataMessage {
                 Some(AmfValue::String(s1)),
                 Some(AmfValue::Object(map) | AmfValue::EcmaArray(map)),
                 _,
-            ) if matches!(s1.as_str(), "onMetaData" | "@onMetaData") => Self::OnMetaData(map),
+            ) if matches!(s1.as_str(), "onMetaData" | "@onMetaData") => {
+                Self::OnMetaData(map)
+            }
             (v1, v2, v3) => {
                 let first_3_values = [v1, v2, v3].into_iter().flatten();
                 Self::Unknown(first_3_values.chain(iter).collect())

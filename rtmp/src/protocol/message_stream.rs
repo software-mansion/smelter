@@ -14,8 +14,8 @@ use crate::{
         RawMessage,
         byte_stream::RtmpByteStream,
         chunk::{
-            ChunkBaseHeader, ChunkExtendedTimestamp, ChunkHeaderTimestamp, ChunkMessageHeader,
-            ParseChunkError, VirtualMessageHeader,
+            ChunkBaseHeader, ChunkExtendedTimestamp, ChunkHeaderTimestamp,
+            ChunkMessageHeader, ParseChunkError, VirtualMessageHeader,
         },
     },
 };
@@ -57,7 +57,9 @@ impl RtmpMessageStream {
         self.reader.read_msg(&mut self.stream)
     }
 
-    pub fn try_read_msg(&mut self) -> Result<Option<RtmpMessageIncoming>, RtmpStreamError> {
+    pub fn try_read_msg(
+        &mut self,
+    ) -> Result<Option<RtmpMessageIncoming>, RtmpStreamError> {
         self.reader.try_read_msg(&mut self.stream)
     }
 
@@ -75,10 +77,7 @@ struct RtmpMessageReader {
 
 impl RtmpMessageReader {
     fn new() -> Self {
-        Self {
-            context: HashMap::new(),
-            chunk_size: DEFAULT_CHUNK_SIZE,
-        }
+        Self { context: HashMap::new(), chunk_size: DEFAULT_CHUNK_SIZE }
     }
 
     fn read_msg(
@@ -137,7 +136,8 @@ impl RtmpMessageReader {
         buffer: &mut VecDeque<u8>,
     ) -> Result<Option<RawMessage>, ParseChunkError> {
         let (base_header, offset) = ChunkBaseHeader::try_read(buffer)?;
-        let (msg_header, offset) = ChunkMessageHeader::try_read(&base_header, buffer, offset)?;
+        let (msg_header, offset) =
+            ChunkMessageHeader::try_read(&base_header, buffer, offset)?;
 
         let context = self.context.entry(base_header.cs_id).or_default();
         let msg_header = VirtualMessageHeader::from_msg(context.header, msg_header)
@@ -151,8 +151,13 @@ impl RtmpMessageReader {
             false => (None, offset),
         };
 
-        let (payload, offset) =
-            Self::try_chunk_read_payload(buffer, offset, self.chunk_size, msg_header, context)?;
+        let (payload, offset) = Self::try_chunk_read_payload(
+            buffer,
+            offset,
+            self.chunk_size,
+            msg_header,
+            context,
+        )?;
 
         buffer.drain(..offset);
 
@@ -173,7 +178,8 @@ impl RtmpMessageReader {
         if buffer.len() < offset + payload_len {
             return Err(ParseChunkError::NotEnoughData);
         }
-        let payload = Bytes::from_iter(buffer.iter().skip(offset).take(payload_len).copied());
+        let payload =
+            Bytes::from_iter(buffer.iter().skip(offset).take(payload_len).copied());
         Ok((payload, offset + payload_len))
     }
 }
@@ -278,7 +284,8 @@ impl RtmpMessageWriter {
         let context = self.context.entry(cs_id).or_default();
 
         let msg_header = context.resolve_header_type(&msg);
-        let extended_timestamp = context.resolve_extended_timestamps(&msg_header, msg.timestamp);
+        let extended_timestamp =
+            context.resolve_extended_timestamps(&msg_header, msg.timestamp);
         context.update(msg_header, msg.timestamp)?;
 
         let mut msg_header = Some(msg_header);
@@ -290,7 +297,13 @@ impl RtmpMessageWriter {
                 false => payload.split_to(payload.len()),
             };
             let msg_header = msg_header.take().unwrap_or(ChunkMessageHeader::NoHeader);
-            Self::write_chunk(stream, cs_id, msg_header, extended_timestamp, chunk_payload)?;
+            Self::write_chunk(
+                stream,
+                cs_id,
+                msg_header,
+                extended_timestamp,
+                chunk_payload,
+            )?;
         }
         stream.flush()?;
         Ok(())
@@ -303,10 +316,7 @@ impl RtmpMessageWriter {
         extended_timestamp: Option<u32>,
         payload: Bytes,
     ) -> Result<(), RtmpStreamError> {
-        let base_header = ChunkBaseHeader {
-            fmt: msg_header.chunk_type(),
-            cs_id,
-        };
+        let base_header = ChunkBaseHeader { fmt: msg_header.chunk_type(), cs_id };
 
         let base_header_data = base_header.serialize()?;
         let msg_header_data = msg_header.serialize();
@@ -342,8 +352,10 @@ impl WriterChunkStreamContext {
 
         let timestamp_delta = msg.timestamp.saturating_sub(prev_ts);
 
-        let msg_timestamp_match = (prev.timestamp.has_extended() && timestamp_delta >= 0x00FFFFFF)
-            || (!prev.timestamp.has_extended() && prev.timestamp.value() == timestamp_delta);
+        let msg_timestamp_match = (prev.timestamp.has_extended()
+            && timestamp_delta >= 0x00FFFFFF)
+            || (!prev.timestamp.has_extended()
+                && prev.timestamp.value() == timestamp_delta);
 
         if !msg_stream_id_match {
             return ChunkMessageHeader::Full {
@@ -368,7 +380,11 @@ impl WriterChunkStreamContext {
             };
         }
 
-        if msg_stream_id_match && msg_type_id_match && msg_len_match && !msg_timestamp_match {
+        if msg_stream_id_match
+            && msg_type_id_match
+            && msg_len_match
+            && !msg_timestamp_match
+        {
             return ChunkMessageHeader::TimestampOnly {
                 timestamp_delta: match timestamp_delta >= 0x00FFFFFF {
                     true => 0x00FFFFFF,
@@ -377,14 +393,22 @@ impl WriterChunkStreamContext {
             };
         }
 
-        if msg_stream_id_match && msg_type_id_match && msg_len_match && msg_timestamp_match {
+        if msg_stream_id_match
+            && msg_type_id_match
+            && msg_len_match
+            && msg_timestamp_match
+        {
             return ChunkMessageHeader::NoHeader;
         }
 
         unreachable!()
     }
 
-    fn resolve_extended_timestamps(&self, msg: &ChunkMessageHeader, timestamp: u32) -> Option<u32> {
+    fn resolve_extended_timestamps(
+        &self,
+        msg: &ChunkMessageHeader,
+        timestamp: u32,
+    ) -> Option<u32> {
         let Some((_, prev_ts)) = self.0 else {
             return match timestamp >= 0x00FFFFFF {
                 true => Some(timestamp),
@@ -394,14 +418,22 @@ impl WriterChunkStreamContext {
         let delta = timestamp.saturating_sub(prev_ts);
         match msg {
             ChunkMessageHeader::Full { .. } if timestamp >= 0x00FFFFFF => Some(timestamp),
-            ChunkMessageHeader::NoMessageStreamId { .. } if delta >= 0x00FFFFFF => Some(delta),
-            ChunkMessageHeader::TimestampOnly { .. } if delta >= 0x00FFFFFF => Some(delta),
+            ChunkMessageHeader::NoMessageStreamId { .. } if delta >= 0x00FFFFFF => {
+                Some(delta)
+            }
+            ChunkMessageHeader::TimestampOnly { .. } if delta >= 0x00FFFFFF => {
+                Some(delta)
+            }
             ChunkMessageHeader::NoHeader if delta >= 0x00FFFFFF => Some(delta),
             _ => None,
         }
     }
 
-    fn update(&mut self, msg: ChunkMessageHeader, timestamp: u32) -> Result<(), RtmpStreamError> {
+    fn update(
+        &mut self,
+        msg: ChunkMessageHeader,
+        timestamp: u32,
+    ) -> Result<(), RtmpStreamError> {
         let prev = self.0.map(|prev| prev.0);
         let header = VirtualMessageHeader::from_msg(prev, msg)
             .map_err(RtmpMessageSerializeError::InternalError)?;

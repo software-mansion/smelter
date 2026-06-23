@@ -3,8 +3,8 @@ use std::{ops::Deref, time::Duration};
 use crate::{scene::ViewChildrenDirection, transformations::layout::NestedLayout};
 
 use super::{
-    BorderRadius, BoxShadow, Component, ComponentId, IntermediateNode, Overflow, Padding, Position,
-    RGBAColor, SceneError, Size, StatefulComponent,
+    BorderRadius, BoxShadow, Component, ComponentId, IntermediateNode, Overflow, Padding,
+    Position, RGBAColor, SceneError, Size, StatefulComponent,
     components::ViewComponent,
     layout::StatefulLayoutComponent,
     scene_state::BuildStateTreeCtx,
@@ -61,9 +61,7 @@ impl StatefulViewComponent {
     /// External position of a component (includes border and padding)
     pub(super) fn position(&self, pts: Duration) -> Position {
         let view = self.view(pts);
-        view.position
-            .with_border(view.border_width)
-            .with_padding(view.padding)
+        view.position.with_border(view.border_width).with_padding(view.padding)
     }
 
     pub(super) fn component_id(&self) -> Option<&ComponentId> {
@@ -128,9 +126,7 @@ impl ViewComponent {
             padding: self.padding,
         };
 
-        let props_changed = previous_state
-            .map(|state| state.end != end)
-            .unwrap_or(false);
+        let props_changed = previous_state.map(|state| state.end != end).unwrap_or(false);
         let interrupt_previous_transition =
             self.transition.map(|t| t.should_interrupt).unwrap_or(false);
         let transition = TransitionState::new(
@@ -153,8 +149,6 @@ impl ViewComponent {
                 .map(|c| Component::stateful_component(c, ctx))
                 .collect::<Result<_, _>>()?,
         };
-        Ok(StatefulComponent::Layout(
-            StatefulLayoutComponent::View(view).into(),
-        ))
+        Ok(StatefulComponent::Layout(StatefulLayoutComponent::View(view).into()))
     }
 }

@@ -1,8 +1,8 @@
 use smelter_render::{
     InputId, OutputId,
     error::{
-        InitRendererEngineError, RegisterError, RegisterRendererError, RequestKeyframeError,
-        UnregisterRendererError, UpdateSceneError, WgpuError,
+        InitRendererEngineError, RegisterError, RegisterRendererError,
+        RequestKeyframeError, UnregisterRendererError, UpdateSceneError, WgpuError,
     },
 };
 
@@ -309,10 +309,7 @@ pub struct PipelineErrorInfo {
 
 impl PipelineErrorInfo {
     fn new(error_code: &'static str, error_type: ErrorType) -> Self {
-        Self {
-            error_code,
-            error_type,
-        }
+        Self { error_code, error_type }
     }
 }
 
@@ -334,13 +331,17 @@ const WHEP_BAD_STATUS: &str = "WHEP_BAD_STATUS";
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
         match err {
-            RegisterInputError::AlreadyRegistered(_) => {
-                PipelineErrorInfo::new(INPUT_STREAM_ALREADY_REGISTERED, ErrorType::Conflict)
-            }
+            RegisterInputError::AlreadyRegistered(_) => PipelineErrorInfo::new(
+                INPUT_STREAM_ALREADY_REGISTERED,
+                ErrorType::Conflict,
+            ),
 
             // WHEP
             RegisterInputError::InputError(_, InputInitError::Whep(err))
-                if matches!(err.as_ref(), WebrtcClientError::InvalidEndpointUrl(_, _)) =>
+                if matches!(
+                    err.as_ref(),
+                    WebrtcClientError::InvalidEndpointUrl(_, _)
+                ) =>
             {
                 PipelineErrorInfo::new(WHEP_INVALID_SERVER_URL, ErrorType::UserError)
             }
@@ -367,9 +368,10 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
             ) if err.is_request() || err.is_status() => {
                 PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError)
             }
-            RegisterInputError::InputError(_, InputInitError::Mp4(Mp4InputError::IoError(_))) => {
-                PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError)
-            }
+            RegisterInputError::InputError(
+                _,
+                InputInitError::Mp4(Mp4InputError::IoError(_)),
+            ) => PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError),
 
             // FFmpeg (used in HLS input)
             RegisterInputError::InputError(
@@ -405,9 +407,10 @@ const INVALID_VULKAN_VIDEO_PARAMETERS: &str = "INVALID_VULKAN_VIDEO_PARAMETERS";
 impl From<&RegisterOutputError> for PipelineErrorInfo {
     fn from(err: &RegisterOutputError) -> Self {
         match err {
-            RegisterOutputError::AlreadyRegistered(_) => {
-                PipelineErrorInfo::new(OUTPUT_STREAM_ALREADY_REGISTERED, ErrorType::Conflict)
-            }
+            RegisterOutputError::AlreadyRegistered(_) => PipelineErrorInfo::new(
+                OUTPUT_STREAM_ALREADY_REGISTERED,
+                ErrorType::Conflict,
+            ),
 
             // RTMP
             RegisterOutputError::OutputError(
@@ -419,7 +422,10 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
 
             // WHIP
             RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
-                if matches!(err.as_ref(), WebrtcClientError::InvalidEndpointUrl(_, _)) =>
+                if matches!(
+                    err.as_ref(),
+                    WebrtcClientError::InvalidEndpointUrl(_, _)
+                ) =>
             {
                 PipelineErrorInfo::new(WHIP_INVALID_SERVER_URL, ErrorType::UserError)
             }
@@ -428,10 +434,14 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
             {
                 PipelineErrorInfo::new(WHIP_REQUEST_FAILED, ErrorType::UserError)
             }
-            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err)) if matches!(err.as_ref(), WebrtcClientError::BadStatus(status, _) if status.is_client_error()) => {
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
+                if matches!(err.as_ref(), WebrtcClientError::BadStatus(status, _) if status.is_client_error()) =>
+            {
                 PipelineErrorInfo::new(WHIP_BAD_STATUS, ErrorType::UserError)
             }
-            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err)) if matches!(err.as_ref(), WebrtcClientError::BadStatus(status, _) if status.is_server_error()) => {
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
+                if matches!(err.as_ref(), WebrtcClientError::BadStatus(status, _) if status.is_server_error()) =>
+            {
                 PipelineErrorInfo::new(WHIP_BAD_STATUS, ErrorType::BadGateway)
             }
 
@@ -446,7 +456,10 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
                     | ffmpeg_next::error::ENOTSUP
             ) =>
             {
-                PipelineErrorInfo::new(SERVER_PATH_RESOLUTION_FAILED, ErrorType::UserError)
+                PipelineErrorInfo::new(
+                    SERVER_PATH_RESOLUTION_FAILED,
+                    ErrorType::UserError,
+                )
             }
 
             // Vulkan
@@ -456,7 +469,10 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
                 OutputInitError::EncoderError(EncoderInitError::VulkanEncoderError(
                     VulkanEncoderError::ParametersError { .. },
                 )),
-            ) => PipelineErrorInfo::new(INVALID_VULKAN_VIDEO_PARAMETERS, ErrorType::UserError),
+            ) => PipelineErrorInfo::new(
+                INVALID_VULKAN_VIDEO_PARAMETERS,
+                ErrorType::UserError,
+            ),
 
             // Generic
             RegisterOutputError::OutputError(_, _) => {
@@ -469,9 +485,10 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
             RegisterOutputError::NoVideoAndAudio(_) => {
                 PipelineErrorInfo::new(NO_VIDEO_OR_AUDIO_FOR_OUTPUT, ErrorType::UserError)
             }
-            RegisterOutputError::UnknownError(_) => {
-                PipelineErrorInfo::new(UNKNOWN_REGISTER_OUTPUT_ERROR, ErrorType::ServerError)
-            }
+            RegisterOutputError::UnknownError(_) => PipelineErrorInfo::new(
+                UNKNOWN_REGISTER_OUTPUT_ERROR,
+                ErrorType::ServerError,
+            ),
         }
     }
 }
@@ -485,9 +502,11 @@ impl From<&UpdateInputError> for PipelineErrorInfo {
             UpdateInputError::NotFound(_) => {
                 PipelineErrorInfo::new(UPDATE_INPUT_NOT_FOUND, ErrorType::EntityNotFound)
             }
-            UpdateInputError::SeekNotSupported(_) | UpdateInputError::PausingNotSupported(_) => {
-                PipelineErrorInfo::new(UPDATE_INPUT_ACTION_NOT_SUPPORTED, ErrorType::UserError)
-            }
+            UpdateInputError::SeekNotSupported(_)
+            | UpdateInputError::PausingNotSupported(_) => PipelineErrorInfo::new(
+                UPDATE_INPUT_ACTION_NOT_SUPPORTED,
+                ErrorType::UserError,
+            ),
         }
     }
 }
@@ -511,7 +530,8 @@ impl From<&UnregisterInputError> for PipelineErrorInfo {
 const OUTPUT_STREAM_STILL_IN_USE: &str = "OUTPUT_STREAM_STILL_IN_USE";
 const OUTPUT_STREAM_NOT_FOUND: &str = "OUTPUT_STREAM_NOT_FOUND";
 const NO_AUDIO_AND_VIDEO_SPECIFIED: &str = "NO_AUDIO_AND_VIDEO_SPECIFIED";
-const AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING: &str = "AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING";
+const AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING: &str =
+    "AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING";
 
 impl From<&UnregisterOutputError> for PipelineErrorInfo {
     fn from(err: &UnregisterOutputError) -> Self {
@@ -597,9 +617,10 @@ impl From<&RegisterRendererError> for PipelineErrorInfo {
             RegisterRendererError::Image(_, _) => {
                 PipelineErrorInfo::new(REGISTER_IMAGE_ERROR, ErrorType::UserError)
             }
-            RegisterRendererError::Web(_, _) => {
-                PipelineErrorInfo::new(REGISTER_WEB_RENDERER_ERROR, ErrorType::ServerError)
-            }
+            RegisterRendererError::Web(_, _) => PipelineErrorInfo::new(
+                REGISTER_WEB_RENDERER_ERROR,
+                ErrorType::ServerError,
+            ),
         }
     }
 }

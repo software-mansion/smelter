@@ -1,7 +1,11 @@
 use std::sync::Arc;
-use webrtc::api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
+use webrtc::api::media_engine::{
+    MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9,
+};
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender};
+use webrtc::rtp_transceiver::{
+    rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender,
+};
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 
 pub async fn replace_tracks_with_negotiated_codec(
@@ -13,10 +17,7 @@ pub async fn replace_tracks_with_negotiated_codec(
 
     if let Some(mime_type) = video_mime_type {
         let track = Arc::new(TrackLocalStaticRTP::new(
-            RTCRtpCodecCapability {
-                mime_type,
-                ..Default::default()
-            },
+            RTCRtpCodecCapability { mime_type, ..Default::default() },
             "video".to_string(),
             "webrtc-rs".to_string(),
         ));
@@ -25,10 +26,7 @@ pub async fn replace_tracks_with_negotiated_codec(
 
     if let Some(mime_type) = audio_mime_type {
         let track = Arc::new(TrackLocalStaticRTP::new(
-            RTCRtpCodecCapability {
-                mime_type,
-                ..Default::default()
-            },
+            RTCRtpCodecCapability { mime_type, ..Default::default() },
             "audio".to_string(),
             "webrtc-rs".to_string(),
         ));
@@ -55,7 +53,8 @@ fn extract_negotiated_codec(
                 let mut parts = value.split_whitespace();
                 let _payload_type = parts.next();
                 let spec = parts.next().unwrap_or("");
-                let codec_name = spec.split('/').next().unwrap_or("").to_ascii_uppercase();
+                let codec_name =
+                    spec.split('/').next().unwrap_or("").to_ascii_uppercase();
 
                 let mime_type = match (media_kind.as_str(), codec_name.as_str()) {
                     ("video", "H264") => Some(MIME_TYPE_H264),

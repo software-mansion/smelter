@@ -24,12 +24,10 @@ pub async fn handle_new_whip_ice_candidates(
     state.inputs.validate_token(&input_ref, &headers).await?;
     state.inputs.validate_session_id(&input_ref, &session_id)?;
 
-    let session = state
-        .inputs
-        .get_with(&input_ref, |input| match &input.session {
-            Some(s) => Ok(Some((s.peer_connection.downgrade(), s.session_id.clone()))),
-            None => Ok(None),
-        })?;
+    let session = state.inputs.get_with(&input_ref, |input| match &input.session {
+        Some(s) => Ok(Some((s.peer_connection.downgrade(), s.session_id.clone()))),
+        None => Ok(None),
+    })?;
 
     let Some((peer_connection, session_id)) = session else {
         return Err(WhipWhepServerError::InternalError(format!(

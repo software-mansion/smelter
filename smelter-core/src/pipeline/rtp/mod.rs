@@ -33,7 +33,8 @@ impl RtpPacket {
 
 impl std::fmt::Debug for RtpPacket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let first_bytes = &self.packet.payload[0..usize::min(10, self.packet.payload.len())];
+        let first_bytes =
+            &self.packet.payload[0..usize::min(10, self.packet.payload.len())];
         f.debug_struct("RtpPacket")
             .field("header", &self.packet.header)
             .field("payload", &first_bytes)

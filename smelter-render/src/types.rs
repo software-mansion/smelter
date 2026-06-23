@@ -85,10 +85,7 @@ where
     Id: From<Arc<str>>,
 {
     pub fn new(pts: Duration) -> Self {
-        FrameSet {
-            frames: HashMap::new(),
-            pts,
-        }
+        FrameSet { frames: HashMap::new(), pts }
     }
 }
 
@@ -143,10 +140,7 @@ impl From<Arc<str>> for OutputId {
     }
 }
 
-pub const MAX_NODE_RESOLUTION: Resolution = Resolution {
-    width: 7682,
-    height: 4320,
-};
+pub const MAX_NODE_RESOLUTION: Resolution = Resolution { width: 7682, height: 4320 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Resolution {
@@ -155,20 +149,11 @@ pub struct Resolution {
 }
 
 impl Resolution {
-    pub const ZERO: Self = Resolution {
-        width: 0,
-        height: 0,
-    };
+    pub const ZERO: Self = Resolution { width: 0, height: 0 };
 
-    pub const ONE_PIXEL: Self = Resolution {
-        width: 1,
-        height: 1,
-    };
+    pub const ONE_PIXEL: Self = Resolution { width: 1, height: 1 };
 
-    pub const MIN_2X2: Self = Resolution {
-        width: 2,
-        height: 2,
-    };
+    pub const MIN_2X2: Self = Resolution { width: 2, height: 2 };
 
     pub fn ratio(&self) -> f32 {
         self.width as f32 / self.height as f32
@@ -177,14 +162,11 @@ impl Resolution {
 
 impl From<wgpu::Extent3d> for Resolution {
     fn from(value: wgpu::Extent3d) -> Self {
-        Self {
-            width: value.width as usize,
-            height: value.height as usize,
-        }
+        Self { width: value.width as usize, height: value.height as usize }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFrameFormat {
     PlanarYuv420Bytes,
     PlanarYuv422Bytes,

@@ -25,7 +25,7 @@ pub const EMBED_SOURCE_FRAMES_MESSAGE: &str = "EMBED_SOURCE_FRAMES";
 pub const UNEMBED_SOURCE_FRAMES_MESSAGE: &str = "UNEMBED_SOURCE_FRAMES";
 pub const GET_FRAME_POSITIONS_MESSAGE: &str = "GET_FRAME_POSITIONS";
 
-pub(super) type FrameData = Arc<Mutex<Bytes>>;
+pub(super) type FrameData = Arc<Mutex<Option<Bytes>>>;
 pub(super) type SourceTransforms = Arc<Mutex<Vec<Mat4>>>;
 
 pub(crate) use node::WebRendererNode;

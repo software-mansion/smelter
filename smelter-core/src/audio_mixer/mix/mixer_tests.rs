@@ -14,26 +14,15 @@ fn sum_scaler_no_scaling_test() {
         VOL_UP_INCREMENT,
     );
 
-    let input_samples: Vec<(f64, f64)> = vec![
-        (0.01, -0.010),
-        (-0.02, 0.03),
-        (0.1, 0.1),
-        (0.4, 0.4),
-        (-0.6, 0.5),
-    ];
+    let input_samples: Vec<(f64, f64)> =
+        vec![(0.01, -0.010), (-0.02, 0.03), (0.1, 0.1), (0.4, 0.4), (-0.6, 0.5)];
 
     let actual_samples = mixer.scale_samples(input_samples);
 
     assert_eq!(mixer.scaling_factor, 1.0);
     assert_eq!(
         actual_samples,
-        vec![
-            (0.01, -0.010),
-            (-0.02, 0.03),
-            (0.1, 0.1),
-            (0.4, 0.4),
-            (-0.6, 0.5),
-        ]
+        vec![(0.01, -0.010), (-0.02, 0.03), (0.1, 0.1), (0.4, 0.4), (-0.6, 0.5),]
     );
 }
 
@@ -89,22 +78,12 @@ fn sum_scaler_decrease_and_increase_volume_test() {
     ];
 
     // This chunk doesn't change volume
-    let input_chunk_2: Vec<(f64, f64)> = vec![
-        (0.3, -0.3),
-        (0.2, 0.2),
-        (-0.4, 0.4),
-        (0.7, 0.7),
-        (0.35, 0.35),
-    ];
+    let input_chunk_2: Vec<(f64, f64)> =
+        vec![(0.3, -0.3), (0.2, 0.2), (-0.4, 0.4), (0.7, 0.7), (0.35, 0.35)];
 
     // This chunk causes volume to increase
-    let input_chunk_3: Vec<(f64, f64)> = vec![
-        (0.4, 0.4),
-        (0.3, 0.4),
-        (0.25, 0.25),
-        (-0.35, -0.35),
-        (-0.45, -0.45),
-    ];
+    let input_chunk_3: Vec<(f64, f64)> =
+        vec![(0.4, 0.4), (0.3, 0.4), (0.25, 0.25), (-0.35, -0.35), (-0.45, -0.45)];
 
     let actual_chunk_1 = mixer.scale_samples(input_chunk_1);
     let actual_scaling_factor_1 = mixer.scaling_factor;

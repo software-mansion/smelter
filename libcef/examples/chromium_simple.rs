@@ -63,10 +63,7 @@ struct RenderHandler;
 
 impl libcef::RenderHandler for RenderHandler {
     fn resolution(&self, _browser: &libcef::Browser) -> Resolution {
-        Resolution {
-            width: 1920,
-            height: 1080,
-        }
+        Resolution { width: 1920, height: 1080 }
     }
 
     fn on_paint(&self, browser: &libcef::Browser, buffer: &[u8], resolution: Resolution) {
@@ -79,11 +76,7 @@ impl libcef::RenderHandler for RenderHandler {
 }
 
 fn main() {
-    let target_path = &std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("..");
+    let target_path = &std::env::current_exe().unwrap().parent().unwrap().join("..");
 
     if libcef::bundle_for_development(target_path).is_err() {
         panic!(
@@ -101,13 +94,9 @@ fn main() {
     let ctx = libcef::Context::new(app, settings).expect("create browser");
 
     let client = Client;
-    let window_info = libcef::WindowInfo {
-        windowless_rendering_enabled: true,
-    };
-    let browser_settings = libcef::BrowserSettings {
-        windowless_frame_rate: 60,
-        background_color: 0xfff,
-    };
+    let window_info = libcef::WindowInfo { windowless_rendering_enabled: true };
+    let browser_settings =
+        libcef::BrowserSettings { windowless_frame_rate: 60, background_color: 0xfff };
     let _ = ctx.start_browser(
         client,
         window_info,

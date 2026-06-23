@@ -156,7 +156,8 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => DEFAULT_STREAM_FALLBACK_TIMEOUT,
     };
 
-    let default_logger_level = "info,wgpu_hal=warn,wgpu_core=warn,webrtc_srtp::session=warn";
+    let default_logger_level =
+        "info,wgpu_hal=warn,wgpu_core=warn,webrtc_srtp::session=warn";
     let logger_level = match env::var("SMELTER_LOGGER_LEVEL") {
         Ok(level) => format!("{default_logger_level},{level}"),
         Err(_) => default_logger_level.to_string(),
@@ -206,15 +207,17 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => false,
     };
 
-    let ahead_of_time_processing: bool = match env::var("SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE") {
-        Ok(enable) => bool_env_from_str(&enable).unwrap_or(offline_processing),
-        Err(_) => offline_processing,
-    };
+    let ahead_of_time_processing: bool =
+        match env::var("SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE") {
+            Ok(enable) => bool_env_from_str(&enable).unwrap_or(offline_processing),
+            Err(_) => offline_processing,
+        };
 
-    let never_drop_output_frames: bool = match env::var("SMELTER_NEVER_DROP_OUTPUT_FRAMES") {
-        Ok(enable) => bool_env_from_str(&enable).unwrap_or(offline_processing),
-        Err(_) => offline_processing,
-    };
+    let never_drop_output_frames: bool =
+        match env::var("SMELTER_NEVER_DROP_OUTPUT_FRAMES") {
+            Ok(enable) => bool_env_from_str(&enable).unwrap_or(offline_processing),
+            Err(_) => offline_processing,
+        };
 
     let run_late_scheduled_events = match env::var("SMELTER_RUN_LATE_SCHEDULED_EVENTS") {
         Ok(enable) => bool_env_from_str(&enable).unwrap_or(false),
@@ -224,7 +227,9 @@ fn try_read_config() -> Result<Config, String> {
     let default_wgpu_features: WgpuFeatures =
         WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
     let wgpu_required_features = match env::var("SMELTER_REQUIRED_WGPU_FEATURES") {
-        Ok(required_wgpu_features) => wgpu_features_from_str(&required_wgpu_features).unwrap(),
+        Ok(required_wgpu_features) => {
+            wgpu_features_from_str(&required_wgpu_features).unwrap()
+        }
         Err(_) => default_wgpu_features,
     };
 
@@ -261,24 +266,27 @@ fn try_read_config() -> Result<Config, String> {
     };
 
     let default_stun_servers = Arc::new(vec!["stun:stun.l.google.com:19302".to_string()]);
-    let webrtc_stun_servers =
-        match env::var("SMELTER_WEBRTC_STUN_SERVERS").or(env::var("SMELTER_STUN_SERVERS")) {
-            Ok(var) => {
-                if var.is_empty() {
-                    println!("CONFIG ERROR: empty stun servers env");
-                    Arc::new(Vec::new())
-                } else {
-                    Arc::new(var.split(',').map(String::from).collect())
-                }
+    let webrtc_stun_servers = match env::var("SMELTER_WEBRTC_STUN_SERVERS")
+        .or(env::var("SMELTER_STUN_SERVERS"))
+    {
+        Ok(var) => {
+            if var.is_empty() {
+                println!("CONFIG ERROR: empty stun servers env");
+                Arc::new(Vec::new())
+            } else {
+                Arc::new(var.split(',').map(String::from).collect())
             }
-            Err(_) => default_stun_servers,
-        };
+        }
+        Err(_) => default_stun_servers,
+    };
 
     let webrtc_udp_port_range = match env::var("SMELTER_WEBRTC_UDP_PORT_RANGE") {
         Ok(port_range) => match port_range_from_str(&port_range) {
             Ok(port_range) => Some(port_range),
             Err(err) => {
-                println!("CONFIG ERROR: \"{port_range}\" is not a valid port range: {err}");
+                println!(
+                    "CONFIG ERROR: \"{port_range}\" is not a valid port range: {err}"
+                );
                 None
             }
         },
@@ -336,10 +344,7 @@ fn try_read_config() -> Result<Config, String> {
     };
 
     let rtmp_tls_config = match (rtmp_tls_cert_file, rtmp_tls_key_file) {
-        (Some(cert_file), Some(key_file)) => Some(TlsConfig {
-            cert_file,
-            key_file,
-        }),
+        (Some(cert_file), Some(key_file)) => Some(TlsConfig { cert_file, key_file }),
         _ => None,
     };
 
@@ -404,10 +409,11 @@ fn read_side_channel_socket_dir() -> Arc<Path> {
             // resolves to a per-user `/var/folders/...` path that is long enough to
             // overflow the 104-byte `sun_path` limit once socket filenames are
             // appended, so fall back to `/tmp` there instead.
-            let tmp_root = dirs::runtime_dir().unwrap_or_else(|| match cfg!(target_os = "macos") {
-                true => PathBuf::from("/tmp"),
-                false => env::temp_dir(),
-            });
+            let tmp_root =
+                dirs::runtime_dir().unwrap_or_else(|| match cfg!(target_os = "macos") {
+                    true => PathBuf::from("/tmp"),
+                    false => env::temp_dir(),
+                });
             tmp_root.join(name)
         }
     };

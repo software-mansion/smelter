@@ -1,8 +1,9 @@
 #[cfg(target_os = "linux")]
 mod example {
     use decklink::{
-        AudioSampleType, DeckLinkError, DisplayModeType, PixelFormat, SupportedVideoModeFlags,
-        VideoConnection, VideoInputConversionMode, VideoInputFlags, get_decklinks,
+        AudioSampleType, DeckLinkError, DisplayModeType, PixelFormat,
+        SupportedVideoModeFlags, VideoConnection, VideoInputConversionMode,
+        VideoInputFlags, get_decklinks,
     };
 
     pub struct ErrorStack<'a>(Option<&'a (dyn std::error::Error + 'static)>);
@@ -52,10 +53,7 @@ mod example {
         input.enable_video(
             mode,
             PixelFormat::Format8BitYUV,
-            VideoInputFlags {
-                enable_format_detection: true,
-                ..Default::default()
-            },
+            VideoInputFlags { enable_format_detection: true, ..Default::default() },
         )?;
         input.enable_audio(48_000, AudioSampleType::Sample32bit, 2)?;
         Ok(())

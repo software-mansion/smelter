@@ -22,9 +22,9 @@ impl RgbaTextureInput {
     }
 
     fn bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {
-        let view = self.texture.create_view(&wgpu::TextureViewDescriptor {
-            ..Default::default()
-        });
+        let view = self
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor { ..Default::default() });
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("RgbaTextureInput"),
             layout: &ctx.format.single_texture_layout,
@@ -45,17 +45,22 @@ impl RgbaTextureInput {
                 &self.bind_group(ctx),
                 texture.srgb_view(),
             ),
-            (NodeTextureState::CpuOptimized { texture, .. }, wgpu::TextureFormat::Rgba8Unorm) => {
-                ctx.utils.linear_rgba_add_premult_alpha.render(
-                    ctx,
-                    &self.bind_group(ctx),
-                    texture.view(),
-                )
-            }
-            (NodeTextureState::WebGl { texture, .. }, wgpu::TextureFormat::Rgba8UnormSrgb) => ctx
-                .utils
-                .srgb_rgba_add_premult_alpha
-                .render(ctx, &self.bind_group(ctx), texture.view()),
+            (
+                NodeTextureState::CpuOptimized { texture, .. },
+                wgpu::TextureFormat::Rgba8Unorm,
+            ) => ctx.utils.linear_rgba_add_premult_alpha.render(
+                ctx,
+                &self.bind_group(ctx),
+                texture.view(),
+            ),
+            (
+                NodeTextureState::WebGl { texture, .. },
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+            ) => ctx.utils.srgb_rgba_add_premult_alpha.render(
+                ctx,
+                &self.bind_group(ctx),
+                texture.view(),
+            ),
             (_, format) => {
                 warn!("Unsupported format: {format:?}")
             }

@@ -9,9 +9,7 @@ impl V8Document {
         ctx_entered: &V8ContextEntered,
     ) -> Result<V8Element, V8ObjectError> {
         let id_value: V8Value = V8String::new(id).into();
-        let element = self
-            .0
-            .call_method("getElementById", &[&id_value], ctx_entered)?;
+        let element = self.0.call_method("getElementById", &[&id_value], ctx_entered)?;
         let V8Value::Object(element) = element else {
             return Err(V8ObjectError::ExpectedType {
                 name: format!("getElementById({id})"),

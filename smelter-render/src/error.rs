@@ -67,11 +67,15 @@ pub enum UpdateSceneError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RequestKeyframeError {
-    #[error("Output \"{0}\" does not exist, register it first before requesting keyframe.")]
+    #[error(
+        "Output \"{0}\" does not exist, register it first before requesting keyframe."
+    )]
     OutputNotRegistered(OutputId),
     #[error("Output \"{0}\" does not support keyframe requests.")]
     KeyframesUnsupported(OutputId),
-    #[error("Output \"{0}\" is not a video output. Can't request a keyframe on non video output.")]
+    #[error(
+        "Output \"{0}\" is not a video output. Can't request a keyframe on non video output."
+    )]
     NoVideoOutput(OutputId),
 }
 

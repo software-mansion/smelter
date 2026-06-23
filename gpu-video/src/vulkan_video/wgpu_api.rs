@@ -1,6 +1,6 @@
 use crate::{
-    DecoderError, DecoderEvent, EncodedInputChunk, EncodedOutputChunk, InputFrame, OutputFrame,
-    VulkanEncoderError,
+    DecoderError, DecoderEvent, EncodedInputChunk, EncodedOutputChunk, InputFrame,
+    OutputFrame, VulkanEncoderError,
     codec::{
         h264::{H264Codec, encode::H264WriteParametersInfo},
         h265::{H265Codec, encode::H265WriteParametersInfo},
@@ -73,8 +73,10 @@ impl WgpuTexturesDecoder {
         &mut self,
         access_units: Vec<AccessUnit>,
     ) -> Result<Vec<OutputFrame<wgpu::Texture>>, DecoderError> {
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
-        let unsorted_frames = self.vulkan_decoder.decode_to_wgpu_textures(&instructions)?;
+        let instructions =
+            compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
+        let unsorted_frames =
+            self.vulkan_decoder.decode_to_wgpu_textures(&instructions)?;
         let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
         Ok(sorted_frames)
     }
@@ -104,12 +106,11 @@ impl WgpuTexturesEncoderH265 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn vps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H265WriteParametersInfo {
-                write_vps: true,
-                write_sps: false,
-                write_pps: false,
-            })
+        self.vulkan_encoder.stream_parameters(H265WriteParametersInfo {
+            write_vps: true,
+            write_sps: false,
+            write_pps: false,
+        })
     }
 
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
@@ -117,12 +118,11 @@ impl WgpuTexturesEncoderH265 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H265WriteParametersInfo {
-                write_vps: false,
-                write_sps: true,
-                write_pps: false,
-            })
+        self.vulkan_encoder.stream_parameters(H265WriteParametersInfo {
+            write_vps: false,
+            write_sps: true,
+            write_pps: false,
+        })
     }
 
     /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
@@ -130,12 +130,11 @@ impl WgpuTexturesEncoderH265 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H265WriteParametersInfo {
-                write_vps: false,
-                write_sps: false,
-                write_pps: true,
-            })
+        self.vulkan_encoder.stream_parameters(H265WriteParametersInfo {
+            write_vps: false,
+            write_sps: false,
+            write_pps: true,
+        })
     }
 }
 
@@ -163,11 +162,10 @@ impl WgpuTexturesEncoderH264 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H264WriteParametersInfo {
-                write_sps: true,
-                write_pps: false,
-            })
+        self.vulkan_encoder.stream_parameters(H264WriteParametersInfo {
+            write_sps: true,
+            write_pps: false,
+        })
     }
 
     /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
@@ -175,11 +173,10 @@ impl WgpuTexturesEncoderH264 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H264WriteParametersInfo {
-                write_sps: false,
-                write_pps: true,
-            })
+        self.vulkan_encoder.stream_parameters(H264WriteParametersInfo {
+            write_sps: false,
+            write_pps: true,
+        })
     }
 }
 

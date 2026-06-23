@@ -28,8 +28,9 @@ impl WhipWhepHttpClient {
         endpoint_url: &Arc<str>,
         bearer_token: &Option<Arc<str>>,
     ) -> Result<Arc<Self>, WebrtcClientError> {
-        let endpoint_url = Url::parse(endpoint_url)
-            .map_err(|e| WebrtcClientError::InvalidEndpointUrl(e, endpoint_url.to_string()))?;
+        let endpoint_url = Url::parse(endpoint_url).map_err(|e| {
+            WebrtcClientError::InvalidEndpointUrl(e, endpoint_url.to_string())
+        })?;
 
         Ok(Arc::new(Self {
             http_client: reqwest::Client::new(),
@@ -66,10 +67,7 @@ impl WhipWhepHttpClient {
         let answer = RTCSessionDescription::answer(answer)
             .map_err(WebrtcClientError::RTCSessionDescriptionError)?;
 
-        Ok(SdpAnswer {
-            session_url,
-            answer,
-        })
+        Ok(SdpAnswer { session_url, answer })
     }
 
     pub async fn send_trickle_ice(
@@ -77,7 +75,8 @@ impl WhipWhepHttpClient {
         session_url: &Url,
         ice_candidate: RTCIceCandidateInit,
     ) -> Result<(), WebrtcClientError> {
-        let headers = self.header_map(HeaderValue::from_static("application/trickle-ice-sdpfrag"));
+        let headers =
+            self.header_map(HeaderValue::from_static("application/trickle-ice-sdpfrag"));
         let response = self
             .http_client
             .patch(session_url.clone())
@@ -85,7 +84,9 @@ impl WhipWhepHttpClient {
             .body(sdp_from_candidate(ice_candidate))
             .send()
             .await
-            .map_err(|_| WebrtcClientError::RequestFailed(Method::PATCH, session_url.clone()))?;
+            .map_err(|_| {
+                WebrtcClientError::RequestFailed(Method::PATCH, session_url.clone())
+            })?;
 
         let status = response.status();
         if status.is_server_error() || status.is_client_error() {
@@ -94,12 +95,13 @@ impl WhipWhepHttpClient {
                     WebrtcClientError::TrickleIceNotSupported
                 }
                 StatusCode::PRECONDITION_REQUIRED => WebrtcClientError::EntityTagMissing,
-                StatusCode::PRECONDITION_FAILED => WebrtcClientError::EntityTagNonMatching,
+                StatusCode::PRECONDITION_FAILED => {
+                    WebrtcClientError::EntityTagNonMatching
+                }
                 _ => {
-                    let answer = &response
-                        .text()
-                        .await
-                        .map_err(|e| WebrtcClientError::BodyParsingError("ICE Candidate", e))?;
+                    let answer = &response.text().await.map_err(|e| {
+                        WebrtcClientError::BodyParsingError("ICE Candidate", e)
+                    })?;
                     WebrtcClientError::BadStatus(status, answer.to_string())
                 }
             };

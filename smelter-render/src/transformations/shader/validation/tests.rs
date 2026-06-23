@@ -150,10 +150,12 @@ mod params_validation {
             },
             ShaderParamStructField {
                 field_name: "list".into(),
-                value: ShaderParam::List(vec![ShaderParam::Struct(vec![ShaderParamStructField {
-                    field_name: "int".into(),
-                    value: ShaderParam::I32(-10),
-                }])]),
+                value: ShaderParam::List(vec![ShaderParam::Struct(vec![
+                    ShaderParamStructField {
+                        field_name: "int".into(),
+                        value: ShaderParam::I32(-10),
+                    },
+                ])]),
             },
         ]);
 

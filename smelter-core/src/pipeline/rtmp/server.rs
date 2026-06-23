@@ -18,11 +18,7 @@ pub struct RtmpPipelineState {
 
 impl RtmpPipelineState {
     pub fn new(port: u16, tls_config: Option<TlsConfig>) -> Arc<Self> {
-        Arc::new(Self {
-            port,
-            tls_config,
-            inputs: RtmpInputsState::default(),
-        })
+        Arc::new(Self { port, tls_config, inputs: RtmpInputsState::default() })
     }
 }
 

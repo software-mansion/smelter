@@ -15,9 +15,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<std::process::ExitStatus> {
-    let path: PathBuf = std::env::args_os()
-        .nth(1)
-        .context("Usage: play_rtp_dump <input_file>")?
-        .into();
+    let path: PathBuf =
+        std::env::args_os().nth(1).context("Usage: play_rtp_dump <input_file>")?.into();
     rtp_player::play(&path)
 }

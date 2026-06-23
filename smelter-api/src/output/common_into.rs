@@ -91,24 +91,20 @@ impl TryFrom<VideoEncoderBitrate> for core::VideoEncoderBitrate {
 
     fn try_from(value: VideoEncoderBitrate) -> Result<Self, Self::Error> {
         match value {
-            VideoEncoderBitrate::AverageBitrate(average_bitrate) => Ok(core::VideoEncoderBitrate {
-                average_bitrate,
-                max_bitrate: (average_bitrate as f64 * 1.25) as u64,
-            }),
-            VideoEncoderBitrate::Vbr {
-                average_bitrate,
-                max_bitrate,
-            } => {
+            VideoEncoderBitrate::AverageBitrate(average_bitrate) => {
+                Ok(core::VideoEncoderBitrate {
+                    average_bitrate,
+                    max_bitrate: (average_bitrate as f64 * 1.25) as u64,
+                })
+            }
+            VideoEncoderBitrate::Vbr { average_bitrate, max_bitrate } => {
                 if average_bitrate > max_bitrate {
                     return Err(TypeError::new(
                         "max_bitrate has to be greater than average_bitrate",
                     ));
                 }
 
-                Ok(core::VideoEncoderBitrate {
-                    average_bitrate,
-                    max_bitrate,
-                })
+                Ok(core::VideoEncoderBitrate { average_bitrate, max_bitrate })
             }
         }
     }
@@ -120,7 +116,9 @@ pub(crate) fn duration_from_keyframe_interval(
     const DEFAULT_KEYFRAME_INTERVAL: Duration = Duration::from_millis(5000);
 
     match keyframe_interval {
-        Some(ki) if *ki < 0.0 => Err(TypeError::new("Keyframe interval cannot be negative.")),
+        Some(ki) if *ki < 0.0 => {
+            Err(TypeError::new("Keyframe interval cannot be negative."))
+        }
         Some(ki) => {
             let ki = ki.round() as u64;
             Ok(Duration::from_millis(ki))

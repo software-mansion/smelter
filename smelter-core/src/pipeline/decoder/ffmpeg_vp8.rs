@@ -44,10 +44,7 @@ impl VideoDecoder for FfmpegVp8Decoder {
 
         let decoder = decoder.decoder();
         let decoder = decoder.open_as(Id::VP8)?;
-        Ok(Self {
-            decoder,
-            av_frame: ffmpeg_next::frame::Video::empty(),
-        })
+        Ok(Self { decoder, av_frame: ffmpeg_next::frame::Video::empty() })
     }
 }
 
@@ -98,9 +95,9 @@ impl FfmpegVp8Decoder {
                     }
                 },
                 Err(ffmpeg_next::Error::Eof) => None,
-                Err(ffmpeg_next::Error::Other {
-                    errno: ffmpeg_next::error::EAGAIN,
-                }) => None, // decoder needs more chunks to produce frame
+                Err(ffmpeg_next::Error::Other { errno: ffmpeg_next::error::EAGAIN }) => {
+                    None
+                } // decoder needs more chunks to produce frame
                 Err(e) => {
                     error!("Decoder error: {e}.");
                     None

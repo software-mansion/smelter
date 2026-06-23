@@ -24,11 +24,7 @@ impl ArgbLinearTexture {
             &[wgpu::TextureFormat::Rgba8Unorm],
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Self {
-            texture,
-            view,
-            resolution,
-        }
+        Self { texture, view, resolution }
     }
 
     pub fn resolution(&self) -> Resolution {

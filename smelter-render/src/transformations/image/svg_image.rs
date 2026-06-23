@@ -51,12 +51,15 @@ impl SvgAsset {
         let tree = usvg::Tree::from_str(text_svg, &Default::default())?;
         let tree = resvg::Tree::from_usvg(&tree);
 
-        Ok(Self {
-            tree: UnsafeInternalRc(tree.into()),
-        })
+        Ok(Self { tree: UnsafeInternalRc(tree.into()) })
     }
 
-    pub fn render(&self, ctx: &WgpuCtx, target: &NodeTextureState, state: &mut SvgNodeState) {
+    pub fn render(
+        &self,
+        ctx: &WgpuCtx,
+        target: &NodeTextureState,
+        state: &mut SvgNodeState,
+    ) {
         if state.was_rendered {
             return;
         }
@@ -70,7 +73,10 @@ impl SvgAsset {
             ) => {
                 renderer.render(ctx, &self.tree.0, texture, resolution);
             }
-            (SvgRenderer::CpuOptimized, NodeTextureState::CpuOptimized { texture, .. }) => {
+            (
+                SvgRenderer::CpuOptimized,
+                NodeTextureState::CpuOptimized { texture, .. },
+            ) => {
                 // input is already in sRGB with pre-multiplied alpha
                 render_to_texture(ctx, &self.tree.0, texture.texture(), resolution);
             }
@@ -99,7 +105,9 @@ impl SvgNodeState {
         Self {
             was_rendered: false,
             renderer: match ctx.mode {
-                RenderingMode::GpuOptimized => SvgRenderer::GpuOptimized(GpuSvgRenderer::new(ctx)),
+                RenderingMode::GpuOptimized => {
+                    SvgRenderer::GpuOptimized(GpuSvgRenderer::new(ctx))
+                }
                 RenderingMode::CpuOptimized => SvgRenderer::CpuOptimized,
                 RenderingMode::WebGl => SvgRenderer::WebGl(WebGlSvgRenderer::new(ctx)),
             },
@@ -131,10 +139,12 @@ struct GpuSvgRenderer {
 impl GpuSvgRenderer {
     fn new(ctx: &WgpuCtx) -> Self {
         let original_texture = RgbaMultiViewTexture::new(ctx, Resolution::ONE_PIXEL);
-        let non_premultiplied_texture = RgbaMultiViewTexture::new(ctx, Resolution::ONE_PIXEL);
+        let non_premultiplied_texture =
+            RgbaMultiViewTexture::new(ctx, Resolution::ONE_PIXEL);
         Self {
             original_texture_linear_bg: original_texture.new_linear_bind_group(ctx),
-            non_premultiplied_texture_srgb_bg: non_premultiplied_texture.new_srgb_bind_group(ctx),
+            non_premultiplied_texture_srgb_bg: non_premultiplied_texture
+                .new_srgb_bind_group(ctx),
 
             original_texture,
             non_premultiplied_texture,
@@ -169,7 +179,8 @@ impl GpuSvgRenderer {
     fn ensure_texture_size(&mut self, ctx: &WgpuCtx, resolution: Resolution) {
         if Resolution::from(self.original_texture.size()) != resolution {
             self.original_texture = RgbaMultiViewTexture::new(ctx, resolution);
-            self.original_texture_linear_bg = self.original_texture.new_linear_bind_group(ctx);
+            self.original_texture_linear_bg =
+                self.original_texture.new_linear_bind_group(ctx);
         }
         if Resolution::from(self.non_premultiplied_texture.size()) != resolution {
             self.non_premultiplied_texture = RgbaMultiViewTexture::new(ctx, resolution);
@@ -199,11 +210,14 @@ struct WebGlSvgRenderer {
 impl WebGlSvgRenderer {
     fn new(ctx: &WgpuCtx) -> Self {
         let original_texture = RgbaLinearTexture::new(ctx, Resolution::ONE_PIXEL);
-        let non_premultiplied_texture_linear = RgbaLinearTexture::new(ctx, Resolution::ONE_PIXEL);
-        let non_premultiplied_texture_srgb = RgbaSrgbTexture::new(ctx, Resolution::ONE_PIXEL);
+        let non_premultiplied_texture_linear =
+            RgbaLinearTexture::new(ctx, Resolution::ONE_PIXEL);
+        let non_premultiplied_texture_srgb =
+            RgbaSrgbTexture::new(ctx, Resolution::ONE_PIXEL);
 
         let original_texture_linear_bg = original_texture.new_bind_group(ctx);
-        let non_premultiplied_texture_srgb_bg = non_premultiplied_texture_srgb.new_bind_group(ctx);
+        let non_premultiplied_texture_srgb_bg =
+            non_premultiplied_texture_srgb.new_bind_group(ctx);
 
         Self {
             original_texture,
@@ -249,7 +263,8 @@ impl WebGlSvgRenderer {
     fn ensure_texture_size(&mut self, ctx: &WgpuCtx, resolution: Resolution) {
         if Resolution::from(self.original_texture.size()) != resolution {
             self.original_texture = RgbaLinearTexture::new(ctx, resolution);
-            self.non_premultiplied_texture_linear = RgbaLinearTexture::new(ctx, resolution);
+            self.non_premultiplied_texture_linear =
+                RgbaLinearTexture::new(ctx, resolution);
             self.non_premultiplied_texture_srgb = RgbaSrgbTexture::new(ctx, resolution);
 
             self.original_texture_linear_bg = self.original_texture.new_bind_group(ctx);

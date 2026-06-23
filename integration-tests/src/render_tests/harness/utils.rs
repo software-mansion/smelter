@@ -28,21 +28,15 @@ pub(super) fn frame_to_rgba(frame: &Frame) -> Vec<u8> {
 }
 
 pub(super) fn yuv_frame_to_rgba(frame: &Frame, planes: &YuvPlanes) -> Vec<u8> {
-    let YuvPlanes {
-        y_plane,
-        u_plane,
-        v_plane,
-    } = planes;
+    let YuvPlanes { y_plane, u_plane, v_plane } = planes;
 
     // Renderer can sometimes produce resolution that is not dividable by 2
     let corrected_width = frame.resolution.width - (frame.resolution.width % 2);
     let corrected_height = frame.resolution.height - (frame.resolution.height % 2);
 
     let mut rgba_data = Vec::with_capacity(y_plane.len() * 4);
-    for (i, y_plane) in y_plane
-        .chunks(frame.resolution.width)
-        .enumerate()
-        .take(corrected_height)
+    for (i, y_plane) in
+        y_plane.chunks(frame.resolution.width).enumerate().take(corrected_height)
     {
         for (j, y) in y_plane.iter().enumerate().take(corrected_width) {
             let mut y = (*y) as f32;
@@ -152,13 +146,11 @@ fn download_buffer(
 ) -> bytes::Bytes {
     let buffer = bytes::BytesMut::with_capacity((size.width * size.height * 4) as usize);
     let (s, r) = bounded(1);
-    source
-        .slice(..)
-        .map_async(wgpu::MapMode::Read, move |result| {
-            if let Err(err) = s.send(result) {
-                error!("channel send error: {err}")
-            }
-        });
+    source.slice(..).map_async(wgpu::MapMode::Read, move |result| {
+        if let Err(err) = s.send(result) {
+            error!("channel send error: {err}")
+        }
+    });
 
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
@@ -168,9 +160,7 @@ fn download_buffer(
         let range = source.slice(..).get_mapped_range().unwrap();
         let chunks = range.chunks(pad_to_256(size.width * 4) as usize);
         for chunk in chunks {
-            buffer
-                .write_all(&chunk[..(size.width * 4) as usize])
-                .unwrap();
+            buffer.write_all(&chunk[..(size.width * 4) as usize]).unwrap();
         }
     };
     source.unmap();
@@ -178,9 +168,5 @@ fn download_buffer(
 }
 
 fn pad_to_256(value: u32) -> u32 {
-    if value.is_multiple_of(256) {
-        value
-    } else {
-        value + (256 - (value % 256))
-    }
+    if value.is_multiple_of(256) { value } else { value + (256 - (value % 256)) }
 }

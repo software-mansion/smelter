@@ -37,7 +37,9 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
     type SpawnOutput = RtpVideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, depayloader_options, frame_sender) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = duration_bounded(RTP_BUFFER);

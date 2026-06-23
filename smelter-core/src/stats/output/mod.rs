@@ -1,8 +1,9 @@
 use crate::{
     MediaKind, OutputProtocolKind,
     stats::{
-        output::hls::HlsOutputState, output::mp4::Mp4OutputState, output::rtmp::RtmpOutputState,
-        output::rtp::RtpOutputState, output::whep::WhepOutputState, output::whip::WhipOutputState,
+        output::hls::HlsOutputState, output::mp4::Mp4OutputState,
+        output::rtmp::RtmpOutputState, output::rtp::RtpOutputState,
+        output::whep::WhepOutputState, output::whip::WhipOutputState,
         output_reports::OutputStatsReport,
     },
 };

@@ -26,11 +26,7 @@ impl EmbeddingHelper {
         chromium_sender: ChromiumSender,
         embedding_method: WebEmbeddingMethod,
     ) -> Self {
-        Self {
-            wgpu_ctx: ctx.wgpu_ctx.clone(),
-            chromium_sender,
-            embedding_method,
-        }
+        Self { wgpu_ctx: ctx.wgpu_ctx.clone(), chromium_sender, embedding_method }
     }
 
     pub fn prepare_embedding(
@@ -43,9 +39,12 @@ impl EmbeddingHelper {
                 self.chromium_embedding(sources, embedding_data)?
             }
             WebEmbeddingMethod::NativeEmbeddingOverContent
-            | WebEmbeddingMethod::NativeEmbeddingUnderContent => self
-                .chromium_sender
-                .request_frame_positions(embedding_data.children_ids.clone())?,
+            | WebEmbeddingMethod::NativeEmbeddingUnderContent => {
+                if !embedding_data.children_ids.is_empty() {
+                    self.chromium_sender
+                        .request_frame_positions(embedding_data.children_ids.clone())?;
+                }
+            }
         }
 
         Ok(())
@@ -68,12 +67,14 @@ impl EmbeddingHelper {
                 continue;
             };
             let size = texture_state.texture().size();
-            pending_downloads.push(self.copy_buffer_to_shmem(source_idx, size, buffer.clone()));
+            pending_downloads.push(self.copy_buffer_to_shmem(
+                source_idx,
+                size,
+                buffer.clone(),
+            ));
         }
 
-        self.wgpu_ctx
-            .device
-            .poll(wgpu::PollType::wait_indefinitely())?;
+        self.wgpu_ctx.device.poll(wgpu::PollType::wait_indefinitely())?;
 
         for pending in pending_downloads {
             pending()?;
@@ -89,10 +90,8 @@ impl EmbeddingHelper {
         sources: &[&NodeTexture],
         buffers: &[Arc<wgpu::Buffer>],
     ) -> Result<(), EmbedError> {
-        let mut encoder = self
-            .wgpu_ctx
-            .device
-            .create_command_encoder(&Default::default());
+        let mut encoder =
+            self.wgpu_ctx.device.create_command_encoder(&Default::default());
 
         for (texture, buffer) in sources.iter().zip(buffers) {
             let Some(texture_state) = texture.state() else {
@@ -112,19 +111,20 @@ impl EmbeddingHelper {
         buffer: Arc<wgpu::Buffer>,
     ) -> impl FnOnce() -> Result<(), EmbedError> + '_ {
         let (s, r) = bounded(1);
-        buffer
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |result| {
-                if let Err(err) = s.send(result) {
-                    error!("channel send error: {err}")
-                }
-            });
+        buffer.slice(..).map_async(wgpu::MapMode::Read, move |result| {
+            if let Err(err) = s.send(result) {
+                error!("channel send error: {err}")
+            }
+        });
 
         move || {
             r.recv().unwrap()?;
 
-            self.chromium_sender
-                .update_shared_memory(source_idx, buffer.clone(), size)?;
+            self.chromium_sender.update_shared_memory(
+                source_idx,
+                buffer.clone(),
+                size,
+            )?;
             buffer.unmap();
 
             Ok(())

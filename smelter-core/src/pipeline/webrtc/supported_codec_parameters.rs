@@ -130,35 +130,24 @@ pub fn h264_codec_params_for_profile_level_support(
 
 pub(crate) fn get_video_rtcp_feedback() -> Vec<RTCPFeedback> {
     vec![
-        RTCPFeedback {
-            typ: "goog-remb".to_owned(),
-            parameter: "".to_owned(),
-        },
-        RTCPFeedback {
-            typ: "ccm".to_owned(),
-            parameter: "fir".to_owned(),
-        },
-        RTCPFeedback {
-            typ: "nack".to_owned(),
-            parameter: "".to_owned(),
-        },
-        RTCPFeedback {
-            typ: "nack".to_owned(),
-            parameter: "pli".to_owned(),
-        },
+        RTCPFeedback { typ: "goog-remb".to_owned(), parameter: "".to_owned() },
+        RTCPFeedback { typ: "ccm".to_owned(), parameter: "fir".to_owned() },
+        RTCPFeedback { typ: "nack".to_owned(), parameter: "".to_owned() },
+        RTCPFeedback { typ: "nack".to_owned(), parameter: "pli".to_owned() },
     ]
 }
 
-pub fn opus_codec_params(fec_first: bool, channels: AudioChannels) -> Vec<RTCRtpCodecParameters> {
+pub fn opus_codec_params(
+    fec_first: bool,
+    channels: AudioChannels,
+) -> Vec<RTCRtpCodecParameters> {
     let codec_configs = match fec_first {
-        true => [
-            ("minptime=10;useinbandfec=1", 111),
-            ("minptime=10;useinbandfec=0", 110),
-        ],
-        false => [
-            ("minptime=10;useinbandfec=0", 110),
-            ("minptime=10;useinbandfec=1", 111),
-        ],
+        true => {
+            [("minptime=10;useinbandfec=1", 111), ("minptime=10;useinbandfec=0", 110)]
+        }
+        false => {
+            [("minptime=10;useinbandfec=0", 110), ("minptime=10;useinbandfec=1", 111)]
+        }
     };
 
     let channels = match channels {

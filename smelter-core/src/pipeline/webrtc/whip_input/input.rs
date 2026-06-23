@@ -7,7 +7,8 @@ use crate::{
             WhipInputsState,
             bearer_token::generate_token,
             whip_input::{
-                state::WhipInputStateOptions, video_preferences::resolve_video_preferences,
+                state::WhipInputStateOptions,
+                video_preferences::resolve_video_preferences,
             },
         },
     },
@@ -64,10 +65,12 @@ impl WhipInput {
 
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
 
-        let endpoint_route = Arc::from(format!("/whip/{}", urlencoding::encode(&input_ref.id().0)));
+        let endpoint_route =
+            Arc::from(format!("/whip/{}", urlencoding::encode(&input_ref.id().0)));
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
 
-        let video_preferences = resolve_video_preferences(&ctx, options.video_preferences)?;
+        let video_preferences =
+            resolve_video_preferences(&ctx, options.video_preferences)?;
 
         state.inputs.add_input(
             &input_ref,
@@ -80,14 +83,8 @@ impl WhipInput {
         )?;
 
         Ok((
-            Input::Whip(Self {
-                whip_inputs_state: state.inputs.clone(),
-                input_ref,
-            }),
-            InputInitInfo::Whip {
-                bearer_token,
-                endpoint_route,
-            },
+            Input::Whip(Self { whip_inputs_state: state.inputs.clone(), input_ref }),
+            InputInitInfo::Whip { bearer_token, endpoint_route },
             queue_input,
         ))
     }

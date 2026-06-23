@@ -11,10 +11,7 @@ use integration_tests::{
 
 const HTML_FILE_PATH: &str = "examples/web_view.html";
 
-const VIDEO_RESOLUTION: Resolution = Resolution {
-    width: 1920,
-    height: 1080,
-};
+const VIDEO_RESOLUTION: Resolution = Resolution { width: 1920, height: 1080 };
 
 const IP: &str = "127.0.0.1";
 const INPUT_PORT: u16 = 8002;
@@ -27,11 +24,7 @@ fn main() {
 
     #[cfg(feature = "web-renderer")]
     {
-        let target_path = &std::env::current_exe()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("..");
+        let target_path = &std::env::current_exe().unwrap().parent().unwrap().join("..");
         if let Err(err) = libcef::bundle_for_development(target_path) {
             panic!(
                 "Build process helper first. For release profile use: cargo build -r --bin process_helper. {err:?}"
@@ -43,12 +36,11 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264)).spawn()?;
+    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264))
+        .spawn()?;
 
-    let html_file_path = integration_tests_root()
-        .join(HTML_FILE_PATH)
-        .display()
-        .to_string();
+    let html_file_path =
+        integration_tests_root().join(HTML_FILE_PATH).display().to_string();
 
     examples::post(
         "input/input_1/register",

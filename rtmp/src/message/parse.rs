@@ -13,12 +13,12 @@ impl RtmpMessageIncoming {
         let p = &msg.payload;
         let msg_type = MessageType::try_from_raw(msg.msg_type)?;
         let result = match msg_type {
-            MessageType::Audio => RtmpMessageIncoming::Audio {
-                audio: AudioMessage::from_raw(msg)?,
-            },
-            MessageType::Video => RtmpMessageIncoming::Video {
-                video: VideoMessage::from_raw(msg)?,
-            },
+            MessageType::Audio => {
+                RtmpMessageIncoming::Audio { audio: AudioMessage::from_raw(msg)? }
+            }
+            MessageType::Video => {
+                RtmpMessageIncoming::Video { video: VideoMessage::from_raw(msg)? }
+            }
 
             MessageType::DataMessageAmf0 => RtmpMessageIncoming::DataMessage {
                 data: DataMessage::from_amf_values(decode_amf_values(msg.payload)?),
@@ -57,9 +57,11 @@ impl RtmpMessageIncoming {
                 stream_id: msg.stream_id,
             },
 
-            MessageType::Acknowledgement if p.len() >= 4 => RtmpMessageIncoming::Acknowledgement {
-                bytes_received: u32::from_be_bytes([p[0], p[1], p[2], p[3]]),
-            },
+            MessageType::Acknowledgement if p.len() >= 4 => {
+                RtmpMessageIncoming::Acknowledgement {
+                    bytes_received: u32::from_be_bytes([p[0], p[1], p[2], p[3]]),
+                }
+            }
             MessageType::Acknowledgement => {
                 return Err(RtmpMessageParseError::PayloadTooShort);
             }

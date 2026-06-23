@@ -17,9 +17,8 @@ pub async fn handle_terminate_whip_session(
     state.inputs.validate_token(&input_ref, &headers).await?;
     state.inputs.validate_session_id(&input_ref, &session_id)?;
 
-    let session = state
-        .inputs
-        .get_mut_with(&input_ref, |input| Ok(input.session.take()))?;
+    let session =
+        state.inputs.get_mut_with(&input_ref, |input| Ok(input.session.take()))?;
 
     match session {
         Some(_) => {

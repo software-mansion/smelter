@@ -36,7 +36,8 @@ pub(super) fn validate_scene_update(
     old_outputs: &HashMap<OutputId, OutputScene>,
     updated_output: &OutputScene,
 ) -> Result<(), SceneError> {
-    let mut updated_outputs: HashMap<&OutputId, &OutputScene> = old_outputs.iter().collect();
+    let mut updated_outputs: HashMap<&OutputId, &OutputScene> =
+        old_outputs.iter().collect();
     updated_outputs.insert(&updated_output.output_id, updated_output);
     let updated_outputs: Vec<&OutputScene> = updated_outputs.values().copied().collect();
 
@@ -59,10 +60,7 @@ fn validate_component_ids_uniqueness(outputs: &[&OutputScene]) -> Result<(), Sce
             ids.insert(id);
         }
 
-        component
-            .children()
-            .into_iter()
-            .try_for_each(|c| visit(c, ids))
+        component.children().into_iter().try_for_each(|c| visit(c, ids))
     }
 
     outputs.iter().try_for_each(|output| {
@@ -71,7 +69,9 @@ fn validate_component_ids_uniqueness(outputs: &[&OutputScene]) -> Result<(), Sce
     })
 }
 
-fn validate_web_renderer_ids_uniqueness(outputs: &[&OutputScene]) -> Result<(), SceneError> {
+fn validate_web_renderer_ids_uniqueness(
+    outputs: &[&OutputScene],
+) -> Result<(), SceneError> {
     let mut web_renderer_ids: HashSet<&RendererId> = HashSet::new();
 
     fn visit<'a>(
@@ -88,13 +88,8 @@ fn validate_web_renderer_ids_uniqueness(outputs: &[&OutputScene]) -> Result<(), 
             ids.insert(instance_id);
         }
 
-        component
-            .children()
-            .into_iter()
-            .try_for_each(|c| visit(c, ids))
+        component.children().into_iter().try_for_each(|c| visit(c, ids))
     }
 
-    outputs
-        .iter()
-        .try_for_each(|output| visit(&output.scene_root, &mut web_renderer_ids))
+    outputs.iter().try_for_each(|output| visit(&output.scene_root, &mut web_renderer_ids))
 }

@@ -93,10 +93,7 @@ impl BufferedReader {
 
     fn try_read(&mut self, transport: &mut RtmpTransport) -> Result<(), io::Error> {
         match transport.read(&mut self.read_buf)? {
-            0 => Err(io::Error::new(
-                ErrorKind::UnexpectedEof,
-                "connection closed",
-            )),
+            0 => Err(io::Error::new(ErrorKind::UnexpectedEof, "connection closed")),
             bytes_read => {
                 self.buf.extend(self.read_buf[0..bytes_read].iter());
                 self.bytes_read += bytes_read as u64;
@@ -113,13 +110,13 @@ struct BufferedWriter {
 
 impl BufferedWriter {
     fn new(shutdown_condition: ShutdownCondition) -> Self {
-        Self {
-            shutdown_condition,
-            buf: Vec::new(),
-        }
+        Self { shutdown_condition, buf: Vec::new() }
     }
 
-    fn write_to_transport(&mut self, transport: &mut RtmpTransport) -> Result<(), io::Error> {
+    fn write_to_transport(
+        &mut self,
+        transport: &mut RtmpTransport,
+    ) -> Result<(), io::Error> {
         while !self.buf.is_empty() {
             match transport.write(&self.buf) {
                 Ok(0) => {
@@ -141,7 +138,11 @@ impl BufferedWriter {
         Ok(())
     }
 
-    fn write(&mut self, transport: &mut RtmpTransport, data: &[u8]) -> Result<(), RtmpStreamError> {
+    fn write(
+        &mut self,
+        transport: &mut RtmpTransport,
+        data: &[u8],
+    ) -> Result<(), RtmpStreamError> {
         self.buf.extend_from_slice(data);
         self.write_to_transport(transport)?;
         Ok(())

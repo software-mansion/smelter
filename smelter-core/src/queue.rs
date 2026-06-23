@@ -145,9 +145,7 @@ pub struct QueueContext {
 
 impl QueueContext {
     pub(crate) fn effective_last_pts(&self) -> Duration {
-        self.last_pts
-            .value()
-            .unwrap_or_else(|| self.sync_point.elapsed())
+        self.last_pts.value().unwrap_or_else(|| self.sync_point.elapsed())
     }
 }
 
@@ -248,12 +246,8 @@ impl Queue {
             should_close: AtomicBool::new(false),
         });
 
-        QueueThread::new(
-            queue.clone(),
-            queue_start_receiver,
-            scheduled_event_receiver,
-        )
-        .spawn();
+        QueueThread::new(queue.clone(), queue_start_receiver, scheduled_event_receiver)
+            .spawn();
 
         queue
     }
@@ -269,16 +263,10 @@ impl Queue {
     pub(crate) fn add_input(&self, input_id: &InputId, queue_input: QueueInput) {
         let weak = queue_input.downgrade();
 
-        self.video_queue
-            .lock()
-            .unwrap()
-            .add_input(input_id, weak.clone());
+        self.video_queue.lock().unwrap().add_input(input_id, weak.clone());
         self.audio_queue.lock().unwrap().add_input(input_id, weak);
 
-        self.inputs
-            .lock()
-            .unwrap()
-            .insert(input_id.clone(), queue_input);
+        self.inputs.lock().unwrap().insert(input_id.clone(), queue_input);
     }
 
     pub fn remove_input(&self, input_id: &InputId) {
@@ -296,19 +284,13 @@ impl Queue {
             let queue_start_pts = self.queue_ctx.sync_point.elapsed();
             self.queue_ctx.start_pts.update(queue_start_pts);
             sender
-                .send(QueueStartEvent {
-                    audio_sender,
-                    video_sender,
-                    queue_start_pts,
-                })
+                .send(QueueStartEvent { audio_sender, video_sender, queue_start_pts })
                 .unwrap()
         }
     }
 
     pub fn schedule_event(&self, pts: Duration, callback: Box<dyn FnOnce() + Send>) {
-        self.scheduled_event_sender
-            .send(ScheduledEvent { pts, callback })
-            .unwrap();
+        self.scheduled_event_sender.send(ScheduledEvent { pts, callback }).unwrap();
     }
 }
 

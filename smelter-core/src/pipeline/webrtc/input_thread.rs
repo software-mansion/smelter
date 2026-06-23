@@ -44,14 +44,19 @@ impl InitializableThread for VideoTrackThread {
     type SpawnOutput = VideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, decoder_mapping, payload_type_mapping, frame_sender, keyframe_request_sender) =
-            options;
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+        let (
+            ctx,
+            decoder_mapping,
+            payload_type_mapping,
+            frame_sender,
+            keyframe_request_sender,
+        ) = options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
-        let packet_stream = AsyncReceiverIter {
-            receiver: rtp_packet_receiver,
-        };
+        let packet_stream = AsyncReceiverIter { receiver: rtp_packet_receiver };
 
         let depayloader_stream =
             DynamicDepayloaderStream::new(payload_type_mapping, packet_stream).flatten();
@@ -65,10 +70,7 @@ impl InitializableThread for VideoTrackThread {
         .flatten()
         .inspect(|frame| trace!(?frame, "Frame produced"));
 
-        let state = Self {
-            stream: Box::new(decoder_stream),
-            frame_sender,
-        };
+        let state = Self { stream: Box::new(decoder_stream), frame_sender };
         let output = VideoTrackThreadHandle { rtp_packet_sender };
         Ok((state, output))
     }
@@ -105,14 +107,14 @@ impl InitializableThread for AudioTrackThread {
     type SpawnOutput = AudioTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, samples_sender) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
-        let packet_stream = AsyncReceiverIter {
-            receiver: rtp_packet_receiver,
-        };
+        let packet_stream = AsyncReceiverIter { receiver: rtp_packet_receiver };
 
         let depayloader_stream =
             DepayloaderStream::new(DepayloaderOptions::Opus, packet_stream).flatten();
@@ -122,10 +124,7 @@ impl InitializableThread for AudioTrackThread {
                 .flatten()
                 .inspect(|batch| trace!(?batch, "Sample batch produced"));
 
-        let state = Self {
-            stream: Box::new(decoder_stream),
-            samples_sender,
-        };
+        let state = Self { stream: Box::new(decoder_stream), samples_sender };
         let output = AudioTrackThreadHandle { rtp_packet_sender };
         Ok((state, output))
     }
@@ -133,7 +132,9 @@ impl InitializableThread for AudioTrackThread {
     fn run(self) {
         for samples in self.stream {
             if self.samples_sender.send(samples).is_err() {
-                warn!("Failed to send decoded audio samples from decoder. Channel closed.");
+                warn!(
+                    "Failed to send decoded audio samples from decoder. Channel closed."
+                );
                 return;
             }
         }

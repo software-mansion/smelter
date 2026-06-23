@@ -109,9 +109,7 @@ impl SmelterRenderer {
         };
 
         let mut renderer = self.0.lock().await;
-        renderer
-            .register_renderer(renderer_id, RendererSpec::Image(image_spec))
-            .await
+        renderer.register_renderer(renderer_id, RendererSpec::Image(image_spec)).await
     }
 
     pub async fn register_shader(
@@ -132,9 +130,7 @@ impl SmelterRenderer {
     pub async fn register_font(&self, font_url: String) -> Result<(), JsValue> {
         let bytes = download(&font_url).await?;
         let mut renderer = self.0.lock().await;
-        renderer
-            .register_font(Source::Binary(Arc::new(bytes)))
-            .await;
+        renderer.register_font(Source::Binary(Arc::new(bytes))).await;
 
         Ok(())
     }

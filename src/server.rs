@@ -29,7 +29,8 @@ pub fn run() {
     thread::Builder::new()
         .name("HTTP server startup thread".to_string())
         .spawn(move || {
-            let (_should_close_sender, should_close_receiver) = crossbeam_channel::bounded(1);
+            let (_should_close_sender, should_close_receiver) =
+                crossbeam_channel::bounded(1);
             if let Err(err) = run_api(state, runtime, should_close_receiver) {
                 error!(%err);
                 process::exit(1);

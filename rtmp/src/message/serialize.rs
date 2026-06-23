@@ -30,16 +30,17 @@ impl RtmpMessageOutgoing {
                 timestamp: 0,
                 payload: Bytes::copy_from_slice(&bytes_received.to_be_bytes()[..]),
             },
-            RtmpMessageOutgoing::SetPeerBandwidth {
-                bandwidth,
-                limit_type,
-            } => RawMessage {
-                msg_type: MessageType::SetPeerBandwidth.into_raw(),
-                stream_id: CONTROL_MESSAGE_STREAM_ID,
-                chunk_stream_id: PROTOCOL_CHUNK_STREAM_ID,
-                timestamp: 0,
-                payload: Bytes::from([&bandwidth.to_be_bytes()[..], &[limit_type]].concat()),
-            },
+            RtmpMessageOutgoing::SetPeerBandwidth { bandwidth, limit_type } => {
+                RawMessage {
+                    msg_type: MessageType::SetPeerBandwidth.into_raw(),
+                    stream_id: CONTROL_MESSAGE_STREAM_ID,
+                    chunk_stream_id: PROTOCOL_CHUNK_STREAM_ID,
+                    timestamp: 0,
+                    payload: Bytes::from(
+                        [&bandwidth.to_be_bytes()[..], &[limit_type]].concat(),
+                    ),
+                }
+            }
             RtmpMessageOutgoing::UserControl(msg) => RawMessage {
                 msg_type: MessageType::UserControl.into_raw(),
                 stream_id: CONTROL_MESSAGE_STREAM_ID,
@@ -68,15 +69,12 @@ impl RtmpMessageOutgoing {
                 timestamp: 0,
                 payload: encode_amf_values(&data.into_amf_values())?,
             },
-            RtmpMessageOutgoing::Video {
-                video: msg,
-                stream_id,
-            } => msg.into_raw(stream_id, ex_capabilities)?,
-            RtmpMessageOutgoing::Audio {
-                audio: msg,
-                stream_id,
-                channels,
-            } => msg.into_raw(stream_id, channels, ex_capabilities)?,
+            RtmpMessageOutgoing::Video { video: msg, stream_id } => {
+                msg.into_raw(stream_id, ex_capabilities)?
+            }
+            RtmpMessageOutgoing::Audio { audio: msg, stream_id, channels } => {
+                msg.into_raw(stream_id, channels, ex_capabilities)?
+            }
         };
         Ok(result)
     }

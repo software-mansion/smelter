@@ -13,8 +13,8 @@ use crate::{
     VulkanDevice, VulkanInitError, VulkanInstance,
     capabilities::EncodeCapabilities,
     device::{
-        DECODE_CODEC_EXTENSIONS, DECODE_EXTENSIONS, ENCODE_CODEC_EXTENSIONS, ENCODE_EXTENSIONS,
-        REQUIRED_EXTENSIONS, VulkanDeviceDescriptor,
+        DECODE_CODEC_EXTENSIONS, DECODE_EXTENSIONS, ENCODE_CODEC_EXTENSIONS,
+        ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS, VulkanDeviceDescriptor,
         caps::{DecodeCapabilities, NativeDecodeCapabilities, NativeEncodeCapabilities},
         queues::{QueueIndex, QueueIndices},
     },
@@ -37,7 +37,10 @@ pub struct VulkanAdapter<'a> {
 }
 
 impl<'a> VulkanAdapter<'a> {
-    fn new(vulkan_instance: &'a VulkanInstance, device: vk::PhysicalDevice) -> Option<Self> {
+    fn new(
+        vulkan_instance: &'a VulkanInstance,
+        device: vk::PhysicalDevice,
+    ) -> Option<Self> {
         let instance = &vulkan_instance.instance;
 
         #[cfg(feature = "wgpu")]
@@ -52,16 +55,18 @@ impl<'a> VulkanAdapter<'a> {
         let _span = debug_span!("creating adapter", device_name = %device_name).entered();
 
         let mut vk_13_features = vk::PhysicalDeviceVulkan13Features::default();
-        let mut features = vk::PhysicalDeviceFeatures2::default().push_next(&mut vk_13_features);
+        let mut features =
+            vk::PhysicalDeviceFeatures2::default().push_next(&mut vk_13_features);
 
         unsafe { instance.get_physical_device_features2(device, &mut features) };
-        let extensions = match unsafe { instance.enumerate_device_extension_properties(device) } {
-            Ok(ext) => ext,
-            Err(err) => {
-                warn!("Couldn't enumerate device extension properties: {err}");
-                return None;
-            }
-        };
+        let extensions =
+            match unsafe { instance.enumerate_device_extension_properties(device) } {
+                Ok(ext) => ext,
+                Err(err) => {
+                    warn!("Couldn't enumerate device extension properties: {err}");
+                    return None;
+                }
+            };
 
         if vk_13_features.synchronization2 == vk::FALSE {
             debug!("device does not support the required synchronization2 feature");
@@ -73,7 +78,8 @@ impl<'a> VulkanAdapter<'a> {
             return None;
         }
 
-        let has_decode_extensions = check_extensions(DECODE_EXTENSIONS, &extensions).is_ok();
+        let has_decode_extensions =
+            check_extensions(DECODE_EXTENSIONS, &extensions).is_ok();
         let supported_decode_codec_extensions =
             supported_extensions(DECODE_CODEC_EXTENSIONS, &extensions);
         let supports_any_decoding =
@@ -81,7 +87,8 @@ impl<'a> VulkanAdapter<'a> {
         let supported_decode_operations =
             extensions_to_codec_operations(&supported_decode_codec_extensions);
 
-        let has_encode_extensions = check_extensions(ENCODE_EXTENSIONS, &extensions).is_ok();
+        let has_encode_extensions =
+            check_extensions(ENCODE_EXTENSIONS, &extensions).is_ok();
         let supported_encode_codec_extensions =
             supported_extensions(ENCODE_CODEC_EXTENSIONS, &extensions);
         let supports_any_encoding =
@@ -90,7 +97,7 @@ impl<'a> VulkanAdapter<'a> {
             extensions_to_codec_operations(&supported_encode_codec_extensions);
         #[cfg(all(feature = "quicksync", target_os = "linux"))]
         let supports_quicksync_dmabuf_interop = check_extensions(
-            &crate::dmabuf::REQUIRED_SYNC_VULKAN_DEVICE_EXTENSIONS,
+            &crate::dmabuf::REQUIRED_VULKAN_DEVICE_EXTENSIONS,
             &extensions,
         )
         .is_ok();
@@ -103,7 +110,8 @@ impl<'a> VulkanAdapter<'a> {
         let queues_len =
             unsafe { instance.get_physical_device_queue_family_properties2_len(device) };
         let mut queues = vec![vk::QueueFamilyProperties2::default(); queues_len];
-        let mut video_properties = vec![vk::QueueFamilyVideoPropertiesKHR::default(); queues_len];
+        let mut video_properties =
+            vec![vk::QueueFamilyVideoPropertiesKHR::default(); queues_len];
         let mut query_result_status_properties =
             vec![vk::QueueFamilyQueryResultStatusPropertiesKHR::default(); queues_len];
 
@@ -112,18 +120,24 @@ impl<'a> VulkanAdapter<'a> {
             .zip(video_properties.iter_mut())
             .zip(query_result_status_properties.iter_mut())
         {
-            *queue = queue
-                .push_next(query_result_properties)
-                .push_next(video_properties);
+            *queue = queue.push_next(query_result_properties).push_next(video_properties);
         }
 
-        unsafe { instance.get_physical_device_queue_family_properties2(device, &mut queues) };
+        unsafe {
+            instance.get_physical_device_queue_family_properties2(device, &mut queues)
+        };
 
-        let decode_capabilities =
-            NativeDecodeCapabilities::query(instance, device, supported_decode_operations);
+        let decode_capabilities = NativeDecodeCapabilities::query(
+            instance,
+            device,
+            supported_decode_operations,
+        );
 
-        let encode_capabilities =
-            NativeEncodeCapabilities::query(instance, device, supported_encode_operations);
+        let encode_capabilities = NativeEncodeCapabilities::query(
+            instance,
+            device,
+            supported_encode_operations,
+        );
 
         let queue_counts = queues
             .iter()
@@ -134,9 +148,7 @@ impl<'a> VulkanAdapter<'a> {
             .iter()
             .enumerate()
             .find(|(_, q)| {
-                q.queue_family_properties
-                    .queue_flags
-                    .contains(vk::QueueFlags::TRANSFER)
+                q.queue_family_properties.queue_flags.contains(vk::QueueFlags::TRANSFER)
                     && !q
                         .queue_family_properties
                         .queue_flags
@@ -148,9 +160,7 @@ impl<'a> VulkanAdapter<'a> {
             .iter()
             .enumerate()
             .find(|(_, q)| {
-                q.queue_family_properties
-                    .queue_flags
-                    .contains(vk::QueueFlags::COMPUTE)
+                q.queue_family_properties.queue_flags.contains(vk::QueueFlags::COMPUTE)
                     && !q
                         .queue_family_properties
                         .queue_flags
@@ -163,7 +173,9 @@ impl<'a> VulkanAdapter<'a> {
             .enumerate()
             .find(|(_, q)| {
                 q.queue_family_properties.queue_flags.contains(
-                    vk::QueueFlags::GRAPHICS | vk::QueueFlags::TRANSFER | vk::QueueFlags::COMPUTE,
+                    vk::QueueFlags::GRAPHICS
+                        | vk::QueueFlags::TRANSFER
+                        | vk::QueueFlags::COMPUTE,
                 )
             })
             .map(|(i, _)| i)?;
@@ -195,11 +207,13 @@ impl<'a> VulkanAdapter<'a> {
         debug!("decode capabilities: {decode_capabilities:#?}");
         debug!("encode capabilities: {encode_capabilities:#?}");
 
-        let (driver_name, driver_info) = match properties.api_version >= vk::API_VERSION_1_2 {
+        let (driver_name, driver_info) = match properties.api_version
+            >= vk::API_VERSION_1_2
+        {
             true => {
                 let mut driver_properties = vk::PhysicalDeviceDriverProperties::default();
-                let mut properties2 =
-                    vk::PhysicalDeviceProperties2::default().push_next(&mut driver_properties);
+                let mut properties2 = vk::PhysicalDeviceProperties2::default()
+                    .push_next(&mut driver_properties);
                 unsafe {
                     instance.get_physical_device_properties2(device, &mut properties2);
                 }
@@ -267,7 +281,8 @@ impl<'a> VulkanAdapter<'a> {
                 graphics_transfer_compute: QueueIndex {
                     family_index: graphics_transfer_compute_queue_idx,
                     queue_count: 1, // Currently we can only handle 1 queue
-                    video_properties: video_properties[graphics_transfer_compute_queue_idx],
+                    video_properties: video_properties
+                        [graphics_transfer_compute_queue_idx],
                     query_result_status_properties: query_result_status_properties
                         [graphics_transfer_compute_queue_idx],
                 },
@@ -365,10 +380,7 @@ impl Default for VulkanAdapterDescriptor<'_> {
 #[cfg(not(feature = "wgpu"))]
 impl Default for VulkanAdapterDescriptor {
     fn default() -> Self {
-        Self {
-            supports_decoding: true,
-            supports_encoding: true,
-        }
+        Self { supports_decoding: true, supports_encoding: true }
     }
 }
 
@@ -439,7 +451,8 @@ macro_rules! find_ext {
 pub(crate) fn iter_adapters<'a>(
     vulkan_instance: &'a VulkanInstance,
 ) -> Result<impl Iterator<Item = VulkanAdapter<'a>> + 'a, VulkanInitError> {
-    let physical_devices = unsafe { vulkan_instance.instance.enumerate_physical_devices()? };
+    let physical_devices =
+        unsafe { vulkan_instance.instance.enumerate_physical_devices()? };
     Ok(physical_devices
         .into_iter()
         .filter_map(move |device| VulkanAdapter::new(vulkan_instance, device)))
@@ -490,11 +503,12 @@ fn supported_extensions<'a>(
         .collect()
 }
 
-fn extensions_to_codec_operations(extensions: &[&CStr]) -> vk::VideoCodecOperationFlagsKHR {
-    extensions
-        .iter()
-        .copied()
-        .fold(vk::VideoCodecOperationFlagsKHR::empty(), |acc, ext| {
+fn extensions_to_codec_operations(
+    extensions: &[&CStr],
+) -> vk::VideoCodecOperationFlagsKHR {
+    extensions.iter().copied().fold(
+        vk::VideoCodecOperationFlagsKHR::empty(),
+        |acc, ext| {
             acc | match ext {
                 name if name == vk::KHR_VIDEO_ENCODE_H264_NAME => {
                     vk::VideoCodecOperationFlagsKHR::ENCODE_H264
@@ -510,7 +524,8 @@ fn extensions_to_codec_operations(extensions: &[&CStr]) -> vk::VideoCodecOperati
                 }
                 _ => vk::VideoCodecOperationFlagsKHR::empty(),
             }
-        })
+        },
+    )
 }
 
 fn find_video_queue_idx(
@@ -519,11 +534,7 @@ fn find_video_queue_idx(
     video_codec_operation: vk::VideoCodecOperationFlagsKHR,
 ) -> Option<usize> {
     for (i, queue) in queues.iter().enumerate() {
-        if !queue
-            .queue_family_properties
-            .queue_flags
-            .contains(queue_flag)
-        {
+        if !queue.queue_family_properties.queue_flags.contains(queue_flag) {
             continue;
         }
 

@@ -32,28 +32,28 @@ impl AudioMixerInput {
         let (input_sender, input_receiver) = bounded(100);
         let (result_sender, result_receiver) = bounded(100);
         start_input_thread(mixing_sample_rate, input_receiver, result_sender);
-        Self {
-            input_sender,
-            result_receiver,
-            next_chunk: None,
-        }
+        Self { input_sender, result_receiver, next_chunk: None }
     }
 
-    pub fn process_batch(&self, batches: Vec<InputAudioSamples>, pts_range: (Duration, Duration)) {
-        let result = self
-            .input_sender
-            .send(AudioMixerInputEvent { batches, pts_range });
+    pub fn process_batch(
+        &self,
+        batches: Vec<InputAudioSamples>,
+        pts_range: (Duration, Duration),
+    ) {
+        let result = self.input_sender.send(AudioMixerInputEvent { batches, pts_range });
         if result.is_err() {
             trace!("Failed to send samples. Channel closed.")
         }
     }
 
-    pub fn get_samples(&mut self, pts_range: (Duration, Duration)) -> Option<Vec<(f64, f64)>> {
+    pub fn get_samples(
+        &mut self,
+        pts_range: (Duration, Duration),
+    ) -> Option<Vec<(f64, f64)>> {
         loop {
             if self.next_chunk.is_none() {
-                let Ok(result) = self
-                    .result_receiver
-                    .recv_timeout(Duration::from_millis(100))
+                let Ok(result) =
+                    self.result_receiver.recv_timeout(Duration::from_millis(100))
                 else {
                     // Timeout here is just in case of deadlock, it should not happen
                     error!("Failed to read samples.");

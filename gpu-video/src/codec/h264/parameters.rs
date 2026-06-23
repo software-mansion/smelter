@@ -39,10 +39,7 @@ impl SeqParameterSetExt for SeqParameterSet {
         };
 
         let (CropUnitX, CropUnitY) = match chroma_array_type {
-            0 => (
-                1,
-                2 - (self.frame_mbs_flags == FrameMbsFlags::Frames) as u32,
-            ),
+            0 => (1, 2 - (self.frame_mbs_flags == FrameMbsFlags::Frames) as u32),
 
             _ => (
                 SubWidthC,
@@ -184,11 +181,8 @@ impl From<&'_ SeqParameterSet> for VkH264SequenceParameterSet {
             None => std::ptr::null(),
         };
 
-        let scaling_lists: Option<Box<H264ScalingLists>> = sps
-            .chroma_info
-            .scaling_matrix
-            .as_ref()
-            .map(|matrix| Box::new(matrix.into()));
+        let scaling_lists: Option<Box<H264ScalingLists>> =
+            sps.chroma_info.scaling_matrix.as_ref().map(|matrix| Box::new(matrix.into()));
 
         let pScalingLists = match scaling_lists.as_ref() {
             Some(l) => &l.list,
@@ -249,11 +243,14 @@ impl VkH264SequenceParameterSet {
         // with enabled frame_mbs_only_flag
         let (CropUnitX, CropUnitY) = (2, 2);
 
-        let width_offset = (MACROBLOCK_SIZE - (width % MACROBLOCK_SIZE)) % MACROBLOCK_SIZE;
-        let height_offset = (MACROBLOCK_SIZE - (height % MACROBLOCK_SIZE)) % MACROBLOCK_SIZE;
+        let width_offset =
+            (MACROBLOCK_SIZE - (width % MACROBLOCK_SIZE)) % MACROBLOCK_SIZE;
+        let height_offset =
+            (MACROBLOCK_SIZE - (height % MACROBLOCK_SIZE)) % MACROBLOCK_SIZE;
 
         let pic_width_in_mbs_minus1 = (width + width_offset) / MACROBLOCK_SIZE - 1;
-        let pic_height_in_map_units_minus1 = (height + height_offset) / MACROBLOCK_SIZE - 1;
+        let pic_height_in_map_units_minus1 =
+            (height + height_offset) / MACROBLOCK_SIZE - 1;
         let frame_crop_right_offset = width_offset / CropUnitX;
         let frame_crop_bottom_offset = height_offset / CropUnitY;
 
@@ -479,7 +476,9 @@ pub(crate) fn vk_to_h264_level_idc(
 
 /// As per __Table A-1 Level limits__ in the H.264 spec
 /// `mbs` means macroblocks here
-pub(crate) fn h264_level_idc_to_max_dpb_mbs(level_idc: u8) -> Result<u64, VulkanDecoderError> {
+pub(crate) fn h264_level_idc_to_max_dpb_mbs(
+    level_idc: u8,
+) -> Result<u64, VulkanDecoderError> {
     match level_idc {
         10 => Ok(396),
         11 => Ok(900),
@@ -616,9 +615,11 @@ impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkH264PictureParameter
                 flags,
                 seq_parameter_set_id: pps.seq_parameter_set_id.id(),
                 pic_parameter_set_id: pps.pic_parameter_set_id.id(),
-                num_ref_idx_l0_default_active_minus1: pps.num_ref_idx_l0_default_active_minus1
+                num_ref_idx_l0_default_active_minus1: pps
+                    .num_ref_idx_l0_default_active_minus1
                     as u8,
-                num_ref_idx_l1_default_active_minus1: pps.num_ref_idx_l1_default_active_minus1
+                num_ref_idx_l1_default_active_minus1: pps
+                    .num_ref_idx_l1_default_active_minus1
                     as u8,
                 weighted_bipred_idc: pps.weighted_bipred_idc.into(),
                 pic_init_qp_minus26: pps.pic_init_qp_minus26 as i8,
@@ -643,7 +644,8 @@ impl VkH264PictureParameterSet {
         let transform_8x8_mode_flag = (caps
             .std_syntax_flags
             .contains(vk::VideoEncodeH264StdFlagsKHR::TRANSFORM_8X8_MODE_FLAG_SET)
-            && matches!(profile, H264Profile::High)) as u32;
+            && matches!(profile, H264Profile::High))
+            as u32;
 
         let pps = vk::native::StdVideoH264PictureParameterSet {
             flags: vk::native::StdVideoH264PpsFlags {
@@ -674,10 +676,7 @@ impl VkH264PictureParameterSet {
             pScalingLists: std::ptr::null(),
         };
 
-        Self {
-            pps,
-            _scaling_list: None,
-        }
+        Self { pps, _scaling_list: None }
     }
 }
 
@@ -709,7 +708,9 @@ impl<'a> H264DecodeProfileInfo<'a> {
     ) -> Result<Self, VulkanDecoderError> {
         let profile_idc = h264_profile_idc_to_vk(sps.profile());
 
-        if profile_idc == vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_INVALID {
+        if profile_idc
+            == vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_INVALID
+        {
             return Err(VulkanDecoderError::InvalidInputData(
                 "unsupported h264 profile".into(),
             ));

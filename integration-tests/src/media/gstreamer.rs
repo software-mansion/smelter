@@ -8,7 +8,8 @@ use std::{
 use tracing::info;
 
 use super::{
-    Receive, ResolvedAsset, ResolvedKind, RtpVideo, Send, VideoCodec, handle::ProcessHandle,
+    Receive, ResolvedAsset, ResolvedKind, RtpVideo, Send, VideoCodec,
+    handle::ProcessHandle,
 };
 
 pub(super) fn spawn_send(
@@ -21,30 +22,12 @@ pub(super) fn spawn_send(
         bail!("GStreamer backend doesn't support looped input; use Backend::Ffmpeg");
     }
     match to {
-        Send::RtpUdpClient {
-            ip,
-            video_port,
-            audio_port,
-        } => send_rtp(
-            asset,
-            ip,
-            *video_port,
-            *audio_port,
-            RtpTransport::Udp,
-            stdio,
-        ),
-        Send::RtpTcpClient {
-            ip,
-            video_port,
-            audio_port,
-        } => send_rtp(
-            asset,
-            ip,
-            *video_port,
-            *audio_port,
-            RtpTransport::Tcp,
-            stdio,
-        ),
+        Send::RtpUdpClient { ip, video_port, audio_port } => {
+            send_rtp(asset, ip, *video_port, *audio_port, RtpTransport::Udp, stdio)
+        }
+        Send::RtpTcpClient { ip, video_port, audio_port } => {
+            send_rtp(asset, ip, *video_port, *audio_port, RtpTransport::Tcp, stdio)
+        }
         Send::RtmpClient { .. } => Err(anyhow!(
             "GStreamer backend doesn't support RTMP send; use Backend::Ffmpeg"
         )),
@@ -56,11 +39,9 @@ pub(super) fn spawn_receive(from: &Receive, stdio: bool) -> Result<Vec<ProcessHa
         Receive::RtpUdpListener { video, audio_port } => {
             receive_rtp_udp(video.as_ref(), audio_port.is_some(), stdio)
         }
-        Receive::RtpTcpClient {
-            ip,
-            video,
-            audio_port,
-        } => receive_rtp_tcp(ip, video.as_ref(), audio_port.is_some(), stdio),
+        Receive::RtpTcpClient { ip, video, audio_port } => {
+            receive_rtp_tcp(ip, video.as_ref(), audio_port.is_some(), stdio)
+        }
         Receive::RtmpListener { .. } => Err(anyhow!(
             "GStreamer backend doesn't support RTMP receive; use Backend::Ffmpeg"
         )),
@@ -111,12 +92,8 @@ fn send_rtp(
 
     info!("[media] gstreamer: spawning send pipeline");
     let (out, err) = stdio_for(stdio);
-    let child = Command::new("bash")
-        .arg("-c")
-        .arg(pipeline)
-        .stdout(out)
-        .stderr(err)
-        .spawn()?;
+    let child =
+        Command::new("bash").arg("-c").arg(pipeline).stdout(out).stderr(err).spawn()?;
     Ok(vec![ProcessHandle::new(child)])
 }
 
@@ -133,11 +110,13 @@ fn build_file_pipeline(
         _ => "qtdemux",
     };
     let path_str = path.to_string_lossy();
-    let mut cmd = format!("gst-launch-1.0 -v filesrc location={path_str} ! {demuxer} name=demux ");
+    let mut cmd =
+        format!("gst-launch-1.0 -v filesrc location={path_str} ! {demuxer} name=demux ");
 
     if let Some(port) = video_port {
-        let codec =
-            codec.ok_or_else(|| anyhow!("video codec required for file-based gstreamer send"))?;
+        let codec = codec.ok_or_else(|| {
+            anyhow!("video codec required for file-based gstreamer send")
+        })?;
         let pay = match codec {
             VideoCodec::H264 => "h264parse ! rtph264pay config-interval=1",
             VideoCodec::Vp8 => "rtpvp8pay mtu=1200 picture-id-mode=2",
@@ -170,11 +149,15 @@ fn build_testsrc_pipeline(
 
     if let Some(port) = video_port {
         let enc = match codec {
-            VideoCodec::H264 => "x264enc tune=zerolatency speed-preset=superfast ! rtph264pay",
+            VideoCodec::H264 => {
+                "x264enc tune=zerolatency speed-preset=superfast ! rtph264pay"
+            }
             VideoCodec::Vp8 => {
                 "vp8enc deadline=1 error-resilient=partitions keyframe-max-dist=30 auto-alt-ref=true cpu-used=-5 ! rtpvp8pay"
             }
-            VideoCodec::Vp9 => "vp9enc deadline=1 auto-alt-ref=true cpu-used=-5 ! rtpvp9pay",
+            VideoCodec::Vp9 => {
+                "vp9enc deadline=1 auto-alt-ref=true cpu-used=-5 ! rtpvp9pay"
+            }
         };
         cmd.push_str(&format!(
             "{enc} ! application/x-rtp,payload=96 ! {sink} ",
@@ -193,7 +176,9 @@ fn build_testsrc_pipeline(
 fn rtp_sink(ip: &str, port: u16, transport: RtpTransport) -> String {
     match transport {
         RtpTransport::Udp => format!("udpsink host={ip} port={port}"),
-        RtpTransport::Tcp => format!("rtpstreampay ! tcpclientsink host={ip} port={port}"),
+        RtpTransport::Tcp => {
+            format!("rtpstreampay ! tcpclientsink host={ip} port={port}")
+        }
     }
 }
 
@@ -235,12 +220,8 @@ fn receive_rtp_udp(
 
     info!("[media] gstreamer: receive UDP on {port}");
     let (out, err) = stdio_for(stdio);
-    let child = Command::new("bash")
-        .arg("-c")
-        .arg(cmd)
-        .stdout(out)
-        .stderr(err)
-        .spawn()?;
+    let child =
+        Command::new("bash").arg("-c").arg(cmd).stdout(out).stderr(err).spawn()?;
     thread::sleep(Duration::from_secs(2));
     Ok(vec![ProcessHandle::new(child)])
 }
@@ -280,12 +261,8 @@ fn receive_rtp_tcp(
 
     info!("[media] gstreamer: receive TCP from {ip}:{port}");
     let (out, err) = stdio_for(stdio);
-    let child = Command::new("bash")
-        .arg("-c")
-        .arg(cmd)
-        .stdout(out)
-        .stderr(err)
-        .spawn()?;
+    let child =
+        Command::new("bash").arg("-c").arg(cmd).stdout(out).stderr(err).spawn()?;
     thread::sleep(Duration::from_secs(2));
     Ok(vec![ProcessHandle::new(child)])
 }

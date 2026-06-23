@@ -158,10 +158,8 @@ impl FdkAacEncoder {
                 false => self.input_buffer.len() as c_int,
             };
 
-            let in_args = fdk::AACENC_InArgs {
-                numInSamples: num_in_samples,
-                numAncBytes: 0,
-            };
+            let in_args =
+                fdk::AACENC_InArgs { numInSamples: num_in_samples, numAncBytes: 0 };
 
             // FDK docs 2.5 states that "the input buffer should be handled as a modulo buffer". I couldn't find what "modulo buffer" means.
             // Code examples in docs use static array and move samples after each `encode` call (it's not a circular buffer).
@@ -172,8 +170,10 @@ impl FdkAacEncoder {
             // Calling `drain` on the input buffer will reallocate it, so the buffer descriptions are created right before calling `aacEncEncode`.
             // It's unsafe to use pointers obtained by calling `as_ptr()` and `as_ptr_mut()` after moving / reallocating the buffer.
             let mut in_buf = self.input_buffer.as_ptr();
-            let mut in_buf_ident: c_int = fdk::AACENC_BufferIdentifier_IN_AUDIO_DATA as c_int;
-            let mut in_buf_size: c_int = (self.input_buffer.len() * mem::size_of::<i16>()) as c_int;
+            let mut in_buf_ident: c_int =
+                fdk::AACENC_BufferIdentifier_IN_AUDIO_DATA as c_int;
+            let mut in_buf_size: c_int =
+                (self.input_buffer.len() * mem::size_of::<i16>()) as c_int;
             let mut in_buf_el_size: c_int = mem::size_of::<i16>() as c_int;
 
             let in_desc = fdk::AACENC_BufDesc {
@@ -185,7 +185,8 @@ impl FdkAacEncoder {
             };
 
             let mut out_buf = self.output_buffer.as_mut_ptr();
-            let mut out_buf_ident: c_int = fdk::AACENC_BufferIdentifier_OUT_BITSTREAM_DATA as c_int;
+            let mut out_buf_ident: c_int =
+                fdk::AACENC_BufferIdentifier_OUT_BITSTREAM_DATA as c_int;
             let mut out_buf_size: c_int = self.output_buffer.len() as c_int;
             let mut out_buf_el_size: c_int = mem::size_of::<u8>() as c_int;
 
@@ -259,10 +260,8 @@ impl FdkAacEncoder {
             }
             AudioSamples::Stereo(stereo_samples) => {
                 for (l, r) in stereo_samples {
-                    self.input_buffer
-                        .push((l.clamp(-1.0, 1.0) * i16::MAX as f64) as i16);
-                    self.input_buffer
-                        .push((r.clamp(-1.0, 1.0) * i16::MAX as f64) as i16);
+                    self.input_buffer.push((l.clamp(-1.0, 1.0) * i16::MAX as f64) as i16);
+                    self.input_buffer.push((r.clamp(-1.0, 1.0) * i16::MAX as f64) as i16);
                 }
             }
         }

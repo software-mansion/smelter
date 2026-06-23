@@ -4,8 +4,8 @@ use ash::vk;
 
 use crate::{
     codec::{
-        Codec, CodecCapabilities, CodecSpecificDecodeCapabilities, CodecSpecificEncodeCapabilities,
-        CodecSpecificEncoderQualityLevelProperties,
+        Codec, CodecCapabilities, CodecSpecificDecodeCapabilities,
+        CodecSpecificEncodeCapabilities, CodecSpecificEncoderQualityLevelProperties,
         h264::parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
     },
     device::caps::NativeEncodeH264Capabilities,

@@ -8,7 +8,9 @@ use spectrum_analyzer::{
 };
 use tracing::error;
 
-use super::{Channel, RealTolerance, SamplingInterval, calc_level, find_samples, split_samples};
+use super::{
+    Channel, RealTolerance, SamplingInterval, calc_level, find_samples, split_samples,
+};
 
 #[derive(Debug)]
 struct AnalyzeResult {
@@ -42,7 +44,8 @@ impl AnalyzeResult {
         let avg_diff = (actual.average_level - expected.average_level).abs();
         let med_diff = (actual.median_level - expected.median_level).abs();
         let max_freq_diff = (actual.max_frequency - expected.max_frequency).abs();
-        let max_freq_level_diff = (actual.max_frequency_level - expected.max_frequency_level).abs();
+        let max_freq_level_diff =
+            (actual.max_frequency_level - expected.max_frequency_level).abs();
         let general_diff = (actual.general_level - expected.general_level).abs();
 
         let max_freq_tolerance =
@@ -79,17 +82,26 @@ pub(super) fn validate(
         let expected_samples = find_samples(&expected, interval);
         let actual_samples = find_samples(&actual, interval);
 
-        let (e_l, e_r, a_l, a_r) = analyze(actual_samples, expected_samples, sample_rate)?;
+        let (e_l, e_r, a_l, a_r) =
+            analyze(actual_samples, expected_samples, sample_rate)?;
 
-        if let Err(err) =
-            AnalyzeResult::compare(&a_l, &e_l, tolerance, interval.first_sample, Channel::Left)
-        {
+        if let Err(err) = AnalyzeResult::compare(
+            &a_l,
+            &e_l,
+            tolerance,
+            interval.first_sample,
+            Channel::Left,
+        ) {
             error!("{err}");
             failed_batches += 1;
         }
-        if let Err(err) =
-            AnalyzeResult::compare(&a_r, &e_r, tolerance, interval.first_sample, Channel::Right)
-        {
+        if let Err(err) = AnalyzeResult::compare(
+            &a_r,
+            &e_r,
+            tolerance,
+            interval.first_sample,
+            Channel::Right,
+        ) {
             error!("{err}");
             failed_batches += 1;
         }
@@ -145,7 +157,10 @@ fn analyze(
     ))
 }
 
-fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, SpectrumAnalyzerError> {
+fn calc_fft(
+    samples: &[f32],
+    sample_rate: u32,
+) -> Result<FrequencySpectrum, SpectrumAnalyzerError> {
     let samples = hann_window(samples);
     samples_fft_to_spectrum(&samples, sample_rate, FrequencyLimit::All, None)
 }

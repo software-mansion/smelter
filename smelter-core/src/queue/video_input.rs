@@ -53,7 +53,8 @@ impl VideoQueueInput {
         side_channel: Option<VideoSideChannel>,
         side_channel_delay: Duration,
     ) -> (Self, Sender<Frame>) {
-        let (receiver, sender) = VideoInputReceiver::new(side_channel_delay, side_channel);
+        let (receiver, sender) =
+            VideoInputReceiver::new(side_channel_delay, side_channel);
         let input = Self {
             queue_ctx: ctx.queue_ctx.clone(),
             required,
@@ -104,8 +105,7 @@ impl VideoQueueInput {
         self.paused_frame = frame;
         self.paused_pts = Some(pts);
 
-        self.event_emitter
-            .emit(Event::VideoInputStreamPaused(self.input_id.clone()));
+        self.event_emitter.emit(Event::VideoInputStreamPaused(self.input_id.clone()));
     }
 
     pub(super) fn resume(&mut self) {
@@ -120,7 +120,9 @@ impl VideoQueueInput {
 
     pub(super) fn paused_event(&self, pts: Duration) -> Option<FrameEvent> {
         let offset = self.track_offset.get()?;
-        if let (Some(paused_pts), Some(mut frame)) = (self.paused_pts, self.paused_frame.clone()) {
+        if let (Some(paused_pts), Some(mut frame)) =
+            (self.paused_pts, self.paused_frame.clone())
+        {
             frame.pts += offset + pts.saturating_sub(paused_pts);
             return Some(FrameEvent {
                 required: self.required,
@@ -158,10 +160,7 @@ impl VideoQueueInput {
             None => {
                 if self.is_done() && !self.event_eos_guard.emited() {
                     self.event_eos_guard.emit();
-                    Some(FrameEvent {
-                        required: true,
-                        event: PipelineEvent::EOS,
-                    })
+                    Some(FrameEvent { required: true, event: PipelineEvent::EOS })
                 } else {
                     None
                 }
@@ -169,7 +168,11 @@ impl VideoQueueInput {
         }
     }
 
-    pub(super) fn is_ready_for_pts(&mut self, pts: Duration, queue_start_pts: Duration) -> bool {
+    pub(super) fn is_ready_for_pts(
+        &mut self,
+        pts: Duration,
+        queue_start_pts: Duration,
+    ) -> bool {
         if self.paused_pts.is_some() {
             return true;
         }
@@ -184,7 +187,9 @@ impl VideoQueueInput {
 
         match self.receiver.state() {
             ReceiverState::New => match self.offset_from_start {
-                Some(offset_from_start) => pts.saturating_sub(queue_start_pts) < offset_from_start,
+                Some(offset_from_start) => {
+                    pts.saturating_sub(queue_start_pts) < offset_from_start
+                }
                 None => true,
             },
             ReceiverState::Running => {
@@ -205,9 +210,9 @@ impl VideoQueueInput {
         }
         self.event_delivered_guard.emit();
         let offset = match self.offset_from_start {
-            Some(offset_from_start) => self
-                .track_offset
-                .get_or_init(offset_from_start + queue_start_pts),
+            Some(offset_from_start) => {
+                self.track_offset.get_or_init(offset_from_start + queue_start_pts)
+            }
             None => self.track_offset.get_or_init(buffer_pts),
         };
         Some(offset)
@@ -247,7 +252,10 @@ pub(crate) struct VideoInputReceiver {
 }
 
 impl VideoInputReceiver {
-    pub fn new(delay: Duration, side_channel: Option<VideoSideChannel>) -> (Self, Sender<Frame>) {
+    pub fn new(
+        delay: Duration,
+        side_channel: Option<VideoSideChannel>,
+    ) -> (Self, Sender<Frame>) {
         let (sender, receiver) = bounded(1);
         let track = Self {
             max_size: Duration::from_millis(100),

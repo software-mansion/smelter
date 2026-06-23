@@ -54,9 +54,8 @@ impl ParamsBindGroups {
         let color_params_buffer = create_buffer(ctx, COLOR_PARAMS_SIZE);
         let box_shadow_params_buffer = create_buffer(ctx, BOX_SHADOW_PARAMS_SIZE);
 
-        let bind_group_1_layout = ctx
-            .device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+        let bind_group_1_layout =
+            ctx.device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some("Bind group 1 layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -126,20 +125,19 @@ impl ParamsBindGroups {
         });
 
         let bind_group_2_layout =
-            ctx.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("Bind group 2 layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
+            ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Bind group 2 layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
 
         let mut bind_groups_2 = Vec::with_capacity(100);
         for _ in 0..100 {
@@ -188,8 +186,11 @@ impl ParamsBindGroups {
         output_resolution_bytes[4..8]
             .copy_from_slice(&(output_resolution.height as f32).to_le_bytes());
 
-        ctx.queue
-            .write_buffer(&self.output_resolution_buffer, 0, &output_resolution_bytes);
+        ctx.queue.write_buffer(
+            &self.output_resolution_buffer,
+            0,
+            &output_resolution_bytes,
+        );
 
         let mut layout_infos = Vec::new();
 
@@ -223,14 +224,18 @@ impl ParamsBindGroups {
                     };
                     let mut color_params_bytes = [0u8; 80];
                     color_params_bytes[0..16].copy_from_slice(&border_radius_bytes);
-                    color_params_bytes[16..32].copy_from_slice(&color_to_bytes(ctx, border_color));
-                    color_params_bytes[32..48].copy_from_slice(&color_to_bytes(ctx, color));
+                    color_params_bytes[16..32]
+                        .copy_from_slice(&color_to_bytes(ctx, border_color));
+                    color_params_bytes[32..48]
+                        .copy_from_slice(&color_to_bytes(ctx, color));
                     color_params_bytes[48..52].copy_from_slice(&top.to_le_bytes());
                     color_params_bytes[52..56].copy_from_slice(&left.to_le_bytes());
                     color_params_bytes[56..60].copy_from_slice(&width.to_le_bytes());
                     color_params_bytes[60..64].copy_from_slice(&height.to_le_bytes());
-                    color_params_bytes[64..68].copy_from_slice(&rotation_degrees.to_le_bytes());
-                    color_params_bytes[68..72].copy_from_slice(&border_width.to_le_bytes());
+                    color_params_bytes[64..68]
+                        .copy_from_slice(&rotation_degrees.to_le_bytes());
+                    color_params_bytes[68..72]
+                        .copy_from_slice(&border_width.to_le_bytes());
                     color_params.push(color_params_bytes);
                     layout_infos.push(layout_info);
                 }
@@ -260,14 +265,20 @@ impl ParamsBindGroups {
                     texture_params_bytes[40..44].copy_from_slice(&width.to_le_bytes());
                     texture_params_bytes[44..48].copy_from_slice(&height.to_le_bytes());
                     texture_params_bytes[48..52].copy_from_slice(&crop.top.to_le_bytes());
-                    texture_params_bytes[52..56].copy_from_slice(&crop.left.to_le_bytes());
-                    texture_params_bytes[56..60].copy_from_slice(&crop.width.to_le_bytes());
-                    texture_params_bytes[60..64].copy_from_slice(&crop.height.to_le_bytes());
-                    texture_params_bytes[64..68].copy_from_slice(&rotation_degrees.to_le_bytes());
-                    texture_params_bytes[68..72].copy_from_slice(&border_width.to_le_bytes());
+                    texture_params_bytes[52..56]
+                        .copy_from_slice(&crop.left.to_le_bytes());
+                    texture_params_bytes[56..60]
+                        .copy_from_slice(&crop.width.to_le_bytes());
+                    texture_params_bytes[60..64]
+                        .copy_from_slice(&crop.height.to_le_bytes());
+                    texture_params_bytes[64..68]
+                        .copy_from_slice(&rotation_degrees.to_le_bytes());
+                    texture_params_bytes[68..72]
+                        .copy_from_slice(&border_width.to_le_bytes());
                     texture_params_bytes[72..76]
                         .copy_from_slice(&scaling_filter_value.to_le_bytes());
-                    texture_params_bytes[76..80].copy_from_slice(&mip_level.to_le_bytes());
+                    texture_params_bytes[76..80]
+                        .copy_from_slice(&mip_level.to_le_bytes());
                     texture_params.push(texture_params_bytes);
                     layout_infos.push(layout_info);
                 }
@@ -279,14 +290,17 @@ impl ParamsBindGroups {
                     };
                     let mut box_shadow_params_bytes = [0u8; 64];
                     box_shadow_params_bytes[0..16].copy_from_slice(&border_radius_bytes);
-                    box_shadow_params_bytes[16..32].copy_from_slice(&color_to_bytes(ctx, color));
+                    box_shadow_params_bytes[16..32]
+                        .copy_from_slice(&color_to_bytes(ctx, color));
                     box_shadow_params_bytes[32..36].copy_from_slice(&top.to_le_bytes());
                     box_shadow_params_bytes[36..40].copy_from_slice(&left.to_le_bytes());
                     box_shadow_params_bytes[40..44].copy_from_slice(&width.to_le_bytes());
-                    box_shadow_params_bytes[44..48].copy_from_slice(&height.to_le_bytes());
+                    box_shadow_params_bytes[44..48]
+                        .copy_from_slice(&height.to_le_bytes());
                     box_shadow_params_bytes[48..52]
                         .copy_from_slice(&rotation_degrees.to_le_bytes());
-                    box_shadow_params_bytes[52..56].copy_from_slice(&blur_radius.to_le_bytes());
+                    box_shadow_params_bytes[52..56]
+                        .copy_from_slice(&blur_radius.to_le_bytes());
                     box_shadow_params.push(box_shadow_params_bytes);
                     layout_infos.push(layout_info);
                 }
@@ -322,17 +336,18 @@ impl ParamsBindGroups {
                 }
             }
 
-            ctx.queue
-                .write_buffer(&self.bind_groups_2[index].1, 0, &masks_bytes.concat());
+            ctx.queue.write_buffer(
+                &self.bind_groups_2[index].1,
+                0,
+                &masks_bytes.concat(),
+            );
         }
         texture_params.resize_with(100, || [0u8; 80]);
         color_params.resize_with(100, || [0u8; 80]);
         box_shadow_params.resize_with(100, || [0u8; 64]);
 
-        ctx.queue
-            .write_buffer(&self.texture_params_buffer, 0, &texture_params.concat());
-        ctx.queue
-            .write_buffer(&self.color_params_buffer, 0, &color_params.concat());
+        ctx.queue.write_buffer(&self.texture_params_buffer, 0, &texture_params.concat());
+        ctx.queue.write_buffer(&self.color_params_buffer, 0, &color_params.concat());
         ctx.queue.write_buffer(
             &self.box_shadow_params_buffer,
             0,

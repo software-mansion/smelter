@@ -12,12 +12,7 @@ pub(crate) struct InputDelayBuffer<T: TimedValue> {
 
 impl<T: TimedValue> InputDelayBuffer<T> {
     pub fn new(size: Duration) -> Self {
-        Self {
-            buffer: VecDeque::new(),
-            size,
-            ready: false,
-            end: false,
-        }
+        Self { buffer: VecDeque::new(), size, ready: false, end: false }
     }
 
     pub fn write(&mut self, item: T) {

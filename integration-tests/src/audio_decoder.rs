@@ -52,9 +52,8 @@ impl AudioDecoder {
     }
 
     pub fn decode(&mut self, packet: rtp::packet::Packet) -> Result<()> {
-        let first_rtp_timestamp = *self
-            .first_rtp_timestamp
-            .get_or_insert(packet.header.timestamp);
+        let first_rtp_timestamp =
+            *self.first_rtp_timestamp.get_or_insert(packet.header.timestamp);
         let chunk_data = self.depayloader.depacketize(&packet.payload)?;
         if chunk_data.is_empty() {
             return Ok(());
@@ -62,9 +61,11 @@ impl AudioDecoder {
 
         let samples_count = self.decoder.decode(&chunk_data, &mut self.buffer, false)?;
         self.decoded_samples.push(AudioSampleBatch {
-            samples: self.batch_to_f32(&self.buffer[..(self.sample_multiplier * samples_count)]),
+            samples: self
+                .batch_to_f32(&self.buffer[..(self.sample_multiplier * samples_count)]),
             pts: Duration::from_secs_f64(
-                (packet.header.timestamp - first_rtp_timestamp) as f64 / self.sample_rate as f64,
+                (packet.header.timestamp - first_rtp_timestamp) as f64
+                    / self.sample_rate as f64,
             ),
         });
 

@@ -10,7 +10,8 @@ use crate::utils::{self, SmelterBin};
 
 const X86_TARGET: &str = "x86_64-unknown-linux-gnu";
 const X86_OUTPUT_FILE: &str = "smelter_linux_x86_64.tar.gz";
-const X86_WITH_WEB_RENDERER_OUTPUT_FILE: &str = "smelter_with_web_renderer_linux_x86_64.tar.gz";
+const X86_WITH_WEB_RENDERER_OUTPUT_FILE: &str =
+    "smelter_with_web_renderer_linux_x86_64.tar.gz";
 
 const ARM_TARGET: &str = "aarch64-unknown-linux-gnu";
 const ARM_OUTPUT_FILE: &str = "smelter_linux_aarch64.tar.gz";
@@ -23,12 +24,7 @@ pub fn bundle_linux_app() -> Result<()> {
 
     if cfg!(target_arch = "x86_64") {
         bundle_app(&workdir, X86_TARGET, X86_OUTPUT_FILE, false)?;
-        bundle_app(
-            &workdir,
-            X86_TARGET,
-            X86_WITH_WEB_RENDERER_OUTPUT_FILE,
-            true,
-        )?;
+        bundle_app(&workdir, X86_TARGET, X86_WITH_WEB_RENDERER_OUTPUT_FILE, true)?;
     } else if cfg!(target_arch = "aarch64") {
         bundle_app(&workdir, ARM_TARGET, ARM_OUTPUT_FILE, false)?;
     }
@@ -76,10 +72,7 @@ fn bundle_app(
         None,
     )?;
 
-    let rustc_envs = vec![
-        ("FFMPEG_VERSION", ffmpeg_version),
-        ("FFMPEG_URL", ffmpeg_url),
-    ];
+    let rustc_envs = vec![("FFMPEG_VERSION", ffmpeg_version), ("FFMPEG_URL", ffmpeg_url)];
     info!("Build dependency_check binary.");
     utils::compile_smelter(
         SmelterBin::DependencyCheck,

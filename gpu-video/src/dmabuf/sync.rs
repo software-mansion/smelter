@@ -7,7 +7,7 @@ use ash::vk;
 use wgpu::hal::api::Vulkan as VkApi;
 
 use super::{
-    DmaBufInterop,
+    DmaBufFrame, DmaBufInterop,
     interop::VulkanDmaBufDevice,
     semaphore::{VulkanSemaphore, VulkanSemaphoreError},
     sync_file::{self, DmaBufAccess, SyncFile},
@@ -74,15 +74,6 @@ impl QuickSyncDmaBufSync {
         Self { queue: queue.clone(), vulkan: Arc::clone(&interop.vulkan) }
     }
 
-    pub(crate) fn submit_frame_write(
-        &self,
-        frame: &DmaBufSyncFd,
-        encoder: wgpu::CommandEncoder,
-        label: &'static str,
-    ) -> Result<(), QuickSyncDmaBufSyncError> {
-        self.submit_dma_buf_access(frame, DmaBufAccess::Write, [encoder.finish()], label)
-    }
-
     pub(crate) fn submit_frame_read(
         &self,
         frame: &DmaBufSyncFd,
@@ -90,6 +81,28 @@ impl QuickSyncDmaBufSync {
         label: &'static str,
     ) -> Result<(), QuickSyncDmaBufSyncError> {
         self.submit_dma_buf_access(frame, DmaBufAccess::Read, [encoder.finish()], label)
+    }
+
+    pub(crate) fn submit_dma_buf_write(
+        &self,
+        frame: &DmaBufFrame,
+        encoder: wgpu::CommandEncoder,
+        label: &'static str,
+    ) -> Result<(), QuickSyncDmaBufSyncError> {
+        self.submit_dma_buf_frame_access(
+            frame,
+            DmaBufAccess::Write,
+            [encoder.finish()],
+            label,
+        )
+    }
+
+    pub(crate) fn submit_pending_dma_buf_writes(
+        &self,
+        frame: &DmaBufFrame,
+        label: &'static str,
+    ) -> Result<(), QuickSyncDmaBufSyncError> {
+        self.submit_dma_buf_frame_access(frame, DmaBufAccess::Write, [], label)
     }
 
     fn submit_dma_buf_access(
@@ -122,6 +135,37 @@ impl QuickSyncDmaBufSync {
         release_result
     }
 
+    fn submit_dma_buf_frame_access(
+        &self,
+        frame: &DmaBufFrame,
+        access: DmaBufAccess,
+        command_buffers: impl IntoIterator<Item = wgpu::CommandBuffer>,
+        label: &'static str,
+    ) -> Result<(), QuickSyncDmaBufSyncError> {
+        let submitted_frame = frame.clone();
+        let sync_guard = frame.sync_guard();
+        let acquired =
+            self.acquire_dma_buf_frame(frame, access).map_err(label_error(label))?;
+        let release = VulkanSemaphore::exportable(Arc::clone(&self.vulkan))
+            .map_err(label_error(label))?;
+        let staged_submission = self
+            .stage_submission_sync(&acquired, release.raw())
+            .map_err(label_error(label))?;
+
+        self.queue.submit(command_buffers);
+        staged_submission.consume();
+
+        let release_result = release
+            .export_sync_file()
+            .map_err(QuickSyncDmaBufSyncError::from)
+            .and_then(|sync_file| self.release_dma_buf_frame(frame, access, &sync_file))
+            .map_err(label_error(label));
+        drop(sync_guard);
+        self.queue
+            .on_submitted_work_done(move || drop((submitted_frame, acquired, release)));
+        release_result
+    }
+
     fn acquire_frame(
         &self,
         frame: &DmaBufSyncFd,
@@ -138,6 +182,26 @@ impl QuickSyncDmaBufSync {
         )?]))
     }
 
+    fn acquire_dma_buf_frame(
+        &self,
+        frame: &DmaBufFrame,
+        access: DmaBufAccess,
+    ) -> Result<Box<[VulkanSemaphore]>, QuickSyncDmaBufSyncError> {
+        let mut semaphores = Vec::with_capacity(frame.objects().len());
+        for object in frame.objects() {
+            let sync_file =
+                sync_file::export_sync_file(object.fd.as_ref().as_fd(), access)
+                    .map_err(QuickSyncDmaBufSyncError::ExportSyncFile)?;
+            if let SyncFile::Pending(sync_file) = sync_file {
+                semaphores.push(VulkanSemaphore::import_sync_file(
+                    Arc::clone(&self.vulkan),
+                    sync_file,
+                )?);
+            }
+        }
+        Ok(semaphores.into_boxed_slice())
+    }
+
     fn release_frame(
         &self,
         frame: &DmaBufSyncFd,
@@ -146,6 +210,19 @@ impl QuickSyncDmaBufSync {
     ) -> Result<(), QuickSyncDmaBufSyncError> {
         sync_file::import_sync_file(frame.as_fd(), access, sync_file)
             .map_err(QuickSyncDmaBufSyncError::ImportSyncFile)
+    }
+
+    fn release_dma_buf_frame(
+        &self,
+        frame: &DmaBufFrame,
+        access: DmaBufAccess,
+        sync_file: &SyncFile,
+    ) -> Result<(), QuickSyncDmaBufSyncError> {
+        for object in frame.objects() {
+            sync_file::import_sync_file(object.fd.as_ref().as_fd(), access, sync_file)
+                .map_err(QuickSyncDmaBufSyncError::ImportSyncFile)?;
+        }
+        Ok(())
     }
 
     fn stage_submission_sync(

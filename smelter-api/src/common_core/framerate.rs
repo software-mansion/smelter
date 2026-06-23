@@ -21,12 +21,10 @@ impl TryFrom<Framerate> for smelter_render::Framerate {
                 let Some((num_str, den_str)) = text.split_once('/') else {
                     return Err(TypeError::new(ERROR_MESSAGE));
                 };
-                let num = num_str
-                    .parse::<u32>()
-                    .or(Err(TypeError::new(ERROR_MESSAGE)))?;
-                let den = den_str
-                    .parse::<u32>()
-                    .or(Err(TypeError::new(ERROR_MESSAGE)))?;
+                let num =
+                    num_str.parse::<u32>().or(Err(TypeError::new(ERROR_MESSAGE)))?;
+                let den =
+                    den_str.parse::<u32>().or(Err(TypeError::new(ERROR_MESSAGE)))?;
                 Ok(smelter_render::Framerate { num, den })
             }
             Framerate::U32(num) => Ok(smelter_render::Framerate { num, den: 1 }),

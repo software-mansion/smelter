@@ -31,11 +31,7 @@ impl NV12Input {
             _ => None,
         };
         let bind_group = nv12_texture.new_bind_group(ctx);
-        Ok(Self {
-            nv12_texture,
-            color_space_converter,
-            bind_group,
-        })
+        Ok(Self { nv12_texture, color_space_converter, bind_group })
     }
 
     pub fn new_uploadable(ctx: &WgpuCtx, resolution: Resolution) -> Self {
@@ -45,11 +41,7 @@ impl NV12Input {
             _ => None,
         };
         let bind_group = nv12_texture.new_bind_group(ctx);
-        Self {
-            nv12_texture,
-            color_space_converter,
-            bind_group,
-        }
+        Self { nv12_texture, color_space_converter, bind_group }
     }
 
     pub fn resolution(&self) -> Resolution {
@@ -67,10 +59,12 @@ impl NV12Input {
             (RenderingMode::WebGl, Some(converter))
                 if converter.size() != self.nv12_texture.texture().size() =>
             {
-                self.color_space_converter = Some(RgbToSrgbConverter::new(ctx, self.resolution()))
+                self.color_space_converter =
+                    Some(RgbToSrgbConverter::new(ctx, self.resolution()))
             }
             (RenderingMode::WebGl, None) => {
-                self.color_space_converter = Some(RgbToSrgbConverter::new(ctx, self.resolution()))
+                self.color_space_converter =
+                    Some(RgbToSrgbConverter::new(ctx, self.resolution()))
             }
             _ => (),
         };
@@ -105,9 +99,11 @@ impl NV12Input {
                 );
             }
             NodeTextureState::CpuOptimized { texture, .. } => {
-                ctx.format
-                    .nv12_to_rgba_linear
-                    .convert(ctx, &self.bind_group, texture.view());
+                ctx.format.nv12_to_rgba_linear.convert(
+                    ctx,
+                    &self.bind_group,
+                    texture.view(),
+                );
             }
             NodeTextureState::WebGl { texture, .. } => {
                 let Some(color_space_converter) = &mut self.color_space_converter else {

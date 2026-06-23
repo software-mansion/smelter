@@ -8,8 +8,8 @@ use strum::{Display, EnumIter};
 use crate::{
     inputs::InputHandle,
     outputs::{
-        hls::HlsOutput, mp4::Mp4Output, rtmp::RtmpOutput, rtp::RtpOutput, whep::WhepOutput,
-        whip::WhipOutput,
+        hls::HlsOutput, mp4::Mp4Output, rtmp::RtmpOutput, rtp::RtpOutput,
+        whep::WhepOutput, whip::WhipOutput,
     },
 };
 

@@ -14,10 +14,9 @@ impl std::str::FromStr for NumericArgument {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "maximize" => Ok(NumericArgument::Maximize),
-            _ => s
-                .parse::<u64>()
-                .map(NumericArgument::Constant)
-                .map_err(|e| e.to_string()),
+            _ => {
+                s.parse::<u64>().map(NumericArgument::Constant).map_err(|e| e.to_string())
+            }
         }
     }
 }
@@ -209,42 +208,15 @@ impl Resolution {
 impl From<ResolutionPreset> for Resolution {
     fn from(value: ResolutionPreset) -> Self {
         match value {
-            ResolutionPreset::Res4320p => Resolution {
-                width: 7680,
-                height: 4320,
-            },
-            ResolutionPreset::Res2160p => Resolution {
-                width: 3840,
-                height: 2160,
-            },
-            ResolutionPreset::Res1440p => Resolution {
-                width: 2560,
-                height: 1440,
-            },
-            ResolutionPreset::Res1080p => Resolution {
-                width: 1920,
-                height: 1080,
-            },
-            ResolutionPreset::Res720p => Resolution {
-                width: 1280,
-                height: 720,
-            },
-            ResolutionPreset::Res480p => Resolution {
-                width: 854,
-                height: 480,
-            },
-            ResolutionPreset::Res360p => Resolution {
-                width: 640,
-                height: 360,
-            },
-            ResolutionPreset::Res240p => Resolution {
-                width: 426,
-                height: 240,
-            },
-            ResolutionPreset::Res144p => Resolution {
-                width: 256,
-                height: 144,
-            },
+            ResolutionPreset::Res4320p => Resolution { width: 7680, height: 4320 },
+            ResolutionPreset::Res2160p => Resolution { width: 3840, height: 2160 },
+            ResolutionPreset::Res1440p => Resolution { width: 2560, height: 1440 },
+            ResolutionPreset::Res1080p => Resolution { width: 1920, height: 1080 },
+            ResolutionPreset::Res720p => Resolution { width: 1280, height: 720 },
+            ResolutionPreset::Res480p => Resolution { width: 854, height: 480 },
+            ResolutionPreset::Res360p => Resolution { width: 640, height: 360 },
+            ResolutionPreset::Res240p => Resolution { width: 426, height: 240 },
+            ResolutionPreset::Res144p => Resolution { width: 256, height: 144 },
         }
     }
 }

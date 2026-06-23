@@ -84,10 +84,7 @@ where
             Some(PipelineEvent::Data(event)) => match self.decoder.decode(event) {
                 Ok(chunks) => Some(chunks),
                 Err(err) => {
-                    warn!(
-                        "Audio decoder error: {}",
-                        ErrorStack::new(&err).into_string()
-                    );
+                    warn!("Audio decoder error: {}", ErrorStack::new(&err).into_string());
                     Some(vec![])
                 }
             },

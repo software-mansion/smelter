@@ -32,19 +32,14 @@ impl RawDataOutput {
         };
         Ok((
             Self { video, audio },
-            RawDataOutputReceiver {
-                video: video_receiver,
-                audio: audio_receiver,
-            },
+            RawDataOutputReceiver { video: video_receiver, audio: audio_receiver },
         ))
     }
 }
 
 impl Output for RawDataOutput {
     fn audio(&self) -> Option<OutputAudio<'_>> {
-        self.audio.as_ref().map(|audio| OutputAudio {
-            samples_batch_sender: audio,
-        })
+        self.audio.as_ref().map(|audio| OutputAudio { samples_batch_sender: audio })
     }
 
     fn video(&self) -> Option<OutputVideo<'_>> {

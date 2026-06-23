@@ -52,11 +52,7 @@ pub(super) struct InnerQueueInput {
     track_offset: TrackOffset,
     pause_state: PauseState,
 
-    pending: VecDeque<(
-        Option<VideoQueueInput>,
-        Option<AudioQueueInput>,
-        TrackOffset,
-    )>,
+    pending: VecDeque<(Option<VideoQueueInput>, Option<AudioQueueInput>, TrackOffset)>,
     required: bool,
     video_side_channel: Option<VideoSideChannel>,
     audio_side_channel: Option<AudioSideChannel>,
@@ -105,10 +101,7 @@ impl InnerQueueInput {
     fn queue_new_track(
         &mut self,
         opts: QueueTrackOptions,
-    ) -> (
-        Option<QueueSender<Frame>>,
-        Option<QueueSender<InputAudioSamples>>,
-    ) {
+    ) -> (Option<QueueSender<Frame>>, Option<QueueSender<InputAudioSamples>>) {
         if !opts.video && !opts.audio {
             return (None, None);
         }
@@ -117,7 +110,9 @@ impl InnerQueueInput {
         let (track_offset, offset_from_start) = match opts.offset {
             QueueTrackOffset::None => (TrackOffset::default(), None),
             QueueTrackOffset::Pts(duration) => (TrackOffset::new(duration), None),
-            QueueTrackOffset::FromStart(duration) => (TrackOffset::default(), Some(duration)),
+            QueueTrackOffset::FromStart(duration) => {
+                (TrackOffset::default(), Some(duration))
+            }
         };
         let (video_input, video_sender) = if opts.video {
             let side_channel = self
@@ -155,8 +150,7 @@ impl InnerQueueInput {
         } else {
             (None, None)
         };
-        self.pending
-            .push_back((video_input, audio_input, track_offset));
+        self.pending.push_back((video_input, audio_input, track_offset));
         (video_sender, audio_sender)
     }
 
@@ -232,7 +226,11 @@ pub struct QueueInputOptions {
 }
 
 impl QueueInput {
-    pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, opts: QueueInputOptions) -> Self {
+    pub fn new(
+        ctx: &Arc<PipelineCtx>,
+        input_ref: &Ref<InputId>,
+        opts: QueueInputOptions,
+    ) -> Self {
         let socket_dir = ctx.queue_ctx.side_channel_socket_dir.as_deref();
         let video_side_channel = match (opts.video_side_channel, socket_dir) {
             (true, Some(dir)) => VideoSideChannel::new(ctx, input_ref, dir),
@@ -263,10 +261,7 @@ impl QueueInput {
     pub fn queue_new_track(
         &self,
         opts: QueueTrackOptions,
-    ) -> (
-        Option<QueueSender<Frame>>,
-        Option<QueueSender<InputAudioSamples>>,
-    ) {
+    ) -> (Option<QueueSender<Frame>>, Option<QueueSender<InputAudioSamples>>) {
         self.0.lock().unwrap().queue_new_track(opts)
     }
 

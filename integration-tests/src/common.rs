@@ -35,35 +35,36 @@ pub fn dump_format<P: AsRef<Path>>(path: P) -> Result<DumpFormat> {
 }
 
 pub fn input_dump_from_disk<P: AsRef<Path>>(path: P) -> Result<Bytes> {
-    let input_path = submodule_root_path()
-        .join("rtp_packet_dumps")
-        .join("inputs")
-        .join(path);
+    let input_path =
+        submodule_root_path().join("rtp_packet_dumps").join("inputs").join(path);
 
     let bytes = fs::read(input_path).context("Failed to read input dump")?;
     Ok(Bytes::from(bytes))
 }
 
 pub fn output_dump_from_disk<P: AsRef<Path>>(path: P) -> Result<Bytes> {
-    let output_path = submodule_root_path()
-        .join("rtp_packet_dumps")
-        .join("outputs")
-        .join(path);
+    let output_path =
+        submodule_root_path().join("rtp_packet_dumps").join("outputs").join(path);
 
     let bytes = fs::read(output_path).context("Failed to read output dump")?;
     Ok(Bytes::from(bytes))
 }
 
-pub fn split_rtp_packet_dump(dump: Bytes, split_at_pts: Duration) -> Result<(Bytes, Bytes)> {
+pub fn split_rtp_packet_dump(
+    dump: Bytes,
+    split_at_pts: Duration,
+) -> Result<(Bytes, Bytes)> {
     let mut read_bytes = 0;
     let mut start_pts = None;
 
     while read_bytes < dump.len() {
-        let packet_len = u16::from_be_bytes([dump[read_bytes], dump[read_bytes + 1]]) as usize;
+        let packet_len =
+            u16::from_be_bytes([dump[read_bytes], dump[read_bytes + 1]]) as usize;
         read_bytes += 2;
 
-        let packet =
-            rtp::packet::Packet::unmarshal(&mut dump.slice(read_bytes..(read_bytes + packet_len)))?;
+        let packet = rtp::packet::Packet::unmarshal(
+            &mut dump.slice(read_bytes..(read_bytes + packet_len)),
+        )?;
         read_bytes += packet_len;
 
         let packet_pts = match packet.header.payload_type {
@@ -92,17 +93,9 @@ pub fn save_failed_test_dumps<P: AsRef<Path>>(
 
     let _ = fs::create_dir_all(&path);
 
-    let file_name = snapshot_filename
-        .as_ref()
-        .file_name()
-        .unwrap()
-        .to_string_lossy();
+    let file_name = snapshot_filename.as_ref().file_name().unwrap().to_string_lossy();
 
-    fs::write(
-        path.join(format!("expected_dump_{file_name}")),
-        expected_dump,
-    )
-    .unwrap();
+    fs::write(path.join(format!("expected_dump_{file_name}")), expected_dump).unwrap();
     fs::write(path.join(format!("actual_dump_{file_name}")), actual_dump).unwrap();
 }
 
@@ -110,14 +103,13 @@ pub fn save_failed_test_dumps<P: AsRef<Path>>(
 /// when the expected snapshot is missing entirely (so there's nothing
 /// to pair it with) or in any other path that produced an `actual`
 /// without a corresponding `expected` to diff against.
-pub fn save_failed_actual_dump<P: AsRef<Path>>(actual_dump: &Bytes, snapshot_filename: P) {
+pub fn save_failed_actual_dump<P: AsRef<Path>>(
+    actual_dump: &Bytes,
+    snapshot_filename: P,
+) {
     let path = pipeline_tests_workdir();
     let _ = fs::create_dir_all(&path);
-    let file_name = snapshot_filename
-        .as_ref()
-        .file_name()
-        .unwrap()
-        .to_string_lossy();
+    let file_name = snapshot_filename.as_ref().file_name().unwrap().to_string_lossy();
     // This path runs when the expected snapshot doesn't exist, so an
     // expected dump from a previous run is stale — remove it so the
     // audit tooling doesn't pair the fresh actual with old data.
@@ -140,7 +132,8 @@ pub fn unmarshal_packets(data: &Bytes) -> Result<Vec<rtp::packet::Packet>> {
     let mut packets = Vec::new();
     let mut read_bytes = 0;
     while read_bytes < data.len() {
-        let packet_size = u16::from_be_bytes([data[read_bytes], data[read_bytes + 1]]) as usize;
+        let packet_size =
+            u16::from_be_bytes([data[read_bytes], data[read_bytes + 1]]) as usize;
         read_bytes += 2;
 
         if data.len() < read_bytes + packet_size {
@@ -148,8 +141,9 @@ pub fn unmarshal_packets(data: &Bytes) -> Result<Vec<rtp::packet::Packet>> {
         }
 
         // TODO(noituri): Goodbye packet
-        let packet =
-            rtp::packet::Packet::unmarshal(&mut &data[read_bytes..(read_bytes + packet_size)])?;
+        let packet = rtp::packet::Packet::unmarshal(
+            &mut &data[read_bytes..(read_bytes + packet_size)],
+        )?;
         read_bytes += packet_size;
 
         packets.push(packet);

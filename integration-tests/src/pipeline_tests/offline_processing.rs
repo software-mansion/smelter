@@ -17,8 +17,8 @@ use crate::{
     pipeline_tests::{
         PipelineTest,
         harness::{
-            AudioCompareConfig, FftCompareConfig, VideoCompareConfig, compare_audio_dumps,
-            compare_video_dumps,
+            AudioCompareConfig, FftCompareConfig, VideoCompareConfig,
+            compare_audio_dumps, compare_video_dumps,
             fft::{Mode, RealTolerance},
         },
         start_server_msg_listener,
@@ -140,7 +140,9 @@ pub fn offline_processing() -> Result<()> {
 
     let processing_time = processing_start.elapsed();
     if processing_time > MAX_PROCESSING_TIME {
-        bail!("offline processing took {processing_time:.2?} (allowed {MAX_PROCESSING_TIME:?})");
+        bail!(
+            "offline processing took {processing_time:.2?} (allowed {MAX_PROCESSING_TIME:?})"
+        );
     }
 
     let new_output_dump = Bytes::from(fs::read(OUTPUT_FILE)?);
@@ -154,7 +156,8 @@ pub fn offline_processing() -> Result<()> {
         },
     )?;
 
-    let mut fft_cfg = FftCompareConfig::real(vec![Duration::ZERO..Duration::from_millis(18_000)]);
+    let mut fft_cfg =
+        FftCompareConfig::real(vec![Duration::ZERO..Duration::from_millis(18_000)]);
     fft_cfg.mode = Mode::Real(RealTolerance {
         max_frequency_level: 5.0,
         average_level: 15.0,
@@ -166,10 +169,7 @@ pub fn offline_processing() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(fft_cfg),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(fft_cfg), ..Default::default() },
     )?;
 
     Ok(())

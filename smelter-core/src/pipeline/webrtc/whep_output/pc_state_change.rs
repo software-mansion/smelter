@@ -11,7 +11,9 @@ use webrtc::{
     peer_connection::peer_connection_state::RTCPeerConnectionState,
 };
 
-use crate::pipeline::webrtc::whep_output::{WhepOutputStatsSender, state::WhepOutputsState};
+use crate::pipeline::webrtc::whep_output::{
+    WhepOutputStatsSender, state::WhepOutputsState,
+};
 
 use crate::prelude::*;
 
@@ -35,14 +37,20 @@ impl ConnectionStateChangeHdlr {
             outputs: outputs.clone(),
             output_ref: output_ref.clone(),
             session_id: session_id.clone(),
-            stats_sender: WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone()),
+            stats_sender: WhepOutputStatsSender::new(
+                ctx.stats_sender.clone(),
+                output_ref.clone(),
+            ),
             cleanup_task_handle: Default::default(),
         }
     }
 
-    pub fn on_state_change(&self, pc: &Arc<RTCPeerConnection>, state: RTCPeerConnectionState) {
-        self.stats_sender
-            .peer_state_changed(&self.session_id, state);
+    pub fn on_state_change(
+        &self,
+        pc: &Arc<RTCPeerConnection>,
+        state: RTCPeerConnectionState,
+    ) {
+        self.stats_sender.peer_state_changed(&self.session_id, state);
         self.clone().handle_cleanup_on_disconnect(pc.clone(), state);
     }
 
@@ -74,7 +82,9 @@ impl ConnectionStateChangeHdlr {
                 }
             }
             RTCPeerConnectionState::Failed | RTCPeerConnectionState::Disconnected => {
-                if let Ok(handle @ None) = self.cleanup_task_handle.clone().lock().as_deref_mut() {
+                if let Ok(handle @ None) =
+                    self.cleanup_task_handle.clone().lock().as_deref_mut()
+                {
                     // schedule task only if none is pending, crucial in transitions failed <-> disconnected
                     let task = tokio::spawn(async move {
                         sleep(Duration::from_secs(150)).await; // 2 min 30 s

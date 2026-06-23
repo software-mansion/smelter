@@ -127,9 +127,9 @@ impl EncodedDataOutput {
                 resolution: v.config.resolution,
                 extradata: v.config.extradata.clone(),
             }),
-            audio: audio.as_ref().map(|a| AudioEncoderInfo {
-                extradata: a.config.extradata.clone(),
-            }),
+            audio: audio
+                .as_ref()
+                .map(|a| AudioEncoderInfo { extradata: a.config.extradata.clone() }),
         };
         Ok((Self { video, audio }, handle))
     }
@@ -137,9 +137,9 @@ impl EncodedDataOutput {
 
 impl Output for EncodedDataOutput {
     fn audio(&self) -> Option<OutputAudio<'_>> {
-        self.audio.as_ref().map(|audio| OutputAudio {
-            samples_batch_sender: &audio.sample_batch_sender,
-        })
+        self.audio
+            .as_ref()
+            .map(|audio| OutputAudio { samples_batch_sender: &audio.sample_batch_sender })
     }
 
     fn video(&self) -> Option<OutputVideo<'_>> {

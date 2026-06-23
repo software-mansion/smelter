@@ -34,10 +34,7 @@ impl StatefulImageComponent {
         self.resolution.height as f32
     }
     pub(super) fn size(&self) -> Size {
-        Size {
-            width: self.width(),
-            height: self.height(),
-        }
+        Size { width: self.width(), height: self.height() }
     }
 
     pub(super) fn intermediate_node(&self) -> IntermediateNode {
@@ -88,14 +85,12 @@ impl ImageComponent {
             (None, None) => image.resolution(),
         };
 
-        let prev_state = self
-            .id
-            .as_ref()
-            .and_then(|id| ctx.prev_state.get(id))
-            .and_then(|component| match component {
+        let prev_state = self.id.as_ref().and_then(|id| ctx.prev_state.get(id)).and_then(
+            |component| match component {
                 StatefulComponent::Image(image) => Some(image),
                 _ => None,
-            });
+            },
+        );
 
         let prev_image = prev_state.as_ref().map(|s| &s.image);
         let are_images_matching = match (prev_image, &image) {
@@ -105,12 +100,16 @@ impl ImageComponent {
             (Some(Image::Animated(previous)), Image::Animated(current)) => {
                 Arc::ptr_eq(previous, current)
             }
-            (Some(Image::Svg(previous)), Image::Svg(current)) => Arc::ptr_eq(previous, current),
+            (Some(Image::Svg(previous)), Image::Svg(current)) => {
+                Arc::ptr_eq(previous, current)
+            }
             (_, _) => false,
         };
 
         let component = match prev_state {
-            Some(state) if self == state.component && are_images_matching => state.clone(),
+            Some(state) if self == state.component && are_images_matching => {
+                state.clone()
+            }
             _ => StatefulImageComponent {
                 component: self,
                 image,

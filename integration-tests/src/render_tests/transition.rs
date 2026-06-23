@@ -3,9 +3,9 @@ use std::time::Duration;
 use anyhow::Result;
 use integration_tests_macros::render_test;
 use smelter_render::scene::{
-    AbsolutePosition, Component, ComponentId, HorizontalPosition, InterpolationKind, Position,
-    RGBAColor, RescalerComponent, Transition, VerticalPosition, ViewChildrenDirection,
-    ViewComponent,
+    AbsolutePosition, Component, ComponentId, HorizontalPosition, InterpolationKind,
+    Position, RGBAColor, RescalerComponent, Transition, VerticalPosition,
+    ViewChildrenDirection, ViewComponent,
 };
 
 use crate::render_tests::{RenderTest, harness::test_case::TestRunner};
@@ -54,37 +54,34 @@ fn snapshot_long_transition(runner: &mut TestRunner) {
 fn change_rescaler_absolute_and_send_next_update() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME);
 
-    let rescaler =
-        |width: f32, height: f32, top: f32, right: f32, transition: Option<Transition>| {
-            Component::View(ViewComponent {
-                children: vec![Component::Rescaler(RescalerComponent {
-                    id: Some(ComponentId(RESIZE_1.into())),
-                    position: Position::Absolute(AbsolutePosition {
-                        width: Some(width),
-                        height: Some(height),
-                        position_horizontal: HorizontalPosition::RightOffset(right),
-                        position_vertical: VerticalPosition::TopOffset(top),
-                        rotation_degrees: 0.0,
-                    }),
-                    transition,
-                    child: Box::new(Component::View(ViewComponent {
-                        background_color: GREEN_FULL,
-                        ..Default::default()
-                    })),
+    let rescaler = |width: f32,
+                    height: f32,
+                    top: f32,
+                    right: f32,
+                    transition: Option<Transition>| {
+        Component::View(ViewComponent {
+            children: vec![Component::Rescaler(RescalerComponent {
+                id: Some(ComponentId(RESIZE_1.into())),
+                position: Position::Absolute(AbsolutePosition {
+                    width: Some(width),
+                    height: Some(height),
+                    position_horizontal: HorizontalPosition::RightOffset(right),
+                    position_vertical: VerticalPosition::TopOffset(top),
+                    rotation_degrees: 0.0,
+                }),
+                transition,
+                child: Box::new(Component::View(ViewComponent {
+                    background_color: GREEN_FULL,
                     ..Default::default()
-                })],
+                })),
                 ..Default::default()
-            })
-        };
+            })],
+            ..Default::default()
+        })
+    };
 
     runner.update_scene(rescaler(200.0, 200.0, 20.0, 20.0, None));
-    runner.update_scene(rescaler(
-        640.0,
-        360.0,
-        0.0,
-        0.0,
-        Some(linear_transition_10s()),
-    ));
+    runner.update_scene(rescaler(640.0, 360.0, 0.0, 0.0, Some(linear_transition_10s())));
     runner.update_scene(rescaler(640.0, 360.0, 0.0, 0.0, None));
     snapshot_long_transition(&mut runner);
     runner.finish()
@@ -98,19 +95,13 @@ fn change_view_width_and_send_abort_transition() -> Result<()> {
             children: vec![
                 Component::View(ViewComponent {
                     background_color: RED,
-                    position: Position::Static {
-                        width: Some(50.0),
-                        height: None,
-                    },
+                    position: Position::Static { width: Some(50.0), height: None },
                     ..Default::default()
                 }),
                 Component::View(ViewComponent {
                     id: id.map(|s| ComponentId(s.into())),
                     background_color: GREEN_FULL,
-                    position: Position::Static {
-                        width: Some(width),
-                        height: None,
-                    },
+                    position: Position::Static { width: Some(width), height: None },
                     transition,
                     ..Default::default()
                 }),
@@ -138,19 +129,13 @@ fn change_view_width_and_send_next_update() -> Result<()> {
             children: vec![
                 Component::View(ViewComponent {
                     background_color: RED,
-                    position: Position::Static {
-                        width: Some(50.0),
-                        height: None,
-                    },
+                    position: Position::Static { width: Some(50.0), height: None },
                     ..Default::default()
                 }),
                 Component::View(ViewComponent {
                     id: Some(ComponentId(RESIZE_1.into())),
                     background_color: GREEN_FULL,
-                    position: Position::Static {
-                        width: Some(width),
-                        height: None,
-                    },
+                    position: Position::Static { width: Some(width), height: None },
                     transition,
                     ..Default::default()
                 }),
@@ -177,19 +162,13 @@ fn change_view_width() -> Result<()> {
             children: vec![
                 Component::View(ViewComponent {
                     background_color: RED,
-                    position: Position::Static {
-                        width: Some(50.0),
-                        height: None,
-                    },
+                    position: Position::Static { width: Some(50.0), height: None },
                     ..Default::default()
                 }),
                 Component::View(ViewComponent {
                     id: Some(ComponentId(RESIZE_1.into())),
                     background_color: GREEN_FULL,
-                    position: Position::Static {
-                        width: Some(width),
-                        height: None,
-                    },
+                    position: Position::Static { width: Some(width), height: None },
                     transition,
                     ..Default::default()
                 }),
@@ -215,10 +194,7 @@ fn change_view_height() -> Result<()> {
             children: vec![
                 Component::View(ViewComponent {
                     background_color: RED,
-                    position: Position::Static {
-                        width: Some(50.0),
-                        height: None,
-                    },
+                    position: Position::Static { width: Some(50.0), height: None },
                     ..Default::default()
                 }),
                 Component::View(ViewComponent {
@@ -348,10 +324,7 @@ fn interrupt_scene(
                 Component::View(ViewComponent {
                     id: Some(ComponentId(id.into())),
                     background_color: color,
-                    position: Position::Static {
-                        width: Some(width),
-                        height,
-                    },
+                    position: Position::Static { width: Some(width), height },
                     transition: Some(transition),
                     ..Default::default()
                 }),

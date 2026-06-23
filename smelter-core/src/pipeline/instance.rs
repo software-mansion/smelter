@@ -13,7 +13,8 @@ use tokio::runtime::Runtime;
 use tracing::{Level, error, info, span, trace, warn};
 
 use smelter_render::{
-    FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions, RendererSpec,
+    FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions,
+    RendererSpec,
     error::{
         ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
         UpdateSceneError,
@@ -28,10 +29,13 @@ use crate::{
         RtmpPipelineState,
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
         input::{PipelineInput, new_external_input, register_pipeline_input},
-        output::{OutputSender, PipelineOutput, new_external_output, register_pipeline_output},
+        output::{
+            OutputSender, PipelineOutput, new_external_output, register_pipeline_output,
+        },
         rtmp::spawn_rtmp_server,
         webrtc::{
-            WebrtcSettingEngineCtx, WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle,
+            WebrtcSettingEngineCtx, WhipWhepPipelineState, WhipWhepServer,
+            WhipWhepServerHandle,
         },
     },
     queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
@@ -41,6 +45,8 @@ use crate::{
     graphics_context::{GraphicsContext, GraphicsContextOptions},
     prelude::*,
 };
+
+const VIDEO_OUTPUT_BUFFER_SIZE: usize = 128;
 
 pub struct Pipeline {
     pub(super) inputs: HashMap<InputId, PipelineInput>,
@@ -123,7 +129,10 @@ impl Pipeline {
         Ok(())
     }
 
-    pub fn unregister_input(&mut self, input_id: &InputId) -> Result<(), UnregisterInputError> {
+    pub fn unregister_input(
+        &mut self,
+        input_id: &InputId,
+    ) -> Result<(), UnregisterInputError> {
         if !self.inputs.contains_key(input_id) {
             return Err(UnregisterInputError::NotFound(input_id.clone()));
         }
@@ -153,7 +162,9 @@ impl Pipeline {
             output_id,
             register_options.video,
             register_options.audio,
-            |ctx, output_ref| new_external_output(ctx, output_ref, register_options.output_options),
+            |ctx, output_ref| {
+                new_external_output(ctx, output_ref, register_options.output_options)
+            },
         )
     }
 
@@ -168,8 +179,11 @@ impl Pipeline {
             register_options.video,
             register_options.audio,
             |ctx, output_ref| {
-                let (output, handle) =
-                    EncodedDataOutput::new(ctx, output_ref, register_options.output_options)?;
+                let (output, handle) = EncodedDataOutput::new(
+                    ctx,
+                    output_ref,
+                    register_options.output_options,
+                )?;
                 Ok((Box::new(output), handle))
             },
         )
@@ -186,13 +200,17 @@ impl Pipeline {
             register_options.video,
             register_options.audio,
             |_ctx, _output_ref| {
-                let (output, result) = RawDataOutput::new(register_options.output_options)?;
+                let (output, result) =
+                    RawDataOutput::new(register_options.output_options)?;
                 Ok((Box::new(output), result))
             },
         )
     }
 
-    pub fn unregister_output(&mut self, output_id: &OutputId) -> Result<(), UnregisterOutputError> {
+    pub fn unregister_output(
+        &mut self,
+        output_id: &OutputId,
+    ) -> Result<(), UnregisterOutputError> {
         if !self.outputs.contains_key(output_id) {
             return Err(UnregisterOutputError::NotFound(output_id.clone()));
         }
@@ -218,8 +236,7 @@ impl Pipeline {
         renderer_id: &RendererId,
         registry_type: RegistryType,
     ) -> Result<(), UnregisterRendererError> {
-        self.renderer
-            .unregister_renderer(renderer_id, registry_type)
+        self.renderer.unregister_renderer(renderer_id, registry_type)
     }
 
     pub fn update_output(
@@ -240,16 +257,18 @@ impl Pipeline {
         Ok(())
     }
 
-    pub fn request_keyframe(&self, output_id: OutputId) -> Result<(), RequestKeyframeError> {
+    pub fn request_keyframe(
+        &self,
+        output_id: OutputId,
+    ) -> Result<(), RequestKeyframeError> {
         let Some(output) = self.outputs.get(&output_id) else {
             return Err(RequestKeyframeError::OutputNotRegistered(output_id.clone()));
         };
 
         match output.output.video() {
-            Some(video) => video
-                .keyframe_request_sender
-                .send(())
-                .map_err(|_| RequestKeyframeError::KeyframesUnsupported(output_id.clone())),
+            Some(video) => video.keyframe_request_sender.send(()).map_err(|_| {
+                RequestKeyframeError::KeyframesUnsupported(output_id.clone())
+            }),
             None => Err(RequestKeyframeError::NoVideoOutput(output_id.clone())),
         }
     }
@@ -339,7 +358,7 @@ impl Pipeline {
             return;
         }
         info!("Starting pipeline.");
-        let (video_sender, video_receiver) = bounded(2);
+        let (video_sender, video_receiver) = bounded(VIDEO_OUTPUT_BUFFER_SIZE);
         let (audio_sender, audio_receiver) = bounded(100);
         guard.queue.start(video_sender, audio_sender);
 
@@ -407,7 +426,6 @@ fn run_renderer_thread(
             return;
         }
     };
-
     for mut input_frames in frames_receiver.iter() {
         let Some(pipeline) = pipeline.upgrade() else {
             break;
@@ -535,18 +553,15 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
 
     let graphics_context = match opts.wgpu_options {
         PipelineWgpuOptions::Context(ctx) => ctx,
-        PipelineWgpuOptions::Options {
-            device_id,
-            driver_name,
-            features,
-            force_gpu,
-        } => GraphicsContext::new(GraphicsContextOptions {
-            device_id,
-            driver_name,
-            force_gpu,
-            features,
-            ..Default::default()
-        })?,
+        PipelineWgpuOptions::Options { device_id, driver_name, features, force_gpu } => {
+            GraphicsContext::new(GraphicsContextOptions {
+                device_id,
+                driver_name,
+                force_gpu,
+                features,
+                ..Default::default()
+            })?
+        }
     };
 
     let renderer = Renderer::new(RendererOptions {
@@ -557,13 +572,13 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         device: graphics_context.device.clone(),
         queue: graphics_context.queue.clone(),
         rendering_mode: opts.rendering_mode,
+        scaling_filter: opts.scaling_filter,
     })?;
 
-    let download_dir = opts
-        .download_root
-        .join(format!("smelter-{}", rand::random::<u64>()))
-        .into();
-    std::fs::create_dir_all(&download_dir).map_err(InitPipelineError::CreateDownloadDir)?;
+    let download_dir =
+        opts.download_root.join(format!("smelter-{}", rand::random::<u64>())).into();
+    std::fs::create_dir_all(&download_dir)
+        .map_err(InitPipelineError::CreateDownloadDir)?;
 
     if let Some(dir) = opts.side_channel_socket_dir.as_deref() {
         prepare_side_channel_socket_dir(dir)?;

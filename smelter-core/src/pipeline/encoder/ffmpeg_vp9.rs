@@ -10,7 +10,9 @@ use tracing::{error, info, trace, warn};
 use crate::pipeline::{
     PipelineCtx,
     encoder::{
-        ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format},
+        ffmpeg_utils::{
+            create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format,
+        },
         utils::gop_size_from_ms_framerate,
     },
     ffmpeg_utils::FfmpegOptions,
@@ -39,7 +41,8 @@ impl VideoEncoder for FfmpegVp9Encoder {
 
         let framerate = ctx.output_framerate;
 
-        let codec = ffmpeg_next::codec::encoder::find(Id::VP9).ok_or(EncoderInitError::NoCodec)?;
+        let codec = ffmpeg_next::codec::encoder::find(Id::VP9)
+            .ok_or(EncoderInitError::NoCodec)?;
 
         let mut encoder = Context::new().encoder().video()?;
 
@@ -121,10 +124,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
 
         Ok((
-            Self {
-                encoder,
-                packet: ffmpeg_next::Packet::empty(),
-            },
+            Self { encoder, packet: ffmpeg_next::Packet::empty() },
             VideoEncoderConfig {
                 resolution: options.resolution,
                 output_format: match options.pixel_format {

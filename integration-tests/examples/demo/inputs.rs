@@ -5,7 +5,8 @@ use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
 use crate::inputs::{
-    hls::HlsInput, mp4::Mp4Input, rtmp::RtmpInput, rtp::RtpInput, whep::WhepInput, whip::WhipInput,
+    hls::HlsInput, mp4::Mp4Input, rtmp::RtmpInput, rtp::RtpInput, whep::WhepInput,
+    whip::WhipInput,
 };
 
 pub mod hls;

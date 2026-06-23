@@ -9,8 +9,8 @@ use crate::{
     pipeline_tests::{
         PipelineTest,
         harness::{
-            AudioCompareConfig, FftCompareConfig, OutputReceiver, PacketSender, VideoCompareConfig,
-            compare_audio_dumps, compare_video_dumps,
+            AudioCompareConfig, FftCompareConfig, OutputReceiver, PacketSender,
+            VideoCompareConfig, compare_audio_dumps, compare_video_dumps,
             fft::{ArtificialTolerance, Mode},
         },
     },
@@ -21,7 +21,8 @@ fn artificial_fft(
     tolerance: Option<ArtificialTolerance>,
     allowed_failed_batches: u32,
 ) -> FftCompareConfig {
-    let mut cfg = FftCompareConfig::artificial(vec![Duration::ZERO..Duration::from_secs(10)]);
+    let mut cfg =
+        FftCompareConfig::artificial(vec![Duration::ZERO..Duration::from_secs(10)]);
     if let Some(t) = tolerance {
         cfg.mode = Mode::Artificial(t);
     }
@@ -361,10 +362,7 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(artificial_fft(None, 2)),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(artificial_fft(None, 2)), ..Default::default() },
     )?;
 
     Ok(())
@@ -453,9 +451,7 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
         &new_output_dump,
         AudioCompareConfig {
             fft: Some(artificial_fft(
-                Some(ArtificialTolerance {
-                    frequency_level: 100.0,
-                }),
+                Some(ArtificialTolerance { frequency_level: 100.0 }),
                 0,
             )),
             ..Default::default()
@@ -552,9 +548,7 @@ pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
         &new_output_dump,
         AudioCompareConfig {
             fft: Some(artificial_fft(
-                Some(ArtificialTolerance {
-                    frequency_level: 100.0,
-                }),
+                Some(ArtificialTolerance { frequency_level: 100.0 }),
                 0,
             )),
             ..Default::default()

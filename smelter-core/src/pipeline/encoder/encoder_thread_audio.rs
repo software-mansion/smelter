@@ -5,7 +5,8 @@ use tracing::warn;
 
 use crate::{
     pipeline::encoder::{
-        AudioEncoder, AudioEncoderConfig, AudioEncoderStream, resampler::ResampledForEncoderStream,
+        AudioEncoder, AudioEncoderConfig, AudioEncoderStream,
+        resampler::ResampledForEncoderStream,
     },
     utils::{InitializableThread, ThreadMetadata},
 };
@@ -38,12 +39,10 @@ where
     type SpawnOutput = AudioEncoderThreadHandle;
     type SpawnError = EncoderInitError;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let AudioEncoderThreadOptions {
-            ctx,
-            encoder_options,
-            chunks_sender,
-        } = options;
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+        let AudioEncoderThreadOptions { ctx, encoder_options, chunks_sender } = options;
 
         let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
         let resampled_stream = ResampledForEncoderStream::new(
@@ -54,23 +53,21 @@ where
         )?
         .flatten();
 
-        let (encoded_stream, encoder_ctx) =
-            AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
+        let (encoded_stream, encoder_ctx) = AudioEncoderStream::<Encoder, _>::new(
+            ctx,
+            encoder_options,
+            resampled_stream,
+        )?;
 
         let stream = encoded_stream.flatten().map(|event| match event {
             PipelineEvent::Data(chunk) => EncodedOutputEvent::Data(chunk),
             PipelineEvent::EOS => EncodedOutputEvent::AudioEOS,
         });
 
-        let state = Self {
-            stream: Box::new(stream),
-            chunks_sender,
-            _encoder: PhantomData,
-        };
-        let output = AudioEncoderThreadHandle {
-            sample_batch_sender,
-            config: encoder_ctx.config,
-        };
+        let state =
+            Self { stream: Box::new(stream), chunks_sender, _encoder: PhantomData };
+        let output =
+            AudioEncoderThreadHandle { sample_batch_sender, config: encoder_ctx.config };
         Ok((state, output))
     }
 

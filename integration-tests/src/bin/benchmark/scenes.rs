@@ -17,7 +17,8 @@ pub struct SceneContext {
     pub outputs: Vec<OutputId>,
 }
 
-pub type BuilderFn = fn(ctx: &SceneContext, output_id: &OutputId) -> (Component, AudioMixerConfig);
+pub type BuilderFn =
+    fn(ctx: &SceneContext, output_id: &OutputId) -> (Component, AudioMixerConfig);
 
 #[derive(Clone, Copy)]
 pub struct SceneLayout {
@@ -47,11 +48,7 @@ impl Count {
 pub const SINGLE_VIDEO_N_TO_N: SceneLayout = SceneLayout {
     label: "single_video_n_to_n",
     builder: |ctx, output_id| {
-        let output_index = ctx
-            .outputs
-            .iter()
-            .position(|id| id == output_id)
-            .unwrap_or(0);
+        let output_index = ctx.outputs.iter().position(|id| id == output_id).unwrap_or(0);
         if ctx.inputs.is_empty() {
             return (
                 Component::View(ViewComponent {
@@ -73,10 +70,7 @@ pub const SINGLE_VIDEO_N_TO_N: SceneLayout = SceneLayout {
                 ..Default::default()
             }),
             AudioMixerConfig {
-                inputs: vec![AudioMixerInputConfig {
-                    input_id,
-                    volume: 1.0,
-                }],
+                inputs: vec![AudioMixerInputConfig { input_id, volume: 1.0 }],
             },
         )
     },
@@ -89,11 +83,7 @@ pub const SINGLE_VIDEO_N_TO_N: SceneLayout = SceneLayout {
 pub const TWO_VIDEO_2N_TO_N: SceneLayout = SceneLayout {
     label: "two_video_2n_to_n",
     builder: |ctx, output_id| {
-        let output_index = ctx
-            .outputs
-            .iter()
-            .position(|id| id == output_id)
-            .unwrap_or(0);
+        let output_index = ctx.outputs.iter().position(|id| id == output_id).unwrap_or(0);
         if ctx.inputs.is_empty() {
             return (
                 Component::View(ViewComponent {
@@ -123,14 +113,8 @@ pub const TWO_VIDEO_2N_TO_N: SceneLayout = SceneLayout {
             }),
             AudioMixerConfig {
                 inputs: vec![
-                    AudioMixerInputConfig {
-                        input_id: input_1,
-                        volume: 1.0,
-                    },
-                    AudioMixerInputConfig {
-                        input_id: input_2,
-                        volume: 1.0,
-                    },
+                    AudioMixerInputConfig { input_id: input_1, volume: 1.0 },
+                    AudioMixerInputConfig { input_id: input_2, volume: 1.0 },
                 ],
             },
         )
@@ -144,11 +128,7 @@ pub const TWO_VIDEO_2N_TO_N: SceneLayout = SceneLayout {
 pub const FOUR_VIDEO_4N_TO_N: SceneLayout = SceneLayout {
     label: "four_video_4n_to_n",
     builder: |ctx, output_id| {
-        let output_index = ctx
-            .outputs
-            .iter()
-            .position(|id| id == output_id)
-            .unwrap_or(0);
+        let output_index = ctx.outputs.iter().position(|id| id == output_id).unwrap_or(0);
         if ctx.inputs.is_empty() {
             return (
                 Component::View(ViewComponent {
@@ -188,22 +168,10 @@ pub const FOUR_VIDEO_4N_TO_N: SceneLayout = SceneLayout {
             }),
             AudioMixerConfig {
                 inputs: vec![
-                    AudioMixerInputConfig {
-                        input_id: input_1,
-                        volume: 1.0,
-                    },
-                    AudioMixerInputConfig {
-                        input_id: input_2,
-                        volume: 1.0,
-                    },
-                    AudioMixerInputConfig {
-                        input_id: input_3,
-                        volume: 1.0,
-                    },
-                    AudioMixerInputConfig {
-                        input_id: input_4,
-                        volume: 1.0,
-                    },
+                    AudioMixerInputConfig { input_id: input_1, volume: 1.0 },
+                    AudioMixerInputConfig { input_id: input_2, volume: 1.0 },
+                    AudioMixerInputConfig { input_id: input_3, volume: 1.0 },
+                    AudioMixerInputConfig { input_id: input_4, volume: 1.0 },
                 ],
             },
         )
@@ -217,11 +185,7 @@ pub const FOUR_VIDEO_4N_TO_N: SceneLayout = SceneLayout {
 pub const SINGLE_VIDEO_1_TO_N: SceneLayout = SceneLayout {
     label: "single_video_1_to_n",
     builder: |ctx, output_id| {
-        let output_index = ctx
-            .outputs
-            .iter()
-            .position(|id| id == output_id)
-            .unwrap_or(0);
+        let output_index = ctx.outputs.iter().position(|id| id == output_id).unwrap_or(0);
         if ctx.inputs.is_empty() {
             return (
                 Component::View(ViewComponent {
@@ -243,10 +207,7 @@ pub const SINGLE_VIDEO_1_TO_N: SceneLayout = SceneLayout {
                 ..Default::default()
             }),
             AudioMixerConfig {
-                inputs: vec![AudioMixerInputConfig {
-                    input_id,
-                    volume: 1.0,
-                }],
+                inputs: vec![AudioMixerInputConfig { input_id, volume: 1.0 }],
             },
         )
     },
@@ -330,11 +291,7 @@ pub const TILES_1_TO_N: SceneLayout = SceneLayout {
 pub const PASS_THROUGH_1_TO_N: SceneLayout = SceneLayout {
     label: "pass_through_1_to_n",
     builder: |ctx, output_id| {
-        let output_index = ctx
-            .outputs
-            .iter()
-            .position(|id| id == output_id)
-            .unwrap_or(0);
+        let output_index = ctx.outputs.iter().position(|id| id == output_id).unwrap_or(0);
         if ctx.inputs.is_empty() {
             return (
                 Component::View(ViewComponent {
@@ -351,10 +308,7 @@ pub const PASS_THROUGH_1_TO_N: SceneLayout = SceneLayout {
                 input_id: input_id.clone(),
             }),
             AudioMixerConfig {
-                inputs: vec![AudioMixerInputConfig {
-                    input_id,
-                    volume: 1.0,
-                }],
+                inputs: vec![AudioMixerInputConfig { input_id, volume: 1.0 }],
             },
         )
     },
@@ -387,9 +341,7 @@ pub const STATIC_IMAGE_1_TO_N: SceneLayout = SceneLayout {
         vec![(
             RendererId("example_image".into()),
             RendererSpec::Image(ImageSpec {
-                src: ImageSource::LocalPath {
-                    path: example_image_path().into(),
-                },
+                src: ImageSource::LocalPath { path: example_image_path().into() },
                 image_type: ImageType::Png,
             }),
         )]
@@ -411,10 +363,7 @@ pub const IMAGE_WITH_SHADER_1_TO_N: SceneLayout = SceneLayout {
                 id: None,
                 shader_id: RendererId("example_shader".into()),
                 shader_param: None,
-                size: Size {
-                    width: 1920.0,
-                    height: 1080.0,
-                },
+                size: Size { width: 1920.0, height: 1080.0 },
             }),
             AudioMixerConfig { inputs: vec![] },
         )
@@ -426,9 +375,7 @@ pub const IMAGE_WITH_SHADER_1_TO_N: SceneLayout = SceneLayout {
             (
                 RendererId("example_image".into()),
                 RendererSpec::Image(ImageSpec {
-                    src: ImageSource::LocalPath {
-                        path: example_image_path().into(),
-                    },
+                    src: ImageSource::LocalPath { path: example_image_path().into() },
                     image_type: ImageType::Png,
                 }),
             ),

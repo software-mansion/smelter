@@ -11,14 +11,15 @@ use crate::{
     benchmark::{Benchmark, EncoderOptions},
     benchmark_pass::{InputFile, InputFileKind, SingleBenchmarkPass},
     scenes::{
-        BLANK_1_TO_N, BLANK_N_TO_1, BuilderFn, FOUR_VIDEO_4N_TO_N, IMAGE_WITH_SHADER_1_TO_N,
-        PASS_THROUGH_1_TO_N, SINGLE_VIDEO_1_TO_N, SINGLE_VIDEO_N_TO_N, STATIC_IMAGE_1_TO_N,
-        SceneLayout, TILES_1_TO_N, TWO_VIDEO_2N_TO_N,
+        BLANK_1_TO_N, BLANK_N_TO_1, BuilderFn, FOUR_VIDEO_4N_TO_N,
+        IMAGE_WITH_SHADER_1_TO_N, PASS_THROUGH_1_TO_N, SINGLE_VIDEO_1_TO_N,
+        SINGLE_VIDEO_N_TO_N, STATIC_IMAGE_1_TO_N, SceneLayout, TILES_1_TO_N,
+        TWO_VIDEO_2N_TO_N,
     },
     utils::{
         ensure_bunny_480p24fps, ensure_bunny_720p24fps, ensure_bunny_1080p30fps,
-        ensure_bunny_1080p60fps_no_audio, ensure_bunny_2160p30fps, generate_png_from_video,
-        generate_yuv_from_mp4,
+        ensure_bunny_1080p60fps_no_audio, ensure_bunny_2160p30fps,
+        generate_png_from_video, generate_yuv_from_mp4,
     },
 };
 
@@ -159,10 +160,7 @@ pub fn minimal_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
             .build(),
         vk_base
             .clone()
-            .input_source([
-                ctx.bbb_mp4_720p24fps.clone(),
-                ctx.bbb_mp4_1080p30fps.clone(),
-            ])
+            .input_source([ctx.bbb_mp4_720p24fps.clone(), ctx.bbb_mp4_1080p30fps.clone()])
             .output_resolutions([ResolutionPreset::Res1080p, ResolutionPreset::Res1440p])
             .build(),
         vk_base
@@ -180,10 +178,7 @@ pub fn minimal_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
             .build(),
         ffmpeg_base
             .clone()
-            .input_source([
-                ctx.bbb_mp4_720p24fps.clone(),
-                ctx.bbb_mp4_1080p30fps.clone(),
-            ])
+            .input_source([ctx.bbb_mp4_720p24fps.clone(), ctx.bbb_mp4_1080p30fps.clone()])
             .output_resolutions([ResolutionPreset::Res1080p, ResolutionPreset::Res1440p])
             .build(),
         ffmpeg_base
@@ -300,10 +295,7 @@ pub fn vulkan_only_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
             .output_resolutions([ResolutionPreset::Res2160p])
             .build(),
         base.clone()
-            .input_source([
-                ctx.bbb_mp4_720p24fps.clone(),
-                ctx.bbb_mp4_1080p30fps.clone(),
-            ])
+            .input_source([ctx.bbb_mp4_720p24fps.clone(), ctx.bbb_mp4_1080p30fps.clone()])
             .output_resolutions([ResolutionPreset::Res1080p, ResolutionPreset::Res1440p])
             .build(),
         base.clone()
@@ -323,10 +315,7 @@ fn benchmark_set_constant_input_output_ratio() -> BenchmarkBuilder {
             EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Veryfast),
             EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
         ])
-        .decoders(vec![
-            VideoDecoderOptions::VulkanH264,
-            VideoDecoderOptions::FfmpegH264,
-        ])
+        .decoders(vec![VideoDecoderOptions::VulkanH264, VideoDecoderOptions::FfmpegH264])
 }
 
 fn benchmark_set_renderer_only(ctx: &'static BenchmarkSuiteContext) -> BenchmarkBuilder {
@@ -351,10 +340,7 @@ fn benchmark_set_decoder_only(ctx: &'static BenchmarkSuiteContext) -> BenchmarkB
         .id_prefix("decoding only")
         .scenes([BLANK_N_TO_1])
         .encoders([EncoderOptions::Disabled])
-        .decoders(vec![
-            VideoDecoderOptions::VulkanH264,
-            VideoDecoderOptions::FfmpegH264,
-        ])
+        .decoders(vec![VideoDecoderOptions::VulkanH264, VideoDecoderOptions::FfmpegH264])
         .input_source([
             ctx.bbb_mp4_480p24fps.clone(),
             ctx.bbb_mp4_720p24fps.clone(),
@@ -509,7 +495,10 @@ impl BenchmarkBuilder {
         self
     }
 
-    fn decoders(mut self, decoders: impl IntoIterator<Item = VideoDecoderOptions>) -> Self {
+    fn decoders(
+        mut self,
+        decoders: impl IntoIterator<Item = VideoDecoderOptions>,
+    ) -> Self {
         self.decoders = decoders.into_iter().collect();
         self
     }
@@ -596,7 +585,8 @@ impl BenchmarkBuilder {
                             )),
                             decoder: decoder.unwrap_or(VideoDecoderOptions::FfmpegH264),
                             warm_up_time: Duration::from_secs(2),
-                            rendering_mode: rendering_mode.unwrap_or(RenderingMode::GpuOptimized),
+                            rendering_mode: rendering_mode
+                                .unwrap_or(RenderingMode::GpuOptimized),
                         }
                     })),
                 }
@@ -606,9 +596,5 @@ impl BenchmarkBuilder {
 }
 
 fn wrap_axis<T>(values: Vec<T>) -> Vec<Option<T>> {
-    if values.is_empty() {
-        vec![None]
-    } else {
-        values.into_iter().map(Some).collect()
-    }
+    if values.is_empty() { vec![None] } else { values.into_iter().map(Some).collect() }
 }

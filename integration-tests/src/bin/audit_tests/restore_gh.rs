@@ -38,7 +38,9 @@ pub(crate) fn download_ci_artifacts() -> Result<()> {
         .raw_prompt()
     {
         Ok(s) => s.index,
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => return Ok(()),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
+            return Ok(());
+        }
         Err(e) => return Err(e.into()),
     };
     let run = &runs[selected_idx];
@@ -58,20 +60,15 @@ pub(crate) fn download_ci_artifacts() -> Result<()> {
     }
 
     if dest.exists() {
-        fs::remove_dir_all(&dest).with_context(|| format!("Failed to clear {}", dest.display()))?;
+        fs::remove_dir_all(&dest)
+            .with_context(|| format!("Failed to clear {}", dest.display()))?;
     }
-    fs::create_dir_all(&dest).with_context(|| format!("Failed to create {}", dest.display()))?;
+    fs::create_dir_all(&dest)
+        .with_context(|| format!("Failed to create {}", dest.display()))?;
 
     let mut cmd = Command::new("gh");
-    cmd.args([
-        "run",
-        "download",
-        &run.run_id.to_string(),
-        "-n",
-        "test_workdir",
-        "-D",
-    ])
-    .arg(&dest);
+    cmd.args(["run", "download", &run.run_id.to_string(), "-n", "test_workdir", "-D"])
+        .arg(&dest);
     info!("> {cmd:?}");
     let status = cmd.status().context("Failed to spawn `gh run download`")?;
     if !status.success() {
@@ -156,8 +153,8 @@ fn list_recent_runs() -> Result<Vec<ArtifactRun>> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("`gh api` exited with {}: {stderr}", output.status);
     }
-    let response: ArtifactsResponse =
-        serde_json::from_slice(&output.stdout).context("Failed to parse `gh api` output")?;
+    let response: ArtifactsResponse = serde_json::from_slice(&output.stdout)
+        .context("Failed to parse `gh api` output")?;
     // The API already returns newest first; filter expired artifacts
     // last so the list order matches what the user sees on GitHub.
     let runs = response

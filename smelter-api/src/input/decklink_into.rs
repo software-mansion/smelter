@@ -19,25 +19,23 @@ impl TryFrom<DeckLink> for core::RegisterInputOptions {
             None => None,
         };
 
-        Ok(core::RegisterInputOptions::DeckLink(
-            core::DeckLinkInputOptions {
-                subdevice_index: value.subdevice_index,
-                display_name: value.display_name,
-                persistent_id,
-                enable_audio: value.enable_audio.unwrap_or(true),
-                pixel_format: Some(core::DeckLinkPixelFormat::Format8BitYUV),
-                queue_options: {
-                    let side_channel = value.side_channel.unwrap_or_default();
-                    let side_channel_delay = side_channel.delay()?;
-                    core::QueueInputOptions {
-                        required: value.required.unwrap_or(false),
-                        video_side_channel: side_channel.video.unwrap_or(false),
-                        audio_side_channel: side_channel.audio.unwrap_or(false),
-                        side_channel_delay,
-                    }
-                },
+        Ok(core::RegisterInputOptions::DeckLink(core::DeckLinkInputOptions {
+            subdevice_index: value.subdevice_index,
+            display_name: value.display_name,
+            persistent_id,
+            enable_audio: value.enable_audio.unwrap_or(true),
+            pixel_format: Some(core::DeckLinkPixelFormat::Format8BitYUV),
+            queue_options: {
+                let side_channel = value.side_channel.unwrap_or_default();
+                let side_channel_delay = side_channel.delay()?;
+                core::QueueInputOptions {
+                    required: value.required.unwrap_or(false),
+                    video_side_channel: side_channel.video.unwrap_or(false),
+                    audio_side_channel: side_channel.audio.unwrap_or(false),
+                    side_channel_delay,
+                }
             },
-        ))
+        }))
     }
 
     #[cfg(not(feature = "decklink"))]

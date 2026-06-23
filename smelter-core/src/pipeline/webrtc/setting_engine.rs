@@ -46,11 +46,9 @@ impl WebrtcSettingEngineCtx {
         tokio_rt: &Arc<Runtime>,
     ) -> Result<Self, InitPipelineError> {
         match port_strategy {
-            Some(WebrtcUdpPortStrategy::PortRange(start, end)) => Ok(Self::PortRange {
-                start,
-                end,
-                nat_1to1_ips,
-            }),
+            Some(WebrtcUdpPortStrategy::PortRange(start, end)) => {
+                Ok(Self::PortRange { start, end, nat_1to1_ips })
+            }
             Some(WebrtcUdpPortStrategy::Mux(port)) => {
                 // WARNING: Make sure this code is never run in async context.
                 let (udp_mux, socket) = tokio_rt
@@ -69,10 +67,7 @@ impl WebrtcSettingEngineCtx {
 
     pub fn close(&self) {
         if let WebrtcSettingEngineCtx::MuxOnSinglePort {
-            udp_mux,
-            socket,
-            tokio_rt,
-            ..
+            udp_mux, socket, tokio_rt, ..
         } = self
         {
             let udp_mux = udp_mux.clone();
@@ -90,8 +85,10 @@ impl WebrtcSettingEngineCtx {
         let mut setting_engine = SettingEngine::default();
 
         if !self.nat_1to1_ips().is_empty() {
-            setting_engine
-                .set_nat_1to1_ips(self.nat_1to1_ips().to_vec(), RTCIceCandidateType::Host);
+            setting_engine.set_nat_1to1_ips(
+                self.nat_1to1_ips().to_vec(),
+                RTCIceCandidateType::Host,
+            );
             setting_engine.set_network_types(vec![NetworkType::Udp4]);
         };
 
@@ -99,9 +96,7 @@ impl WebrtcSettingEngineCtx {
             WebrtcSettingEngineCtx::AnyPort { .. } => (),
             WebrtcSettingEngineCtx::PortRange { start, end, .. } => {
                 let mut ephemeral_udp = EphemeralUDP::default();
-                ephemeral_udp
-                    .set_ports(*start, u16::max(*end, *start))
-                    .unwrap(); // It can only fail if start>end
+                ephemeral_udp.set_ports(*start, u16::max(*end, *start)).unwrap(); // It can only fail if start>end
                 setting_engine.set_udp_network(UDPNetwork::Ephemeral(ephemeral_udp));
             }
             WebrtcSettingEngineCtx::MuxOnSinglePort { udp_mux, .. } => {
@@ -171,7 +166,10 @@ impl Conn for UdpMuxSocket {
         Ok(self.try_socket()?.recv(buf).await?)
     }
 
-    async fn recv_from(&self, buf: &mut [u8]) -> webrtc_util::Result<(usize, SocketAddr)> {
+    async fn recv_from(
+        &self,
+        buf: &mut [u8],
+    ) -> webrtc_util::Result<(usize, SocketAddr)> {
         Ok(self.try_socket()?.recv_from(buf).await?)
     }
 
@@ -179,7 +177,11 @@ impl Conn for UdpMuxSocket {
         Ok(self.try_socket()?.send(buf).await?)
     }
 
-    async fn send_to(&self, buf: &[u8], target: SocketAddr) -> webrtc_util::Result<usize> {
+    async fn send_to(
+        &self,
+        buf: &[u8],
+        target: SocketAddr,
+    ) -> webrtc_util::Result<usize> {
         Ok(self.try_socket()?.send_to(buf, target).await?)
     }
 

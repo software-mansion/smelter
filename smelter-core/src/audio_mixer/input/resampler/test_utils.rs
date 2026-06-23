@@ -27,7 +27,8 @@ pub(super) fn try_init_logger() {
 
     static INIT: Once = Once::new();
     INIT.call_once(|| {
-        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("trace"));
+        let filter =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("trace"));
         let _ = fmt().with_env_filter(filter).with_test_writer().try_init();
     });
 }
@@ -117,19 +118,16 @@ pub(super) struct SignalSource {
 }
 
 impl SignalSource {
-    pub fn new<F: Fn(Duration) -> f64 + Send + Sync + 'static>(rate: u32, func: F) -> Self {
-        Self {
-            func: Arc::new(func),
-            rate,
-        }
+    pub fn new<F: Fn(Duration) -> f64 + Send + Sync + 'static>(
+        rate: u32,
+        func: F,
+    ) -> Self {
+        Self { func: Arc::new(func), rate }
     }
 
     pub fn shifted(&self, offset: Duration) -> Self {
         let func = self.func.clone();
-        Self {
-            func: Arc::new(move |pts| func(pts + offset)),
-            rate: self.rate,
-        }
+        Self { func: Arc::new(move |pts| func(pts + offset)), rate: self.rate }
     }
 
     pub fn sample_at(&self, pts: Duration) -> f64 {
@@ -139,10 +137,14 @@ impl SignalSource {
     /// Samples covering `[start, end)`. Frame count uses the same rounding
     /// rule as `InputResampler` (`((dur)*rate).round() as usize`).
     pub fn samples(&self, start: Duration, end: Duration) -> Vec<f64> {
-        let frames =
-            ((end.saturating_sub(start)).as_secs_f64() * self.rate as f64).round() as usize;
+        let frames = ((end.saturating_sub(start)).as_secs_f64() * self.rate as f64)
+            .round() as usize;
         (0..frames)
-            .map(|i| self.sample_at(start + Duration::from_secs_f64(i as f64 / self.rate as f64)))
+            .map(|i| {
+                self.sample_at(
+                    start + Duration::from_secs_f64(i as f64 / self.rate as f64),
+                )
+            })
             .collect()
     }
 
@@ -262,18 +264,12 @@ impl<'a> SignalAssertionWithParams<'a> {
 }
 
 impl<'a> SignalAssertion<'a> {
-    const DEFAULT_PARAMS: AssertParams = AssertParams {
-        tolerance: 0.01,
-        stretch: 1.0,
-    };
+    const DEFAULT_PARAMS: AssertParams = AssertParams { tolerance: 0.01, stretch: 1.0 };
 
     pub fn tolerance(&'a self, tolerance: f64) -> SignalAssertionWithParams<'a> {
         let mut params = Self::DEFAULT_PARAMS;
         params.tolerance = tolerance;
-        SignalAssertionWithParams {
-            inner: self,
-            params,
-        }
+        SignalAssertionWithParams { inner: self, params }
     }
 
     #[allow(dead_code)]
@@ -283,10 +279,7 @@ impl<'a> SignalAssertion<'a> {
     pub fn stretch(&'a self, ratio: f64) -> SignalAssertionWithParams<'a> {
         let mut params = Self::DEFAULT_PARAMS;
         params.stretch = ratio;
-        SignalAssertionWithParams {
-            inner: self,
-            params,
-        }
+        SignalAssertionWithParams { inner: self, params }
     }
 
     pub fn assert(&self) {
@@ -309,12 +302,16 @@ impl<'a> SignalAssertion<'a> {
         let stretch = params.stretch;
         let func = self.source.func.clone();
         let source = SignalSource {
-            func: Arc::new(move |pts| func(Duration::from_secs_f64(pts.as_secs_f64() / stretch))),
+            func: Arc::new(move |pts| {
+                func(Duration::from_secs_f64(pts.as_secs_f64() / stretch))
+            }),
             rate: self.source.rate,
         };
 
         let expected: Vec<f64> = (0..length)
-            .map(|i| source.sample_at(Duration::from_secs_f64(i as f64 / source.rate as f64)))
+            .map(|i| {
+                source.sample_at(Duration::from_secs_f64(i as f64 / source.rate as f64))
+            })
             .collect();
 
         let (max_err, max_err_idx) = max_abs_error(actual, &expected);
@@ -354,11 +351,8 @@ impl<'a> SignalAssertion<'a> {
         );
 
         if best_shift_us.abs() > 1.0 && rms_best_shift * 4.0 < rms_nominal {
-            let direction = if best_shift_us > 0.0 {
-                "later than"
-            } else {
-                "earlier than"
-            };
+            let direction =
+                if best_shift_us > 0.0 { "later than" } else { "earlier than" };
             let _ = writeln!(
                 buf,
                 "  diagnosis: signal IS present but lands {best_shift_us:+.0}us {direction} expected",
@@ -423,11 +417,7 @@ fn rms_at_shift(actual: &[f64], source: &SignalSource, shift_secs: f64) -> f64 {
         sum_sq += err * err;
         count += 1;
     }
-    if count == 0 {
-        f64::INFINITY
-    } else {
-        (sum_sq / count as f64).sqrt()
-    }
+    if count == 0 { f64::INFINITY } else { (sum_sq / count as f64).sqrt() }
 }
 
 fn best_alignment_shift(
@@ -460,7 +450,11 @@ fn rms_at_stretch(actual: &[f64], source: &SignalSource, stretch: f64) -> f64 {
     (sum_sq / actual.len() as f64).sqrt()
 }
 
-fn best_alignment_stretch(actual: &[f64], source: &SignalSource, center: f64) -> (f64, f64) {
+fn best_alignment_stretch(
+    actual: &[f64],
+    source: &SignalSource,
+    center: f64,
+) -> (f64, f64) {
     let mut best_stretch = center;
     let mut best_rms = f64::INFINITY;
     let step = 0.001 / 100.0;

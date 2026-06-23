@@ -8,8 +8,8 @@ use crate::{
     pipeline_tests::{
         PipelineTest,
         harness::{
-            AudioCompareConfig, FftCompareConfig, OutputReceiver, PacketSender, VideoCompareConfig,
-            compare_audio_dumps, compare_video_dumps,
+            AudioCompareConfig, FftCompareConfig, OutputReceiver, PacketSender,
+            VideoCompareConfig, compare_audio_dumps, compare_video_dumps,
             fft::{Mode, RealTolerance},
         },
     },
@@ -96,8 +96,8 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
     )?;
 
     let packets_dump = input_dump_from_disk("8_colors_input_video_audio.rtp")?;
-    let sender_handle =
-        PacketSender::new(CommunicationProtocol::Tcp, input_port)?.send_non_blocking(packets_dump);
+    let sender_handle = PacketSender::new(CommunicationProtocol::Tcp, input_port)?
+        .send_non_blocking(packets_dump);
 
     instance.send_request("start", json!({}))?;
 
@@ -113,7 +113,8 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
         },
     )?;
 
-    let mut fft_cfg = FftCompareConfig::real(vec![Duration::ZERO..Duration::from_secs(10)]);
+    let mut fft_cfg =
+        FftCompareConfig::real(vec![Duration::ZERO..Duration::from_secs(10)]);
     fft_cfg.mode = Mode::Real(RealTolerance {
         max_frequency_level: 5.0,
         average_level: 15.0,
@@ -125,10 +126,7 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(fft_cfg),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(fft_cfg), ..Default::default() },
     )?;
 
     Ok(())

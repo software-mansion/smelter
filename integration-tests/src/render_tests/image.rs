@@ -157,7 +157,8 @@ fn remove_jpeg_in_view() -> Result<()> {
 
 #[render_test(description = "")]
 fn svg_as_root() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![svg_renderer()]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![svg_renderer()]);
     runner.update_scene(Component::Image(ImageComponent {
         image_id: RendererId(SVG_ID.into()),
         ..Default::default()
@@ -168,7 +169,8 @@ fn svg_as_root() -> Result<()> {
 
 #[render_test(description = "")]
 fn svg_in_view() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![svg_renderer()]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![svg_renderer()]);
     runner.update_scene(Component::View(ViewComponent {
         children: vec![Component::Image(ImageComponent {
             image_id: RendererId(SVG_ID.into()),
@@ -182,8 +184,8 @@ fn svg_in_view() -> Result<()> {
 
 #[render_test(description = "")]
 fn gif_progress_between_updates() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![gif1_renderer(), gif2_renderer()]);
+    let mut runner = TestRunner::new(MODULE, TEST_NAME)
+        .with_renderers(vec![gif1_renderer(), gif2_renderer()]);
     runner.update_scene(Component::Image(ImageComponent {
         id: Some(ComponentId("gif".into())),
         image_id: RendererId(GIF1_ID.into()),

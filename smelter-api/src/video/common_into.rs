@@ -32,12 +32,8 @@ impl TryFrom<AspectRatio> for (u32, u32) {
         let Some((v1_str, v2_str)) = text.0.split_once(':') else {
             return Err(TypeError::new(ERROR_MESSAGE));
         };
-        let v1 = v1_str
-            .parse::<u32>()
-            .or(Err(TypeError::new(ERROR_MESSAGE)))?;
-        let v2 = v2_str
-            .parse::<u32>()
-            .or(Err(TypeError::new(ERROR_MESSAGE)))?;
+        let v1 = v1_str.parse::<u32>().or(Err(TypeError::new(ERROR_MESSAGE)))?;
+        let v2 = v2_str.parse::<u32>().or(Err(TypeError::new(ERROR_MESSAGE)))?;
         Ok((v1, v2))
     }
 }

@@ -76,7 +76,10 @@ pub(crate) struct RunOptions {
     pub(crate) save_dumps: bool,
 }
 
-pub(crate) fn run_test(filter: &str, options: RunOptions) -> Result<std::process::ExitStatus> {
+pub(crate) fn run_test(
+    filter: &str,
+    options: RunOptions,
+) -> Result<std::process::ExitStatus> {
     let mut cmd = Command::new("cargo");
     scrub_cargo_env(&mut cmd);
     cmd.args([
@@ -127,16 +130,17 @@ fn scrub_cargo_env(cmd: &mut Command) {
 /// intentionally, so a single Enter is enough. Cancelling (Esc /
 /// Ctrl-C) is treated as "no".
 pub(crate) fn confirm_wipe(dir: &Path, message: &str) -> Result<bool> {
-    let has_content = fs::read_dir(dir)
-        .map(|mut entries| entries.next().is_some())
-        .unwrap_or(false);
+    let has_content =
+        fs::read_dir(dir).map(|mut entries| entries.next().is_some()).unwrap_or(false);
     if !has_content {
         return Ok(true);
     }
     println!();
     match Confirm::new(message).with_default(true).prompt() {
         Ok(b) => Ok(b),
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => Ok(false),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
+            Ok(false)
+        }
         Err(e) => Err(e.into()),
     }
 }
@@ -151,7 +155,9 @@ pub(crate) fn truncate(s: &str, max: usize) -> String {
 }
 
 pub(crate) fn walk_dir(dir: &Path, visit: &mut dyn FnMut(&Path)) -> Result<()> {
-    for entry in fs::read_dir(dir).with_context(|| format!("Failed to read {}", dir.display()))? {
+    for entry in
+        fs::read_dir(dir).with_context(|| format!("Failed to read {}", dir.display()))?
+    {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() {

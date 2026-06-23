@@ -104,9 +104,7 @@ pub struct ArtificialTolerance {
 
 impl Default for ArtificialTolerance {
     fn default() -> Self {
-        Self {
-            frequency_level: 40.0,
-        }
+        Self { frequency_level: 40.0 }
     }
 }
 
@@ -148,7 +146,8 @@ impl SamplingInterval {
             return vec![];
         }
 
-        let time_per_batch = Duration::from_secs_f64(samples_per_batch as f64 / sample_rate as f64);
+        let time_per_batch =
+            Duration::from_secs_f64(samples_per_batch as f64 / sample_rate as f64);
 
         let mut first_sample = (start_pts.as_secs_f64() * sample_rate as f64
             / samples_per_batch as f64) as usize
@@ -160,10 +159,7 @@ impl SamplingInterval {
             if pts >= end_pts {
                 break;
             }
-            intervals.push(Self {
-                first_sample,
-                samples: samples_per_batch,
-            });
+            intervals.push(Self { first_sample, samples: samples_per_batch });
             first_sample += samples_per_batch;
         }
         intervals
@@ -190,11 +186,15 @@ pub fn compare(
     let intervals: Vec<SamplingInterval> = config
         .intervals
         .iter()
-        .flat_map(|r| SamplingInterval::from_range(r, config.sample_rate, config.samples_per_batch))
+        .flat_map(|r| {
+            SamplingInterval::from_range(r, config.sample_rate, config.samples_per_batch)
+        })
         .collect();
 
-    let expected_samples: Vec<f32> = expected.iter().flat_map(|s| s.samples.clone()).collect();
-    let actual_samples: Vec<f32> = actual.iter().flat_map(|s| s.samples.clone()).collect();
+    let expected_samples: Vec<f32> =
+        expected.iter().flat_map(|s| s.samples.clone()).collect();
+    let actual_samples: Vec<f32> =
+        actual.iter().flat_map(|s| s.samples.clone()).collect();
 
     match &config.mode {
         Mode::Real(tolerance) => real::validate(
@@ -224,14 +224,14 @@ fn collect_pts(
     let lower = range.start.saturating_sub(tolerance);
     let higher = range.end + tolerance;
     let widened = lower..higher;
-    batches
-        .iter()
-        .filter(|s| widened.contains(&s.pts))
-        .map(|s| s.pts)
-        .collect()
+    batches.iter().filter(|s| widened.contains(&s.pts)).map(|s| s.pts).collect()
 }
 
-fn compare_pts(actual: &[Duration], expected: &[Duration], tolerance: Duration) -> Result<()> {
+fn compare_pts(
+    actual: &[Duration],
+    expected: &[Duration],
+    tolerance: Duration,
+) -> Result<()> {
     for (a, e) in actual.iter().zip(expected.iter()) {
         let diff = if a >= e { *a - *e } else { *e - *a };
         if diff > tolerance {
@@ -261,12 +261,7 @@ pub(super) fn find_samples(samples: &[f32], interval: SamplingInterval) -> Vec<f
 
 pub(super) fn split_samples(samples: Vec<f32>) -> (Vec<f32>, Vec<f32>) {
     let left = samples.iter().step_by(2).copied().collect::<Vec<_>>();
-    let right = samples
-        .iter()
-        .skip(1)
-        .step_by(2)
-        .copied()
-        .collect::<Vec<_>>();
+    let right = samples.iter().skip(1).step_by(2).copied().collect::<Vec<_>>();
     (left, right)
 }
 

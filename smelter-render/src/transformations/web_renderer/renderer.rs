@@ -52,7 +52,7 @@ impl WebRenderer {
 
         info!("Starting web renderer for {}", &spec.url);
 
-        let frame_data = Arc::new(Mutex::new(Bytes::new()));
+        let frame_data = Arc::new(Mutex::new(None));
         let source_transforms = Arc::new(Mutex::new(Vec::new()));
 
         let client = BrowserClient::new(
@@ -60,8 +60,10 @@ impl WebRenderer {
             source_transforms.clone(),
             spec.resolution,
         );
-        let chromium_sender = ChromiumSender::new(chromium_context, instance_id, &spec, client);
-        let embedding_helper = EmbeddingHelper::new(ctx, chromium_sender, spec.embedding_method);
+        let chromium_sender =
+            ChromiumSender::new(chromium_context, instance_id, &spec, client);
+        let embedding_helper =
+            EmbeddingHelper::new(ctx, chromium_sender, spec.embedding_method);
         let render_website_shader = WebRendererShader::new(&ctx.wgpu_ctx)?;
         let website_texture = WebsiteTexture::new(&ctx.wgpu_ctx, spec.resolution);
 
@@ -82,18 +84,22 @@ impl WebRenderer {
         embedding_data: &EmbeddingData,
         target: &mut NodeTexture,
     ) -> Result<(), RenderWebsiteError> {
-        self.embedding_helper
-            .prepare_embedding(sources, embedding_data)
-            .map_err(|err| RenderWebsiteError::EmbeddingFailed(self.spec.url.clone(), err))?;
+        self.embedding_helper.prepare_embedding(sources, embedding_data).map_err(
+            |err| RenderWebsiteError::EmbeddingFailed(self.spec.url.clone(), err),
+        )?;
 
-        if let Some(frame) = self.retrieve_frame() {
-            let target = target.ensure_size(ctx.wgpu_ctx, self.spec.resolution);
-            self.website_texture.upload(ctx.wgpu_ctx, &frame);
-            let render_textures = self.prepare_textures(sources);
-
-            self.render_website_shader
-                .render(ctx.wgpu_ctx, &render_textures, target);
+        let frame = self.retrieve_frame();
+        if frame.is_none() && sources.is_empty() {
+            return Ok(());
         }
+
+        let target = target.ensure_size(ctx.wgpu_ctx, self.spec.resolution);
+        if let Some(frame) = frame {
+            self.website_texture.upload(ctx.wgpu_ctx, &frame);
+        }
+        let render_textures = self.prepare_textures(sources);
+
+        self.render_website_shader.render(ctx.wgpu_ctx, &render_textures, target);
 
         Ok(())
     }
@@ -134,11 +140,7 @@ impl WebRenderer {
     }
 
     fn retrieve_frame(&self) -> Option<Bytes> {
-        let frame_data = self.frame_data.lock().unwrap();
-        if frame_data.is_empty() {
-            return None;
-        }
-        Some(frame_data.clone())
+        self.frame_data.lock().unwrap().take()
     }
 
     pub fn resolution(&self) -> Resolution {
@@ -152,7 +154,9 @@ impl WebsiteTexture {
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {
                 Self::Srgb(BgraSrgbTexture::new(ctx, resolution))
             }
-            RenderingMode::CpuOptimized => Self::Linear(BgraLinearTexture::new(ctx, resolution)),
+            RenderingMode::CpuOptimized => {
+                Self::Linear(BgraLinearTexture::new(ctx, resolution))
+            }
         }
     }
     fn view(&self) -> &wgpu::TextureView {

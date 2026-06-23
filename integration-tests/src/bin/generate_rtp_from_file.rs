@@ -11,10 +11,7 @@ fn main() {
     }
 
     let input_path = PathBuf::from(&args[2]);
-    let output_path = input_path
-        .parent()
-        .unwrap()
-        .join(input_path.file_stem().unwrap());
+    let output_path = input_path.parent().unwrap().join(input_path.file_stem().unwrap());
 
     let input_path = input_path.to_str().unwrap();
     let output_path = output_path.to_str().unwrap();
@@ -45,7 +42,9 @@ fn main() {
             "#
             )
         }
-        option => panic!("Invalid option \"{option}\". Must be video, audio or muxed_video_audio."),
+        option => panic!(
+            "Invalid option \"{option}\". Must be video, audio or muxed_video_audio."
+        ),
     };
 
     Command::new("bash").arg("-c").arg(cmd).status().unwrap();

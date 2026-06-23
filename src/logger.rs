@@ -68,21 +68,13 @@ pub fn init_logger(opts: LoggerConfig) {
         fs::create_dir_all(log_file.parent().unwrap()).unwrap();
         let writer = File::create(log_file).unwrap();
         let filter = tracing_subscriber::EnvFilter::new(opts.file_level.clone());
-        Some(
-            fmt::Layer::default()
-                .json()
-                .with_writer(writer)
-                .with_filter(filter),
-        )
+        Some(fmt::Layer::default().json().with_writer(writer).with_filter(filter))
     } else {
         None
     };
 
     match file_layer {
-        Some(file_layer) => Registry::default()
-            .with(stdio_layer)
-            .with(file_layer)
-            .init(),
+        Some(file_layer) => Registry::default().with(stdio_layer).with(file_layer).init(),
         None => Registry::default().with(stdio_layer).init(),
     }
 

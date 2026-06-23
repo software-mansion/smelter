@@ -69,10 +69,7 @@ pub async fn handle_input(
             });
         }
         None => {
-            api.pipeline()?
-                .lock()
-                .unwrap()
-                .unregister_input(&input_id.into())?;
+            api.pipeline()?.lock().unwrap().unregister_input(&input_id.into())?;
         }
     }
     Ok(Response::Ok {})
@@ -110,10 +107,7 @@ pub async fn handle_output(
             });
         }
         None => {
-            api.pipeline()?
-                .lock()
-                .unwrap()
-                .unregister_output(&output_id.into())?;
+            api.pipeline()?.lock().unwrap().unregister_output(&output_id.into())?;
         }
     }
     Ok(Response::Ok {})
@@ -184,8 +178,8 @@ pub async fn handle_web_renderer(
         Some(schedule_time_ms) => {
             let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
             Pipeline::schedule_event(&api.pipeline()?, schedule_time, move |pipeline| {
-                if let Err(err) =
-                    pipeline.unregister_renderer(&instance_id.into(), RegistryType::WebRenderer)
+                if let Err(err) = pipeline
+                    .unregister_renderer(&instance_id.into(), RegistryType::WebRenderer)
                 {
                     error!(
                         "Error while running scheduled web renderer unregister for pts {}ms: {}",

@@ -6,15 +6,18 @@ use std::{
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
-    OnConnectionCallback, RtmpAudioCodec, RtmpEvent, RtmpServerConfig, RtmpServerConnection,
-    RtmpServerConnectionError, RtmpVideoCodec, server::listener_thread::start_listener_thread,
-    utils::ShutdownCondition,
+    OnConnectionCallback, RtmpAudioCodec, RtmpEvent, RtmpServerConfig,
+    RtmpServerConnection, RtmpServerConnectionError, RtmpVideoCodec,
+    server::listener_thread::start_listener_thread, utils::ShutdownCondition,
 };
 
 pub struct RtmpServer(Arc<Mutex<ServerInstance>>);
 
 impl RtmpServer {
-    pub(super) fn new(config: RtmpServerConfig, conn_sender: Sender<RtmpServerConnection>) -> Self {
+    pub(super) fn new(
+        config: RtmpServerConfig,
+        conn_sender: Sender<RtmpServerConnection>,
+    ) -> Self {
         Self(Arc::new(Mutex::new(ServerInstance {
             config,
             shutdown_condition: ShutdownCondition::default(),

@@ -6,7 +6,9 @@ use tracing::warn;
 use crate::pipeline::webrtc::whep_output::WhepOutputStatsSender;
 use crate::prelude::*;
 use crate::{
-    pipeline::encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
+    pipeline::encoder::{
+        AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream,
+    },
     utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -37,7 +39,9 @@ where
     type SpawnOutput = WhepAudioTrackThreadHandle;
     type SpawnError = EncoderInitError;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let WhepAudioTrackThreadOptions {
             ctx,
             encoder_options,
@@ -55,8 +59,11 @@ where
         )?
         .flatten();
 
-        let (encoded_stream, _encoder_ctx) =
-            AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
+        let (encoded_stream, _encoder_ctx) = AudioEncoderStream::<Encoder, _>::new(
+            ctx,
+            encoder_options,
+            resampled_stream,
+        )?;
 
         let stream = encoded_stream.flatten().map(move |event| match event {
             PipelineEvent::Data(packet) => {
@@ -66,14 +73,9 @@ where
             PipelineEvent::EOS => EncodedOutputEvent::AudioEOS,
         });
 
-        let state = Self {
-            stream: Box::new(stream),
-            chunks_sender,
-            _encoder: PhantomData,
-        };
-        let output = WhepAudioTrackThreadHandle {
-            sample_batch_sender,
-        };
+        let state =
+            Self { stream: Box::new(stream), chunks_sender, _encoder: PhantomData };
+        let output = WhepAudioTrackThreadHandle { sample_batch_sender };
         Ok((state, output))
     }
 

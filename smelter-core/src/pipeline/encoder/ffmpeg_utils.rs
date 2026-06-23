@@ -40,9 +40,12 @@ pub(super) fn create_av_frame(
         frame.resolution.height as u32,
     );
 
-    let expected_y_plane_size = (av_frame.plane_width(0) * av_frame.plane_height(0)) as usize;
-    let expected_u_plane_size = (av_frame.plane_width(1) * av_frame.plane_height(1)) as usize;
-    let expected_v_plane_size = (av_frame.plane_width(2) * av_frame.plane_height(2)) as usize;
+    let expected_y_plane_size =
+        (av_frame.plane_width(0) * av_frame.plane_height(0)) as usize;
+    let expected_u_plane_size =
+        (av_frame.plane_width(1) * av_frame.plane_height(1)) as usize;
+    let expected_v_plane_size =
+        (av_frame.plane_width(2) * av_frame.plane_height(2)) as usize;
     if expected_y_plane_size != data.y_plane.len() {
         return Err(FrameConversionError(format!(
             "Y plane is a wrong size, expected: {} received: {}",
@@ -83,12 +86,15 @@ fn write_plane_to_av_frame(frame: &mut frame::Video, plane: usize, data: &[u8]) 
         .for_each(|(data, target)| target[..width].copy_from_slice(data));
 }
 
-pub(super) fn read_extradata(encoder: &ffmpeg_next::codec::encoder::Video) -> Option<bytes::Bytes> {
+pub(super) fn read_extradata(
+    encoder: &ffmpeg_next::codec::encoder::Video,
+) -> Option<bytes::Bytes> {
     unsafe {
         let encoder_ptr = encoder.0.0.0.as_ptr();
         let size = (*encoder_ptr).extradata_size;
         if size > 0 {
-            let extradata_slice = slice::from_raw_parts((*encoder_ptr).extradata, size as usize);
+            let extradata_slice =
+                slice::from_raw_parts((*encoder_ptr).extradata, size as usize);
             Some(bytes::Bytes::copy_from_slice(extradata_slice))
         } else {
             None

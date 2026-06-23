@@ -42,10 +42,7 @@ fn test_array() {
     let mut encoder = Amf3EncoderState::new(BytesMut::new());
     let associative = HashMap::from([
         ("Integer".to_string(), Amf3Value::Integer(2137)),
-        (
-            "String".to_string(),
-            Amf3Value::String("kremówki".to_string()),
-        ),
+        ("String".to_string(), Amf3Value::String("kremówki".to_string())),
     ]);
     let dense = vec![Amf3Value::Xml("Sample XML".to_string())];
     let amf_array = Amf3Value::Array { associative, dense };
@@ -83,10 +80,7 @@ fn test_object() {
     let values = vec![
         ("Val1".to_string(), Amf3Value::Null),
         ("Val2".to_string(), Amf3Value::Undefined),
-        (
-            "Val3".to_string(),
-            Amf3Value::String("kremówki".to_string()),
-        ),
+        ("Val3".to_string(), Amf3Value::String("kremówki".to_string())),
         ("Val4".to_string(), Amf3Value::Integer(2137)),
     ];
     let amf_object = Amf3Value::Object {
@@ -103,17 +97,10 @@ fn test_object() {
     // Case with empty class name
     let mut encoder = Amf3EncoderState::new(BytesMut::new());
     let values = vec![
-        (
-            "Val1".to_string(),
-            Amf3Value::String("kremówki".to_string()),
-        ),
+        ("Val1".to_string(), Amf3Value::String("kremówki".to_string())),
         ("Val2".to_string(), Amf3Value::Integer(2137)),
     ];
-    let amf_object = Amf3Value::Object {
-        class_name: None,
-        sealed_count: 2,
-        values,
-    };
+    let amf_object = Amf3Value::Object { class_name: None, sealed_count: 2, values };
     encoder.put_value(&amf_object).unwrap();
     let amf3_values = encoder.buf.freeze();
     let mut decoder = Amf3DecoderState::new(amf3_values);

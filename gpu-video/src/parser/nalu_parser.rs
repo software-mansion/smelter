@@ -14,9 +14,7 @@ pub(crate) struct NalParser {
 
 impl Default for NalParser {
     fn default() -> Self {
-        Self {
-            reader: AnnexBReader::accumulate(NalReceiver::default()),
-        }
+        Self { reader: AnnexBReader::accumulate(NalReceiver::default()) }
     }
 }
 
@@ -48,15 +46,14 @@ impl AccumulatedNalHandler for NalReceiver {
 
 impl NalReceiver {
     fn handle_nal(&mut self, nal: RefNal<'_>) -> Result<ParsedNalu, H264ParserError> {
-        let nal_unit_type = nal
-            .header()
-            .map_err(H264ParserError::NalHeaderParseError)?
-            .nal_unit_type();
+        let nal_unit_type =
+            nal.header().map_err(H264ParserError::NalHeaderParseError)?.nal_unit_type();
 
         match nal_unit_type {
             h264_reader::nal::UnitType::SeqParameterSet => {
-                let parsed = h264_reader::nal::sps::SeqParameterSet::from_bits(nal.rbsp_bits())
-                    .map_err(H264ParserError::SpsParseError)?;
+                let parsed =
+                    h264_reader::nal::sps::SeqParameterSet::from_bits(nal.rbsp_bits())
+                        .map_err(H264ParserError::SpsParseError)?;
 
                 self.parser_ctx.put_seq_param_set(parsed.clone());
                 Ok(ParsedNalu::Sps(parsed.clone()))

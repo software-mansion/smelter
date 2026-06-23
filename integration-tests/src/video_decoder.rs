@@ -36,9 +36,7 @@ impl VideoDecoder {
             (*decoder.as_mut_ptr()).pkt_timebase = Rational::new(1, 1_000_000).into();
         }
 
-        let decoder = decoder
-            .decoder()
-            .open_as(Into::<Id>::into(parameters.id()))?;
+        let decoder = decoder.decoder().open_as(Into::<Id>::into(parameters.id()))?;
 
         Ok(Self {
             decoder,
@@ -49,10 +47,10 @@ impl VideoDecoder {
     }
 
     pub fn decode(&mut self, packet: rtp::packet::Packet) -> Result<()> {
-        let first_rtp_timestamp = *self
-            .first_rtp_timestamp
-            .get_or_insert(packet.header.timestamp);
-        let pts = (packet.header.timestamp - first_rtp_timestamp) as f64 / 90000.0 * 1_000_000.0;
+        let first_rtp_timestamp =
+            *self.first_rtp_timestamp.get_or_insert(packet.header.timestamp);
+        let pts = (packet.header.timestamp - first_rtp_timestamp) as f64 / 90000.0
+            * 1_000_000.0;
         let chunk_data = self.depayloader.depacketize(&packet.payload)?;
         if chunk_data.is_empty() {
             return Ok(());

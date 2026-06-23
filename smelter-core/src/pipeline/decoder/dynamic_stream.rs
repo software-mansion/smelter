@@ -4,9 +4,10 @@ use smelter_render::{Frame, error::ErrorStack};
 use tracing::error;
 
 use crate::pipeline::decoder::{
-    EncodedInputEvent, VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
-    ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder,
-    quicksync_h264::QuickSyncH264Decoder, vulkan_h264::VulkanH264Decoder,
+    EncodedInputEvent, VideoDecoder, VideoDecoderInstance,
+    ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder,
+    ffmpeg_vp9::FfmpegVp9Decoder, quicksync_h264::QuickSyncH264Decoder,
+    vulkan_h264::VulkanH264Decoder,
 };
 
 use crate::prelude::*;

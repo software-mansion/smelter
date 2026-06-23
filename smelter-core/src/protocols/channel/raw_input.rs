@@ -37,11 +37,7 @@ pub struct InputAudioSamples {
 
 impl InputAudioSamples {
     pub fn new(samples: AudioSamples, start_pts: Duration, sample_rate: u32) -> Self {
-        Self {
-            samples,
-            start_pts,
-            sample_rate,
-        }
+        Self { samples, start_pts, sample_rate }
     }
 
     pub fn pts_range(&self) -> (Duration, Duration) {

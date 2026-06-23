@@ -8,7 +8,8 @@ use crate::{
 };
 
 use super::{
-    ComponentId, Node, NodeParams, OutputScene, Position, SceneError, Size, StatefulComponent,
+    ComponentId, Node, NodeParams, OutputScene, Position, SceneError, Size,
+    StatefulComponent,
     image_component::StatefulImageComponent,
     input_stream_component::StatefulInputStreamComponent,
     layout::{LayoutNode, SizedLayoutComponent, StatefulLayoutComponent},
@@ -129,20 +130,11 @@ impl SceneState {
 /// Intermediate representation of a node tree while it's being constructed.
 pub(super) enum IntermediateNode {
     InputStream(StatefulInputStreamComponent),
-    Shader {
-        shader: StatefulShaderComponent,
-        children: Vec<IntermediateNode>,
-    },
-    WebView {
-        web: StatefulWebViewComponent,
-        children: Vec<IntermediateNode>,
-    },
+    Shader { shader: StatefulShaderComponent, children: Vec<IntermediateNode> },
+    WebView { web: StatefulWebViewComponent, children: Vec<IntermediateNode> },
     Image(StatefulImageComponent),
     Text(StatefulTextComponent),
-    Layout {
-        root: Box<StatefulLayoutComponent>,
-        children: Vec<IntermediateNode>,
-    },
+    Layout { root: Box<StatefulLayoutComponent>, children: Vec<IntermediateNode> },
 }
 
 impl IntermediateNode {
@@ -151,7 +143,11 @@ impl IntermediateNode {
     ///   of an output stream. TODO: Currently only layouts respect that value
     /// * `pts` - PTS from the last render (this function is not called on render
     ///   so we can't have exact PTS here)
-    fn build_tree(self, resolution: Option<Resolution>, pts: Duration) -> Result<Node, SceneError> {
+    fn build_tree(
+        self,
+        resolution: Option<Resolution>,
+        pts: Duration,
+    ) -> Result<Node, SceneError> {
         let size = match resolution {
             Some(resolution) => resolution.into(),
             None => self.node_size(pts)?,
@@ -188,20 +184,16 @@ impl IntermediateNode {
                 params: NodeParams::Image(image.image_render_params()),
                 children: vec![],
             }),
-            IntermediateNode::Text(text) => Ok(Node {
-                params: NodeParams::Text(text.params),
-                children: vec![],
-            }),
+            IntermediateNode::Text(text) => {
+                Ok(Node { params: NodeParams::Text(text.params), children: vec![] })
+            }
         }
     }
 
     fn node_size(&self, pts: Duration) -> Result<Size, SceneError> {
         match self {
             IntermediateNode::InputStream(input) => Ok(input.size),
-            IntermediateNode::Shader {
-                shader,
-                children: _,
-            } => Ok(shader.component.size),
+            IntermediateNode::Shader { shader, children: _ } => Ok(shader.component.size),
             IntermediateNode::WebView { web, children: _ } => Ok(web.size()),
             IntermediateNode::Image(image) => Ok(image.size()),
             IntermediateNode::Text(text) => Ok(text.size()),

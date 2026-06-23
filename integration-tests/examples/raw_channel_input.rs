@@ -37,7 +37,8 @@ fn main() {
     let config = read_config();
     logger::init_logger(config.logger.clone());
     let ctx = GraphicsContext::new(GraphicsContextOptions {
-        features: wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        features:
+            wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         ..Default::default()
     })
     .unwrap();
@@ -49,32 +50,26 @@ fn main() {
         ..pipeline_options_from_config(&config, &Arc::new(Runtime::new().unwrap()), &None)
     })
     .unwrap_or_else(|err| {
-        panic!(
-            "Failed to start compositor.\n{}",
-            ErrorStack::new(&err).into_string()
-        )
+        panic!("Failed to start compositor.\n{}", ErrorStack::new(&err).into_string())
     });
     let pipeline = Arc::new(Mutex::new(pipeline));
     let output_id = OutputId("output_1".into());
     let input_id = InputId("input_1".into());
 
     #[allow(clippy::zombie_processes)]
-    let _ = MediaReceiver::new(Receive::rtmp_listener(OUTPUT_PORT))
-        .spawn()
-        .unwrap();
+    let _ = MediaReceiver::new(Receive::rtmp_listener(OUTPUT_PORT)).spawn().unwrap();
 
     let output_options = RegisterOutputOptions {
         output_options: ProtocolOutputOptions::Rtmp(RtmpOutputOptions {
-            connection: RtmpConnectionOptions::from_url(&format!("rtmp://127.0.0.1:{OUTPUT_PORT}"))
-                .unwrap(),
+            connection: RtmpConnectionOptions::from_url(&format!(
+                "rtmp://127.0.0.1:{OUTPUT_PORT}"
+            ))
+            .unwrap(),
             video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                 preset: FfmpegH264EncoderPreset::Ultrafast,
                 bitrate: None,
                 keyframe_interval: Duration::from_millis(5000),
-                resolution: Resolution {
-                    width: 1280,
-                    height: 720,
-                },
+                resolution: Resolution { width: 1280, height: 720 },
                 pixel_format: OutputPixelFormat::YUV420P,
                 raw_options: vec![],
                 bitstream_format: H264BitstreamFormat::Avcc,
@@ -121,10 +116,7 @@ fn generate_frames(device: &wgpu::Device, queue: &wgpu::Queue) -> Vec<Frame> {
     let texture_a = create_texture(0, device, queue);
     let texture_b = create_texture(1, device, queue);
     let texture_c = create_texture(2, device, queue);
-    let resolution = Resolution {
-        width: 640,
-        height: 360,
-    };
+    let resolution = Resolution { width: 640, height: 360 };
     let mut frames = vec![];
 
     for i in 0..200 {
@@ -178,7 +170,11 @@ fn generate_frames(device: &wgpu::Device, queue: &wgpu::Queue) -> Vec<Frame> {
     frames
 }
 
-fn create_texture(index: usize, device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<wgpu::Texture> {
+fn create_texture(
+    index: usize,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) -> Arc<wgpu::Texture> {
     let input = TestInput::new(index);
     let size = wgpu::Extent3d {
         width: input.resolution.width as u32,

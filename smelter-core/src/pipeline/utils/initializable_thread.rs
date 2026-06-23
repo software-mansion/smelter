@@ -8,7 +8,9 @@ pub(crate) trait InitializableThread: Sized {
     /// Represents type returned on failed `init` to the caller of `Self::spawn`
     type SpawnError: std::error::Error + Send + 'static;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError>;
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError>;
 
     fn run(self);
 
@@ -27,7 +29,8 @@ pub(crate) trait InitializableThread: Sized {
                     Level::INFO,
                     "Thread",
                     thread = metadata.thread_name,
-                    instance = format!("{} {}", metadata.thread_instance_name, instance_id),
+                    instance =
+                        format!("{} {}", metadata.thread_instance_name, instance_id),
                 )
                 .entered();
                 let state = match Self::init(opts) {

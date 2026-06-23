@@ -48,7 +48,8 @@ pub(crate) struct Mp4Streams {
 pub(crate) fn probe_streams(dump: &Bytes) -> Result<Mp4Streams> {
     let path = write_temp_file(dump)?;
     let result = (|| {
-        let input = format::input(&path).context("Failed to open MP4 dump with ffmpeg")?;
+        let input =
+            format::input(&path).context("Failed to open MP4 dump with ffmpeg")?;
         Ok(Mp4Streams {
             has_video: input.streams().best(Type::Video).is_some(),
             has_audio: input.streams().best(Type::Audio).is_some(),
@@ -115,8 +116,9 @@ fn write_temp_file(bytes: &Bytes) -> Result<PathBuf> {
         std::process::id(),
         TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed),
     ));
-    std::fs::write(&path, bytes)
-        .with_context(|| format!("Failed to write temporary MP4 dump {}", path.display()))?;
+    std::fs::write(&path, bytes).with_context(|| {
+        format!("Failed to write temporary MP4 dump {}", path.display())
+    })?;
     Ok(path)
 }
 
@@ -181,11 +183,7 @@ impl Mp4VideoFrameSource {
         let pts = pts
             .checked_sub(first_pts)
             .context("MP4 video frame pts earlier than the first frame")?;
-        Ok(Frame {
-            data,
-            resolution,
-            pts,
-        })
+        Ok(Frame { data, resolution, pts })
     }
 }
 
@@ -214,7 +212,10 @@ impl LazyFrameSource for Mp4VideoFrameSource {
 /// `expected_sample_rate` is the rate the downstream analysis runs
 /// at; a track encoded at any other rate is rejected rather than
 /// silently producing misaligned sample indices.
-pub fn decode_aac_audio(dump: &Bytes, expected_sample_rate: u32) -> Result<Vec<AudioSampleBatch>> {
+pub fn decode_aac_audio(
+    dump: &Bytes,
+    expected_sample_rate: u32,
+) -> Result<Vec<AudioSampleBatch>> {
     let Some(stream) = demux(dump)?.audio else {
         bail!("MP4 dump has no audio stream");
     };
@@ -264,16 +265,10 @@ fn convert_audio_frame(
         );
     }
     if decoded.channels() != 2 {
-        bail!(
-            "expected stereo audio in MP4 dump, got {} channel(s)",
-            decoded.channels()
-        );
+        bail!("expected stereo audio in MP4 dump, got {} channel(s)", decoded.channels());
     }
     if decoded.format() != Sample::F32(sample::Type::Planar) {
-        bail!(
-            "unsupported audio sample format {:?} in MP4 dump",
-            decoded.format()
-        );
+        bail!("unsupported audio sample format {:?} in MP4 dump", decoded.format());
     }
     let left = decoded.plane::<f32>(0);
     let right = decoded.plane::<f32>(1);

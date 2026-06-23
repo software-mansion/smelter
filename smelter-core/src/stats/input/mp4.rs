@@ -41,8 +41,12 @@ impl Mp4InputTrackStatsEvent {
         track_kind: StatsTrackKind,
     ) -> StatsEvent {
         match track_kind {
-            StatsTrackKind::Video => Mp4InputStatsEvent::Video(self).into_event(input_ref),
-            StatsTrackKind::Audio => Mp4InputStatsEvent::Audio(self).into_event(input_ref),
+            StatsTrackKind::Video => {
+                Mp4InputStatsEvent::Video(self).into_event(input_ref)
+            }
+            StatsTrackKind::Audio => {
+                Mp4InputStatsEvent::Audio(self).into_event(input_ref)
+            }
         }
     }
 }
@@ -61,23 +65,21 @@ pub struct Mp4InputTrackState {
 
 impl Mp4InputState {
     pub fn new() -> Self {
-        Self {
-            video: Mp4InputTrackState::new(),
-            audio: Mp4InputTrackState::new(),
-        }
+        Self { video: Mp4InputTrackState::new(), audio: Mp4InputTrackState::new() }
     }
 
     pub fn report(&mut self) -> Mp4InputStatsReport {
-        Mp4InputStatsReport {
-            video: self.video.report(),
-            audio: self.audio.report(),
-        }
+        Mp4InputStatsReport { video: self.video.report(), audio: self.audio.report() }
     }
 
     pub fn handle_event(&mut self, event: Mp4InputStatsEvent) {
         match event {
-            Mp4InputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
-            Mp4InputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+            Mp4InputStatsEvent::Video(track_event) => {
+                self.video.handle_event(track_event)
+            }
+            Mp4InputStatsEvent::Audio(track_event) => {
+                self.audio.handle_event(track_event)
+            }
         }
     }
 }
@@ -92,9 +94,11 @@ impl Mp4InputTrackState {
 
     pub fn report(&mut self) -> Mp4InputTrackStatsReport {
         Mp4InputTrackStatsReport {
-            bitrate_1_second: self.bitrate_1_sec.sum() / self.bitrate_1_sec.window_size().as_secs(),
+            bitrate_1_second: self.bitrate_1_sec.sum()
+                / self.bitrate_1_sec.window_size().as_secs(),
 
-            bitrate_1_minute: self.bitrate_1_min.sum() / self.bitrate_1_min.window_size().as_secs(),
+            bitrate_1_minute: self.bitrate_1_min.sum()
+                / self.bitrate_1_min.window_size().as_secs(),
         }
     }
 

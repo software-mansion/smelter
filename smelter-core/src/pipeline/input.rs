@@ -96,13 +96,17 @@ pub(super) fn new_external_input(
 ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
     match options {
         RegisterInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_ref, opts),
-        RegisterInputOptions::RtmpServer(opts) => RtmpServerInput::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::RtmpServer(opts) => {
+            RtmpServerInput::new_input(ctx, input_ref, opts)
+        }
         RegisterInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_ref, opts),
         RegisterInputOptions::Whep(opts) => WhepInput::new_input(ctx, input_ref, opts),
         #[cfg(target_os = "linux")]
-        RegisterInputOptions::V4l2(opts) => super::v4l2::V4l2Input::new_input(ctx, input_ref, opts),
+        RegisterInputOptions::V4l2(opts) => {
+            super::v4l2::V4l2Input::new_input(ctx, input_ref, opts)
+        }
         #[cfg(feature = "decklink")]
         RegisterInputOptions::DeckLink(opts) => {
             super::decklink::DeckLink::new_input(ctx, input_ref, opts)
@@ -129,17 +133,14 @@ where
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
-    let (input, input_result, queue_input) = build_input(pipeline_ctx, Ref::new(&input_id))
-        .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
+    let (input, input_result, queue_input) =
+        build_input(pipeline_ctx, Ref::new(&input_id))
+            .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
 
     // TODO: for now assume that
     let (audio_eos_received, video_eos_received) = (Some(false), Some(false));
 
-    let pipeline_input = PipelineInput {
-        input,
-        audio_eos_received,
-        video_eos_received,
-    };
+    let pipeline_input = PipelineInput { input, audio_eos_received, video_eos_received };
 
     let mut guard = pipeline.lock().unwrap();
 

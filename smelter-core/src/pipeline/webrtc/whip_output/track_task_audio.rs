@@ -8,7 +8,9 @@ use crate::pipeline::webrtc::whip_output::WhipOutputStatsSender;
 use crate::prelude::*;
 use crate::{
     pipeline::{
-        encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
+        encoder::{
+            AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream,
+        },
         rtp::{
             RtpPacket,
             payloader::{PayloaderOptions, PayloaderStream},
@@ -46,7 +48,9 @@ where
     type SpawnOutput = WhipAudioTrackThreadHandle;
     type SpawnError = EncoderInitError;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let WhipAudioTrackThreadOptions {
             ctx,
             encoder_options,
@@ -65,33 +69,29 @@ where
         )?
         .flatten();
 
-        let (encoded_stream, encoder_ctx) =
-            AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
+        let (encoded_stream, encoder_ctx) = AudioEncoderStream::<Encoder, _>::new(
+            ctx,
+            encoder_options,
+            resampled_stream,
+        )?;
 
-        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
+        let payloaded_stream =
+            PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
-        let stream = payloaded_stream
-            .flatten()
-            .filter_map(move |event| match event {
-                Ok(PipelineEvent::Data(packet)) => {
-                    stats_sender.bytes_sent_event(packet.len(), StatsTrackKind::Audio);
-                    Some(packet)
-                }
-                Ok(PipelineEvent::EOS) => None,
-                Err(err) => {
-                    warn!(
-                        "Depayloading error: {}",
-                        ErrorStack::new(&err).into_string()
-                    );
-                    None
-                }
-            });
+        let stream = payloaded_stream.flatten().filter_map(move |event| match event {
+            Ok(PipelineEvent::Data(packet)) => {
+                stats_sender.bytes_sent_event(packet.len(), StatsTrackKind::Audio);
+                Some(packet)
+            }
+            Ok(PipelineEvent::EOS) => None,
+            Err(err) => {
+                warn!("Depayloading error: {}", ErrorStack::new(&err).into_string());
+                None
+            }
+        });
 
-        let state = Self {
-            stream: Box::new(stream),
-            chunks_sender,
-            _encoder: PhantomData,
-        };
+        let state =
+            Self { stream: Box::new(stream), chunks_sender, _encoder: PhantomData };
         let output = WhipAudioTrackThreadHandle {
             sample_batch_sender,
             packet_loss_sender: encoder_ctx.packet_loss_sender,

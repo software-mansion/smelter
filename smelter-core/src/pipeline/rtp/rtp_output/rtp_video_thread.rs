@@ -46,7 +46,9 @@ where
     type SpawnOutput = RtpVideoTrackThreadHandle;
     type SpawnError = EncoderInitError;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let RtpVideoTrackThreadOptions {
             ctx,
             output_ref,
@@ -59,13 +61,11 @@ where
         let ssrc = payloader_options.ssrc;
         let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
 
-        let (encoded_stream, encoder_ctx) = VideoEncoderStream::<Encoder>::new(
-            ctx,
-            encoder_options,
-            frame_receiver,
-        )?;
+        let (encoded_stream, encoder_ctx) =
+            VideoEncoderStream::<Encoder>::new(ctx, encoder_options, frame_receiver)?;
 
-        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
+        let payloaded_stream =
+            PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
         let stream = payloaded_stream.flatten().map(move |event| match event {
             Ok(PipelineEvent::Data(packet)) => {
@@ -82,11 +82,8 @@ where
             Err(err) => RtpOutputEvent::Err(err),
         });
 
-        let state = Self {
-            stream: Box::new(stream),
-            chunks_sender,
-            _encoder: PhantomData,
-        };
+        let state =
+            Self { stream: Box::new(stream), chunks_sender, _encoder: PhantomData };
         let output = RtpVideoTrackThreadHandle {
             frame_sender,
             keyframe_request_sender: encoder_ctx.keyframe_request_sender,

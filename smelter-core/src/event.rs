@@ -21,11 +21,7 @@ pub enum Event {
     AudioInputStreamEos(InputId),
     VideoInputStreamEos(InputId),
     OutputDone(OutputId),
-    OutputError {
-        output_id: OutputId,
-        severity: ErrorSeverity,
-        err: OutputRuntimeError,
-    },
+    OutputError { output_id: OutputId, severity: ErrorSeverity, err: OutputRuntimeError },
 }
 
 fn input_event(kind: &str, input_id: InputId) -> event_handler::Event {
@@ -45,8 +41,12 @@ fn output_event(kind: &str, output_id: OutputId) -> event_handler::Event {
 impl From<Event> for event_handler::Event {
     fn from(val: Event) -> Self {
         match val {
-            Event::AudioInputStreamDelivered(id) => input_event("AUDIO_INPUT_DELIVERED", id),
-            Event::VideoInputStreamDelivered(id) => input_event("VIDEO_INPUT_DELIVERED", id),
+            Event::AudioInputStreamDelivered(id) => {
+                input_event("AUDIO_INPUT_DELIVERED", id)
+            }
+            Event::VideoInputStreamDelivered(id) => {
+                input_event("VIDEO_INPUT_DELIVERED", id)
+            }
             Event::AudioInputStreamPlaying(id) => input_event("AUDIO_INPUT_PLAYING", id),
             Event::VideoInputStreamPlaying(id) => input_event("VIDEO_INPUT_PLAYING", id),
             Event::AudioInputStreamPaused(id) => input_event("AUDIO_INPUT_PAUSED", id),
@@ -54,11 +54,7 @@ impl From<Event> for event_handler::Event {
             Event::AudioInputStreamEos(id) => input_event("AUDIO_INPUT_EOS", id),
             Event::VideoInputStreamEos(id) => input_event("VIDEO_INPUT_EOS", id),
             Event::OutputDone(id) => output_event("OUTPUT_DONE", id),
-            Event::OutputError {
-                output_id,
-                err,
-                severity,
-            } => event_handler::Event {
+            Event::OutputError { output_id, err, severity } => event_handler::Event {
                 kind: "OUTPUT_ERROR".to_string(),
                 properties: vec![
                     ("output_id".to_string(), output_id.to_string()),
@@ -83,9 +79,7 @@ impl Debug for EventEmitter {
 
 impl EventEmitter {
     pub(super) fn new() -> Self {
-        Self {
-            emitter: Emitter::new(),
-        }
+        Self { emitter: Emitter::new() }
     }
 
     pub(super) fn emit(&self, event: Event) {

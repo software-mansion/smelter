@@ -8,8 +8,8 @@ use self::{
 };
 
 use super::{
-    Component, ComponentId, HorizontalAlign, IntermediateNode, Position, RGBAColor, SceneError,
-    Size, StatefulComponent, TilesComponent, VerticalAlign,
+    Component, ComponentId, HorizontalAlign, IntermediateNode, Position, RGBAColor,
+    SceneError, Size, StatefulComponent, TilesComponent, VerticalAlign,
     layout::StatefulLayoutComponent,
     scene_state::BuildStateTreeCtx,
     transition::{TransitionOptions, TransitionState},
@@ -58,7 +58,9 @@ impl StatefulTilesComponent {
 
     fn tiles(&self, size: Size, pts: Duration) -> Vec<Option<Tile>> {
         let end = self.component.tiles(size, &self.children);
-        let (Some((start, start_size)), Some(transition)) = (&self.start, &self.transition) else {
+        let (Some((start, start_size)), Some(transition)) =
+            (&self.start, &self.transition)
+        else {
             return end.clone();
         };
         let start = resize_tiles(start, start_size, &size);
@@ -67,10 +69,7 @@ impl StatefulTilesComponent {
     }
 
     pub(super) fn position(&self, _pts: Duration) -> Position {
-        Position::Static {
-            width: self.component.width,
-            height: self.component.height,
-        }
+        Position::Static { width: self.component.width, height: self.component.height }
     }
 
     pub(super) fn children(&self) -> Vec<&StatefulComponent> {
@@ -175,9 +174,7 @@ impl TilesComponent {
             children,
         };
 
-        Ok(StatefulComponent::Layout(
-            StatefulLayoutComponent::Tiles(tiles).into(),
-        ))
+        Ok(StatefulComponent::Layout(StatefulLayoutComponent::Tiles(tiles).into()))
     }
 
     fn did_child_order_change(

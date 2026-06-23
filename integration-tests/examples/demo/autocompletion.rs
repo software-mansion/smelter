@@ -37,11 +37,8 @@ impl FilePathCompleter {
             })
             .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-        let scan_dir = if input.ends_with('/') {
-            input_path
-        } else {
-            fallback_parent.clone()
-        };
+        let scan_dir =
+            if input.ends_with('/') { input_path } else { fallback_parent.clone() };
 
         let entries = match std::fs::read_dir(scan_dir) {
             Ok(read_dir) => Ok(read_dir),

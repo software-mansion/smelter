@@ -29,14 +29,14 @@ impl<'a> DecodingImages<'a> {
         }
     }
 
-    pub(crate) fn target_info(&self, new_reference_slot_index: usize) -> (Arc<Image>, usize) {
+    pub(crate) fn target_info(
+        &self,
+        new_reference_slot_index: usize,
+    ) -> (Arc<Image>, usize) {
         match &self.dst_image {
             Some(image) => (image.image_with_view.target_info(0), 0),
             None => (
-                self.dpb
-                    .image
-                    .image_with_view
-                    .target_info(new_reference_slot_index),
+                self.dpb.image.image_with_view.target_info(new_reference_slot_index),
                 new_reference_slot_index,
             ),
         }
@@ -79,11 +79,7 @@ impl<'a> DecodingImages<'a> {
             dpb_format,
             dimensions,
             max_dpb_slots,
-            if dst_format.is_some() {
-                None
-            } else {
-                Some(&queue_indices)
-            },
+            if dst_format.is_some() { None } else { Some(&queue_indices) },
             vk::ImageLayout::VIDEO_DECODE_DPB_KHR,
         )?;
 
@@ -126,7 +122,9 @@ impl<'a> DecodingImages<'a> {
         self.dpb.reference_slot_info()
     }
 
-    pub(crate) fn allocate_reference_picture(&mut self) -> Result<usize, VulkanDecoderError> {
+    pub(crate) fn allocate_reference_picture(
+        &mut self,
+    ) -> Result<usize, VulkanDecoderError> {
         Ok(self.dpb.allocate_reference_picture()?)
     }
 

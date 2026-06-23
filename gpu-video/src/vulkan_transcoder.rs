@@ -37,7 +37,9 @@ pub enum TranscoderError {
     #[error("Vulkan error: {0}")]
     Vulkan(#[from] vk::Result),
 
-    #[error("Wrong output number: expected a value between 0 and {expected_max}, found {actual}")]
+    #[error(
+        "Wrong output number: expected a value between 0 and {expected_max}, found {actual}"
+    )]
     WrongOutputNumber { expected_max: usize, actual: usize },
 }
 
@@ -93,11 +95,7 @@ impl Transcoder {
         config: TranscoderParameters,
     ) -> Result<Self, TranscoderError> {
         let decoder = VulkanDecoder::new(
-            Arc::new(
-                device
-                    .decoding_device()
-                    .map_err(DecoderError::VulkanDecoderError)?,
-            ),
+            Arc::new(device.decoding_device().map_err(DecoderError::VulkanDecoderError)?),
             vk::VideoDecodeUsageFlagsKHR::TRANSCODING,
             ImageModifiers {
                 create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
@@ -112,11 +110,8 @@ impl Transcoder {
         let reference_ctx = ReferenceContext::default();
         let sorter = FrameSorter::new();
 
-        let scaling_algorithms: Vec<_> = config
-            .output_parameters
-            .iter()
-            .map(|c| c.scaling_algorithm)
-            .collect();
+        let scaling_algorithms: Vec<_> =
+            config.output_parameters.iter().map(|c| c.scaling_algorithm).collect();
 
         let parameters = config
             .output_parameters
@@ -160,7 +155,8 @@ impl Transcoder {
 
         let pipeline_output_configs =
             make_pipeline_output_configs(&parameters, &scaling_algorithms);
-        let pipeline = pipeline::ResizingPipeline::new(device.clone(), pipeline_output_configs)?;
+        let pipeline =
+            pipeline::ResizingPipeline::new(device.clone(), pipeline_output_configs)?;
 
         Ok(Self {
             decoder,
@@ -187,7 +183,9 @@ impl Transcoder {
     /// are coming, otherwise the output may have the wrong frame order. Returns a [`Vec`] where
     /// each element corresponds to an output frame. Each frame is a [`Vec`] where each element
     /// corresponds to one output.
-    pub fn flush(&mut self) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, TranscoderError> {
+    pub fn flush(
+        &mut self,
+    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, TranscoderError> {
         let instructions = self.flush_parser()?;
         let mut output = self.transcode_instructions(instructions)?;
         output.append(&mut self.flush_transcoder()?);
@@ -197,8 +195,9 @@ impl Transcoder {
 
     fn flush_parser(&mut self) -> Result<Vec<DecoderInstruction>, TranscoderError> {
         let access_units = self.parser.flush().map_err(DecoderError::from)?;
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)
-            .map_err(DecoderError::from)?;
+        let instructions =
+            compile_to_decoder_instructions(&mut self.reference_ctx, access_units)
+                .map_err(DecoderError::from)?;
 
         Ok(instructions)
     }
@@ -221,13 +220,12 @@ impl Transcoder {
         &mut self,
         input: EncodedInputChunk<'_>,
     ) -> Result<Vec<DecoderInstruction>, TranscoderError> {
-        let access_units = self
-            .parser
-            .parse(input.data, input.pts)
-            .map_err(DecoderError::from)?;
+        let access_units =
+            self.parser.parse(input.data, input.pts).map_err(DecoderError::from)?;
 
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)
-            .map_err(DecoderError::from)?;
+        let instructions =
+            compile_to_decoder_instructions(&mut self.reference_ctx, access_units)
+                .map_err(DecoderError::from)?;
 
         Ok(instructions)
     }
@@ -239,23 +237,17 @@ impl Transcoder {
         let mut encoded_frame_sets = Vec::new();
 
         for instruction in instructions {
-            let Some(mut frame) = self
-                .decoder
-                .decode(&instruction)
-                .map_err(DecoderError::from)?
+            let Some(mut frame) =
+                self.decoder.decode(&instruction).map_err(DecoderError::from)?
             else {
                 continue;
             };
 
-            let mut trackers = self
-                .encoders
-                .iter_mut()
-                .map(|e| e.tracker())
-                .collect::<Vec<_>>();
+            let mut trackers =
+                self.encoders.iter_mut().map(|e| e.tracker()).collect::<Vec<_>>();
             let cropped_extent = frame.decode_result.frame.cropped_extent;
-            let output = self
-                .resizing_pipeline
-                .run(&mut frame, &mut trackers, cropped_extent)?;
+            let output =
+                self.resizing_pipeline.run(&mut frame, &mut trackers, cropped_extent)?;
 
             let sorted = self.sorter.put(DecodeResult {
                 frame: ResizedImages {
@@ -282,32 +274,26 @@ impl Transcoder {
         resized_images: OutputFrame<ResizedImages>,
     ) -> Result<Vec<EncodedOutputChunk<Vec<u8>>>, TranscoderError> {
         let mut submits = Vec::new();
-        for (encoder, frame) in self
-            .encoders
-            .iter_mut()
-            .zip(resized_images.data.images.outputs.iter())
+        for (encoder, frame) in
+            self.encoders.iter_mut().zip(resized_images.data.images.outputs.iter())
         {
-            let submit = encoder.encode(frame.image.clone(), false, resized_images.metadata.pts)?;
+            let submit = encoder.encode(
+                frame.image.clone(),
+                false,
+                resized_images.metadata.pts,
+            )?;
             submits.push(submit);
         }
 
         let mut semaphores = Vec::new();
         let mut values = Vec::new();
         for submit in submits.iter_mut() {
-            semaphores.push(
-                submit
-                    .0
-                    .encoder
-                    .tracker()
-                    .semaphore_tracker
-                    .semaphore
-                    .semaphore,
-            );
+            semaphores
+                .push(submit.0.encoder.tracker().semaphore_tracker.semaphore.semaphore);
             values.push(submit.0.wait_value.0);
         }
-        let wait = vk::SemaphoreWaitInfo::default()
-            .semaphores(&semaphores)
-            .values(&values);
+        let wait =
+            vk::SemaphoreWaitInfo::default().semaphores(&semaphores).values(&values);
         unsafe { self.device.device.wait_semaphores(&wait, u64::MAX)? };
 
         let mut results = Vec::new();
@@ -318,15 +304,12 @@ impl Transcoder {
         }
 
         // TODO: this is atrocious
-        self.decoder
-            .tracker
-            .mark_waited(resized_images.data.decoder_wait_value);
+        self.decoder.tracker.mark_waited(resized_images.data.decoder_wait_value);
         resized_images.data.input_buffer.release_to_pool();
 
         self.resizing_pipeline
             .mark_command_buffers_completed(resized_images.data.decoder_wait_value);
-        self.resizing_pipeline
-            .free_submission(resized_images.data.images);
+        self.resizing_pipeline.free_submission(resized_images.data.images);
 
         if let Some(query_pool) = resized_images.data.decode_query_pool {
             query_pool

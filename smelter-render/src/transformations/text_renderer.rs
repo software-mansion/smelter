@@ -12,14 +12,15 @@ use glyphon::{
 };
 use tracing::warn;
 use wgpu::{
-    CommandEncoderDescriptor, LoadOp, MultisampleState, Operations, RenderPassColorAttachment,
-    RenderPassDescriptor,
+    CommandEncoderDescriptor, LoadOp, MultisampleState, Operations,
+    RenderPassColorAttachment, RenderPassDescriptor,
 };
 
 use crate::{
     Resolution,
     scene::{
-        HorizontalAlign, RGBAColor, TextComponent, TextDimensions, TextStyle, TextWeight, TextWrap,
+        HorizontalAlign, RGBAColor, TextComponent, TextDimensions, TextStyle, TextWeight,
+        TextWrap,
     },
     state::{RenderCtx, node_texture::NodeTexture},
     wgpu::{WgpuCtx, utils::convert_to_shader_color},
@@ -43,10 +44,7 @@ impl fmt::Debug for TextBuffer {
 
 impl From<Resolution> for glyphon::Resolution {
     fn from(value: Resolution) -> Self {
-        Self {
-            width: value.width as u32,
-            height: value.height as u32,
-        }
+        Self { width: value.width as u32, height: value.height as u32 }
     }
 }
 
@@ -69,14 +67,19 @@ impl TextRendererNode {
         }
     }
 
-    pub(crate) fn render(&mut self, renderer_ctx: &mut RenderCtx, target: &mut NodeTexture) {
+    pub(crate) fn render(
+        &mut self,
+        renderer_ctx: &mut RenderCtx,
+        target: &mut NodeTexture,
+    ) {
         if self.was_rendered {
             return;
         }
 
         if self.resolution.width == 0 || self.resolution.height == 0 {
             // We can't use zero-sized textures
-            let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, Resolution::ONE_PIXEL);
+            let target_state =
+                target.ensure_size(renderer_ctx.wgpu_ctx, Resolution::ONE_PIXEL);
 
             target_state.upload(renderer_ctx.wgpu_ctx, &[0; 4]);
 
@@ -131,13 +134,9 @@ impl TextRendererNode {
             )
             .unwrap();
 
-        let mut encoder =
-            renderer_ctx
-                .wgpu_ctx
-                .device
-                .create_command_encoder(&CommandEncoderDescriptor {
-                    label: Some("Text renderer encoder"),
-                });
+        let mut encoder = renderer_ctx.wgpu_ctx.device.create_command_encoder(
+            &CommandEncoderDescriptor { label: Some("Text renderer encoder") },
+        );
 
         let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, self.resolution);
         let view = &target_state.view();
@@ -250,21 +249,15 @@ impl TextRendererCtx {
             });
             FontSystem::new_with_locale_and_db(locale, Database::new())
         };
-        font_system
-            .db_mut()
-            .load_font_source(Source::Binary(Arc::new(include_bytes!(
-                "../../fonts/Inter_18pt-Regular.ttf"
-            ))));
-        font_system
-            .db_mut()
-            .load_font_source(Source::Binary(Arc::new(include_bytes!(
-                "../../fonts/Inter_18pt-Italic.ttf"
-            ))));
-        font_system
-            .db_mut()
-            .load_font_source(Source::Binary(Arc::new(include_bytes!(
-                "../../fonts/Inter_18pt-Bold.ttf"
-            ))));
+        font_system.db_mut().load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "../../fonts/Inter_18pt-Regular.ttf"
+        ))));
+        font_system.db_mut().load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "../../fonts/Inter_18pt-Italic.ttf"
+        ))));
+        font_system.db_mut().load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "../../fonts/Inter_18pt-Bold.ttf"
+        ))));
         Self {
             font_system: Mutex::new(font_system),
             swash_cache: Mutex::new(SwashCache::new()),
@@ -300,14 +293,10 @@ impl TextRendererCtx {
         buffer.set_wrap(font_system, text_params.wrap);
 
         let texture_size = match text_resolution {
-            TextDimensions::Fixed { width, height } => Resolution {
-                width: width as usize,
-                height: height as usize,
-            },
-            TextDimensions::Fitted {
-                max_width,
-                max_height,
-            } => {
+            TextDimensions::Fixed { width, height } => {
+                Resolution { width: width as usize, height: height as usize }
+            }
+            TextDimensions::Fitted { max_width, max_height } => {
                 buffer.set_size(font_system, Some(max_width), Some(max_height));
                 buffer.shape_until_scroll(font_system, false);
                 Self::get_text_resolution(
@@ -325,10 +314,7 @@ impl TextRendererCtx {
                     text_params.font_size,
                 );
 
-                Resolution {
-                    width: width as usize,
-                    height: text_size.height,
-                }
+                Resolution { width: width as usize, height: text_size.height }
             }
         };
 
@@ -363,7 +349,8 @@ impl TextRendererCtx {
         }
 
         let last_line_padding = font_size / 5.0;
-        let height = (lines_count as f32 * line_height.ceil() + last_line_padding) as usize;
+        let height =
+            (lines_count as f32 * line_height.ceil() + last_line_padding) as usize;
         Resolution { width, height }
     }
 }

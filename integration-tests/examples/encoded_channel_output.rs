@@ -23,10 +23,7 @@ fn main() {
     // no chromium support, so we can ignore _event_loop
     let runtime = Arc::new(Runtime::new().unwrap());
     let state = ApiState::new(config, runtime).unwrap_or_else(|err| {
-        panic!(
-            "Failed to start compositor.\n{}",
-            ErrorStack::new(&err).into_string()
-        )
+        panic!("Failed to start compositor.\n{}", ErrorStack::new(&err).into_string())
     });
     let output_id = OutputId("output_1".into());
     let input_id = InputId("input_id".into());
@@ -37,10 +34,7 @@ fn main() {
                 preset: FfmpegH264EncoderPreset::Ultrafast,
                 bitrate: None,
                 keyframe_interval: Duration::from_millis(5000),
-                resolution: Resolution {
-                    width: 1280,
-                    height: 720,
-                },
+                resolution: Resolution { width: 1280, height: 720 },
                 pixel_format: OutputPixelFormat::YUV420P,
                 raw_options: vec![],
                 bitstream_format: H264BitstreamFormat::AnnexB,
@@ -75,10 +69,7 @@ fn main() {
 
     let input_options = RegisterInputOptions::Mp4(Mp4InputOptions {
         source: Mp4InputSource::File(
-            TestSample::BigBuckBunnyH264AAC
-                .ensure_path()
-                .unwrap()
-                .into(),
+            TestSample::BigBuckBunnyH264AAC.ensure_path().unwrap().into(),
         ),
         should_loop: false,
         video_decoders: Mp4InputVideoDecoders {
@@ -86,13 +77,11 @@ fn main() {
         },
         seek: None,
         offset: Some(Duration::ZERO),
-        queue_options: QueueInputOptions {
-            required: true,
-            ..Default::default()
-        },
+        queue_options: QueueInputOptions { required: true, ..Default::default() },
     });
 
-    Pipeline::register_input(&state.pipeline().unwrap(), input_id.clone(), input_options).unwrap();
+    Pipeline::register_input(&state.pipeline().unwrap(), input_id.clone(), input_options)
+        .unwrap();
 
     let output = Pipeline::register_encoded_data_output(
         &state.pipeline().unwrap(),
@@ -116,10 +105,14 @@ fn main() {
             return;
         };
         match chunk.kind {
-            MediaKind::Video(VideoCodec::H264) => h264_dump.write_all(&chunk.data).unwrap(),
+            MediaKind::Video(VideoCodec::H264) => {
+                h264_dump.write_all(&chunk.data).unwrap()
+            }
             MediaKind::Video(VideoCodec::Vp8) => unreachable!(),
             MediaKind::Video(VideoCodec::Vp9) => unreachable!(),
-            MediaKind::Audio(AudioCodec::Opus) => opus_dump.write_all(&chunk.data).unwrap(),
+            MediaKind::Audio(AudioCodec::Opus) => {
+                opus_dump.write_all(&chunk.data).unwrap()
+            }
             MediaKind::Audio(AudioCodec::Aac) => panic!("AAC is not supported on output"),
         }
     }

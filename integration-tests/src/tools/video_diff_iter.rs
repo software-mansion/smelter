@@ -80,8 +80,14 @@ impl VideoDiffIter {
     /// against yet.
     pub fn from_rtp_dumps(left: &Path, right: &Path) -> Result<Self> {
         Ok(Self::new(
-            LazyFrameStream::from_dump_path_or_empty(left, LazyFrameStream::from_rtp_bytes)?,
-            LazyFrameStream::from_dump_path_or_empty(right, LazyFrameStream::from_rtp_bytes)?,
+            LazyFrameStream::from_dump_path_or_empty(
+                left,
+                LazyFrameStream::from_rtp_bytes,
+            )?,
+            LazyFrameStream::from_dump_path_or_empty(
+                right,
+                LazyFrameStream::from_rtp_bytes,
+            )?,
         ))
     }
 
@@ -100,8 +106,14 @@ impl VideoDiffIter {
     /// frames are still decoded lazily.
     pub fn from_mp4_dumps(left: &Path, right: &Path) -> Result<Self> {
         Ok(Self::new(
-            LazyFrameStream::from_dump_path_or_empty(left, LazyFrameStream::from_mp4_bytes)?,
-            LazyFrameStream::from_dump_path_or_empty(right, LazyFrameStream::from_mp4_bytes)?,
+            LazyFrameStream::from_dump_path_or_empty(
+                left,
+                LazyFrameStream::from_mp4_bytes,
+            )?,
+            LazyFrameStream::from_dump_path_or_empty(
+                right,
+                LazyFrameStream::from_mp4_bytes,
+            )?,
         ))
     }
 
@@ -116,18 +128,11 @@ impl VideoDiffIter {
     /// Build directly from already-decoded frames. Useful for tests.
     /// Inputs must be sorted by `pts` ascending.
     pub fn from_frames(left: Vec<Frame>, right: Vec<Frame>) -> Self {
-        Self::new(
-            LazyFrameStream::from_frames(left),
-            LazyFrameStream::from_frames(right),
-        )
+        Self::new(LazyFrameStream::from_frames(left), LazyFrameStream::from_frames(right))
     }
 
     fn new(left: LazyFrameStream, right: LazyFrameStream) -> Self {
-        Self {
-            left,
-            right,
-            state: State::NotStarted,
-        }
+        Self { left, right, state: State::NotStarted }
     }
 }
 
@@ -243,12 +248,7 @@ impl LazyFrameStream {
     }
 
     fn from_frames(frames: Vec<Frame>) -> Self {
-        Self {
-            source: None,
-            pending: frames.into(),
-            drained: true,
-            current: None,
-        }
+        Self { source: None, pending: frames.into(), drained: true, current: None }
     }
 
     /// Reads the dump at `path` and builds a stream via `from_bytes`,
@@ -266,10 +266,12 @@ impl LazyFrameStream {
             return Ok(Self::from_frames(Vec::new()));
         }
         let bytes = Bytes::from(
-            std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
+            std::fs::read(path)
+                .with_context(|| format!("Failed to read {}", path.display()))?,
         );
-        from_bytes(&bytes)
-            .with_context(|| format!("Failed to build frame stream from {}", path.display()))
+        from_bytes(&bytes).with_context(|| {
+            format!("Failed to build frame stream from {}", path.display())
+        })
     }
 
     fn current(&self) -> Option<&Frame> {
@@ -322,10 +324,7 @@ mod tests {
                 u_plane: Bytes::new(),
                 v_plane: Bytes::new(),
             }),
-            resolution: Resolution {
-                width: 16,
-                height: 16,
-            },
+            resolution: Resolution { width: 16, height: 16 },
             pts: Duration::from_millis(pts_ms),
         }
     }
@@ -391,10 +390,8 @@ mod tests {
 
     #[test]
     fn one_side_empty() {
-        let pairs = collect_pairs(VideoDiffIter::from_frames(
-            vec![frame(0), frame(33)],
-            vec![],
-        ));
+        let pairs =
+            collect_pairs(VideoDiffIter::from_frames(vec![frame(0), frame(33)], vec![]));
         assert_eq!(pairs, vec![(Some(0), None), (Some(33), None)]);
     }
 

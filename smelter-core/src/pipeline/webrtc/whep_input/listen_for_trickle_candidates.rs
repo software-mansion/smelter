@@ -52,14 +52,14 @@ async fn handle_trickle_candidate(
             info!("Trickle ICE is not supported by WHEP server");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
-        Err(WebrtcClientError::EntityTagMissing) | Err(WebrtcClientError::EntityTagNonMatching) => {
+        Err(WebrtcClientError::EntityTagMissing)
+        | Err(WebrtcClientError::EntityTagNonMatching) => {
             info!("Entity tags not supported by WHEP input");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
-        Err(err) => warn!(
-            "Trickle ICE request failed: {}",
-            ErrorStack::new(&err).into_string()
-        ),
+        Err(err) => {
+            warn!("Trickle ICE request failed: {}", ErrorStack::new(&err).into_string())
+        }
         Ok(_) => (),
     };
 }

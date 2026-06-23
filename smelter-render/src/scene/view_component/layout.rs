@@ -158,7 +158,8 @@ impl ViewComponentParam {
 
         let layout = match child {
             StatefulComponent::Layout(layout_component) => {
-                let children_layouts = layout_component.layout(Size { width, height }, pts);
+                let children_layouts =
+                    layout_component.layout(Size { width, height }, pts);
                 NestedLayout {
                     top,
                     left,
@@ -205,7 +206,12 @@ impl ViewComponentParam {
     /// height if the direction is `ViewChildrenDirection::Column`.
     ///
     /// size represents dimensions of content (without a border).
-    fn static_child_size(&self, size: Size, children: &[StatefulComponent], pts: Duration) -> f32 {
+    fn static_child_size(
+        &self,
+        size: Size,
+        children: &[StatefulComponent],
+        pts: Duration,
+    ) -> f32 {
         let max_size = match self.direction {
             super::ViewChildrenDirection::Row => size.width - self.padding.horizontal(),
             super::ViewChildrenDirection::Column => size.height - self.padding.vertical(),
@@ -234,12 +240,14 @@ impl ViewComponentParam {
         children: &[StatefulComponent],
         pts: Duration,
     ) -> f32 {
-        let sum_size = self
-            .sum_static_children_sizes(children, pts)
-            .max(0.000000001); // avoid division by 0
+        let sum_size = self.sum_static_children_sizes(children, pts).max(0.000000001); // avoid division by 0
         let (max_size, max_alternative_size) = match self.direction {
-            super::ViewChildrenDirection::Row => (content_size.width, content_size.height),
-            super::ViewChildrenDirection::Column => (content_size.height, content_size.width),
+            super::ViewChildrenDirection::Row => {
+                (content_size.width, content_size.height)
+            }
+            super::ViewChildrenDirection::Column => {
+                (content_size.height, content_size.width)
+            }
         };
         let max_alternative_size_for_child = Self::static_children_iter(children, pts)
             .map(|child| match self.direction {
@@ -259,7 +267,11 @@ impl ViewComponentParam {
         )
     }
 
-    fn sum_static_children_sizes(&self, children: &[StatefulComponent], pts: Duration) -> f32 {
+    fn sum_static_children_sizes(
+        &self,
+        children: &[StatefulComponent],
+        pts: Duration,
+    ) -> f32 {
         let size_accessor = match self.direction {
             super::ViewChildrenDirection::Row => StatefulComponent::width,
             super::ViewChildrenDirection::Column => StatefulComponent::height,

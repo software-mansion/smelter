@@ -13,15 +13,12 @@ impl TryFrom<Bytes> for AacAudioConfig {
     type Error = AacConfigParseError;
 
     fn try_from(data: Bytes) -> Result<Self, Self::Error> {
-        let (object_type, frequency_index) = Self::parse_object_type_frequency_index(&data)?;
+        let (object_type, frequency_index) =
+            Self::parse_object_type_frequency_index(&data)?;
         let sample_rate = Self::parse_sample_rate(&data, object_type, frequency_index)?;
         let channels = Self::parse_channels(&data, object_type, frequency_index)?;
 
-        Ok(Self {
-            data,
-            channels,
-            sample_rate,
-        })
+        Ok(Self { data, channels, sample_rate })
     }
 }
 
@@ -65,11 +62,13 @@ impl AacAudioConfig {
                 }
                 match object_type {
                     31 => {
-                        let raw = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+                        let raw =
+                            u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
                         (raw & 0x01_FF_FF_FE) >> 1
                     }
                     _ => {
-                        let raw = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+                        let raw =
+                            u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
                         (raw & 0x7F_FF_FF_80) >> 7
                     }
                 }
@@ -119,13 +118,13 @@ impl AacAudioConfig {
         match channel_configuration {
             1 => Ok(AudioChannels::Mono),
             2 => Ok(AudioChannels::Stereo),
-            _ => Err(AacConfigParseError::InvalidAudioChannel(
-                channel_configuration,
-            )),
+            _ => Err(AacConfigParseError::InvalidAudioChannel(channel_configuration)),
         }
     }
 
-    fn parse_object_type_frequency_index(data: &Bytes) -> Result<(u8, u8), AacConfigParseError> {
+    fn parse_object_type_frequency_index(
+        data: &Bytes,
+    ) -> Result<(u8, u8), AacConfigParseError> {
         if data.remaining() < 2 {
             return Err(AacConfigParseError::TooShort);
         }

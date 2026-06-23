@@ -8,10 +8,7 @@ use integration_tests::{
     media::{MediaReceiver, MediaSender, Receive, Send, TestSample, VideoCodec},
 };
 
-const VIDEO_RESOLUTION: Resolution = Resolution {
-    width: 1280,
-    height: 720,
-};
+const VIDEO_RESOLUTION: Resolution = Resolution { width: 1280, height: 720 };
 
 const IP: &str = "127.0.0.1";
 const INPUT_1_PORT: u16 = 8002;
@@ -111,9 +108,7 @@ fn client_code() -> Result<()> {
 
     MediaSender::new(
         TestSample::BigBuckBunnyH264AAC,
-        Send::rtp_udp_client()
-            .video_port(INPUT_1_PORT)
-            .audio_port(INPUT_2_PORT),
+        Send::rtp_udp_client().video_port(INPUT_1_PORT).audio_port(INPUT_2_PORT),
     )
     .spawn()?;
 

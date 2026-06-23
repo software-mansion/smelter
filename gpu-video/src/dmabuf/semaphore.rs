@@ -36,11 +36,7 @@ impl VulkanSemaphore {
             .handle_type(vk::ExternalSemaphoreHandleTypeFlags::SYNC_FD)
             .fd(fd.as_raw_fd());
 
-        match unsafe {
-            vulkan
-                .external_semaphore_fd
-                .import_semaphore_fd(&import_info)
-        } {
+        match unsafe { vulkan.external_semaphore_fd.import_semaphore_fd(&import_info) } {
             Ok(()) => {
                 let _ = fd.into_raw_fd();
                 Ok(semaphore)
@@ -65,12 +61,9 @@ impl VulkanSemaphore {
         let get_fd_info = vk::SemaphoreGetFdInfoKHR::default()
             .semaphore(self.semaphore)
             .handle_type(vk::ExternalSemaphoreHandleTypeFlags::SYNC_FD);
-        let fd = unsafe {
-            self.vulkan
-                .external_semaphore_fd
-                .get_semaphore_fd(&get_fd_info)
-        }
-        .map_err(VulkanSemaphoreError::Export)?;
+        let fd =
+            unsafe { self.vulkan.external_semaphore_fd.get_semaphore_fd(&get_fd_info) }
+                .map_err(VulkanSemaphoreError::Export)?;
 
         Ok(SyncFile::from_owned_raw_fd(fd))
     }

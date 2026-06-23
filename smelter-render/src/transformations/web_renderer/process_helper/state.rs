@@ -10,9 +10,7 @@ pub struct State {
 
 impl State {
     pub fn new() -> Self {
-        Self {
-            sources: HashMap::new(),
-        }
+        Self { sources: HashMap::new() }
     }
 
     pub fn source(&mut self, key: &Path) -> Option<&mut Source> {
@@ -63,14 +61,8 @@ impl Source {
             .into()
         };
 
-        let source = Source {
-            shmem,
-            array_buffer,
-            id_attribute_value,
-            width,
-            height,
-            frame_info,
-        };
+        let source =
+            Source { shmem, array_buffer, id_attribute_value, width, height, frame_info };
 
         Ok(source)
     }

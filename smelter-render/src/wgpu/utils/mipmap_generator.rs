@@ -21,7 +21,8 @@ pub struct MipMapGenerator {
 
 impl MipMapGenerator {
     pub(crate) fn new(device: &wgpu::Device) -> Self {
-        let shader_module = device.create_shader_module(wgpu::include_wgsl!("mipmap_blit.wgsl"));
+        let shader_module =
+            device.create_shader_module(wgpu::include_wgsl!("mipmap_blit.wgsl"));
 
         let single_texture_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -40,14 +41,15 @@ impl MipMapGenerator {
 
         let sampler = Sampler::new(device);
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("MipMapGenerator pipeline layout"),
-            bind_group_layouts: &[
-                Some(&single_texture_layout),
-                Some(&sampler.bind_group_layout),
-            ],
-            immediate_size: 0,
-        });
+        let pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("MipMapGenerator pipeline layout"),
+                bind_group_layouts: &[
+                    Some(&single_texture_layout),
+                    Some(&sampler.bind_group_layout),
+                ],
+                immediate_size: 0,
+            });
 
         let pipeline_unorm = Self::create_pipeline(
             device,
@@ -62,12 +64,7 @@ impl MipMapGenerator {
             wgpu::TextureFormat::Rgba8UnormSrgb,
         );
 
-        Self {
-            pipeline_unorm,
-            pipeline_srgb,
-            sampler,
-            single_texture_layout,
-        }
+        Self { pipeline_unorm, pipeline_srgb, sampler, single_texture_layout }
     }
 
     fn create_pipeline(
@@ -135,11 +132,7 @@ impl MipMapGenerator {
         } else {
             ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("MipMapGenerator mipped texture"),
-                size: wgpu::Extent3d {
-                    width: w,
-                    height: h,
-                    depth_or_array_layers: 1,
-                },
+                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
                 mip_level_count: mip_count,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -165,11 +158,7 @@ impl MipMapGenerator {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::Extent3d {
-                width: w,
-                height: h,
-                depth_or_array_layers: 1,
-            },
+            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
         );
 
         let pipeline = if format == wgpu::TextureFormat::Rgba8UnormSrgb {
@@ -199,22 +188,23 @@ impl MipMapGenerator {
                 }],
             });
 
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("MipMapGenerator blit pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    view: &dst_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut render_pass =
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("MipMapGenerator blit pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        view: &dst_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
 
             render_pass.set_pipeline(pipeline);
             render_pass.set_bind_group(0, &src_bg, &[]);
@@ -224,10 +214,6 @@ impl MipMapGenerator {
 
         let view = mipped_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        MippedTexture {
-            texture: mipped_texture,
-            view,
-            mip_count,
-        }
+        MippedTexture { texture: mipped_texture, view, mip_count }
     }
 }

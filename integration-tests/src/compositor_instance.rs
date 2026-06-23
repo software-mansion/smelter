@@ -70,7 +70,11 @@ impl CompositorInstance {
         instance
     }
 
-    pub fn send_request(&self, path: &str, request_body: serde_json::Value) -> Result<()> {
+    pub fn send_request(
+        &self,
+        path: &str,
+        request_body: serde_json::Value,
+    ) -> Result<()> {
         let resp = self
             .http_client
             .post(format!("http://127.0.0.1:{}/api/{}", self.api_port, path))
@@ -114,7 +118,8 @@ impl CompositorInstance {
 
 fn get_free_port() -> u16 {
     static LAST_PORT: OnceLock<AtomicU16> = OnceLock::new();
-    let port = LAST_PORT.get_or_init(|| AtomicU16::new(10_000 + (rand::random::<u16>() % 10_000)));
+    let port = LAST_PORT
+        .get_or_init(|| AtomicU16::new(10_000 + (rand::random::<u16>() % 10_000)));
     port.fetch_add(1, Ordering::Relaxed)
 }
 

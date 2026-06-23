@@ -14,7 +14,10 @@ pub(super) struct RtcpListeners {
 }
 
 impl RtcpListeners {
-    pub(super) fn start(ctx: &Arc<PipelineCtx>, rtc_receiver: Arc<RTCRtpReceiver>) -> Self {
+    pub(super) fn start(
+        ctx: &Arc<PipelineCtx>,
+        rtc_receiver: Arc<RTCRtpReceiver>,
+    ) -> Self {
         let (sender_report_sender, sender_report_receiver) = mpsc::unbounded_channel();
         ctx.tokio_rt.spawn(async move {
             loop {
@@ -22,7 +25,8 @@ impl RtcpListeners {
                     Ok((packets, _attr)) => {
                         for packet in packets {
                             debug!(?packet, "Received RTCP packet");
-                            if packet.header().packet_type == rtcp::header::PacketType::SenderReport
+                            if packet.header().packet_type
+                                == rtcp::header::PacketType::SenderReport
                             {
                                 let report = packet
                                     .as_any()
@@ -44,8 +48,6 @@ impl RtcpListeners {
                 }
             }
         });
-        Self {
-            sender_report_receiver,
-        }
+        Self { sender_report_receiver }
     }
 }

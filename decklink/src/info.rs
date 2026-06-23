@@ -4,8 +4,8 @@ use crate::{
     enums::{
         self,
         ffi::{
-            FlagAttributeId, FloatConfigurationId, IntegerAttributeId, IntegerConfigurationId,
-            StringAttributeId, StringConfigurationId,
+            FlagAttributeId, FloatConfigurationId, IntegerAttributeId,
+            IntegerConfigurationId, StringAttributeId, StringConfigurationId,
         },
     },
 };
@@ -34,11 +34,7 @@ impl DeckLink {
         };
         let current_profile = self.profile_attributes()?.info()?;
         let configuration = self.configuration()?.info()?;
-        Ok(DeckLinkInfo {
-            current_profile,
-            profiles,
-            configuration,
-        })
+        Ok(DeckLinkInfo { current_profile, profiles, configuration })
     }
 }
 
@@ -85,11 +81,14 @@ impl ProfileAttributes {
             vendor_name: self.get_string(StringAttributeId::VendorName)?,
             display_name: self.get_string(StringAttributeId::DisplayName)?,
             device_handle: self.get_string(StringAttributeId::DeviceHandle)?,
-            ethernet_mac_address: self.get_string(StringAttributeId::EthernetMACAddress)?,
+            ethernet_mac_address: self
+                .get_string(StringAttributeId::EthernetMACAddress)?,
 
             profile_id: self.get_integer(IntegerAttributeId::ProfileID)?,
-            max_audio_channels: self.get_integer(IntegerAttributeId::MaximumAudioChannels)?,
-            number_of_subdevices: self.get_integer(IntegerAttributeId::NumberOfSubDevices)?,
+            max_audio_channels: self
+                .get_integer(IntegerAttributeId::MaximumAudioChannels)?,
+            number_of_subdevices: self
+                .get_integer(IntegerAttributeId::NumberOfSubDevices)?,
             subdevice_index: self.get_integer(IntegerAttributeId::SubDeviceIndex)?,
             persistent_id: self.get_integer(IntegerAttributeId::PersistentID)?,
             persistent_id_hex_str: self
@@ -129,16 +128,21 @@ impl DeckLinkConfiguration {
 
             audio_input_scale: self
                 .get_float(FloatConfigurationId::ConfigDigitalAudioInputScale)?,
-            headphone_volume: self.get_float(FloatConfigurationId::ConfigHeadphoneVolume)?,
+            headphone_volume: self
+                .get_float(FloatConfigurationId::ConfigHeadphoneVolume)?,
 
-            device_label: self.get_string(StringConfigurationId::ConfigDeviceInformationLabel)?,
+            device_label: self
+                .get_string(StringConfigurationId::ConfigDeviceInformationLabel)?,
             device_serial_number: self
                 .get_string(StringConfigurationId::ConfigDeviceInformationSerialNumber)?,
             device_company: self
                 .get_string(StringConfigurationId::ConfigDeviceInformationCompany)?,
-            device_phone: self.get_string(StringConfigurationId::ConfigDeviceInformationPhone)?,
-            device_email: self.get_string(StringConfigurationId::ConfigDeviceInformationEmail)?,
-            device_date: self.get_string(StringConfigurationId::ConfigDeviceInformationDate)?,
+            device_phone: self
+                .get_string(StringConfigurationId::ConfigDeviceInformationPhone)?,
+            device_email: self
+                .get_string(StringConfigurationId::ConfigDeviceInformationEmail)?,
+            device_date: self
+                .get_string(StringConfigurationId::ConfigDeviceInformationDate)?,
         })
     }
 }

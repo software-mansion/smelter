@@ -27,9 +27,8 @@ struct FrameWithPts {
 
 pub fn run() {
     let args = Args::parse();
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .finish();
+    let subscriber =
+        tracing_subscriber::fmt().with_max_level(tracing::Level::INFO).finish();
 
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
@@ -40,10 +39,7 @@ pub fn run() {
 
     let vulkan_instance = VulkanInstance::new().unwrap();
 
-    let surface = vulkan_instance
-        .wgpu_instance()
-        .create_surface(&window)
-        .unwrap();
+    let surface = vulkan_instance.wgpu_instance().create_surface(&window).unwrap();
 
     let vulkan_adapter = vulkan_instance
         .create_adapter(&gpu_video::parameters::VulkanAdapterDescriptor {

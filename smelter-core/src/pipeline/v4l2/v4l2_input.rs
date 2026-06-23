@@ -76,9 +76,12 @@ impl V4l2Input {
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let device_config = V4l2DeviceConfig::initialize(&opts)?;
 
-        let mut stream =
-            MmapStream::with_buffers(&device_config.device, v4l::buffer::Type::VideoCapture, 4)
-                .map_err(V4l2InputError::IoError)?;
+        let mut stream = MmapStream::with_buffers(
+            &device_config.device,
+            v4l::buffer::Type::VideoCapture,
+            4,
+        )
+        .map_err(V4l2InputError::IoError)?;
         // the library recommends to skip the first frame
         stream.next().map_err(V4l2InputError::IoError)?;
 
@@ -106,24 +109,20 @@ impl V4l2Input {
         std::thread::Builder::new()
             .name(format!("V4L2 reader thread for input {input_ref}"))
             .spawn(move || {
-                let _span = span!(Level::INFO, "V4L2", input_id = input_ref.to_string()).entered();
+                let _span = span!(Level::INFO, "V4L2", input_id = input_ref.to_string())
+                    .entered();
                 state.run();
                 info!("Stopping input.");
             })
             .unwrap();
 
-        Ok((
-            Input::V4l2(Self { should_close }),
-            InputInitInfo::Other,
-            queue_input,
-        ))
+        Ok((Input::V4l2(Self { should_close }), InputInitInfo::Other, queue_input))
     }
 }
 
 impl Drop for V4l2Input {
     fn drop(&mut self) {
-        self.should_close
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.should_close.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -157,10 +156,7 @@ impl V4l2DeviceConfig {
             .map_err(|e| V4l2InputError::OpeningDeviceFailed(opts.path.clone(), e))?;
 
         let caps = device.query_caps().map_err(V4l2InputError::IoError)?;
-        if !caps
-            .capabilities
-            .contains(v4l::capability::Flags::VIDEO_CAPTURE)
-        {
+        if !caps.capabilities.contains(v4l::capability::Flags::VIDEO_CAPTURE) {
             return Err(V4l2InputError::CaptureNotSupported);
         }
 
@@ -181,26 +177,24 @@ impl V4l2DeviceConfig {
             Self::try_set_framerate(&device, framerate, &opts.path)?;
         }
 
-        Ok(Self {
-            device,
-            resolution,
-            format,
-        })
+        Ok(Self { device, resolution, format })
     }
 
-    fn try_set_format(device: &Device, format: V4l2Format) -> Result<V4l2Format, V4l2InputError> {
+    fn try_set_format(
+        device: &Device,
+        format: V4l2Format,
+    ) -> Result<V4l2Format, V4l2InputError> {
         let requested_fourcc = format.into();
         let current_format = device.format()?;
 
-        let negotiated_format = device.set_format(&Format {
-            fourcc: format.into(),
-            ..current_format
-        })?;
+        let negotiated_format =
+            device.set_format(&Format { fourcc: format.into(), ..current_format })?;
 
         if negotiated_format.fourcc != requested_fourcc {
             warn!(
                 requested_format = requested_fourcc.str().unwrap_or("<unknown format>"),
-                configured_format = negotiated_format.fourcc.str().unwrap_or("<unknown format>"),
+                configured_format =
+                    negotiated_format.fourcc.str().unwrap_or("<unknown format>"),
                 "Failed to configure requested format.",
             );
         }
@@ -263,7 +257,9 @@ impl V4l2DeviceConfig {
             den: negotiated_params.interval.numerator,
         };
 
-        if negotiated_framerate.num != framerate.num || negotiated_framerate.den != framerate.den {
+        if negotiated_framerate.num != framerate.num
+            || negotiated_framerate.den != framerate.den
+        {
             warn!(
                 requested_framerate = ?framerate,
                 configured_framerate = ?negotiated_framerate,
@@ -298,17 +294,18 @@ impl InputState<'_> {
                 }
             };
 
-            let V4l2DeviceConfig {
-                resolution, format, ..
-            } = &self.config;
+            let V4l2DeviceConfig { resolution, format, .. } = &self.config;
 
             // Some devices, most notably the OBS virtual camera, stuck extra bytes at the
             // end of the data they send. Because of this, we allow up to a 1% mismatch
             // between the expected and actual data lengths in both the YUYV and NV12 implementations.
             let data = match format {
                 V4l2Format::Yuyv => {
-                    let expected_length = (resolution.width * resolution.height * 2) as f64;
-                    if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
+                    let expected_length =
+                        (resolution.width * resolution.height * 2) as f64;
+                    if (frame.len() as f64 - expected_length).abs()
+                        > expected_length * 0.01
+                    {
                         if let Err(err) = self.config.refresh_format() {
                             error!(%err, "Error when trying to refresh parameters.");
                             return;
@@ -322,7 +319,9 @@ impl InputState<'_> {
                 V4l2Format::Nv12 => {
                     let y_length = resolution.width * resolution.height;
                     let expected_length = y_length as f64 * 1.5;
-                    if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
+                    if (frame.len() as f64 - expected_length).abs()
+                        > expected_length * 0.01
+                    {
                         if let Err(err) = self.config.refresh_format() {
                             error!(%err, "Fatal error when trying to refresh parameters.");
                             return;
@@ -403,10 +402,7 @@ fn read_device(path: Arc<Path>) -> Result<Option<V4l2DeviceInfo>, V4l2InputError
         return Ok(None);
     };
 
-    if !caps
-        .capabilities
-        .contains(v4l::capability::Flags::VIDEO_CAPTURE)
-    {
+    if !caps.capabilities.contains(v4l::capability::Flags::VIDEO_CAPTURE) {
         return Ok(None);
     }
 
@@ -418,11 +414,7 @@ fn read_device(path: Arc<Path>) -> Result<Option<V4l2DeviceInfo>, V4l2InputError
         }
     }
 
-    Ok(Some(V4l2DeviceInfo {
-        path,
-        name: caps.card,
-        formats,
-    }))
+    Ok(Some(V4l2DeviceInfo { path, name: caps.card, formats }))
 }
 
 fn read_format(
@@ -439,16 +431,15 @@ fn read_format(
 
     for framesize in device.enum_framesizes(fourcc)? {
         for framesize in framesize.size.to_discrete() {
-            if let Some(resolution_info) = read_framesize(device, path, fourcc, framesize)? {
+            if let Some(resolution_info) =
+                read_framesize(device, path, fourcc, framesize)?
+            {
                 resolutions.push(resolution_info);
             }
         }
     }
 
-    Ok(Some(V4l2FormatInfo {
-        format,
-        resolutions,
-    }))
+    Ok(Some(V4l2FormatInfo { format, resolutions }))
 }
 
 fn read_framesize(
@@ -459,15 +450,17 @@ fn read_framesize(
 ) -> Result<Option<V4l2ResolutionInfo>, V4l2InputError> {
     let mut framerates = Vec::new();
 
-    for framerate in device.enum_frameintervals(fourcc, framesize.width, framesize.height)? {
+    for framerate in
+        device.enum_frameintervals(fourcc, framesize.width, framesize.height)?
+    {
         match framerate.interval {
-            FrameIntervalEnum::Discrete(interval) => framerates.push(Framerate {
-                num: interval.denominator,
-                den: interval.numerator,
-            }),
+            FrameIntervalEnum::Discrete(interval) => framerates
+                .push(Framerate { num: interval.denominator, den: interval.numerator }),
 
             FrameIntervalEnum::Stepwise(stepwise) => {
-                if let Some(framerates_iter) = read_stepwise_frame_interval(path, stepwise) {
+                if let Some(framerates_iter) =
+                    read_stepwise_frame_interval(path, stepwise)
+                {
                     framerates.extend(framerates_iter)
                 }
             }

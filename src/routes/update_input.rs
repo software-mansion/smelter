@@ -47,9 +47,10 @@ pub async fn handle_input_update(
         .transpose()
         .map_err(|err| TypeError::new(format!("Invalid seek duration. {err}")))?;
 
-    api.pipeline()?
-        .lock()
-        .unwrap()
-        .update_input(&input_id.into(), request.pause, seek)?;
+    api.pipeline()?.lock().unwrap().update_input(
+        &input_id.into(),
+        request.pause,
+        seek,
+    )?;
     Ok(Response::Ok {})
 }

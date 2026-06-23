@@ -299,12 +299,7 @@ pub struct Shader {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
-#[serde(
-    tag = "type",
-    rename_all = "snake_case",
-    content = "value",
-    deny_unknown_fields
-)]
+#[serde(tag = "type", rename_all = "snake_case", content = "value", deny_unknown_fields)]
 pub enum ShaderParam {
     F32(f32),
     U32(u32),

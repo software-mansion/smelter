@@ -60,10 +60,7 @@ impl TryFrom<AudioSceneInput> for core::AudioMixerInputConfig {
         {
             return Err(TypeError::new("Input volume has to be in [0, 2] range."));
         }
-        Ok(Self {
-            input_id: value.input_id.into(),
-            volume: value.volume.unwrap_or(1.0),
-        })
+        Ok(Self { input_id: value.input_id.into(), volume: value.volume.unwrap_or(1.0) })
     }
 }
 

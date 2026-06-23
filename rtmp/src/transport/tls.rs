@@ -64,18 +64,20 @@ pub(crate) struct TlsServerStream(StreamOwned<ServerConnection, TcpStream>);
 impl TlsServerStream {
     pub fn new(socket: TcpStream, tls: &TlsConfig) -> Result<Self, RtmpConnectionError> {
         let certs = CertificateDer::pem_file_iter(tls.cert_file.as_ref())
-            .map_err(|e| RtmpConnectionError::TlsConfig(format!("Failed to read cert file: {e}")))?
+            .map_err(|e| {
+                RtmpConnectionError::TlsConfig(format!("Failed to read cert file: {e}"))
+            })?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 RtmpConnectionError::TlsConfig(format!("Failed to parse cert file: {e}"))
             })?;
 
-        let key = PrivateKeyDer::from_pem_file(tls.key_file.as_ref())
-            .map_err(|e| RtmpConnectionError::TlsConfig(format!("Failed to read key file: {e}")))?;
+        let key = PrivateKeyDer::from_pem_file(tls.key_file.as_ref()).map_err(|e| {
+            RtmpConnectionError::TlsConfig(format!("Failed to read key file: {e}"))
+        })?;
 
-        let config = ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(certs, key)?;
+        let config =
+            ServerConfig::builder().with_no_client_auth().with_single_cert(certs, key)?;
 
         let conn = ServerConnection::new(Arc::new(config))?;
         Ok(Self(StreamOwned::new(conn, socket)))

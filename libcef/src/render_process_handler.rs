@@ -9,7 +9,13 @@ use crate::{
 /// Methods are only called by CEF when implemented on the renderer process
 pub trait RenderProcessHandler {
     /// Called when a new [`V8Context`] for a [`Frame`] was created
-    fn on_context_created(&mut self, _browser: &Browser, _frame: &Frame, _context: &V8Context) {}
+    fn on_context_created(
+        &mut self,
+        _browser: &Browser,
+        _frame: &Frame,
+        _context: &V8Context,
+    ) {
+    }
 
     /// Called when new process message is received.
     /// Return `true` if message was handled, `false` otherwise
@@ -46,7 +52,9 @@ impl<R: RenderProcessHandler> CefStruct for RenderProcessHandlerWrapper<R> {
         }
     }
 
-    fn base_from_cef_data(cef_data: &mut Self::CefType) -> &mut libcef_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut libcef_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }
@@ -76,9 +84,7 @@ impl<R: RenderProcessHandler> RenderProcessHandlerWrapper<R> {
 
         let browser = Browser::new(browser);
         let frame = Frame::new(frame);
-        let message = ProcessMessage {
-            inner: CefRc::new(message),
-        };
+        let message = ProcessMessage { inner: CefRc::new(message) };
 
         let is_handled = self_ref.0.on_process_message_received(
             &browser,

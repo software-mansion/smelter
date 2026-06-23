@@ -102,7 +102,8 @@ impl VideoQueueExt for ash::khr::video_queue::Device {
         }
 
         let mut memory_requirements = vec![
-            vk::VideoSessionMemoryRequirementsKHR::default();
+            vk::VideoSessionMemoryRequirementsKHR::default(
+            );
             memory_requirements_len as usize
         ];
 
@@ -203,8 +204,12 @@ impl VideoQueueExt for ash::khr::video_queue::Device {
         update_info: &vk::VideoSessionParametersUpdateInfoKHR,
     ) -> VkResult<()> {
         unsafe {
-            (self.fp().update_video_session_parameters_khr)(self.device(), parameters, update_info)
-                .result()
+            (self.fp().update_video_session_parameters_khr)(
+                self.device(),
+                parameters,
+                update_info,
+            )
+            .result()
         }
     }
 }

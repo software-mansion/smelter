@@ -67,11 +67,13 @@ impl Image {
                 Image::Svg(Arc::new(asset))
             }
             ImageType::Gif => {
-                let asset = AnimatedAsset::new(&ctx.wgpu_ctx, file.clone(), ImageFormat::Gif);
+                let asset =
+                    AnimatedAsset::new(&ctx.wgpu_ctx, file.clone(), ImageFormat::Gif);
                 match asset {
                     Ok(asset) => Image::Animated(Arc::new(asset)),
                     Err(AnimatedError::SingleFrame) => {
-                        let asset = BitmapAsset::new(&ctx.wgpu_ctx, file, ImageFormat::Gif)?;
+                        let asset =
+                            BitmapAsset::new(&ctx.wgpu_ctx, file, ImageFormat::Gif)?;
                         Image::Bitmap(Arc::new(asset))
                     }
                     Err(err) => return Err(ImageError::from(err)),
@@ -81,23 +83,30 @@ impl Image {
                 let format = match image::guess_format(&file) {
                     Ok(format) => format,
                     Err(_) => {
-                        let asset = SvgAsset::new(&ctx.wgpu_ctx, file).map_err(|err| {
-                            debug!("{:?}", err);
-                            ImageError::UnsupportedFormat
-                        })?;
+                        let asset =
+                            SvgAsset::new(&ctx.wgpu_ctx, file).map_err(|err| {
+                                debug!("{:?}", err);
+                                ImageError::UnsupportedFormat
+                            })?;
                         return Ok(Image::Svg(Arc::new(asset)));
                     }
                 };
 
                 match format {
                     ImageFormat::Gif => {
-                        let asset =
-                            AnimatedAsset::new(&ctx.wgpu_ctx, file.clone(), ImageFormat::Gif);
+                        let asset = AnimatedAsset::new(
+                            &ctx.wgpu_ctx,
+                            file.clone(),
+                            ImageFormat::Gif,
+                        );
                         match asset {
                             Ok(asset) => Image::Animated(Arc::new(asset)),
                             Err(AnimatedError::SingleFrame) => {
-                                let asset =
-                                    BitmapAsset::new(&ctx.wgpu_ctx, file, ImageFormat::Gif)?;
+                                let asset = BitmapAsset::new(
+                                    &ctx.wgpu_ctx,
+                                    file,
+                                    ImageFormat::Gif,
+                                )?;
                                 Image::Bitmap(Arc::new(asset))
                             }
                             Err(err) => return Err(ImageError::from(err)),
@@ -143,27 +152,17 @@ impl Image {
 }
 
 pub enum ImageNode {
-    Bitmap {
-        asset: Arc<BitmapAsset>,
-        state: BitmapNodeState,
-    },
-    Animated {
-        asset: Arc<AnimatedAsset>,
-        state: AnimatedNodeState,
-    },
-    Svg {
-        asset: Arc<SvgAsset>,
-        state: Box<SvgNodeState>,
-    },
+    Bitmap { asset: Arc<BitmapAsset>, state: BitmapNodeState },
+    Animated { asset: Arc<AnimatedAsset>, state: AnimatedNodeState },
+    Svg { asset: Arc<SvgAsset>, state: Box<SvgNodeState> },
 }
 
 impl ImageNode {
     pub fn new(ctx: &WgpuCtx, image: ImageRenderParams) -> Self {
         match image.image {
-            Image::Bitmap(asset) => Self::Bitmap {
-                asset,
-                state: BitmapNodeState::new(image.resolution),
-            },
+            Image::Bitmap(asset) => {
+                Self::Bitmap { asset, state: BitmapNodeState::new(image.resolution) }
+            }
             Image::Animated(asset) => Self::Animated {
                 asset,
                 state: AnimatedNodeState::new(image.start_pts, image.resolution),
@@ -175,14 +174,23 @@ impl ImageNode {
         }
     }
 
-    pub fn render(&mut self, ctx: &mut RenderCtx, target: &mut NodeTexture, pts: Duration) {
+    pub fn render(
+        &mut self,
+        ctx: &mut RenderCtx,
+        target: &mut NodeTexture,
+        pts: Duration,
+    ) {
         let target = target.ensure_size(ctx.wgpu_ctx, self.resolution());
         match self {
-            ImageNode::Bitmap { asset, state, .. } => asset.render(ctx.wgpu_ctx, target, state),
+            ImageNode::Bitmap { asset, state, .. } => {
+                asset.render(ctx.wgpu_ctx, target, state)
+            }
             ImageNode::Animated { asset, state, .. } => {
                 asset.render(ctx.wgpu_ctx, target, state, pts)
             }
-            ImageNode::Svg { asset, state, .. } => asset.render(ctx.wgpu_ctx, target, state),
+            ImageNode::Svg { asset, state, .. } => {
+                asset.render(ctx.wgpu_ctx, target, state)
+            }
         }
     }
 

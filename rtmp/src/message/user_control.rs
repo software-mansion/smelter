@@ -14,10 +14,7 @@ pub(crate) enum UserControlMessage {
     StreamDry { stream_id: u32 },
     /// Client -> Server
     /// Send before server starts to process stream.
-    SetBufferLength {
-        stream_id: u32,
-        buffer_duration: Duration,
-    },
+    SetBufferLength { stream_id: u32, buffer_duration: Duration },
     /// Server -> Client
     StreamIsRecorded { stream_id: u32 },
     /// Server -> Client
@@ -95,10 +92,7 @@ impl UserControlMessage {
                 result.put_u16(UserControlMessageKind::StreamDry.into_raw());
                 result.put_u32(stream_id);
             }
-            UserControlMessage::SetBufferLength {
-                stream_id,
-                buffer_duration,
-            } => {
+            UserControlMessage::SetBufferLength { stream_id, buffer_duration } => {
                 result.put_u16(UserControlMessageKind::SetBufferLength.into_raw());
                 result.put_u32(stream_id);
                 result.put_u32(buffer_duration.as_millis() as u32);

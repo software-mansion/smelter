@@ -58,10 +58,7 @@ impl Benchmark {
             }
         }
 
-        BenchmarkResult {
-            id: self.id,
-            pass: last_valid_pass,
-        }
+        BenchmarkResult { id: self.id, pass: last_valid_pass }
     }
 }
 

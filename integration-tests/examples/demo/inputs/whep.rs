@@ -50,10 +50,7 @@ impl From<WhepInputOptions> for WhepInput {
     fn from(value: WhepInputOptions) -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("input_whep_{suffix}");
-        Self {
-            name,
-            options: value,
-        }
+        Self { name, options: value }
     }
 }
 
@@ -69,12 +66,7 @@ impl WhepInput {
     }
 
     pub fn serialize_register(&self) -> serde_json::Value {
-        let WhepInputOptions {
-            endpoint_url,
-            bearer_token,
-            video,
-            ..
-        } = &self.options;
+        let WhepInputOptions { endpoint_url, bearer_token, video, .. } = &self.options;
         json!({
             "type": "whep_client",
             "endpoint_url": endpoint_url,
@@ -138,10 +130,7 @@ impl WhepInputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_video()?
-            .prompt_player()?
-            .prompt_url()?
-            .prompt_bearer_token()
+        self.prompt_video()?.prompt_player()?.prompt_url()?.prompt_bearer_token()
     }
 
     fn prompt_player(self) -> Result<Self> {
@@ -165,7 +154,9 @@ impl WhepInputBuilder {
                         .prompt_skippable()?;
 
                 match endpoint_url_input {
-                    Some(url) if !url.trim().is_empty() => Ok(self.with_endpoint_url(url)),
+                    Some(url) if !url.trim().is_empty() => {
+                        Ok(self.with_endpoint_url(url))
+                    }
                     Some(_) | None => Ok(self),
                 }
             }
@@ -188,15 +179,18 @@ impl WhepInputBuilder {
             println!("4. Open network tab in dev tools and reload if necessary.");
             println!("5. Paste copied Fishjam ID in the appropriate input field.");
             println!("6. Start streaming and press \"Connect to stream\".");
-            println!("7. In dev tools search for the request named \"whep\" using POST method.");
+            println!(
+                "7. In dev tools search for the request named \"whep\" using POST method."
+            );
             println!(
                 "8. In \"Request headers\" section find \"Authorization\" header and copy a token from there."
             );
             println!("9. Disconnect from watching the stream before pasting the token.");
         }
-        let token_input = Text::new("Enter the WHEP bearer token. (ESC for \"example\"):")
-            .with_initial_value(&env_token)
-            .prompt_skippable()?;
+        let token_input =
+            Text::new("Enter the WHEP bearer token. (ESC for \"example\"):")
+                .with_initial_value(&env_token)
+                .prompt_skippable()?;
         match token_input {
             Some(token) if !token.trim().is_empty() => Ok(self.with_bearer_token(token)),
             Some(_) | None => Ok(self.with_bearer_token("example".to_string())),
@@ -205,7 +199,8 @@ impl WhepInputBuilder {
 
     fn prompt_video(self) -> Result<Self> {
         let video_options = WhepRegisterOptions::iter().collect();
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+        let video_selection =
+            Select::new("Set video stream?", video_options).prompt_skippable()?;
 
         match video_selection {
             Some(WhepRegisterOptions::SetVideoStream) => {
@@ -266,10 +261,7 @@ impl WhepInputBuilder {
             video: self.video,
             player: self.player,
         };
-        WhepInput {
-            name: self.name,
-            options,
-        }
+        WhepInput { name: self.name, options }
     }
 }
 

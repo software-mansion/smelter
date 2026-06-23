@@ -28,7 +28,8 @@ impl PacketSender {
             )?,
         };
 
-        socket.connect(&SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), port).into())?;
+        socket
+            .connect(&SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), port).into())?;
 
         Ok(Self { protocol, socket })
     }
@@ -49,8 +50,10 @@ impl PacketSender {
     fn send_via_udp(&mut self, rtp_packets: &[u8]) -> Result<()> {
         let mut sent_bytes = 0;
         while sent_bytes < rtp_packets.len() {
-            let packet_len =
-                u16::from_be_bytes([rtp_packets[sent_bytes], rtp_packets[sent_bytes + 1]]) as usize;
+            let packet_len = u16::from_be_bytes([
+                rtp_packets[sent_bytes],
+                rtp_packets[sent_bytes + 1],
+            ]) as usize;
             sent_bytes += 2;
 
             let packet = &rtp_packets[sent_bytes..(sent_bytes + packet_len)];

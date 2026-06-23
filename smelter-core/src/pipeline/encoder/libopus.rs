@@ -47,7 +47,8 @@ impl AudioEncoder for OpusEncoder {
         // `get_lookahead` returns input-rate samples; scale or decoders miss
         // part of the pre-roll on sub-48 kHz streams. Matches ffmpeg's
         // `libavcodec/libopusenc.c:100`.
-        let pre_skip = (encoder.get_lookahead()? as u32 * 48_000 / options.sample_rate) as u16;
+        let pre_skip =
+            (encoder.get_lookahead()? as u32 * 48_000 / options.sample_rate) as u16;
         let extradata = opus_head(options.channels, options.sample_rate, pre_skip);
 
         let output_buffer = vec![0u8; 1024 * 1024];
@@ -61,9 +62,7 @@ impl AudioEncoder for OpusEncoder {
                 first_input_pts: None,
                 encoded_samples: 0,
             },
-            AudioEncoderConfig {
-                extradata: Some(extradata),
-            },
+            AudioEncoderConfig { extradata: Some(extradata) },
         ))
     }
 
@@ -94,10 +93,9 @@ impl OpusEncoder {
         {
             let samples = self.input_buffer.read_samples(SAMPLES_PER_BATCH);
             let raw_samples: Vec<_> = match samples {
-                AudioSamples::Mono(samples) => samples
-                    .iter()
-                    .map(|val| (*val * i16::MAX as f64) as i16)
-                    .collect(),
+                AudioSamples::Mono(samples) => {
+                    samples.iter().map(|val| (*val * i16::MAX as f64) as i16).collect()
+                }
                 AudioSamples::Stereo(samples) => samples
                     .iter()
                     .flat_map(|(l, r)| {

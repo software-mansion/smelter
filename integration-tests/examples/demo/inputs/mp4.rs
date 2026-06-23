@@ -8,7 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 
-use crate::{autocompletion::FilePathCompleter, inputs::VideoDecoder, utils::resolve_path};
+use crate::{
+    autocompletion::FilePathCompleter, inputs::VideoDecoder, utils::resolve_path,
+};
 
 const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 
@@ -34,10 +36,7 @@ impl From<Mp4InputOptions> for Mp4Input {
     fn from(value: Mp4InputOptions) -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("mp4_input_{suffix}");
-        Self {
-            name,
-            options: value,
-        }
+        Self { name, options: value }
     }
 }
 
@@ -49,12 +48,7 @@ impl From<Mp4Input> for Mp4InputOptions {
 
 impl Mp4Input {
     pub fn serialize_register(&self) -> serde_json::Value {
-        let Mp4InputOptions {
-            ref source,
-            input_loop,
-            decoder,
-            seek_ms,
-        } = self.options;
+        let Mp4InputOptions { ref source, input_loop, decoder, seek_ms } = self.options;
         let (source_key, source_val) = source.serialize();
         json!({
             "type": "mp4",
@@ -128,20 +122,18 @@ impl Mp4InputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_source()?
-            .prompt_decoder()?
-            .prompt_loop()?
-            .prompt_seek()
+        self.prompt_source()?.prompt_decoder()?.prompt_loop()?.prompt_seek()
     }
 
     fn prompt_source(self) -> Result<Self> {
         let env_source = env::var(MP4_INPUT_SOURCE).unwrap_or_default();
 
         loop {
-            let source_input = Text::new("Input path or url (ESC for \"Big Buck Bunny\"):")
-                .with_autocomplete(FilePathCompleter::default())
-                .with_initial_value(&env_source)
-                .prompt_skippable()?;
+            let source_input =
+                Text::new("Input path or url (ESC for \"Big Buck Bunny\"):")
+                    .with_autocomplete(FilePathCompleter::default())
+                    .with_initial_value(&env_source)
+                    .prompt_skippable()?;
 
             match source_input {
                 Some(source_str) if !source_str.trim().is_empty() => {
@@ -179,9 +171,8 @@ impl Mp4InputBuilder {
     }
 
     fn prompt_loop(self) -> Result<Self> {
-        let loop_selection = Confirm::new("Loop input [y/N]:")
-            .with_default(false)
-            .prompt_skippable()?;
+        let loop_selection =
+            Confirm::new("Loop input [y/N]:").with_default(false).prompt_skippable()?;
         match loop_selection {
             Some(r#loop) => Ok(self.with_loop(r#loop)),
             None => Ok(self),
@@ -189,7 +180,8 @@ impl Mp4InputBuilder {
     }
 
     fn prompt_seek(self) -> Result<Self> {
-        let seek_input = Text::new("Seek position in ms (ESC for none):").prompt_skippable()?;
+        let seek_input =
+            Text::new("Seek position in ms (ESC for none):").prompt_skippable()?;
         match seek_input {
             Some(s) if !s.trim().is_empty() => {
                 let ms: f64 = s.trim().parse()?;
@@ -226,9 +218,6 @@ impl Mp4InputBuilder {
             input_loop: self.input_loop,
             seek_ms: self.seek_ms,
         };
-        Mp4Input {
-            name: self.name,
-            options,
-        }
+        Mp4Input { name: self.name, options }
     }
 }

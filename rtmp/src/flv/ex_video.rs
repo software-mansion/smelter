@@ -174,17 +174,13 @@ impl ExVideoTag {
         let packet_type = ExVideoPacketType::from_raw(data[0] & 0b00001111)?;
 
         // Process ModEx to resolve the final packet type and collect modifiers.
-        let (packet_type, rest, timestamp_offset_nanos) = if packet_type == ExVideoPacketType::ModEx
-        {
-            let result = resolve_mod_ex(data.slice(1..))?;
-            (
-                result.packet_type,
-                result.remaining,
-                result.timestamp_offset_nanos,
-            )
-        } else {
-            (packet_type, data.slice(1..), None)
-        };
+        let (packet_type, rest, timestamp_offset_nanos) =
+            if packet_type == ExVideoPacketType::ModEx {
+                let result = resolve_mod_ex(data.slice(1..))?;
+                (result.packet_type, result.remaining, result.timestamp_offset_nanos)
+            } else {
+                (packet_type, data.slice(1..), None)
+            };
 
         // Per spec: if frame_type is Command and packet_type is not Metadata,
         // the payload is a single UI8 VideoCommand with no FourCC or video body.
@@ -214,11 +210,12 @@ impl ExVideoTag {
 
         let packet = match packet_type {
             ExVideoPacketType::SequenceStart => ExVideoPacket::SequenceStart(body_data),
-            ExVideoPacketType::CodedFrames => Self::parse_coded_frames(body_data, four_cc)?,
-            ExVideoPacketType::CodedFramesX => ExVideoPacket::CodedFrames {
-                composition_time: 0,
-                data: body_data,
-            },
+            ExVideoPacketType::CodedFrames => {
+                Self::parse_coded_frames(body_data, four_cc)?
+            }
+            ExVideoPacketType::CodedFramesX => {
+                ExVideoPacket::CodedFrames { composition_time: 0, data: body_data }
+            }
             ExVideoPacketType::SequenceEnd => ExVideoPacket::SequenceEnd,
             ExVideoPacketType::Metadata => ExVideoPacket::Metadata(body_data),
             ExVideoPacketType::Mpeg2TsSequenceStart => {
@@ -235,12 +232,7 @@ impl ExVideoTag {
             }
         };
 
-        Ok(ExVideoTag::VideoBody {
-            four_cc,
-            packet,
-            frame_type,
-            timestamp_offset_nanos,
-        })
+        Ok(ExVideoTag::VideoBody { four_cc, packet, frame_type, timestamp_offset_nanos })
     }
 
     /// Parses CodedFrames body. AVC, HEVC, and VVC include a 3-byte signed
@@ -255,15 +247,9 @@ impl ExVideoTag {
                 return Err(FlvVideoTagParseError::TooShort);
             }
             let composition_time = parse_composition_time(&data[0..3]);
-            Ok(ExVideoPacket::CodedFrames {
-                composition_time,
-                data: data.slice(3..),
-            })
+            Ok(ExVideoPacket::CodedFrames { composition_time, data: data.slice(3..) })
         } else {
-            Ok(ExVideoPacket::CodedFrames {
-                composition_time: 0,
-                data,
-            })
+            Ok(ExVideoPacket::CodedFrames { composition_time: 0, data })
         }
     }
 
@@ -292,10 +278,10 @@ impl ExVideoTag {
                 timestamp_offset_nanos,
             } => {
                 let (wire_packet_type, needs_composition_time) = match packet {
-                    ExVideoPacket::SequenceStart(_) => (ExVideoPacketType::SequenceStart, false),
-                    ExVideoPacket::CodedFrames {
-                        composition_time, ..
-                    } => {
+                    ExVideoPacket::SequenceStart(_) => {
+                        (ExVideoPacketType::SequenceStart, false)
+                    }
+                    ExVideoPacket::CodedFrames { composition_time, .. } => {
                         if !four_cc.has_composition_time() {
                             // VP8/VP9/AV1: no composition time on wire
                             (ExVideoPacketType::CodedFrames, false)
@@ -316,14 +302,12 @@ impl ExVideoTag {
                 };
 
                 let has_mod_ex = timestamp_offset_nanos.is_some();
-                let header_packet_type = if has_mod_ex {
-                    ExVideoPacketType::ModEx
-                } else {
-                    wire_packet_type
-                };
+                let header_packet_type =
+                    if has_mod_ex { ExVideoPacketType::ModEx } else { wire_packet_type };
 
-                let first_byte =
-                    EX_HEADER_BIT | (frame_type.into_raw() << 4) | header_packet_type.into_raw();
+                let first_byte = EX_HEADER_BIT
+                    | (frame_type.into_raw() << 4)
+                    | header_packet_type.into_raw();
 
                 let body_data = match packet {
                     ExVideoPacket::SequenceStart(data) => &data[..],
@@ -349,7 +333,8 @@ impl ExVideoTag {
                 // ModEx wire overhead: 1 (size) + payload + 1 (type byte)
                 let mod_ex_size = mod_ex_data.as_ref().map_or(0, |data| data.len() + 2);
                 let composition_time_size = if needs_composition_time { 3 } else { 0 };
-                let capacity = 1 + mod_ex_size + 4 + composition_time_size + body_data.len();
+                let capacity =
+                    1 + mod_ex_size + 4 + composition_time_size + body_data.len();
 
                 let mut buf = BytesMut::with_capacity(capacity);
                 buf.put_u8(first_byte);
@@ -366,9 +351,7 @@ impl ExVideoTag {
                 buf.put(&four_cc.into_raw()[..]);
 
                 if needs_composition_time
-                    && let ExVideoPacket::CodedFrames {
-                        composition_time, ..
-                    } = packet
+                    && let ExVideoPacket::CodedFrames { composition_time, .. } = packet
                 {
                     serialize_composition_time(&mut buf, *composition_time);
                 }

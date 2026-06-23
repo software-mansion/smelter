@@ -5,12 +5,7 @@ impl TryFrom<HlsOutput> for core::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: HlsOutput) -> Result<Self, Self::Error> {
-        let HlsOutput {
-            path,
-            max_playlist_size,
-            video,
-            audio,
-        } = request;
+        let HlsOutput { path, max_playlist_size, video, audio } = request;
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(
@@ -99,22 +94,23 @@ impl HlsVideoEncoderOptions {
                     .collect(),
                 bitstream_format: core::H264BitstreamFormat::AnnexB,
             }),
-            HlsVideoEncoderOptions::VulkanH264 {
-                bitrate,
-                keyframe_interval_ms,
-            } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
-                resolution: resolution.into(),
-                bitrate: bitrate
-                    .map(|bitrate| {
-                        Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
-                            bitrate.try_into()?,
-                        ))
-                    })
-                    .transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
-                preset: core::VulkanH264EncoderPreset::HighQuality,
-                bitstream_format: core::H264BitstreamFormat::AnnexB,
-            }),
+            HlsVideoEncoderOptions::VulkanH264 { bitrate, keyframe_interval_ms } => {
+                core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
+                    resolution: resolution.into(),
+                    bitrate: bitrate
+                        .map(|bitrate| {
+                            Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
+                                bitrate.try_into()?,
+                            ))
+                        })
+                        .transpose()?,
+                    keyframe_interval: duration_from_keyframe_interval(
+                        keyframe_interval_ms,
+                    )?,
+                    preset: core::VulkanH264EncoderPreset::HighQuality,
+                    bitstream_format: core::H264BitstreamFormat::AnnexB,
+                })
+            }
         };
         Ok(encoder_options)
     }

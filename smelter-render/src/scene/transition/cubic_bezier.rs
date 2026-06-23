@@ -10,7 +10,8 @@ pub fn cubic_bezier_easing(progress: f64, x1: f64, y1: f64, x2: f64, y2: f64) ->
         return 1.0;
     }
 
-    let t = find_first_cubic_root(-progress, x1 - progress, x2 - progress, 1.0 - progress);
+    let t =
+        find_first_cubic_root(-progress, x1 - progress, x2 - progress, 1.0 - progress);
     if t.is_nan() {
         // TODO(noituri): IDK how to handle this case
         return 1.0;
@@ -78,12 +79,14 @@ fn find_first_cubic_root(p0: f64, p1: f64, p2: f64, p3: f64) -> f64 {
             return root;
         }
 
-        let root = (t1 * f64::cos((phi + 2.0 * PI) / 3.0) - a3).clamp_valid_root_in_unit_range();
+        let root =
+            (t1 * f64::cos((phi + 2.0 * PI) / 3.0) - a3).clamp_valid_root_in_unit_range();
         if !root.is_nan() {
             return root;
         }
 
-        return (t1 * f64::cos((phi + 4.0 * PI) / 3.0) - a3).clamp_valid_root_in_unit_range();
+        return (t1 * f64::cos((phi + 4.0 * PI) / 3.0) - a3)
+            .clamp_valid_root_in_unit_range();
     }
 
     if discriminant == 0.0 {
@@ -116,17 +119,9 @@ impl F64Ext for f64 {
 
     fn clamp_valid_root_in_unit_range(self) -> Self {
         if self < 0.0 {
-            if self >= -ALLOWED_FLOATING_ERROR {
-                0.0
-            } else {
-                f64::NAN
-            }
+            if self >= -ALLOWED_FLOATING_ERROR { 0.0 } else { f64::NAN }
         } else if self > 1.0 {
-            if self <= 1.0 + ALLOWED_FLOATING_ERROR {
-                1.0
-            } else {
-                f64::NAN
-            }
+            if self <= 1.0 + ALLOWED_FLOATING_ERROR { 1.0 } else { f64::NAN }
         } else {
             self
         }
@@ -142,7 +137,10 @@ mod test {
         assert!(cubic_bezier_easing(0.0, 0.0, 0.0, 1.0, 1.0).is_close_to(0.0));
         assert!(cubic_bezier_easing(1.0, 0.0, 0.0, 1.0, 1.0).is_close_to(1.0));
         assert!(cubic_bezier_easing(0.5, 0.0, 0.0, 1.0, 1.0).is_close_to(0.5));
-        assert!(cubic_bezier_easing(0.294, 0.25, 0.1, 0.25, 1.0).is_close_to(0.5014012915764126));
+        assert!(
+            cubic_bezier_easing(0.294, 0.25, 0.1, 0.25, 1.0)
+                .is_close_to(0.5014012915764126)
+        );
         assert!(cubic_bezier_easing(0.5, 0.85, 0.0, 0.15, 1.0).is_close_to(0.5));
     }
 }

@@ -43,7 +43,12 @@ impl Context {
         let app = CefRefData::new_ptr(AppWrapper::new(app));
 
         let init_result = unsafe {
-            libcef_sys::cef_initialize(main_args.raw_mut(), &settings, app, std::ptr::null_mut())
+            libcef_sys::cef_initialize(
+                main_args.raw_mut(),
+                &settings,
+                app,
+                std::ptr::null_mut(),
+            )
         };
 
         if init_result != 1 {
@@ -88,7 +93,13 @@ impl Context {
     pub fn execute_process<A: App>(&self, app: A) -> i32 {
         let mut main_args = MainArgs::from_program_args();
         let app = CefRefData::new_ptr(AppWrapper::new(app));
-        unsafe { libcef_sys::cef_execute_process(main_args.raw_mut(), app, std::ptr::null_mut()) }
+        unsafe {
+            libcef_sys::cef_execute_process(
+                main_args.raw_mut(),
+                app,
+                std::ptr::null_mut(),
+            )
+        }
     }
 
     pub fn start_browser<C: Client>(

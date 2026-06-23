@@ -23,7 +23,11 @@ impl VideoEncoder for QuickSyncH264Encoder {
         ))
     }
 
-    fn encode(&mut self, _frame: Frame, _force_keyframe: bool) -> Vec<EncodedOutputChunk> {
+    fn encode(
+        &mut self,
+        _frame: Frame,
+        _force_keyframe: bool,
+    ) -> Vec<EncodedOutputChunk> {
         match *self {}
     }
 

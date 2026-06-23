@@ -55,9 +55,7 @@ impl RtmpTransport {
         // polling using the should_close flag. On some platforms, a socket
         // created during connection inherits options from the listener socket,
         // so we explicitly force it to blocking mode here.
-        socket
-            .set_nonblocking(false)
-            .expect("Cannot set blocking tcp input stream");
+        socket.set_nonblocking(false).expect("Cannot set blocking tcp input stream");
         socket
             .set_read_timeout(Some(Duration::from_millis(50)))
             .expect("Cannot set read timeout");
@@ -67,9 +65,7 @@ impl RtmpTransport {
     }
 
     fn configure_client_socket(socket: &TcpStream) {
-        socket
-            .set_nonblocking(false)
-            .expect("Cannot set blocking tcp input stream");
+        socket.set_nonblocking(false).expect("Cannot set blocking tcp input stream");
         socket
             .set_read_timeout(Some(Duration::from_micros(500)))
             .expect("Cannot set read timeout");

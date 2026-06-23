@@ -3,9 +3,13 @@ use std::sync::{Arc, Mutex};
 use axum::response::IntoResponse;
 use smelter_core::{
     Pipeline, PipelineOptions, PipelineRtmpServerOptions, PipelineWgpuOptions,
-    PipelineWhipWhepServerOptions, error::InitPipelineError, protocols::WebrtcUdpPortStrategy,
+    PipelineWhipWhepServerOptions, error::InitPipelineError,
+    protocols::WebrtcUdpPortStrategy,
 };
-use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
+use smelter_render::{
+    scene::ImageScalingFilter,
+    web_renderer::{ChromiumContext, ChromiumContextInitError},
+};
 
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -18,17 +22,9 @@ use crate::{config::Config, error::ApiError};
 #[serde(untagged)]
 pub enum Response {
     Ok {},
-    RegisteredPort {
-        port: Option<u16>,
-    },
-    RegisteredMp4 {
-        video_duration_ms: Option<u64>,
-        audio_duration_ms: Option<u64>,
-    },
-    RegisteredWhipInput {
-        bearer_token: Arc<str>,
-        endpoint_route: Arc<str>,
-    },
+    RegisteredPort { port: Option<u16> },
+    RegisteredMp4 { video_duration_ms: Option<u64>, audio_duration_ms: Option<u64> },
+    RegisteredWhipInput { bearer_token: Arc<str>, endpoint_route: Arc<str> },
 }
 
 impl IntoResponse for Response {
@@ -54,14 +50,18 @@ pub struct ApiState {
 }
 
 impl ApiState {
-    pub fn new(config: Config, runtime: Arc<Runtime>) -> Result<Arc<ApiState>, ApiStateInitError> {
-        let chromium_context = match config.web_renderer_enable && cfg!(feature = "web-renderer") {
-            true => Some(ChromiumContext::new(
-                config.output_framerate,
-                config.web_renderer_gpu_enable,
-            )?),
-            false => None,
-        };
+    pub fn new(
+        config: Config,
+        runtime: Arc<Runtime>,
+    ) -> Result<Arc<ApiState>, ApiStateInitError> {
+        let chromium_context =
+            match config.web_renderer_enable && cfg!(feature = "web-renderer") {
+                true => Some(ChromiumContext::new(
+                    config.output_framerate,
+                    config.web_renderer_gpu_enable,
+                )?),
+                false => None,
+            };
         let options = pipeline_options_from_config(&config, &runtime, &chromium_context);
         let pipeline = Pipeline::new(options)?;
         Ok(Arc::new(ApiState {
@@ -88,8 +88,11 @@ impl ApiState {
         let mut guard = self.pipeline.lock().unwrap();
         guard.take();
 
-        let options =
-            pipeline_options_from_config(&self.config, &self.runtime, &self.chromium_context);
+        let options = pipeline_options_from_config(
+            &self.config,
+            &self.runtime,
+            &self.chromium_context,
+        );
         let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
         *guard = Some(pipeline);
         Ok(())
@@ -116,6 +119,7 @@ pub fn pipeline_options_from_config(
         output_framerate: opt.output_framerate,
 
         rendering_mode: opt.rendering_mode,
+        scaling_filter: ImageScalingFilter::Lanczos3,
         tokio_rt: Some(tokio_rt.clone()),
 
         chromium_context: chromium_context.clone(),
@@ -128,16 +132,18 @@ pub fn pipeline_options_from_config(
 
         webrtc_stun_servers: opt.webrtc_stun_servers.clone(),
         whip_whep_server: match opt.whip_whep_enable {
-            true => PipelineWhipWhepServerOptions::Enable {
-                port: opt.whip_whep_server_port,
-            },
+            true => {
+                PipelineWhipWhepServerOptions::Enable { port: opt.whip_whep_server_port }
+            }
             false => PipelineWhipWhepServerOptions::Disable,
         },
         webrtc_udp_port_strategy: opt.webrtc_udp_port_strategy.clone().map(|s| match s {
             crate::config::WebrtcUdpPortStrategy::PortRange(start, end) => {
                 WebrtcUdpPortStrategy::PortRange(start, end)
             }
-            crate::config::WebrtcUdpPortStrategy::Mux(port) => WebrtcUdpPortStrategy::Mux(port),
+            crate::config::WebrtcUdpPortStrategy::Mux(port) => {
+                WebrtcUdpPortStrategy::Mux(port)
+            }
         }),
         webrtc_nat_1to1_ips: opt.webrtc_nat_1to1_ips.clone(),
 

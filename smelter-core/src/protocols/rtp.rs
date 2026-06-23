@@ -6,7 +6,8 @@ pub use aac::*;
 
 use crate::{
     codecs::{
-        AacAudioSpecificConfig, AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions,
+        AacAudioSpecificConfig, AudioEncoderOptions, VideoDecoderOptions,
+        VideoEncoderOptions,
     },
     protocols::{Port, PortOrRange},
     queue::QueueInputOptions,

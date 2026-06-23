@@ -51,9 +51,7 @@ fn main() {
 }
 
 fn workingdir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("workingdir")
-        .join("inputs")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("workingdir").join("inputs")
 }
 
 fn examples_root() -> PathBuf {

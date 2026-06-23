@@ -4,8 +4,8 @@ use axum::{http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 use smelter_api::TypeError;
 use smelter_core::error::{
-    ErrorType, InitPipelineError, PipelineErrorInfo, RegisterInputError, RegisterOutputError,
-    UnregisterInputError, UnregisterOutputError, UpdateInputError,
+    ErrorType, InitPipelineError, PipelineErrorInfo, RegisterInputError,
+    RegisterOutputError, UnregisterInputError, UnregisterOutputError, UpdateInputError,
 };
 use smelter_render::error::{
     ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
@@ -24,7 +24,11 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    pub fn new(error_code: &'static str, message: String, http_status_code: StatusCode) -> Self {
+    pub fn new(
+        error_code: &'static str,
+        message: String,
+        http_status_code: StatusCode,
+    ) -> Self {
         ApiError {
             error_code,
             message: message.clone(),

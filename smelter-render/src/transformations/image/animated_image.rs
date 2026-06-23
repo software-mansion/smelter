@@ -26,16 +26,8 @@ pub struct AnimatedAsset {
 
 #[derive(Debug)]
 enum AnimationFrame {
-    Srgb {
-        texture: RgbaSrgbTexture,
-        bg: wgpu::BindGroup,
-        pts: Duration,
-    },
-    Linear {
-        texture: RgbaLinearTexture,
-        bg: wgpu::BindGroup,
-        pts: Duration,
-    },
+    Srgb { texture: RgbaSrgbTexture, bg: wgpu::BindGroup, pts: Duration },
+    Linear { texture: RgbaLinearTexture, bg: wgpu::BindGroup, pts: Duration },
 }
 
 impl AnimatedAsset {
@@ -97,10 +89,7 @@ impl AnimatedAsset {
             return Err(AnimatedError::SingleFrame);
         }
         let first_frame_size = first_frame.texture().size();
-        if !frames
-            .iter()
-            .all(|frame| frame.texture().size() == first_frame_size)
-        {
+        if !frames.iter().all(|frame| frame.texture().size() == first_frame_size) {
             return Err(AnimatedError::UnsupportedVariableResolution);
         }
 
@@ -111,10 +100,7 @@ impl AnimatedAsset {
             animation_duration = Duration::from_nanos(1)
         }
 
-        Ok(Self {
-            frames,
-            animation_duration,
-        })
+        Ok(Self { frames, animation_duration })
     }
 
     pub(super) fn render(
@@ -125,25 +111,23 @@ impl AnimatedAsset {
         pts: Duration,
     ) {
         let animation_pts = Duration::from_nanos(
-            ((pts.as_nanos() - state.start_pts.as_nanos()) % self.animation_duration.as_nanos())
-                as u64,
+            ((pts.as_nanos() - state.start_pts.as_nanos())
+                % self.animation_duration.as_nanos()) as u64,
         );
 
         let closest_frame = self
             .frames
             .iter()
-            .min_by_key(|frame| u128::abs_diff(frame.pts().as_nanos(), animation_pts.as_nanos()))
+            .min_by_key(|frame| {
+                u128::abs_diff(frame.pts().as_nanos(), animation_pts.as_nanos())
+            })
             .unwrap();
         match &closest_frame {
             AnimationFrame::Srgb { bg, .. } => {
-                ctx.utils
-                    .srgb_rgba_add_premult_alpha
-                    .render(ctx, bg, target.view());
+                ctx.utils.srgb_rgba_add_premult_alpha.render(ctx, bg, target.view());
             }
             AnimationFrame::Linear { bg, .. } => {
-                ctx.utils
-                    .linear_rgba_add_premult_alpha
-                    .render(ctx, bg, target.view());
+                ctx.utils.linear_rgba_add_premult_alpha.render(ctx, bg, target.view());
             }
         }
     }
@@ -155,10 +139,7 @@ impl AnimatedAsset {
 
 impl AnimatedNodeState {
     pub fn new(start_pts: Duration, resolution: Resolution) -> Self {
-        Self {
-            start_pts,
-            resolution,
-        }
+        Self { start_pts, resolution }
     }
     pub fn resolution(&self) -> Resolution {
         self.resolution

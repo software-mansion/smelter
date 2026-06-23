@@ -9,15 +9,14 @@ fn main() {
         .with_max_level(tracing::Level::DEBUG)
         .finish();
 
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to initialize tracing");
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Failed to initialize tracing");
 
     let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_adapter = vulkan_instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
-        .unwrap();
-    let vulkan_device = vulkan_adapter
-        .create_device(&VulkanDeviceDescriptor::default())
-        .unwrap();
+    let vulkan_adapter =
+        vulkan_instance.create_adapter(&VulkanAdapterDescriptor::default()).unwrap();
+    let vulkan_device =
+        vulkan_adapter.create_device(&VulkanDeviceDescriptor::default()).unwrap();
 
     std::hint::black_box(vulkan_device);
 }

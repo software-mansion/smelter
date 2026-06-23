@@ -11,10 +11,7 @@ use integration_tests::{
     media::{Asset, MediaReceiver, MediaSender, Receive, Send, VideoCodec},
     paths::integration_tests_root,
 };
-const VIDEO_RESOLUTION: Resolution = Resolution {
-    width: 1920,
-    height: 1080,
-};
+const VIDEO_RESOLUTION: Resolution = Resolution { width: 1920, height: 1080 };
 
 const INPUT_PORT: u16 = 8002;
 const OUTPUT_PORT: u16 = 8004;
@@ -104,7 +101,8 @@ fn build_and_start_docker(skip_build: bool) -> Result<()> {
 fn start_example_client_code(host_ip: String) -> Result<()> {
     thread::sleep(Duration::from_secs(5));
 
-    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264)).spawn()?;
+    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264))
+        .spawn()?;
     start_server_msg_listener();
 
     examples::post(

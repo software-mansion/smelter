@@ -10,15 +10,19 @@ use crate::{
     RtmpEvent, RtmpServerConnectionError, RtmpStreamError,
     amf0::AmfValue,
     message::{
-        AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageOk, DataMessage,
-        RtmpMessageIncoming, RtmpMessageOutgoing, UserControlMessage, VideoMessage,
+        AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, CommandMessageOk,
+        DataMessage, RtmpMessageIncoming, RtmpMessageOutgoing, UserControlMessage,
+        VideoMessage,
     },
     protocol::{
-        byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
+        byte_stream::RtmpByteStream, handshake::Handshake,
+        message_stream::RtmpMessageStream,
     },
     server::{
         instance::ServerConnectionCtx,
-        negotiation::{NegotiationProgress, NegotiationResult, PEER_BANDWIDTH, WINDOW_ACK_SIZE},
+        negotiation::{
+            NegotiationProgress, NegotiationResult, PEER_BANDWIDTH, WINDOW_ACK_SIZE,
+        },
     },
     transport::RtmpTransport,
 };
@@ -62,9 +66,7 @@ pub(super) fn run_connection_thread(
 
     let (sender, receiver) = bounded(1000);
     // Return connection to caller via on_connection callback
-    ctx.lock()
-        .unwrap()
-        .send_connection(app, stream_key, receiver)?;
+    ctx.lock().unwrap().send_connection(app, stream_key, receiver)?;
 
     loop {
         let msg = state.next_msg()?;
@@ -132,7 +134,9 @@ impl RtmpServerConnectionState {
         }
     }
 
-    fn negotiate_connection(&mut self) -> Result<NegotiationResult, RtmpServerConnectionError> {
+    fn negotiate_connection(
+        &mut self,
+    ) -> Result<NegotiationResult, RtmpServerConnectionError> {
         let mut state = NegotiationProgress::WaitingForConnect;
 
         loop {
@@ -188,38 +192,37 @@ impl RtmpServerConnectionState {
         }
     }
 
-    fn on_connect(&mut self, transaction_id: u32) -> Result<(), RtmpServerConnectionError> {
+    fn on_connect(
+        &mut self,
+        transaction_id: u32,
+    ) -> Result<(), RtmpServerConnectionError> {
         self.stream.write_msg(RtmpMessageOutgoing::WindowAckSize {
             window_size: WINDOW_ACK_SIZE,
         })?;
-        self.stream
-            .write_msg(RtmpMessageOutgoing::SetPeerBandwidth {
-                bandwidth: PEER_BANDWIDTH,
-                limit_type: 0, // 0 - Hard, 1 - Soft, 2 - Dynamic
-            })?;
+        self.stream.write_msg(RtmpMessageOutgoing::SetPeerBandwidth {
+            bandwidth: PEER_BANDWIDTH,
+            limit_type: 0, // 0 - Hard, 1 - Soft, 2 - Dynamic
+        })?;
 
-        self.stream
-            .write_msg(UserControlMessage::StreamBegin { stream_id: 0 }.into())?;
+        self.stream.write_msg(UserControlMessage::StreamBegin { stream_id: 0 }.into())?;
 
         let decode_forward_caps =
             AmfValue::Number((FOURCC_INFO_CAN_DECODE | FOURCC_INFO_CAN_FORWARD) as f64);
 
         let mut video_fourcc_info_map = HashMap::new();
-        video_fourcc_info_map.insert(
-            "*".to_string(),
-            AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
-        );
+        video_fourcc_info_map
+            .insert("*".to_string(), AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64));
         for codec in &self.video_codecs {
-            video_fourcc_info_map.insert(codec.fourcc().to_string(), decode_forward_caps.clone());
+            video_fourcc_info_map
+                .insert(codec.fourcc().to_string(), decode_forward_caps.clone());
         }
 
         let mut audio_fourcc_info_map = HashMap::new();
-        audio_fourcc_info_map.insert(
-            "*".to_string(),
-            AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
-        );
+        audio_fourcc_info_map
+            .insert("*".to_string(), AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64));
         for codec in &self.audio_codecs {
-            audio_fourcc_info_map.insert(codec.fourcc().to_string(), decode_forward_caps.clone());
+            audio_fourcc_info_map
+                .insert(codec.fourcc().to_string(), decode_forward_caps.clone());
         }
 
         let fourcc_list: Vec<AmfValue> = self
@@ -238,18 +241,13 @@ impl RtmpServerConnectionState {
                 ("fmsVer", "FMS/3,0,1,123".into()),
                 ("capabilities", AmfValue::Number(31.0)),
                 ("fourCcList", AmfValue::StrictArray(fourcc_list)),
-                (
-                    "videoFourCcInfoMap",
-                    AmfValue::Object(video_fourcc_info_map),
-                ),
-                (
-                    "audioFourCcInfoMap",
-                    AmfValue::Object(audio_fourcc_info_map),
-                ),
+                ("videoFourCcInfoMap", AmfValue::Object(video_fourcc_info_map)),
+                ("audioFourCcInfoMap", AmfValue::Object(audio_fourcc_info_map)),
                 (
                     "capsEx",
                     AmfValue::Number(
-                        (CAPS_EX_RECONNECT | CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO) as f64,
+                        (CAPS_EX_RECONNECT | CAPS_EX_MODEX | CAPS_EX_TIMESTAMP_NANO)
+                            as f64,
                     ),
                 ),
             ]
@@ -279,7 +277,10 @@ impl RtmpServerConnectionState {
     }
 
     /// Message handler for messages not related to life cycle
-    fn default_msg_handler(&mut self, msg: RtmpMessageIncoming) -> Result<(), RtmpStreamError> {
+    fn default_msg_handler(
+        &mut self,
+        msg: RtmpMessageIncoming,
+    ) -> Result<(), RtmpStreamError> {
         match msg {
             RtmpMessageIncoming::SetChunkSize { chunk_size } => {
                 self.stream.set_reader_chunk_size(chunk_size as usize);
@@ -298,7 +299,9 @@ impl RtmpServerConnectionState {
                     window_size: bandwidth,
                 })?;
             }
-            RtmpMessageIncoming::UserControl(UserControlMessage::PingRequest { timestamp }) => {
+            RtmpMessageIncoming::UserControl(UserControlMessage::PingRequest {
+                timestamp,
+            }) => {
                 let msg = UserControlMessage::PingResponse { timestamp };
                 self.stream.write_msg(msg.into())?;
             }
@@ -318,10 +321,9 @@ impl RtmpServerConnectionState {
         };
         let bytes_received = self.stream.bytes_read();
         if bytes_received.saturating_sub(self.last_ack) > window_size / 2 {
-            self.stream
-                .write_msg(RtmpMessageOutgoing::Acknowledgement {
-                    bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
-                })?;
+            self.stream.write_msg(RtmpMessageOutgoing::Acknowledgement {
+                bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
+            })?;
             self.last_ack = bytes_received;
         }
         Ok(())

@@ -115,14 +115,21 @@ where
     let output = PipelineOutput {
         output,
         audio_end_condition: audio.as_ref().map(|audio| {
-            PipelineOutputEndConditionState::new_audio(audio.end_condition.clone(), &guard.inputs)
+            PipelineOutputEndConditionState::new_audio(
+                audio.end_condition.clone(),
+                &guard.inputs,
+            )
         }),
         video_end_condition: video.as_ref().map(|video| {
-            PipelineOutputEndConditionState::new_video(video.end_condition.clone(), &guard.inputs)
+            PipelineOutputEndConditionState::new_video(
+                video.end_condition.clone(),
+                &guard.inputs,
+            )
         }),
     };
 
-    if let (Some(video_opts), Some(video_output)) = (video.clone(), output.output.video()) {
+    if let (Some(video_opts), Some(video_output)) = (video.clone(), output.output.video())
+    {
         let result = guard.renderer.update_scene(
             output_id.clone(),
             video_output.resolution,
@@ -153,7 +160,8 @@ where
 impl Pipeline {
     pub(super) fn all_output_video_senders_iter(
         pipeline: &Arc<Mutex<Pipeline>>,
-    ) -> impl Iterator<Item = (OutputId, OutputSender<Sender<PipelineEvent<Frame>>>)> {
+    ) -> impl Iterator<Item = (OutputId, OutputSender<Sender<PipelineEvent<Frame>>>)>
+    {
         let outputs: HashMap<_, _> = pipeline
             .lock()
             .unwrap()
@@ -166,9 +174,8 @@ impl Pipeline {
             })
             .collect();
 
-        outputs
-            .into_iter()
-            .filter_map(|(output_id, (sender, eos_status))| match eos_status {
+        outputs.into_iter().filter_map(|(output_id, (sender, eos_status))| {
+            match eos_status {
                 EosStatus::None => Some((output_id, OutputSender::ActiveSender(sender))),
                 EosStatus::SendEos => {
                     info!(?output_id, "Sending video EOS on output.");
@@ -181,16 +188,14 @@ impl Pipeline {
                     Some((output_id, OutputSender::FinishedSender))
                 }
                 EosStatus::AlreadySent => None,
-            })
+            }
+        })
     }
 
     pub(super) fn all_output_audio_senders_iter(
         pipeline: &Arc<Mutex<Pipeline>>,
     ) -> impl Iterator<
-        Item = (
-            OutputId,
-            OutputSender<Sender<PipelineEvent<OutputAudioSamples>>>,
-        ),
+        Item = (OutputId, OutputSender<Sender<PipelineEvent<OutputAudioSamples>>>),
     > {
         let outputs: HashMap<_, _> = pipeline
             .lock()
@@ -204,19 +209,22 @@ impl Pipeline {
             })
             .collect();
 
-        outputs
-            .into_iter()
-            .filter_map(|(output_id, (sender, eos_status))| match eos_status {
+        outputs.into_iter().filter_map(|(output_id, (sender, eos_status))| {
+            match eos_status {
                 EosStatus::None => Some((output_id, OutputSender::ActiveSender(sender))),
                 EosStatus::SendEos => {
                     info!(?output_id, "Sending audio EOS on output.");
                     if sender.send(PipelineEvent::EOS).is_err() {
-                        warn!(?output_id, "Failed to send EOS from mixer. Channel closed.");
+                        warn!(
+                            ?output_id,
+                            "Failed to send EOS from mixer. Channel closed."
+                        );
                     };
                     Some((output_id, OutputSender::FinishedSender))
                 }
                 EosStatus::AlreadySent => None,
-            })
+            }
+        })
     }
 }
 
@@ -317,13 +325,15 @@ impl PipelineOutputEndConditionState {
             StateChange::NoChanges => (),
         };
         self.did_end = match self.condition {
-            PipelineOutputEndCondition::AnyOf(ref inputs) => inputs
-                .iter()
-                .any(|input_id| !self.connected_inputs.contains(input_id)),
-            PipelineOutputEndCondition::AllOf(ref inputs) => inputs
-                .iter()
-                .all(|input_id| !self.connected_inputs.contains(input_id)),
-            PipelineOutputEndCondition::AnyInput => matches!(action, StateChange::RemoveInput(_)),
+            PipelineOutputEndCondition::AnyOf(ref inputs) => {
+                inputs.iter().any(|input_id| !self.connected_inputs.contains(input_id))
+            }
+            PipelineOutputEndCondition::AllOf(ref inputs) => {
+                inputs.iter().all(|input_id| !self.connected_inputs.contains(input_id))
+            }
+            PipelineOutputEndCondition::AnyInput => {
+                matches!(action, StateChange::RemoveInput(_))
+            }
             PipelineOutputEndCondition::AllInputs => self.connected_inputs.is_empty(),
             PipelineOutputEndCondition::Never => false,
         };

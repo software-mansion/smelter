@@ -40,7 +40,9 @@ impl Settings {
             windowless_rendering_enabled: self.windowless_rendering_enabled as c_int,
             command_line_args_disabled: false as c_int,
             cache_path: CefString::empty_raw(),
-            root_cache_path: CefString::new_raw(self.root_cache_path.display().to_string()),
+            root_cache_path: CefString::new_raw(
+                self.root_cache_path.display().to_string(),
+            ),
             persist_session_cookies: false as c_int,
             user_agent: CefString::empty_raw(),
             user_agent_product: CefString::empty_raw(),
@@ -76,16 +78,14 @@ pub enum LogSeverity {
 
 #[cfg(target_os = "linux")]
 fn executables_paths() -> (_cef_string_utf16_t, _cef_string_utf16_t) {
-    let browser_subprocess_path = env::var(PROCESS_HELPER_PATH_ENV).unwrap_or_else(|_| {
-        let current_exe = env::current_exe().unwrap();
-        let current_dir = current_exe.parent().unwrap();
-        current_dir.join("process_helper").display().to_string()
-    });
+    let browser_subprocess_path =
+        env::var(PROCESS_HELPER_PATH_ENV).unwrap_or_else(|_| {
+            let current_exe = env::current_exe().unwrap();
+            let current_dir = current_exe.parent().unwrap();
+            current_dir.join("process_helper").display().to_string()
+        });
 
-    (
-        CefString::empty_raw(),
-        CefString::new_raw(browser_subprocess_path),
-    )
+    (CefString::empty_raw(), CefString::new_raw(browser_subprocess_path))
 }
 
 #[cfg(target_os = "macos")]

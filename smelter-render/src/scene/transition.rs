@@ -46,7 +46,9 @@ impl TransitionState {
         match previous_transition {
             Some(previous_transition) if !previous_transition.is_finished(last_pts) => {
                 match (component_props_changed, interrupt_previous_transition) {
-                    (true, true) => current_transition.map(|opt| Self::from_options(opt, last_pts)),
+                    (true, true) => {
+                        current_transition.map(|opt| Self::from_options(opt, last_pts))
+                    }
                     _ => {
                         let remaining_duration = (previous_transition.start_pts
                             + previous_transition.duration)
@@ -87,17 +89,20 @@ impl TransitionState {
 
     pub fn state(&self, pts: Duration) -> InterpolationState {
         // Value in range [0, 1], where 1 means end of transition.
-        let progress =
-            (pts.as_secs_f64() - self.start_pts.as_secs_f64()) / self.duration.as_secs_f64();
+        let progress = (pts.as_secs_f64() - self.start_pts.as_secs_f64())
+            / self.duration.as_secs_f64();
         // Value in range [initial_offset.0 , 1]. Previous progress ([0, 1]) is rescaled to fit
         // smaller range and offset is added.
-        let progress = self.initial_offset.0.0 + progress * (1.0 - self.initial_offset.0.0);
+        let progress =
+            self.initial_offset.0.0 + progress * (1.0 - self.initial_offset.0.0);
         // Clamp just to handle a case where this function is called after transition is finished.
         let progress = f64::clamp(progress, 0.0, 1.0);
         // Value in range [initial_offset.1, 1] or [state(initial_offset.0), 1].
         let state = self.interpolation_kind.state(progress);
         // Value in range [0, 1].
-        InterpolationState((state.0 - self.initial_offset.1.0) / (1.0 - self.initial_offset.1.0))
+        InterpolationState(
+            (state.0 - self.initial_offset.1.0) / (1.0 - self.initial_offset.1.0),
+        )
     }
 
     fn is_finished(&self, current_pts: Duration) -> bool {

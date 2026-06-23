@@ -64,14 +64,15 @@ impl FramePreProcessor {
     ) -> Arc<wgpu::Texture> {
         self.upload_and_convert_to_node_texture(frame);
 
-        let output_texture_views: &'static [wgpu::TextureFormat] = match self.wgpu_ctx.mode {
-            RenderingMode::GpuOptimized => &[
-                wgpu::TextureFormat::Rgba8Unorm,
-                wgpu::TextureFormat::Rgba8UnormSrgb,
-            ],
-            RenderingMode::CpuOptimized => &[wgpu::TextureFormat::Rgba8Unorm],
-            RenderingMode::WebGl => &[wgpu::TextureFormat::Rgba8UnormSrgb],
-        };
+        let output_texture_views: &'static [wgpu::TextureFormat] =
+            match self.wgpu_ctx.mode {
+                RenderingMode::GpuOptimized => &[
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                ],
+                RenderingMode::CpuOptimized => &[wgpu::TextureFormat::Rgba8Unorm],
+                RenderingMode::WebGl => &[wgpu::TextureFormat::Rgba8UnormSrgb],
+            };
 
         let texture = match resolution {
             Some(resolution) => {
@@ -157,28 +158,21 @@ impl FramePreProcessor {
     fn download(&self, texture: &wgpu::Texture, resolution: Resolution) -> bytes::Bytes {
         let (buffer, _) = self.download_buffer.as_ref().unwrap();
 
-        let mut encoder =
-            self.wgpu_ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("RGBA download encoder"),
-                });
+        let mut encoder = self.wgpu_ctx.device.create_command_encoder(
+            &wgpu::CommandEncoderDescriptor { label: Some("RGBA download encoder") },
+        );
         texture.copy_to_buffer(&mut encoder, buffer);
         self.wgpu_ctx.queue.submit(Some(encoder.finish()));
 
         let (s, r) = bounded(1);
-        buffer
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |result| {
-                if let Err(err) = s.send(result) {
-                    error!("channel send error: {err}");
-                }
-            });
+        buffer.slice(..).map_async(wgpu::MapMode::Read, move |result| {
+            if let Err(err) = s.send(result) {
+                error!("channel send error: {err}");
+            }
+        });
 
-        while let Err(wgpu::PollError::Timeout) = self
-            .wgpu_ctx
-            .device
-            .poll(wgpu::PollType::wait_indefinitely())
+        while let Err(wgpu::PollError::Timeout) =
+            self.wgpu_ctx.device.poll(wgpu::PollType::wait_indefinitely())
         {}
 
         r.recv().unwrap().unwrap();
@@ -211,7 +205,9 @@ enum RescaleTexture {
 impl RescaleTexture {
     fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
         match ctx.mode {
-            RenderingMode::CpuOptimized => Self::Linear(RgbaLinearTexture::new(ctx, resolution)),
+            RenderingMode::CpuOptimized => {
+                Self::Linear(RgbaLinearTexture::new(ctx, resolution))
+            }
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {
                 Self::Srgb(RgbaSrgbTexture::new(ctx, resolution))
             }

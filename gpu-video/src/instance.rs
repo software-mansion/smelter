@@ -33,10 +33,7 @@ impl VulkanInstance {
 
     fn new_from_entry(entry: Arc<Entry>) -> Result<Arc<Self>, VulkanInitError> {
         let api_version = vk::make_api_version(0, 1, 3, 0);
-        let app_info = vk::ApplicationInfo {
-            api_version,
-            ..Default::default()
-        };
+        let app_info = vk::ApplicationInfo { api_version, ..Default::default() };
 
         let mut requested_layers = Vec::new();
 
@@ -48,7 +45,8 @@ impl VulkanInstance {
             requested_layers.push(c"VK_LAYER_LUNARG_api_dump");
         }
 
-        let instance_layer_properties = unsafe { entry.enumerate_instance_layer_properties()? };
+        let instance_layer_properties =
+            unsafe { entry.enumerate_instance_layer_properties()? };
         let instance_layer_names = instance_layer_properties
             .iter()
             .map(|layer| layer.layer_name_as_c_str())
@@ -57,9 +55,9 @@ impl VulkanInstance {
         let layers = requested_layers
             .into_iter()
             .filter(|requested_layer_name| {
-                instance_layer_names
-                    .iter()
-                    .any(|instance_layer_name| instance_layer_name == requested_layer_name)
+                instance_layer_names.iter().any(|instance_layer_name| {
+                    instance_layer_name == requested_layer_name
+                })
             })
             .map(|layer| layer.as_ptr())
             .collect::<Vec<_>>();
@@ -68,7 +66,8 @@ impl VulkanInstance {
 
         let extensions = extensions.into_iter().collect::<Vec<_>>();
         #[cfg(feature = "wgpu")]
-        let extensions = merge_with_wgpu_instance_extensions(&entry, api_version, extensions)?;
+        let extensions =
+            merge_with_wgpu_instance_extensions(&entry, api_version, extensions)?;
 
         let extension_ptrs = extensions.iter().map(|e| e.as_ptr()).collect::<Vec<_>>();
 
@@ -78,10 +77,12 @@ impl VulkanInstance {
             .enabled_extension_names(&extension_ptrs);
 
         let instance = unsafe { entry.create_instance(&create_info, None) }?;
-        let video_queue_instance_ext = ash::khr::video_queue::Instance::new(&entry, &instance);
+        let video_queue_instance_ext =
+            ash::khr::video_queue::Instance::new(&entry, &instance);
         let video_encode_queue_instance_ext =
             ash::khr::video_encode_queue::Instance::new(&entry, &instance);
-        let debug_utils_instance_ext = ash::ext::debug_utils::Instance::new(&entry, &instance);
+        let debug_utils_instance_ext =
+            ash::ext::debug_utils::Instance::new(&entry, &instance);
 
         let instance = Arc::new(Instance {
             instance,

@@ -7,14 +7,13 @@ pub enum RegisterError {
     #[error(
         "Failed to register a {item_type}, The \"{renderer_id}\" {item_type} was already registered."
     )]
-    KeyTaken {
-        item_type: &'static str,
-        renderer_id: Arc<str>,
-    },
+    KeyTaken { item_type: &'static str, renderer_id: Arc<str> },
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("Failed to unregister a {item_type}. The \"{renderer_id}\" {item_type} does not exist.")]
+#[error(
+    "Failed to unregister a {item_type}. The \"{renderer_id}\" {item_type} does not exist."
+)]
 pub struct UnregisterError {
     item_type: &'static str,
     renderer_id: RendererId,
@@ -44,17 +43,18 @@ pub(crate) struct RendererRegistry<T: Clone> {
 
 impl<T: Clone> RendererRegistry<T> {
     pub(crate) fn new(registry_type: RegistryType) -> Self {
-        Self {
-            registry: HashMap::new(),
-            registry_type,
-        }
+        Self { registry: HashMap::new(), registry_type }
     }
 
     pub(crate) fn get(&self, key: &RendererId) -> Option<T> {
         self.registry.get(key).cloned()
     }
 
-    pub(crate) fn register(&mut self, id: RendererId, renderer: T) -> Result<(), RegisterError> {
+    pub(crate) fn register(
+        &mut self,
+        id: RendererId,
+        renderer: T,
+    ) -> Result<(), RegisterError> {
         if self.registry.contains_key(&id) {
             return Err(RegisterError::KeyTaken {
                 item_type: self.registry_type.registry_item_name(),

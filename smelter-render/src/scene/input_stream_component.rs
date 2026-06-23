@@ -1,8 +1,8 @@
 use crate::Resolution;
 
 use super::{
-    ComponentId, InputStreamComponent, IntermediateNode, SceneError, Size, StatefulComponent,
-    scene_state::BuildStateTreeCtx,
+    ComponentId, InputStreamComponent, IntermediateNode, SceneError, Size,
+    StatefulComponent, scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug, Clone)]
@@ -30,15 +30,10 @@ impl InputStreamComponent {
             .input_resolutions
             .get(&self.input_id)
             .copied()
-            .unwrap_or(Resolution {
-                width: 0,
-                height: 0,
-            });
-        Ok(StatefulComponent::InputStream(
-            StatefulInputStreamComponent {
-                component: self,
-                size: input.into(),
-            },
-        ))
+            .unwrap_or(Resolution { width: 0, height: 0 });
+        Ok(StatefulComponent::InputStream(StatefulInputStreamComponent {
+            component: self,
+            size: input.into(),
+        }))
     }
 }

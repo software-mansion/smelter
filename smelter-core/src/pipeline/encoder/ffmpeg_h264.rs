@@ -6,7 +6,8 @@ use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{debug, error, info, trace, warn};
 
 use crate::pipeline::encoder::ffmpeg_utils::{
-    create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format, read_extradata,
+    create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format,
+    read_extradata,
 };
 use crate::pipeline::encoder::utils::{
     bitrate_from_resolution_framerate, gop_size_from_ms_framerate,
@@ -35,7 +36,8 @@ impl VideoEncoder for FfmpegH264Encoder {
         options: FfmpegH264EncoderOptions,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initialize FFmpeg H264 encoder");
-        let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
+        let codec = ffmpeg_next::codec::encoder::find(Id::H264)
+            .ok_or(EncoderInitError::NoCodec)?;
         let codec_name = codec.name();
         debug!(h264_encoder = codec_name);
 
@@ -63,8 +65,8 @@ impl VideoEncoder for FfmpegH264Encoder {
         let ffmpeg_options = initialize_ffmpeg_h264_options(ctx, &options, codec_name);
 
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
-        let extradata =
-            read_extradata(&encoder).and_then(|extradata| build_avc_decoder_config(&extradata));
+        let extradata = read_extradata(&encoder)
+            .and_then(|extradata| build_avc_decoder_config(&extradata));
 
         Ok((
             Self {
@@ -219,7 +221,10 @@ fn initialize_ffmpeg_h264_options(
                 ("threads", "0"),
             ]);
             let bitrate = options.bitrate.unwrap_or_else(|| {
-                bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
+                bitrate_from_resolution_framerate(
+                    options.resolution,
+                    ctx.output_framerate,
+                )
             });
             let b = bitrate.average_bitrate;
             let maxrate = bitrate.max_bitrate;
@@ -242,7 +247,10 @@ fn initialize_ffmpeg_h264_options(
                 ("bf", "0"),
             ]);
             let bitrate = options.bitrate.unwrap_or_else(|| {
-                bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
+                bitrate_from_resolution_framerate(
+                    options.resolution,
+                    ctx.output_framerate,
+                )
             });
             let b = bitrate.average_bitrate;
             let maxrate = bitrate.max_bitrate;
@@ -301,7 +309,8 @@ fn initialize_ffmpeg_h264_options(
             }
         }
     }
-    let gop_size = gop_size_from_ms_framerate(options.keyframe_interval, ctx.output_framerate);
+    let gop_size =
+        gop_size_from_ms_framerate(options.keyframe_interval, ctx.output_framerate);
     ffmpeg_options.append(&[
         // Max distance between keyframes in bits, default is equivalent of 5000 ms.
         ("g", &gop_size.to_string()),

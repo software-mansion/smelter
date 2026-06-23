@@ -35,7 +35,8 @@ pub(crate) trait EncodeCodec: Codec {
         parameters: &FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
     ) -> Result<Self::OwnedParameters, VulkanEncoderError>;
-    fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters) -> Self::VkParameters<'a>;
+    fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters)
+    -> Self::VkParameters<'a>;
 
     type BitstreamUnitData;
     fn bitstream_unit_data(
@@ -75,7 +76,9 @@ pub(crate) trait EncodeCodec: Codec {
     ) -> Self::PictureInfo<'a>;
 
     type DpbSlotInfo<'a>: vk::ExtendsVideoReferenceSlotInfoKHR;
-    fn dpb_slot_info<'a>(reference_info: &'a Self::ReferenceInfo) -> Self::DpbSlotInfo<'a>;
+    fn dpb_slot_info<'a>(
+        reference_info: &'a Self::ReferenceInfo,
+    ) -> Self::DpbSlotInfo<'a>;
     fn new_slot_dpb_slot_info<'a>(
         reference_info: &'a Self::ReferenceInfo,
     ) -> Self::DpbSlotInfo<'a> {

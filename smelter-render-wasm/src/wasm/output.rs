@@ -40,21 +40,17 @@ impl RendererOutputs {
 
         let mut pending_downloads = Vec::with_capacity(outputs.frames.len());
         for (id, buffer) in self.buffers.iter_mut() {
-            let (map_complete_sender, map_complete_receiver) = crossbeam_channel::bounded(1);
-            buffer
-                .slice(..)
-                .map_async(wgpu::MapMode::Read, move |result| {
-                    if let Err(err) = map_complete_sender.send(result) {
-                        error!("channel send error: {err}")
-                    }
-                });
+            let (map_complete_sender, map_complete_receiver) =
+                crossbeam_channel::bounded(1);
+            buffer.slice(..).map_async(wgpu::MapMode::Read, move |result| {
+                if let Err(err) = map_complete_sender.send(result) {
+                    error!("channel send error: {err}")
+                }
+            });
             pending_downloads.push((id.clone(), map_complete_receiver));
         }
 
-        wgpu_ctx
-            .device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .unwrap();
+        wgpu_ctx.device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
         let mut output_data = vec![];
         for (id, map_complete_receiver) in pending_downloads {
@@ -78,12 +74,12 @@ impl RendererOutputs {
         buffer: &wgpu::Buffer,
     ) -> Result<OutputFrame, JsValue> {
         let buffer_view = buffer.slice(..).get_mapped_range().unwrap();
-        let resolution = Resolution {
-            width: frame.resolution.width,
-            height: frame.resolution.height,
-        };
-        let mut data: Vec<u8> = Vec::with_capacity(4 * resolution.width * resolution.height);
-        for chunk in buffer_view.chunks(pad_to_256(4 * resolution.width as u32) as usize) {
+        let resolution =
+            Resolution { width: frame.resolution.width, height: frame.resolution.height };
+        let mut data: Vec<u8> =
+            Vec::with_capacity(4 * resolution.width * resolution.height);
+        for chunk in buffer_view.chunks(pad_to_256(4 * resolution.width as u32) as usize)
+        {
             data.extend(&chunk[..(4 * frame.resolution.width)]);
         }
 
@@ -104,7 +100,11 @@ impl RendererOutputs {
         })
     }
 
-    fn ensure_buffer(wgpu_ctx: &WgpuCtx, buffer: &mut wgpu::Buffer, resolution: Resolution) {
+    fn ensure_buffer(
+        wgpu_ctx: &WgpuCtx,
+        buffer: &mut wgpu::Buffer,
+        resolution: Resolution,
+    ) {
         let size = pad_to_256(4 * resolution.width as u32) * resolution.height as u32;
         if buffer.size() != size as u64 {
             *buffer = Self::create_buffer(wgpu_ctx, resolution);

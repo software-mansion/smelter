@@ -31,10 +31,7 @@ mod main_module {
     };
     use tokio::runtime::Runtime;
 
-    const VIDEO_RESOLUTION: Resolution = Resolution {
-        width: 1920,
-        height: 1080,
-    };
+    const VIDEO_RESOLUTION: Resolution = Resolution { width: 1920, height: 1080 };
 
     const PORT: u16 = 8010;
 
@@ -44,16 +41,16 @@ mod main_module {
         logger::init_logger(config.logger.clone());
 
         #[allow(clippy::zombie_processes)]
-        MediaReceiver::new(Receive::rtmp_listener(PORT))
-            .spawn()
-            .unwrap();
+        MediaReceiver::new(Receive::rtmp_listener(PORT)).spawn().unwrap();
 
         let pipeline = pipeline(&config);
         let output_id = OutputId("output_1".into());
         let input_id = InputId("input_1".into());
 
-        Pipeline::register_input(&pipeline, input_id.clone(), v4l2_input_options()).unwrap();
-        Pipeline::register_output(&pipeline, output_id, output_options(input_id.clone())).unwrap();
+        Pipeline::register_input(&pipeline, input_id.clone(), v4l2_input_options())
+            .unwrap();
+        Pipeline::register_output(&pipeline, output_id, output_options(input_id.clone()))
+            .unwrap();
         Pipeline::start(&pipeline);
 
         std::thread::sleep(Duration::from_secs(30));
@@ -72,10 +69,7 @@ mod main_module {
             resolution: Some(VIDEO_RESOLUTION),
             format: V4l2Format::Yuyv,
             framerate: Some(Framerate { num: 30, den: 1 }),
-            queue_options: QueueInputOptions {
-                required: false,
-                ..Default::default()
-            },
+            queue_options: QueueInputOptions { required: false, ..Default::default() },
         })
     }
 
@@ -89,7 +83,11 @@ mod main_module {
                     features: wgpu::Features::empty(),
                     force_gpu: false,
                 },
-                ..pipeline_options_from_config(config, &Arc::new(Runtime::new().unwrap()), &None)
+                ..pipeline_options_from_config(
+                    config,
+                    &Arc::new(Runtime::new().unwrap()),
+                    &None,
+                )
             })
             .unwrap_or_else(|err| {
                 panic!(
@@ -116,11 +114,16 @@ mod main_module {
                     bitstream_format: H264BitstreamFormat::Avcc,
                 })),
                 audio: None,
-                connection: RtmpConnectionOptions::from_url(&format!("rtmp://127.0.0.1:{PORT}"))
-                    .unwrap(),
+                connection: RtmpConnectionOptions::from_url(&format!(
+                    "rtmp://127.0.0.1:{PORT}"
+                ))
+                .unwrap(),
             }),
             video: Some(RegisterOutputVideoOptions {
-                initial: Component::InputStream(InputStreamComponent { id: None, input_id }),
+                initial: Component::InputStream(InputStreamComponent {
+                    id: None,
+                    input_id,
+                }),
                 end_condition: PipelineOutputEndCondition::Never,
             }),
             audio: None, // TODO: add audio example

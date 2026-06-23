@@ -8,8 +8,8 @@ use std::{
 use tracing::info;
 
 use super::{
-    AudioCodec, Receive, ResolvedAsset, ResolvedKind, Send, VideoCodec, handle::ProcessHandle,
-    sdp::write_sdp,
+    AudioCodec, Receive, ResolvedAsset, ResolvedKind, Send, VideoCodec,
+    handle::ProcessHandle, sdp::write_sdp,
 };
 
 pub(super) fn spawn_send(
@@ -19,11 +19,9 @@ pub(super) fn spawn_send(
     stdio: bool,
 ) -> Result<Vec<ProcessHandle>> {
     match to {
-        Send::RtpUdpClient {
-            ip,
-            video_port,
-            audio_port,
-        } => send_rtp_udp(asset, ip, *video_port, *audio_port, looped_input, stdio),
+        Send::RtpUdpClient { ip, video_port, audio_port } => {
+            send_rtp_udp(asset, ip, *video_port, *audio_port, looped_input, stdio)
+        }
         Send::RtpTcpClient { .. } => Err(anyhow!(
             "FFmpeg backend does not support RTP TCP send; use Backend::Gstreamer"
         )),
@@ -101,7 +99,8 @@ fn send_rtp_udp(
             }
         }
         ResolvedKind::Pattern { video, resolution } => {
-            let port = video_port.ok_or_else(|| anyhow!("test pattern requires video_port"))?;
+            let port =
+                video_port.ok_or_else(|| anyhow!("test pattern requires video_port"))?;
             handles.push(send_testsrc(ip, port, *video, *resolution, stdio)?);
             if audio_port.is_some() {
                 return Err(anyhow!(
@@ -186,15 +185,9 @@ fn send_testsrc(
     );
     let codec_args: Vec<&str> = match codec {
         VideoCodec::H264 => vec!["libx264"],
-        VideoCodec::Vp8 => vec![
-            "libvpx",
-            "-deadline",
-            "realtime",
-            "-error-resilient",
-            "1",
-            "-b:v",
-            "1M",
-        ],
+        VideoCodec::Vp8 => {
+            vec!["libvpx", "-deadline", "realtime", "-error-resilient", "1", "-b:v", "1M"]
+        }
         VideoCodec::Vp9 => vec![
             "libvpx-vp9",
             "-deadline",
@@ -223,10 +216,12 @@ fn send_testsrc(
 // Send: RTMP
 // ---------------------------------------------------------------------------
 
-fn send_rtmp(asset: &ResolvedAsset, url: &str, stdio: bool) -> Result<Vec<ProcessHandle>> {
-    let path = asset
-        .path()
-        .ok_or_else(|| anyhow!("RTMP send requires a file asset"))?;
+fn send_rtmp(
+    asset: &ResolvedAsset,
+    url: &str,
+    stdio: bool,
+) -> Result<Vec<ProcessHandle>> {
+    let path = asset.path().ok_or_else(|| anyhow!("RTMP send requires a file asset"))?;
     info!("[media] ffmpeg: RTMP push -> {url}");
 
     let (out, err) = stdio_for(stdio);
@@ -258,9 +253,7 @@ fn receive_rtp_udp(
     stdio: bool,
 ) -> Result<Vec<ProcessHandle>> {
     if video.is_none() && audio_port.is_none() {
-        return Err(anyhow!(
-            "At least one of: video, audio_port has to be specified."
-        ));
+        return Err(anyhow!("At least one of: video, audio_port has to be specified."));
     }
     if let (Some(v), Some(a)) = (video, audio_port)
         && v.port == a

@@ -25,10 +25,7 @@ impl TryFrom<RtmpOutput> for core::RegisterOutputOptions {
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                 };
 
-                (
-                    Some(encoder.to_pipeline_options(resolution)?),
-                    Some(output_options),
-                )
+                (Some(encoder.to_pipeline_options(resolution)?), Some(output_options))
             }
             None => (None, None),
         };
@@ -50,10 +47,7 @@ impl TryFrom<RtmpOutput> for core::RegisterOutputOptions {
                     channels: channels.into(),
                 };
 
-                (
-                    Some(encoder.to_pipeline_options(channels)?),
-                    Some(output_audio_options),
-                )
+                (Some(encoder.to_pipeline_options(channels)?), Some(output_audio_options))
             }
             None => (None, None),
         };
@@ -155,22 +149,21 @@ impl RtmpClientAudioEncoderOptions {
         channels: AudioChannels,
     ) -> Result<core::AudioEncoderOptions, TypeError> {
         match self {
-            RtmpClientAudioEncoderOptions::Aac { sample_rate } => Ok(
-                core::AudioEncoderOptions::FdkAac(core::FdkAacEncoderOptions {
+            RtmpClientAudioEncoderOptions::Aac { sample_rate } => {
+                Ok(core::AudioEncoderOptions::FdkAac(core::FdkAacEncoderOptions {
                     channels: channels.into(),
                     sample_rate: sample_rate.unwrap_or(44100),
-                }),
-            ),
-            RtmpClientAudioEncoderOptions::Opus {
-                preset,
-                sample_rate,
-            } => Ok(core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
-                channels: channels.into(),
-                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
-                sample_rate: sample_rate.unwrap_or(48000),
-                forward_error_correction: false,
-                packet_loss: 0,
-            })),
+                }))
+            }
+            RtmpClientAudioEncoderOptions::Opus { preset, sample_rate } => {
+                Ok(core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
+                    channels: channels.into(),
+                    preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
+                    sample_rate: sample_rate.unwrap_or(48000),
+                    forward_error_correction: false,
+                    packet_loss: 0,
+                }))
+            }
         }
     }
 }

@@ -22,7 +22,9 @@ mod scenes;
 mod suite;
 mod utils;
 
-use args::{Args, BenchmarkSuite, NumericArgument, Resolution, ResolutionArgument, VideoEncoder};
+use args::{
+    Args, BenchmarkSuite, NumericArgument, Resolution, ResolutionArgument, VideoEncoder,
+};
 use utils::{ensure_default_mp4, generate_yuv_from_mp4};
 
 use crate::suite::{
@@ -41,7 +43,8 @@ fn main() {
     logger::init_logger(logger_config);
 
     let ctx = GraphicsContext::new(GraphicsContextOptions {
-        features: wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        features:
+            wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         ..Default::default()
     })
     .unwrap();
@@ -90,10 +93,8 @@ fn main() {
 }
 
 fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
-    let input_path = args
-        .input_path
-        .clone()
-        .unwrap_or_else(|| ensure_default_mp4().unwrap());
+    let input_path =
+        args.input_path.clone().unwrap_or_else(|| ensure_default_mp4().unwrap());
     [Benchmark {
         id: "from_args",
         bench_pass_builder: Arc::new(Box::new(move |value: u64| {
@@ -150,7 +151,9 @@ fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
                 input_file: InputFile {
                     label: "from_args",
                     kind: match args.disable_decoder {
-                        true => InputFileKind::Raw(generate_yuv_from_mp4(&input_path).unwrap()),
+                        true => InputFileKind::Raw(
+                            generate_yuv_from_mp4(&input_path).unwrap(),
+                        ),
                         false => InputFileKind::Mp4(input_path.clone()),
                     },
                 },

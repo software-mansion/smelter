@@ -8,12 +8,15 @@ use super::types::to_js_error;
 struct WebDisplayHandle;
 
 impl wgpu::rwh::HasDisplayHandle for WebDisplayHandle {
-    fn display_handle(&self) -> Result<wgpu::rwh::DisplayHandle<'_>, wgpu::rwh::HandleError> {
+    fn display_handle(
+        &self,
+    ) -> Result<wgpu::rwh::DisplayHandle<'_>, wgpu::rwh::HandleError> {
         Ok(wgpu::rwh::DisplayHandle::web())
     }
 }
 
-pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue>), JsValue> {
+pub async fn create_wgpu_context()
+-> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue>), JsValue> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::GL,
         backend_options: wgpu::BackendOptions {
@@ -34,9 +37,7 @@ pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue
 
     let canvas = web_sys::OffscreenCanvas::new(0, 0)?;
     let surface_target = wgpu::SurfaceTarget::OffscreenCanvas(canvas);
-    let surface = instance
-        .create_surface(surface_target)
-        .map_err(to_js_error)?;
+    let surface = instance.create_surface(surface_target).map_err(to_js_error)?;
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -67,9 +68,5 @@ pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue
 }
 
 pub fn pad_to_256(value: u32) -> u32 {
-    if value % 256 == 0 {
-        value
-    } else {
-        value + (256 - (value % 256))
-    }
+    if value % 256 == 0 { value } else { value + (256 - (value % 256)) }
 }

@@ -43,7 +43,9 @@ pub(crate) fn cleanup_orphan_snapshots() -> Result<()> {
         .prompt()
     {
         Ok(b) => b,
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => return Ok(()),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
+            return Ok(());
+        }
         Err(e) => return Err(e.into()),
     };
     if !confirm {

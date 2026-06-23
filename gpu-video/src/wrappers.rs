@@ -117,7 +117,8 @@ unsafe impl<'a> Sync for ProfileInfo<'a> {}
 
 pub(crate) struct ProfileInfo<'a> {
     pub(crate) profile_info: vk::VideoProfileInfoKHR<'a>,
-    additional_infos_ptr: Vec<NonNull<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync + 'a>>,
+    additional_infos_ptr:
+        Vec<NonNull<dyn vk::ExtendsVideoProfileInfoKHR + Send + Sync + 'a>>,
 }
 
 impl<'a> ProfileInfo<'a> {
@@ -138,10 +139,7 @@ impl<'a> ProfileInfo<'a> {
             profile_info = profile_info.push_next(r);
         }
 
-        Self {
-            profile_info,
-            additional_infos_ptr: ptrs,
-        }
+        Self { profile_info, additional_infos_ptr: ptrs }
     }
 }
 

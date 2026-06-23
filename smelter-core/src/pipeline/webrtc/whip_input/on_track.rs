@@ -11,7 +11,8 @@ use crate::{
             input_rtp_reader::WebrtcRtpReader,
             input_thread::{AudioTrackThread, VideoTrackThread},
             negotiated_codecs::{
-                WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping, audio_codec_negotiated,
+                WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping,
+                audio_codec_negotiated,
             },
             whip_input::WhipTrackContext,
         },
@@ -42,7 +43,8 @@ pub(super) fn handle_on_track(
                 return;
             };
             let task = async move {
-                if let Err(err) = process_audio_track(ctx, input_ref, audio_sender).await {
+                if let Err(err) = process_audio_track(ctx, input_ref, audio_sender).await
+                {
                     // TODO: address after WhipWhepServerError rework
                     warn!(?err, "On track handler failed")
                 }
@@ -56,7 +58,8 @@ pub(super) fn handle_on_track(
             };
             let task = async move {
                 if let Err(err) =
-                    process_video_track(ctx, input_ref, video_preferences, video_sender).await
+                    process_video_track(ctx, input_ref, video_preferences, video_sender)
+                        .await
                 {
                     // TODO: address after WhipWhepServerError rework
                     warn!(?err, "On track handler failed")
@@ -96,19 +99,15 @@ async fn process_audio_track(
             ctx.jitter_buffer_ctx,
             48_000,
             Box::new(move |event| {
-                stats_sender.send(WhipInputStatsEvent::AudioRtp(event).into_event(&input_ref));
+                stats_sender
+                    .send(WhipInputStatsEvent::AudioRtp(event).into_event(&input_ref));
             }),
         ),
     );
 
     while let Some(packet) = rtp_reader.read_packet().await {
         trace!(?packet, "Sending RTP packet");
-        if handle
-            .rtp_packet_sender
-            .send(PipelineEvent::Data(packet))
-            .await
-            .is_err()
-        {
+        if handle.rtp_packet_sender.send(PipelineEvent::Data(packet)).await.is_err() {
             debug!("Failed to send audio RTP packet, Channel closed.");
             break;
         }
@@ -124,7 +123,8 @@ async fn process_video_track(
     video_sender: QueueSender<Frame>,
 ) -> Result<(), WhipWhepServerError> {
     let (Some(decoder_mapping), Some(payload_type_mapping)) = (
-        VideoDecoderMapping::from_webrtc_receiver(&ctx.rtc_receiver, &video_preferences).await,
+        VideoDecoderMapping::from_webrtc_receiver(&ctx.rtc_receiver, &video_preferences)
+            .await,
         VideoPayloadTypeMapping::from_webrtc_receiver(&ctx.rtc_receiver).await,
     ) else {
         warn!("Skipping video track, no valid codec negotiated");
@@ -137,7 +137,8 @@ async fn process_video_track(
         let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
         let input_ref = input_ref.clone();
         Box::new(move |event| {
-            stats_sender.send(WhipInputStatsEvent::VideoRtp(event).into_event(&input_ref));
+            stats_sender
+                .send(WhipInputStatsEvent::VideoRtp(event).into_event(&input_ref));
         })
     };
     let mut rtp_reader = WebrtcRtpReader::new(
@@ -161,12 +162,7 @@ async fn process_video_track(
 
     while let Some(packet) = rtp_reader.read_packet().await {
         trace!(?packet, "Sending RTP packet");
-        if handle
-            .rtp_packet_sender
-            .send(PipelineEvent::Data(packet))
-            .await
-            .is_err()
-        {
+        if handle.rtp_packet_sender.send(PipelineEvent::Data(packet)).await.is_err() {
             debug!("Failed to send video RTP packet, Channel closed.");
             break;
         }

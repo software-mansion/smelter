@@ -21,7 +21,9 @@ use std::{fmt, path::Path};
 use anyhow::Result;
 use bytes::Bytes;
 
-use crate::{dump_format, output_dump_from_disk, save_failed_actual_dump, save_failed_test_dumps};
+use crate::{
+    dump_format, output_dump_from_disk, save_failed_actual_dump, save_failed_test_dumps,
+};
 
 pub mod audio;
 pub mod audio_analysis;

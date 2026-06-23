@@ -4,7 +4,9 @@
 #[cfg(target_os = "linux")]
 fn main() {
     use smelter::{config::read_config, state::pipeline_options_from_config};
-    use smelter_core::{Pipeline, PipelineWgpuOptions, graphics_context::GraphicsContext};
+    use smelter_core::{
+        Pipeline, PipelineWgpuOptions, graphics_context::GraphicsContext,
+    };
     use std::sync::Arc;
     use tokio::runtime::Runtime;
 

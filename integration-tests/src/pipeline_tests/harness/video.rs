@@ -80,12 +80,7 @@ pub fn compare(
             &mut last_expected,
             &mut expected_count,
         );
-        track_pts(
-            &pair.right,
-            &mut first_actual,
-            &mut last_actual,
-            &mut actual_count,
-        );
+        track_pts(&pair.right, &mut first_actual, &mut last_actual, &mut actual_count);
 
         if !pair_in_intervals(&pair, &config.validation_intervals) {
             continue;
@@ -149,7 +144,11 @@ fn track_pts(
     }
 }
 
-fn average_framerate(first: Option<Duration>, last: Option<Duration>, count: usize) -> f32 {
+fn average_framerate(
+    first: Option<Duration>,
+    last: Option<Duration>,
+    count: usize,
+) -> f32 {
     if count <= 1 {
         return 0.0;
     }

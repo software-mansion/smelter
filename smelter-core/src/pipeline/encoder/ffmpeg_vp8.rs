@@ -39,7 +39,8 @@ impl VideoEncoder for FfmpegVp8Encoder {
 
         let framerate = ctx.output_framerate;
 
-        let codec = ffmpeg_next::codec::encoder::find(Id::VP8).ok_or(EncoderInitError::NoCodec)?;
+        let codec = ffmpeg_next::codec::encoder::find(Id::VP8)
+            .ok_or(EncoderInitError::NoCodec)?;
 
         let mut encoder = Context::new().encoder().video()?;
 
@@ -100,10 +101,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
 
         Ok((
-            Self {
-                encoder,
-                packet: ffmpeg_next::Packet::empty(),
-            },
+            Self { encoder, packet: ffmpeg_next::Packet::empty() },
             VideoEncoderConfig {
                 resolution: options.resolution,
                 output_format: OutputFrameFormat::PlanarYuv420Bytes,

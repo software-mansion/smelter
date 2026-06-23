@@ -62,11 +62,7 @@ pub async fn handle_output_update(
                 }
             });
         }
-        None => api
-            .pipeline()?
-            .lock()
-            .unwrap()
-            .update_output(output_id, scene, audio)?,
+        None => api.pipeline()?.lock().unwrap().update_output(output_id, scene, audio)?,
     };
     Ok(Response::Ok {})
 }
@@ -87,10 +83,7 @@ pub async fn handle_keyframe_request(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
 ) -> Result<Response, ApiError> {
-    api.pipeline()?
-        .lock()
-        .unwrap()
-        .request_keyframe(output_id.into())?;
+    api.pipeline()?.lock().unwrap().request_keyframe(output_id.into())?;
 
     Ok(Response::Ok {})
 }

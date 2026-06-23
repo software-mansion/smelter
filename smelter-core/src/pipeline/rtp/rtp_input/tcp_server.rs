@@ -44,12 +44,9 @@ pub(super) fn start_tcp_server_thread(
     thread::Builder::new()
         .name(format!("RTP TCP server receiver {input_ref}"))
         .spawn(move || {
-            let _span = span!(
-                Level::INFO,
-                "RTP TCP server",
-                input_id = input_ref.to_string()
-            )
-            .entered();
+            let _span =
+                span!(Level::INFO, "RTP TCP server", input_id = input_ref.to_string())
+                    .entered();
             run_tcp_server_thread(socket, packets_tx, should_close);
             debug!("Closing RTP receiver thread (TCP server).");
         })
@@ -64,12 +61,12 @@ fn run_tcp_server_thread(
     should_close: Arc<AtomicBool>,
 ) {
     // make accept non blocking so we have a chance to handle should_close value
-    socket
-        .set_nonblocking(true)
-        .expect("Cannot set non-blocking");
+    socket.set_nonblocking(true).expect("Cannot set non-blocking");
 
     let mut connected_socket = None;
-    while !should_close.load(std::sync::atomic::Ordering::Relaxed) && connected_socket.is_none() {
+    while !should_close.load(std::sync::atomic::Ordering::Relaxed)
+        && connected_socket.is_none()
+    {
         // accept only one connection at the time
         let Ok((socket, _)) = socket.accept() else {
             thread::sleep(Duration::from_millis(50));
@@ -88,7 +85,9 @@ fn run_tcp_server_thread(
     for packet in socket {
         trace!(size_bytes = packet.len(), "Received RTP packet");
         if packets_tx.send(packet).is_err() {
-            debug!("Failed to send raw RTP packet from TCP server element. Channel closed.");
+            debug!(
+                "Failed to send raw RTP packet from TCP server element. Channel closed."
+            );
             return;
         }
     }
@@ -103,18 +102,11 @@ struct TcpReadPacketStream {
 
 impl TcpReadPacketStream {
     fn new(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
-        socket
-            .set_nonblocking(false)
-            .expect("Cannot set blocking tcp input stream");
+        socket.set_nonblocking(false).expect("Cannot set blocking tcp input stream");
         socket
             .set_read_timeout(Some(Duration::from_millis(50)))
             .expect("Cannot set read timeout");
-        Self {
-            socket,
-            buf: VecDeque::new(),
-            read_buf: vec![0; 65536],
-            should_close,
-        }
+        Self { socket, buf: VecDeque::new(), read_buf: vec![0; 65536], should_close }
     }
 
     fn read_until_buffer_size(&mut self, buf_size: usize) -> Option<()> {
@@ -128,7 +120,8 @@ impl TcpReadPacketStream {
                     self.buf.extend(self.read_buf[0..read_bytes].iter());
                 }
                 Err(err) => {
-                    let should_close = self.should_close.load(std::sync::atomic::Ordering::Relaxed);
+                    let should_close =
+                        self.should_close.load(std::sync::atomic::Ordering::Relaxed);
                     match err.kind() {
                         std::io::ErrorKind::WouldBlock if !should_close => {
                             continue;

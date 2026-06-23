@@ -25,14 +25,18 @@ impl AudioDecoder for OpusDecoder {
 
     type Options = ();
 
-    fn new(ctx: &Arc<PipelineCtx>, _options: Self::Options) -> Result<Self, DecoderInitError> {
+    fn new(
+        ctx: &Arc<PipelineCtx>,
+        _options: Self::Options,
+    ) -> Result<Self, DecoderInitError> {
         info!("Initializing libopus decoder");
         const OPUS_SAMPLE_RATES: [u32; 5] = [8_000, 12_000, 16_000, 24_000, 48_000];
 
-        let decoded_sample_rate = match OPUS_SAMPLE_RATES.contains(&ctx.mixing_sample_rate) {
-            true => ctx.mixing_sample_rate,
-            false => 48_000,
-        };
+        let decoded_sample_rate =
+            match OPUS_SAMPLE_RATES.contains(&ctx.mixing_sample_rate) {
+                true => ctx.mixing_sample_rate,
+                false => 48_000,
+            };
         let decoder = opus::Decoder::new(decoded_sample_rate, opus::Channels::Stereo)?;
         // Max sample rate for opus is 48kHz.
         // Usually packets contain 20ms audio chunks, but for safety we use buffer
@@ -54,7 +58,8 @@ impl AudioDecoder for OpusDecoder {
         let encoded_chunk = match event {
             EncodedInputEvent::Chunk(chunk) => chunk,
             EncodedInputEvent::LostData => {
-                self.unhandled_lost_packets = self.unhandled_lost_packets.saturating_add(1);
+                self.unhandled_lost_packets =
+                    self.unhandled_lost_packets.saturating_add(1);
                 return Ok(vec![]);
             }
             EncodedInputEvent::AuDelimiter => return Ok(vec![]),
@@ -99,11 +104,14 @@ impl OpusDecoder {
         &mut self,
         encoded_chunk: &EncodedInputChunk,
     ) -> Result<InputAudioSamples, DecodingError> {
-        let decoded_samples_count =
-            self.decoder
-                .decode(&encoded_chunk.data, &mut self.decoded_samples_buffer, false)?;
+        let decoded_samples_count = self.decoder.decode(
+            &encoded_chunk.data,
+            &mut self.decoded_samples_buffer,
+            false,
+        )?;
 
-        let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
+        let samples =
+            Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
         Ok(InputAudioSamples {
             samples,
             start_pts: encoded_chunk.pts,
@@ -126,12 +134,14 @@ impl OpusDecoder {
         encoded_chunk: &EncodedInputChunk,
         lost_packets: u32,
     ) -> Result<Option<InputAudioSamples>, DecodingError> {
-        let Ok(samples_per_packet) = self.decoder.get_nb_samples(&encoded_chunk.data) else {
+        let Ok(samples_per_packet) = self.decoder.get_nb_samples(&encoded_chunk.data)
+        else {
             debug!("Failed to read opus packet duration; skipping FEC.");
             return Ok(None);
         };
-        let packet_duration =
-            Duration::from_secs_f64(samples_per_packet as f64 / self.decoded_sample_rate as f64);
+        let packet_duration = Duration::from_secs_f64(
+            samples_per_packet as f64 / self.decoded_sample_rate as f64,
+        );
 
         // Cap how much we ask opus to synthesise. Beyond ~60–80 ms PLC degrades to
         // noise, and opus itself rejects more than 120 ms per call.
@@ -164,7 +174,8 @@ impl OpusDecoder {
         let recovered_duration = packet_duration * recovered_packets;
         let start_pts = encoded_chunk.pts.saturating_sub(recovered_duration);
 
-        let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
+        let samples =
+            Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
         Ok(Some(InputAudioSamples {
             samples,
             start_pts,

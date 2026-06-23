@@ -9,31 +9,19 @@ pub struct VpCodecConfig {
 
 impl VpCodecConfig {
     pub fn vp8() -> Self {
-        Self {
-            profile: 0,
-            chroma_subsampling: 1,
-        }
+        Self { profile: 0, chroma_subsampling: 1 }
     }
 
     pub fn vp9_yuv420p() -> Self {
-        Self {
-            profile: 0,
-            chroma_subsampling: 1,
-        }
+        Self { profile: 0, chroma_subsampling: 1 }
     }
 
     pub fn vp9_yuv422p() -> Self {
-        Self {
-            profile: 1,
-            chroma_subsampling: 2,
-        }
+        Self { profile: 1, chroma_subsampling: 2 }
     }
 
     pub fn vp9_yuv444p() -> Self {
-        Self {
-            profile: 1,
-            chroma_subsampling: 3,
-        }
+        Self { profile: 1, chroma_subsampling: 3 }
     }
 
     pub fn to_bytes(self) -> Bytes {
@@ -43,7 +31,7 @@ impl VpCodecConfig {
             0,
             0, // flags
             self.profile,
-            0,                                         // level (undefined for VP8/VP9 live)
+            0, // level (undefined for VP8/VP9 live)
             (8 << 4) | (self.chroma_subsampling << 1), // bitDepth | chromaSubsampling | videoFullRangeFlag
             1,                                         // BT.709 color primaries
             1,                                         // BT.709 transfer characteristics

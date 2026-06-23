@@ -52,12 +52,9 @@ pub(super) fn start_udp_reader_thread(
     thread::Builder::new()
         .name(format!("RTP UDP receiver {input_ref}"))
         .spawn(move || {
-            let _span = span!(
-                Level::INFO,
-                "RTP UDP Receiver",
-                input_id = input_ref.to_string()
-            )
-            .entered();
+            let _span =
+                span!(Level::INFO, "RTP UDP Receiver", input_id = input_ref.to_string())
+                    .entered();
             run_udp_receiver_thread(socket, packets_tx, should_close);
             debug!("Closing RTP receiver thread (UDP).");
         })
@@ -90,10 +87,7 @@ fn run_udp_receiver_thread(
             },
         };
 
-        if packets_tx
-            .send(Bytes::copy_from_slice(&buffer[..received_bytes]))
-            .is_err()
-        {
+        if packets_tx.send(Bytes::copy_from_slice(&buffer[..received_bytes])).is_err() {
             debug!("Failed to send raw RTP packet UDP receiver thread. Channel closed.");
             return;
         }

@@ -7,10 +7,7 @@ use integration_tests::{
     media::{MediaReceiver, MediaSender, Receive, Send, TestSample},
 };
 
-const VIDEO_RESOLUTION: Resolution = Resolution {
-    width: 1280,
-    height: 720,
-};
+const VIDEO_RESOLUTION: Resolution = Resolution { width: 1280, height: 720 };
 
 const INPUT_PORT: u16 = 8002;
 const OUTPUT_PORT: u16 = 8004;

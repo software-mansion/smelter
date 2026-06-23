@@ -3,19 +3,20 @@ use std::collections::HashMap;
 use tracing::{debug, warn};
 
 use crate::{
-    AudioChannels, ExCapabilities, RtmpAudioCodec, RtmpConnectionError, RtmpEvent, RtmpVideoCodec,
-    TrackKey,
+    AudioChannels, ExCapabilities, RtmpAudioCodec, RtmpConnectionError, RtmpEvent,
+    RtmpVideoCodec, TrackKey,
     client::negotiation::{
         NegotiationProgress, send_connect, send_create_stream, send_publish,
         warn_on_unsupported_codecs,
     },
     error::RtmpStreamError,
     message::{
-        AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, DataMessage, RtmpMessageIncoming,
-        RtmpMessageOutgoing, UserControlMessage, VideoMessage,
+        AudioMessage, CONTROL_MESSAGE_STREAM_ID, CommandMessage, DataMessage,
+        RtmpMessageIncoming, RtmpMessageOutgoing, UserControlMessage, VideoMessage,
     },
     protocol::{
-        byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
+        byte_stream::RtmpByteStream, handshake::Handshake,
+        message_stream::RtmpMessageStream,
     },
     transport::RtmpTransport,
     utils::ShutdownCondition,
@@ -135,11 +136,7 @@ impl RtmpClient {
         let stream_id = state.negotiate_connection(&config)?;
         debug!("Negotiation complete");
 
-        Ok(Self {
-            state,
-            stream_id,
-            shutdown_condition,
-        })
+        Ok(Self { state, stream_id, shutdown_condition })
     }
 
     pub fn send<T>(&mut self, event: T) -> Result<(), RtmpStreamError>
@@ -199,16 +196,13 @@ impl RtmpClient {
 
 impl Drop for RtmpClient {
     fn drop(&mut self) {
-        let _ = self
-            .state
-            .stream
-            .write_msg(RtmpMessageOutgoing::CommandMessage {
-                msg: CommandMessage::DeleteStream {
-                    transaction_id: 0,
-                    stream_id: self.stream_id,
-                },
-                stream_id: CONTROL_MESSAGE_STREAM_ID,
-            });
+        let _ = self.state.stream.write_msg(RtmpMessageOutgoing::CommandMessage {
+            msg: CommandMessage::DeleteStream {
+                transaction_id: 0,
+                stream_id: self.stream_id,
+            },
+            stream_id: CONTROL_MESSAGE_STREAM_ID,
+        });
         self.shutdown_condition.mark_for_shutdown();
     }
 }
@@ -253,8 +247,7 @@ impl RtmpClientState {
                 self.stream.write_msg(RtmpMessageOutgoing::SetChunkSize {
                     chunk_size: OUTGOING_CHUNK_SIZE,
                 })?;
-                self.stream
-                    .set_writer_chunk_size(OUTGOING_CHUNK_SIZE as usize);
+                self.stream.set_writer_chunk_size(OUTGOING_CHUNK_SIZE as usize);
                 continue;
             }
 
@@ -266,7 +259,10 @@ impl RtmpClientState {
         }
     }
 
-    fn default_msg_handler(&mut self, msg: RtmpMessageIncoming) -> Result<(), RtmpStreamError> {
+    fn default_msg_handler(
+        &mut self,
+        msg: RtmpMessageIncoming,
+    ) -> Result<(), RtmpStreamError> {
         match msg {
             RtmpMessageIncoming::SetChunkSize { chunk_size } => {
                 self.stream.set_reader_chunk_size(chunk_size as usize);
@@ -286,7 +282,9 @@ impl RtmpClientState {
                     window_size: bandwidth,
                 })?;
             }
-            RtmpMessageIncoming::UserControl(UserControlMessage::PingRequest { timestamp }) => {
+            RtmpMessageIncoming::UserControl(UserControlMessage::PingRequest {
+                timestamp,
+            }) => {
                 let msg = UserControlMessage::PingResponse { timestamp };
                 self.stream.write_msg(msg.into())?;
             }
@@ -307,10 +305,9 @@ impl RtmpClientState {
         };
         let bytes_received = self.stream.bytes_read();
         if bytes_received.saturating_sub(self.last_ack) > window_size / 2 {
-            self.stream
-                .write_msg(RtmpMessageOutgoing::Acknowledgement {
-                    bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
-                })?;
+            self.stream.write_msg(RtmpMessageOutgoing::Acknowledgement {
+                bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
+            })?;
             self.last_ack = bytes_received;
         }
         Ok(())

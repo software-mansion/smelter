@@ -38,7 +38,8 @@ pub(crate) fn run_specific_render() -> Result<()> {
     let mut tests: Vec<&'static RenderTest> = render_tests();
     tests.sort_by_key(|t| t.full_test_name);
 
-    let labels: Vec<String> = tests.iter().map(|t| t.full_test_name.to_string()).collect();
+    let labels: Vec<String> =
+        tests.iter().map(|t| t.full_test_name.to_string()).collect();
 
     let matcher = SkimMatcherV2::default();
     let scorer = move |filter: &str, _value: &String, string_value: &str, _idx: usize| {
@@ -55,7 +56,9 @@ pub(crate) fn run_specific_render() -> Result<()> {
         .raw_prompt()
     {
         Ok(s) => s.index,
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => return Ok(()),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
+            return Ok(());
+        }
         Err(e) => return Err(e.into()),
     };
     let test = tests[selected_idx];
@@ -78,10 +81,7 @@ pub(crate) fn run_specific_render() -> Result<()> {
 pub(crate) fn audit_existing_render() -> Result<()> {
     let mut tests = discover_render_tests_with_snapshots()?;
     if tests.is_empty() {
-        warn!(
-            "No render test results found in {}",
-            render_tests_workdir().display()
-        );
+        warn!("No render test results found in {}", render_tests_workdir().display());
         return Ok(());
     }
     tests.sort_by_key(|t| t.full_test_name);
@@ -129,8 +129,12 @@ fn audit_render_test(
             opened_snapshot_name = None;
         }
 
-        let selection =
-            prompt_render_test_menu(test, &pairs, opened_snapshot_name.as_deref(), cursor)?;
+        let selection = prompt_render_test_menu(
+            test,
+            &pairs,
+            opened_snapshot_name.as_deref(),
+            cursor,
+        )?;
         let (choice, picked_idx) = match selection {
             None => return Ok(ControlFlow::Break(())),
             Some(pair) => pair,
@@ -158,10 +162,17 @@ fn audit_render_test(
                 let snapshot = &pairs[idx];
                 opened_snapshot_name = Some(snapshot.snapshot_name.clone());
                 let alive = inspector.as_ref().is_some_and(|insp| {
-                    render_tests_inspector::refresh(insp, &snapshot.expected, &snapshot.actual)
+                    render_tests_inspector::refresh(
+                        insp,
+                        &snapshot.expected,
+                        &snapshot.actual,
+                    )
                 });
                 if !alive {
-                    match render_tests_inspector::open(&snapshot.expected, &snapshot.actual) {
+                    match render_tests_inspector::open(
+                        &snapshot.expected,
+                        &snapshot.actual,
+                    ) {
                         Ok(insp) => *inspector = Some(insp),
                         Err(e) => error!("Failed to launch render inspector: {e:#}"),
                     }
@@ -172,7 +183,8 @@ fn audit_render_test(
                     warn!("Open a snapshot first before updating");
                     continue;
                 };
-                let Some(snapshot) = pairs.iter().find(|p| p.snapshot_name == name) else {
+                let Some(snapshot) = pairs.iter().find(|p| p.snapshot_name == name)
+                else {
                     warn!("Opened snapshot {name} is no longer in the workdir");
                     opened_snapshot_name = None;
                     continue;
@@ -206,12 +218,16 @@ fn prompt_render_test_menu(
     const RESET: &str = "\x1b[0m";
 
     println!();
-    println!("{BOLD}{YELLOW}── Render test ──────────────────────────────────────{RESET}");
+    println!(
+        "{BOLD}{YELLOW}── Render test ──────────────────────────────────────{RESET}"
+    );
     println!("{BOLD}{CYAN}{}{RESET}", test.full_test_name);
     if !test.description.is_empty() {
         println!("{}", test.description);
     }
-    println!("{BOLD}{YELLOW}─────────────────────────────────────────────────────{RESET}");
+    println!(
+        "{BOLD}{YELLOW}─────────────────────────────────────────────────────{RESET}"
+    );
     println!();
 
     // When a snapshot is open, surface `Update` first — the common
@@ -260,7 +276,9 @@ fn prompt_render_test_menu(
             };
             Ok(Some((choice, idx)))
         }
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => Ok(None),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
+            Ok(None)
+        }
         Err(e) => Err(e.into()),
     }
 }
@@ -322,8 +340,8 @@ fn discover_render_tests_with_snapshots() -> Result<Vec<&'static RenderTest>> {
     if !workdir.exists() {
         return Ok(found);
     }
-    for entry in
-        fs::read_dir(&workdir).with_context(|| format!("Failed to read {}", workdir.display()))?
+    for entry in fs::read_dir(&workdir)
+        .with_context(|| format!("Failed to read {}", workdir.display()))?
     {
         let entry = entry?;
         let file_name = entry.file_name();
@@ -333,9 +351,8 @@ fn discover_render_tests_with_snapshots() -> Result<Vec<&'static RenderTest>> {
         if !name.ends_with(".png") {
             continue;
         }
-        let Some(snapshot) = name
-            .strip_prefix("actual_")
-            .or_else(|| name.strip_prefix("expected_"))
+        let Some(snapshot) =
+            name.strip_prefix("actual_").or_else(|| name.strip_prefix("expected_"))
         else {
             continue;
         };
@@ -358,9 +375,10 @@ fn render_snapshot_pairs_for_test(test: &RenderTest) -> Result<Vec<RenderSnapsho
     if !workdir.exists() {
         return Ok(Vec::new());
     }
-    let mut by_name: std::collections::BTreeMap<String, (bool, bool)> = Default::default();
-    for entry in
-        fs::read_dir(&workdir).with_context(|| format!("Failed to read {}", workdir.display()))?
+    let mut by_name: std::collections::BTreeMap<String, (bool, bool)> =
+        Default::default();
+    for entry in fs::read_dir(&workdir)
+        .with_context(|| format!("Failed to read {}", workdir.display()))?
     {
         let entry = entry?;
         let file_name = entry.file_name();
@@ -377,7 +395,9 @@ fn render_snapshot_pairs_for_test(test: &RenderTest) -> Result<Vec<RenderSnapsho
         } else {
             continue;
         };
-        if match_render_test_for_workdir_snapshot(rest).is_none_or(|t| !std::ptr::eq(t, test)) {
+        if match_render_test_for_workdir_snapshot(rest)
+            .is_none_or(|t| !std::ptr::eq(t, test))
+        {
             continue;
         }
         let slot = by_name.entry(rest.to_string()).or_default();
@@ -392,11 +412,7 @@ fn render_snapshot_pairs_for_test(test: &RenderTest) -> Result<Vec<RenderSnapsho
         .map(|snapshot_name| {
             let actual = workdir.join(format!("actual_{snapshot_name}"));
             let expected = workdir.join(format!("expected_{snapshot_name}"));
-            RenderSnapshotPair {
-                snapshot_name,
-                actual,
-                expected,
-            }
+            RenderSnapshotPair { snapshot_name, actual, expected }
         })
         .collect())
 }
@@ -415,11 +431,7 @@ fn update_render_snapshot(snapshot: &RenderSnapshotPair) -> Result<()> {
             .with_context(|| format!("Failed to create {}", parent.display()))?;
     }
     fs::copy(&snapshot.actual, &dst).with_context(|| {
-        format!(
-            "Failed to copy {} -> {}",
-            snapshot.actual.display(),
-            dst.display()
-        )
+        format!("Failed to copy {} -> {}", snapshot.actual.display(), dst.display())
     })?;
     info!("Updated {}", dst.display());
     Ok(())
@@ -439,9 +451,7 @@ fn committed_snapshot_path(workdir_snapshot_name: &str) -> Result<PathBuf> {
         .with_context(|| {
             format!("workdir snapshot name `{workdir_snapshot_name}` missing `<module>__` prefix")
         })?;
-    Ok(render_snapshots_dir_path()
-        .join(test.module)
-        .join(committed_name))
+    Ok(render_snapshots_dir_path().join(test.module).join(committed_name))
 }
 
 fn clear_render_snapshot_pair(snapshot: &RenderSnapshotPair) -> Result<()> {
@@ -470,9 +480,7 @@ fn parse_workdir_snapshot_name(name: &str) -> Option<(&str, &str)> {
 /// modules would otherwise alias.
 fn match_render_test_for_workdir_snapshot(name: &str) -> Option<&'static RenderTest> {
     let (module, test_name) = parse_workdir_snapshot_name(name)?;
-    render_tests()
-        .into_iter()
-        .find(|t| t.module == module && t.test_name == test_name)
+    render_tests().into_iter().find(|t| t.module == module && t.test_name == test_name)
 }
 
 /// Look up the `RenderTest` for a committed snapshot file. The

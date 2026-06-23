@@ -13,18 +13,12 @@ pub struct Resolution {
 
 impl From<Resolution> for smelter_render::Resolution {
     fn from(resolution: Resolution) -> Self {
-        Self {
-            width: resolution.width,
-            height: resolution.height,
-        }
+        Self { width: resolution.width, height: resolution.height }
     }
 }
 
 impl From<Resolution> for scene::Size {
     fn from(resolution: Resolution) -> Self {
-        Self {
-            width: resolution.width as f32,
-            height: resolution.height as f32,
-        }
+        Self { width: resolution.width as f32, height: resolution.height as f32 }
     }
 }

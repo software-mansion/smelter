@@ -762,10 +762,7 @@ fn text_align_center() {
         scene::Component::Text(scene::TextComponent {
             font_family: Arc::from("Inter"),
             align: scene::HorizontalAlign::Center,
-            dimensions: scene::TextDimensions::Fixed {
-                width: 1000.0,
-                height: 200.0,
-            },
+            dimensions: scene::TextDimensions::Fixed { width: 1000.0, height: 200.0 },
             ..text_default("Example text", 100.0)
         }),
     );
@@ -792,10 +789,7 @@ fn text_bold_right_aligned() {
             font_family: Arc::from("Inter"),
             align: scene::HorizontalAlign::Right,
             weight: scene::TextWeight::Bold,
-            dimensions: scene::TextDimensions::Fixed {
-                width: 1000.0,
-                height: 200.0,
-            },
+            dimensions: scene::TextDimensions::Fixed { width: 1000.0, height: 200.0 },
             ..text_default("Example text", 100.0)
         }),
     );
@@ -893,10 +887,7 @@ fn shader_with_inputs_no_params() {
             id: None,
             shader_id: smelter_render::RendererId("base_params_plane_id".into()),
             shader_param: None,
-            size: scene::Size {
-                width: 640.0,
-                height: 360.0,
-            },
+            size: scene::Size { width: 640.0, height: 360.0 },
             children: vec![input_stream(None, "input_1"), input_stream(None, "input_2")],
         }),
     );
@@ -957,10 +948,7 @@ fn shader_param_full_enum_coverage() {
                     ]),
                 },
             ])),
-            size: scene::Size {
-                width: 640.0,
-                height: 360.0,
-            },
+            size: scene::Size { width: 640.0, height: 360.0 },
             children: vec![],
         }),
     );

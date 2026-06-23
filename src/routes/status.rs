@@ -84,10 +84,7 @@ pub async fn status_handler(
                 InputProtocolKind::DeckLink => "decklink",
                 InputProtocolKind::RawDataChannel => "raw_data",
             };
-            InputInfo {
-                input_id: id.to_string(),
-                input_type: input_type.to_string(),
-            }
+            InputInfo { input_id: id.to_string(), input_type: input_type.to_string() }
         })
         .collect();
 
@@ -104,10 +101,7 @@ pub async fn status_handler(
                 OutputProtocolKind::EncodedDataChannel => "encoded_data",
                 OutputProtocolKind::RawDataChannel => "raw_data",
             };
-            OutputInfo {
-                output_id: id.to_string(),
-                output_type: output_type.to_string(),
-            }
+            OutputInfo { output_id: id.to_string(), output_type: output_type.to_string() }
         })
         .collect();
 

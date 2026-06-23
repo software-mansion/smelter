@@ -4,8 +4,8 @@ use tracing::warn;
 
 use crate::{
     ExCapabilities, ExVideoPacket, ExVideoTag, FlvVideoData, LegacyFlvVideoCodec,
-    RtmpMessageParseError, RtmpMessageSerializeError, RtmpVideoCodec, TrackId, VideoConfig,
-    VideoData, VideoTag, VideoTagFrameType, VideoTagH264PacketType,
+    RtmpMessageParseError, RtmpMessageSerializeError, RtmpVideoCodec, TrackId,
+    VideoConfig, VideoData, VideoTag, VideoTagFrameType, VideoTagH264PacketType,
     message::VIDEO_CHUNK_STREAM_ID,
     protocol::{MessageType, RawMessage},
 };
@@ -45,7 +45,8 @@ impl VideoMessage {
                     track_id: TrackId::PRIMARY,
                     codec: RtmpVideoCodec::H264,
                     pts: Duration::from_millis(
-                        (timestamp as i64 + tag.composition_time.unwrap_or(0) as i64).max(0) as u64,
+                        (timestamp as i64 + tag.composition_time.unwrap_or(0) as i64)
+                            .max(0) as u64,
                     ),
                     dts: Duration::from_millis(timestamp.into()),
                     data: tag.data,
@@ -83,18 +84,14 @@ impl VideoMessage {
             ExVideoTag::StartSeek | ExVideoTag::EndSeek => return Self::Unknown,
         };
         let nanos_offset = u64::from(timestamp_offset_nanos.unwrap_or(0));
-        let dts = Duration::from_millis(timestamp.into()) + Duration::from_nanos(nanos_offset);
+        let dts =
+            Duration::from_millis(timestamp.into()) + Duration::from_nanos(nanos_offset);
 
         match packet {
-            ExVideoPacket::SequenceStart(data) => Self::Config(VideoConfig {
-                track_id: TrackId::PRIMARY,
-                codec,
-                data,
-            }),
-            ExVideoPacket::CodedFrames {
-                composition_time,
-                data,
-            } => {
+            ExVideoPacket::SequenceStart(data) => {
+                Self::Config(VideoConfig { track_id: TrackId::PRIMARY, codec, data })
+            }
+            ExVideoPacket::CodedFrames { composition_time, data } => {
                 let is_keyframe = match frame_type {
                     VideoTagFrameType::Keyframe => true,
                     VideoTagFrameType::Interframe => false,
@@ -140,7 +137,8 @@ fn video_into_raw(
 ) -> Result<RawMessage, RtmpMessageSerializeError> {
     let dts_nanos = video.dts.as_nanos();
     let timestamp = (dts_nanos / 1_000_000) as u32;
-    let composition_time = (video.pts.as_millis() as i64 - video.dts.as_millis() as i64) as i32;
+    let composition_time =
+        (video.pts.as_millis() as i64 - video.dts.as_millis() as i64) as i32;
 
     let payload = match video.codec {
         RtmpVideoCodec::H264 => FlvVideoData::Legacy(VideoTag {
@@ -161,10 +159,7 @@ fn video_into_raw(
                 .filter(|offset| *offset != 0);
             FlvVideoData::Enhanced(ExVideoTag::VideoBody {
                 four_cc: video.codec.into(),
-                packet: ExVideoPacket::CodedFrames {
-                    composition_time,
-                    data: video.data,
-                },
+                packet: ExVideoPacket::CodedFrames { composition_time, data: video.data },
                 frame_type: match video.is_keyframe {
                     true => VideoTagFrameType::Keyframe,
                     false => VideoTagFrameType::Interframe,
@@ -224,8 +219,8 @@ mod tests {
 
     use super::VideoMessage;
     use crate::{
-        ExCapabilities, ExVideoFourCc, ExVideoPacket, ExVideoTag, FlvVideoData, RtmpVideoCodec,
-        TrackId, VideoData, VideoTagFrameType,
+        ExCapabilities, ExVideoFourCc, ExVideoPacket, ExVideoTag, FlvVideoData,
+        RtmpVideoCodec, TrackId, VideoData, VideoTagFrameType,
         protocol::{MessageType, RawMessage},
     };
 
@@ -298,9 +293,7 @@ mod tests {
 
     #[test]
     fn drops_seek_commands() {
-        let payload = FlvVideoData::Enhanced(ExVideoTag::StartSeek)
-            .serialize()
-            .unwrap();
+        let payload = FlvVideoData::Enhanced(ExVideoTag::StartSeek).serialize().unwrap();
 
         let message = VideoMessage::from_raw(RawMessage {
             msg_type: MessageType::Video.into_raw(),

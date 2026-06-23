@@ -45,12 +45,7 @@ impl NV12Texture {
         );
         let (view_y, view_uv) = create_plane_views(&texture);
 
-        Self {
-            texture: Arc::new(texture),
-            secondary_texture: None,
-            view_y,
-            view_uv,
-        }
+        Self { texture: Arc::new(texture), secondary_texture: None, view_y, view_uv }
     }
 
     pub fn new_uploadable(ctx: &WgpuCtx, resolution: Resolution) -> Self {
@@ -87,7 +82,8 @@ impl NV12Texture {
             &[],
         );
 
-        let view_uv = secondary_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view_uv =
+            secondary_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         Self {
             texture: texture.into(),
@@ -112,12 +108,7 @@ impl NV12Texture {
 
         let (view_y, view_uv) = create_plane_views(&texture);
 
-        Ok(Self {
-            texture,
-            secondary_texture: None,
-            view_y,
-            view_uv,
-        })
+        Ok(Self { texture, secondary_texture: None, view_y, view_uv })
     }
 
     pub fn uploadable(&self) -> bool {
@@ -126,14 +117,23 @@ impl NV12Texture {
 
     pub fn upload(&self, ctx: &WgpuCtx, planes: &NvPlanes) {
         self.texture.upload_data(&ctx.queue, &planes.y_plane, 1);
-        self.secondary_texture
-            .as_ref()
-            .unwrap()
-            .upload_data(&ctx.queue, &planes.uv_planes, 2);
+        self.secondary_texture.as_ref().unwrap().upload_data(
+            &ctx.queue,
+            &planes.uv_planes,
+            2,
+        );
     }
 
     pub fn texture(&self) -> &wgpu::Texture {
         &self.texture
+    }
+
+    pub fn texture_arc(&self) -> Arc<wgpu::Texture> {
+        Arc::clone(&self.texture)
+    }
+
+    pub fn is_unused(&self) -> bool {
+        Arc::strong_count(&self.texture) == 1
     }
 
     pub fn views(&self) -> (&wgpu::TextureView, &wgpu::TextureView) {
@@ -188,9 +188,7 @@ impl NV12Texture {
     pub fn fill_with_color(&self, ctx: &WgpuCtx, color: RGBColor) {
         let (y, u, v) = color.to_yuv();
         ctx.utils.r8_fill_with_value.fill(ctx, &self.view_y, y);
-        ctx.utils
-            .rg8_fill_with_value
-            .fill(ctx, &self.view_uv, [u, v]);
+        ctx.utils.rg8_fill_with_value.fill(ctx, &self.view_uv, [u, v]);
     }
 }
 

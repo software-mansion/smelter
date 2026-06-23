@@ -16,11 +16,7 @@ pub struct AudioQueue {
 
 impl AudioQueue {
     pub fn new(sync_point: Instant, ahead_of_time_processing: bool) -> Self {
-        AudioQueue {
-            inputs: HashMap::new(),
-            sync_point,
-            ahead_of_time_processing,
-        }
+        AudioQueue { inputs: HashMap::new(), sync_point, ahead_of_time_processing }
     }
 
     pub fn add_input(&mut self, input_id: &InputId, weak: WeakQueueInput) {
@@ -42,18 +38,14 @@ impl AudioQueue {
             .inputs
             .iter()
             .filter_map(|(input_id, weak)| {
-                let audio_event = weak.audio(|input| input.pop_samples(range, queue_start_pts))?;
+                let audio_event =
+                    weak.audio(|input| input.pop_samples(range, queue_start_pts))?;
                 required = required || audio_event.required;
                 Some((input_id.clone(), audio_event.event))
             })
             .collect();
 
-        QueueAudioOutput {
-            required,
-            samples,
-            start_pts,
-            end_pts,
-        }
+        QueueAudioOutput { required, samples, start_pts, end_pts }
     }
 
     pub(super) fn should_push_for_pts_range(
@@ -78,7 +70,9 @@ impl AudioQueue {
             })
             .collect();
 
-        if !self.ahead_of_time_processing && self.sync_point + pts_range.0 > Instant::now() {
+        if !self.ahead_of_time_processing
+            && self.sync_point + pts_range.0 > Instant::now()
+        {
             return false;
         }
 

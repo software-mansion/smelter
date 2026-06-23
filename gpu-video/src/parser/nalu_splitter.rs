@@ -41,16 +41,14 @@ impl NALUSplitter {
         bytestream: &[u8],
         pts: Option<u64>,
     ) -> Vec<(Vec<u8>, Option<u64>)> {
-        let mut output_pts = if self.buffer.is_empty() {
-            pts
-        } else {
-            self.pts
-        };
+        let mut output_pts = if self.buffer.is_empty() { pts } else { self.pts };
 
         self.buffer.put(bytestream);
         let mut result = Vec::new();
 
-        while let Some(i) = find_start_of_next_nalu(&self.buffer[self.previous_search_end..]) {
+        while let Some(i) =
+            find_start_of_next_nalu(&self.buffer[self.previous_search_end..])
+        {
             let nalu = self.buffer.split_to(self.previous_search_end + i);
             self.previous_search_end = 0;
             result.push((nalu.to_vec(), output_pts));
@@ -72,7 +70,9 @@ impl NALUSplitter {
         }
 
         let mut result = Vec::new();
-        while let Some(i) = find_start_of_next_nalu(&self.buffer[self.previous_search_end..]) {
+        while let Some(i) =
+            find_start_of_next_nalu(&self.buffer[self.previous_search_end..])
+        {
             let nalu = self.buffer.split_to(self.previous_search_end + i);
             self.previous_search_end = 0;
             result.push((nalu.to_vec(), self.pts));

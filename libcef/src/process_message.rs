@@ -14,9 +14,7 @@ impl ProcessMessage {
     pub fn new(name: &str) -> Self {
         let name = CefString::new_raw(name);
         let inner = unsafe { libcef_sys::cef_process_message_create(&name) };
-        Self {
-            inner: CefRc::new(inner),
-        }
+        Self { inner: CefRc::new(inner) }
     }
 
     pub fn name(&self) -> String {
@@ -36,17 +34,18 @@ impl ProcessMessage {
         }
     }
 
-    pub fn write_string(&mut self, index: usize, data: String) -> Result<(), ProcessMessageError> {
+    pub fn write_string(
+        &mut self,
+        index: usize,
+        data: String,
+    ) -> Result<(), ProcessMessageError> {
         unsafe {
             let args = self.arg_list();
             let set_string = (*args.get_weak()).set_string.unwrap();
             let data = CefString::new_raw(data);
 
             if set_string(args.get_weak(), index, &data) != 1 {
-                return Err(ProcessMessageError::WriteFailed {
-                    ty: "string",
-                    index,
-                });
+                return Err(ProcessMessageError::WriteFailed { ty: "string", index });
             }
 
             Ok(())
@@ -79,7 +78,11 @@ impl ProcessMessage {
         }
     }
 
-    pub fn write_int(&mut self, index: usize, data: i32) -> Result<(), ProcessMessageError> {
+    pub fn write_int(
+        &mut self,
+        index: usize,
+        data: i32,
+    ) -> Result<(), ProcessMessageError> {
         unsafe {
             let args = self.arg_list();
             let set_int = (*args.get_weak()).set_int.unwrap();
@@ -117,16 +120,17 @@ impl ProcessMessage {
         }
     }
 
-    pub fn write_double(&mut self, index: usize, data: f64) -> Result<(), ProcessMessageError> {
+    pub fn write_double(
+        &mut self,
+        index: usize,
+        data: f64,
+    ) -> Result<(), ProcessMessageError> {
         unsafe {
             let args = self.arg_list();
             let set_double = (*args.get_weak()).set_double.unwrap();
 
             if set_double(args.get_weak(), index, data) != 1 {
-                return Err(ProcessMessageError::WriteFailed {
-                    ty: "double",
-                    index,
-                });
+                return Err(ProcessMessageError::WriteFailed { ty: "double", index });
             }
 
             Ok(())
@@ -186,10 +190,7 @@ pub struct ProcessMessageBuilder {
 
 impl ProcessMessageBuilder {
     pub fn new(message_name: &str) -> Self {
-        Self {
-            message: ProcessMessage::new(message_name),
-            current_index: 0,
-        }
+        Self { message: ProcessMessage::new(message_name), current_index: 0 }
     }
 
     pub fn build(self) -> ProcessMessage {
@@ -223,11 +224,7 @@ pub enum ProcessMessageError {
     #[error(
         "The actual type at {index} is {actual_ty} but tried to read {expected_ty} from process message."
     )]
-    ReadWrongType {
-        expected_ty: &'static str,
-        actual_ty: String,
-        index: usize,
-    },
+    ReadWrongType { expected_ty: &'static str, actual_ty: String, index: usize },
 
     #[error("Tried to read data at {index} but the process message length is {length}.")]
     ReadOutOfBounds { index: usize, length: usize },

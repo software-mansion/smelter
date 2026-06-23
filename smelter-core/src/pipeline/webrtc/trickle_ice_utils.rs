@@ -3,7 +3,9 @@ use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 
 use crate::pipeline::webrtc::error::WhipWhepServerError;
 
-pub(crate) fn ice_fragment_unmarshal(sdp_fragment_content: &str) -> Vec<RTCIceCandidateInit> {
+pub(crate) fn ice_fragment_unmarshal(
+    sdp_fragment_content: &str,
+) -> Vec<RTCIceCandidateInit> {
     let lines = sdp_fragment_content.split("\n");
     let mut candidates = Vec::new();
     let mut mid = None;
@@ -11,9 +13,7 @@ pub(crate) fn ice_fragment_unmarshal(sdp_fragment_content: &str) -> Vec<RTCIceCa
 
     for line in lines {
         if line.starts_with("a=mid:") {
-            mid = line
-                .split_once(':')
-                .map(|(_, value)| value.trim().to_string());
+            mid = line.split_once(':').map(|(_, value)| value.trim().to_string());
             mid_num = mid_num.map_or(Some(0), |index| Some(index + 1));
         }
         if line.starts_with("a=candidate:") {
@@ -28,16 +28,14 @@ pub(crate) fn ice_fragment_unmarshal(sdp_fragment_content: &str) -> Vec<RTCIceCa
     candidates
 }
 
-pub(crate) fn validate_content_type(headers: &HeaderMap) -> Result<(), WhipWhepServerError> {
-    let content_type = headers
-        .get("Content-Type")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
+pub(crate) fn validate_content_type(
+    headers: &HeaderMap,
+) -> Result<(), WhipWhepServerError> {
+    let content_type =
+        headers.get("Content-Type").and_then(|value| value.to_str().ok()).unwrap_or("");
 
     if content_type != "application/trickle-ice-sdpfrag" {
-        return Err(WhipWhepServerError::BadRequest(
-            "Invalid Content-Type".to_owned(),
-        ));
+        return Err(WhipWhepServerError::BadRequest("Invalid Content-Type".to_owned()));
     }
     Ok(())
 }

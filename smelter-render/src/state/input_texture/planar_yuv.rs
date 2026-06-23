@@ -23,11 +23,7 @@ impl PlanarYuvInput {
 
         let yuv_bind_group = upload_textures.new_bind_group(ctx);
 
-        Self {
-            upload_textures,
-            yuv_bind_group,
-            color_space_converter: None,
-        }
+        Self { upload_textures, yuv_bind_group, color_space_converter: None }
     }
 
     pub fn resolution(&self) -> Resolution {
@@ -80,7 +76,12 @@ impl PlanarYuvInput {
         }
     }
 
-    fn maybe_recreate(&mut self, ctx: &WgpuCtx, resolution: Resolution, variant: PlanarYuvVariant) {
+    fn maybe_recreate(
+        &mut self,
+        ctx: &WgpuCtx,
+        resolution: Resolution,
+        variant: PlanarYuvVariant,
+    ) {
         if resolution == self.upload_textures.resolution
             && variant == self.upload_textures.variant()
         {

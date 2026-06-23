@@ -78,17 +78,21 @@ pub async fn setup_video_track(
     debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
 
-    let stats_sender = WhipOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
+    let stats_sender =
+        WhipOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
 
-    let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
-        let supported = supported_codecs.iter().find_map(|codec_params| {
-            match encoder_options.matches(&codec_params.capability) {
-                true => Some(codec_params.clone()),
-                false => None,
-            }
-        })?;
-        Some((encoder_options.clone(), supported.clone()))
-    }) else {
+    let Some((options, codec_params)) =
+        encoder_preferences.iter().find_map(|encoder_options| {
+            let supported =
+                supported_codecs.iter().find_map(|codec_params| match encoder_options
+                    .matches(&codec_params.capability)
+                {
+                    true => Some(codec_params.clone()),
+                    false => None,
+                })?;
+            Some((encoder_options.clone(), supported.clone()))
+        })
+    else {
         return Err(WebrtcClientError::NoVideoCodecNegotiated);
     };
 
@@ -100,14 +104,12 @@ pub async fn setup_video_track(
 
     rtc_sender.replace_track(Some(track.clone())).await?;
 
-    fn payloader_options(codec: PayloadedCodec, payload_type: u8, ssrc: u32) -> PayloaderOptions {
-        PayloaderOptions {
-            codec,
-            payload_type,
-            clock_rate: 90_000,
-            mtu: 1200,
-            ssrc,
-        }
+    fn payloader_options(
+        codec: PayloadedCodec,
+        payload_type: u8,
+        ssrc: u32,
+    ) -> PayloaderOptions {
+        PayloaderOptions { codec, payload_type, clock_rate: 90_000, mtu: 1200, ssrc }
     }
 
     let ssrc = match rtc_sender_params.encodings.first() {
@@ -165,34 +167,38 @@ pub async fn setup_video_track(
                 },
             )
         }
-        VideoEncoderOptions::FfmpegVp8(options) => WhipVideoTrackThread::<FfmpegVp8Encoder>::spawn(
-            output_ref.clone(),
-            WhipVideoTrackThreadOptions {
-                ctx: ctx.clone(),
-                encoder_options: options,
-                payloader_options: payloader_options(
-                    PayloadedCodec::Vp8,
-                    codec_params.payload_type,
-                    ssrc,
-                ),
-                chunks_sender: sender,
-                stats_sender,
-            },
-        ),
-        VideoEncoderOptions::FfmpegVp9(options) => WhipVideoTrackThread::<FfmpegVp9Encoder>::spawn(
-            output_ref.clone(),
-            WhipVideoTrackThreadOptions {
-                ctx: ctx.clone(),
-                encoder_options: options,
-                payloader_options: payloader_options(
-                    PayloadedCodec::Vp9,
-                    codec_params.payload_type,
-                    ssrc,
-                ),
-                chunks_sender: sender,
-                stats_sender,
-            },
-        ),
+        VideoEncoderOptions::FfmpegVp8(options) => {
+            WhipVideoTrackThread::<FfmpegVp8Encoder>::spawn(
+                output_ref.clone(),
+                WhipVideoTrackThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options,
+                    payloader_options: payloader_options(
+                        PayloadedCodec::Vp8,
+                        codec_params.payload_type,
+                        ssrc,
+                    ),
+                    chunks_sender: sender,
+                    stats_sender,
+                },
+            )
+        }
+        VideoEncoderOptions::FfmpegVp9(options) => {
+            WhipVideoTrackThread::<FfmpegVp9Encoder>::spawn(
+                output_ref.clone(),
+                WhipVideoTrackThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options,
+                    payloader_options: payloader_options(
+                        PayloadedCodec::Vp9,
+                        codec_params.payload_type,
+                        ssrc,
+                    ),
+                    chunks_sender: sender,
+                    stats_sender,
+                },
+            )
+        }
     }?;
 
     handle_keyframe_requests(
@@ -214,18 +220,22 @@ pub async fn setup_audio_track(
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
-    let stats_sender = WhipOutputStatsSender::new(ctx.stats_sender.clone(), output_id.clone());
+    let stats_sender =
+        WhipOutputStatsSender::new(ctx.stats_sender.clone(), output_id.clone());
 
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
-    let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
-        let supported = supported_codecs.iter().find_map(|codec_params| {
-            match encoder_options.matches(&codec_params.capability) {
-                true => Some(codec_params.clone()),
-                false => None,
-            }
-        })?;
-        Some((encoder_options.clone(), supported.clone()))
-    }) else {
+    let Some((options, codec_params)) =
+        encoder_preferences.iter().find_map(|encoder_options| {
+            let supported =
+                supported_codecs.iter().find_map(|codec_params| match encoder_options
+                    .matches(&codec_params.capability)
+                {
+                    true => Some(codec_params.clone()),
+                    false => None,
+                })?;
+            Some((encoder_options.clone(), supported.clone()))
+        })
+    else {
         return Err(WebrtcClientError::NoAudioCodecNegotiated);
     };
 
@@ -237,14 +247,12 @@ pub async fn setup_audio_track(
 
     rtc_sender.replace_track(Some(track.clone())).await?;
 
-    fn payloader_options(codec: PayloadedCodec, payload_type: u8, ssrc: u32) -> PayloaderOptions {
-        PayloaderOptions {
-            codec,
-            payload_type,
-            clock_rate: 48_000,
-            mtu: 1200,
-            ssrc,
-        }
+    fn payloader_options(
+        codec: PayloadedCodec,
+        payload_type: u8,
+        ssrc: u32,
+    ) -> PayloaderOptions {
+        PayloaderOptions { codec, payload_type, clock_rate: 48_000, mtu: 1200, ssrc }
     }
 
     let ssrc = match rtc_sender_params.encodings.first() {
@@ -319,14 +327,17 @@ fn handle_packet_loss_requests(
                 let Some(pc) = pc.upgrade() else { return };
 
                 let stats = pc.get_stats().await.reports;
-                let outbound_id = String::from(RTC_OUTBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
+                let outbound_id =
+                    String::from(RTC_OUTBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
                 let remote_inbound_id =
                     String::from(RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
 
                 let outbound_stats = match stats.get(&outbound_id) {
                     Some(StatsReportType::OutboundRTP(report)) => report,
                     Some(_) => {
-                        error!("Invalid report type for given key! (This should not happen)");
+                        error!(
+                            "Invalid report type for given key! (This should not happen)"
+                        );
                         continue;
                     }
                     None => {
@@ -338,7 +349,9 @@ fn handle_packet_loss_requests(
                 let remote_inbound_stats = match stats.get(&remote_inbound_id) {
                     Some(StatsReportType::RemoteInboundRTP(report)) => report,
                     Some(_) => {
-                        error!("Invalid report type for given key! (This should not happen)");
+                        error!(
+                            "Invalid report type for given key! (This should not happen)"
+                        );
                         continue;
                     }
                     None => {
@@ -349,7 +362,8 @@ fn handle_packet_loss_requests(
 
                 let packets_sent: u64 = outbound_stats.packets_sent;
                 // This can be lower than 0 in case of duplicates
-                let packets_lost: u64 = i64::max(remote_inbound_stats.packets_lost, 0) as u64;
+                let packets_lost: u64 =
+                    i64::max(remote_inbound_stats.packets_lost, 0) as u64;
 
                 let packet_loss_percentage = calculate_packet_loss_percentage(
                     packets_sent,
@@ -380,8 +394,8 @@ fn calculate_packet_loss_percentage(
 
     // I don't want the system to panic in case of some bug
     let packet_loss_percentage: i32 = if packets_sent_since_last_report != 0 {
-        let mut loss =
-            100.0 * packets_lost_since_last_report as f64 / packets_sent_since_last_report as f64;
+        let mut loss = 100.0 * packets_lost_since_last_report as f64
+            / packets_sent_since_last_report as f64;
         // loss is rounded up to the nearest multiple of 5
         loss = f64::ceil(loss / 5.0) * 5.0;
         loss as i32

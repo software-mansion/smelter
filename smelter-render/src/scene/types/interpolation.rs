@@ -40,7 +40,9 @@ impl ContinuousValue for usize {
 impl<T: ContinuousValue + Clone> ContinuousValue for Option<T> {
     fn interpolate(start: &Self, end: &Self, state: InterpolationState) -> Self {
         match (start, end) {
-            (Some(start), Some(end)) => Some(ContinuousValue::interpolate(start, end, state)),
+            (Some(start), Some(end)) => {
+                Some(ContinuousValue::interpolate(start, end, state))
+            }
             (_, end) => end.clone(),
         }
     }
@@ -58,9 +60,10 @@ impl ContinuousValue for VerticalPosition {
             (VerticalPosition::TopOffset(start), VerticalPosition::TopOffset(end)) => {
                 Self::TopOffset(ContinuousValue::interpolate(start, end, state))
             }
-            (VerticalPosition::BottomOffset(start), VerticalPosition::BottomOffset(end)) => {
-                Self::BottomOffset(ContinuousValue::interpolate(start, end, state))
-            }
+            (
+                VerticalPosition::BottomOffset(start),
+                VerticalPosition::BottomOffset(end),
+            ) => Self::BottomOffset(ContinuousValue::interpolate(start, end, state)),
             (_, end) => *end,
         }
     }
@@ -69,12 +72,14 @@ impl ContinuousValue for VerticalPosition {
 impl ContinuousValue for HorizontalPosition {
     fn interpolate(start: &Self, end: &Self, state: InterpolationState) -> Self {
         match (start, end) {
-            (HorizontalPosition::LeftOffset(start), HorizontalPosition::LeftOffset(end)) => {
-                Self::LeftOffset(ContinuousValue::interpolate(start, end, state))
-            }
-            (HorizontalPosition::RightOffset(start), HorizontalPosition::RightOffset(end)) => {
-                Self::RightOffset(ContinuousValue::interpolate(start, end, state))
-            }
+            (
+                HorizontalPosition::LeftOffset(start),
+                HorizontalPosition::LeftOffset(end),
+            ) => Self::LeftOffset(ContinuousValue::interpolate(start, end, state)),
+            (
+                HorizontalPosition::RightOffset(start),
+                HorizontalPosition::RightOffset(end),
+            ) => Self::RightOffset(ContinuousValue::interpolate(start, end, state)),
             (_, end) => *end,
         }
     }

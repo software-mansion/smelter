@@ -24,9 +24,8 @@ impl H264AuSplitter {
             return Err(AuSplitterError::UnsupportedMediaKind(chunk.kind));
         }
 
-        let access_units = self
-            .parser
-            .parse(&chunk.data, Some(chunk.pts.as_micros() as u64))?;
+        let access_units =
+            self.parser.parse(&chunk.data, Some(chunk.pts.as_micros() as u64))?;
 
         self.process_au(access_units, chunk.present)
     }
@@ -98,7 +97,8 @@ impl H264AuSplitter {
 
                 let is_expected_frame_num = !sps.gaps_in_frame_num_value_allowed_flag
                     && frame_num != self.prev_ref_frame_num
-                    && frame_num != ((self.prev_ref_frame_num as i64 + 1) % max_frame_num) as u16;
+                    && frame_num
+                        != ((self.prev_ref_frame_num as i64 + 1) % max_frame_num) as u16;
                 if is_expected_frame_num {
                     debug!("AUSplitter detected missing frame");
                     self.detected_missed_frames = true;

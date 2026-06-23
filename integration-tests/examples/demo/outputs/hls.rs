@@ -65,12 +65,7 @@ impl From<HlsOutputOptions> for HlsOutput {
         let suffix = rand::rng().next_u32();
         let name = format!("hls_output_{suffix}");
         let path = integration_tests_root().join(&name).join("index.m3u8");
-        Self {
-            name,
-            path,
-            options: value,
-            stream_handles: vec![],
-        }
+        Self { name, path, options: value, stream_handles: vec![] }
     }
 }
 
@@ -110,7 +105,8 @@ impl HlsOutput {
     }
 
     fn start_ffmpeg_receiver(&mut self) -> Result<()> {
-        let handles = MediaReceiver::new(Receive::hls_player(self.path.clone())).spawn()?;
+        let handles =
+            MediaReceiver::new(Receive::hls_player(self.path.clone())).spawn()?;
         self.stream_handles.extend(handles);
         Ok(())
     }
@@ -140,12 +136,7 @@ impl HlsOutputBuilder {
     pub fn new() -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("hls_output_{suffix}");
-        Self {
-            name,
-            video: None,
-            audio: None,
-            player: OutputPlayer::Manual,
-        }
+        Self { name, video: None, audio: None, player: OutputPlayer::Manual }
     }
 
     pub fn prompt(self, running_state: RunningState) -> Result<Self> {
@@ -165,8 +156,10 @@ impl HlsOutputBuilder {
     }
 
     fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![HlsRegisterOptions::SetVideoStream, HlsRegisterOptions::Skip];
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+        let video_options =
+            vec![HlsRegisterOptions::SetVideoStream, HlsRegisterOptions::Skip];
+        let video_selection =
+            Select::new("Set video stream?", video_options).prompt_skippable()?;
 
         match video_selection {
             Some(HlsRegisterOptions::SetVideoStream) => {
@@ -178,7 +171,8 @@ impl HlsOutputBuilder {
                     video.scene = scene;
                 }
 
-                let encoder_options = vec![VideoEncoder::FfmpegH264, VideoEncoder::VulkanH264];
+                let encoder_options =
+                    vec![VideoEncoder::FfmpegH264, VideoEncoder::VulkanH264];
                 let encoder_choice =
                     Select::new("Select encoder (ESC for ffmpeg_h264):", encoder_options)
                         .prompt_skippable()?;
@@ -194,7 +188,8 @@ impl HlsOutputBuilder {
     }
 
     fn prompt_audio(self) -> Result<Self> {
-        let audio_options = vec![HlsRegisterOptions::SetAudioStream, HlsRegisterOptions::Skip];
+        let audio_options =
+            vec![HlsRegisterOptions::SetAudioStream, HlsRegisterOptions::Skip];
         let audio_selection =
             Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
 
@@ -214,7 +209,8 @@ impl HlsOutputBuilder {
         };
 
         let player_selection =
-            Select::new("Select player (ESC for Manual):", player_options).prompt_skippable()?;
+            Select::new("Select player (ESC for Manual):", player_options)
+                .prompt_skippable()?;
 
         match player_selection {
             Some(player) => Ok(self.with_player(player)),
@@ -244,12 +240,7 @@ impl HlsOutputBuilder {
             audio: self.audio,
             player: self.player,
         };
-        HlsOutput {
-            name: self.name,
-            path,
-            options,
-            stream_handles: vec![],
-        }
+        HlsOutput { name: self.name, path, options, stream_handles: vec![] }
     }
 }
 
@@ -283,10 +274,7 @@ impl HlsOutputVideoOptions {
 
 impl Default for HlsOutputVideoOptions {
     fn default() -> Self {
-        let resolution = VideoResolution {
-            width: 1920,
-            height: 1080,
-        };
+        let resolution = VideoResolution { width: 1920, height: 1080 };
         let root_id = "root".to_string();
         Self {
             resolution,
@@ -348,8 +336,6 @@ impl HlsOutputAudioOptions {
 
 impl Default for HlsOutputAudioOptions {
     fn default() -> Self {
-        Self {
-            encoder: AudioEncoder::Aac,
-        }
+        Self { encoder: AudioEncoder::Aac }
     }
 }

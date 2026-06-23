@@ -74,16 +74,8 @@ impl QueueThread {
 
     fn cleanup_old_data(&mut self) {
         // Drop old frames as if start was happening now.
-        self.queue
-            .video_queue
-            .lock()
-            .unwrap()
-            .drop_old_frames_before_start();
-        self.queue
-            .audio_queue
-            .lock()
-            .unwrap()
-            .drop_old_samples_before_start()
+        self.queue.video_queue.lock().unwrap().drop_old_frames_before_start();
+        self.queue.audio_queue.lock().unwrap().drop_old_samples_before_start()
     }
 }
 
@@ -180,11 +172,7 @@ impl QueueThreadAfterStart {
             } else {
                 self.queue.queue_ctx.last_pts.update(video_pts);
                 trace!(pts=?video_pts, "Try to push video frames.");
-                if self
-                    .video_processor
-                    .try_push_next_frame_set(video_pts)
-                    .is_none()
-                {
+                if self.video_processor.try_push_next_frame_set(video_pts).is_none() {
                     break;
                 }
             }
@@ -199,19 +187,14 @@ impl QueueThreadAfterStart {
             .first_key_value()
             .map(|(pts, _)| *pts + self.queue_start_pts);
 
-        let min_pts = video_pts
-            .min(audio_pts_range.0)
-            .min(event_pts.unwrap_or(Duration::MAX));
+        let min_pts =
+            video_pts.min(audio_pts_range.0).min(event_pts.unwrap_or(Duration::MAX));
 
         let new_event_pts = scheduled_event.pts + self.queue_start_pts;
 
         let is_future_event = new_event_pts >= min_pts;
         if !is_future_event {
-            tracing::warn!(
-                ?new_event_pts,
-                ?min_pts,
-                "Scheduled event received too late"
-            )
+            tracing::warn!(?new_event_pts, ?min_pts, "Scheduled event received too late")
         }
 
         if self.queue.run_late_scheduled_events || is_future_event {
@@ -248,8 +231,8 @@ impl VideoQueueProcessor {
     fn try_push_next_frame_set(&mut self, next_buffer_pts: Duration) -> Option<()> {
         let mut internal_queue = self.queue.video_queue.lock().unwrap();
 
-        let should_push_next_frame =
-            internal_queue.should_push_next_frameset(next_buffer_pts, self.queue_start_pts);
+        let should_push_next_frame = internal_queue
+            .should_push_next_frameset(next_buffer_pts, self.queue_start_pts);
         if !should_push_next_frame {
             return None;
         }
@@ -258,7 +241,8 @@ impl VideoQueueProcessor {
             internal_queue.get_frames_batch(next_buffer_pts, self.queue_start_pts);
         drop(internal_queue);
 
-        frames_batch.required = frames_batch.required || self.queue.never_drop_output_frames;
+        frames_batch.required =
+            frames_batch.required || self.queue.never_drop_output_frames;
 
         // potentially infinitely blocking if output is not consumed
         // and one of the stream is "required"
@@ -295,8 +279,10 @@ struct AudioQueueProcessor {
 impl AudioQueueProcessor {
     fn next_buffer_pts_range(&self) -> (Duration, Duration) {
         (
-            self.queue_start_pts + (self.queue.audio_chunk_duration * self.chunks_counter),
-            self.queue_start_pts + (self.queue.audio_chunk_duration * (self.chunks_counter + 1)),
+            self.queue_start_pts
+                + (self.queue.audio_chunk_duration * self.chunks_counter),
+            self.queue_start_pts
+                + (self.queue.audio_chunk_duration * (self.chunks_counter + 1)),
         )
     }
 
@@ -308,8 +294,8 @@ impl AudioQueueProcessor {
     ) -> Option<()> {
         let mut internal_queue = self.queue.audio_queue.lock().unwrap();
 
-        let should_push_next_batch =
-            internal_queue.should_push_for_pts_range(next_buffer_pts_range, self.queue_start_pts);
+        let should_push_next_batch = internal_queue
+            .should_push_for_pts_range(next_buffer_pts_range, self.queue_start_pts);
         if !should_push_next_batch {
             return None;
         }

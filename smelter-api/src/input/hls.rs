@@ -25,7 +25,9 @@ pub struct HlsInput {
     pub side_channel: Option<SideChannel>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq, Eq, Hash,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum InputHlsCodec {
     H264,

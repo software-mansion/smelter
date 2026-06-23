@@ -59,9 +59,9 @@ impl SampleMixer {
         };
 
         match output_info.channels {
-            AudioChannels::Mono => {
-                AudioSamples::Mono(mixed.into_iter().map(|(l, r)| (l + r) / 2.0).collect())
-            }
+            AudioChannels::Mono => AudioSamples::Mono(
+                mixed.into_iter().map(|(l, r)| (l + r) / 2.0).collect(),
+            ),
             AudioChannels::Stereo => AudioSamples::Stereo(mixed),
         }
     }
@@ -84,14 +84,18 @@ impl SampleMixer {
                 self.vol_up_threshold
             });
 
-        let should_decrease_volume = max_sample * self.scaling_factor > self.vol_down_threshold;
-        let should_increase_volume = max_sample * self.scaling_factor < self.vol_up_threshold;
+        let should_decrease_volume =
+            max_sample * self.scaling_factor > self.vol_down_threshold;
+        let should_increase_volume =
+            max_sample * self.scaling_factor < self.vol_up_threshold;
 
         let old_scaling_factor = self.scaling_factor;
         if should_decrease_volume {
-            self.scaling_factor = f64::max(self.scaling_factor - self.vol_down_increment, 0.0)
+            self.scaling_factor =
+                f64::max(self.scaling_factor - self.vol_down_increment, 0.0)
         } else if should_increase_volume {
-            self.scaling_factor = f64::min(self.scaling_factor + self.vol_up_increment, 1.0)
+            self.scaling_factor =
+                f64::min(self.scaling_factor + self.vol_up_increment, 1.0)
         };
         trace!(
             max_sample,
@@ -106,7 +110,8 @@ impl SampleMixer {
             .into_iter()
             .enumerate()
             .map(|(index, (l, r))| {
-                let factor = old_scaling_factor + factor_diff * index as f64 / sample_count as f64;
+                let factor =
+                    old_scaling_factor + factor_diff * index as f64 / sample_count as f64;
                 ((l * factor).clamp(-1.0, 1.0), (r * factor).clamp(-1.0, 1.0))
             })
             .collect()

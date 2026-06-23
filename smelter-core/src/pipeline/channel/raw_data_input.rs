@@ -45,26 +45,23 @@ impl RawDataInput {
         input_ref: Ref<InputId>,
         options: RawDataInputOptions,
     ) -> Result<(Input, RawDataInputSender, QueueInput), InputInitError> {
-        let buffer_duration = options
-            .buffer_duration
-            .unwrap_or(ctx.default_buffer_duration);
+        let buffer_duration =
+            options.buffer_duration.unwrap_or(ctx.default_buffer_duration);
 
         let queue_input = QueueInput::new(
             &ctx,
             &input_ref,
-            QueueInputOptions {
-                required: options.required,
-                ..Default::default()
-            },
+            QueueInputOptions { required: options.required, ..Default::default() },
         );
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: options.video,
-            audio: options.audio,
-            offset: match options.offset {
-                Some(offset) => QueueTrackOffset::FromStart(offset),
-                None => QueueTrackOffset::None,
-            },
-        });
+        let (video_sender, audio_sender) =
+            queue_input.queue_new_track(QueueTrackOptions {
+                video: options.video,
+                audio: options.audio,
+                offset: match options.offset {
+                    Some(offset) => QueueTrackOffset::FromStart(offset),
+                    None => QueueTrackOffset::None,
+                },
+            });
 
         let first_pts = Arc::new(Mutex::new(None));
 
@@ -87,10 +84,7 @@ impl RawDataInput {
 
         Ok((
             Input::RawDataChannel,
-            RawDataInputSender {
-                video: video_sender,
-                audio: audio_sender,
-            },
+            RawDataInputSender { video: video_sender, audio: audio_sender },
             queue_input,
         ))
     }
@@ -105,9 +99,7 @@ fn spawn_video_repacking_thread(
     let (input_sender, input_receiver) = bounded::<PipelineEvent<Frame>>(1000);
 
     thread::Builder::new()
-        .name(format!(
-            "Raw channel video synchronization thread for input {input_ref}"
-        ))
+        .name(format!("Raw channel video synchronization thread for input {input_ref}"))
         .spawn(move || {
             for event in input_receiver.into_iter() {
                 match event {
@@ -141,12 +133,11 @@ fn spawn_audio_repacking_thread(
     mut buffer: InputDelayBuffer<InputAudioSamples>,
     samples_sender: QueueSender<InputAudioSamples>,
 ) -> Sender<PipelineEvent<InputAudioSamples>> {
-    let (input_sender, input_receiver) = bounded::<PipelineEvent<InputAudioSamples>>(1000);
+    let (input_sender, input_receiver) =
+        bounded::<PipelineEvent<InputAudioSamples>>(1000);
 
     thread::Builder::new()
-        .name(format!(
-            "Raw channel audio synchronization thread for input {input_ref}"
-        ))
+        .name(format!("Raw channel audio synchronization thread for input {input_ref}"))
         .spawn(move || {
             for event in input_receiver.into_iter() {
                 match event {
@@ -155,7 +146,8 @@ fn spawn_audio_repacking_thread(
                 };
 
                 while let Some(mut batch) = buffer.read() {
-                    let first_pts = *first_pts.lock().unwrap().get_or_insert(batch.start_pts);
+                    let first_pts =
+                        *first_pts.lock().unwrap().get_or_insert(batch.start_pts);
                     batch.start_pts = batch.start_pts.saturating_sub(first_pts);
 
                     trace!(?batch, "Sending raw frame");

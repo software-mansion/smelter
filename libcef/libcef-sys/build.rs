@@ -15,9 +15,8 @@ fn main() -> Result<()> {
 
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     let cache_dir = dirs::cache_dir().unwrap().join("smelter");
-    let cef_root = env::var("CEF_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or(cache_dir.join("cef_root"));
+    let cef_root =
+        env::var("CEF_ROOT").map(PathBuf::from).unwrap_or(cache_dir.join("cef_root"));
 
     if !cef_root.exists() {
         for i in 0..5 {
@@ -59,15 +58,13 @@ fn prepare(cef_root: &Path, target_path: &Path) -> Result<bindgen::Bindings> {
     #[cfg(target_os = "macos")]
     {
         let framework_out_path = target_path.join("Frameworks");
-        fs::create_dir_all(&framework_out_path).expect("create frameworks output directory");
+        fs::create_dir_all(&framework_out_path)
+            .expect("create frameworks output directory");
 
         let framework_path = PathBuf::from(cef_root)
             .join("Release")
             .join("Chromium Embedded Framework.framework");
-        let options = CopyOptions {
-            skip_exist: true,
-            ..Default::default()
-        };
+        let options = CopyOptions { skip_exist: true, ..Default::default() };
 
         dir::copy(framework_path, framework_out_path, &options)?;
         dir::copy("resources", target_path, &options)?;
@@ -75,11 +72,8 @@ fn prepare(cef_root: &Path, target_path: &Path) -> Result<bindgen::Bindings> {
 
     #[cfg(target_os = "linux")]
     {
-        let options = CopyOptions {
-            skip_exist: true,
-            content_only: true,
-            ..Default::default()
-        };
+        let options =
+            CopyOptions { skip_exist: true, content_only: true, ..Default::default() };
 
         let cef_root = PathBuf::from(cef_root);
         let release_path = cef_root.join("Release");
@@ -112,10 +106,7 @@ fn link(cef_root: &Path, _target_path: &Path) {
 
 #[cfg(target_os = "linux")]
 fn link(_cef_root: &Path, target_path: &Path) {
-    println!(
-        "cargo:rustc-link-search=native={}",
-        target_path.join("lib").display()
-    );
+    println!("cargo:rustc-link-search=native={}", target_path.join("lib").display());
     println!("cargo:rustc-link-lib=dylib=cef");
 }
 
@@ -147,9 +138,8 @@ fn cef_url() -> &'static str {
 
 fn download_cef(cef_root_path: &Path) -> Result<()> {
     let url = cef_url();
-    let download_path = cef_root_path
-        .parent()
-        .context("Failed to retrieve CEF_ROOT parent directory")?;
+    let download_path =
+        cef_root_path.parent().context("Failed to retrieve CEF_ROOT parent directory")?;
     let client = reqwest::blocking::ClientBuilder::new()
         .timeout(Duration::from_secs(2 * 60))
         .build()?;

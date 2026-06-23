@@ -13,11 +13,15 @@ use crate::transformations::web_renderer::UNEMBED_SOURCE_FRAMES_MESSAGE;
 use crate::transformations::web_renderer::chromium_sender::{
     ChromiumSenderMessage, UpdateSharedMemoryInfo,
 };
-use crate::transformations::web_renderer::shared_memory::{SharedMemory, SharedMemoryError};
+use crate::transformations::web_renderer::shared_memory::{
+    SharedMemory, SharedMemoryError,
+};
 use crate::wgpu::texture::utils::pad_to_256;
 use crate::{RendererId, Resolution};
 
-use super::{EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE, WebRendererSpec, utils};
+use super::{
+    EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE, WebRendererSpec, utils,
+};
 use super::{browser_client::BrowserClient, chromium_context::ChromiumContext};
 
 pub(super) struct ChromiumSenderThread {
@@ -54,9 +58,8 @@ impl ChromiumSenderThread {
     }
 
     fn run(&mut self) {
-        let Ok(browser) = self
-            .chromium_context
-            .start_browser(&self.url, self.browser_client.clone())
+        let Ok(browser) =
+            self.chromium_context.start_browser(&self.url, self.browser_client.clone())
         else {
             error!("Couldn't start browser for {}", self.url);
             return;
@@ -69,10 +72,9 @@ impl ChromiumSenderThread {
         );
         loop {
             let result = match self.message_receiver.recv().unwrap() {
-                ChromiumSenderMessage::EmbedSources {
-                    resolutions,
-                    children_ids,
-                } => self.embed_frames(&mut state, resolutions, children_ids),
+                ChromiumSenderMessage::EmbedSources { resolutions, children_ids } => {
+                    self.embed_frames(&mut state, resolutions, children_ids)
+                }
                 ChromiumSenderMessage::EnsureSharedMemory { resolutions } => {
                     self.ensure_shared_memory(&mut state, resolutions)
                 }
@@ -100,27 +102,31 @@ impl ChromiumSenderThread {
         resolutions: Vec<Option<Resolution>>,
         children_ids: Vec<ComponentId>,
     ) -> Result<(), ChromiumSenderThreadError> {
-        let mut process_message = libcef::ProcessMessageBuilder::new(EMBED_SOURCE_FRAMES_MESSAGE);
+        let mut process_message =
+            libcef::ProcessMessageBuilder::new(EMBED_SOURCE_FRAMES_MESSAGE);
 
         // IPC message to chromium renderer subprocess consists of:
         // - shared memory path
         // - ID attribute of an HTML element
         // - texture width
         // - texture height
-        for (source_idx, (resolution, id)) in resolutions.into_iter().zip(children_ids).enumerate()
+        for (source_idx, (resolution, id)) in
+            resolutions.into_iter().zip(children_ids).enumerate()
         {
             let Some(Resolution { width, height }) = resolution else {
                 continue;
             };
 
-            process_message.write_string(state.shared_memory(source_idx)?.to_path_string())?;
+            process_message
+                .write_string(state.shared_memory(source_idx)?.to_path_string())?;
             process_message.write_string(id.to_string())?;
             process_message.write_int(width as i32)?;
             process_message.write_int(height as i32)?;
         }
 
         let frame = state.browser.main_frame()?;
-        frame.send_process_message(libcef::ProcessId::Renderer, process_message.build())?;
+        frame
+            .send_process_message(libcef::ProcessId::Renderer, process_message.build())?;
 
         Ok(())
     }
@@ -150,7 +156,8 @@ impl ChromiumSenderThread {
                 let mut process_message =
                     libcef::ProcessMessage::new(UNEMBED_SOURCE_FRAMES_MESSAGE);
                 process_message.write_string(0, shmem.to_path_string())?;
-                frame.send_process_message(libcef::ProcessId::Renderer, process_message)?;
+                frame
+                    .send_process_message(libcef::ProcessId::Renderer, process_message)?;
                 // -----
 
                 shmem.resize(size)?;
@@ -158,10 +165,8 @@ impl ChromiumSenderThread {
         }
 
         // Create additional shared memory
-        for (source_idx, resolution) in resolutions
-            .into_iter()
-            .enumerate()
-            .skip(shared_memory.len())
+        for (source_idx, resolution) in
+            resolutions.into_iter().enumerate().skip(shared_memory.len())
         {
             let size = size_from_resolution(resolution);
             shared_memory.push(SharedMemory::new(
@@ -228,16 +233,16 @@ impl Drop for ThreadState {
 }
 
 impl ThreadState {
-    fn new(browser: libcef::Browser, compositor_id: &str, web_renderer_id: &RendererId) -> Self {
-        let shared_memory_root_path =
-            utils::get_smelter_instance_tmp_path(compositor_id).join(web_renderer_id.to_string());
+    fn new(
+        browser: libcef::Browser,
+        compositor_id: &str,
+        web_renderer_id: &RendererId,
+    ) -> Self {
+        let shared_memory_root_path = utils::get_smelter_instance_tmp_path(compositor_id)
+            .join(web_renderer_id.to_string());
         let shared_memory = Vec::new();
 
-        Self {
-            browser,
-            shared_memory,
-            shared_memory_root_path,
-        }
+        Self { browser, shared_memory, shared_memory_root_path }
     }
 
     fn shared_memory(

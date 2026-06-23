@@ -42,7 +42,11 @@ pub(super) struct VideoSideChannelServer {
 }
 
 impl VideoSideChannelServer {
-    pub fn new(socket_path: PathBuf, input_id: &InputId, wgpu_ctx: Arc<WgpuCtx>) -> Option<Self> {
+    pub fn new(
+        socket_path: PathBuf,
+        input_id: &InputId,
+        wgpu_ctx: Arc<WgpuCtx>,
+    ) -> Option<Self> {
         let span = info_span!("side_channel", kind = "video", input_id = %input_id);
         let (clients, cleanup) = bind_and_spawn_accept(
             socket_path,
@@ -51,7 +55,8 @@ impl VideoSideChannelServer {
             span.clone(),
         )?;
 
-        let (sender, receiver) = crossbeam_channel::bounded::<Frame>(VIDEO_CHANNEL_CAPACITY);
+        let (sender, receiver) =
+            crossbeam_channel::bounded::<Frame>(VIDEO_CHANNEL_CAPACITY);
         thread::Builder::new()
             .name("video-sc-send".to_string())
             .spawn(move || {
@@ -68,10 +73,7 @@ impl VideoSideChannelServer {
             })
             .expect("Failed to spawn video side channel send thread");
 
-        Some(Self {
-            sender,
-            _cleanup: cleanup,
-        })
+        Some(Self { sender, _cleanup: cleanup })
     }
 }
 
@@ -105,10 +107,7 @@ impl AudioSideChannelServer {
             })
             .expect("Failed to spawn audio side channel send thread");
 
-        Some(Self {
-            sender,
-            _cleanup: cleanup,
-        })
+        Some(Self { sender, _cleanup: cleanup })
     }
 }
 
@@ -153,10 +152,7 @@ fn bind_and_spawn_accept(
         })
         .expect("Failed to spawn side channel accept thread");
 
-    let cleanup = Arc::new(ServerCleanup {
-        socket_path,
-        should_close,
-    });
+    let cleanup = Arc::new(ServerCleanup { socket_path, should_close });
     Some((clients, cleanup))
 }
 
@@ -195,7 +191,10 @@ fn run_accept_clients_thread(
     debug!("Side channel: accept thread finished");
 }
 
-fn run_client_sender_thread(mut stream: UnixStream, receiver: crossbeam_channel::Receiver<Bytes>) {
+fn run_client_sender_thread(
+    mut stream: UnixStream,
+    receiver: crossbeam_channel::Receiver<Bytes>,
+) {
     while let Ok(data) = receiver.recv() {
         let len_bytes = (data.len() as u32).to_be_bytes();
         if stream.write_all(&len_bytes).is_err() {

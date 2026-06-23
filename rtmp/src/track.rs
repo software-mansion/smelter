@@ -29,9 +29,6 @@ pub(crate) struct TrackKey {
 
 impl TrackKey {
     pub fn new(stream_id: u32, track_id: TrackId) -> Self {
-        Self {
-            stream_id,
-            track_id,
-        }
+        Self { stream_id, track_id }
     }
 }

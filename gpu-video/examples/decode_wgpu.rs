@@ -4,26 +4,29 @@ fn main() {
 
     use gpu_video::{
         EncodedInputChunk, OutputFrame, VulkanInstance,
-        parameters::{DecoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor},
+        parameters::{
+            DecoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+        },
     };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
         .finish();
 
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to initialize tracing");
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Failed to initialize tracing");
 
     let args = std::env::args().collect::<Vec<_>>();
     if args.len() != 2 {
         println!("usage: {} FILENAME", args[0]);
         return;
     }
-    let h264_bytestream = std::fs::read(&args[1]).unwrap_or_else(|_| panic!("read {}", args[1]));
+    let h264_bytestream =
+        std::fs::read(&args[1]).unwrap_or_else(|_| panic!("read {}", args[1]));
 
     let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_adapter = vulkan_instance
-        .create_adapter(&VulkanAdapterDescriptor::default())
-        .unwrap();
+    let vulkan_adapter =
+        vulkan_instance.create_adapter(&VulkanAdapterDescriptor::default()).unwrap();
     let vulkan_device = vulkan_adapter
         .create_device(&VulkanDeviceDescriptor {
             wgpu_limits: wgpu::Limits {
@@ -45,10 +48,7 @@ fn main() {
     let queue = &vulkan_device.wgpu_queue();
 
     for chunk in h264_bytestream.chunks(256) {
-        let chunk = EncodedInputChunk {
-            data: chunk,
-            pts: None,
-        };
+        let chunk = EncodedInputChunk { data: chunk, pts: None };
 
         let frames = decoder.decode(chunk).unwrap();
 
@@ -80,7 +80,8 @@ fn download_wgpu_texture(
 ) -> Vec<u8> {
     use std::io::Write;
 
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    let mut encoder =
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     let y_plane_bytes_per_row = (frame.width() as u64).div_ceil(256) * 256;
     let y_plane_size = y_plane_bytes_per_row * frame.height() as u64;
 
@@ -152,9 +153,8 @@ fn download_wgpu_texture(
             let buf = buf.unwrap();
             let mut result = Vec::new();
 
-            for chunk in buf
-                .chunks(y_plane_bytes_per_row as usize)
-                .map(|chunk| &chunk[..width])
+            for chunk in
+                buf.chunks(y_plane_bytes_per_row as usize).map(|chunk| &chunk[..width])
             {
                 result.write_all(chunk).unwrap();
             }
@@ -171,9 +171,8 @@ fn download_wgpu_texture(
             let buf = buf.unwrap();
             let mut result = Vec::new();
 
-            for chunk in buf
-                .chunks(uv_plane_bytes_per_row as usize)
-                .map(|chunk| &chunk[..width])
+            for chunk in
+                buf.chunks(uv_plane_bytes_per_row as usize).map(|chunk| &chunk[..width])
             {
                 result.write_all(chunk).unwrap();
             }

@@ -59,8 +59,7 @@ impl V8Function {
             .iter()
             .enumerate()
             .map(|(i, arg)| {
-                arg.get_raw()
-                    .map_err(|err| V8FunctionError::ArgNotValid(err, i))
+                arg.get_raw().map_err(|err| V8FunctionError::ArgNotValid(err, i))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -85,7 +84,9 @@ impl From<V8Function> for V8Value {
 /// Used for executing native functions
 struct V8Handler<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>>(F);
 
-impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> CefStruct for V8Handler<F> {
+impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> CefStruct
+    for V8Handler<F>
+{
     type CefType = libcef_sys::cef_v8handler_t;
 
     fn new_cef_data() -> Self::CefType {
@@ -95,7 +96,9 @@ impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> CefStruct for V8
         }
     }
 
-    fn base_from_cef_data(cef_data: &mut Self::CefType) -> &mut libcef_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut libcef_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }
@@ -113,11 +116,12 @@ impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> V8Handler<F> {
         const HANDLED: c_int = 1;
 
         unsafe {
-            let args: Vec<V8Value> = std::slice::from_raw_parts(arguments, arguments_count)
-                .iter()
-                .cloned()
-                .map(V8Value::from_raw)
-                .collect();
+            let args: Vec<V8Value> =
+                std::slice::from_raw_parts(arguments, arguments_count)
+                    .iter()
+                    .cloned()
+                    .map(V8Value::from_raw)
+                    .collect();
 
             let result = panic::catch_unwind(|| {
                 let self_ref = CefRefData::<Self>::from_cef(self_);
@@ -134,9 +138,7 @@ impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> V8Handler<F> {
                         Err(_) => "function panicked".to_string(),
                     };
 
-                    Err(V8FunctionError::NativeFuncError(NativeFunctionError(
-                        err_msg,
-                    )))
+                    Err(V8FunctionError::NativeFuncError(NativeFunctionError(err_msg)))
                 }
             };
 

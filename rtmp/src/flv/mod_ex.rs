@@ -41,7 +41,9 @@ impl From<ModExParseError> for FlvAudioTagParseError {
         match err {
             ModExParseError::TooShort => Self::TooShort,
             ModExParseError::UnknownModExType(v) => Self::UnknownAudioPacketModExType(v),
-            ModExParseError::InvalidTimestampOffsetNanos(n) => Self::InvalidTimestampOffsetNanos(n),
+            ModExParseError::InvalidTimestampOffsetNanos(n) => {
+                Self::InvalidTimestampOffsetNanos(n)
+            }
         }
     }
 }
@@ -51,7 +53,9 @@ impl From<ModExParseError> for FlvVideoTagParseError {
         match err {
             ModExParseError::TooShort => Self::TooShort,
             ModExParseError::UnknownModExType(v) => Self::UnknownVideoPacketModExType(v),
-            ModExParseError::InvalidTimestampOffsetNanos(n) => Self::InvalidTimestampOffsetNanos(n),
+            ModExParseError::InvalidTimestampOffsetNanos(n) => {
+                Self::InvalidTimestampOffsetNanos(n)
+            }
         }
     }
 }
@@ -102,7 +106,8 @@ pub(super) fn resolve_mod_ex<P: ExPacketKind>(
             if data.len() < offset + 2 {
                 return Err(ModExParseError::TooShort.into());
             }
-            mod_ex_data_size = u16::from_be_bytes([data[offset], data[offset + 1]]) as usize + 1;
+            mod_ex_data_size =
+                u16::from_be_bytes([data[offset], data[offset + 1]]) as usize + 1;
             offset += 2;
         }
 
@@ -122,14 +127,22 @@ pub(super) fn resolve_mod_ex<P: ExPacketKind>(
 
         match mod_ex_type {
             ModExType::TimestampOffsetNano => {
-                let mod_ex_data = &data[mod_ex_data_start..mod_ex_data_start + mod_ex_data_size];
+                let mod_ex_data =
+                    &data[mod_ex_data_start..mod_ex_data_start + mod_ex_data_size];
                 if mod_ex_data.len() < 3 {
                     return Err(ModExParseError::TooShort.into());
                 }
 
-                let nanos = u32::from_be_bytes([0, mod_ex_data[0], mod_ex_data[1], mod_ex_data[2]]);
+                let nanos = u32::from_be_bytes([
+                    0,
+                    mod_ex_data[0],
+                    mod_ex_data[1],
+                    mod_ex_data[2],
+                ]);
                 if nanos > MAX_TIMESTAMP_OFFSET_NANOS {
-                    return Err(ModExParseError::InvalidTimestampOffsetNanos(nanos).into());
+                    return Err(
+                        ModExParseError::InvalidTimestampOffsetNanos(nanos).into()
+                    );
                 }
 
                 let _ = timestamp_offset_nanos.replace(nanos);
@@ -212,9 +225,7 @@ mod tests {
         let result = resolve_mod_ex::<ExVideoPacketType>(data);
         assert!(matches!(
             result,
-            Err(FlvVideoTagParseError::InvalidTimestampOffsetNanos(
-                1_000_000
-            ))
+            Err(FlvVideoTagParseError::InvalidTimestampOffsetNanos(1_000_000))
         ));
     }
 

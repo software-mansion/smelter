@@ -40,7 +40,10 @@ pub(super) enum NegotiationProgress {
 }
 
 impl NegotiationProgress {
-    pub fn try_match_connect(&self, msg: &RtmpMessageIncoming) -> Option<(u32, Arc<str>)> {
+    pub fn try_match_connect(
+        &self,
+        msg: &RtmpMessageIncoming,
+    ) -> Option<(u32, Arc<str>)> {
         let NegotiationProgress::WaitingForConnect = self else {
             return None;
         };
@@ -48,12 +51,7 @@ impl NegotiationProgress {
         let RtmpMessageIncoming::CommandMessage { msg, .. } = msg else {
             return None;
         };
-        let CommandMessage::Connect {
-            transaction_id,
-            command_object,
-            ..
-        } = msg
-        else {
+        let CommandMessage::Connect { transaction_id, command_object, .. } = msg else {
             return None;
         };
 
@@ -65,7 +63,10 @@ impl NegotiationProgress {
         Some((*transaction_id, Arc::from(app)))
     }
 
-    pub fn try_match_create_stream(&self, msg: &RtmpMessageIncoming) -> Option<(u32, Arc<str>)> {
+    pub fn try_match_create_stream(
+        &self,
+        msg: &RtmpMessageIncoming,
+    ) -> Option<(u32, Arc<str>)> {
         let NegotiationProgress::WaitingForCreateStream { app, .. } = self else {
             return None;
         };
@@ -80,7 +81,10 @@ impl NegotiationProgress {
         Some((*transaction_id, app.clone()))
     }
 
-    pub fn try_match_publish(&self, msg: &RtmpMessageIncoming) -> Option<NegotiationResult> {
+    pub fn try_match_publish(
+        &self,
+        msg: &RtmpMessageIncoming,
+    ) -> Option<NegotiationResult> {
         let NegotiationProgress::WaitingForPublish { app } = self else {
             return None;
         };

@@ -7,13 +7,8 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
     fn try_from(value: WhipInput) -> Result<Self, Self::Error> {
-        let WhipInput {
-            video,
-            required,
-            bearer_token,
-            buffer_size_ms,
-            side_channel,
-        } = value;
+        let WhipInput { video, required, bearer_token, buffer_size_ms, side_channel } =
+            value;
 
         let side_channel = side_channel.unwrap_or_default();
         let side_channel_delay = side_channel.delay()?;
@@ -50,10 +45,18 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
 impl From<WhipVideoDecoderOptions> for core::WebrtcVideoDecoderOptions {
     fn from(decoder: WhipVideoDecoderOptions) -> Self {
         match decoder {
-            WhipVideoDecoderOptions::FfmpegH264 => core::WebrtcVideoDecoderOptions::FfmpegH264,
-            WhipVideoDecoderOptions::FfmpegVp8 => core::WebrtcVideoDecoderOptions::FfmpegVp8,
-            WhipVideoDecoderOptions::FfmpegVp9 => core::WebrtcVideoDecoderOptions::FfmpegVp9,
-            WhipVideoDecoderOptions::VulkanH264 => core::WebrtcVideoDecoderOptions::VulkanH264,
+            WhipVideoDecoderOptions::FfmpegH264 => {
+                core::WebrtcVideoDecoderOptions::FfmpegH264
+            }
+            WhipVideoDecoderOptions::FfmpegVp8 => {
+                core::WebrtcVideoDecoderOptions::FfmpegVp8
+            }
+            WhipVideoDecoderOptions::FfmpegVp9 => {
+                core::WebrtcVideoDecoderOptions::FfmpegVp9
+            }
+            WhipVideoDecoderOptions::VulkanH264 => {
+                core::WebrtcVideoDecoderOptions::VulkanH264
+            }
             WhipVideoDecoderOptions::Any => core::WebrtcVideoDecoderOptions::Any,
         }
     }

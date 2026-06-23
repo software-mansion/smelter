@@ -21,7 +21,11 @@ impl ContinuousValue for RescalerComponentParam {
                 state,
             ),
             border_color: end.border_color,
-            box_shadow: ContinuousValue::interpolate(&start.box_shadow, &end.box_shadow, state),
+            box_shadow: ContinuousValue::interpolate(
+                &start.box_shadow,
+                &end.box_shadow,
+                state,
+            ),
         }
     }
 }

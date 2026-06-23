@@ -43,8 +43,12 @@ impl WhipOutputTrackStatsEvent {
         track_kind: StatsTrackKind,
     ) -> StatsEvent {
         match track_kind {
-            StatsTrackKind::Video => WhipOutputStatsEvent::Video(self).into_event(output_ref),
-            StatsTrackKind::Audio => WhipOutputStatsEvent::Audio(self).into_event(output_ref),
+            StatsTrackKind::Video => {
+                WhipOutputStatsEvent::Video(self).into_event(output_ref)
+            }
+            StatsTrackKind::Audio => {
+                WhipOutputStatsEvent::Audio(self).into_event(output_ref)
+            }
         }
     }
 }
@@ -81,8 +85,12 @@ impl WhipOutputState {
 
     pub fn handle_event(&mut self, event: WhipOutputStatsEvent) {
         match event {
-            WhipOutputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
-            WhipOutputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+            WhipOutputStatsEvent::Video(track_event) => {
+                self.video.handle_event(track_event)
+            }
+            WhipOutputStatsEvent::Audio(track_event) => {
+                self.audio.handle_event(track_event)
+            }
             WhipOutputStatsEvent::PeerStateChanged(state) => self.peer_state = state,
         }
     }
@@ -98,9 +106,11 @@ impl WhipOutputTrackState {
 
     pub fn report(&mut self) -> WhipOutputTrackStatsReport {
         WhipOutputTrackStatsReport {
-            bitrate_1_second: self.bitrate_1_sec.sum() / self.bitrate_1_sec.window_size().as_secs(),
+            bitrate_1_second: self.bitrate_1_sec.sum()
+                / self.bitrate_1_sec.window_size().as_secs(),
 
-            bitrate_1_minute: self.bitrate_1_min.sum() / self.bitrate_1_min.window_size().as_secs(),
+            bitrate_1_minute: self.bitrate_1_min.sum()
+                / self.bitrate_1_min.window_size().as_secs(),
         }
     }
 

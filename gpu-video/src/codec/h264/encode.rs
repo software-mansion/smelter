@@ -71,15 +71,15 @@ impl EncodeCodec for H264Codec {
             parameters.color_range,
             parameters.framerate,
         )?;
-        let pps = VkH264PictureParameterSet::new_encode(codec_capabilities, parameters.profile);
+        let pps =
+            VkH264PictureParameterSet::new_encode(codec_capabilities, parameters.profile);
 
-        Ok(Self::OwnedParameters {
-            sps: vec![sps],
-            pps: vec![pps],
-        })
+        Ok(Self::OwnedParameters { sps: vec![sps], pps: vec![pps] })
     }
 
-    fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters) -> Self::VkParameters<'a> {
+    fn vk_parameters<'a>(
+        parameters: &'a Self::OwnedParameters,
+    ) -> Self::VkParameters<'a> {
         Self::VkParameters {
             sps: parameters.sps.iter().map(|p| p.sps).collect(),
             pps: parameters.pps.iter().map(|p| p.pps).collect(),
@@ -94,11 +94,12 @@ impl EncodeCodec for H264Codec {
         vk::native::StdVideoEncodeH264SliceHeader {
             flags: vk::native::StdVideoEncodeH264SliceHeaderFlags {
                 _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH264SliceHeaderFlags::new_bitfield_1(
-                    1, // TODO: b-frames
-                    1, // TODO: don't override always
-                    0,
-                ),
+                _bitfield_1:
+                    vk::native::StdVideoEncodeH264SliceHeaderFlags::new_bitfield_1(
+                        1, // TODO: b-frames
+                        1, // TODO: don't override always
+                        0,
+                    ),
             },
             first_mb_in_slice: 0,
             slice_type: if is_idr {
@@ -110,7 +111,8 @@ impl EncodeCodec for H264Codec {
             slice_beta_offset_div2: 0,
             slice_qp_delta: 0,
             reserved1: 0,
-            cabac_init_idc: vk::native::StdVideoH264CabacInitIdc_STD_VIDEO_H264_CABAC_INIT_IDC_0,
+            cabac_init_idc:
+                vk::native::StdVideoH264CabacInitIdc_STD_VIDEO_H264_CABAC_INIT_IDC_0,
             disable_deblocking_filter_idc: 0,
             pWeightTable: std::ptr::null(),
         }
@@ -123,13 +125,13 @@ impl EncodeCodec for H264Codec {
         capabilities: &NativeEncodeQualityLevelProperties<Self>,
         is_idr: bool,
     ) -> Self::BitstreamUnitInfo<'a> {
-        let mut slice_info = vk::VideoEncodeH264NaluSliceInfoKHR::default().std_slice_header(data);
+        let mut slice_info =
+            vk::VideoEncodeH264NaluSliceInfoKHR::default().std_slice_header(data);
 
         if let RateControl::Disabled = rate_control {
             if !capabilities.zeroed() {
-                let qp = capabilities
-                    .codec_quality_level_properties
-                    .preferred_constant_qp;
+                let qp =
+                    capabilities.codec_quality_level_properties.preferred_constant_qp;
 
                 if is_idr {
                     slice_info.constant_qp = qp.qp_i;
@@ -156,11 +158,13 @@ impl EncodeCodec for H264Codec {
         vk::native::StdVideoEncodeH264ReferenceListsInfo {
             flags: vk::native::StdVideoEncodeH264ReferenceListsInfoFlags {
                 _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH264ReferenceListsInfoFlags::new_bitfield_1(
-                    0, 0, 0,
-                ),
+                _bitfield_1:
+                    vk::native::StdVideoEncodeH264ReferenceListsInfoFlags::new_bitfield_1(
+                        0, 0, 0,
+                    ),
             },
-            num_ref_idx_l0_active_minus1: active_reference_slots.len().saturating_sub(1) as u8,
+            num_ref_idx_l0_active_minus1: active_reference_slots.len().saturating_sub(1)
+                as u8,
             num_ref_idx_l1_active_minus1: 0,
             RefPicList0: ref_list0,
             RefPicList1: [0xff; 32],
@@ -180,7 +184,8 @@ impl EncodeCodec for H264Codec {
         vk::native::StdVideoEncodeH264ReferenceInfo {
             flags: vk::native::StdVideoEncodeH264ReferenceInfoFlags {
                 _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH264ReferenceInfoFlags::new_bitfield_1(0, 0),
+                _bitfield_1:
+                    vk::native::StdVideoEncodeH264ReferenceInfoFlags::new_bitfield_1(0, 0),
             },
             primary_pic_type: primary_pic_type(is_idr),
             FrameNum: counters.frame_num,
@@ -201,14 +206,15 @@ impl EncodeCodec for H264Codec {
         vk::native::StdVideoEncodeH264PictureInfo {
             flags: vk::native::StdVideoEncodeH264PictureInfoFlags {
                 _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH264PictureInfoFlags::new_bitfield_1(
-                    is_idr as u32,
-                    1, // TODO: must be the same as nal_ref_idc != 0
-                    0,
-                    0, // long term refs
-                    0, // adaptive reference control
-                    0,
-                ),
+                _bitfield_1:
+                    vk::native::StdVideoEncodeH264PictureInfoFlags::new_bitfield_1(
+                        is_idr as u32,
+                        1, // TODO: must be the same as nal_ref_idc != 0
+                        0,
+                        0, // long term refs
+                        0, // adaptive reference control
+                        0,
+                    ),
             },
             seq_parameter_set_id: 0,
             pic_parameter_set_id: 0,
@@ -234,7 +240,9 @@ impl EncodeCodec for H264Codec {
     }
 
     type DpbSlotInfo<'a> = vk::VideoEncodeH264DpbSlotInfoKHR<'a>;
-    fn dpb_slot_info<'a>(reference_info: &'a Self::ReferenceInfo) -> Self::DpbSlotInfo<'a> {
+    fn dpb_slot_info<'a>(
+        reference_info: &'a Self::ReferenceInfo,
+    ) -> Self::DpbSlotInfo<'a> {
         vk::VideoEncodeH264DpbSlotInfoKHR::default().std_reference_info(reference_info)
     }
 
@@ -302,10 +310,7 @@ impl EncodeCodec for H264Codec {
             .std_pps_id(0)
     }
     fn codec_write_parameters_info_all() -> Self::CodecWriteParametersInfo {
-        H264WriteParametersInfo {
-            write_sps: true,
-            write_pps: true,
-        }
+        H264WriteParametersInfo { write_sps: true, write_pps: true }
     }
 
     fn resolve_idr_period<'a>(
@@ -328,13 +333,15 @@ impl EncodeCodec for H264Codec {
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'a>,
         user_provided: Option<NonZeroU32>,
     ) -> NonZeroU32 {
-        let max = NonZeroU32::new(codec_capabilities.max_p_picture_l0_reference_count).unwrap();
+        let max =
+            NonZeroU32::new(codec_capabilities.max_p_picture_l0_reference_count).unwrap();
         if let Some(user_provided) = user_provided {
             return user_provided.min(max);
         }
 
         if quality_level_properties.preferred_max_l0_reference_count > 0 {
-            NonZeroU32::new(quality_level_properties.preferred_max_l0_reference_count).unwrap()
+            NonZeroU32::new(quality_level_properties.preferred_max_l0_reference_count)
+                .unwrap()
         } else {
             max
         }

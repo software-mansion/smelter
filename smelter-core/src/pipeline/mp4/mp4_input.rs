@@ -22,7 +22,9 @@ use crate::{
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
         utils::H264AvccToAnnexB,
     },
-    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
+    queue::{
+        QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput,
+    },
     utils::{
         InitializableThread, ShutdownCondition,
         channel::{SendTimeoutError, Sender},
@@ -99,10 +101,9 @@ impl Mp4Input {
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let source_file = match options.source.clone() {
             Mp4InputSource::Url(url) => Self::download_remote_file(&ctx, &url)?,
-            Mp4InputSource::File(path) => Arc::new(SourceFile {
-                path,
-                remove_on_drop: false,
-            }),
+            Mp4InputSource::File(path) => {
+                Arc::new(SourceFile { path, remove_on_drop: false })
+            }
         };
 
         ctx.stats_sender.send(StatsEvent::NewInput {
@@ -110,16 +111,19 @@ impl Mp4Input {
             kind: InputProtocolKind::Mp4,
         });
 
-        let video_track = Mp4FileReader::from_path(&source_file.path)?.try_new_h264_track();
+        let video_track =
+            Mp4FileReader::from_path(&source_file.path)?.try_new_h264_track();
         let video_duration = video_track.as_ref().and_then(|track| track.duration());
-        let audio_track = Mp4FileReader::from_path(&source_file.path)?.try_new_aac_track();
+        let audio_track =
+            Mp4FileReader::from_path(&source_file.path)?.try_new_aac_track();
         let audio_duration = audio_track.as_ref().and_then(|track| track.duration());
 
         if video_track.is_none() && audio_track.is_none() {
             return Err(Mp4InputError::NoTrack.into());
         }
 
-        if let Some(DecoderOptions::H264(_)) = video_track.as_ref().map(|t| t.decoder_options())
+        if let Some(DecoderOptions::H264(_)) =
+            video_track.as_ref().map(|t| t.decoder_options())
             && options.video_decoders.h264 == Some(VideoDecoderOptions::VulkanH264)
             && !ctx.graphics_context.has_vulkan_decoder_support()
         {
@@ -128,15 +132,17 @@ impl Mp4Input {
             ));
         }
 
-        let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options.clone());
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: video_track.is_some(),
-            audio: audio_track.is_some(),
-            offset: match options.offset {
-                Some(offset) => QueueTrackOffset::FromStart(offset),
-                None => QueueTrackOffset::None,
-            },
-        });
+        let queue_input =
+            QueueInput::new(&ctx, &input_ref, options.queue_options.clone());
+        let (video_sender, audio_sender) =
+            queue_input.queue_new_track(QueueTrackOptions {
+                video: video_track.is_some(),
+                audio: audio_track.is_some(),
+                offset: match options.offset {
+                    Some(offset) => QueueTrackOffset::FromStart(offset),
+                    None => QueueTrackOffset::None,
+                },
+            });
 
         let initial_seek = options.seek;
         let (mut reader, events_sender) = TrackManagerThread::new(
@@ -162,10 +168,7 @@ impl Mp4Input {
 
         Ok((
             Input::Mp4(Self { events_sender }),
-            InputInitInfo::Mp4 {
-                video_duration,
-                audio_duration,
-            },
+            InputInitInfo::Mp4 { video_duration, audio_duration },
             queue_input,
         ))
     }
@@ -185,10 +188,7 @@ impl Mp4Input {
 
         std::io::copy(&mut file_response, &mut file)?;
 
-        Ok(Arc::new(SourceFile {
-            path: path.into(),
-            remove_on_drop: true,
-        }))
+        Ok(Arc::new(SourceFile { path: path.into(), remove_on_drop: true }))
     }
 }
 
@@ -331,14 +331,10 @@ impl TrackManagerThread {
             cond.mark_for_shutdown()
         }
 
-        let video_track = self
-            .video_thread
-            .take()
-            .map(|(handle, _)| handle.join().unwrap());
-        let audio_track = self
-            .audio_thread
-            .take()
-            .map(|(handle, _)| handle.join().unwrap());
+        let video_track =
+            self.video_thread.take().map(|(handle, _)| handle.join().unwrap());
+        let audio_track =
+            self.audio_thread.take().map(|(handle, _)| handle.join().unwrap());
 
         if let (Some(track), Some(sender)) = (video_track, video_sender)
             && let Err(err) = self.spawn_video(track, sender, seek)
@@ -389,7 +385,8 @@ impl TrackManagerThread {
         let handle = std::thread::Builder::new()
             .name("mp4 reader - video".to_string())
             .spawn(move || {
-                let _span = span!(Level::INFO, "MP4 video", input_id = input_id).entered();
+                let _span =
+                    span!(Level::INFO, "MP4 video", input_id = input_id).entered();
                 track_thread.run_video_thread(decoder_handle)
             })
             .unwrap();
@@ -416,7 +413,8 @@ impl TrackManagerThread {
         let handle = std::thread::Builder::new()
             .name("mp4 reader - audio".to_string())
             .spawn(move || {
-                let _span = span!(Level::INFO, "MP4 audio", input_id = input_id).entered();
+                let _span =
+                    span!(Level::INFO, "MP4 audio", input_id = input_id).entered();
                 track_thread.run_audio_thread(decoder_handle)
             })
             .unwrap();
@@ -476,7 +474,9 @@ impl TrackManagerThread {
                 )?
             }
             _ => {
-                return Err(Mp4InputError::Unknown("Non H264 decoder options returned.").into());
+                return Err(
+                    Mp4InputError::Unknown("Non H264 decoder options returned.").into()
+                );
             }
         };
         Ok(handle)
@@ -488,19 +488,21 @@ impl TrackManagerThread {
         samples_sender: QueueSender<InputAudioSamples>,
     ) -> Result<DecoderThreadHandle, InputInitError> {
         let handle = match track.decoder_options() {
-            DecoderOptions::Aac(data) => AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
-                self.input_ref.clone(),
-                AudioDecoderThreadOptions {
-                    ctx: self.ctx.clone(),
-                    decoder_options: FdkAacDecoderOptions {
-                        asc: Some(data.clone()),
+            DecoderOptions::Aac(data) => {
+                AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
+                    self.input_ref.clone(),
+                    AudioDecoderThreadOptions {
+                        ctx: self.ctx.clone(),
+                        decoder_options: FdkAacDecoderOptions { asc: Some(data.clone()) },
+                        samples_sender,
+                        input_buffer_size: CHUNK_BUFFER_DURATION,
                     },
-                    samples_sender,
-                    input_buffer_size: CHUNK_BUFFER_DURATION,
-                },
-            )?,
+                )?
+            }
             _ => {
-                return Err(Mp4InputError::Unknown("Non AAC decoder options returned.").into());
+                return Err(
+                    Mp4InputError::Unknown("Non AAC decoder options returned.").into()
+                );
             }
         };
         Ok(handle)

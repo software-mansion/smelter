@@ -8,7 +8,9 @@ use crate::{
     CommunicationProtocol, CompositorInstance, input_dump_from_disk,
     pipeline_tests::{
         PipelineTest,
-        harness::{OutputReceiver, PacketSender, VideoCompareConfig, compare_video_dumps},
+        harness::{
+            OutputReceiver, PacketSender, VideoCompareConfig, compare_video_dumps,
+        },
     },
 };
 

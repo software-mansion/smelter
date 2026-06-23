@@ -19,11 +19,7 @@ impl ArgbInput {
         let upload_textures = ArgbLinearTexture::new(ctx, Resolution::MIN_2X2);
         let argb_bind_group = upload_textures.new_bind_group(ctx);
 
-        Self {
-            upload_textures,
-            argb_bind_group,
-            color_space_converter: None,
-        }
+        Self { upload_textures, argb_bind_group, color_space_converter: None }
     }
 
     pub fn resolution(&self) -> Resolution {
@@ -46,9 +42,11 @@ impl ArgbInput {
                 );
             }
             NodeTextureState::CpuOptimized { texture, .. } => {
-                ctx.format
-                    .argb_to_rgba_linear
-                    .convert(ctx, &self.argb_bind_group, texture.view());
+                ctx.format.argb_to_rgba_linear.convert(
+                    ctx,
+                    &self.argb_bind_group,
+                    texture.view(),
+                );
             }
             NodeTextureState::WebGl { texture, .. } => {
                 let Some(color_space_converter) = &mut self.color_space_converter else {

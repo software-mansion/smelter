@@ -1,11 +1,15 @@
 use std::{sync::Arc, time::Duration};
 
-use gpu_video::{EncodedInputChunk, H264DecoderEvent, quicksync::h264::WgpuTexturesDecoderH264};
+use gpu_video::{
+    EncodedInputChunk, H264DecoderEvent, quicksync::h264::WgpuTexturesDecoderH264,
+};
 use smelter_render::{Frame, FrameData, Resolution};
 use tracing::{debug, trace, warn};
 
 use crate::{
-    pipeline::decoder::{EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance},
+    pipeline::decoder::{
+        EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
+    },
     prelude::*,
 };
 
@@ -30,12 +34,10 @@ impl VideoDecoder for QuickSyncH264Decoder {
             Arc::clone(&ctx.graphics_context.queue),
             &adapter_info,
         )
-        .map_err(|err| DecoderInitError::QuickSyncH264DecoderUnavailable(err.to_string()))?;
-        Ok(Self {
-            decoder,
-            keyframe_request_sender,
-            drop_frames: false,
-        })
+        .map_err(|err| {
+            DecoderInitError::QuickSyncH264DecoderUnavailable(err.to_string())
+        })?;
+        Ok(Self { decoder, keyframe_request_sender, drop_frames: false })
     }
 }
 
@@ -86,11 +88,7 @@ impl VideoDecoderInstance for QuickSyncH264Decoder {
             }
         };
 
-        if self.drop_frames {
-            Vec::new()
-        } else {
-            frames_from_gpu_video_rgba(frames)
-        }
+        if self.drop_frames { Vec::new() } else { frames_from_gpu_video_rgba(frames) }
     }
 
     fn flush(&mut self) -> Vec<Frame> {
@@ -102,11 +100,7 @@ impl VideoDecoderInstance for QuickSyncH264Decoder {
             }
         };
 
-        if self.drop_frames {
-            Vec::new()
-        } else {
-            frames_from_gpu_video_rgba(frames)
-        }
+        if self.drop_frames { Vec::new() } else { frames_from_gpu_video_rgba(frames) }
     }
 }
 

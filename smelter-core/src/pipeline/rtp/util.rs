@@ -16,11 +16,16 @@ pub(super) fn bind_to_requested_port(
         PortOrRange::Exact(port) => {
             socket
                 .bind(
-                    &net::SocketAddr::V4(net::SocketAddrV4::new(net::Ipv4Addr::UNSPECIFIED, port))
-                        .into(),
+                    &net::SocketAddr::V4(net::SocketAddrV4::new(
+                        net::Ipv4Addr::UNSPECIFIED,
+                        port,
+                    ))
+                    .into(),
                 )
                 .map_err(|err| match err.kind() {
-                    std::io::ErrorKind::AddrInUse => BindToPortError::PortAlreadyInUse(port),
+                    std::io::ErrorKind::AddrInUse => {
+                        BindToPortError::PortAlreadyInUse(port)
+                    }
                     _ => BindToPortError::SocketBind(err),
                 })?;
             port
@@ -28,8 +33,11 @@ pub(super) fn bind_to_requested_port(
         PortOrRange::Range((lower_bound, upper_bound)) => {
             let port = (lower_bound..upper_bound).find(|port| {
                 let bind_res = socket.bind(
-                    &net::SocketAddr::V4(net::SocketAddrV4::new(net::Ipv4Addr::UNSPECIFIED, *port))
-                        .into(),
+                    &net::SocketAddr::V4(net::SocketAddrV4::new(
+                        net::Ipv4Addr::UNSPECIFIED,
+                        *port,
+                    ))
+                    .into(),
                 );
 
                 bind_res.is_ok()

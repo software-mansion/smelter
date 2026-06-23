@@ -31,11 +31,7 @@ impl InterleavedYuv422Texture {
             &[wgpu::TextureFormat::Rgba8Unorm],
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Self {
-            resolution,
-            texture,
-            view,
-        }
+        Self { resolution, texture, view }
     }
 
     pub fn new_bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {
@@ -51,5 +47,14 @@ impl InterleavedYuv422Texture {
 
     pub fn upload(&self, ctx: &WgpuCtx, data: &[u8]) {
         self.texture.upload_data(&ctx.queue, data, 4);
+    }
+
+    pub fn encode_upload(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        data: &[u8],
+    ) {
+        self.texture.encode_upload_data(encoder, staging_belt, data, 4);
     }
 }

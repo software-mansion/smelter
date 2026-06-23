@@ -5,7 +5,10 @@ use super::ffi::{self, HResult};
 pub struct DeckLinkConfiguration(pub(super) *mut ffi::IDeckLinkConfiguration);
 
 impl DeckLinkConfiguration {
-    pub fn get_flag(&self, id: ffi::FlagConfigurationId) -> Result<Option<bool>, DeckLinkError> {
+    pub fn get_flag(
+        &self,
+        id: ffi::FlagConfigurationId,
+    ) -> Result<Option<bool>, DeckLinkError> {
         let mut value = false;
         match unsafe { ffi::configuration_flag(self.0, id, &mut value)? } {
             HResult::NotImplementedError => Ok(None),
@@ -30,7 +33,10 @@ impl DeckLinkConfiguration {
         }
     }
 
-    pub fn get_float(&self, id: ffi::FloatConfigurationId) -> Result<Option<f64>, DeckLinkError> {
+    pub fn get_float(
+        &self,
+        id: ffi::FloatConfigurationId,
+    ) -> Result<Option<f64>, DeckLinkError> {
         let mut value: f64 = 0.0;
         match unsafe { ffi::configuration_float(self.0, id, &mut value)? } {
             HResult::NotImplementedError => Ok(None),

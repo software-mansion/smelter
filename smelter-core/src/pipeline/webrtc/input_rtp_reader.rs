@@ -54,7 +54,9 @@ impl WebrtcRtpReader {
 
     /// read_rtp is not cancel safe so we need to create separate tasks that
     /// sends packets over the channel
-    fn start_rtp_reader_task(track: Arc<TrackRemote>) -> Receiver<webrtc::rtp::packet::Packet> {
+    fn start_rtp_reader_task(
+        track: Arc<TrackRemote>,
+    ) -> Receiver<webrtc::rtp::packet::Packet> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
         tokio::spawn(async move {
             loop {
@@ -85,8 +87,7 @@ impl WebrtcRtpReader {
             }
 
             while let Ok(report) = self.rtcp_listeners.sender_report_receiver.try_recv() {
-                self.jitter_buffer
-                    .on_sender_report(report.ntp_time, report.rtp_time);
+                self.jitter_buffer.on_sender_report(report.ntp_time, report.rtp_time);
             }
 
             tokio::select! {

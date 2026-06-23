@@ -46,13 +46,7 @@ impl TestInput {
     ];
 
     pub fn new(index: usize) -> Self {
-        Self::new_with_resolution(
-            index,
-            Resolution {
-                width: 640,
-                height: 360,
-            },
-        )
+        Self::new_with_resolution(index, Resolution { width: 640, height: 360 })
     }
 
     pub fn new_with_resolution(index: usize, resolution: Resolution) -> Self {
@@ -65,8 +59,8 @@ impl TestInput {
             const BORDER_SIZE: usize = 18;
             const GRID_SIZE: usize = 72;
 
-            let is_border_in_x =
-                x <= BORDER_SIZE || (x <= resolution.width && x >= resolution.width - BORDER_SIZE);
+            let is_border_in_x = x <= BORDER_SIZE
+                || (x <= resolution.width && x >= resolution.width - BORDER_SIZE);
             let is_border_in_y: bool = y <= BORDER_SIZE
                 || (y <= resolution.height && y >= resolution.height - BORDER_SIZE);
             let is_on_grid = (x / GRID_SIZE + y / GRID_SIZE).is_multiple_of(2);
@@ -102,11 +96,7 @@ impl TestInput {
             v_plane: v_plane.into(),
         });
 
-        Self {
-            name: format!("input_{index}"),
-            resolution,
-            data,
-        }
+        Self { name: format!("input_{index}"), resolution, data }
     }
 
     /// Creates a grid of dark lines on a light background with varying line spacings.
@@ -143,10 +133,6 @@ impl TestInput {
             v_plane: v_plane.into(),
         });
 
-        Self {
-            name: format!("input_{index}"),
-            resolution,
-            data,
-        }
+        Self { name: format!("input_{index}"), resolution, data }
     }
 }

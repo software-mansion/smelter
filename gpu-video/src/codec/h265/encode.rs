@@ -8,7 +8,8 @@ use crate::{
         h265::{
             H265Codec, H265VkParameters,
             parameters::{
-                VkH265PictureParameterSet, VkH265SequenceParameterSet, VkH265VideoParameterSet,
+                VkH265PictureParameterSet, VkH265SequenceParameterSet,
+                VkH265VideoParameterSet,
             },
         },
     },
@@ -69,7 +70,9 @@ impl EncodeCodec for H265Codec {
         })
     }
 
-    fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters) -> Self::VkParameters<'a> {
+    fn vk_parameters<'a>(
+        parameters: &'a Self::OwnedParameters,
+    ) -> Self::VkParameters<'a> {
         H265VkParameters {
             vps: parameters.vps.iter().map(|p| p.vps).collect(),
             sps: parameters.sps.iter().map(|p| p.sps).collect(),
@@ -82,29 +85,29 @@ impl EncodeCodec for H265Codec {
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
         is_idr: bool,
     ) -> Self::BitstreamUnitData {
-        let slice_sao = codec_capabilities
-            .std_syntax_flags
-            .contains(vk::VideoEncodeH265StdFlagsKHR::SAMPLE_ADAPTIVE_OFFSET_ENABLED_FLAG_SET)
-            as u32;
+        let slice_sao = codec_capabilities.std_syntax_flags.contains(
+            vk::VideoEncodeH265StdFlagsKHR::SAMPLE_ADAPTIVE_OFFSET_ENABLED_FLAG_SET,
+        ) as u32;
 
         vk::native::StdVideoEncodeH265SliceSegmentHeader {
             flags: vk::native::StdVideoEncodeH265SliceSegmentHeaderFlags {
                 _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH265SliceSegmentHeaderFlags::new_bitfield_1(
-                    1,                          // first_slice_segment_in_pic_flag
-                    0,                          // dependent_slice_segment_flag
-                    slice_sao,                  // slice_sao_luma_flag
-                    slice_sao,                  // slice_sao_chroma_flag
-                    if is_idr { 0 } else { 1 }, // num_ref_idx_active_override_flag
-                    0,                          // mvd_l1_zero_flag
-                    0,                          // cabac_init_flag
-                    0,                          // cu_chroma_qp_offset_enabled_flag
-                    0,                          // deblocking_filter_override_flag
-                    0,                          // slice_deblocking_filter_disabled_flag
-                    1, // collocated_from_l0_flag (use L0 for collocated picture)
-                    0, // slice_loop_filter_across_slices_enabled_flag
-                    0, // reserved
-                ),
+                _bitfield_1:
+                    vk::native::StdVideoEncodeH265SliceSegmentHeaderFlags::new_bitfield_1(
+                        1,                          // first_slice_segment_in_pic_flag
+                        0,                          // dependent_slice_segment_flag
+                        slice_sao,                  // slice_sao_luma_flag
+                        slice_sao,                  // slice_sao_chroma_flag
+                        if is_idr { 0 } else { 1 }, // num_ref_idx_active_override_flag
+                        0,                          // mvd_l1_zero_flag
+                        0,                          // cabac_init_flag
+                        0,                          // cu_chroma_qp_offset_enabled_flag
+                        0,                          // deblocking_filter_override_flag
+                        0, // slice_deblocking_filter_disabled_flag
+                        1, // collocated_from_l0_flag (use L0 for collocated picture)
+                        0, // slice_loop_filter_across_slices_enabled_flag
+                        0, // reserved
+                    ),
             },
             slice_type: if is_idr {
                 vk::native::StdVideoH265SliceType_STD_VIDEO_H265_SLICE_TYPE_I
@@ -134,14 +137,13 @@ impl EncodeCodec for H265Codec {
         capabilities: &crate::device::caps::NativeEncodeQualityLevelProperties<Self>,
         is_idr: bool,
     ) -> Self::BitstreamUnitInfo<'a> {
-        let mut slice_info =
-            vk::VideoEncodeH265NaluSliceSegmentInfoKHR::default().std_slice_segment_header(data);
+        let mut slice_info = vk::VideoEncodeH265NaluSliceSegmentInfoKHR::default()
+            .std_slice_segment_header(data);
 
         if let RateControl::Disabled = rate_control {
             if !capabilities.zeroed() {
-                let qp = capabilities
-                    .codec_quality_level_properties
-                    .preferred_constant_qp;
+                let qp =
+                    capabilities.codec_quality_level_properties.preferred_constant_qp;
 
                 if is_idr {
                     slice_info.constant_qp = qp.qp_i;
@@ -168,11 +170,13 @@ impl EncodeCodec for H265Codec {
         let list_info = vk::native::StdVideoEncodeH265ReferenceListsInfo {
             flags: vk::native::StdVideoEncodeH265ReferenceListsInfoFlags {
                 _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH265ReferenceListsInfoFlags::new_bitfield_1(
-                    0, 0, 0,
-                ),
+                _bitfield_1:
+                    vk::native::StdVideoEncodeH265ReferenceListsInfoFlags::new_bitfield_1(
+                        0, 0, 0,
+                    ),
             },
-            num_ref_idx_l0_active_minus1: active_reference_slots.len().saturating_sub(1) as u8,
+            num_ref_idx_l0_active_minus1: active_reference_slots.len().saturating_sub(1)
+                as u8,
             num_ref_idx_l1_active_minus1: 0,
             RefPicList0: ref_list0,
             RefPicList1: [0xff; 15],
@@ -187,7 +191,8 @@ impl EncodeCodec for H265Codec {
         for (i, reference) in active_reference_slots.iter().rev().enumerate() {
             assert!(reference.1.PicOrderCntVal < previous_poc);
 
-            delta_poc_s0_minus1[i] = (previous_poc - reference.1.PicOrderCntVal - 1) as u16;
+            delta_poc_s0_minus1[i] =
+                (previous_poc - reference.1.PicOrderCntVal - 1) as u16;
             used_by_curr_pic_s0_flag |= 1 << i;
             previous_poc = reference.1.PicOrderCntVal;
         }
@@ -196,7 +201,8 @@ impl EncodeCodec for H265Codec {
             flags: vk::native::StdVideoH265ShortTermRefPicSetFlags {
                 _bitfield_align_1: [],
                 __bindgen_padding_0: [0; 3],
-                _bitfield_1: vk::native::StdVideoH265ShortTermRefPicSetFlags::new_bitfield_1(0, 0),
+                _bitfield_1:
+                    vk::native::StdVideoH265ShortTermRefPicSetFlags::new_bitfield_1(0, 0),
             },
             // for inter-ref set prediction, which is used to base this ref-set on one from sps
             delta_idx_minus1: 0,
@@ -217,10 +223,7 @@ impl EncodeCodec for H265Codec {
             reserved3: 0,
         };
 
-        ReferenceListInfoH265 {
-            list_info,
-            short_term_ref_pic_set,
-        }
+        ReferenceListInfoH265 { list_info, short_term_ref_pic_set }
     }
     fn new_slot_reference_info(
         counters: &Self::EncodingCounters,
@@ -229,9 +232,10 @@ impl EncodeCodec for H265Codec {
         vk::native::StdVideoEncodeH265ReferenceInfo {
             flags: vk::native::StdVideoEncodeH265ReferenceInfoFlags {
                 _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH265ReferenceInfoFlags::new_bitfield_1(
-                    0, 0, 0,
-                ),
+                _bitfield_1:
+                    vk::native::StdVideoEncodeH265ReferenceInfoFlags::new_bitfield_1(
+                        0, 0, 0,
+                    ),
             },
             pic_type: pic_type(is_idr),
             PicOrderCntVal: counters.pic_order_cnt as i32,
@@ -256,18 +260,19 @@ impl EncodeCodec for H265Codec {
         vk::native::StdVideoEncodeH265PictureInfo {
             flags: vk::native::StdVideoEncodeH265PictureInfoFlags {
                 _bitfield_align_1: [],
-                _bitfield_1: vk::native::StdVideoEncodeH265PictureInfoFlags::new_bitfield_1(
-                    1,             // is_reference
-                    is_idr as u32, // IrapPicFlag
-                    0,             // used_for_long_term_reference
-                    0,             // discardable_flag
-                    0,             // cross_layer_bla_flag
-                    1,             // pic_output_flag
-                    0,             // no_output_of_prior_pics_flag
-                    0,             // short_term_ref_pic_set_sps_flag
-                    slice_temporal_mvp_enabled_flag,
-                    0, // reserved
-                ),
+                _bitfield_1:
+                    vk::native::StdVideoEncodeH265PictureInfoFlags::new_bitfield_1(
+                        1,             // is_reference
+                        is_idr as u32, // IrapPicFlag
+                        0,             // used_for_long_term_reference
+                        0,             // discardable_flag
+                        0,             // cross_layer_bla_flag
+                        1,             // pic_output_flag
+                        0,             // no_output_of_prior_pics_flag
+                        0,             // short_term_ref_pic_set_sps_flag
+                        slice_temporal_mvp_enabled_flag,
+                        0, // reserved
+                    ),
             },
             pic_type: pic_type(is_idr),
             sps_video_parameter_set_id: 0,
@@ -294,7 +299,9 @@ impl EncodeCodec for H265Codec {
     }
 
     type DpbSlotInfo<'a> = vk::VideoEncodeH265DpbSlotInfoKHR<'a>;
-    fn dpb_slot_info<'a>(reference_info: &'a Self::ReferenceInfo) -> Self::DpbSlotInfo<'a> {
+    fn dpb_slot_info<'a>(
+        reference_info: &'a Self::ReferenceInfo,
+    ) -> Self::DpbSlotInfo<'a> {
         vk::VideoEncodeH265DpbSlotInfoKHR::default().std_reference_info(reference_info)
     }
 
@@ -387,13 +394,15 @@ impl EncodeCodec for H265Codec {
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'a>,
         user_provided: Option<std::num::NonZeroU32>,
     ) -> std::num::NonZeroU32 {
-        let max = NonZeroU32::new(codec_capabilities.max_p_picture_l0_reference_count).unwrap();
+        let max =
+            NonZeroU32::new(codec_capabilities.max_p_picture_l0_reference_count).unwrap();
         if let Some(user_provided) = user_provided {
             return user_provided.min(max);
         }
 
         if quality_level_properties.preferred_max_l0_reference_count > 0 {
-            NonZeroU32::new(quality_level_properties.preferred_max_l0_reference_count).unwrap()
+            NonZeroU32::new(quality_level_properties.preferred_max_l0_reference_count)
+                .unwrap()
         } else {
             max
         }

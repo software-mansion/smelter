@@ -64,7 +64,9 @@ impl<C: Client> CefStruct for ClientWrapper<C> {
         }
     }
 
-    fn base_from_cef_data(cef_data: &mut Self::CefType) -> &mut libcef_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut libcef_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }
@@ -76,10 +78,7 @@ impl<C: Client> ClientWrapper<C> {
             .map(RenderHandlerWrapper)
             .map(CefRefData::new_ptr)
             .map(CefRc::new);
-        Self {
-            client,
-            render_handler,
-        }
+        Self { client, render_handler }
     }
 
     extern "C" fn render_handler(
@@ -104,9 +103,7 @@ impl<C: Client> ClientWrapper<C> {
         let self_ref = unsafe { CefRefData::<Self>::from_cef(self_) };
         let browser = Browser::new(browser);
         let frame = Frame::new(frame);
-        let message = ProcessMessage {
-            inner: CefRc::new(message),
-        };
+        let message = ProcessMessage { inner: CefRc::new(message) };
 
         let is_handled = self_ref.client.on_process_message_received(
             &browser,

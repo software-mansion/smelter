@@ -28,28 +28,30 @@ impl WgpuRgbaToNv12Converter {
             _ => return Err(WgpuConverterInitError::OnlyLimitedBT709Supported),
         }
 
-        let rgba_view_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            }],
-        });
+        let rgba_view_bgl =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                }],
+            });
 
         let sampler = WgpuSampler::new(device);
-        let shader_module =
-            device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_nv12.wgsl"));
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("gpu-video rgba to nv12 converter pipeline layout"),
-            bind_group_layouts: &[Some(&rgba_view_bgl), Some(&sampler.bgl)],
-            immediate_size: 0,
-        });
+        let shader_module = device
+            .create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_nv12.wgsl"));
+        let pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("gpu-video rgba to nv12 converter pipeline layout"),
+                bind_group_layouts: &[Some(&rgba_view_bgl), Some(&sampler.bgl)],
+                immediate_size: 0,
+            });
 
         let y_plane_renderer = PlaneRenderer::new(
             device,
@@ -75,7 +77,10 @@ impl WgpuRgbaToNv12Converter {
 
     /// Creates [`wgpu::BindGroup`] for RGBA [`wgpu::Texture`].
     /// The texture's usage must contain [`wgpu::TextureUsages::TEXTURE_BINDING`].
-    pub fn create_input_bind_group(&self, rgba_texture: &wgpu::Texture) -> wgpu::BindGroup {
+    pub fn create_input_bind_group(
+        &self,
+        rgba_texture: &wgpu::Texture,
+    ) -> wgpu::BindGroup {
         let rgba_view = rgba_texture.create_view(&wgpu::TextureViewDescriptor::default());
         self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -159,22 +164,25 @@ impl PlaneRenderer {
         sampler_bg: &wgpu::BindGroup,
         plane_view: &wgpu::TextureView,
     ) {
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: plane_view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::DontCare(unsafe { wgpu::LoadOpDontCare::enabled() }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
+        let mut render_pass =
+            command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: plane_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::DontCare(unsafe {
+                            wgpu::LoadOpDontCare::enabled()
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
 
         render_pass.set_bind_group(0, texture_bg, &[]);
         render_pass.set_bind_group(1, sampler_bg, &[]);

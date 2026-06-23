@@ -6,8 +6,9 @@ use crate::{
 };
 
 use super::{
-    AbsolutePosition, BorderRadius, ComponentId, HorizontalPosition, Position, RGBAColor, Size,
-    StatefulComponent, VerticalPosition, rescaler_component::StatefulRescalerComponent,
+    AbsolutePosition, BorderRadius, ComponentId, HorizontalPosition, Position, RGBAColor,
+    Size, StatefulComponent, VerticalPosition,
+    rescaler_component::StatefulRescalerComponent,
     tiles_component::StatefulTilesComponent, view_component::StatefulViewComponent,
 };
 
@@ -30,7 +31,11 @@ pub(crate) struct LayoutNode {
 }
 
 impl layout::LayoutProvider for LayoutNode {
-    fn layouts(&mut self, pts: std::time::Duration, inputs: &[Option<Resolution>]) -> NestedLayout {
+    fn layouts(
+        &mut self,
+        pts: std::time::Duration,
+        inputs: &[Option<Resolution>],
+    ) -> NestedLayout {
         self.root.component.update_state(inputs);
         self.root.layout(pts)
     }
@@ -108,10 +113,7 @@ impl StatefulLayoutComponent {
                     // TODO
                     input.size = input_resolutions[child_index_offset]
                         .map(Into::into)
-                        .unwrap_or(Size {
-                            width: 0.0,
-                            height: 0.0,
-                        });
+                        .unwrap_or(Size { width: 0.0, height: 0.0 });
                     child_index_offset += 1;
                 }
                 StatefulComponent::Shader(_)
@@ -123,7 +125,8 @@ impl StatefulLayoutComponent {
                 StatefulComponent::Layout(layout) => {
                     let node_children = layout.node_children().len();
                     layout.update_state(
-                        &input_resolutions[child_index_offset..child_index_offset + node_children],
+                        &input_resolutions
+                            [child_index_offset..child_index_offset + node_children],
                     );
                     child_index_offset += node_children
                 }
@@ -131,29 +134,27 @@ impl StatefulLayoutComponent {
         }
     }
 
-    pub(super) fn layout_content(component: &StatefulComponent, index: usize) -> LayoutContent {
+    pub(super) fn layout_content(
+        component: &StatefulComponent,
+        index: usize,
+    ) -> LayoutContent {
         match component {
             StatefulComponent::Layout(_layout) => LayoutContent::None,
-            StatefulComponent::InputStream(input) => LayoutContent::ChildNode {
-                index,
-                size: input.size,
-            },
-            StatefulComponent::Shader(shader) => LayoutContent::ChildNode {
-                index,
-                size: shader.component.size,
-            },
-            StatefulComponent::WebView(web) => LayoutContent::ChildNode {
-                index,
-                size: web.size(),
-            },
-            StatefulComponent::Image(image) => LayoutContent::ChildNode {
-                index,
-                size: image.size(),
-            },
-            StatefulComponent::Text(text) => LayoutContent::ChildNode {
-                index,
-                size: text.size(),
-            },
+            StatefulComponent::InputStream(input) => {
+                LayoutContent::ChildNode { index, size: input.size }
+            }
+            StatefulComponent::Shader(shader) => {
+                LayoutContent::ChildNode { index, size: shader.component.size }
+            }
+            StatefulComponent::WebView(web) => {
+                LayoutContent::ChildNode { index, size: web.size() }
+            }
+            StatefulComponent::Image(image) => {
+                LayoutContent::ChildNode { index, size: image.size() }
+            }
+            StatefulComponent::Text(text) => {
+                LayoutContent::ChildNode { index, size: text.size() }
+            }
         }
     }
 
@@ -168,7 +169,9 @@ impl StatefulLayoutComponent {
 
         let top = match position.position_vertical {
             VerticalPosition::TopOffset(top) => top,
-            VerticalPosition::BottomOffset(bottom) => parent_size.height - bottom - height,
+            VerticalPosition::BottomOffset(bottom) => {
+                parent_size.height - bottom - height
+            }
         };
         let left = match position.position_horizontal {
             HorizontalPosition::LeftOffset(left) => left,
@@ -182,9 +185,12 @@ impl StatefulLayoutComponent {
 
         match child {
             StatefulComponent::Layout(layout_component) => {
-                let children_layouts = layout_component.layout(Size { width, height }, pts);
+                let children_layouts =
+                    layout_component.layout(Size { width, height }, pts);
                 let child_nodes_count = match content {
-                    LayoutContent::ChildNode { .. } => children_layouts.child_nodes_count + 1,
+                    LayoutContent::ChildNode { .. } => {
+                        children_layouts.child_nodes_count + 1
+                    }
                     _ => children_layouts.child_nodes_count,
                 };
                 NestedLayout {

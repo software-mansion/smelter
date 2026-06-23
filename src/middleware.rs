@@ -30,7 +30,9 @@ async fn buffer_request_body(request: Request) -> Result<Request, Response> {
     let bytes = body
         .collect()
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())?
+        .map_err(|err| {
+            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
+        })?
         .to_bytes();
 
     match serde_json::from_slice::<Value>(&bytes) {
@@ -56,7 +58,9 @@ async fn buffer_response_body(response: Response) -> Result<Response, Response> 
     let bytes = body
         .collect()
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())?
+        .map_err(|err| {
+            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
+        })?
         .to_bytes();
 
     match serde_json::from_slice::<Value>(&bytes) {

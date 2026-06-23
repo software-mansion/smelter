@@ -137,7 +137,9 @@ impl StatefulComponent {
             StatefulComponent::Layout(layout) => match layout.deref() {
                 StatefulLayoutComponent::View(view) => view.intermediate_node(),
                 StatefulLayoutComponent::Tiles(tiles) => tiles.intermediate_node(),
-                StatefulLayoutComponent::Rescaler(rescaler) => rescaler.intermediate_node(),
+                StatefulLayoutComponent::Rescaler(rescaler) => {
+                    rescaler.intermediate_node()
+                }
             },
         }
     }
@@ -171,7 +173,10 @@ impl Component {
     /// from `Component`, but additionally it has it's own state. When calculating
     /// initial value of that state, the component has access to state of that
     /// component from before scene update.
-    fn stateful_component(self, ctx: &BuildStateTreeCtx) -> Result<StatefulComponent, SceneError> {
+    fn stateful_component(
+        self,
+        ctx: &BuildStateTreeCtx,
+    ) -> Result<StatefulComponent, SceneError> {
         match self {
             Component::InputStream(input) => input.stateful_component(ctx),
             Component::Shader(shader) => shader.stateful_component(ctx),
@@ -190,10 +195,7 @@ pub enum SceneError {
     #[error(
         "\"{component}\" that is a child of an non-layout component e.g. \"Shader\", \"WebView\" need to have known size. {msg}"
     )]
-    UnknownDimensionsForLayoutNodeRoot {
-        component: &'static str,
-        msg: String,
-    },
+    UnknownDimensionsForLayoutNodeRoot { component: &'static str, msg: String },
 
     #[error(
         "Image \"{0}\" does not exist. You have to register it first before using it in the scene definition."

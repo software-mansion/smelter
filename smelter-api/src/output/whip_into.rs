@@ -5,12 +5,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: WhipOutput) -> Result<Self, Self::Error> {
-        let WhipOutput {
-            endpoint_url,
-            bearer_token,
-            video,
-            audio,
-        } = request;
+        let WhipOutput { endpoint_url, bearer_token, video, audio } = request;
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(
@@ -23,7 +18,10 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
 
                 let output_options = core::RegisterOutputVideoOptions {
                     initial: options.initial.try_into()?,
-                    end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
+                    end_condition: options
+                        .send_eos_when
+                        .unwrap_or_default()
+                        .try_into()?,
                 };
 
                 let encoder_preferences = match options.encoder_preferences.as_deref() {
@@ -36,9 +34,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                         .collect::<Result<_, _>>()?,
                 };
 
-                let video_whip_options = core::VideoWhipOptions {
-                    encoder_preferences,
-                };
+                let video_whip_options = core::VideoWhipOptions { encoder_preferences };
 
                 (Some(output_options), Some(video_whip_options))
             }
@@ -73,9 +69,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                         .collect(),
                 };
 
-                let audio_whip_options = core::AudioWhipOptions {
-                    encoder_preferences,
-                };
+                let audio_whip_options = core::AudioWhipOptions { encoder_preferences };
                 (Some(output_audio_options), Some(audio_whip_options))
             }
             None => (None, None),
@@ -108,66 +102,83 @@ impl WhipVideoEncoderOptions {
                 keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
-            } => core::WhipVideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
-                preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
-                resolution: resolution.into(),
-                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
-                pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
-                raw_options: ffmpeg_options
-                    .clone()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect(),
-                bitstream_format: core::H264BitstreamFormat::AnnexB,
-            }),
-            WhipVideoEncoderOptions::VulkanH264 {
-                bitrate,
-                keyframe_interval_ms,
-            } => core::WhipVideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
-                resolution: resolution.into(),
-                bitrate: bitrate
-                    .map(|bitrate| {
-                        Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
-                            bitrate.try_into()?,
-                        ))
-                    })
-                    .transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
-                preset: core::VulkanH264EncoderPreset::HighQuality,
-                bitstream_format: core::H264BitstreamFormat::AnnexB,
-            }),
+            } => core::WhipVideoEncoderOptions::FfmpegH264(
+                core::FfmpegH264EncoderOptions {
+                    preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+                    resolution: resolution.into(),
+                    bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                    keyframe_interval: duration_from_keyframe_interval(
+                        keyframe_interval_ms,
+                    )?,
+                    pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+                    raw_options: ffmpeg_options
+                        .clone()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .collect(),
+                    bitstream_format: core::H264BitstreamFormat::AnnexB,
+                },
+            ),
+            WhipVideoEncoderOptions::VulkanH264 { bitrate, keyframe_interval_ms } => {
+                core::WhipVideoEncoderOptions::VulkanH264(
+                    core::VulkanH264EncoderOptions {
+                        resolution: resolution.into(),
+                        bitrate: bitrate
+                            .map(|bitrate| {
+                                Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
+                                    bitrate.try_into()?,
+                                ))
+                            })
+                            .transpose()?,
+                        keyframe_interval: duration_from_keyframe_interval(
+                            keyframe_interval_ms,
+                        )?,
+                        preset: core::VulkanH264EncoderPreset::HighQuality,
+                        bitstream_format: core::H264BitstreamFormat::AnnexB,
+                    },
+                )
+            }
             WhipVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
                 keyframe_interval_ms,
                 ffmpeg_options,
-            } => core::WhipVideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
-                resolution: resolution.into(),
-                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
-                raw_options: ffmpeg_options
-                    .clone()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect(),
-            }),
+            } => {
+                core::WhipVideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
+                    resolution: resolution.into(),
+                    bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                    keyframe_interval: duration_from_keyframe_interval(
+                        keyframe_interval_ms,
+                    )?,
+                    raw_options: ffmpeg_options
+                        .clone()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .collect(),
+                })
+            }
             WhipVideoEncoderOptions::FfmpegVp9 {
                 bitrate,
                 keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
-            } => core::WhipVideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
-                resolution: resolution.into(),
-                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
-                pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
-                raw_options: ffmpeg_options
-                    .clone()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect(),
-            }),
-            WhipVideoEncoderOptions::Any => core::WhipVideoEncoderOptions::Any(resolution.into()),
+            } => {
+                core::WhipVideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
+                    resolution: resolution.into(),
+                    bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                    keyframe_interval: duration_from_keyframe_interval(
+                        keyframe_interval_ms,
+                    )?,
+                    pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+                    raw_options: ffmpeg_options
+                        .clone()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .collect(),
+                })
+            }
+            WhipVideoEncoderOptions::Any => {
+                core::WhipVideoEncoderOptions::Any(resolution.into())
+            }
         };
 
         Ok(encoder_options)
@@ -175,7 +186,10 @@ impl WhipVideoEncoderOptions {
 }
 
 impl WhipAudioEncoderOptions {
-    fn to_pipeline_options(&self, channels: AudioChannels) -> core::WhipAudioEncoderOptions {
+    fn to_pipeline_options(
+        &self,
+        channels: AudioChannels,
+    ) -> core::WhipAudioEncoderOptions {
         let encoder_options: core::WhipAudioEncoderOptions = match self {
             WhipAudioEncoderOptions::Opus {
                 preset,
@@ -188,7 +202,9 @@ impl WhipAudioEncoderOptions {
                 forward_error_correction: forward_error_correction.unwrap_or(true),
                 packet_loss: 0,
             }),
-            WhipAudioEncoderOptions::Any => core::WhipAudioEncoderOptions::Any(channels.into()),
+            WhipAudioEncoderOptions::Any => {
+                core::WhipAudioEncoderOptions::Any(channels.into())
+            }
         };
         encoder_options
     }

@@ -7,7 +7,9 @@ use std::{
 use tokio::sync::{mpsc, oneshot};
 use tracing::{Instrument, Level, debug, span, trace, warn};
 use url::Url;
-use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
+use webrtc::track::track_local::{
+    TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP,
+};
 
 use establish_peer_connection::exchange_sdp_offers;
 use peer_connection::PeerConnection;
@@ -25,7 +27,8 @@ use crate::{
         webrtc::{
             http_client::WhipWhepHttpClient,
             whip_output::codec_preferences::{
-                codec_params_from_preferences, resolve_audio_preferences, resolve_video_preferences,
+                codec_params_from_preferences, resolve_audio_preferences,
+                resolve_video_preferences,
             },
         },
     },
@@ -71,11 +74,8 @@ impl WhipOutput {
             kind: OutputProtocolKind::Whip,
         });
 
-        let span = span!(
-            Level::INFO,
-            "WHIP client task",
-            output_id = output_ref.to_string()
-        );
+        let span =
+            span!(Level::INFO, "WHIP client task", output_id = output_ref.to_string());
         let rt = ctx.tokio_rt.clone();
         rt.spawn(
             async {
@@ -121,17 +121,20 @@ impl WhipClientTask {
         let video_preferences = resolve_video_preferences(&ctx, &options)?;
         let audio_preferences = resolve_audio_preferences(&options);
 
-        let codec_params = codec_params_from_preferences(&video_preferences, &audio_preferences);
+        let codec_params =
+            codec_params_from_preferences(&video_preferences, &audio_preferences);
 
-        let client = WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
+        let client =
+            WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
         let pc = PeerConnection::new(&ctx, codec_params).await?;
 
         {
             let stats_sender = ctx.stats_sender.clone();
             let output_ref = output_ref.clone();
             pc.on_connection_state_change(move |state| {
-                stats_sender
-                    .send(WhipOutputStatsEvent::PeerStateChanged(state).into_event(&output_ref));
+                stats_sender.send(
+                    WhipOutputStatsEvent::PeerStateChanged(state).into_event(&output_ref),
+                );
             });
         }
 
@@ -144,15 +147,24 @@ impl WhipClientTask {
         // supported codec is set before set_remote_description https://github.com/webrtc-rs/webrtc/issues/737
         //
         // Final codec resolution is based on RTCRtpSendParameters and happens after set_remote_description call.
-        replace_tracks_with_negotiated_codec(&answer, &video_rtc_sender, &audio_rtc_sender).await?;
+        replace_tracks_with_negotiated_codec(
+            &answer,
+            &video_rtc_sender,
+            &audio_rtc_sender,
+        )
+        .await?;
 
         pc.set_remote_description(answer).await?;
 
         let (video_thread_handle, video_track) = match video_preferences {
             Some(encoder_preferences) => {
-                let (video_thread_handle, video) =
-                    setup_video_track(&ctx, &output_ref, video_rtc_sender, encoder_preferences)
-                        .await?;
+                let (video_thread_handle, video) = setup_video_track(
+                    &ctx,
+                    &output_ref,
+                    video_rtc_sender,
+                    encoder_preferences,
+                )
+                .await?;
                 (Some(video_thread_handle), Some(video))
             }
             None => (None, None),
@@ -183,10 +195,7 @@ impl WhipClientTask {
                 audio_track,
                 pc,
             },
-            WhipOutput {
-                video: video_thread_handle,
-                audio: audio_thread_handle,
-            },
+            WhipOutput { video: video_thread_handle, audio: audio_thread_handle },
         ))
     }
 
@@ -255,7 +264,9 @@ impl WhipClientTask {
                 // try to wait for both audio and video packet to be ready
                 (Some(video), Some(audio)) => {
                     if audio.timestamp > video.timestamp {
-                        if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
+                        if let (Some(p), Some(track)) =
+                            (next_video_packet.take(), &video_track)
+                        {
                             match track.write_rtp(&p.packet).await {
                                 Ok(_) => {
                                     trace!(packet=?p, "Video RTP packet written to track");
@@ -266,7 +277,8 @@ impl WhipClientTask {
                                 }
                             }
                         }
-                    } else if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track)
+                    } else if let (Some(p), Some(track)) =
+                        (next_audio_packet.take(), &audio_track)
                     {
                         match track.write_rtp(&p.packet).await {
                             Ok(_) => {
@@ -281,7 +293,9 @@ impl WhipClientTask {
                 }
                 // read audio if there is not way to get video packet
                 (None, Some(_)) if video_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track) {
+                    if let (Some(p), Some(track)) =
+                        (next_audio_packet.take(), &audio_track)
+                    {
                         match track.write_rtp(&p.packet).await {
                             Ok(_) => {
                                 trace!(packet=?p, "Audio RTP packet written to track");
@@ -295,7 +309,9 @@ impl WhipClientTask {
                 }
                 // read video if there is not way to get audio packet
                 (Some(_), None) if audio_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
+                    if let (Some(p), Some(track)) =
+                        (next_video_packet.take(), &video_track)
+                    {
                         match track.write_rtp(&p.packet).await {
                             Ok(_) => {
                                 trace!(packet=?p, "Video RTP packet written to track");
@@ -317,18 +333,16 @@ impl WhipClientTask {
         }
 
         self.client.delete_session(self.session_url).await;
-        self.ctx
-            .event_emitter
-            .emit(Event::OutputDone(self.output_ref.id().clone()));
+        self.ctx.event_emitter.emit(Event::OutputDone(self.output_ref.id().clone()));
         debug!("Closing WHIP sender thread.")
     }
 }
 
 impl Output for WhipOutput {
     fn audio(&self) -> Option<OutputAudio<'_>> {
-        self.audio.as_ref().map(|audio| OutputAudio {
-            samples_batch_sender: &audio.sample_batch_sender,
-        })
+        self.audio
+            .as_ref()
+            .map(|audio| OutputAudio { samples_batch_sender: &audio.sample_batch_sender })
     }
 
     fn video(&self) -> Option<OutputVideo<'_>> {
@@ -377,15 +391,13 @@ struct WhipOutputStatsSender {
 
 impl WhipOutputStatsSender {
     pub fn new(stats_sender: StatsSender, output_ref: Ref<OutputId>) -> Self {
-        Self {
-            stats_sender,
-            output_ref,
-        }
+        Self { stats_sender, output_ref }
     }
 
     fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
-            WhipOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+            WhipOutputTrackStatsEvent::BytesSent(size)
+                .into_event(&self.output_ref, track_kind),
         );
     }
 }

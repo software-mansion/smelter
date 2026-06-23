@@ -1,7 +1,8 @@
 use glyphon::fontdb::Source;
 use smelter_api as api;
 use smelter_render::{
-    InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RendererOptions, RendererSpec,
+    InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RendererOptions,
+    RendererSpec,
 };
 use wasm_bindgen::JsValue;
 
@@ -23,31 +24,25 @@ impl Renderer {
         upload_frames_with_copy_external: bool,
         options: RendererOptions,
     ) -> Result<Self, JsValue> {
-        let renderer = smelter_render::Renderer::new(options).map_err(types::to_js_error)?;
+        let renderer =
+            smelter_render::Renderer::new(options).map_err(types::to_js_error)?;
         let inputs = RendererInputs::new(upload_frames_with_copy_external);
         let outputs = RendererOutputs::default();
 
-        Ok(Self {
-            renderer,
-            inputs,
-            outputs,
-        })
+        Ok(Self { renderer, inputs, outputs })
     }
 
-    pub async fn render(&mut self, inputs: InputFrameSet) -> Result<OutputFrameSet, JsValue> {
+    pub async fn render(
+        &mut self,
+        inputs: InputFrameSet,
+    ) -> Result<OutputFrameSet, JsValue> {
         let ctx = self.wgpu_ctx();
         let pts = inputs.pts;
         let frame_set = self.inputs.create_input_frames(&ctx, inputs).await?;
 
-        let outputs = self
-            .renderer
-            .render(frame_set)
-            .map_err(types::to_js_error)?;
+        let outputs = self.renderer.render(frame_set).map_err(types::to_js_error)?;
         let output_frames = self.outputs.process_output_frames(&ctx, outputs)?;
-        Ok(OutputFrameSet {
-            pts,
-            frames: output_frames,
-        })
+        Ok(OutputFrameSet { pts, frames: output_frames })
     }
 
     pub fn update_scene(
@@ -108,9 +103,6 @@ impl Renderer {
 
     fn wgpu_ctx(&self) -> WgpuCtx {
         let ctx = self.renderer.wgpu_ctx();
-        WgpuCtx {
-            device: ctx.device.as_ref().clone(),
-            queue: ctx.queue.as_ref().clone(),
-        }
+        WgpuCtx { device: ctx.device.as_ref().clone(), queue: ctx.queue.as_ref().clone() }
     }
 }

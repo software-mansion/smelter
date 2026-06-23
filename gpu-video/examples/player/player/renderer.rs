@@ -34,44 +34,46 @@ pub fn run_renderer<'a>(
     let start_timestamp = std::time::Instant::now();
     event_loop
         .run(move |event, cf| match event {
-            Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
-                WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            state: ElementState::Pressed,
-                            physical_key: PhysicalKey::Code(KeyCode::Escape),
-                            ..
-                        },
-                    ..
-                }
-                | WindowEvent::CloseRequested => cf.exit(),
+            Event::WindowEvent { window_id, event } if window_id == window.id() => {
+                match event {
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state: ElementState::Pressed,
+                                physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                ..
+                            },
+                        ..
+                    }
+                    | WindowEvent::CloseRequested => cf.exit(),
 
-                WindowEvent::RedrawRequested => {
-                    window.request_redraw();
-                    if next_frame.is_none() {
-                        if let Ok(f) = rx.try_recv() {
-                            next_frame = Some(f);
+                    WindowEvent::RedrawRequested => {
+                        window.request_redraw();
+                        if next_frame.is_none() {
+                            if let Ok(f) = rx.try_recv() {
+                                next_frame = Some(f);
+                            }
                         }
+
+                        let current_pts = std::time::Instant::now() - start_timestamp;
+                        if let Some(next_frame_pts) = next_frame.as_ref().map(|f| f.pts) {
+                            if next_frame_pts < current_pts {
+                                current_frame = next_frame.take().unwrap();
+                            }
+                        }
+
+                        let _ = window.request_inner_size(PhysicalSize::new(
+                            current_frame.frame.size().width,
+                            current_frame.frame.size().height,
+                        ));
+
+                        renderer.render(&current_frame.frame, window);
                     }
 
-                    let current_pts = std::time::Instant::now() - start_timestamp;
-                    if let Some(next_frame_pts) = next_frame.as_ref().map(|f| f.pts) {
-                        if next_frame_pts < current_pts {
-                            current_frame = next_frame.take().unwrap();
-                        }
-                    }
-
-                    let _ = window.request_inner_size(PhysicalSize::new(
-                        current_frame.frame.size().width,
-                        current_frame.frame.size().height,
-                    ));
-
-                    renderer.render(&current_frame.frame, window);
+                    WindowEvent::Resized(new_size) => renderer.resize(new_size),
+                    _ => {}
                 }
-
-                WindowEvent::Resized(new_size) => renderer.resize(new_size),
-                _ => {}
-            },
+            }
             _ => {}
         })
         .unwrap();
@@ -95,22 +97,10 @@ impl Vertex {
 }
 
 const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [-1.0, 1.0, 0.0],
-        texture_coords: [0.0, 0.0],
-    },
-    Vertex {
-        position: [-1.0, -1.0, 0.0],
-        texture_coords: [0.0, 1.0],
-    },
-    Vertex {
-        position: [1.0, -1.0, 0.0],
-        texture_coords: [1.0, 1.0],
-    },
-    Vertex {
-        position: [1.0, 1.0, 0.0],
-        texture_coords: [1.0, 0.0],
-    },
+    Vertex { position: [-1.0, 1.0, 0.0], texture_coords: [0.0, 0.0] },
+    Vertex { position: [-1.0, -1.0, 0.0], texture_coords: [0.0, 1.0] },
+    Vertex { position: [1.0, -1.0, 0.0], texture_coords: [1.0, 1.0] },
+    Vertex { position: [1.0, 1.0, 0.0], texture_coords: [1.0, 0.0] },
 ];
 
 const INDICES: &[u16] = &[0, 1, 3, 1, 2, 3];
@@ -127,11 +117,16 @@ struct Renderer<'a> {
 }
 
 impl<'a> Renderer<'a> {
-    fn new(surface: wgpu::Surface<'a>, vulkan_device: &VulkanDevice, window: &Window) -> Self {
+    fn new(
+        surface: wgpu::Surface<'a>,
+        vulkan_device: &VulkanDevice,
+        window: &Window,
+    ) -> Self {
         let device = vulkan_device.wgpu_device();
         let queue = vulkan_device.wgpu_queue();
         let size = window.inner_size();
-        let surface_capabilities = surface.get_capabilities(&vulkan_device.wgpu_adapter());
+        let surface_capabilities =
+            surface.get_capabilities(&vulkan_device.wgpu_adapter());
         let surface_texture_format = surface_capabilities
             .formats
             .iter()
@@ -155,11 +150,12 @@ impl<'a> Renderer<'a> {
 
         surface.configure(&device, &surface_configuration);
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vertex buffer"),
-            usage: wgpu::BufferUsages::VERTEX,
-            contents: bytemuck::cast_slice(VERTICES),
-        });
+        let vertex_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("vertex buffer"),
+                usage: wgpu::BufferUsages::VERTEX,
+                contents: bytemuck::cast_slice(VERTICES),
+            });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("index buffer"),
@@ -167,37 +163,44 @@ impl<'a> Renderer<'a> {
             contents: bytemuck::cast_slice(INDICES),
         });
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("bgl"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+        let bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("bgl"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float {
+                                filterable: true,
+                            },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
                     },
-                    count: None,
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    wgpu::BindGroupLayoutEntry {
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float {
+                                filterable: true,
+                            },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
                     },
-                    count: None,
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                },
-            ],
-        });
+                    wgpu::BindGroupLayoutEntry {
+                        ty: wgpu::BindingType::Sampler(
+                            wgpu::SamplerBindingType::Filtering,
+                        ),
+                        count: None,
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                    },
+                ],
+            });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("sampler"),
@@ -210,11 +213,12 @@ impl<'a> Renderer<'a> {
             ..Default::default()
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("pipeline layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
+        let pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("pipeline layout"),
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: 0,
+            });
 
         let shader_module_descriptor = wgpu::include_wgsl!("shader.wgsl");
         let shader_module = device.create_shader_module(shader_module_descriptor);
@@ -274,8 +278,7 @@ impl<'a> Renderer<'a> {
         if size.width > 0 && size.height > 0 {
             self.surface_configuration.width = size.width;
             self.surface_configuration.height = size.height;
-            self.surface
-                .configure(&self.device, &self.surface_configuration);
+            self.surface.configure(&self.device, &self.surface_configuration);
         }
     }
 
@@ -336,24 +339,26 @@ impl<'a> Renderer<'a> {
         let mut command_encoder = device.create_command_encoder(&Default::default());
 
         {
-            let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &surface_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                ..Default::default()
-            });
+            let mut render_pass =
+                command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("render pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &surface_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    ..Default::default()
+                });
 
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass
+                .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
         }
 

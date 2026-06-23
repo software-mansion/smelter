@@ -86,13 +86,10 @@ fn parse_rgba(s: &str) -> Result<scene::RGBAColor, TypeError> {
     let inner_s = s.trim_start_matches("rgba(").trim_end_matches(')');
     let parts: Vec<&str> = inner_s.split(',').collect();
     let [r, g, b, a] = parts.as_slice() else {
-        return Err(TypeError::new(
-            "Expected three color components and alpha channel.",
-        ));
+        return Err(TypeError::new("Expected three color components and alpha channel."));
     };
-    let a = a
-        .parse::<f32>()
-        .map_err(|_| TypeError::new("Alpha channel parsing failed."))?;
+    let a =
+        a.parse::<f32>().map_err(|_| TypeError::new("Alpha channel parsing failed."))?;
     if !(0.0..=1.0).contains(&a) {
         return Err(TypeError::new(
             "Alpha value out of range. It must be between 0.0 and 1.0",
@@ -264,10 +261,7 @@ fn parse_named_color(color_name: &str) -> Option<scene::RGBAColor> {
 #[test]
 fn test_rgba_deserialization() {
     fn test_case(color: &str, expected: Result<scene::RGBAColor, TypeError>) {
-        assert_eq!(
-            scene::RGBAColor::try_from(RGBAColor(color.to_string())),
-            expected
-        );
+        assert_eq!(scene::RGBAColor::try_from(RGBAColor(color.to_string())), expected);
     }
     test_case("#00000000", Ok(scene::RGBAColor(0, 0, 0, 0)));
     test_case("#01020304", Ok(scene::RGBAColor(1, 2, 3, 4)));

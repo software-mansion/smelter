@@ -31,10 +31,8 @@ impl NestedLayout {
     ) -> (Vec<RenderLayout>, Vec<RenderLayout>) {
         let mut child_index_offset = child_index_offset;
         if let LayoutContent::ChildNode { index, size } = self.content {
-            self.content = LayoutContent::ChildNode {
-                index: index + child_index_offset,
-                size,
-            };
+            self.content =
+                LayoutContent::ChildNode { index: index + child_index_offset, size };
             child_index_offset += 1
         }
         let layout = self.render_layout(&parent_masks);
@@ -47,11 +45,7 @@ impl NestedLayout {
             .collect();
 
         let parent_masks = match &self.mask {
-            Some(mask) => parent_masks
-                .iter()
-                .chain(iter::once(mask))
-                .cloned()
-                .collect(),
+            Some(mask) => parent_masks.iter().chain(iter::once(mask)).cloned().collect(),
             None => parent_masks.clone(),
         };
         let parent_masks = self.child_parent_masks(&parent_masks);
@@ -78,10 +72,7 @@ impl NestedLayout {
             .map(|l| self.flatten_child(l))
             .collect();
 
-        (
-            box_shadow_layouts,
-            [vec![layout], children_shadow, children_layouts].concat(),
-        )
+        (box_shadow_layouts, [vec![layout], children_shadow, children_layouts].concat())
     }
 
     // Final pass on each render layout, it applies following modifications:
@@ -90,13 +81,17 @@ impl NestedLayout {
     fn fix_final_render_layout(mut layout: RenderLayout) -> RenderLayout {
         fn filter_mask(layout: &RenderLayout, mask: Mask) -> Option<Mask> {
             let max_top_border = f32::max(mask.radius.top_left, mask.radius.top_right);
-            let max_bottom_border = f32::max(mask.radius.bottom_left, mask.radius.bottom_right);
+            let max_bottom_border =
+                f32::max(mask.radius.bottom_left, mask.radius.bottom_right);
             let max_left_border = f32::max(mask.radius.top_left, mask.radius.bottom_left);
-            let max_right_border = f32::max(mask.radius.top_right, mask.radius.bottom_right);
+            let max_right_border =
+                f32::max(mask.radius.top_right, mask.radius.bottom_right);
             let should_skip = mask.top + max_top_border <= layout.top
                 && mask.left + max_left_border <= layout.left
-                && mask.left + mask.width - max_right_border >= layout.left + layout.width
-                && mask.top + mask.height - max_bottom_border >= layout.top + layout.height;
+                && mask.left + mask.width - max_right_border
+                    >= layout.left + layout.width
+                && mask.top + mask.height - max_bottom_border
+                    >= layout.top + layout.height;
             match should_skip {
                 true => None,
                 false => Some(mask),
@@ -160,10 +155,7 @@ impl NestedLayout {
                 }
                 true
             }
-            RenderLayoutContent::BoxShadow {
-                color: RGBAColor(_, _, _, 0),
-                ..
-            } => false,
+            RenderLayoutContent::BoxShadow { color: RGBAColor(_, _, _, 0), .. } => false,
             RenderLayoutContent::BoxShadow { .. } => true,
         }
     }
@@ -182,15 +174,13 @@ impl NestedLayout {
                 height: child.height * self.scale_y,
                 rotation_degrees: child.rotation_degrees + self.rotation_degrees, // TODO: not exactly correct
                 content: match child.content {
-                    RenderLayoutContent::Color {
-                        color,
-                        border_color,
-                        border_width,
-                    } => RenderLayoutContent::Color {
-                        color,
-                        border_color,
-                        border_width: border_width * unified_scale,
-                    },
+                    RenderLayoutContent::Color { color, border_color, border_width } => {
+                        RenderLayoutContent::Color {
+                            color,
+                            border_color,
+                            border_width: border_width * unified_scale,
+                        }
+                    }
                     RenderLayoutContent::ChildNode {
                         index,
                         border_color,
@@ -228,22 +218,21 @@ impl NestedLayout {
                 // a position after cropping and translated back to (layout.top, layout.left).
                 let cropped_top = f32::max(child.top - crop.top, 0.0);
                 let cropped_left = f32::max(child.left - crop.left, 0.0);
-                let cropped_bottom = f32::min(child.top + child.height - crop.top, crop.height);
-                let cropped_right = f32::min(child.left + child.width - crop.left, crop.width);
+                let cropped_bottom =
+                    f32::min(child.top + child.height - crop.top, crop.height);
+                let cropped_right =
+                    f32::min(child.left + child.width - crop.left, crop.width);
                 let cropped_width = cropped_right - cropped_left;
                 let cropped_height = cropped_bottom - cropped_top;
                 match child.content.clone() {
-                    RenderLayoutContent::Color {
-                        color,
-                        border_color,
-                        border_width,
-                    } => {
+                    RenderLayoutContent::Color { color, border_color, border_width } => {
                         RenderLayout {
                             top: self.top + (cropped_top * self.scale_y),
                             left: self.left + (cropped_left * self.scale_x),
                             width: cropped_width * self.scale_x,
                             height: cropped_height * self.scale_y,
-                            rotation_degrees: child.rotation_degrees + self.rotation_degrees, // TODO: not exactly correct
+                            rotation_degrees: child.rotation_degrees
+                                + self.rotation_degrees, // TODO: not exactly correct
                             content: RenderLayoutContent::Color {
                                 color,
                                 border_color,
@@ -284,7 +273,8 @@ impl NestedLayout {
                             left: self.left + (cropped_left * self.scale_x),
                             width: cropped_width * self.scale_x,
                             height: cropped_height * self.scale_y,
-                            rotation_degrees: child.rotation_degrees + self.rotation_degrees, // TODO: not exactly correct
+                            rotation_degrees: child.rotation_degrees
+                                + self.rotation_degrees, // TODO: not exactly correct
                             content: RenderLayoutContent::ChildNode {
                                 index,
                                 crop,
@@ -303,7 +293,8 @@ impl NestedLayout {
                             left: self.left + (cropped_left * self.scale_x),
                             width: cropped_width * self.scale_x,
                             height: cropped_height * self.scale_y,
-                            rotation_degrees: child.rotation_degrees + self.rotation_degrees, // TODO: not exactly correct
+                            rotation_degrees: child.rotation_degrees
+                                + self.rotation_degrees, // TODO: not exactly correct
                             content: RenderLayoutContent::BoxShadow {
                                 color,
                                 blur_radius: blur_radius * unified_scale,
@@ -334,19 +325,21 @@ impl NestedLayout {
                     border_color: self.border_color,
                     border_width: self.border_width,
                 },
-                LayoutContent::ChildNode { index, size } => RenderLayoutContent::ChildNode {
-                    index,
-                    crop: Crop {
-                        top: 0.0,
-                        left: 0.0,
-                        width: size.width,
-                        height: size.height,
-                    },
-                    border_color: self.border_color,
-                    border_width: self.border_width,
-                    scaling_filter: ImageScalingFilter::Bilinear,
-                    mip_level: 0.0,
-                },
+                LayoutContent::ChildNode { index, size } => {
+                    RenderLayoutContent::ChildNode {
+                        index,
+                        crop: Crop {
+                            top: 0.0,
+                            left: 0.0,
+                            width: size.width,
+                            height: size.height,
+                        },
+                        border_color: self.border_color,
+                        border_width: self.border_width,
+                        scaling_filter: ImageScalingFilter::Bilinear,
+                        mip_level: 0.0,
+                    }
+                }
                 LayoutContent::None => RenderLayoutContent::Color {
                     color: RGBAColor(0, 0, 0, 0),
                     border_color: self.border_color,
@@ -359,7 +352,11 @@ impl NestedLayout {
     }
 
     /// calculate RenderLayout for one of self box shadows
-    fn box_shadow_layout(&self, box_shadow: &BoxShadow, parent_masks: &[Mask]) -> RenderLayout {
+    fn box_shadow_layout(
+        &self,
+        box_shadow: &BoxShadow,
+        parent_masks: &[Mask],
+    ) -> RenderLayout {
         RenderLayout {
             top: self.top + box_shadow.offset_y,
             left: self.left + box_shadow.offset_x,

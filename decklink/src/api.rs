@@ -93,8 +93,10 @@ mod ffi {
         type DisplayModeType = crate::enums::ffi::DisplayModeType;
         type PixelFormat = crate::enums::ffi::PixelFormat;
         type VideoInputConversionMode = crate::enums::ffi::VideoInputConversionMode;
-        type VideoInputFormatChangedEvents = crate::enums::ffi::VideoInputFormatChangedEvents;
-        type DetectedVideoInputFormatFlags = crate::enums::ffi::DetectedVideoInputFormatFlags;
+        type VideoInputFormatChangedEvents =
+            crate::enums::ffi::VideoInputFormatChangedEvents;
+        type DetectedVideoInputFormatFlags =
+            crate::enums::ffi::DetectedVideoInputFormatFlags;
 
         type SupportedVideoModeFlags = crate::enums::ffi::SupportedVideoModeFlags;
         type VideoInputFlags = crate::enums::ffi::VideoInputFlags;
@@ -108,6 +110,7 @@ mod ffi {
         type IDeckLinkProfileAttributes;
         type IDeckLinkConfiguration;
         type IDeckLinkVideoInputFrame;
+        type IDeckLinkVideoBuffer;
         type IDeckLinkAudioInputPacket;
         type IDeckLinkDisplayMode;
 
@@ -213,7 +216,10 @@ mod ffi {
             profile: *mut IDeckLinkProfile,
             out: &mut *mut IDeckLinkProfileAttributes,
         ) -> HResult;
-        unsafe fn profile_is_active(profile: *mut IDeckLinkProfile, out: &mut bool) -> HResult;
+        unsafe fn profile_is_active(
+            profile: *mut IDeckLinkProfile,
+            out: &mut bool,
+        ) -> HResult;
         unsafe fn profile_release(profile: *mut IDeckLinkProfile);
     }
 
@@ -266,8 +272,14 @@ mod ffi {
     extern "C++" {
         unsafe fn video_input_frame_height(input: *mut IDeckLinkVideoInputFrame) -> i64;
         unsafe fn video_input_frame_width(input: *mut IDeckLinkVideoInputFrame) -> i64;
-        unsafe fn video_input_frame_row_bytes(input: *mut IDeckLinkVideoInputFrame) -> i64;
-        unsafe fn video_input_frame_bytes(input: *mut IDeckLinkVideoInputFrame) -> Result<*mut u8>;
+        unsafe fn video_input_frame_row_bytes(
+            input: *mut IDeckLinkVideoInputFrame,
+        ) -> i64;
+        unsafe fn video_input_frame_start_access(
+            input: *mut IDeckLinkVideoInputFrame,
+            buffer: &mut *mut IDeckLinkVideoBuffer,
+        ) -> Result<*mut u8>;
+        unsafe fn video_input_frame_end_access(buffer: *mut IDeckLinkVideoBuffer);
         unsafe fn video_input_frame_pixel_format(
             input: *mut IDeckLinkVideoInputFrame,
         ) -> Result<PixelFormat>;
@@ -282,7 +294,9 @@ mod ffi {
         unsafe fn audio_input_packet_bytes(
             input: *mut IDeckLinkAudioInputPacket,
         ) -> Result<*mut u8>;
-        unsafe fn audio_input_packet_sample_count(input: *mut IDeckLinkAudioInputPacket) -> i64;
+        unsafe fn audio_input_packet_sample_count(
+            input: *mut IDeckLinkAudioInputPacket,
+        ) -> i64;
         unsafe fn audio_input_packet_packet_time(
             input: *mut IDeckLinkAudioInputPacket,
             time_scale: i64,
@@ -297,7 +311,9 @@ mod ffi {
         unsafe fn display_mode_display_mode_type(
             mode: *mut IDeckLinkDisplayMode,
         ) -> Result<DisplayModeType>;
-        unsafe fn display_mode_frame_rate(mode: *mut IDeckLinkDisplayMode) -> Result<Ratio>;
+        unsafe fn display_mode_frame_rate(
+            mode: *mut IDeckLinkDisplayMode,
+        ) -> Result<Ratio>;
 
         unsafe fn display_mode_release(mode: *mut IDeckLinkDisplayMode);
     }
@@ -310,8 +326,9 @@ pub struct DeckLink(*mut ffi::IDeckLink);
 impl DeckLink {
     pub fn profile_attributes(&self) -> Result<ProfileAttributes, DeckLinkError> {
         let mut attr = null_mut();
-        unsafe { ffi::decklink_profile_attributes(self.0, &mut attr) }
-            .into_result("IDeckLink::QueryInterface(IID_IDeckLinkProfileAttributes, _)")?;
+        unsafe { ffi::decklink_profile_attributes(self.0, &mut attr) }.into_result(
+            "IDeckLink::QueryInterface(IID_IDeckLinkProfileAttributes, _)",
+        )?;
         Ok(ProfileAttributes(attr))
     }
 
@@ -329,7 +346,8 @@ impl DeckLink {
         if HResult::NoInterfaceError == hresult {
             return Ok(None);
         }
-        hresult.into_result("IDeckLink::QueryInterface(IID_IDeckLinkProfileManager, _)")?;
+        hresult
+            .into_result("IDeckLink::QueryInterface(IID_IDeckLinkProfileManager, _)")?;
 
         Ok(Some(ProfileManager(manager)))
     }
@@ -350,10 +368,7 @@ impl Drop for DeckLink {
 
 pub fn get_decklinks() -> Result<Vec<DeckLink>, DeckLinkError> {
     let ptrs = ffi::get_decklinks()?;
-    Ok(ptrs
-        .into_iter()
-        .map(|wrapper| DeckLink(wrapper.ptr))
-        .collect())
+    Ok(ptrs.into_iter().map(|wrapper| DeckLink(wrapper.ptr)).collect())
 }
 
 pub struct DisplayMode(*mut ffi::IDeckLinkDisplayMode, bool);

@@ -7,7 +7,8 @@ use tokio::{sync::watch, time::timeout};
 use tracing::{debug, warn};
 use webrtc::{
     api::{
-        APIBuilder, interceptor_registry::register_default_interceptors, media_engine::MediaEngine,
+        APIBuilder, interceptor_registry::register_default_interceptors,
+        media_engine::MediaEngine,
     },
     ice_transport::{
         ice_candidate::RTCIceCandidateInit, ice_connection_state::RTCIceConnectionState,
@@ -74,9 +75,7 @@ impl RecvonlyPeerConnection {
             },
         ));
 
-        Ok(Self {
-            pc: peer_connection,
-        })
+        Ok(Self { pc: peer_connection })
     }
 
     pub fn connection_state(&self) -> RTCPeerConnectionState {
@@ -158,13 +157,12 @@ impl RecvonlyPeerConnection {
     ) -> Result<(), webrtc::Error> {
         let (sender, mut receiver) = watch::channel(RTCIceGathererState::Unspecified);
 
-        self.pc
-            .on_ice_gathering_state_change(Box::new(move |gatherer_state| {
-                if let Err(err) = sender.send(gatherer_state) {
-                    debug!("Cannot send gathering state: {err:?}");
-                };
-                Box::pin(async {})
-            }));
+        self.pc.on_ice_gathering_state_change(Box::new(move |gatherer_state| {
+            if let Err(err) = sender.send(gatherer_state) {
+                debug!("Cannot send gathering state: {err:?}");
+            };
+            Box::pin(async {})
+        }));
 
         let gather_candidates = async {
             while receiver.changed().await.is_ok() {
@@ -184,12 +182,12 @@ impl RecvonlyPeerConnection {
         self.pc.on_ice_candidate(f);
     }
 
-    pub fn on_track<F: FnMut(OnTrackHdlrContext) + Send + Sync + 'static>(&self, mut f: F) {
+    pub fn on_track<F: FnMut(OnTrackHdlrContext) + Send + Sync + 'static>(
+        &self,
+        mut f: F,
+    ) {
         self.pc.on_track(Box::new(move |track, rtc_receiver, _| {
-            let ctx = OnTrackHdlrContext {
-                track,
-                rtc_receiver,
-            };
+            let ctx = OnTrackHdlrContext { track, rtc_receiver };
             f(ctx);
             Box::pin(async {})
         }));
@@ -203,9 +201,7 @@ impl RecvonlyPeerConnection {
     }
 
     pub fn downgrade(&self) -> WeakRecvonlyPeerConnection {
-        WeakRecvonlyPeerConnection {
-            pc: Arc::downgrade(&self.pc),
-        }
+        WeakRecvonlyPeerConnection { pc: Arc::downgrade(&self.pc) }
     }
 }
 

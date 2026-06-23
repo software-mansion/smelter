@@ -17,7 +17,9 @@ impl<F: FnOnce()> CefStruct for Task<F> {
         }
     }
 
-    fn base_from_cef_data(cef_data: &mut Self::CefType) -> &mut libcef_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut libcef_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }

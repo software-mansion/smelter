@@ -35,10 +35,7 @@ impl VideoSessionParametersManager {
             parameters: Arc::new(VideoSessionParameters::new::<H264Codec>(
                 vulkan_ctx.device.clone(),
                 session,
-                H264VkParameters {
-                    sps: Vec::new(),
-                    pps: Vec::new(),
-                },
+                H264VkParameters { sps: Vec::new(), pps: Vec::new() },
                 None,
                 None,
             )?),
@@ -79,7 +76,10 @@ impl VideoSessionParametersManager {
 
     // it is probably not optimal to insert sps and pps searately. this could be optimized, so that
     // the insertion happens lazily when the parameters are bound to a session.
-    pub(crate) fn put_sps(&mut self, sps: &SeqParameterSet) -> Result<(), VulkanDecoderError> {
+    pub(crate) fn put_sps(
+        &mut self,
+        sps: &SeqParameterSet,
+    ) -> Result<(), VulkanDecoderError> {
         let key = sps.seq_parameter_set_id.id();
         match self.sps.entry(key) {
             std::collections::hash_map::Entry::Occupied(mut e) => {
@@ -93,7 +93,10 @@ impl VideoSessionParametersManager {
         }
     }
 
-    pub(crate) fn put_pps(&mut self, pps: &PicParameterSet) -> Result<(), VulkanDecoderError> {
+    pub(crate) fn put_pps(
+        &mut self,
+        pps: &PicParameterSet,
+    ) -> Result<(), VulkanDecoderError> {
         let key = (pps.seq_parameter_set_id.id(), pps.pic_parameter_set_id.id());
         match self.pps.entry(key) {
             std::collections::hash_map::Entry::Occupied(mut e) => {
@@ -127,10 +130,7 @@ impl VideoSessionParametersManager {
         self.parameters = Arc::new(VideoSessionParameters::new::<H264Codec>(
             self.device.clone(),
             self.session,
-            H264VkParameters {
-                sps: initial_sps,
-                pps: initial_pps,
-            },
+            H264VkParameters { sps: initial_sps, pps: initial_pps },
             Some(&self.parameters),
             None,
         )?);
@@ -161,7 +161,10 @@ impl SessionParams<'_> {
                     new_params.max_coded_extent.height,
                 ),
             },
-            max_dpb_slots: u32::max(current_params.max_dpb_slots, new_params.max_dpb_slots),
+            max_dpb_slots: u32::max(
+                current_params.max_dpb_slots,
+                new_params.max_dpb_slots,
+            ),
             max_active_references: u32::max(
                 current_params.max_active_references,
                 new_params.max_active_references,

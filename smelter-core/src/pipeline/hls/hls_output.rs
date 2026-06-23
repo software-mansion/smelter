@@ -118,7 +118,8 @@ impl HlsOutput {
             .name(format!("HLS writer thread for output {output_ref}"))
             .spawn(move || {
                 let _span =
-                    tracing::info_span!("HLS writer", output_id = output_ref.to_string()).entered();
+                    tracing::info_span!("HLS writer", output_id = output_ref.to_string())
+                        .entered();
 
                 let stats_sender = HlsOutputStatsSender {
                     stats_sender: ctx.stats_sender.clone(),
@@ -132,16 +133,12 @@ impl HlsOutput {
                     ctx.output_framerate,
                     stats_sender,
                 );
-                ctx.event_emitter
-                    .emit(Event::OutputDone(output_ref.id().clone()));
+                ctx.event_emitter.emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing HLS writer thread.");
             })
             .unwrap();
 
-        Ok(HlsOutput {
-            video: video_encoder,
-            audio: audio_encoder,
-        })
+        Ok(HlsOutput { video: video_encoder, audio: audio_encoder })
     }
 
     fn init_video_track(
@@ -230,14 +227,16 @@ impl HlsOutput {
         let sample_rate = options.sample_rate();
 
         let encoder = match options {
-            AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
-                output_id.clone(),
-                AudioEncoderThreadOptions {
-                    ctx: ctx.clone(),
-                    encoder_options: options,
-                    chunks_sender: encoded_chunks_sender,
-                },
-            )?,
+            AudioEncoderOptions::FdkAac(options) => {
+                AudioEncoderThread::<FdkAacEncoder>::spawn(
+                    output_id.clone(),
+                    AudioEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options,
+                        chunks_sender: encoded_chunks_sender,
+                    },
+                )?
+            }
             AudioEncoderOptions::Opus(_) => {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus));
             }
@@ -271,9 +270,9 @@ impl HlsOutput {
 
 impl Output for HlsOutput {
     fn audio(&self) -> Option<OutputAudio<'_>> {
-        self.audio.as_ref().map(|audio| OutputAudio {
-            samples_batch_sender: &audio.sample_batch_sender,
-        })
+        self.audio
+            .as_ref()
+            .map(|audio| OutputAudio { samples_batch_sender: &audio.sample_batch_sender })
     }
 
     fn video(&self) -> Option<OutputVideo<'_>> {
@@ -378,10 +377,7 @@ fn write_chunk(
     };
 
     let pts = chunk.pts.saturating_sub(timestamp_offset);
-    let dts = chunk
-        .dts
-        .map(|dts| dts.saturating_sub(timestamp_offset))
-        .unwrap_or(pts);
+    let dts = chunk.dts.map(|dts| dts.saturating_sub(timestamp_offset)).unwrap_or(pts);
 
     let mut packet = ffmpeg::Packet::copy(&chunk.data);
     packet.set_pts(Some(Rescale::rescale(
@@ -419,7 +415,8 @@ struct HlsOutputStatsSender {
 impl HlsOutputStatsSender {
     fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
-            HlsOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+            HlsOutputTrackStatsEvent::BytesSent(size)
+                .into_event(&self.output_ref, track_kind),
         );
     }
 }

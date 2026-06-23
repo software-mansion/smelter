@@ -69,10 +69,8 @@ pub(crate) fn run(expected: &Path, actual: &Path) -> Result<()> {
 }
 
 fn run_video(expected: &Path, actual: &Path, format: DumpFormat) -> Result<()> {
-    let output_dir = expected
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."));
+    let output_dir =
+        expected.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
     let mut iter = new_video_diff_iter(expected, actual, format)?;
     let mut state = SessionState::default();
     let viewer = FrameInspector::spawn();
@@ -99,7 +97,9 @@ fn run_video(expected: &Path, actual: &Path, format: DumpFormat) -> Result<()> {
             Action::Skip5s => {
                 advance_until(&mut iter, &mut state, Duration::from_secs(5), &viewer)?
             }
-            Action::NextHighMse => advance_until_high_mse(&mut iter, &mut state, &viewer)?,
+            Action::NextHighMse => {
+                advance_until_high_mse(&mut iter, &mut state, &viewer)?
+            }
             Action::Restart => {
                 iter = new_video_diff_iter(expected, actual, format)?;
                 state = SessionState::default();
@@ -139,14 +139,12 @@ fn run_audio(expected: &Path, actual: &Path, format: DumpFormat) -> Result<()> {
 /// side.
 fn decode_audio_dump(path: &Path, format: DumpFormat) -> Result<Vec<AudioSampleBatch>> {
     if !path.exists() {
-        warn!(
-            "inspector: audio dump {} not found, treating as empty",
-            path.display()
-        );
+        warn!("inspector: audio dump {} not found, treating as empty", path.display());
         return Ok(Vec::new());
     }
     let bytes = Bytes::from(
-        std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
+        std::fs::read(path)
+            .with_context(|| format!("Failed to read {}", path.display()))?,
     );
     match format {
         DumpFormat::Rtp => rtp_source::decode_opus_audio(&bytes, AUDIO_SAMPLE_RATE)
@@ -324,18 +322,17 @@ fn push_to_viewer(state: &SessionState, viewer: &FrameInspector, mse: Option<f64
     };
     // The iterator never yields a pair with both sides missing, so
     // there is always a resolution to size the placeholder after.
-    let Some(placeholder_resolution) = pair
-        .left
-        .as_ref()
-        .or(pair.right.as_ref())
-        .map(|f| f.resolution)
+    let Some(placeholder_resolution) =
+        pair.left.as_ref().or(pair.right.as_ref()).map(|f| f.resolution)
     else {
         return;
     };
-    let Some(left) = side_view(pair.left.as_ref(), "expected", placeholder_resolution) else {
+    let Some(left) = side_view(pair.left.as_ref(), "expected", placeholder_resolution)
+    else {
         return;
     };
-    let Some(right) = side_view(pair.right.as_ref(), "actual", placeholder_resolution) else {
+    let Some(right) = side_view(pair.right.as_ref(), "actual", placeholder_resolution)
+    else {
         return;
     };
     viewer.update(frame_inspector::Pair {
@@ -363,7 +360,11 @@ struct SideView {
 /// One side of a viewer update. `None` only when an existing frame
 /// fails to convert to RGBA; a missing frame becomes a dark-gray
 /// placeholder captioned "(no frame)".
-fn side_view(frame: Option<&Frame>, side: &str, placeholder: Resolution) -> Option<SideView> {
+fn side_view(
+    frame: Option<&Frame>,
+    side: &str,
+    placeholder: Resolution,
+) -> Option<SideView> {
     match frame {
         Some(frame) => match frame_to_rgba(frame) {
             Ok(rgba) => Some(SideView {
@@ -397,7 +398,12 @@ fn save_last_pair(state: &SessionState, output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn save_side(frame: Option<&Frame>, output_dir: &Path, pts_label: &str, side: &str) -> Result<()> {
+fn save_side(
+    frame: Option<&Frame>,
+    output_dir: &Path,
+    pts_label: &str,
+    side: &str,
+) -> Result<()> {
     let Some(frame) = frame else {
         warn!("{side}: no frame at this position, nothing to save");
         return Ok(());

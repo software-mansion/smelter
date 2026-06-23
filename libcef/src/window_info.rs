@@ -24,16 +24,15 @@ impl WindowInfo {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn into_raw(self) -> libcef_sys::cef_window_info_t {
-        use std::os::raw::c_ulong;
-
         libcef_sys::cef_window_info_t {
             window_name: CefString::empty_raw(),
             bounds: unsafe { std::mem::zeroed() },
-            parent_window: 0 as c_ulong,
+            hidden: true as c_int,
+            parent_view: std::ptr::null_mut(),
             windowless_rendering_enabled: self.windowless_rendering_enabled as c_int,
             shared_texture_enabled: false as c_int,
             external_begin_frame_enabled: false as c_int,
-            window: 0 as c_ulong,
+            view: std::ptr::null_mut(),
             runtime_style: libcef_sys::cef_runtime_style_t_CEF_RUNTIME_STYLE_ALLOY,
         }
     }

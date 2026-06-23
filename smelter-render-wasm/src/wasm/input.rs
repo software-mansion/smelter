@@ -19,10 +19,7 @@ pub struct RendererInputs {
 
 impl RendererInputs {
     pub fn new(use_copy_external: bool) -> Self {
-        Self {
-            textures: HashMap::default(),
-            use_copy_external,
-        }
+        Self { textures: HashMap::default(), use_copy_external }
     }
 
     pub async fn create_input_frames(
@@ -49,9 +46,13 @@ impl RendererInputs {
             .into_iter()
             .map(|(input, texture)| async {
                 let input_id = input.id.clone();
-                let frame =
-                    RendererInputs::upload_frame(wgpu_ctx, input, texture, self.use_copy_external)
-                        .await?;
+                let frame = RendererInputs::upload_frame(
+                    wgpu_ctx,
+                    input,
+                    texture,
+                    self.use_copy_external,
+                )
+                .await?;
                 Ok((input_id, frame))
             });
 
@@ -66,10 +67,7 @@ impl RendererInputs {
             value.pts = inputs.pts
         }
 
-        Ok(FrameSet {
-            frames,
-            pts: inputs.pts,
-        })
+        Ok(FrameSet { frames, pts: inputs.pts })
     }
 
     pub async fn upload_frame(
@@ -81,9 +79,20 @@ impl RendererInputs {
         let InputFrame { pts, frame, .. } = input;
         match frame {
             InputFrameKind::VideoFrame(video_frame) => match use_copy_external {
-                true => Self::copy_direct_from_video_frame(wgpu_ctx, video_frame, texture, pts),
+                true => Self::copy_direct_from_video_frame(
+                    wgpu_ctx,
+                    video_frame,
+                    texture,
+                    pts,
+                ),
                 false => {
-                    Self::copy_via_cpu_from_video_frame(wgpu_ctx, video_frame, texture, pts).await
+                    Self::copy_via_cpu_from_video_frame(
+                        wgpu_ctx,
+                        video_frame,
+                        texture,
+                        pts,
+                    )
+                    .await
                 }
             },
             InputFrameKind::HtmlVideoElement(element) => {

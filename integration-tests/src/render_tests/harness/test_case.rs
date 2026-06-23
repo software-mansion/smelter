@@ -10,8 +10,8 @@ use super::{
 
 use anyhow::Result;
 use smelter_render::{
-    Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId, RendererSpec,
-    RenderingMode, Resolution, scene::Component,
+    Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId,
+    RendererSpec, RenderingMode, Resolution, scene::Component,
 };
 
 pub(crate) struct TestRunner {
@@ -33,10 +33,7 @@ impl TestRunner {
             renderer: create_renderer(RenderingMode::GpuOptimized),
             inputs: Vec::new(),
             allowed_error: 1.0,
-            resolution: Resolution {
-                width: 640,
-                height: 360,
-            },
+            resolution: Resolution { width: 640, height: 360 },
             output_format: OutputFrameFormat::PlanarYuv420Bytes,
             failed: false,
         }
@@ -44,14 +41,16 @@ impl TestRunner {
 
     pub(crate) fn with_inputs(mut self, inputs: Vec<TestInput>) -> Self {
         for input in &inputs {
-            self.renderer
-                .register_input(InputId(Arc::from(input.name.clone())));
+            self.renderer.register_input(InputId(Arc::from(input.name.clone())));
         }
         self.inputs = inputs;
         self
     }
 
-    pub(crate) fn with_renderers(self, renderers: Vec<(RendererId, RendererSpec)>) -> Self {
+    pub(crate) fn with_renderers(
+        self,
+        renderers: Vec<(RendererId, RendererSpec)>,
+    ) -> Self {
         for (id, spec) in renderers {
             self.renderer.register_renderer(id, spec).unwrap();
         }
@@ -118,11 +117,7 @@ impl TestRunner {
 
     pub(crate) fn finish(self) -> Result<()> {
         if self.failed {
-            anyhow::bail!(
-                "Snapshot test \"{}/{}\" failed",
-                self.module,
-                self.test_name
-            );
+            anyhow::bail!("Snapshot test \"{}/{}\" failed", self.module, self.test_name);
         }
         Ok(())
     }
@@ -131,11 +126,8 @@ impl TestRunner {
         let mut frame_set = FrameSet::new(pts);
         for input in &self.inputs {
             let input_id = InputId::from(Arc::from(input.name.clone()));
-            let frame = Frame {
-                data: input.data.clone(),
-                resolution: input.resolution,
-                pts,
-            };
+            let frame =
+                Frame { data: input.data.clone(), resolution: input.resolution, pts };
             frame_set.frames.insert(input_id, frame);
         }
 
@@ -182,10 +174,7 @@ impl Default for TestCase {
             renderers: Vec::new(),
             steps: Vec::new(),
             allowed_error: 1.0,
-            resolution: Resolution {
-                width: 640,
-                height: 360,
-            },
+            resolution: Resolution { width: 640, height: 360 },
             output_format: OutputFrameFormat::PlanarYuv420Bytes,
             rendering_mode: RenderingMode::GpuOptimized,
         }
@@ -197,9 +186,7 @@ impl TestCase {
     fn renderer(&self) -> Renderer {
         let renderer = create_renderer(self.rendering_mode);
         for (id, spec) in self.renderers.iter() {
-            renderer
-                .register_renderer(id.clone(), spec.clone())
-                .unwrap();
+            renderer.register_renderer(id.clone(), spec.clone()).unwrap();
         }
 
         for input in self.inputs.iter() {
@@ -235,7 +222,11 @@ impl TestCase {
         snapshots
     }
 
-    fn render_with_snaphot(&self, renderer: &mut Renderer, pts: Duration) -> Result<Snapshot> {
+    fn render_with_snaphot(
+        &self,
+        renderer: &mut Renderer,
+        pts: Duration,
+    ) -> Result<Snapshot> {
         let output_frame = self.render(renderer, pts)?;
         let new_snapshot = frame_to_rgba(&output_frame);
         Ok(Snapshot {
@@ -251,11 +242,8 @@ impl TestCase {
         let mut frame_set = FrameSet::new(pts);
         for input in self.inputs.iter() {
             let input_id = InputId::from(Arc::from(input.name.clone()));
-            let frame = Frame {
-                data: input.data.clone(),
-                resolution: input.resolution,
-                pts,
-            };
+            let frame =
+                Frame { data: input.data.clone(), resolution: input.resolution, pts };
             frame_set.frames.insert(input_id, frame);
         }
 

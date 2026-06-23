@@ -9,53 +9,17 @@ fn main() {
     let _ = fs::remove_dir_all(workingdir());
     fs::create_dir_all(workingdir()).unwrap();
 
-    generate_input_series(
-        Resolution {
-            width: 1920,
-            height: 1080,
-        },
-        "1920x1080",
-    );
+    generate_input_series(Resolution { width: 1920, height: 1080 }, "1920x1080");
 
-    generate_input_series(
-        Resolution {
-            width: 1080,
-            height: 1920,
-        },
-        "1080x1920",
-    );
+    generate_input_series(Resolution { width: 1080, height: 1920 }, "1080x1920");
 
-    generate_input_series(
-        Resolution {
-            width: 854,
-            height: 480,
-        },
-        "854x480",
-    );
+    generate_input_series(Resolution { width: 854, height: 480 }, "854x480");
 
-    generate_input_series(
-        Resolution {
-            width: 480,
-            height: 854,
-        },
-        "480x854",
-    );
+    generate_input_series(Resolution { width: 480, height: 854 }, "480x854");
 
-    generate_input_series(
-        Resolution {
-            width: 1440,
-            height: 1080,
-        },
-        "1440x1080",
-    );
+    generate_input_series(Resolution { width: 1440, height: 1080 }, "1440x1080");
 
-    generate_input_series(
-        Resolution {
-            width: 1080,
-            height: 1440,
-        },
-        "1080x1440",
-    );
+    generate_input_series(Resolution { width: 1080, height: 1440 }, "1080x1440");
 }
 
 fn generate_input_series(resolution: Resolution, name_suffix: &str) {
@@ -110,12 +74,15 @@ fn generate_input_series(resolution: Resolution, name_suffix: &str) {
 }
 
 fn workingdir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("workingdir")
-        .join("playground_inputs")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("workingdir").join("playground_inputs")
 }
 
-fn generate_png(path: PathBuf, text: &str, rgba_color: &str, resolution: Resolution) -> Result<()> {
+fn generate_png(
+    path: PathBuf,
+    text: &str,
+    rgba_color: &str,
+    resolution: Resolution,
+) -> Result<()> {
     let instance = CompositorInstance::start();
     let output_port = instance.get_port();
 

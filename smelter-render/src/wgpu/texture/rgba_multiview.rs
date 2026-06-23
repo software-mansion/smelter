@@ -31,10 +31,7 @@ impl RgbaMultiViewTexture {
             size,
             wgpu::TextureFormat::Rgba8UnormSrgb,
             usage,
-            &[
-                wgpu::TextureFormat::Rgba8UnormSrgb,
-                wgpu::TextureFormat::Rgba8Unorm,
-            ],
+            &[wgpu::TextureFormat::Rgba8UnormSrgb, wgpu::TextureFormat::Rgba8Unorm],
         );
 
         let linear_view = texture.create_view(&wgpu::TextureViewDescriptor {
@@ -46,11 +43,7 @@ impl RgbaMultiViewTexture {
             ..Default::default()
         });
 
-        Self {
-            texture,
-            linear_view,
-            srgb_view,
-        }
+        Self { texture, linear_view, srgb_view }
     }
 
     pub fn new_srgb_bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {

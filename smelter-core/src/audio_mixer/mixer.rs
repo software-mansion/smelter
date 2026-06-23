@@ -8,7 +8,9 @@ use smelter_render::{OutputId, error::UpdateSceneError};
 use tracing::{debug, trace};
 
 use crate::{
-    audio_mixer::{InputSamplesSet, OutputSamplesSet, input::AudioMixerInput, mix::SampleMixer},
+    audio_mixer::{
+        InputSamplesSet, OutputSamplesSet, input::AudioMixerInput, mix::SampleMixer,
+    },
     prelude::OutputAudioSamples,
 };
 
@@ -40,9 +42,7 @@ pub(crate) struct AudioMixer(Arc<Mutex<InternalAudioMixer>>);
 
 impl AudioMixer {
     pub fn new(mixing_sample_rate: u32) -> Self {
-        Self(Arc::new(Mutex::new(InternalAudioMixer::new(
-            mixing_sample_rate,
-        ))))
+        Self(Arc::new(Mutex::new(InternalAudioMixer::new(mixing_sample_rate))))
     }
 
     pub fn process_batch_set(&self, samples_set: InputSamplesSet) -> OutputSamplesSet {
@@ -61,14 +61,11 @@ impl AudioMixer {
         mixing_strategy: AudioMixingStrategy,
         channels: AudioChannels,
     ) {
-        self.0.lock().unwrap().outputs.insert(
-            output_id,
-            AudioOutputInfo {
-                audio,
-                channels,
-                mixing_strategy,
-            },
-        );
+        self.0
+            .lock()
+            .unwrap()
+            .outputs
+            .insert(output_id, AudioOutputInfo { audio, channels, mixing_strategy });
     }
 
     pub fn unregister_output(&self, output_id: &OutputId) {
@@ -126,8 +123,7 @@ impl InternalAudioMixer {
     }
 
     pub fn register_input(&mut self, input_id: InputId) {
-        self.inputs
-            .insert(input_id, AudioMixerInput::new(self.mixing_sample_rate));
+        self.inputs.insert(input_id, AudioMixerInput::new(self.mixing_sample_rate));
     }
 
     pub fn update_output(
@@ -144,19 +140,25 @@ impl InternalAudioMixer {
         }
     }
 
-    pub fn process_batch_set(&mut self, mut samples_set: InputSamplesSet) -> OutputSamplesSet {
-        let last_processed_batch_end = *self
-            .last_processed_batch_end
-            .get_or_insert(samples_set.start_pts);
+    pub fn process_batch_set(
+        &mut self,
+        mut samples_set: InputSamplesSet,
+    ) -> OutputSamplesSet {
+        let last_processed_batch_end =
+            *self.last_processed_batch_end.get_or_insert(samples_set.start_pts);
 
         let maybe_zero_samples = if last_processed_batch_end < samples_set.start_pts {
-            let missing_range = samples_set
-                .start_pts
-                .saturating_sub(last_processed_batch_end);
+            let missing_range =
+                samples_set.start_pts.saturating_sub(last_processed_batch_end);
             let missing_samples =
-                f64::floor(missing_range.as_secs_f64() * self.mixing_sample_rate as f64) as usize;
+                f64::floor(missing_range.as_secs_f64() * self.mixing_sample_rate as f64)
+                    as usize;
             debug!(?missing_samples, "Detected gap, filling with zeros");
-            Some(self.mix_samples(HashMap::new(), missing_samples, last_processed_batch_end))
+            Some(self.mix_samples(
+                HashMap::new(),
+                missing_samples,
+                last_processed_batch_end,
+            ))
         } else {
             None
         };
@@ -174,9 +176,7 @@ impl InternalAudioMixer {
             .inputs
             .iter_mut()
             .filter_map(|(input_id, input)| {
-                input
-                    .get_samples(pts_range)
-                    .map(|samples| (input_id.clone(), samples))
+                input.get_samples(pts_range).map(|samples| (input_id.clone(), samples))
             })
             .collect();
 
@@ -186,7 +186,8 @@ impl InternalAudioMixer {
             self.mixing_sample_rate,
         );
 
-        let mixed_samples = self.mix_samples(input_samples, samples_count, samples_set.start_pts);
+        let mixed_samples =
+            self.mix_samples(input_samples, samples_count, samples_set.start_pts);
 
         self.last_processed_batch_end = Some(samples_set.end_pts);
         match maybe_zero_samples {
@@ -208,9 +209,11 @@ impl InternalAudioMixer {
             self.outputs
                 .iter()
                 .map(|(output_id, output_info)| {
-                    let samples =
-                        self.sample_mixer
-                            .mix_samples(&input_samples, output_info, samples_count);
+                    let samples = self.sample_mixer.mix_samples(
+                        &input_samples,
+                        output_info,
+                        samples_count,
+                    );
                     (output_id.clone(), OutputAudioSamples { samples, start_pts })
                 })
                 .collect(),

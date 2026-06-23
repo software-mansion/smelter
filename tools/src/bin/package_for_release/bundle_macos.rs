@@ -11,11 +11,13 @@ use crate::utils::{self, SmelterBin};
 
 const ARM_MAC_TARGET: &str = "aarch64-apple-darwin";
 const ARM_OUTPUT_FILE: &str = "smelter_darwin_aarch64.tar.gz";
-const ARM_WITH_WEB_RENDERER_OUTPUT_FILE: &str = "smelter_with_web_renderer_darwin_aarch64.tar.gz";
+const ARM_WITH_WEB_RENDERER_OUTPUT_FILE: &str =
+    "smelter_with_web_renderer_darwin_aarch64.tar.gz";
 
 const INTEL_MAC_TARGET: &str = "x86_64-apple-darwin";
 const INTEL_OUTPUT_FILE: &str = "smelter_darwin_x86_64.tar.gz";
-const INTEL_WITH_WEB_RENDERER_OUTPUT_FILE: &str = "smelter_with_web_renderer_darwin_x86_64.tar.gz";
+const INTEL_WITH_WEB_RENDERER_OUTPUT_FILE: &str =
+    "smelter_with_web_renderer_darwin_x86_64.tar.gz";
 
 pub fn bundle_macos_app() -> Result<()> {
     tracing_subscriber::fmt().init();
@@ -64,23 +66,23 @@ fn bundle_app_with_ffmpeg(
         bail!("Version in invalid format: {ffmpeg_version}");
     }
 
-    let ffmpeg_version_homebrew = &ffmpeg_version[..ffmpeg_version.find(".").unwrap_or(1)];
+    let ffmpeg_version_homebrew =
+        &ffmpeg_version[..ffmpeg_version.find(".").unwrap_or(1)];
     let ffmpeg_url = utils::ffmpeg_url(&ffmpeg_version)?;
     let brew_prefix = Command::new("brew").arg("--prefix").output()?;
     let brew_prefix = String::from_utf8(brew_prefix.stdout)?.trim().to_string();
 
     let rustc_args = [
         format!("-Clink-arg=-Wl,-rpath,{brew_prefix}/opt/ffmpeg/lib"),
-        format!("-Clink-arg=-Wl,-rpath,{brew_prefix}/opt/ffmpeg@{ffmpeg_version_homebrew}/lib"),
+        format!(
+            "-Clink-arg=-Wl,-rpath,{brew_prefix}/opt/ffmpeg@{ffmpeg_version_homebrew}/lib"
+        ),
         "-Clink-arg=-Wl,-rpath,/usr/local/lib".to_string(),
         "-Clink-arg=-Wl,-rpath,@executable_path/libav".to_string(),
         format!("-Clink-arg=-Wl,-rpath,{brew_prefix}/lib"),
     ];
 
-    let rustc_envs = vec![
-        ("FFMPEG_VERSION", ffmpeg_version),
-        ("FFMPEG_URL", ffmpeg_url),
-    ];
+    let rustc_envs = vec![("FFMPEG_VERSION", ffmpeg_version), ("FFMPEG_URL", ffmpeg_url)];
 
     let cargo_build_dir = git_root().join("target").join(target).join("release");
     utils::ensure_empty_dir(&workdir.join("smelter"))?;
@@ -114,10 +116,7 @@ fn bundle_app_with_ffmpeg(
         libcef::bundle_app(&cargo_build_dir, &workdir.join("smelter/smelter.app"))?;
     }
 
-    fs::copy(
-        cargo_build_dir.join("main_process"),
-        workdir.join("smelter/smelter_main"),
-    )?;
+    fs::copy(cargo_build_dir.join("main_process"), workdir.join("smelter/smelter_main"))?;
     let smelter_bin_path = workdir.join("smelter/smelter_main");
 
     fs::copy(
@@ -125,10 +124,8 @@ fn bundle_app_with_ffmpeg(
         workdir.join("smelter/smelter"),
     )?;
 
-    let otool_output_bytes = Command::new("otool")
-        .arg("-L")
-        .arg(&smelter_bin_path)
-        .output()?;
+    let otool_output_bytes =
+        Command::new("otool").arg("-L").arg(&smelter_bin_path).output()?;
     let otool_output = String::from_utf8(otool_output_bytes.stdout)?;
 
     let brew_prefix_bytes = Command::new("brew").arg("--prefix").output()?;
@@ -196,10 +193,7 @@ fn bundle_app_no_ffmpeg(
         libcef::bundle_app(&cargo_build_dir, &workdir.join("smelter/smelter.app"))?;
     }
 
-    fs::copy(
-        cargo_build_dir.join("main_process"),
-        workdir.join("smelter/smelter"),
-    )?;
+    fs::copy(cargo_build_dir.join("main_process"), workdir.join("smelter/smelter"))?;
 
     info!("Create tar.gz archive.");
     let exit_code = Command::new("tar")

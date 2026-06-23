@@ -26,7 +26,8 @@ impl ShaderNode {
         resolution: &Resolution,
     ) -> Self {
         let custom_params_buffer = Self::new_params_buffer(ctx.wgpu_ctx, shader_params);
-        let params_bind_group = Self::new_params_bind_group(ctx.wgpu_ctx, &custom_params_buffer);
+        let params_bind_group =
+            Self::new_params_bind_group(ctx.wgpu_ctx, &custom_params_buffer);
 
         Self {
             params_bind_group,
@@ -36,24 +37,24 @@ impl ShaderNode {
         }
     }
 
-    fn new_params_buffer(ctx: &WgpuCtx, shader_params: &Option<ShaderParam>) -> wgpu::Buffer {
+    fn new_params_buffer(
+        ctx: &WgpuCtx,
+        shader_params: &Option<ShaderParam>,
+    ) -> wgpu::Buffer {
         match shader_params {
             Some(params) => {
                 let params = params.to_bytes();
-                ctx.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("shader node custom params buffer"),
-                        usage: wgpu::BufferUsages::UNIFORM,
-                        contents: &params,
-                    })
-            }
-            None => ctx
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("shader node empty custom params buffer"),
-                    contents: &[0],
+                ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("shader node custom params buffer"),
                     usage: wgpu::BufferUsages::UNIFORM,
-                }),
+                    contents: &params,
+                })
+            }
+            None => ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("shader node empty custom params buffer"),
+                contents: &[0],
+                usage: wgpu::BufferUsages::UNIFORM,
+            }),
         }
     }
 
@@ -100,7 +101,9 @@ impl ShaderParamExt for ShaderParam {
                 ShaderParam::U32(v) => bytes.extend_from_slice(&v.to_le_bytes()),
                 ShaderParam::I32(v) => bytes.extend_from_slice(&v.to_le_bytes()),
                 ShaderParam::List(v) => v.iter().for_each(|v| extend_bytes(v, bytes)),
-                ShaderParam::Struct(v) => v.iter().for_each(|v| extend_bytes(&v.value, bytes)),
+                ShaderParam::Struct(v) => {
+                    v.iter().for_each(|v| extend_bytes(&v.value, bytes))
+                }
             }
         }
 

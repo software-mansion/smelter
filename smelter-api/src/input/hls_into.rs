@@ -7,13 +7,7 @@ impl TryFrom<HlsInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
     fn try_from(value: HlsInput) -> Result<Self, Self::Error> {
-        let HlsInput {
-            url,
-            required,
-            offset_ms,
-            decoder_map,
-            side_channel,
-        } = value;
+        let HlsInput { url, required, offset_ms, decoder_map, side_channel } = value;
 
         let (required, offset) = new_queue_options(required, offset_ms)?;
         let side_channel = side_channel.unwrap_or_default();
@@ -23,8 +17,12 @@ impl TryFrom<HlsInput> for core::RegisterInputOptions {
             .as_ref()
             .and_then(|decoders| decoders.get(&InputHlsCodec::H264))
             .map(|decoder| match decoder {
-                HlsVideoDecoderOptions::FfmpegH264 => Ok(core::VideoDecoderOptions::FfmpegH264),
-                HlsVideoDecoderOptions::VulkanH264 => Ok(core::VideoDecoderOptions::VulkanH264),
+                HlsVideoDecoderOptions::FfmpegH264 => {
+                    Ok(core::VideoDecoderOptions::FfmpegH264)
+                }
+                HlsVideoDecoderOptions::VulkanH264 => {
+                    Ok(core::VideoDecoderOptions::VulkanH264)
+                }
             })
             .transpose()?;
 

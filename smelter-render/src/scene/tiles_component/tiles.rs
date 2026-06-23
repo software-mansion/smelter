@@ -26,7 +26,11 @@ struct TilePosition {
 }
 
 impl TilesComponentParams {
-    pub(super) fn tiles(&self, size: Size, children: &[StatefulComponent]) -> Vec<Option<Tile>> {
+    pub(super) fn tiles(
+        &self,
+        size: Size,
+        children: &[StatefulComponent],
+    ) -> Vec<Option<Tile>> {
         let input_count = children.len() as u32;
         let rows_cols = self.optimal_row_column_count(input_count, size);
         let tile_size = self.tile_size(rows_cols, size);
@@ -123,7 +127,8 @@ impl TilesComponentParams {
             }
         };
 
-        let mut top = additional_top_padding + justified_padding_y + self.padding + self.margin;
+        let mut top =
+            additional_top_padding + justified_padding_y + self.padding + self.margin;
         for row in 0..rows_cols.rows {
             let tiles_in_row = if row < rows_cols.rows - 1 {
                 rows_cols.columns
@@ -135,18 +140,21 @@ impl TilesComponentParams {
                 - (tile_size.width + 2.0 * self.padding) * tiles_in_row as f32
                 - (self.margin * (tiles_in_row as f32 + 1.0));
 
-            let (additional_left_padding, justified_padding_x) = match self.horizontal_align {
-                HorizontalAlign::Left => (0.0, 0.0),
-                HorizontalAlign::Right => (additional_x_padding, 0.0),
-                HorizontalAlign::Justified => {
-                    let space = additional_x_padding / (tiles_in_row + 1) as f32;
-                    (0.0, space)
-                }
-                HorizontalAlign::Center => (additional_x_padding / 2.0, 0.0),
-            };
+            let (additional_left_padding, justified_padding_x) =
+                match self.horizontal_align {
+                    HorizontalAlign::Left => (0.0, 0.0),
+                    HorizontalAlign::Right => (additional_x_padding, 0.0),
+                    HorizontalAlign::Justified => {
+                        let space = additional_x_padding / (tiles_in_row + 1) as f32;
+                        (0.0, space)
+                    }
+                    HorizontalAlign::Center => (additional_x_padding / 2.0, 0.0),
+                };
 
-            let mut left =
-                additional_left_padding + justified_padding_x + self.margin + self.padding;
+            let mut left = additional_left_padding
+                + justified_padding_x
+                + self.margin
+                + self.padding;
 
             for _col in 0..tiles_in_row {
                 layouts.push(TilePosition {
@@ -156,9 +164,13 @@ impl TilesComponentParams {
                     height: tile_size.height,
                 });
 
-                left += tile_size.width + self.margin + self.padding * 2.0 + justified_padding_x;
+                left += tile_size.width
+                    + self.margin
+                    + self.padding * 2.0
+                    + justified_padding_x;
             }
-            top += tile_size.height + self.margin + self.padding * 2.0 + justified_padding_y;
+            top +=
+                tile_size.height + self.margin + self.padding * 2.0 + justified_padding_y;
         }
 
         layouts

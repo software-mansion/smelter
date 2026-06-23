@@ -4,7 +4,9 @@ use std::time::Duration;
 use std::vec;
 
 use crate::InputId;
-use crate::scene::{self, ComponentId, ShaderComponentParams, image_component::ImageRenderParams};
+use crate::scene::{
+    self, ComponentId, ShaderComponentParams, image_component::ImageRenderParams,
+};
 use crate::transformations::layout::LayoutNode;
 use crate::transformations::shader::Shader;
 use crate::transformations::shader::node::ShaderNode;
@@ -78,7 +80,9 @@ impl RenderNode {
             scene::NodeParams::Web(children_ids, web_renderer) => {
                 Self::new_web_renderer_node(ctx, children, children_ids, web_renderer)
             }
-            scene::NodeParams::Image(image_params) => Self::new_image_node(ctx, image_params),
+            scene::NodeParams::Image(image_params) => {
+                Self::new_image_node(ctx, image_params)
+            }
             scene::NodeParams::Text(text_params) => Self::new_text_node(ctx, text_params),
             scene::NodeParams::Layout(layout_provider) => {
                 Self::new_layout_node(ctx, children, layout_provider)
@@ -97,6 +101,11 @@ impl RenderNode {
             InnerRenderNode::InputStreamRef(id) => inputs
                 .get(id)
                 .map(|(node_texture, _)| node_texture)
+                .unwrap_or(&self.output),
+            InnerRenderNode::Layout(node) => node
+                .passthrough_child_index()
+                .and_then(|index| self.children.get(index))
+                .map(|child| child.output_texture(inputs))
                 .unwrap_or(&self.output),
             _non_input_stream => &self.output,
         }
@@ -117,11 +126,7 @@ impl RenderNode {
         let mut output = NodeTexture::new();
         output.ensure_size(ctx.wgpu_ctx, shader_params.size.into());
 
-        Self {
-            renderer: node,
-            output,
-            children,
-        }
+        Self { renderer: node, output, children }
     }
 
     pub(super) fn new_web_renderer_node(
@@ -135,33 +140,21 @@ impl RenderNode {
         let mut output = NodeTexture::new();
         output.ensure_size(ctx.wgpu_ctx, resolution);
 
-        Self {
-            renderer: node,
-            output,
-            children,
-        }
+        Self { renderer: node, output, children }
     }
 
     pub(super) fn new_image_node(ctx: &RenderCtx, image: ImageRenderParams) -> Self {
         let node = InnerRenderNode::Image(ImageNode::new(ctx.wgpu_ctx, image));
         let output = NodeTexture::new();
 
-        Self {
-            renderer: node,
-            output,
-            children: vec![],
-        }
+        Self { renderer: node, output, children: vec![] }
     }
 
     pub(super) fn new_text_node(ctx: &RenderCtx, params: TextRenderParams) -> Self {
         let node = InnerRenderNode::Text(TextRendererNode::new(ctx, params));
         let output = NodeTexture::new();
 
-        Self {
-            renderer: node,
-            output,
-            children: vec![],
-        }
+        Self { renderer: node, output, children: vec![] }
     }
 
     pub(super) fn new_layout_node(
@@ -172,10 +165,6 @@ impl RenderNode {
         let node = InnerRenderNode::Layout(LayoutNode::new(ctx, Box::new(provider)));
         let output = NodeTexture::new();
 
-        Self {
-            renderer: node,
-            output,
-            children,
-        }
+        Self { renderer: node, output, children }
     }
 }

@@ -21,9 +21,7 @@ impl WgpuErrorScope {
             device.push_error_scope(wgpu::ErrorFilter::Validation),
             device.push_error_scope(wgpu::ErrorFilter::OutOfMemory),
         ];
-        Self {
-            scopes: Some(scopes),
-        }
+        Self { scopes: Some(scopes) }
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -33,10 +31,7 @@ impl WgpuErrorScope {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn pop(mut self) -> Result<(), WgpuError> {
-        let scopes = self
-            .scopes
-            .take()
-            .expect("WgpuErrorScope::pop called twice");
+        let scopes = self.scopes.take().expect("WgpuErrorScope::pop called twice");
         for scope in scopes.into_iter().rev() {
             if let Some(error) = pollster::block_on(scope.pop()) {
                 return Err(error.into());

@@ -77,9 +77,5 @@ pub fn convert_to_shader_color(ctx: &WgpuCtx, color: &RGBAColor) -> [f64; 4] {
 
 fn srgb_to_linear(color: u8) -> f64 {
     let color = color as f64 / 255.0;
-    if color < 0.04045 {
-        color / 12.92
-    } else {
-        f64::powf((color + 0.055) / 1.055, 2.4)
-    }
+    if color < 0.04045 { color / 12.92 } else { f64::powf((color + 0.055) / 1.055, 2.4) }
 }

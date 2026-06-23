@@ -28,15 +28,15 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
         let side_channel = side_channel.unwrap_or_default();
         let side_channel_delay = side_channel.delay()?;
 
-        let transport_protocol = transport_protocol.unwrap_or(TransportProtocol::Udp).into();
+        let transport_protocol =
+            transport_protocol.unwrap_or(TransportProtocol::Udp).into();
 
         let buffer_duration = buffer_size_ms
             .map(|ms| Duration::try_from_secs_f64(ms / 1000.0))
             .transpose()
             .map_err(|err| TypeError::new(format!("Invalid buffer_size_ms. {err}")))?;
 
-        const NO_VIDEO_AUDIO_SPEC: &str =
-            "At least one of `video` and `audio` has to be specified in `register_input` request.";
+        const NO_VIDEO_AUDIO_SPEC: &str = "At least one of `video` and `audio` has to be specified in `register_input` request.";
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(NO_VIDEO_AUDIO_SPEC));
@@ -48,10 +48,18 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
                 .as_ref()
                 .map(|video| {
                     let options = match video.decoder {
-                        RtpVideoDecoderOptions::FfmpegH264 => core::VideoDecoderOptions::FfmpegH264,
-                        RtpVideoDecoderOptions::FfmpegVp8 => core::VideoDecoderOptions::FfmpegVp8,
-                        RtpVideoDecoderOptions::FfmpegVp9 => core::VideoDecoderOptions::FfmpegVp9,
-                        RtpVideoDecoderOptions::VulkanH264 => core::VideoDecoderOptions::VulkanH264,
+                        RtpVideoDecoderOptions::FfmpegH264 => {
+                            core::VideoDecoderOptions::FfmpegH264
+                        }
+                        RtpVideoDecoderOptions::FfmpegVp8 => {
+                            core::VideoDecoderOptions::FfmpegVp8
+                        }
+                        RtpVideoDecoderOptions::FfmpegVp9 => {
+                            core::VideoDecoderOptions::FfmpegVp9
+                        }
+                        RtpVideoDecoderOptions::VulkanH264 => {
+                            core::VideoDecoderOptions::VulkanH264
+                        }
                     };
                     Ok(options)
                 })
@@ -76,12 +84,11 @@ impl TryFrom<InputRtpAudioOptions> for core::RtpAudioOptions {
     fn try_from(audio: InputRtpAudioOptions) -> Result<Self, Self::Error> {
         match audio {
             InputRtpAudioOptions::Opus => Ok(core::RtpAudioOptions::Opus),
-            InputRtpAudioOptions::Aac {
-                audio_specific_config,
-                rtp_mode,
-            } => {
+            InputRtpAudioOptions::Aac { audio_specific_config, rtp_mode } => {
                 let depayloader_mode = match rtp_mode {
-                    Some(AacRtpMode::LowBitrate) => core::RtpAacDepayloaderMode::LowBitrate,
+                    Some(AacRtpMode::LowBitrate) => {
+                        core::RtpAacDepayloaderMode::LowBitrate
+                    }
                     Some(AacRtpMode::HighBitrate) | None => {
                         core::RtpAacDepayloaderMode::HighBitrate
                     }
@@ -97,11 +104,7 @@ impl TryFrom<InputRtpAudioOptions> for core::RtpAudioOptions {
                 let asc = core::AacAudioSpecificConfig::parse_from(&raw_asc)
                     .map_err(|err| TypeError::new(ErrorStack::new(&err).into_string()))?;
 
-                Ok(core::RtpAudioOptions::FdkAac {
-                    depayloader_mode,
-                    raw_asc,
-                    asc,
-                })
+                Ok(core::RtpAudioOptions::FdkAac { depayloader_mode, raw_asc, asc })
             }
         }
     }

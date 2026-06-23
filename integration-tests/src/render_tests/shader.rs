@@ -5,7 +5,8 @@ use integration_tests_macros::render_test;
 use smelter_render::{
     InputId, RendererId, RendererSpec,
     scene::{
-        Component, InputStreamComponent, ShaderComponent, ShaderParam, ShaderParamStructField, Size,
+        Component, InputStreamComponent, ShaderComponent, ShaderParam,
+        ShaderParamStructField, Size,
     },
     shader::ShaderSpec,
 };
@@ -27,10 +28,7 @@ pub const TESTS: &[RenderTest] = &[
     USER_PARAMS_CIRCLE_LAYOUT,
 ];
 
-const SCENE_SIZE: Size = Size {
-    width: 640.0,
-    height: 360.0,
-};
+const SCENE_SIZE: Size = Size { width: 640.0, height: 360.0 };
 
 fn plane_id_shader() -> (RendererId, RendererSpec) {
     (
@@ -81,7 +79,8 @@ fn input_streams(count: usize) -> Vec<Component> {
 
 #[render_test(description = "")]
 fn base_params_plane_id_no_inputs() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![plane_id_shader()]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![plane_id_shader()]);
     runner.update_scene(Component::Shader(ShaderComponent {
         id: None,
         shader_id: RendererId("base_params_plane_id".into()),

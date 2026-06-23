@@ -47,7 +47,9 @@ impl<R: RenderHandler> CefStruct for RenderHandlerWrapper<R> {
         }
     }
 
-    fn base_from_cef_data(cef_data: &mut Self::CefType) -> &mut libcef_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut libcef_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }
@@ -87,15 +89,14 @@ impl<R: RenderHandler> RenderHandlerWrapper<R> {
         unsafe {
             let self_ref = CefRefData::<Self>::from_cef(self_);
             let browser = Browser::new(browser);
-            let buffer =
-                std::slice::from_raw_parts(buffer as *const u8, (4 * width * height) as usize);
+            let buffer = std::slice::from_raw_parts(
+                buffer as *const u8,
+                (4 * width * height) as usize,
+            );
             self_ref.0.on_paint(
                 &browser,
                 buffer,
-                Resolution {
-                    width: width as usize,
-                    height: height as usize,
-                },
+                Resolution { width: width as usize, height: height as usize },
             );
         }
     }

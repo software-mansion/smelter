@@ -63,13 +63,11 @@ fn download_buffer(
 ) -> bytes::Bytes {
     let buffer = bytes::BytesMut::with_capacity((size.width * size.height * 4) as usize);
     let (s, r) = bounded(1);
-    source
-        .slice(..)
-        .map_async(wgpu::MapMode::Read, move |result| {
-            if let Err(err) = s.send(result) {
-                error!("channel send error: {err}")
-            }
-        });
+    source.slice(..).map_async(wgpu::MapMode::Read, move |result| {
+        if let Err(err) = s.send(result) {
+            error!("channel send error: {err}")
+        }
+    });
 
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
@@ -79,9 +77,7 @@ fn download_buffer(
         let range = source.slice(..).get_mapped_range().unwrap();
         let chunks = range.chunks(pad_to_256(size.width * 4) as usize);
         for chunk in chunks {
-            buffer
-                .write_all(&chunk[..(size.width * 4) as usize])
-                .unwrap();
+            buffer.write_all(&chunk[..(size.width * 4) as usize]).unwrap();
         }
     };
     source.unmap();
@@ -89,9 +85,5 @@ fn download_buffer(
 }
 
 fn pad_to_256(value: u32) -> u32 {
-    if value.is_multiple_of(256) {
-        value
-    } else {
-        value + (256 - (value % 256))
-    }
+    if value.is_multiple_of(256) { value } else { value + (256 - (value % 256)) }
 }

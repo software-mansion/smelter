@@ -24,10 +24,7 @@ struct Amf0DecoderState {
 
 impl Amf0DecoderState {
     fn new(amf_bytes: Bytes) -> Self {
-        Self {
-            buf: amf_bytes,
-            ..Default::default()
-        }
+        Self { buf: amf_bytes, ..Default::default() }
     }
 
     fn decode_buf(mut self) -> Result<Vec<AmfValue>, AmfDecodingError> {
@@ -57,18 +54,12 @@ impl Amf0DecoderState {
             STRICT_ARRAY => AmfValue::StrictArray(self.decode_strict_array()?),
             DATE => {
                 let (unix_time, timezone_offset) = self.decode_date()?;
-                AmfValue::Date {
-                    unix_time,
-                    timezone_offset,
-                }
+                AmfValue::Date { unix_time, timezone_offset }
             }
             LONG_STRING => AmfValue::LongString(self.decode_long_string()?),
             TYPED_OBJECT => {
                 let (class_name, properties) = self.decode_typed_object()?;
-                AmfValue::TypedObject {
-                    class_name,
-                    properties,
-                }
+                AmfValue::TypedObject { class_name, properties }
             }
             _ => return Err(AmfDecodingError::UnknownType(marker)),
         };
@@ -100,8 +91,8 @@ impl Amf0DecoderState {
             return Err(AmfDecodingError::InsufficientData);
         }
         let string_bytes = self.buf.split_to(size);
-        let string =
-            String::from_utf8(string_bytes.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
+        let string = String::from_utf8(string_bytes.to_vec())
+            .map_err(|_| AmfDecodingError::InvalidUtf8)?;
         Ok(string)
     }
 
@@ -124,7 +115,9 @@ impl Amf0DecoderState {
         Ok(complex)
     }
 
-    fn decode_ecma_array(&mut self) -> Result<HashMap<String, AmfValue>, AmfDecodingError> {
+    fn decode_ecma_array(
+        &mut self,
+    ) -> Result<HashMap<String, AmfValue>, AmfDecodingError> {
         if self.buf.remaining() < 4 {
             return Err(AmfDecodingError::InsufficientData);
         }
@@ -174,8 +167,8 @@ impl Amf0DecoderState {
             return Err(AmfDecodingError::InsufficientData);
         }
         let string_bytes = self.buf.split_to(size);
-        let string =
-            String::from_utf8(string_bytes.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
+        let string = String::from_utf8(string_bytes.to_vec())
+            .map_err(|_| AmfDecodingError::InvalidUtf8)?;
         Ok(string)
     }
 
@@ -196,7 +189,9 @@ impl Amf0DecoderState {
         Ok((class_name, pairs))
     }
 
-    fn decode_object_pairs(&mut self) -> Result<HashMap<String, AmfValue>, AmfDecodingError> {
+    fn decode_object_pairs(
+        &mut self,
+    ) -> Result<HashMap<String, AmfValue>, AmfDecodingError> {
         let mut pairs = HashMap::new();
 
         loop {
@@ -212,8 +207,8 @@ impl Amf0DecoderState {
                 return Err(AmfDecodingError::InsufficientData);
             }
             let key_bytes: Bytes = self.buf.split_to(key_size);
-            let key =
-                String::from_utf8(key_bytes.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
+            let key = String::from_utf8(key_bytes.to_vec())
+                .map_err(|_| AmfDecodingError::InvalidUtf8)?;
 
             let value = self.decode_value()?;
             pairs.insert(key, value);

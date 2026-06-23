@@ -1,8 +1,8 @@
 use thiserror::Error;
 
 use crate::{
-    ExAudioFourCc, ExVideoFourCc, LegacyFlvAudioCodec, LegacyFlvVideoCodec, RtmpAudioCodec,
-    RtmpVideoCodec,
+    ExAudioFourCc, ExVideoFourCc, LegacyFlvAudioCodec, LegacyFlvVideoCodec,
+    RtmpAudioCodec, RtmpVideoCodec,
 };
 
 #[derive(Error, Debug)]

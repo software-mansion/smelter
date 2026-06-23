@@ -10,7 +10,9 @@ pub const PRIMITIVE_STATE: wgpu::PrimitiveState = wgpu::PrimitiveState {
     unclipped_depth: false,
 };
 
-use crate::transformations::shader::validation::error::{ShaderParseError, ShaderValidationError};
+use crate::transformations::shader::validation::error::{
+    ShaderParseError, ShaderValidationError,
+};
 
 use super::WgpuError;
 
@@ -64,15 +66,16 @@ impl Sampler {
             ..Default::default()
         });
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("sampler bind group layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: None,
-            }],
-        });
+        let bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("sampler bind group layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                }],
+            });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("sampler bind group"),
@@ -83,11 +86,7 @@ impl Sampler {
             }],
         });
 
-        Self {
-            _sampler: sampler,
-            bind_group,
-            bind_group_layout,
-        }
+        Self { _sampler: sampler, bind_group, bind_group_layout }
     }
 }
 

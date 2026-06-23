@@ -13,9 +13,8 @@ pub struct MainArgs {
 
 impl MainArgs {
     pub fn from_program_args() -> Self {
-        let mut argv: Vec<_> = std::env::args()
-            .map(|arg| CString::new(arg).unwrap().into_raw())
-            .collect();
+        let mut argv: Vec<_> =
+            std::env::args().map(|arg| CString::new(arg).unwrap().into_raw()).collect();
         let inner = libcef_sys::cef_main_args_t {
             argc: argv.len() as i32,
             argv: argv.as_mut_ptr(),

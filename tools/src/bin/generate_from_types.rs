@@ -79,17 +79,18 @@ fn flatten_definition_with_one_of(definition: &mut SchemaObject) {
             Schema::Bool(_) => (),
             Schema::Object(variant) => {
                 for (prop_name, prop) in properties.properties.iter() {
-                    variant
-                        .object()
-                        .properties
-                        .insert(prop_name.clone(), prop.clone());
+                    variant.object().properties.insert(prop_name.clone(), prop.clone());
                 }
             }
         }
     }
 }
 
-fn generate_schema(mut current_schema: RootSchema, path: &'static str, action: SchemaAction) {
+fn generate_schema(
+    mut current_schema: RootSchema,
+    path: &'static str,
+    action: SchemaAction,
+) {
     flatten_definitions_with_one_of(&mut current_schema);
 
     let root_dir: PathBuf = ROOT_DIR.into();

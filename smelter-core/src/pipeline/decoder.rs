@@ -74,9 +74,14 @@ pub(crate) trait AudioDecoder: Sized {
     const LABEL: &'static str;
     type Options: Send + 'static;
 
-    fn new(ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError>;
-    fn decode(&mut self, event: EncodedInputEvent)
-    -> Result<Vec<InputAudioSamples>, DecodingError>;
+    fn new(
+        ctx: &Arc<PipelineCtx>,
+        options: Self::Options,
+    ) -> Result<Self, DecoderInitError>;
+    fn decode(
+        &mut self,
+        event: EncodedInputEvent,
+    ) -> Result<Vec<InputAudioSamples>, DecodingError>;
     fn flush(&mut self) -> Vec<InputAudioSamples>;
 }
 
@@ -96,11 +101,7 @@ where
     Transformer: BytestreamTransformer,
 {
     pub fn new(transformer: Option<Transformer>, source: Source) -> Self {
-        Self {
-            transformer,
-            source,
-            eos_sent: false,
-        }
+        Self { transformer, source, eos_sent: false }
     }
 }
 

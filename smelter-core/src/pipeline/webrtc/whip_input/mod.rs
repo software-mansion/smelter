@@ -1,5 +1,7 @@
 use std::sync::Arc;
-use webrtc::{rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote::TrackRemote};
+use webrtc::{
+    rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote::TrackRemote,
+};
 
 use crate::{
     PipelineCtx,

@@ -9,7 +9,9 @@ use crate::{
     paths::integration_tests_root,
     pipeline_tests::{
         PipelineTest,
-        harness::{OutputReceiver, PacketSender, VideoCompareConfig, compare_video_dumps},
+        harness::{
+            OutputReceiver, PacketSender, VideoCompareConfig, compare_video_dumps,
+        },
     },
 };
 
@@ -51,7 +53,8 @@ pub fn unregistering_flaky() -> Result<()> {
         }),
     )?;
 
-    let output_receiver = OutputReceiver::start(output_port_2, CommunicationProtocol::Tcp)?;
+    let output_receiver =
+        OutputReceiver::start(output_port_2, CommunicationProtocol::Tcp)?;
 
     instance.send_request(
         "input/input_1/register",
@@ -68,7 +71,8 @@ pub fn unregistering_flaky() -> Result<()> {
     )?;
 
     let input_1_dump = input_dump_from_disk("8_colors_long_input_video.rtp")?;
-    PacketSender::new(CommunicationProtocol::Tcp, input_port)?.send_non_blocking(input_1_dump);
+    PacketSender::new(CommunicationProtocol::Tcp, input_port)?
+        .send_non_blocking(input_1_dump);
 
     instance.send_request("start", json!({}))?;
 
@@ -93,7 +97,10 @@ pub fn unregistering_flaky() -> Result<()> {
     Ok(())
 }
 
-fn register_output_with_initial_scene(instance: &CompositorInstance, port: u16) -> Result<()> {
+fn register_output_with_initial_scene(
+    instance: &CompositorInstance,
+    port: u16,
+) -> Result<()> {
     instance.send_request(
         "output/output_1/register",
         json!({

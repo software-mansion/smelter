@@ -20,8 +20,8 @@ pub(crate) fn query_video_format_properties<'a>(
     profile_info: &vk::VideoProfileInfoKHR<'_>,
     image_usage: vk::ImageUsageFlags,
 ) -> Result<Vec<vk::VideoFormatPropertiesKHR<'a>>, VulkanInitError> {
-    let mut profile_list_info =
-        vk::VideoProfileListInfoKHR::default().profiles(std::slice::from_ref(profile_info));
+    let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
+        .profiles(std::slice::from_ref(profile_info));
 
     let format_info = vk::PhysicalDeviceVideoFormatInfoKHR::default()
         .image_usage(image_usage)
@@ -30,9 +30,7 @@ pub(crate) fn query_video_format_properties<'a>(
     let mut format_info_length = 0;
 
     unsafe {
-        (video_queue_instance_ext
-            .fp()
-            .get_physical_device_video_format_properties_khr)(
+        (video_queue_instance_ext.fp().get_physical_device_video_format_properties_khr)(
             device,
             &format_info,
             &mut format_info_length,
@@ -45,9 +43,7 @@ pub(crate) fn query_video_format_properties<'a>(
         vec![vk::VideoFormatPropertiesKHR::default(); format_info_length as usize];
 
     unsafe {
-        (video_queue_instance_ext
-            .fp()
-            .get_physical_device_video_format_properties_khr)(
+        (video_queue_instance_ext.fp().get_physical_device_video_format_properties_khr)(
             device,
             &format_info,
             &mut format_info_length,
@@ -115,13 +111,15 @@ impl NativeEncodeCapabilities {
         device: vk::PhysicalDevice,
         supported_operations: vk::VideoCodecOperationFlagsKHR,
     ) -> Self {
-        let h264 = match supported_operations.contains(vk::VideoCodecOperationFlagsKHR::ENCODE_H264)
+        let h264 = match supported_operations
+            .contains(vk::VideoCodecOperationFlagsKHR::ENCODE_H264)
         {
             true => Some(NativeEncodeH264Capabilities::query(instance, device)),
             false => None,
         };
 
-        let h265 = match supported_operations.contains(vk::VideoCodecOperationFlagsKHR::ENCODE_H265)
+        let h265 = match supported_operations
+            .contains(vk::VideoCodecOperationFlagsKHR::ENCODE_H265)
         {
             true => Some(NativeEncodeH265Capabilities::query(instance, device)),
             false => None,
@@ -132,14 +130,8 @@ impl NativeEncodeCapabilities {
 
     pub(crate) fn user_facing(&self) -> EncodeCapabilities {
         EncodeCapabilities {
-            h264: self
-                .h264
-                .as_ref()
-                .map(NativeEncodeH264Capabilities::user_facing),
-            h265: self
-                .h265
-                .as_ref()
-                .map(NativeEncodeH265Capabilities::user_facing),
+            h264: self.h264.as_ref().map(NativeEncodeH264Capabilities::user_facing),
+            h265: self.h265.as_ref().map(NativeEncodeH265Capabilities::user_facing),
         }
     }
 }
@@ -173,7 +165,9 @@ impl NativeEncodeH265Capabilities {
             NativeEncodeProfileCapabilities::query(instance, device, &profile).ok()
         };
 
-        let main = profile_caps(vk::native::StdVideoH265ProfileIdc_STD_VIDEO_H265_PROFILE_IDC_MAIN);
+        let main = profile_caps(
+            vk::native::StdVideoH265ProfileIdc_STD_VIDEO_H265_PROFILE_IDC_MAIN,
+        );
 
         Self { main }
     }
@@ -188,11 +182,7 @@ impl NativeEncodeH265Capabilities {
     }
 
     pub(crate) fn max_profile(&self) -> Option<H265Profile> {
-        if self.main.is_some() {
-            Some(H265Profile::Main)
-        } else {
-            None
-        }
+        if self.main.is_some() { Some(H265Profile::Main) } else { None }
     }
 }
 
@@ -235,16 +225,17 @@ impl NativeEncodeH264Capabilities {
             NativeEncodeProfileCapabilities::query(instance, device, &profile).ok()
         };
 
-        let baseline =
-            profile_caps(vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE);
-        let main = profile_caps(vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN);
-        let high = profile_caps(vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH);
+        let baseline = profile_caps(
+            vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE,
+        );
+        let main = profile_caps(
+            vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN,
+        );
+        let high = profile_caps(
+            vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH,
+        );
 
-        Self {
-            baseline,
-            main,
-            high,
-        }
+        Self { baseline, main, high }
     }
 
     pub(crate) fn profile(
@@ -312,7 +303,9 @@ impl<C: CodecCapabilities> NativeEncodeProfileCapabilities<C> {
             (instance
                 .video_queue_instance_ext
                 .fp()
-                .get_physical_device_video_capabilities_khr)(device, profile, &mut caps)
+                .get_physical_device_video_capabilities_khr)(
+                device, profile, &mut caps
+            )
             .result()?;
         }
 
@@ -334,7 +327,8 @@ impl<C: CodecCapabilities> NativeEncodeProfileCapabilities<C> {
             Vec::with_capacity(encode_capabilities.max_quality_levels as usize);
 
         for i in 0..encode_capabilities.max_quality_levels {
-            if let Ok(qlp) = NativeEncodeQualityLevelProperties::query(instance, device, profile, i)
+            if let Ok(qlp) =
+                NativeEncodeQualityLevelProperties::query(instance, device, profile, i)
             {
                 quality_level_properties.push(qlp);
             }
@@ -385,7 +379,8 @@ impl NativeEncodeProfileCapabilities<H265Codec> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeEncodeQualityLevelProperties<C: CodecCapabilities> {
-    pub(crate) quality_level_properties: vk::VideoEncodeQualityLevelPropertiesKHR<'static>,
+    pub(crate) quality_level_properties:
+        vk::VideoEncodeQualityLevelPropertiesKHR<'static>,
     pub(crate) codec_quality_level_properties:
         C::CodecSpecificEncodeQualityLevelProperties<'static>,
 }
@@ -397,12 +392,14 @@ impl<C: CodecCapabilities> NativeEncodeQualityLevelProperties<C> {
         profile_info: &vk::VideoProfileInfoKHR<'_>,
         quality_level: u32,
     ) -> Result<Self, VulkanInitError> {
-        let quality_level_info = vk::PhysicalDeviceVideoEncodeQualityLevelInfoKHR::default()
-            .video_profile(profile_info)
-            .quality_level(quality_level);
+        let quality_level_info =
+            vk::PhysicalDeviceVideoEncodeQualityLevelInfoKHR::default()
+                .video_profile(profile_info)
+                .quality_level(quality_level);
 
         let mut codec_qlp = C::CodecSpecificEncodeQualityLevelProperties::default();
-        let mut qlp = vk::VideoEncodeQualityLevelPropertiesKHR::default().push_next(&mut codec_qlp);
+        let mut qlp =
+            vk::VideoEncodeQualityLevelPropertiesKHR::default().push_next(&mut codec_qlp);
 
         unsafe {
             (instance
@@ -416,28 +413,27 @@ impl<C: CodecCapabilities> NativeEncodeQualityLevelProperties<C> {
             .result()?;
         }
 
-        let quality_level_properties = vk::VideoEncodeQualityLevelPropertiesKHR::default()
-            .preferred_rate_control_mode(qlp.preferred_rate_control_mode)
-            .preferred_rate_control_layer_count(qlp.preferred_rate_control_layer_count);
+        let quality_level_properties =
+            vk::VideoEncodeQualityLevelPropertiesKHR::default()
+                .preferred_rate_control_mode(qlp.preferred_rate_control_mode)
+                .preferred_rate_control_layer_count(
+                    qlp.preferred_rate_control_layer_count,
+                );
 
-        let codec_specific_encode_quality_level_properties = C::static_encode_qlp(&codec_qlp);
+        let codec_specific_encode_quality_level_properties =
+            C::static_encode_qlp(&codec_qlp);
 
         Ok(Self {
             quality_level_properties,
-            codec_quality_level_properties: codec_specific_encode_quality_level_properties,
+            codec_quality_level_properties:
+                codec_specific_encode_quality_level_properties,
         })
     }
 
     pub(crate) fn zeroed(&self) -> bool {
         // this is hideous
-        self.quality_level_properties
-            .preferred_rate_control_mode
-            .as_raw()
-            == 0
-            && self
-                .quality_level_properties
-                .preferred_rate_control_layer_count
-                == 0
+        self.quality_level_properties.preferred_rate_control_mode.as_raw() == 0
+            && self.quality_level_properties.preferred_rate_control_layer_count == 0
             && self.codec_quality_level_properties.zeroed()
     }
 }
@@ -509,13 +505,15 @@ impl NativeDecodeCapabilities {
         device: vk::PhysicalDevice,
         supported_operations: vk::VideoCodecOperationFlagsKHR,
     ) -> Self {
-        let h264 = match supported_operations.contains(vk::VideoCodecOperationFlagsKHR::DECODE_H264)
+        let h264 = match supported_operations
+            .contains(vk::VideoCodecOperationFlagsKHR::DECODE_H264)
         {
             true => Some(NativeDecodeH264Capabilities::query(instance, device)),
             false => None,
         };
 
-        let h265 = match supported_operations.contains(vk::VideoCodecOperationFlagsKHR::DECODE_H265)
+        let h265 = match supported_operations
+            .contains(vk::VideoCodecOperationFlagsKHR::DECODE_H265)
         {
             true => Some(NativeDecodeH265Capabilities::query(instance, device)),
             false => None,
@@ -526,14 +524,8 @@ impl NativeDecodeCapabilities {
 
     pub(crate) fn user_facing(&self) -> DecodeCapabilities {
         DecodeCapabilities {
-            h264: self
-                .h264
-                .as_ref()
-                .map(NativeDecodeH264Capabilities::user_facing),
-            h265: self
-                .h265
-                .as_ref()
-                .map(NativeDecodeH265Capabilities::user_facing),
+            h264: self.h264.as_ref().map(NativeDecodeH264Capabilities::user_facing),
+            h265: self.h265.as_ref().map(NativeDecodeH265Capabilities::user_facing),
         }
     }
 }
@@ -568,7 +560,9 @@ impl NativeDecodeH265Capabilities {
             NativeDecodeProfileCapabilities::query(instance, device, &profile).ok()
         };
 
-        let main = profile_caps(vk::native::StdVideoH265ProfileIdc_STD_VIDEO_H265_PROFILE_IDC_MAIN);
+        let main = profile_caps(
+            vk::native::StdVideoH265ProfileIdc_STD_VIDEO_H265_PROFILE_IDC_MAIN,
+        );
 
         Self { main }
     }
@@ -615,16 +609,17 @@ impl NativeDecodeH264Capabilities {
             NativeDecodeProfileCapabilities::query(instance, device, &profile).ok()
         };
 
-        let baseline =
-            profile_caps(vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE);
-        let main = profile_caps(vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN);
-        let high = profile_caps(vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH);
+        let baseline = profile_caps(
+            vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE,
+        );
+        let main = profile_caps(
+            vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN,
+        );
+        let high = profile_caps(
+            vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH,
+        );
 
-        Self {
-            baseline,
-            main,
-            high,
-        }
+        Self { baseline, main, high }
     }
 
     pub(crate) fn profile(
@@ -677,7 +672,9 @@ impl<C: CodecCapabilities> NativeDecodeProfileCapabilities<C> {
             (instance
                 .video_queue_instance_ext
                 .fp()
-                .get_physical_device_video_capabilities_khr)(device, profile, &mut caps)
+                .get_physical_device_video_capabilities_khr)(
+                device, profile, &mut caps
+            )
             .result()?
         };
 
@@ -697,36 +694,39 @@ impl<C: CodecCapabilities> NativeDecodeProfileCapabilities<C> {
 
         let flags = decode_caps.flags;
 
-        let dpb_format_properties =
-            if flags.contains(vk::VideoDecodeCapabilityFlagsKHR::DPB_AND_OUTPUT_COINCIDE) {
-                query_video_format_properties(
-                    device,
-                    &instance.video_queue_instance_ext,
-                    profile,
-                    vk::ImageUsageFlags::VIDEO_DECODE_DST_KHR
-                        | vk::ImageUsageFlags::VIDEO_DECODE_DPB_KHR
-                        | vk::ImageUsageFlags::TRANSFER_SRC,
-                )?
-            } else {
-                query_video_format_properties(
-                    device,
-                    &instance.video_queue_instance_ext,
-                    profile,
-                    vk::ImageUsageFlags::VIDEO_DECODE_DPB_KHR,
-                )?
-            };
+        let dpb_format_properties = if flags
+            .contains(vk::VideoDecodeCapabilityFlagsKHR::DPB_AND_OUTPUT_COINCIDE)
+        {
+            query_video_format_properties(
+                device,
+                &instance.video_queue_instance_ext,
+                profile,
+                vk::ImageUsageFlags::VIDEO_DECODE_DST_KHR
+                    | vk::ImageUsageFlags::VIDEO_DECODE_DPB_KHR
+                    | vk::ImageUsageFlags::TRANSFER_SRC,
+            )?
+        } else {
+            query_video_format_properties(
+                device,
+                &instance.video_queue_instance_ext,
+                profile,
+                vk::ImageUsageFlags::VIDEO_DECODE_DPB_KHR,
+            )?
+        };
 
-        let dst_format_properties =
-            if flags.contains(vk::VideoDecodeCapabilityFlagsKHR::DPB_AND_OUTPUT_COINCIDE) {
-                None
-            } else {
-                Some(query_video_format_properties(
-                    device,
-                    &instance.video_queue_instance_ext,
-                    profile,
-                    vk::ImageUsageFlags::VIDEO_DECODE_DST_KHR | vk::ImageUsageFlags::TRANSFER_SRC,
-                )?)
-            };
+        let dst_format_properties = if flags
+            .contains(vk::VideoDecodeCapabilityFlagsKHR::DPB_AND_OUTPUT_COINCIDE)
+        {
+            None
+        } else {
+            Some(query_video_format_properties(
+                device,
+                &instance.video_queue_instance_ext,
+                profile,
+                vk::ImageUsageFlags::VIDEO_DECODE_DST_KHR
+                    | vk::ImageUsageFlags::TRANSFER_SRC,
+            )?)
+        };
 
         let dpb_format_properties = match dpb_format_properties
             .into_iter()
@@ -758,25 +758,33 @@ impl<C: CodecCapabilities> NativeDecodeProfileCapabilities<C> {
 }
 
 impl NativeDecodeProfileCapabilities<H265Codec> {
-    pub(crate) fn user_facing(&self) -> Result<DecodeH265ProfileCapabilities, VulkanDecoderError> {
+    pub(crate) fn user_facing(
+        &self,
+    ) -> Result<DecodeH265ProfileCapabilities, VulkanDecoderError> {
         Ok(DecodeH265ProfileCapabilities {
             min_width: self.video_capabilities.min_coded_extent.width,
             max_width: self.video_capabilities.max_coded_extent.width,
             min_height: self.video_capabilities.min_coded_extent.height,
             max_height: self.video_capabilities.max_coded_extent.height,
-            max_level_idc: vk_to_h265_level_idc(self.codec_decode_capabilities.max_level_idc)?,
+            max_level_idc: vk_to_h265_level_idc(
+                self.codec_decode_capabilities.max_level_idc,
+            )?,
         })
     }
 }
 
 impl NativeDecodeProfileCapabilities<H264Codec> {
-    pub(crate) fn user_facing(&self) -> Result<DecodeH264ProfileCapabilities, VulkanDecoderError> {
+    pub(crate) fn user_facing(
+        &self,
+    ) -> Result<DecodeH264ProfileCapabilities, VulkanDecoderError> {
         Ok(DecodeH264ProfileCapabilities {
             min_width: self.video_capabilities.min_coded_extent.width,
             max_width: self.video_capabilities.max_coded_extent.width,
             min_height: self.video_capabilities.min_coded_extent.height,
             max_height: self.video_capabilities.max_coded_extent.height,
-            max_level_idc: vk_to_h264_level_idc(self.codec_decode_capabilities.max_level_idc)?,
+            max_level_idc: vk_to_h264_level_idc(
+                self.codec_decode_capabilities.max_level_idc,
+            )?,
         })
     }
 }

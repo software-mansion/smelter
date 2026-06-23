@@ -16,7 +16,8 @@ use smelter_core::{
     *,
 };
 use smelter_render::{
-    Frame, InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes, scene::Component,
+    Frame, InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes,
+    scene::Component,
 };
 use tracing::debug;
 
@@ -114,9 +115,8 @@ impl SingleBenchmarkPass {
         debug!("pipeline start");
         Pipeline::start(&pipeline);
 
-        let inputs: Vec<_> = (0..self.input_count)
-            .map(|i| InputId(format!("input_{i}").into()))
-            .collect();
+        let inputs: Vec<_> =
+            (0..self.input_count).map(|i| InputId(format!("input_{i}").into())).collect();
         let outputs: Vec<_> = (0..self.output_count)
             .map(|i| OutputId(format!("output_{i}").into()))
             .collect();
@@ -126,7 +126,9 @@ impl SingleBenchmarkPass {
                 let frame_senders = inputs
                     .iter()
                     .cloned()
-                    .map(|input_id| Ok(self.register_pipeline_raw_input(&pipeline, input_id)?))
+                    .map(|input_id| {
+                        Ok(self.register_pipeline_raw_input(&pipeline, input_id)?)
+                    })
                     .collect::<Result<Vec<_>>>()?;
                 thread::spawn(move || raw_data_sender(frame_senders, input));
             }
@@ -137,10 +139,7 @@ impl SingleBenchmarkPass {
             }
         };
 
-        let scene_ctx = SceneContext {
-            inputs: inputs.clone(),
-            outputs: outputs.clone(),
-        };
+        let scene_ctx = SceneContext { inputs: inputs.clone(), outputs: outputs.clone() };
         for (id, spec) in self.resources.clone() {
             Pipeline::register_renderer(&pipeline, id, spec)?;
         }
@@ -149,17 +148,18 @@ impl SingleBenchmarkPass {
             .map(|output_id| {
                 let (root, audio_mix) = (self.builder)(&scene_ctx, output_id);
                 let receiver: Box<dyn DurationReceiver + Send> = match self.encoder {
-                    EncoderOptions::Disabled => {
-                        self.register_pipeline_raw_output(&pipeline, output_id, root, audio_mix)?
-                    }
+                    EncoderOptions::Disabled => self.register_pipeline_raw_output(
+                        &pipeline, output_id, root, audio_mix,
+                    )?,
                     EncoderOptions::FfmpegH264(preset) => self
                         .register_pipeline_encoded_output_ffmpeg(
                             &pipeline, output_id, root, audio_mix, preset,
                         )?,
 
-                    EncoderOptions::VulkanH264 => self.register_pipeline_encoded_output_vulkan(
-                        &pipeline, output_id, root, audio_mix,
-                    )?,
+                    EncoderOptions::VulkanH264 => self
+                        .register_pipeline_encoded_output_vulkan(
+                            &pipeline, output_id, root, audio_mix,
+                        )?,
                 };
 
                 Ok(receiver)
@@ -201,18 +201,20 @@ impl SingleBenchmarkPass {
                 audio: Some(audio_output_options(audio_mix)),
                 output_options: EncodedDataOutputOptions {
                     audio: Some(default_audio_encoder()),
-                    video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
-                        preset,
-                        bitrate: None,
-                        keyframe_interval: KEYFRAME_INTERVAL,
-                        resolution: smelter_render::Resolution {
-                            width: self.output_resolution.width,
-                            height: self.output_resolution.height,
+                    video: Some(VideoEncoderOptions::FfmpegH264(
+                        FfmpegH264EncoderOptions {
+                            preset,
+                            bitrate: None,
+                            keyframe_interval: KEYFRAME_INTERVAL,
+                            resolution: smelter_render::Resolution {
+                                width: self.output_resolution.width,
+                                height: self.output_resolution.height,
+                            },
+                            pixel_format: OutputPixelFormat::YUV420P,
+                            raw_options: vec![("threads".into(), "0".into())],
+                            bitstream_format: H264BitstreamFormat::AnnexB,
                         },
-                        pixel_format: OutputPixelFormat::YUV420P,
-                        raw_options: vec![("threads".into(), "0".into())],
-                        bitstream_format: H264BitstreamFormat::AnnexB,
-                    })),
+                    )),
                 },
             },
         )?;
@@ -237,16 +239,18 @@ impl SingleBenchmarkPass {
                 audio: Some(audio_output_options(audio_mix)),
                 output_options: EncodedDataOutputOptions {
                     audio: Some(default_audio_encoder()),
-                    video: Some(VideoEncoderOptions::VulkanH264(VulkanH264EncoderOptions {
-                        resolution: smelter_render::Resolution {
-                            width: self.output_resolution.width,
-                            height: self.output_resolution.height,
+                    video: Some(VideoEncoderOptions::VulkanH264(
+                        VulkanH264EncoderOptions {
+                            resolution: smelter_render::Resolution {
+                                width: self.output_resolution.width,
+                                height: self.output_resolution.height,
+                            },
+                            bitrate: None,
+                            preset: VulkanH264EncoderPreset::HighQuality,
+                            keyframe_interval: KEYFRAME_INTERVAL,
+                            bitstream_format: H264BitstreamFormat::AnnexB,
                         },
-                        bitrate: None,
-                        preset: VulkanH264EncoderPreset::HighQuality,
-                        keyframe_interval: KEYFRAME_INTERVAL,
-                        bitstream_format: H264BitstreamFormat::AnnexB,
-                    })),
+                    )),
                 },
             },
         )?;
@@ -294,16 +298,11 @@ impl SingleBenchmarkPass {
             input_id.clone(),
             RegisterInputOptions::Mp4(Mp4InputOptions {
                 should_loop: true,
-                video_decoders: Mp4InputVideoDecoders {
-                    h264: Some(self.decoder),
-                },
+                video_decoders: Mp4InputVideoDecoders { h264: Some(self.decoder) },
                 source: Mp4InputSource::File(path.to_path_buf().into()),
                 seek: None,
                 offset: None,
-                queue_options: QueueInputOptions {
-                    required: true,
-                    ..Default::default()
-                },
+                queue_options: QueueInputOptions { required: true, ..Default::default() },
             }),
         )
     }
@@ -350,18 +349,19 @@ impl SingleBenchmarkPass {
             debug!("start drain in measure mode");
             let mut max_pts: Duration = Duration::ZERO;
             let mut min_pts: Duration = Duration::MAX;
-            let receive_fn = move |min_pts: &mut Duration, max_pts: &mut Duration| match receiver
-                .try_receive()
-            {
-                Err(TryRecvError::Empty) => {
-                    thread::sleep(Duration::from_millis(10));
-                }
-                Err(TryRecvError::Disconnected) => panic!(),
-                Ok(pts) => {
-                    *max_pts = (*max_pts).max(pts);
-                    *min_pts = (*min_pts).min(pts);
-                }
-            };
+            let receive_fn =
+                move |min_pts: &mut Duration, max_pts: &mut Duration| match receiver
+                    .try_receive()
+                {
+                    Err(TryRecvError::Empty) => {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(TryRecvError::Disconnected) => panic!(),
+                    Ok(pts) => {
+                        *max_pts = (*max_pts).max(pts);
+                        *min_pts = (*min_pts).min(pts);
+                    }
+                };
 
             // First check after 6 second
             while start_time.elapsed() < warm_up_time + FIRST_CHECK {

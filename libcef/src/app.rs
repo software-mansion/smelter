@@ -38,7 +38,9 @@ impl<A: App> CefStruct for AppWrapper<A> {
     fn new_cef_data() -> Self::CefType {
         libcef_sys::cef_app_t {
             base: unsafe { std::mem::zeroed() },
-            on_before_command_line_processing: Some(Self::on_before_command_line_processing),
+            on_before_command_line_processing: Some(
+                Self::on_before_command_line_processing,
+            ),
             on_register_custom_schemes: None,
             get_resource_bundle_handler: None,
             get_browser_process_handler: None,
@@ -46,7 +48,9 @@ impl<A: App> CefStruct for AppWrapper<A> {
         }
     }
 
-    fn base_from_cef_data(cef_data: &mut Self::CefType) -> &mut libcef_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut libcef_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }
@@ -59,10 +63,7 @@ impl<A: App> AppWrapper<A> {
             .map(CefRefData::new_ptr)
             .map(CefRc::new);
 
-        Self {
-            app,
-            render_process_handler,
-        }
+        Self { app, render_process_handler }
     }
 
     extern "C" fn on_before_command_line_processing(
@@ -73,9 +74,7 @@ impl<A: App> AppWrapper<A> {
         let self_ref = unsafe { CefRefData::<Self>::from_cef(self_) };
         let mut command_line = CommandLine(command_line);
         let process_type = CefString::from_raw(process_type);
-        self_ref
-            .app
-            .on_before_command_line_processing(process_type, &mut command_line);
+        self_ref.app.on_before_command_line_processing(process_type, &mut command_line);
     }
 
     extern "C" fn render_process_handler(

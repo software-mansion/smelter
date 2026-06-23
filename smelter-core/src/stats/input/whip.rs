@@ -34,10 +34,7 @@ pub struct WhipInputState {
 
 impl WhipInputState {
     pub fn new() -> Self {
-        Self {
-            video: RtpJitterBufferState::new(),
-            audio: RtpJitterBufferState::new(),
-        }
+        Self { video: RtpJitterBufferState::new(), audio: RtpJitterBufferState::new() }
     }
 
     pub fn handle_event(&mut self, event: WhipInputStatsEvent) {

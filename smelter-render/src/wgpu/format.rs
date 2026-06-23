@@ -7,7 +7,9 @@ use crate::wgpu::format::{
     rgba_rescale::RgbaRescaler, rgba_to_nv12::RgbaToNv12Converter,
 };
 
-use self::{planar_yuv_to_rgba::PlanarYuvToRgbaConverter, rgba_to_yuv::RgbaToYuvConverter};
+use self::{
+    planar_yuv_to_rgba::PlanarYuvToRgbaConverter, rgba_to_yuv::RgbaToYuvConverter,
+};
 
 use super::{
     WgpuCtx,
@@ -65,8 +67,11 @@ impl TextureFormat {
             wgpu::TextureFormat::Rgba8Unorm,
         );
 
-        let nv12_to_rgba_linear =
-            Nv12ToRgbaConverter::new(device, &nv12_layout, wgpu::TextureFormat::Rgba8Unorm);
+        let nv12_to_rgba_linear = Nv12ToRgbaConverter::new(
+            device,
+            &nv12_layout,
+            wgpu::TextureFormat::Rgba8Unorm,
+        );
 
         let bgra_to_rgba_linear = BgraToRgbaConverter::new(
             device,

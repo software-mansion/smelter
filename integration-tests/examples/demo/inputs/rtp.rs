@@ -5,7 +5,9 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use inquire::{Select, Text};
-use integration_tests::media::{Asset, Backend, MediaSender, ProcessHandle, Send, TestSample};
+use integration_tests::media::{
+    Asset, Backend, MediaSender, ProcessHandle, Send, TestSample,
+};
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -81,23 +83,14 @@ impl From<RtpInputOptions> for RtpInput {
     fn from(value: RtpInputOptions) -> Self {
         let port = get_free_port();
         let name = format!("rtp_input_{}_{port}", value.transport_protocol);
-        Self {
-            name,
-            port,
-            options: value,
-            stream_handles: vec![],
-        }
+        Self { name, port, options: value, stream_handles: vec![] }
     }
 }
 
 impl RtpInput {
     pub fn serialize_register(&self) -> serde_json::Value {
-        let RtpInputOptions {
-            ref video,
-            ref audio,
-            transport_protocol,
-            ..
-        } = self.options;
+        let RtpInputOptions { ref video, ref audio, transport_protocol, .. } =
+            self.options;
         json!({
             "type": "rtp_stream",
             "port": self.port,
@@ -124,19 +117,15 @@ impl RtpInput {
 
     fn test_sample(&self) -> TestSample {
         match &self.options.video {
-            Some(RtpInputVideoOptions {
-                decoder: VideoDecoder::FfmpegH264,
-            })
-            | Some(RtpInputVideoOptions {
-                decoder: VideoDecoder::VulkanH264,
-            })
+            Some(RtpInputVideoOptions { decoder: VideoDecoder::FfmpegH264 })
+            | Some(RtpInputVideoOptions { decoder: VideoDecoder::VulkanH264 })
             | None => TestSample::BigBuckBunnyH264Opus,
-            Some(RtpInputVideoOptions {
-                decoder: VideoDecoder::FfmpegVp8,
-            }) => TestSample::BigBuckBunnyVP8Opus,
-            Some(RtpInputVideoOptions {
-                decoder: VideoDecoder::FfmpegVp9,
-            }) => TestSample::BigBuckBunnyVP9Opus,
+            Some(RtpInputVideoOptions { decoder: VideoDecoder::FfmpegVp8 }) => {
+                TestSample::BigBuckBunnyVP8Opus
+            }
+            Some(RtpInputVideoOptions { decoder: VideoDecoder::FfmpegVp9 }) => {
+                TestSample::BigBuckBunnyVP9Opus
+            }
             _ => unreachable!(),
         }
     }
@@ -155,18 +144,14 @@ impl RtpInput {
         let handles = if tcp {
             MediaSender::new(
                 self.asset(),
-                Send::rtp_tcp_client()
-                    .video_port(video_port)
-                    .audio_port(audio_port),
+                Send::rtp_tcp_client().video_port(video_port).audio_port(audio_port),
             )
             .with_backend(Backend::Gstreamer)
             .spawn()?
         } else {
             MediaSender::new(
                 self.asset(),
-                Send::rtp_udp_client()
-                    .video_port(video_port)
-                    .audio_port(audio_port),
+                Send::rtp_udp_client().video_port(video_port).audio_port(audio_port),
             )
             .with_backend(Backend::Gstreamer)
             .spawn()?
@@ -185,13 +170,13 @@ impl RtpInput {
             }
             (Some(_), None) => (Some(self.port), None),
             (None, Some(_)) => (None, Some(self.port)),
-            (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
+            (None, None) => {
+                return Err(anyhow!("No stream specified, ffmpeg not started!"));
+            }
         };
         let handles = MediaSender::new(
             self.asset(),
-            Send::rtp_udp_client()
-                .video_port(video_port)
-                .audio_port(audio_port),
+            Send::rtp_udp_client().video_port(video_port).audio_port(audio_port),
         )
         .spawn()?;
         self.stream_handles.extend(handles);
@@ -199,13 +184,7 @@ impl RtpInput {
     }
 
     fn on_after_registration_udp(&mut self) -> Result<()> {
-        let RtpInputOptions {
-            ref video,
-            ref audio,
-            ref path,
-            player,
-            ..
-        } = self.options;
+        let RtpInputOptions { ref video, ref audio, ref path, player, .. } = self.options;
         match player {
             InputPlayer::Ffmpeg => self.ffmpeg_transmit(),
             InputPlayer::Gstreamer => self.gstreamer_transmit(false),
@@ -221,10 +200,13 @@ impl RtpInput {
                     }
                     .path(),
                 };
-                let cmd = build_gst_send_udp_cmd(video_codec, has_audio, self.port, &file_path);
+                let cmd =
+                    build_gst_send_udp_cmd(video_codec, has_audio, self.port, &file_path);
                 match (video, audio) {
                     (Some(_), Some(_)) => {
-                        println!("Start streaming H264 encoded video and OPUS encoded audio:");
+                        println!(
+                            "Start streaming H264 encoded video and OPUS encoded audio:"
+                        );
                         println!("{cmd}");
                         println!();
                     }
@@ -246,13 +228,7 @@ impl RtpInput {
     }
 
     fn on_after_registration_tcp(&mut self) -> Result<()> {
-        let RtpInputOptions {
-            ref video,
-            ref audio,
-            ref path,
-            player,
-            ..
-        } = self.options;
+        let RtpInputOptions { ref video, ref audio, ref path, player, .. } = self.options;
         match player {
             InputPlayer::Gstreamer => self.gstreamer_transmit(true),
             InputPlayer::Manual => {
@@ -267,10 +243,13 @@ impl RtpInput {
                     }
                     .path(),
                 };
-                let cmd = build_gst_send_tcp_cmd(video_codec, has_audio, self.port, &file_path);
+                let cmd =
+                    build_gst_send_tcp_cmd(video_codec, has_audio, self.port, &file_path);
                 match (video, audio) {
                     (Some(_), Some(_)) => {
-                        println!("Start streaming H264 encoded video and OPUS encoded audio:");
+                        println!(
+                            "Start streaming H264 encoded video and OPUS encoded audio:"
+                        );
                         println!("{cmd}");
                         println!();
                     }
@@ -372,9 +351,11 @@ impl RtpInputBuilder {
     }
 
     fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
+        let video_options =
+            vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
 
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+        let video_selection =
+            Select::new("Set video stream?", video_options).prompt_skippable()?;
 
         match video_selection {
             Some(RtpRegisterOptions::SetVideoStream) => {
@@ -383,10 +364,13 @@ impl RtpInputBuilder {
                     .collect();
 
                 let codec_choice =
-                    Select::new("Select video codec to test:", codec_options).prompt_skippable()?;
+                    Select::new("Select video codec to test:", codec_options)
+                        .prompt_skippable()?;
 
                 match codec_choice {
-                    Some(codec) => Ok(self.with_video(RtpInputVideoOptions { decoder: codec })),
+                    Some(codec) => {
+                        Ok(self.with_video(RtpInputVideoOptions { decoder: codec }))
+                    }
                     None => Ok(self.with_video(RtpInputVideoOptions {
                         decoder: VideoDecoder::FfmpegH264,
                     })),
@@ -397,7 +381,8 @@ impl RtpInputBuilder {
     }
 
     fn prompt_audio(self) -> Result<Self> {
-        let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
+        let audio_options =
+            vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
         let audio_selection =
             Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
 
@@ -412,11 +397,9 @@ impl RtpInputBuilder {
 
     fn prompt_transport_protocol(self) -> Result<Self> {
         let transport_options = TransportProtocol::iter().collect();
-        let transport_selection = Select::new(
-            "Select transport protocol (ESC for udp):",
-            transport_options,
-        )
-        .prompt_skippable()?;
+        let transport_selection =
+            Select::new("Select transport protocol (ESC for udp):", transport_options)
+                .prompt_skippable()?;
 
         match transport_selection {
             Some(prot) => Ok(self.with_transport_protocol(prot)),
@@ -444,7 +427,9 @@ impl RtpInputBuilder {
             }
             TransportProtocol::TcpServer => {
                 let (player_options, default_player) = match (&self.video, &self.audio) {
-                    (Some(_), Some(_)) => (vec![InputPlayer::Manual], InputPlayer::Manual),
+                    (Some(_), Some(_)) => {
+                        (vec![InputPlayer::Manual], InputPlayer::Manual)
+                    }
                     _ => (
                         vec![InputPlayer::Gstreamer, InputPlayer::Manual],
                         InputPlayer::Gstreamer,
@@ -473,7 +458,10 @@ impl RtpInputBuilder {
         self
     }
 
-    pub fn with_transport_protocol(mut self, transport_protocol: TransportProtocol) -> Self {
+    pub fn with_transport_protocol(
+        mut self,
+        transport_protocol: TransportProtocol,
+    ) -> Self {
         match transport_protocol {
             TransportProtocol::Udp => {
                 self.name = format!("input_rtp_udp_{}", self.port);
@@ -504,12 +492,7 @@ impl RtpInputBuilder {
             transport_protocol: self.transport_protocol,
             player: self.player,
         };
-        RtpInput {
-            name: self.name,
-            port: self.port,
-            options,
-            stream_handles: vec![],
-        }
+        RtpInput { name: self.name, port: self.port, options, stream_handles: vec![] }
     }
 }
 
@@ -528,9 +511,7 @@ impl RtpInputVideoOptions {
 
 impl Default for RtpInputVideoOptions {
     fn default() -> Self {
-        Self {
-            decoder: VideoDecoder::FfmpegH264,
-        }
+        Self { decoder: VideoDecoder::FfmpegH264 }
     }
 }
 
@@ -549,9 +530,7 @@ impl RtpInputAudioOptions {
 
 impl Default for RtpInputAudioOptions {
     fn default() -> Self {
-        Self {
-            decoder: AudioDecoder::Opus,
-        }
+        Self { decoder: AudioDecoder::Opus }
     }
 }
 

@@ -21,12 +21,10 @@ impl ChromiumContext {
         let instance_id = generate_random_id(30);
 
         info!("Init chromium context");
-        let app = ChromiumApp {
-            show_fps: false,
-            enable_gpu,
-        };
+        let app = ChromiumApp { show_fps: false, enable_gpu };
         let settings = libcef::Settings {
-            root_cache_path: utils::get_smelter_instance_tmp_path(&instance_id).join("cef_cache"),
+            root_cache_path: utils::get_smelter_instance_tmp_path(&instance_id)
+                .join("cef_cache"),
             windowless_rendering_enabled: true,
             log_severity: libcef::LogSeverity::Info,
             ..Default::default()
@@ -34,11 +32,7 @@ impl ChromiumContext {
 
         let context = libcef::Context::new(app, settings)
             .map_err(ChromiumContextInitError::ContextFailure)?;
-        Ok(Arc::new(Self {
-            instance_id,
-            framerate,
-            context,
-        }))
+        Ok(Arc::new(Self { instance_id, framerate, context }))
     }
 
     pub(super) fn start_browser(
@@ -46,19 +40,16 @@ impl ChromiumContext {
         url: &str,
         state: super::browser_client::BrowserClient,
     ) -> Result<libcef::Browser, ChromiumContextInitError> {
-        let window_info = libcef::WindowInfo {
-            windowless_rendering_enabled: true,
-        };
+        let window_info = libcef::WindowInfo { windowless_rendering_enabled: true };
         let settings = libcef::BrowserSettings {
-            windowless_frame_rate: (self.framerate.num as i32) / (self.framerate.den as i32),
+            windowless_frame_rate: (self.framerate.num as i32)
+                / (self.framerate.den as i32),
             background_color: 0,
         };
 
         let (tx, rx) = crossbeam_channel::bounded(1);
         let task = libcef::Task::new(move || {
-            let result = self
-                .context
-                .start_browser(state, window_info, settings, url);
+            let result = self.context.start_browser(state, window_info, settings, url);
             tx.send(result).unwrap();
         });
 
@@ -137,7 +128,8 @@ impl libcef::App for ChromiumApp {
 
         command_line.append_switch("disable-dev-shm-usage");
         command_line.append_switch("disable-gpu-shader-disk-cache");
-        command_line.append_switch_with_value("autoplay-policy", "no-user-gesture-required");
+        command_line
+            .append_switch_with_value("autoplay-policy", "no-user-gesture-required");
     }
 }
 

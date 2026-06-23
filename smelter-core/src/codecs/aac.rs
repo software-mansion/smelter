@@ -77,7 +77,8 @@ impl AacAudioSpecificConfig {
         let frame_length: u32;
 
         if profile == 31 {
-            profile = ((first & 0b00000111) << 3) + ((second & 0b11100000) >> 5) + 0b00100000;
+            profile =
+                ((first & 0b00000111) << 3) + ((second & 0b11100000) >> 5) + 0b00100000;
             let frequency_id = (second & 0b00011110) >> 1;
 
             let channel_and_frame_len_bytes: [u8; 2];
@@ -138,12 +139,7 @@ impl AacAudioSpecificConfig {
             frame_length = frame_length_flag_to_frame_length(frame_length_flag);
         }
 
-        Ok(AacAudioSpecificConfig {
-            profile,
-            sample_rate,
-            channel_count,
-            frame_length,
-        })
+        Ok(AacAudioSpecificConfig { profile, sample_rate, channel_count, frame_length })
     }
 }
 
@@ -214,9 +210,8 @@ mod tests {
 
     #[test]
     fn asc_complicated_profile_and_frequency() {
-        let asc = [
-            0b11111001, 0b01011110, 0b00000000, 0b01000010, 0b01101110, 0b01000000,
-        ];
+        let asc =
+            [0b11111001, 0b01011110, 0b00000000, 0b01000010, 0b01101110, 0b01000000];
         let parsed = AacAudioSpecificConfig::parse_from(&asc).unwrap();
 
         assert_eq!(parsed.profile, 42);

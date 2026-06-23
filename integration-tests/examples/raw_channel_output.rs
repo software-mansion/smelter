@@ -9,7 +9,9 @@ use std::{
 
 use crossbeam_channel::bounded;
 use image::{ColorType, ImageEncoder, codecs::png::PngEncoder};
-use integration_tests::{media::TestSample, paths::integration_tests_root, read_rgba_texture};
+use integration_tests::{
+    media::TestSample, paths::integration_tests_root, read_rgba_texture,
+};
 use smelter::{
     config::read_config,
     logger::{self},
@@ -43,10 +45,7 @@ fn main() {
         ..pipeline_options_from_config(&config, &Arc::new(Runtime::new().unwrap()), &None)
     })
     .unwrap_or_else(|err| {
-        panic!(
-            "Failed to start compositor.\n{}",
-            ErrorStack::new(&err).into_string()
-        )
+        panic!("Failed to start compositor.\n{}", ErrorStack::new(&err).into_string())
     });
     let pipeline = Arc::new(Mutex::new(pipeline));
     let output_id = OutputId("output_1".into());
@@ -55,10 +54,7 @@ fn main() {
     let output_options = RegisterRawDataOutputOptions {
         output_options: RawDataOutputOptions {
             video: Some(RawDataOutputVideoOptions {
-                resolution: Resolution {
-                    width: 1280,
-                    height: 720,
-                },
+                resolution: Resolution { width: 1280, height: 720 },
             }),
             audio: Some(RawDataOutputAudioOptions),
         },
@@ -84,10 +80,7 @@ fn main() {
 
     let input_options = RegisterInputOptions::Mp4(Mp4InputOptions {
         source: Mp4InputSource::File(
-            TestSample::BigBuckBunnyH264AAC
-                .ensure_path()
-                .unwrap()
-                .into(),
+            TestSample::BigBuckBunnyH264AAC.ensure_path().unwrap().into(),
         ),
         should_loop: false,
         video_decoders: Mp4InputVideoDecoders {
@@ -95,16 +88,14 @@ fn main() {
         },
         seek: None,
         offset: Some(Duration::ZERO),
-        queue_options: QueueInputOptions {
-            required: true,
-            ..Default::default()
-        },
+        queue_options: QueueInputOptions { required: true, ..Default::default() },
     });
 
     Pipeline::register_input(&pipeline, input_id.clone(), input_options).unwrap();
 
     let RawDataOutputReceiver { video, audio } =
-        Pipeline::register_raw_data_output(&pipeline, output_id.clone(), output_options).unwrap();
+        Pipeline::register_raw_data_output(&pipeline, output_id.clone(), output_options)
+            .unwrap();
 
     Pipeline::start(&pipeline);
 
@@ -124,9 +115,10 @@ fn main() {
         })
         .unwrap();
 
-    let mut audio_dump =
-        File::create(integration_tests_root().join("examples/raw_channel_output_audio_dump.debug"))
-            .unwrap();
+    let mut audio_dump = File::create(
+        integration_tests_root().join("examples/raw_channel_output_audio_dump.debug"),
+    )
+    .unwrap();
 
     thread::Builder::new()
         .spawn(move || {
@@ -136,7 +128,9 @@ fn main() {
                         continue;
                     };
                     audio_dump
-                        .write_all(format!("{:?} {:?}\n", packet.start_pts, samples).as_bytes())
+                        .write_all(
+                            format!("{:?} {:?}\n", packet.start_pts, samples).as_bytes(),
+                        )
                         .unwrap();
                 } else {
                     return;
@@ -163,12 +157,9 @@ fn write_frame(
     let size = texture.size();
     let frame_data = read_rgba_texture(device, queue, &texture);
 
-    let filepath = integration_tests_root().join(format!(
-        "examples/raw_channel_output_video_frame_{index}.png"
-    ));
+    let filepath = integration_tests_root()
+        .join(format!("examples/raw_channel_output_video_frame_{index}.png"));
     let file = File::create(filepath).unwrap();
     let encoder = PngEncoder::new(file);
-    encoder
-        .write_image(&frame_data, size.width, size.height, ColorType::Rgba8)
-        .unwrap();
+    encoder.write_image(&frame_data, size.width, size.height, ColorType::Rgba8).unwrap();
 }

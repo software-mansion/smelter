@@ -1,12 +1,14 @@
-use wgpu::naga::{self, ArraySize, Handle, Module, ScalarKind, ShaderStage, Type, VectorSize};
+use wgpu::naga::{
+    self, ArraySize, Handle, Module, ScalarKind, ShaderStage, Type, VectorSize,
+};
 
 use crate::scene::ShaderParam;
 
 pub mod error;
 
 use error::{
-    BindingExt, ConstArraySizeEvalError, ParametersValidationError, ShaderGlobalVariableExt,
-    ShaderValidationError, TypeEquivalenceError,
+    BindingExt, ConstArraySizeEvalError, ParametersValidationError,
+    ShaderGlobalVariableExt, ShaderValidationError, TypeEquivalenceError,
 };
 
 pub fn shader_header() -> Module {
@@ -15,7 +17,8 @@ pub fn shader_header() -> Module {
         true => include_str!("./validation/shader_header_web.wgsl"),
     };
 
-    naga::front::wgsl::parse_str(header_code).expect("failed to parse the shader header file")
+    naga::front::wgsl::parse_str(header_code)
+        .expect("failed to parse the shader header file")
 }
 
 pub(super) fn validate_contains_header(
@@ -40,14 +43,13 @@ fn validate_globals(
             })
             .ok_or_else(|| ShaderValidationError::GlobalNotFound(global.to_string()))?;
 
-        validate_type_equivalent(global.ty, header, global_in_shader.ty, shader).map_err(
-            |err| {
+        validate_type_equivalent(global.ty, header, global_in_shader.ty, shader)
+            .map_err(|err| {
                 ShaderValidationError::GlobalBadType(
                     err,
                     global_in_shader.name.unwrap_with("<unknown>"),
                 )
-            },
-        )?;
+            })?;
     }
 
     // validate user-defined buffer is a uniform
@@ -124,11 +126,13 @@ fn validate_type_equivalent(
         });
     }
 
-    let expected_inner = match expected_type.inner.canonical_form(&expected_module.types) {
+    let expected_inner = match expected_type.inner.canonical_form(&expected_module.types)
+    {
         Some(t) => t,
         None => expected_type.inner.clone(),
     };
-    let provided_inner = match provided_type.inner.canonical_form(&provided_module.types) {
+    let provided_inner = match provided_type.inner.canonical_form(&provided_module.types)
+    {
         Some(t) => t,
         None => provided_type.inner.clone(),
     };
@@ -183,10 +187,7 @@ fn validate_type_equivalent(
                 provided_module,
             );
         }
-        naga::TypeInner::BindingArray {
-            base: expected_base,
-            size: expected_size,
-        } => {
+        naga::TypeInner::BindingArray { base: expected_base, size: expected_size } => {
             let naga::TypeInner::BindingArray {
                 base: provided_base,
                 size: provided_size,
@@ -206,14 +207,9 @@ fn validate_type_equivalent(
                 provided_module,
             );
         }
-        naga::TypeInner::Struct {
-            members: ref expected_members,
-            ..
-        } => {
-            let naga::TypeInner::Struct {
-                members: ref provided_members,
-                ..
-            } = provided_inner
+        naga::TypeInner::Struct { members: ref expected_members, .. } => {
+            let naga::TypeInner::Struct { members: ref provided_members, .. } =
+                provided_inner
             else {
                 return Err(TypeEquivalenceError::TypeStructureMismatch {
                     expected: expected_inner.to_string(expected_module),
@@ -238,7 +234,9 @@ fn validate_type_equivalent(
                 if expected_member.name != provided_member.name {
                     return Err(TypeEquivalenceError::StructFieldNameMismatch {
                         struct_name: expected_type.name.unwrap_with("<unnamed>"),
-                        expected_field_name: expected_member.name.unwrap_with("<unnamed>"),
+                        expected_field_name: expected_member
+                            .name
+                            .unwrap_with("<unnamed>"),
                         actual_field_name: provided_member.name.unwrap_with("<unnamed>"),
                     });
                 }
@@ -321,13 +319,13 @@ pub(super) fn validate_params(
     match &ty.inner {
         naga::TypeInner::Scalar(scalar) => validate_scalar(params, *scalar),
 
-        naga::TypeInner::Vector { size, scalar } => validate_vector(params, *size, *scalar, module),
+        naga::TypeInner::Vector { size, scalar } => {
+            validate_vector(params, *size, *scalar, module)
+        }
 
-        naga::TypeInner::Matrix {
-            columns,
-            rows,
-            scalar,
-        } => validate_matrix(params, *columns, *rows, *scalar, module),
+        naga::TypeInner::Matrix { columns, rows, scalar } => {
+            validate_matrix(params, *columns, *rows, *scalar, module)
+        }
 
         naga::TypeInner::Array { base, size, stride } => {
             validate_array(params, *base, *size, *stride, module)
@@ -349,9 +347,9 @@ pub(super) fn validate_params(
         | naga::TypeInner::AccelerationStructure { .. }
         | naga::TypeInner::RayQuery { .. }
         | naga::TypeInner::CooperativeMatrix { .. }
-        | naga::TypeInner::BindingArray { .. } => Err(ParametersValidationError::ForbiddenType(
-            ty.inner.type_name(),
-        )),
+        | naga::TypeInner::BindingArray { .. } => {
+            Err(ParametersValidationError::ForbiddenType(ty.inner.type_name()))
+        }
     }
 }
 
@@ -372,12 +370,12 @@ fn validate_struct(
                 });
             }
 
-            for (index, (shader_member, param_field)) in struct_members_in_shader
-                .iter()
-                .zip(param_fields.iter())
-                .enumerate()
+            for (index, (shader_member, param_field)) in
+                struct_members_in_shader.iter().zip(param_fields.iter()).enumerate()
             {
-                if shader_member.name.as_deref().unwrap_or("<unnamed>") != param_field.field_name {
+                if shader_member.name.as_deref().unwrap_or("<unnamed>")
+                    != param_field.field_name
+                {
                     return Err(ParametersValidationError::WrongFieldName {
                         index,
                         struct_name: struct_name_in_shader.into(),
@@ -386,13 +384,13 @@ fn validate_struct(
                     });
                 }
 
-                validate_params(&param_field.value, shader_member.ty, module).map_err(|err| {
-                    ParametersValidationError::WrongFieldType {
+                validate_params(&param_field.value, shader_member.ty, module).map_err(
+                    |err| ParametersValidationError::WrongFieldType {
                         struct_name: struct_name_in_shader.into(),
                         struct_field: param_field.field_name.clone(),
                         error: Box::new(err),
-                    }
-                })?
+                    },
+                )?
             }
 
             Ok(())
@@ -477,12 +475,7 @@ fn validate_matrix(
 
         _ => Err(ParametersValidationError::WrongType {
             actual: params.to_string(),
-            expected: naga::TypeInner::Matrix {
-                columns,
-                rows,
-                scalar,
-            }
-            .to_string(module),
+            expected: naga::TypeInner::Matrix { columns, rows, scalar }.to_string(module),
         }),
     }
 }
@@ -526,10 +519,7 @@ fn validate_scalar(
     scalar: naga::Scalar,
 ) -> Result<(), ParametersValidationError> {
     match scalar {
-        naga::Scalar {
-            kind: ScalarKind::Float,
-            width: 4,
-        } => match params {
+        naga::Scalar { kind: ScalarKind::Float, width: 4 } => match params {
             ShaderParam::F32(_) => Ok(()),
             _ => Err(ParametersValidationError::WrongType {
                 actual: params.to_string(),
@@ -537,10 +527,7 @@ fn validate_scalar(
             }),
         },
 
-        naga::Scalar {
-            kind: ScalarKind::Uint,
-            width: 4,
-        } => match params {
+        naga::Scalar { kind: ScalarKind::Uint, width: 4 } => match params {
             ShaderParam::U32(_) => Ok(()),
             _ => Err(ParametersValidationError::WrongType {
                 actual: params.to_string(),
@@ -548,10 +535,7 @@ fn validate_scalar(
             }),
         },
 
-        naga::Scalar {
-            kind: ScalarKind::Sint,
-            width: 4,
-        } => match params {
+        naga::Scalar { kind: ScalarKind::Sint, width: 4 } => match params {
             ShaderParam::I32(_) => Ok(()),
             _ => Err(ParametersValidationError::WrongType {
                 actual: params.to_string(),
@@ -604,21 +588,13 @@ impl TypeInnerExt for naga::TypeInner {
             naga::TypeInner::ValuePointer { .. } => "value pointer".to_string(),
             naga::TypeInner::Array { .. } => "array".to_string(),
             naga::TypeInner::Struct { .. } => "struct".to_string(),
-            naga::TypeInner::Image {
-                dim,
-                arrayed,
-                class,
-            } => {
+            naga::TypeInner::Image { dim, arrayed, class } => {
                 let fallback = format!("{self:?}");
                 let naga::ImageClass::Sampled { kind, .. } = class else {
                     return fallback;
                 };
 
-                let scalar = naga::Scalar {
-                    kind: *kind,
-                    width: 4,
-                }
-                .to_string();
+                let scalar = naga::Scalar { kind: *kind, width: 4 }.to_string();
 
                 let texture_kind = match (dim, arrayed) {
                     (naga::ImageDimension::D1, false) => "texture_1d",
@@ -633,7 +609,9 @@ impl TypeInnerExt for naga::TypeInner {
                 format!("{texture_kind}<{scalar}>")
             }
             naga::TypeInner::Sampler { .. } => "sampler".to_string(),
-            naga::TypeInner::AccelerationStructure { .. } => "acceleration structure".to_string(),
+            naga::TypeInner::AccelerationStructure { .. } => {
+                "acceleration structure".to_string()
+            }
             naga::TypeInner::RayQuery { .. } => "ray query".to_string(),
             naga::TypeInner::BindingArray { base, size } => {
                 let size: Option<u32> = match size {
@@ -690,7 +668,9 @@ impl ShaderParamExt for ShaderParam {
             ShaderParam::Struct(fields) => {
                 let fields = fields
                     .iter()
-                    .map(|field| format!("{}: {}", field.field_name, field.value.to_string()))
+                    .map(|field| {
+                        format!("{}: {}", field.field_name, field.value.to_string())
+                    })
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("struct {{ {fields} }}")

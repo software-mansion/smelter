@@ -117,7 +117,9 @@ impl VkH265VideoParameterSet {
                 reserved1: 0,
                 flags: vk::native::StdVideoH265VpsFlags {
                     _bitfield_align_1: [],
-                    _bitfield_1: vk::native::StdVideoH265VpsFlags::new_bitfield_1(1, 1, 1, 1),
+                    _bitfield_1: vk::native::StdVideoH265VpsFlags::new_bitfield_1(
+                        1, 1, 1, 1,
+                    ),
                     __bindgen_padding_0: [0; 3],
                 },
                 vps_video_parameter_set_id: 0,
@@ -161,12 +163,12 @@ impl VkH265SequenceParameterSet {
         let min_tb_log2_size: u32 = 2; // MinTbSizeY = 4
         // MaxTbLog2SizeY = min(5, ctb_log2_size) per H.265 spec: MaxTbSizeY can be at most 32
         let max_tb_log2_size = ctb_log2_size.min(5);
-        let log2_diff_max_min_luma_transform_block_size = max_tb_log2_size - min_tb_log2_size;
+        let log2_diff_max_min_luma_transform_block_size =
+            max_tb_log2_size - min_tb_log2_size;
 
-        let sample_adaptive_offset_enabled_flag = caps
-            .std_syntax_flags
-            .contains(vk::VideoEncodeH265StdFlagsKHR::SAMPLE_ADAPTIVE_OFFSET_ENABLED_FLAG_SET)
-            as u32;
+        let sample_adaptive_offset_enabled_flag = caps.std_syntax_flags.contains(
+            vk::VideoEncodeH265StdFlagsKHR::SAMPLE_ADAPTIVE_OFFSET_ENABLED_FLAG_SET,
+        ) as u32;
         let sps_temporal_mvp_enabled_flag = caps
             .std_syntax_flags
             .contains(vk::VideoEncodeH265StdFlagsKHR::SPS_TEMPORAL_MVP_ENABLED_FLAG_SET)

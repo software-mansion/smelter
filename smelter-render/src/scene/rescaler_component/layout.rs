@@ -25,7 +25,9 @@ impl RescalerComponentParam {
         let child_height = child.height(pts);
         let border_radius = self.border_radius.clip_to_size(size);
         match (child_width, child_height) {
-            (None, None) => self.layout_with_scale(content_size, border_radius, child, pts, 1.0),
+            (None, None) => {
+                self.layout_with_scale(content_size, border_radius, child, pts, 1.0)
+            }
             (None, Some(child_height)) => self.layout_with_scale(
                 content_size,
                 border_radius,
@@ -76,13 +78,11 @@ impl RescalerComponentParam {
                     pts,
                 );
                 let child_nodes_count = children_layout.child_nodes_count;
-                (
-                    LayoutContent::None,
-                    vec![children_layout],
-                    child_nodes_count,
-                )
+                (LayoutContent::None, vec![children_layout], child_nodes_count)
             }
-            ref _non_layout => (StatefulLayoutComponent::layout_content(child, 0), vec![], 1),
+            ref _non_layout => {
+                (StatefulLayoutComponent::layout_content(child, 0), vec![], 1)
+            }
         };
 
         let top = match self.vertical_align {

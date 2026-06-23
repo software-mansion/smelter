@@ -46,7 +46,8 @@ pub(crate) fn run_specific() -> Result<()> {
     let mut tests: Vec<&'static PipelineTest> = pipeline_tests();
     tests.sort_by_key(|t| t.full_test_name);
 
-    let labels: Vec<String> = tests.iter().map(|t| t.full_test_name.to_string()).collect();
+    let labels: Vec<String> =
+        tests.iter().map(|t| t.full_test_name.to_string()).collect();
 
     let matcher = SkimMatcherV2::default();
     let scorer = move |filter: &str, _value: &String, string_value: &str, _idx: usize| {
@@ -63,7 +64,9 @@ pub(crate) fn run_specific() -> Result<()> {
         .raw_prompt()
     {
         Ok(s) => s.index,
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => return Ok(()),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
+            return Ok(());
+        }
         Err(e) => return Err(e.into()),
     };
     let test = tests[selected_idx];
@@ -91,10 +94,7 @@ pub(crate) fn run_specific() -> Result<()> {
 pub(crate) fn audit_existing_pipeline() -> Result<()> {
     let mut tests = discover_pipeline_tests_with_dumps()?;
     if tests.is_empty() {
-        warn!(
-            "No test results found in {}",
-            pipeline_tests_workdir().display()
-        );
+        warn!("No test results found in {}", pipeline_tests_workdir().display());
         return Ok(());
     }
     tests.sort_by_key(|t| t.full_test_name);
@@ -137,8 +137,8 @@ fn discover_pipeline_tests_with_dumps() -> Result<Vec<&'static PipelineTest>> {
         return Ok(found);
     }
     let tests = pipeline_tests();
-    for entry in
-        fs::read_dir(&workdir).with_context(|| format!("Failed to read {}", workdir.display()))?
+    for entry in fs::read_dir(&workdir)
+        .with_context(|| format!("Failed to read {}", workdir.display()))?
     {
         let entry = entry?;
         let file_name = entry.file_name();
@@ -154,7 +154,8 @@ fn discover_pipeline_tests_with_dumps() -> Result<Vec<&'static PipelineTest>> {
         else {
             continue;
         };
-        let Some(test) = tests.iter().find(|t| t.snapshot_name == snapshot).copied() else {
+        let Some(test) = tests.iter().find(|t| t.snapshot_name == snapshot).copied()
+        else {
             warn!("No registered PipelineTest matches snapshot {snapshot}");
             continue;
         };
@@ -173,7 +174,10 @@ fn pipeline_test_filter(test: &PipelineTest) -> String {
     format!("test(={name})")
 }
 
-fn pipeline_test_result_action_loop(test: &PipelineTest, filter: &str) -> Result<ControlFlow<()>> {
+fn pipeline_test_result_action_loop(
+    test: &PipelineTest,
+    filter: &str,
+) -> Result<ControlFlow<()>> {
     loop {
         match prompt_pipeline_test_result_action(test)? {
             Some(PipelineTestResultAction::PlayActual) => {
@@ -207,7 +211,9 @@ fn pipeline_test_result_action_loop(test: &PipelineTest, filter: &str) -> Result
                 // its dumps for the inspector regardless of pass/fail.
                 match run_test(filter, RunOptions { save_dumps: true }) {
                     Ok(s) if s.success() => {
-                        info!("Test passed on rerun. Choose Skip to move on, or rerun again.");
+                        info!(
+                            "Test passed on rerun. Choose Skip to move on, or rerun again."
+                        );
                     }
                     Ok(_) => {}
                     Err(e) => error!("Failed to rerun test: {e:#}"),
@@ -244,12 +250,16 @@ fn prompt_pipeline_test_result_action(
     const RESET: &str = "\x1b[0m";
 
     println!();
-    println!("{BOLD}{YELLOW}── Test result ──────────────────────────────────────{RESET}");
+    println!(
+        "{BOLD}{YELLOW}── Test result ──────────────────────────────────────{RESET}"
+    );
     println!("{BOLD}{CYAN}{}{RESET}", test.full_test_name);
     if !test.description.is_empty() {
         println!("{}", test.description);
     }
-    println!("{BOLD}{YELLOW}─────────────────────────────────────────────────────{RESET}");
+    println!(
+        "{BOLD}{YELLOW}─────────────────────────────────────────────────────{RESET}"
+    );
     println!();
 
     let actual_exists = pipeline_tests_workdir()
@@ -269,12 +279,11 @@ fn prompt_pipeline_test_result_action(
             _ => true,
         })
         .collect();
-    match Select::new("What next?", options)
-        .with_page_size(10)
-        .prompt()
-    {
+    match Select::new("What next?", options).with_page_size(10).prompt() {
         Ok(a) => Ok(Some(a)),
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => Ok(None),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
+            Ok(None)
+        }
         Err(e) => Err(e.into()),
     }
 }
@@ -292,8 +301,11 @@ fn clear_pipeline_test_dumps(test: &PipelineTest) -> Result<()> {
 }
 
 fn play_dump(test: &PipelineTest, kind: DumpKind) -> Result<()> {
-    let path =
-        pipeline_tests_workdir().join(format!("{}{}", kind.file_prefix(), test.snapshot_name));
+    let path = pipeline_tests_workdir().join(format!(
+        "{}{}",
+        kind.file_prefix(),
+        test.snapshot_name
+    ));
     if !path.exists() {
         warn!("Dump not found: {}", path.display());
         return Ok(());
@@ -329,7 +341,9 @@ fn run_with_kill_on_key(mut child: std::process::Child) -> Result<()> {
             Err(e) => break Err(e.into()),
         }
         match event::read() {
-            Ok(Event::Key(key)) if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) => {
+            Ok(Event::Key(key))
+                if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) =>
+            {
                 // SAFETY: sending a signal to a process group has no Rust-side
                 // invariants. The group was created when we spawned the child.
                 unsafe { libc::kill(-child_pgid, libc::SIGINT) };
@@ -360,7 +374,8 @@ fn compare_pipeline_dumps(test: &PipelineTest) -> Result<()> {
 }
 
 fn update_pipeline_test_snapshot(test: &PipelineTest) -> Result<()> {
-    let src = pipeline_tests_workdir().join(format!("actual_dump_{}", test.snapshot_name));
+    let src =
+        pipeline_tests_workdir().join(format!("actual_dump_{}", test.snapshot_name));
     if !src.exists() {
         anyhow::bail!("No actual dump at {}", src.display());
     }
@@ -368,24 +383,23 @@ fn update_pipeline_test_snapshot(test: &PipelineTest) -> Result<()> {
         .join("rtp_packet_dumps")
         .join("outputs")
         .join(test.snapshot_name);
-    fs::copy(&src, &dst)
-        .with_context(|| format!("Failed to copy {} -> {}", src.display(), dst.display()))?;
+    fs::copy(&src, &dst).with_context(|| {
+        format!("Failed to copy {} -> {}", src.display(), dst.display())
+    })?;
     info!("Updated {}", dst.display());
     Ok(())
 }
 
 pub(crate) fn find_orphan_pipeline_snapshots() -> Result<Vec<PathBuf>> {
-    let root = submodule_root_path()
-        .join("rtp_packet_dumps")
-        .join("outputs");
+    let root = submodule_root_path().join("rtp_packet_dumps").join("outputs");
     if !root.exists() {
         return Ok(Vec::new());
     }
     let used: std::collections::HashSet<&'static str> =
         pipeline_tests().iter().map(|t| t.snapshot_name).collect();
     let mut orphans: Vec<PathBuf> = Vec::new();
-    for entry in
-        fs::read_dir(&root).with_context(|| format!("Failed to read {}", root.display()))?
+    for entry in fs::read_dir(&root)
+        .with_context(|| format!("Failed to read {}", root.display()))?
     {
         let entry = entry?;
         let path = entry.path();

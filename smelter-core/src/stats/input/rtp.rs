@@ -39,10 +39,7 @@ pub struct RtpInputState {
 
 impl RtpInputState {
     pub fn new() -> Self {
-        Self {
-            video: RtpJitterBufferState::new(),
-            audio: RtpJitterBufferState::new(),
-        }
+        Self { video: RtpJitterBufferState::new(), audio: RtpJitterBufferState::new() }
     }
 
     pub fn handle_event(&mut self, event: RtpInputStatsEvent) {
@@ -97,8 +94,12 @@ impl RtpJitterBufferState {
             packets_lost_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             packets_received: 0,
             packets_received_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
-            effective_buffer_on_write_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
-            effective_buffer_on_pop_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
+            effective_buffer_on_write_10_secs: SlidingWindowValue::new(
+                Duration::from_secs(10),
+            ),
+            effective_buffer_on_pop_10_secs: SlidingWindowValue::new(
+                Duration::from_secs(10),
+            ),
             input_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
             bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
             bitrate_1_min: SlidingWindowValue::new(Duration::from_mins(1)),
@@ -137,9 +138,11 @@ impl RtpJitterBufferState {
             packets_lost: self.packets_lost,
             packets_received: self.packets_received,
 
-            bitrate_1_second: self.bitrate_1_sec.sum() / self.bitrate_1_sec.window_size().as_secs(),
+            bitrate_1_second: self.bitrate_1_sec.sum()
+                / self.bitrate_1_sec.window_size().as_secs(),
 
-            bitrate_1_minute: self.bitrate_1_min.sum() / self.bitrate_1_min.window_size().as_secs(),
+            bitrate_1_minute: self.bitrate_1_min.sum()
+                / self.bitrate_1_min.window_size().as_secs(),
 
             last_10_seconds: RtpJitterBufferSlidingWindowStatsReport {
                 packets_lost: self.packets_lost_10_secs.sum(),

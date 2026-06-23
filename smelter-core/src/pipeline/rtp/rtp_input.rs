@@ -17,9 +17,10 @@ use self::{tcp_server::start_tcp_server_thread, udp::start_udp_reader_thread};
 use crate::{
     pipeline::{
         decoder::{
-            fdk_aac::FdkAacDecoder, ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder,
-            ffmpeg_vp9::FfmpegVp9Decoder, libopus::OpusDecoder,
-            quicksync_h264::QuickSyncH264Decoder, vulkan_h264::VulkanH264Decoder,
+            fdk_aac::FdkAacDecoder, ffmpeg_h264::FfmpegH264Decoder,
+            ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder,
+            libopus::OpusDecoder, quicksync_h264::QuickSyncH264Decoder,
+            vulkan_h264::VulkanH264Decoder,
         },
         input::Input,
         rtp::{
@@ -119,17 +120,20 @@ impl RtpInput {
             ctx.queue_ctx.sync_point,
         );
 
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: opts.video.is_some(),
-            audio: opts.audio.is_some(),
-            offset: match opts.offset {
-                Some(offset) => QueueTrackOffset::FromStart(offset),
-                None => QueueTrackOffset::Pts(Duration::ZERO),
-            },
-        });
+        let (video_sender, audio_sender) =
+            queue_input.queue_new_track(QueueTrackOptions {
+                video: opts.video.is_some(),
+                audio: opts.audio.is_some(),
+                offset: match opts.offset {
+                    Some(offset) => QueueTrackOffset::FromStart(offset),
+                    None => QueueTrackOffset::Pts(Duration::ZERO),
+                },
+            });
 
-        let video_handle = Self::start_video_thread(&ctx, &input_ref, opts.video, video_sender)?;
-        let audio_handle = Self::start_audio_thread(&ctx, &input_ref, opts.audio, audio_sender)?;
+        let video_handle =
+            Self::start_video_thread(&ctx, &input_ref, opts.video, video_sender)?;
+        let audio_handle =
+            Self::start_audio_thread(&ctx, &input_ref, opts.audio, audio_sender)?;
 
         // TODO: this could ran on the same thread as tcp/udp socket
         RtpDemuxerThread::spawn(
@@ -160,10 +164,12 @@ impl RtpInput {
         };
 
         let handle = match options {
-            VideoDecoderOptions::FfmpegH264 => RtpVideoThread::<FfmpegH264Decoder>::spawn(
-                input_ref.clone(),
-                (ctx.clone(), DepayloaderOptions::H264, frame_sender),
-            )?,
+            VideoDecoderOptions::FfmpegH264 => {
+                RtpVideoThread::<FfmpegH264Decoder>::spawn(
+                    input_ref.clone(),
+                    (ctx.clone(), DepayloaderOptions::H264, frame_sender),
+                )?
+            }
             VideoDecoderOptions::FfmpegVp8 => RtpVideoThread::<FfmpegVp8Decoder>::spawn(
                 input_ref.clone(),
                 (ctx.clone(), DepayloaderOptions::Vp8, frame_sender),
@@ -181,10 +187,12 @@ impl RtpInput {
                     (ctx.clone(), DepayloaderOptions::H264, frame_sender),
                 )?
             }
-            VideoDecoderOptions::QuickSyncH264 => RtpVideoThread::<QuickSyncH264Decoder>::spawn(
-                input_ref.clone(),
-                (ctx.clone(), DepayloaderOptions::H264, frame_sender),
-            )?,
+            VideoDecoderOptions::QuickSyncH264 => {
+                RtpVideoThread::<QuickSyncH264Decoder>::spawn(
+                    input_ref.clone(),
+                    (ctx.clone(), DepayloaderOptions::H264, frame_sender),
+                )?
+            }
         };
         Ok(Some(handle))
     }
@@ -210,20 +218,21 @@ impl RtpInput {
                     samples_sender,
                 },
             )?,
-            RtpAudioOptions::FdkAac {
-                asc,
-                raw_asc,
-                depayloader_mode,
-            } => RtpAudioThread::<FdkAacDecoder>::spawn(
-                input_ref,
-                RtpAudioThreadOptions {
-                    ctx: ctx.clone(),
-                    sample_rate: asc.sample_rate,
-                    decoder_options: FdkAacDecoderOptions { asc: Some(raw_asc) },
-                    depayloader_options: DepayloaderOptions::Aac(depayloader_mode, asc),
-                    samples_sender,
-                },
-            )?,
+            RtpAudioOptions::FdkAac { asc, raw_asc, depayloader_mode } => {
+                RtpAudioThread::<FdkAacDecoder>::spawn(
+                    input_ref,
+                    RtpAudioThreadOptions {
+                        ctx: ctx.clone(),
+                        sample_rate: asc.sample_rate,
+                        decoder_options: FdkAacDecoderOptions { asc: Some(raw_asc) },
+                        depayloader_options: DepayloaderOptions::Aac(
+                            depayloader_mode,
+                            asc,
+                        ),
+                        samples_sender,
+                    },
+                )?
+            }
         };
         Ok(Some(handle))
     }
@@ -231,8 +240,7 @@ impl RtpInput {
 
 impl Drop for RtpInput {
     fn drop(&mut self) {
-        self.should_close
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.should_close.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -273,8 +281,9 @@ impl RtpDemuxerThread {
                     jitter_buffer_ctx.clone(),
                     90_000,
                     Box::new(move |event| {
-                        stats_sender
-                            .send(RtpInputStatsEvent::VideoRtp(event).into_event(&ref_clone));
+                        stats_sender.send(
+                            RtpInputStatsEvent::VideoRtp(event).into_event(&ref_clone),
+                        );
                     }),
                 ),
                 rtp_packet_sender: handle.rtp_packet_sender,
@@ -293,8 +302,9 @@ impl RtpDemuxerThread {
                     jitter_buffer_ctx,
                     sample_rate,
                     Box::new(move |event| {
-                        stats_sender
-                            .send(RtpInputStatsEvent::AudioRtp(event).into_event(&ref_clone));
+                        stats_sender.send(
+                            RtpInputStatsEvent::AudioRtp(event).into_event(&ref_clone),
+                        );
                     }),
                 ),
                 rtp_packet_sender: handle.rtp_packet_sender,
@@ -302,19 +312,15 @@ impl RtpDemuxerThread {
             });
         }
 
-        let mut thread = Self {
-            tracks,
-            receiver,
-            first_pts: None,
-            has_offset,
-        };
+        let mut thread = Self { tracks, receiver, first_pts: None, has_offset };
 
         let input_ref = input_ref.clone();
         std::thread::Builder::new()
             .name(format!("Depayloading thread for input: {input_ref}"))
             .spawn(move || {
                 let _span =
-                    span!(Level::INFO, "RTP demuxer", input_id = input_ref.to_string()).entered();
+                    span!(Level::INFO, "RTP demuxer", input_id = input_ref.to_string())
+                        .entered();
                 thread.run();
             })
             .unwrap();
@@ -349,7 +355,8 @@ impl RtpDemuxerThread {
                 // with the additional restriction that payload type values in the range
                 // 64-95 MUST NOT be used.
                 Ok(packet)
-                    if packet.header.payload_type < 64 || packet.header.payload_type > 95 =>
+                    if packet.header.payload_type < 64
+                        || packet.header.payload_type > 95 =>
                 {
                     self.handle_new_rtp_packet(packet);
                 }
@@ -379,17 +386,22 @@ impl RtpDemuxerThread {
         }
     }
 
-    fn handle_new_rtcp_packet(&mut self, rtcp_packet: Box<dyn rtcp::packet::Packet + Send + Sync>) {
+    fn handle_new_rtcp_packet(
+        &mut self,
+        rtcp_packet: Box<dyn rtcp::packet::Packet + Send + Sync>,
+    ) {
         let header = rtcp_packet.header();
         debug!(?header, "Received RTCP packet");
         match header.packet_type {
             PacketType::SenderReport => {
-                let sender_report = rtcp_packet.as_any().downcast_ref::<SenderReport>().unwrap();
+                let sender_report =
+                    rtcp_packet.as_any().downcast_ref::<SenderReport>().unwrap();
                 for track in &mut self.tracks {
                     if track.ssrc == Some(sender_report.ssrc) {
-                        track
-                            .jitter_buffer
-                            .on_sender_report(sender_report.ntp_time, sender_report.rtp_time);
+                        track.jitter_buffer.on_sender_report(
+                            sender_report.ntp_time,
+                            sender_report.rtp_time,
+                        );
                     }
                 }
             }
@@ -491,14 +503,12 @@ impl From<BindToPortError> for RtpInputError {
     fn from(value: BindToPortError) -> Self {
         match value {
             BindToPortError::SocketBind(err) => RtpInputError::SocketBind(err),
-            BindToPortError::PortAlreadyInUse(port) => RtpInputError::PortAlreadyInUse(port),
-            BindToPortError::AllPortsAlreadyInUse {
-                lower_bound,
-                upper_bound,
-            } => RtpInputError::AllPortsAlreadyInUse {
-                lower_bound,
-                upper_bound,
-            },
+            BindToPortError::PortAlreadyInUse(port) => {
+                RtpInputError::PortAlreadyInUse(port)
+            }
+            BindToPortError::AllPortsAlreadyInUse { lower_bound, upper_bound } => {
+                RtpInputError::AllPortsAlreadyInUse { lower_bound, upper_bound }
+            }
         }
     }
 }

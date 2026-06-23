@@ -70,10 +70,7 @@ pub fn compile_smelter(
 }
 
 fn display_rustc_envs(rustc_envs: &Vec<(&'static str, String)>) -> Vec<String> {
-    rustc_envs
-        .iter()
-        .map(|(key, value)| format!("{key}={value}"))
-        .collect()
+    rustc_envs.iter().map(|(key, value)| format!("{key}={value}")).collect()
 }
 
 pub fn ensure_empty_dir(dir: &PathBuf) -> Result<()> {

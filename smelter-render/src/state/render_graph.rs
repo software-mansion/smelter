@@ -21,15 +21,11 @@ pub(super) struct OutputRenderTree {
 
 impl RenderGraph {
     pub fn empty() -> Self {
-        Self {
-            outputs: HashMap::new(),
-            inputs: HashMap::new(),
-        }
+        Self { outputs: HashMap::new(), inputs: HashMap::new() }
     }
 
     pub(super) fn register_input(&mut self, input_id: InputId) {
-        self.inputs
-            .insert(input_id, (NodeTexture::new(), InputTexture::new()));
+        self.inputs.insert(input_id, (NodeTexture::new(), InputTexture::new()));
     }
 
     pub(super) fn unregister_input(&mut self, input_id: &InputId) {
@@ -52,7 +48,11 @@ impl RenderGraph {
 
         let output_tree = OutputRenderTree {
             root: Self::create_node(ctx, output.node)?,
-            output_texture: OutputTexture::new(ctx.wgpu_ctx, output.resolution, output_format),
+            output_texture: OutputTexture::new(
+                ctx.wgpu_ctx,
+                output.resolution,
+                output_format,
+            ),
         };
 
         scope.pop()?;
@@ -62,7 +62,10 @@ impl RenderGraph {
         Ok(())
     }
 
-    fn create_node(ctx: &RenderCtx, node: scene::Node) -> Result<RenderNode, UpdateSceneError> {
+    fn create_node(
+        ctx: &RenderCtx,
+        node: scene::Node,
+    ) -> Result<RenderNode, UpdateSceneError> {
         let children: Vec<RenderNode> = node
             .children
             .into_iter()

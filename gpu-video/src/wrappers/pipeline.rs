@@ -16,7 +16,8 @@ impl DescriptorSetLayout {
         device: Arc<Device>,
         create_info: &vk::DescriptorSetLayoutCreateInfo,
     ) -> Result<Self, VulkanCommonError> {
-        let set_layout = unsafe { device.create_descriptor_set_layout(create_info, None)? };
+        let set_layout =
+            unsafe { device.create_descriptor_set_layout(create_info, None)? };
 
         Ok(Self { device, set_layout })
     }
@@ -24,10 +25,7 @@ impl DescriptorSetLayout {
 
 impl Drop for DescriptorSetLayout {
     fn drop(&mut self) {
-        unsafe {
-            self.device
-                .destroy_descriptor_set_layout(self.set_layout, None)
-        };
+        unsafe { self.device.destroy_descriptor_set_layout(self.set_layout, None) };
     }
 }
 
@@ -68,10 +66,7 @@ impl DescriptorSet {
         let result = unsafe { pool.device.allocate_descriptor_sets(&allocate_info)? };
         Ok(result
             .into_iter()
-            .map(|set| DescriptorSet {
-                descriptor_set: set,
-                _pool: pool.clone(),
-            })
+            .map(|set| DescriptorSet { descriptor_set: set, _pool: pool.clone() })
             .collect())
     }
 }
@@ -90,11 +85,7 @@ impl PipelineLayout {
     ) -> Result<Self, VulkanCommonError> {
         let layout = unsafe { device.create_pipeline_layout(create_info, None)? };
 
-        Ok(Self {
-            layout,
-            device,
-            _descriptor_set_layouts: descriptor_set_layouts,
-        })
+        Ok(Self { layout, device, _descriptor_set_layouts: descriptor_set_layouts })
     }
 }
 
@@ -140,16 +131,15 @@ impl ComputePipeline {
         shader_module: Arc<ShaderModule>,
     ) -> Result<Self, VulkanCommonError> {
         let pipeline = unsafe {
-            device.create_compute_pipelines(vk::PipelineCache::null(), &[create_info], None)
+            device.create_compute_pipelines(
+                vk::PipelineCache::null(),
+                &[create_info],
+                None,
+            )
         }
         .map_err(|(_, e)| e)?[0];
 
-        Ok(Self {
-            pipeline,
-            layout,
-            _shader_module: shader_module,
-            device,
-        })
+        Ok(Self { pipeline, layout, _shader_module: shader_module, device })
     }
 }
 

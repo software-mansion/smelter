@@ -37,8 +37,8 @@ use tracing::{error, info};
 use crate::{
     audio_decoder::AudioSampleBatch,
     pipeline_tests::harness::audio_analysis::{
-        GAP_THRESHOLD, SAMPLE_RATE, chunks_to_stereo, compute_gaps, detect_artifacts, mix_to_mono,
-        peak_abs,
+        GAP_THRESHOLD, SAMPLE_RATE, chunks_to_stereo, compute_gaps, detect_artifacts,
+        mix_to_mono, peak_abs,
     },
 };
 
@@ -126,7 +126,9 @@ pub fn run(expected: Vec<AudioSampleBatch>, actual: Vec<AudioSampleBatch>) -> Re
     let viewer = WaveformViewer::spawn(expected, actual);
 
     loop {
-        let action = match Select::new("waveform_inspector", Action::iter().collect()).prompt() {
+        let action = match Select::new("waveform_inspector", Action::iter().collect())
+            .prompt()
+        {
             Ok(a) => a,
             Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
                 drop(viewer);
@@ -187,11 +189,7 @@ impl WaveformViewer {
             .name("waveform_inspector".into())
             .spawn(move || run_window(state, stop_rx, cmd_rx))
             .expect("Failed to spawn waveform_inspector thread");
-        Self {
-            join: Some(join),
-            stop: Some(stop_tx),
-            cmd: Some(cmd_tx),
-        }
+        Self { join: Some(join), stop: Some(stop_tx), cmd: Some(cmd_tx) }
     }
 
     fn send(&self, cmd: ViewCommand) {
@@ -256,7 +254,12 @@ struct EnvelopeCache {
 }
 
 impl EnvelopeCache {
-    fn compute(state: &ViewerState, width: usize, view_start: usize, view_end: usize) -> Self {
+    fn compute(
+        state: &ViewerState,
+        width: usize,
+        view_start: usize,
+        view_end: usize,
+    ) -> Self {
         Self {
             width,
             view_start,
@@ -286,7 +289,10 @@ struct Envelope {
 }
 
 impl ViewerState {
-    fn build(expected_chunks: Vec<AudioSampleBatch>, actual_chunks: Vec<AudioSampleBatch>) -> Self {
+    fn build(
+        expected_chunks: Vec<AudioSampleBatch>,
+        actual_chunks: Vec<AudioSampleBatch>,
+    ) -> Self {
         let gaps = [compute_gaps(&expected_chunks), compute_gaps(&actual_chunks)];
         let expected = chunks_to_stereo(&expected_chunks);
         let actual = chunks_to_stereo(&actual_chunks);
@@ -373,7 +379,12 @@ fn primary_frequency(spec: &FrequencySpectrum) -> f32 {
 impl Envelope {
     /// Compute a min/max envelope of `samples[view_start..view_end]`
     /// distributed across `width` pixel columns.
-    fn compute(samples: &[f32], view_start: usize, view_end: usize, width: usize) -> Self {
+    fn compute(
+        samples: &[f32],
+        view_start: usize,
+        view_end: usize,
+        width: usize,
+    ) -> Self {
         let mut min = vec![0.0_f32; width];
         let mut max = vec![0.0_f32; width];
         let view_len = view_end.saturating_sub(view_start).max(1) as f64;
@@ -427,9 +438,8 @@ fn apply_zoom(
     }
     let view_len = (*view_end - *view_start).max(1) as f64;
     let factor = ZOOM_PER_TICK.powf(-scroll_y as f64);
-    let new_len = (view_len * factor)
-        .round()
-        .clamp(MIN_VIEW_SAMPLES as f64, total as f64);
+    let new_len =
+        (view_len * factor).round().clamp(MIN_VIEW_SAMPLES as f64, total as f64);
     let pivot_frac = cursor_x as f64 / width as f64;
     let pivot_sample = *view_start as f64 + pivot_frac * view_len;
     let mut new_start = (pivot_sample - pivot_frac * new_len).max(0.0);
@@ -516,14 +526,15 @@ fn run_window(state: ViewerState, stop_rx: Receiver<()>, cmd_rx: Receiver<ViewCo
             canvas = vec![BG; w * h];
         }
 
-        let mouse_x = window
-            .get_mouse_pos(MouseMode::Clamp)
-            .map(|(x, _)| (x as usize).min(w - 1));
+        let mouse_x =
+            window.get_mouse_pos(MouseMode::Clamp).map(|(x, _)| (x as usize).min(w - 1));
 
         // Mouse-wheel zoom on the envelope lanes. Pivots around the
         // cursor X so the time under the mouse stays put while the
         // surrounding range stretches/contracts.
-        if let (Some(cursor_x), Some((_, scroll_y))) = (mouse_x, window.get_scroll_wheel()) {
+        if let (Some(cursor_x), Some((_, scroll_y))) =
+            (mouse_x, window.get_scroll_wheel())
+        {
             apply_zoom(
                 &mut view_start,
                 &mut view_end,
@@ -579,25 +590,29 @@ fn run_window(state: ViewerState, stop_rx: Receiver<()>, cmd_rx: Receiver<ViewCo
         let lanes_top = HEADER_H;
         for (i, (label, lane_env, color)) in lanes.iter().enumerate() {
             let top = lanes_top + i * (LANE_H + LANE_GAP);
-            draw_envelope_lane(&mut canvas, w, h, label, lane_env, top, *color, state.peak);
+            draw_envelope_lane(
+                &mut canvas,
+                w,
+                h,
+                label,
+                lane_env,
+                top,
+                *color,
+                state.peak,
+            );
         }
-        let env_lanes_bottom = lanes_top + NUM_LANES * LANE_H + (NUM_LANES - 1) * LANE_GAP;
+        let env_lanes_bottom =
+            lanes_top + NUM_LANES * LANE_H + (NUM_LANES - 1) * LANE_GAP;
 
         let gap_lanes_top = env_lanes_bottom + LANE_GAP;
         let gap_thresh_us = GAP_THRESHOLD.as_micros();
         let gap_lane_specs: [(String, &[(usize, usize)]); NUM_GAP_LANES] = [
             (
-                format!(
-                    "gaps expected (≥{gap_thresh_us}µs, n={})",
-                    state.gaps[0].len()
-                ),
+                format!("gaps expected (≥{gap_thresh_us}µs, n={})", state.gaps[0].len()),
                 &state.gaps[0],
             ),
             (
-                format!(
-                    "gaps actual (≥{gap_thresh_us}µs, n={})",
-                    state.gaps[1].len()
-                ),
+                format!("gaps actual (≥{gap_thresh_us}µs, n={})", state.gaps[1].len()),
                 &state.gaps[1],
             ),
         ];
@@ -812,7 +827,14 @@ fn draw_interval_lane(
     draw_text(canvas, w, h, 6, top + 2, label, TEXT);
 }
 
-fn draw_cursor(canvas: &mut [u32], w: usize, h: usize, x: usize, top: usize, bottom: usize) {
+fn draw_cursor(
+    canvas: &mut [u32],
+    w: usize,
+    h: usize,
+    x: usize,
+    top: usize,
+    bottom: usize,
+) {
     if x >= w {
         return;
     }
@@ -864,11 +886,7 @@ fn draw_zoom_strip(
     }
 
     let half = (plot_bot - plot_top) as f32 / 2.0;
-    let scale = if state.peak > 0.0 {
-        half / state.peak
-    } else {
-        0.0
-    };
+    let scale = if state.peak > 0.0 { half / state.peak } else { 0.0 };
     let mut prev: Option<(i32, i32)> = None;
     for col in 0..w {
         let s = start_s + col * span / w;
@@ -1025,14 +1043,26 @@ fn draw_spectrum_strip(
     let exp_spec = if fits(&state.mono_expected) {
         let start = cursor_s - half;
         let win = hann_window(&state.mono_expected[start..start + STFT_WINDOW]);
-        samples_fft_to_spectrum(&win, SAMPLE_RATE, FrequencyLimit::All, Some(&divide_by_N)).ok()
+        samples_fft_to_spectrum(
+            &win,
+            SAMPLE_RATE,
+            FrequencyLimit::All,
+            Some(&divide_by_N),
+        )
+        .ok()
     } else {
         None
     };
     let act_spec = if fits(&state.mono_actual) {
         let start = cursor_s - half;
         let win = hann_window(&state.mono_actual[start..start + STFT_WINDOW]);
-        samples_fft_to_spectrum(&win, SAMPLE_RATE, FrequencyLimit::All, Some(&divide_by_N)).ok()
+        samples_fft_to_spectrum(
+            &win,
+            SAMPLE_RATE,
+            FrequencyLimit::All,
+            Some(&divide_by_N),
+        )
+        .ok()
     } else {
         None
     };
@@ -1054,13 +1084,9 @@ fn draw_spectrum_strip(
     // Per-frame peak as the 0 dB reference so quiet moments still have
     // visible structure. Computed across whichever sides are available.
     let peak_of = |d: Option<
-        &[(
-            spectrum_analyzer::Frequency,
-            spectrum_analyzer::FrequencyValue,
-        )],
+        &[(spectrum_analyzer::Frequency, spectrum_analyzer::FrequencyValue)],
     >| {
-        d.map(|d| d.iter().map(|(_, v)| v.val()).fold(0.0_f32, f32::max))
-            .unwrap_or(0.0)
+        d.map(|d| d.iter().map(|(_, v)| v.val()).fold(0.0_f32, f32::max)).unwrap_or(0.0)
     };
     let ref_val = peak_of(exp_data).max(peak_of(act_data)).max(1e-6);
     let to_db = |v: f32| -> f32 {
@@ -1110,7 +1136,15 @@ fn draw_spectrum_strip(
     draw_text(canvas, w, h, 6, top + 2, &line, TEXT);
 }
 
-fn draw_vline(canvas: &mut [u32], w: usize, h: usize, x: i32, y0: i32, y1: i32, color: u32) {
+fn draw_vline(
+    canvas: &mut [u32],
+    w: usize,
+    h: usize,
+    x: i32,
+    y0: i32,
+    y1: i32,
+    color: u32,
+) {
     if x < 0 || (x as usize) >= w {
         return;
     }
@@ -1130,7 +1164,15 @@ fn clamp_y(y: f32, lo: usize, hi: usize) -> usize {
     y.clamp(lo as i32, hi as i32) as usize
 }
 
-fn draw_text(canvas: &mut [u32], w: usize, h: usize, x: usize, y: usize, text: &str, color: u32) {
+fn draw_text(
+    canvas: &mut [u32],
+    w: usize,
+    h: usize,
+    x: usize,
+    y: usize,
+    text: &str,
+    color: u32,
+) {
     let mut cx = x;
     for ch in text.chars() {
         if let Some(glyph) = font8x8::BASIC_FONTS.get(ch) {

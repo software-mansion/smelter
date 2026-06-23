@@ -25,16 +25,10 @@ impl StatefulWebViewComponent {
     }
 
     pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = self
-            .children
-            .iter()
-            .map(StatefulComponent::intermediate_node)
-            .collect();
+        let children =
+            self.children.iter().map(StatefulComponent::intermediate_node).collect();
 
-        IntermediateNode::WebView {
-            web: self.clone(),
-            children,
-        }
+        IntermediateNode::WebView { web: self.clone(), children }
     }
 }
 
@@ -43,11 +37,10 @@ impl WebViewComponent {
         self,
         ctx: &BuildStateTreeCtx,
     ) -> Result<StatefulComponent, SceneError> {
-        let instance = ctx
-            .renderers
-            .web_renderers
-            .get(&self.instance_id)
-            .ok_or_else(|| SceneError::WebRendererNotFound(self.instance_id.clone()))?;
+        let instance =
+            ctx.renderers.web_renderers.get(&self.instance_id).ok_or_else(|| {
+                SceneError::WebRendererNotFound(self.instance_id.clone())
+            })?;
 
         let children = self
             .children

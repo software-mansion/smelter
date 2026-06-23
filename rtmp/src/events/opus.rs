@@ -78,8 +78,8 @@ mod tests {
     #[test]
     fn parses_stereo_opus_id_header() {
         let data = Bytes::from_static(&[
-            b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1, 2, 0, 0, 0x80, 0xBB, 0x00, 0x00, 0,
-            0, 0,
+            b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1, 2, 0, 0, 0x80, 0xBB, 0x00,
+            0x00, 0, 0, 0,
         ]);
         let config = OpusAudioConfig::try_from(data).unwrap();
         assert_eq!(config.channels(), AudioChannels::Stereo);
@@ -87,14 +87,16 @@ mod tests {
 
     #[test]
     fn rejects_too_short() {
-        let data = Bytes::from_static(&[b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1]);
+        let data =
+            Bytes::from_static(&[b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1]);
         assert!(OpusAudioConfig::try_from(data).is_err());
     }
 
     #[test]
     fn rejects_zero_channels() {
         let data = Bytes::from_static(&[
-            b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0,
         ]);
         assert!(OpusAudioConfig::try_from(data).is_err());
     }
@@ -102,8 +104,8 @@ mod tests {
     #[test]
     fn multichannel_maps_to_stereo() {
         let data = Bytes::from_static(&[
-            b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1, 6, 0, 0, 0x80, 0xBB, 0x00, 0x00, 0,
-            0, 0,
+            b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1, 6, 0, 0, 0x80, 0xBB, 0x00,
+            0x00, 0, 0, 0,
         ]);
         let config = OpusAudioConfig::try_from(data).unwrap();
         assert_eq!(config.channels(), AudioChannels::Stereo);

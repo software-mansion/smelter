@@ -48,9 +48,7 @@ pub fn spawn(path: &Path) -> Result<Child> {
 /// Convenience wrapper around [`spawn`] for callers that just want
 /// to block until playback finishes.
 pub fn play(path: &Path) -> Result<ExitStatus> {
-    spawn(path)?
-        .wait()
-        .context("Failed to wait on player child")
+    spawn(path)?.wait().context("Failed to wait on player child")
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -62,7 +60,8 @@ enum StreamKind {
 
 fn detect(path: &Path) -> Result<StreamKind> {
     let bytes = Bytes::from(
-        std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?,
+        std::fs::read(path)
+            .with_context(|| format!("Failed to read {}", path.display()))?,
     );
     let packets = unmarshal_packets(&bytes)
         .with_context(|| format!("Failed to parse RTP dump {}", path.display()))?;

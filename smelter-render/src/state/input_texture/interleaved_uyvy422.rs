@@ -19,11 +19,7 @@ impl InterleavedUyvy422Input {
         let upload_textures = InterleavedUyvy422Texture::new(ctx, Resolution::MIN_2X2);
         let yuv_bind_group = upload_textures.new_bind_group(ctx);
 
-        Self {
-            upload_textures,
-            yuv_bind_group,
-            color_space_converter: None,
-        }
+        Self { upload_textures, yuv_bind_group, color_space_converter: None }
     }
 
     pub fn resolution(&self) -> Resolution {
@@ -33,6 +29,18 @@ impl InterleavedUyvy422Input {
     pub fn upload(&mut self, ctx: &WgpuCtx, data: &[u8], resolution: Resolution) {
         self.maybe_recreate(ctx, resolution);
         self.upload_textures.upload(ctx, data);
+    }
+
+    pub fn encode_upload(
+        &mut self,
+        ctx: &WgpuCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        data: &[u8],
+        resolution: Resolution,
+    ) {
+        self.maybe_recreate(ctx, resolution);
+        self.upload_textures.encode_upload(encoder, staging_belt, data);
     }
 
     pub fn convert(&mut self, ctx: &WgpuCtx, dest: &NodeTextureState) {
@@ -64,6 +72,38 @@ impl InterleavedUyvy422Input {
                 );
                 // copy from rgb texture to srgb texture
                 color_space_converter.convert(ctx, texture.texture());
+            }
+        }
+    }
+
+    pub fn encode_convert(
+        &mut self,
+        ctx: &WgpuCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        dest: &NodeTextureState,
+    ) -> bool {
+        match dest {
+            NodeTextureState::GpuOptimized { texture, .. } => {
+                ctx.format.interleaved_uyvy_to_rgba_linear.encode_convert(
+                    ctx,
+                    encoder,
+                    &self.yuv_bind_group,
+                    texture.linear_view(),
+                );
+                true
+            }
+            NodeTextureState::CpuOptimized { texture, .. } => {
+                ctx.format.interleaved_uyvy_to_rgba_linear.encode_convert(
+                    ctx,
+                    encoder,
+                    &self.yuv_bind_group,
+                    texture.view(),
+                );
+                true
+            }
+            NodeTextureState::WebGl { .. } => {
+                self.convert(ctx, dest);
+                false
             }
         }
     }

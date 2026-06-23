@@ -17,7 +17,8 @@ pub const TESTS: &[RenderTest] = &[SIMPLE_INPUT_PASS_THROUGH];
 
 #[render_test(description = "Single input stream rendered without any transformations.")]
 fn simple_input_pass_through() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         children: vec![Component::InputStream(InputStreamComponent {
             id: None,

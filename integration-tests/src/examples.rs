@@ -19,11 +19,7 @@ pub fn post<T: Serialize + ?Sized>(route: &str, json: &T) -> Result<Response> {
 
     let client = reqwest::blocking::Client::new();
     let response_result = client
-        .post(format!(
-            "http://127.0.0.1:{}/api/{}",
-            read_config().api_port,
-            route
-        ))
+        .post(format!("http://127.0.0.1:{}/api/{}", read_config().api_port, route))
         .timeout(Duration::from_secs(100))
         .json(json)
         .send();
@@ -111,9 +107,8 @@ pub fn start_server_msg_listener() {
 async fn server_msg_listener() {
     let url = format!("ws://127.0.0.1:{}/ws", read_config().api_port);
 
-    let (ws_stream, _) = tokio_tungstenite::connect_async(url)
-        .await
-        .expect("Failed to connect");
+    let (ws_stream, _) =
+        tokio_tungstenite::connect_async(url).await.expect("Failed to connect");
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let (mut outgoing, mut incoming) = ws_stream.split();

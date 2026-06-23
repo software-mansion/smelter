@@ -43,8 +43,8 @@ fn ffmpeg_url() -> &'static str {
 fn main() -> Result<()> {
     self::logger::init_logger();
 
-    let executable_path =
-        env::current_exe().with_context(|| "Failed to get current executable directory.")?;
+    let executable_path = env::current_exe()
+        .with_context(|| "Failed to get current executable directory.")?;
     let executable_dir = executable_path.parent();
     let executable_dir = match executable_dir {
         Some(path) => path.to_path_buf(),
@@ -60,7 +60,8 @@ fn main() -> Result<()> {
         if malformed_lib_exists {
             fs::remove_dir_all(executable_dir.join(FFMPEG_LIB_DIR))?;
         }
-        let gz_archive_exists = fs::exists(executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME))?;
+        let gz_archive_exists =
+            fs::exists(executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME))?;
         if gz_archive_exists {
             fs::remove_file(executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME))?;
         }
@@ -99,15 +100,17 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
 
     // Archive contains only `libav` directory in the root. This directory contains all smelter
     // libav dependencies.
-    unpack_ffmpeg(executable_dir).with_context(|| "Failed to unpack downloaded archive")?;
+    unpack_ffmpeg(executable_dir)
+        .with_context(|| "Failed to unpack downloaded archive")?;
 
     Ok(())
 }
 
 fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
     // TODO: Download in chunks
-    let response = get(ffmpeg_url())
-        .with_context(|| format!("Failed to download libav libraries. URL: {}", ffmpeg_url()))?;
+    let response = get(ffmpeg_url()).with_context(|| {
+        format!("Failed to download libav libraries. URL: {}", ffmpeg_url())
+    })?;
     let content = response.bytes()?;
 
     fs::write(executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME), &content)
@@ -119,7 +122,8 @@ fn unpack_ffmpeg(executable_dir: &Path) -> Result<()> {
     let gz_archive_path = executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME);
 
     let gz_input = BufReader::new(
-        File::open(&gz_archive_path).with_context(|| "Failed to open downloaded archive")?,
+        File::open(&gz_archive_path)
+            .with_context(|| "Failed to open downloaded archive")?,
     );
     let mut tar_bytes: Vec<u8> = vec![];
 
@@ -154,7 +158,8 @@ fn check_ffmpeg_command() -> Result<bool> {
     let ffmpeg_result = Command::new("ffmpeg").arg("-version").output();
     match ffmpeg_result {
         Ok(ffmpeg_output) => {
-            let ffmpeg_output = String::from_utf8(ffmpeg_output.stdout)?.trim().to_string();
+            let ffmpeg_output =
+                String::from_utf8(ffmpeg_output.stdout)?.trim().to_string();
             match match_ffmpeg_version(&ffmpeg_output) {
                 Some(version) if version == required_ffmpeg_version() => Ok(true),
                 Some(version) => {
@@ -224,7 +229,9 @@ fn check_ffmpeg_homebrew() -> Result<bool> {
 
 mod logger {
     use std::{env, str::FromStr};
-    use tracing_subscriber::{Layer, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+    use tracing_subscriber::{
+        Layer, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt,
+    };
 
     enum LoggerFormat {
         Pretty,
@@ -256,7 +263,9 @@ mod logger {
         };
         let default_logger_format = LoggerFormat::Json;
         let logger_format = match env::var("SMELTER_LOGGER_FORMAT") {
-            Ok(format) => LoggerFormat::from_str(&format).unwrap_or(default_logger_format),
+            Ok(format) => {
+                LoggerFormat::from_str(&format).unwrap_or(default_logger_format)
+            }
             Err(_) => default_logger_format,
         };
 

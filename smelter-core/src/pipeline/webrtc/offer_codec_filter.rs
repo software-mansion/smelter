@@ -98,10 +98,8 @@ pub(crate) fn codecs_from_offer(offer: &RTCSessionDescription) -> OfferCodecs {
                             .and_then(|s| s.parse::<u32>().ok())
                             .unwrap_or(48000);
                         // channels is optional; RFC 4566 default is 1
-                        let channels = parts
-                            .next()
-                            .and_then(|s| s.parse::<u16>().ok())
-                            .unwrap_or(1);
+                        let channels =
+                            parts.next().and_then(|s| s.parse::<u16>().ok()).unwrap_or(1);
                         opus_pts.push((pt, clock_rate, channels));
                     }
                 }
@@ -192,12 +190,7 @@ pub(crate) fn codecs_from_offer(offer: &RTCSessionDescription) -> OfferCodecs {
         }
     }
 
-    OfferCodecs {
-        h264: h264_codecs,
-        vp8: vp8_codecs,
-        vp9: vp9_codecs,
-        opus: opus_codecs,
-    }
+    OfferCodecs { h264: h264_codecs, vp8: vp8_codecs, vp9: vp9_codecs, opus: opus_codecs }
 }
 
 /// Extracts profile-level-id and packetization-mode from an H264 fmtp string.

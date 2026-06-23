@@ -114,7 +114,10 @@ impl NegotiationProgress {
         }
     }
 
-    pub(super) fn try_match_on_status(&self, msg: &RtmpMessageIncoming) -> Option<(AmfValue, u32)> {
+    pub(super) fn try_match_on_status(
+        &self,
+        msg: &RtmpMessageIncoming,
+    ) -> Option<(AmfValue, u32)> {
         let NegotiationProgress::WaitingForOnStatus { stream_id } = self else {
             return None;
         };
@@ -142,31 +145,25 @@ pub(super) fn send_connect(
         AmfValue::Number((FOURCC_INFO_CAN_ENCODE | FOURCC_INFO_CAN_FORWARD) as f64);
 
     let mut video_fourcc_info_map = HashMap::new();
-    video_fourcc_info_map.insert(
-        "*".to_string(),
-        AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
-    );
+    video_fourcc_info_map
+        .insert("*".to_string(), AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64));
     for codec in &config.video_codecs {
-        video_fourcc_info_map.insert(codec.fourcc().to_string(), encode_forward_caps.clone());
+        video_fourcc_info_map
+            .insert(codec.fourcc().to_string(), encode_forward_caps.clone());
     }
 
     let mut audio_fourcc_info_map = HashMap::new();
-    audio_fourcc_info_map.insert(
-        "*".to_string(),
-        AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64),
-    );
+    audio_fourcc_info_map
+        .insert("*".to_string(), AmfValue::Number(FOURCC_INFO_CAN_FORWARD as f64));
     for codec in &config.audio_codecs {
-        audio_fourcc_info_map.insert(codec.fourcc().to_string(), encode_forward_caps.clone());
+        audio_fourcc_info_map
+            .insert(codec.fourcc().to_string(), encode_forward_caps.clone());
     }
 
-    let video_fourcc_list = config
-        .video_codecs
-        .iter()
-        .map(|c| AmfValue::String(c.fourcc().to_string()));
-    let audio_fourcc_list = config
-        .audio_codecs
-        .iter()
-        .map(|c| AmfValue::String(c.fourcc().to_string()));
+    let video_fourcc_list =
+        config.video_codecs.iter().map(|c| AmfValue::String(c.fourcc().to_string()));
+    let audio_fourcc_list =
+        config.audio_codecs.iter().map(|c| AmfValue::String(c.fourcc().to_string()));
     let fourcc_list: Vec<AmfValue> = video_fourcc_list.chain(audio_fourcc_list).collect();
 
     let legacy_audio_codecs = if config.audio_codecs.contains(&RtmpAudioCodec::Aac) {
@@ -192,14 +189,8 @@ pub(super) fn send_connect(
             ("videoFunction", AmfValue::Number(0.0)),
             // E-RTMP codecs
             ("fourCcList", AmfValue::StrictArray(fourcc_list)),
-            (
-                "videoFourCcInfoMap",
-                AmfValue::Object(video_fourcc_info_map),
-            ),
-            (
-                "audioFourCcInfoMap",
-                AmfValue::Object(audio_fourcc_info_map),
-            ),
+            ("videoFourCcInfoMap", AmfValue::Object(video_fourcc_info_map)),
+            ("audioFourCcInfoMap", AmfValue::Object(audio_fourcc_info_map)),
             (
                 "capsEx",
                 AmfValue::Number(
@@ -277,7 +268,8 @@ pub(super) fn warn_on_unsupported_codecs(
                     AmfValue::Object(m) | AmfValue::EcmaArray(m),
                 ) => {
                     accepted.extend(m.iter().filter_map(|(c, v)| {
-                        matches!(v, AmfValue::Number(mask) if *mask > 0.0).then_some(c.as_str())
+                        matches!(v, AmfValue::Number(mask) if *mask > 0.0)
+                            .then_some(c.as_str())
                     }));
                 }
                 _ => {}
@@ -305,14 +297,9 @@ pub(super) fn warn_on_unsupported_codecs(
 
 #[cfg(test)]
 fn map_advertises_enhanced_codecs(map: &HashMap<String, AmfValue>) -> bool {
-    map.get("fourCcList")
-        .is_some_and(fourcc_list_supports_enhanced)
-        || map
-            .get("videoFourCcInfoMap")
-            .is_some_and(video_fourcc_info_map_supports_video)
-        || map
-            .get("audioFourCcInfoMap")
-            .is_some_and(audio_fourcc_info_map_supports_audio)
+    map.get("fourCcList").is_some_and(fourcc_list_supports_enhanced)
+        || map.get("videoFourCcInfoMap").is_some_and(video_fourcc_info_map_supports_video)
+        || map.get("audioFourCcInfoMap").is_some_and(audio_fourcc_info_map_supports_audio)
 }
 
 #[cfg(test)]
@@ -321,14 +308,11 @@ fn fourcc_list_supports_enhanced(value: &AmfValue) -> bool {
         return false;
     };
 
-    let known_video: Vec<&'static str> = [
-        RtmpVideoCodec::H264,
-        RtmpVideoCodec::Vp8,
-        RtmpVideoCodec::Vp9,
-    ]
-    .into_iter()
-    .map(|c| c.fourcc())
-    .collect();
+    let known_video: Vec<&'static str> =
+        [RtmpVideoCodec::H264, RtmpVideoCodec::Vp8, RtmpVideoCodec::Vp9]
+            .into_iter()
+            .map(|c| c.fourcc())
+            .collect();
     let known_audio: Vec<&'static str> = [RtmpAudioCodec::Aac, RtmpAudioCodec::Opus]
         .into_iter()
         .map(|c| c.fourcc())
@@ -336,7 +320,9 @@ fn fourcc_list_supports_enhanced(value: &AmfValue) -> bool {
 
     items.iter().any(|item| match item {
         AmfValue::String(v) => {
-            v == "*" || known_video.contains(&v.as_str()) || known_audio.contains(&v.as_str())
+            v == "*"
+                || known_video.contains(&v.as_str())
+                || known_audio.contains(&v.as_str())
         }
         _ => false,
     })
@@ -349,14 +335,11 @@ fn video_fourcc_info_map_supports_video(value: &AmfValue) -> bool {
         AmfValue::EcmaArray(map) => map,
         _ => return false,
     };
-    let known: Vec<&'static str> = [
-        RtmpVideoCodec::H264,
-        RtmpVideoCodec::Vp8,
-        RtmpVideoCodec::Vp9,
-    ]
-    .into_iter()
-    .map(|c| c.fourcc())
-    .collect();
+    let known: Vec<&'static str> =
+        [RtmpVideoCodec::H264, RtmpVideoCodec::Vp8, RtmpVideoCodec::Vp9]
+            .into_iter()
+            .map(|c| c.fourcc())
+            .collect();
 
     map.iter().any(|(k, v)| match v {
         AmfValue::Number(mask) if *mask > 0.0 => k == "*" || known.contains(&k.as_str()),
@@ -397,8 +380,8 @@ mod tests {
         )]);
 
         let caps = ExCapabilities::from_connect_response(&capabilities, &HashMap::new());
-        let advertises_enhanced_codecs =
-            map_advertises_enhanced_codecs(&capabilities) || caps != ExCapabilities::default();
+        let advertises_enhanced_codecs = map_advertises_enhanced_codecs(&capabilities)
+            || caps != ExCapabilities::default();
 
         assert!(advertises_enhanced_codecs);
         assert!(caps.reconnect);

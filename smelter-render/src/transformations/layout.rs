@@ -4,7 +4,6 @@ use crate::{
     Resolution,
     scene::{BorderRadius, BoxShadow, ImageScalingFilter, RGBAColor, Size},
     state::{RenderCtx, node_texture::NodeTexture},
-    types::RenderingMode,
     wgpu::utils::MippedTexture,
 };
 
@@ -27,6 +26,7 @@ pub(crate) struct LayoutNode {
     layout_provider: Box<dyn LayoutProvider>,
     shader: Arc<LayoutShader>,
     mip_cache: HashMap<usize, MippedTexture>,
+    passthrough_child_index: Option<usize>,
 }
 
 /// When rendering we cut this fragment from texture and stretch it on
@@ -89,7 +89,10 @@ enum RenderLayoutContent {
         mip_level: f32,
     },
     #[allow(dead_code)]
-    BoxShadow { color: RGBAColor, blur_radius: f32 },
+    BoxShadow {
+        color: RGBAColor,
+        blur_radius: f32,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -158,7 +161,12 @@ impl LayoutNode {
             layout_provider,
             shader,
             mip_cache: HashMap::new(),
+            passthrough_child_index: None,
         }
+    }
+
+    pub(crate) fn passthrough_child_index(&self) -> Option<usize> {
+        self.passthrough_child_index
     }
 
     pub fn render(
@@ -168,18 +176,20 @@ impl LayoutNode {
         target: &mut NodeTexture,
         pts: Duration,
     ) {
-        let input_resolutions: Vec<Option<Resolution>> = sources
-            .iter()
-            .map(|node_texture| node_texture.resolution())
-            .collect();
+        let input_resolutions: Vec<Option<Resolution>> =
+            sources.iter().map(|node_texture| node_texture.resolution()).collect();
         let output_resolution = self.layout_provider.resolution(pts);
         let layouts = self.layout_provider.layouts(pts, &input_resolutions);
         let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
-
-        let global_filter = match ctx.wgpu_ctx.mode {
-            RenderingMode::GpuOptimized | RenderingMode::WebGl => ImageScalingFilter::Lanczos3,
-            RenderingMode::CpuOptimized => ImageScalingFilter::Bilinear,
-        };
+        self.passthrough_child_index = Self::passthrough_child_index_for(
+            &layouts,
+            &input_resolutions,
+            output_resolution,
+        );
+        if self.passthrough_child_index.is_some() {
+            self.mip_cache.clear();
+            return;
+        }
 
         // Apply global filter and compute mip levels for Lanczos3 child nodes.
         // Only apply to sources that actually have texture data
@@ -200,8 +210,9 @@ impl LayoutNode {
                     continue;
                 }
 
-                *scaling_filter = global_filter;
-                let ratio = f32::max(crop.width / layout_width, crop.height / layout_height);
+                *scaling_filter = ctx.scaling_filter;
+                let ratio =
+                    f32::max(crop.width / layout_width, crop.height / layout_height);
                 if ratio > 1.0 {
                     let levels_needed = match scaling_filter {
                         ImageScalingFilter::Lanczos3 => {
@@ -218,11 +229,9 @@ impl LayoutNode {
         }
 
         let mut encoder =
-            ctx.wgpu_ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("layout node"),
-                });
+            ctx.wgpu_ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("layout node"),
+            });
 
         let format = ctx.wgpu_ctx.default_view_format();
         // Generate mipped textures for sources that need them
@@ -248,9 +257,7 @@ impl LayoutNode {
         let resolved_views: Vec<&wgpu::TextureView> = layouts
             .iter()
             .map(|layout| match &layout.content {
-                RenderLayoutContent::ChildNode {
-                    index, mip_level, ..
-                } => {
+                RenderLayoutContent::ChildNode { index, mip_level, .. } => {
                     if *mip_level > 0.0
                         && let Some(mipped) = mipped_textures.get(index)
                     {
@@ -268,7 +275,8 @@ impl LayoutNode {
                         }
                     }
                 }
-                RenderLayoutContent::Color { .. } | RenderLayoutContent::BoxShadow { .. } => {
+                RenderLayoutContent::Color { .. }
+                | RenderLayoutContent::BoxShadow { .. } => {
                     ctx.wgpu_ctx.default_empty_view()
                 }
             })
@@ -288,6 +296,46 @@ impl LayoutNode {
 
         self.mip_cache = mipped_textures;
     }
+
+    fn passthrough_child_index_for(
+        layouts: &[RenderLayout],
+        input_resolutions: &[Option<Resolution>],
+        output_resolution: Resolution,
+    ) -> Option<usize> {
+        let [layout] = layouts else { return None };
+        let RenderLayoutContent::ChildNode {
+            index,
+            border_color: RGBAColor(_, _, _, border_alpha),
+            border_width,
+            crop,
+            ..
+        } = &layout.content
+        else {
+            return None;
+        };
+        let input_resolution = input_resolutions.get(*index).copied().flatten()?;
+
+        let same_resolution = input_resolution == output_resolution;
+        let full_output = is_same_px(layout.top, 0.0)
+            && is_same_px(layout.left, 0.0)
+            && is_same_px(layout.width, output_resolution.width as f32)
+            && is_same_px(layout.height, output_resolution.height as f32);
+        let full_crop = is_same_px(crop.top, 0.0)
+            && is_same_px(crop.left, 0.0)
+            && is_same_px(crop.width, input_resolution.width as f32)
+            && is_same_px(crop.height, input_resolution.height as f32);
+        let no_effects = is_same_px(layout.rotation_degrees, 0.0)
+            && layout.masks.is_empty()
+            && layout.border_radius == BorderRadius::ZERO
+            && *border_width == 0.0
+            && *border_alpha == 0;
+
+        (same_resolution && full_output && full_crop && no_effects).then_some(*index)
+    }
+}
+
+fn is_same_px(a: f32, b: f32) -> bool {
+    (a - b).abs() < 0.001
 }
 
 impl NestedLayout {

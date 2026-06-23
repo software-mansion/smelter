@@ -5,11 +5,7 @@ impl TryFrom<WhepOutput> for core::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: WhepOutput) -> Result<Self, Self::Error> {
-        let WhepOutput {
-            bearer_token,
-            video,
-            audio,
-        } = request;
+        let WhepOutput { bearer_token, video, audio } = request;
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(
@@ -95,22 +91,23 @@ impl WhepVideoEncoderOptions {
                     .collect(),
                 bitstream_format: core::H264BitstreamFormat::AnnexB,
             }),
-            WhepVideoEncoderOptions::VulkanH264 {
-                bitrate,
-                keyframe_interval_ms,
-            } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
-                resolution: resolution.into(),
-                bitrate: bitrate
-                    .map(|bitrate| {
-                        Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
-                            bitrate.try_into()?,
-                        ))
-                    })
-                    .transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
-                preset: core::VulkanH264EncoderPreset::HighQuality,
-                bitstream_format: core::H264BitstreamFormat::AnnexB,
-            }),
+            WhepVideoEncoderOptions::VulkanH264 { bitrate, keyframe_interval_ms } => {
+                core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
+                    resolution: resolution.into(),
+                    bitrate: bitrate
+                        .map(|bitrate| {
+                            Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
+                                bitrate.try_into()?,
+                            ))
+                        })
+                        .transpose()?,
+                    keyframe_interval: duration_from_keyframe_interval(
+                        keyframe_interval_ms,
+                    )?,
+                    preset: core::VulkanH264EncoderPreset::HighQuality,
+                    bitstream_format: core::H264BitstreamFormat::AnnexB,
+                })
+            }
             WhepVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
                 keyframe_interval_ms,

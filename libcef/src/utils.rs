@@ -26,10 +26,7 @@ pub fn bundle_for_development(target_path: &Path) -> Result<()> {
 
     let _ = fs::remove_dir_all(current_dir.join("process_helper"));
 
-    fs::copy(
-        target_path.join("process_helper"),
-        current_dir.join("process_helper"),
-    )?;
+    fs::copy(target_path.join("process_helper"), current_dir.join("process_helper"))?;
 
     Ok(())
 }
@@ -45,20 +42,15 @@ pub fn bundle_app(target_path: &Path, bundle_path: &Path) -> Result<()> {
         fs::create_dir_all(bundle_path.join(dir))?;
     }
 
-    dir::copy(
-        target_path.join("Frameworks"),
-        &bundle_path,
-        &CopyOptions::default(),
-    )?;
+    dir::copy(target_path.join("Frameworks"), &bundle_path, &CopyOptions::default())?;
 
-    let bundle_info = fs::read_to_string(target_path.join("resources").join("info.plist"))?
-        .replace("${EXECUTABLE_NAME}", "Video Compositor");
-    fs::write(
-        bundle_path.parent().unwrap().join("Info.plist"),
-        bundle_info,
-    )?;
+    let bundle_info =
+        fs::read_to_string(target_path.join("resources").join("info.plist"))?
+            .replace("${EXECUTABLE_NAME}", "Video Compositor");
+    fs::write(bundle_path.parent().unwrap().join("Info.plist"), bundle_info)?;
 
-    let helper_info = fs::read_to_string(target_path.join("resources").join("helper-Info.plist"))?;
+    let helper_info =
+        fs::read_to_string(target_path.join("resources").join("helper-Info.plist"))?;
     let helpers = [
         ("smelter Helper", ""),
         ("smelter Helper (Alerts)", ".alerts"),
@@ -88,10 +80,8 @@ fn bundle_helper(
     helper_path: &Path,
     bundle_path: &Path,
 ) -> Result<()> {
-    let bundle_path = bundle_path
-        .join("Frameworks")
-        .join(format!("{name}.app"))
-        .join("Contents");
+    let bundle_path =
+        bundle_path.join("Frameworks").join(format!("{name}.app")).join("Contents");
 
     for dir in ["MacOS", "Resources"] {
         fs::create_dir_all(bundle_path.join(dir))?;

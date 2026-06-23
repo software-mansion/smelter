@@ -55,8 +55,10 @@ pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
 }
 
 pub(crate) trait Depayloader {
-    fn depayload(&mut self, packet: RtpPacket)
-    -> Result<Vec<EncodedInputEvent>, DepayloadingError>;
+    fn depayload(
+        &mut self,
+        packet: RtpPacket,
+    ) -> Result<Vec<EncodedInputEvent>, DepayloadingError>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -75,11 +77,7 @@ struct BufferedDepayloader<T: Depacketizer + Default + 'static> {
 
 impl<T: Depacketizer + Default + 'static> BufferedDepayloader<T> {
     fn new_boxed(kind: MediaKind) -> Box<dyn Depayloader> {
-        Box::new(Self {
-            kind,
-            buffer: Vec::new(),
-            _marker: std::marker::PhantomData,
-        })
+        Box::new(Self { kind, buffer: Vec::new(), _marker: std::marker::PhantomData })
     }
 }
 
@@ -131,10 +129,7 @@ struct SimpleDepayloader<T: Depacketizer + Default + 'static> {
 
 impl<T: Depacketizer + Default + 'static> SimpleDepayloader<T> {
     fn new_boxed(kind: MediaKind) -> Box<dyn Depayloader> {
-        Box::new(Self {
-            kind,
-            depayloader: T::default(),
-        })
+        Box::new(Self { kind, depayloader: T::default() })
     }
 }
 

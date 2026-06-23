@@ -27,9 +27,7 @@ fn main() {
     let encoders = vec![Encoder::Aac, Encoder::Opus];
     let notes = vec![("a", 440.0), ("c_sharp", 554.37), ("e", 659.26)];
 
-    let snapshots_dir = submodule_root_path()
-        .join("rtp_packet_dumps")
-        .join("inputs");
+    let snapshots_dir = submodule_root_path().join("rtp_packet_dumps").join("inputs");
 
     for encoder in &encoders {
         for (name, freq) in &notes {

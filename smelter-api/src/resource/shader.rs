@@ -16,9 +16,7 @@ impl TryFrom<ShaderSpec> for smelter_render::RendererSpec {
     type Error = TypeError;
 
     fn try_from(spec: ShaderSpec) -> Result<Self, Self::Error> {
-        let spec = shader::ShaderSpec {
-            source: spec.source.into(),
-        };
+        let spec = shader::ShaderSpec { source: spec.source.into() };
         Ok(Self::Shader(spec))
     }
 }

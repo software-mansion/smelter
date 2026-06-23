@@ -25,11 +25,7 @@ where
     Source: Iterator<Item = PipelineEvent<RtpInputEvent>>,
 {
     pub fn new(options: DepayloaderOptions, source: Source) -> Self {
-        Self {
-            depayloader: new_depayloader(options),
-            source,
-            eos_sent: false,
-        }
+        Self { depayloader: new_depayloader(options), source, eos_sent: false }
     }
 }
 
@@ -43,9 +39,14 @@ where
         match self.source.next() {
             Some(PipelineEvent::Data(RtpInputEvent::Packet(packet))) => {
                 match self.depayloader.depayload(packet) {
-                    Ok(events) => Some(events.into_iter().map(PipelineEvent::Data).collect()),
+                    Ok(events) => {
+                        Some(events.into_iter().map(PipelineEvent::Data).collect())
+                    }
                     Err(err) => {
-                        debug!("Depayloader error: {}", ErrorStack::new(&err).into_string());
+                        debug!(
+                            "Depayloader error: {}",
+                            ErrorStack::new(&err).into_string()
+                        );
                         Some(vec![])
                     }
                 }

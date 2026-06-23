@@ -32,9 +32,7 @@ fn global_instance() -> &'static Emitter<Event> {
 
 impl<E: Clone> Emitter<E> {
     pub fn new() -> Self {
-        Self {
-            subscribers: vec![].into(),
-        }
+        Self { subscribers: vec![].into() }
     }
 
     pub fn send_event<T: Into<E>>(&self, event: T) {
@@ -59,17 +57,14 @@ impl<E: Clone> Emitter<E> {
 
     fn remove_disconnected_subscribers(&self, disconnected: HashSet<usize>) {
         let mut guard = self.subscribers.write().unwrap();
-        *guard = mem::take(&mut *guard)
-            .into_iter()
-            .enumerate()
-            .filter_map(|(index, sender)| {
-                if disconnected.contains(&index) {
-                    None
-                } else {
-                    Some(sender)
-                }
-            })
-            .collect()
+        *guard =
+            mem::take(&mut *guard)
+                .into_iter()
+                .enumerate()
+                .filter_map(|(index, sender)| {
+                    if disconnected.contains(&index) { None } else { Some(sender) }
+                })
+                .collect()
     }
 }
 

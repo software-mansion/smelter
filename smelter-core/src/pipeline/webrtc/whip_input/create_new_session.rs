@@ -49,7 +49,8 @@ pub(crate) async fn create_new_whip_session(
         video_params_compliant_with_offer(&state.ctx, &video_preferences, &offer_codecs);
 
     let peer_connection =
-        RecvonlyPeerConnection::new(&state.ctx, &video_codecs, &offer_codecs.opus).await?;
+        RecvonlyPeerConnection::new(&state.ctx, &video_codecs, &offer_codecs.opus)
+            .await?;
 
     let _video_transceiver = peer_connection.new_video_track(&video_codecs).await?;
     let _audio_transceiver = peer_connection.new_audio_track().await?;
@@ -59,9 +60,7 @@ pub(crate) async fn create_new_whip_session(
     let answer = peer_connection.create_answer().await?;
     peer_connection.set_local_description(answer).await?;
 
-    peer_connection
-        .wait_for_ice_candidates(Duration::from_secs(1))
-        .await?;
+    peer_connection.wait_for_ice_candidates(Duration::from_secs(1)).await?;
 
     let answer = peer_connection.local_description().await.ok_or_else(|| {
         WhipWhepServerError::InternalError(
@@ -92,11 +91,12 @@ pub(crate) async fn create_new_whip_session(
             state.ctx.queue_ctx.sync_point,
         );
 
-        let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: true,
-            audio: true,
-            offset: QueueTrackOffset::Pts(Duration::ZERO),
-        });
+        let (mut video_sender, mut audio_sender) =
+            queue_input.queue_new_track(QueueTrackOptions {
+                video: true,
+                audio: true,
+                offset: QueueTrackOffset::Pts(Duration::ZERO),
+            });
 
         peer_connection.on_track(move |track_ctx| {
             let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);

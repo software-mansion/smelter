@@ -16,12 +16,11 @@ pub enum Amf3EncodingError {
     #[error(
         "Sealed count larger than actual number of object members. (Sealed count: {sealed_count}, Actual members: {actual_members})."
     )]
-    SealedCountTooLarge {
-        sealed_count: usize,
-        actual_members: usize,
-    },
+    SealedCountTooLarge { sealed_count: usize, actual_members: usize },
 
-    #[error("Too many sealed members in an object: {0} elements (max {MAX_SEALED_COUNT}).")]
+    #[error(
+        "Too many sealed members in an object: {0} elements (max {MAX_SEALED_COUNT})."
+    )]
     SealedMembersCountTooLarge(usize),
 
     #[error("Dictionary too long: {0} entries (max {U28_MAX}).")]

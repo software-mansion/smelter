@@ -17,17 +17,9 @@ pub enum RegisterInputOptions {
 }
 
 pub enum InputInitInfo {
-    Rtp {
-        port: Option<Port>,
-    },
-    Mp4 {
-        video_duration: Option<Duration>,
-        audio_duration: Option<Duration>,
-    },
-    Whip {
-        bearer_token: Arc<str>,
-        endpoint_route: Arc<str>,
-    },
+    Rtp { port: Option<Port> },
+    Mp4 { video_duration: Option<Duration>, audio_duration: Option<Duration> },
+    Whip { bearer_token: Arc<str>, endpoint_route: Arc<str> },
     Other,
 }
 

@@ -38,12 +38,8 @@ impl Component {
 
     fn codec_filter(self) -> &'static [u8] {
         match self {
-            Self::Encode => {
-                b"mfxImplDescription.mfxEncoderDescription.encoder.CodecID\0"
-            }
-            Self::Decode => {
-                b"mfxImplDescription.mfxDecoderDescription.decoder.CodecID\0"
-            }
+            Self::Encode => b"mfxImplDescription.mfxEncoderDescription.encoder.CodecID\0",
+            Self::Decode => b"mfxImplDescription.mfxDecoderDescription.decoder.CodecID\0",
         }
     }
 }

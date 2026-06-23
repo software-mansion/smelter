@@ -27,9 +27,6 @@ pub struct VideoFramerate {
 
 impl VideoFramerate {
     pub fn new(num: u32, den: u32) -> Option<Self> {
-        Some(Self {
-            num: NonZeroU32::new(num)?,
-            den: NonZeroU32::new(den)?,
-        })
+        Some(Self { num: NonZeroU32::new(num)?, den: NonZeroU32::new(den)? })
     }
 }

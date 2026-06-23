@@ -11,7 +11,9 @@ const HANDSHAKE_SIZE: usize = 1536;
 pub struct Handshake;
 
 impl Handshake {
-    pub fn perform_as_server(stream: &mut RtmpByteStream) -> Result<(), RtmpConnectionError> {
+    pub fn perform_as_server(
+        stream: &mut RtmpByteStream,
+    ) -> Result<(), RtmpConnectionError> {
         // C0 version
         let mut c0 = [0u8; 1];
         stream.read_exact(&mut c0)?;
@@ -56,7 +58,9 @@ impl Handshake {
         Ok(())
     }
 
-    pub fn perform_as_client(stream: &mut RtmpByteStream) -> Result<(), RtmpConnectionError> {
+    pub fn perform_as_client(
+        stream: &mut RtmpByteStream,
+    ) -> Result<(), RtmpConnectionError> {
         let send_time = Instant::now();
 
         // C0 version

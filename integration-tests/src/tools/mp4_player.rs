@@ -39,7 +39,5 @@ pub fn spawn(path: &Path) -> Result<Child> {
 /// to block until playback finishes.
 #[allow(dead_code)]
 pub fn play(path: &Path) -> Result<ExitStatus> {
-    spawn(path)?
-        .wait()
-        .context("Failed to wait on player child")
+    spawn(path)?.wait().context("Failed to wait on player child")
 }

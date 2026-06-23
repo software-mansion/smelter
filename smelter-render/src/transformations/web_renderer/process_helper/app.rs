@@ -28,8 +28,6 @@ impl libcef::App for App {
 impl App {
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Self {
-        Self {
-            state: Arc::new(Mutex::new(State::new())),
-        }
+        Self { state: Arc::new(Mutex::new(State::new())) }
     }
 }

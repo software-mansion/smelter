@@ -65,7 +65,9 @@ impl Mp4Output {
                 options.output_path.to_string_lossy(),
                 new_path_for_old_file.to_string_lossy()
             );
-            if let Err(err) = fs::rename(options.output_path.clone(), new_path_for_old_file) {
+            if let Err(err) =
+                fs::rename(options.output_path.clone(), new_path_for_old_file)
+            {
                 error!("Failed to rename existing output file. Error: {}", err);
             };
         }
@@ -133,7 +135,8 @@ impl Mp4Output {
             .name(format!("MP4 writer thread for output {output_ref}"))
             .spawn(move || {
                 let _span =
-                    tracing::info_span!("MP4 writer", output_id = output_ref.to_string()).entered();
+                    tracing::info_span!("MP4 writer", output_id = output_ref.to_string())
+                        .entered();
 
                 run_ffmpeg_output_thread(
                     &ctx,
@@ -143,16 +146,12 @@ impl Mp4Output {
                     audio_stream,
                     encoded_chunks_receiver,
                 );
-                ctx.event_emitter
-                    .emit(Event::OutputDone(output_ref.id().clone()));
+                ctx.event_emitter.emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing MP4 writer thread.");
             })
             .unwrap();
 
-        Ok(Mp4Output {
-            video: video_encoder,
-            audio: audio_encoder,
-        })
+        Ok(Mp4Output { video: video_encoder, audio: audio_encoder })
     }
 
     fn init_video_track(
@@ -241,14 +240,16 @@ impl Mp4Output {
         let sample_rate = options.sample_rate();
 
         let encoder = match options {
-            AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
-                output_ref.clone(),
-                AudioEncoderThreadOptions {
-                    ctx: ctx.clone(),
-                    encoder_options: options,
-                    chunks_sender: encoded_chunks_sender,
-                },
-            )?,
+            AudioEncoderOptions::FdkAac(options) => {
+                AudioEncoderThread::<FdkAacEncoder>::spawn(
+                    output_ref.clone(),
+                    AudioEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options,
+                        chunks_sender: encoded_chunks_sender,
+                    },
+                )?
+            }
             AudioEncoderOptions::Opus(_) => {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus));
             }
@@ -282,9 +283,9 @@ impl Mp4Output {
 
 impl Output for Mp4Output {
     fn audio(&self) -> Option<OutputAudio<'_>> {
-        self.audio.as_ref().map(|audio| OutputAudio {
-            samples_batch_sender: &audio.sample_batch_sender,
-        })
+        self.audio
+            .as_ref()
+            .map(|audio| OutputAudio { samples_batch_sender: &audio.sample_batch_sender })
     }
 
     fn video(&self) -> Option<OutputVideo<'_>> {
@@ -342,7 +343,9 @@ fn run_ffmpeg_output_thread(
                 };
 
                 stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
-                if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
+                if let Err(err) =
+                    write_chunk(chunk, stream, &mut output_ctx, timestamp_offset)
+                {
                     let try_write_trailer =
                         !matches!(err, OutputMp4RuntimeError::NoSpaceLeftOnDevice);
                     ctx.event_emitter.emit(Event::OutputError {
@@ -363,9 +366,9 @@ fn run_ffmpeg_output_thread(
         if eos_state.is_complete() {
             if let Err(err) = output_ctx.write_trailer() {
                 let err = match err {
-                    ffmpeg::Error::Other {
-                        errno: ffmpeg::error::ENOSPC,
-                    } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
+                    ffmpeg::Error::Other { errno: ffmpeg::error::ENOSPC } => {
+                        OutputMp4RuntimeError::NoSpaceLeftOnDevice
+                    }
                     err => OutputMp4RuntimeError::TrailerWriteError(err),
                 };
                 ctx.event_emitter.emit(Event::OutputError {
@@ -386,10 +389,7 @@ fn write_chunk(
     timestamp_offset: Duration,
 ) -> Result<(), OutputMp4RuntimeError> {
     let pts = chunk.pts.saturating_sub(timestamp_offset);
-    let dts = chunk
-        .dts
-        .map(|dts| dts.saturating_sub(timestamp_offset))
-        .unwrap_or(pts);
+    let dts = chunk.dts.map(|dts| dts.saturating_sub(timestamp_offset)).unwrap_or(pts);
 
     let mut packet = ffmpeg::Packet::copy(&chunk.data);
     packet.set_pts(Some(Rescale::rescale(
@@ -410,9 +410,9 @@ fn write_chunk(
     }
 
     packet.write(output_ctx).map_err(|err| match err {
-        ffmpeg_next::Error::Other {
-            errno: ffmpeg::error::ENOSPC,
-        } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
+        ffmpeg_next::Error::Other { errno: ffmpeg::error::ENOSPC } => {
+            OutputMp4RuntimeError::NoSpaceLeftOnDevice
+        }
         err => OutputMp4RuntimeError::PacketWriteError(err),
     })?;
     Ok(())
@@ -468,7 +468,8 @@ impl EosState {
     }
 
     fn is_complete(&self) -> bool {
-        (self.received_video_eos.unwrap_or(true) && self.received_audio_eos.unwrap_or(true))
+        (self.received_video_eos.unwrap_or(true)
+            && self.received_audio_eos.unwrap_or(true))
             || self.should_abort
     }
 }
@@ -481,7 +482,8 @@ struct Mp4OutputStatsSender {
 impl Mp4OutputStatsSender {
     fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
-            Mp4OutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+            Mp4OutputTrackStatsEvent::BytesSent(size)
+                .into_event(&self.output_ref, track_kind),
         );
     }
 }

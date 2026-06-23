@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serde_json::json;
 use tracing::error;
 
-use crate::{autocompletion::FilePathCompleter, players::InputPlayer, utils::resolve_path};
+use crate::{
+    autocompletion::FilePathCompleter, players::InputPlayer, utils::resolve_path,
+};
 
 const RTMP_INPUT_PATH: &str = "RTMP_INPUT_PATH";
 
@@ -46,11 +48,7 @@ impl Serialize for RtmpInput {
 impl From<RtmpInputOptions> for RtmpInput {
     fn from(value: RtmpInputOptions) -> Self {
         let name = RtmpInputBuilder::generate_name();
-        Self {
-            name,
-            options: value,
-            stream_handles: vec![],
-        }
+        Self { name, options: value, stream_handles: vec![] }
     }
 }
 
@@ -99,7 +97,9 @@ impl RtmpInput {
                     self.name,
                 );
 
-                println!("Start streaming H264 encoded video and AAC encoded audio to Smelter:");
+                println!(
+                    "Start streaming H264 encoded video and AAC encoded audio to Smelter:"
+                );
                 println!("{cmd}");
                 println!();
 
@@ -127,11 +127,7 @@ pub struct RtmpInputBuilder {
 impl RtmpInputBuilder {
     pub fn new() -> Self {
         let name = Self::generate_name();
-        Self {
-            name,
-            path: None,
-            player: InputPlayer::Ffmpeg,
-        }
+        Self { name, path: None, player: InputPlayer::Ffmpeg }
     }
 
     pub fn prompt(self) -> Result<Self> {
@@ -176,7 +172,8 @@ impl RtmpInputBuilder {
     fn prompt_player(self) -> Result<Self> {
         let player_options = vec![InputPlayer::Ffmpeg, InputPlayer::Manual];
         let player_selection =
-            Select::new("Select player (ESC for FFmpeg):", player_options).prompt_skippable()?;
+            Select::new("Select player (ESC for FFmpeg):", player_options)
+                .prompt_skippable()?;
         match player_selection {
             Some(player) => Ok(self.with_player(player)),
             None => Ok(self.with_player(InputPlayer::Ffmpeg)),
@@ -194,14 +191,7 @@ impl RtmpInputBuilder {
     }
 
     pub fn build(self) -> RtmpInput {
-        let options = RtmpInputOptions {
-            path: self.path,
-            player: self.player,
-        };
-        RtmpInput {
-            name: self.name,
-            options,
-            stream_handles: vec![],
-        }
+        let options = RtmpInputOptions { path: self.path, player: self.player };
+        RtmpInput { name: self.name, options, stream_handles: vec![] }
     }
 }

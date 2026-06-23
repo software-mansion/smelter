@@ -23,10 +23,7 @@ impl WebRendererNode {
     pub fn new(children_ids: Vec<ComponentId>, renderer: Arc<WebRenderer>) -> Self {
         Self {
             renderer,
-            embedding_data: EmbeddingData {
-                buffers: Vec::new(),
-                children_ids,
-            },
+            embedding_data: EmbeddingData { buffers: Vec::new(), children_ids },
         }
     }
 
@@ -37,14 +34,9 @@ impl WebRendererNode {
         target: &mut NodeTexture,
     ) {
         self.ensure_buffers(ctx.wgpu_ctx, sources);
-        if let Err(err) = self
-            .renderer
-            .render(ctx, sources, &self.embedding_data, target)
+        if let Err(err) = self.renderer.render(ctx, sources, &self.embedding_data, target)
         {
-            error!(
-                "Failed to run web render: {}",
-                ErrorStack::new(&err).into_string()
-            );
+            error!("Failed to run web render: {}", ErrorStack::new(&err).into_string());
         }
     }
 
@@ -69,9 +61,14 @@ impl WebRendererNode {
         }
     }
 
-    fn ensure_buffer_size(ctx: &WgpuCtx, buffer: &mut Arc<wgpu::Buffer>, texture: &wgpu::Texture) {
+    fn ensure_buffer_size(
+        ctx: &WgpuCtx,
+        buffer: &mut Arc<wgpu::Buffer>,
+        texture: &wgpu::Texture,
+    ) {
         let texture_size = texture.size();
-        let texture_size = (pad_to_256(4 * texture_size.width) * texture_size.height) as u64;
+        let texture_size =
+            (pad_to_256(4 * texture_size.width) * texture_size.height) as u64;
         if buffer.size() != texture_size {
             *buffer = Arc::new(texture.new_download_buffer(ctx));
         }

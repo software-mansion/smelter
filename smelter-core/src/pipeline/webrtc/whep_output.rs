@@ -12,14 +12,16 @@ use crate::{
         output::{Output, OutputAudio, OutputVideo},
         webrtc::whep_output::{
             state::{
-                WhepAudioConnectionOptions, WhepOutputConnectionStateOptions, WhepOutputsState,
-                WhepVideoConnectionOptions,
+                WhepAudioConnectionOptions, WhepOutputConnectionStateOptions,
+                WhepOutputsState, WhepVideoConnectionOptions,
             },
             track_task_audio::{
-                WhepAudioTrackThread, WhepAudioTrackThreadHandle, WhepAudioTrackThreadOptions,
+                WhepAudioTrackThread, WhepAudioTrackThreadHandle,
+                WhepAudioTrackThreadOptions,
             },
             track_task_video::{
-                WhepVideoTrackThread, WhepVideoTrackThreadHandle, WhepVideoTrackThreadOptions,
+                WhepVideoTrackThread, WhepVideoTrackThreadHandle,
+                WhepVideoTrackThreadOptions,
             },
         },
     },
@@ -104,7 +106,8 @@ impl WhepOutput {
         options: VideoEncoderOptions,
     ) -> Result<WhepVideoConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
-        let stats_sender = WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
+        let stats_sender =
+            WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
 
         let thread_handle = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
@@ -182,18 +185,21 @@ impl WhepOutput {
         options: AudioEncoderOptions,
     ) -> Result<WhepAudioConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
-        let stats_sender = WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
+        let stats_sender =
+            WhepOutputStatsSender::new(ctx.stats_sender.clone(), output_ref.clone());
 
         let thread_handle = match options.clone() {
-            AudioEncoderOptions::Opus(options) => WhepAudioTrackThread::<OpusEncoder>::spawn(
-                output_ref.clone(),
-                WhepAudioTrackThreadOptions {
-                    ctx: ctx.clone(),
-                    encoder_options: options.clone(),
-                    chunks_sender: sender,
-                    stats_sender,
-                },
-            )?,
+            AudioEncoderOptions::Opus(options) => {
+                WhepAudioTrackThread::<OpusEncoder>::spawn(
+                    output_ref.clone(),
+                    WhepAudioTrackThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: sender,
+                        stats_sender,
+                    },
+                )?
+            }
             AudioEncoderOptions::FdkAac(_options) => {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac));
             }
@@ -215,9 +221,9 @@ impl Drop for WhepOutput {
 
 impl Output for WhepOutput {
     fn audio(&self) -> Option<OutputAudio<'_>> {
-        self.audio.as_ref().map(|audio| OutputAudio {
-            samples_batch_sender: &audio.sample_batch_sender,
-        })
+        self.audio
+            .as_ref()
+            .map(|audio| OutputAudio { samples_batch_sender: &audio.sample_batch_sender })
     }
 
     fn video(&self) -> Option<OutputVideo<'_>> {
@@ -242,19 +248,21 @@ pub(crate) struct WhepOutputStatsSender {
 
 impl WhepOutputStatsSender {
     pub fn new(stats_sender: StatsSender, output_ref: Ref<OutputId>) -> Self {
-        Self {
-            stats_sender,
-            output_ref,
-        }
+        Self { stats_sender, output_ref }
     }
 
     fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
-            WhepOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
+            WhepOutputTrackStatsEvent::BytesSent(size)
+                .into_event(&self.output_ref, track_kind),
         );
     }
 
-    pub(super) fn peer_state_changed(&self, session_id: &Arc<str>, state: RTCPeerConnectionState) {
+    pub(super) fn peer_state_changed(
+        &self,
+        session_id: &Arc<str>,
+        state: RTCPeerConnectionState,
+    ) {
         self.stats_sender.send(
             WhepOutputStatsEvent::PeerStateChanged {
                 session_id: session_id.clone(),

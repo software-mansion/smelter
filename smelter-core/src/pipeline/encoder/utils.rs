@@ -24,7 +24,10 @@ pub(super) fn bitrate_from_resolution_framerate(
     }
 }
 
-pub(super) fn gop_size_from_ms_framerate(keyframe_interval: Duration, framerate: Framerate) -> u64 {
+pub(super) fn gop_size_from_ms_framerate(
+    keyframe_interval: Duration,
+    framerate: Framerate,
+) -> u64 {
     let framerate = framerate.num as f64 / framerate.den as f64;
     (framerate * keyframe_interval.as_secs_f64()).round() as u64
 }

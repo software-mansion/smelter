@@ -47,11 +47,7 @@ pub(crate) struct RtpNtpSyncPoint {
 
 impl RtpNtpSyncPoint {
     pub fn new(reference_time: Instant) -> Arc<Self> {
-        Self {
-            reference_time,
-            ntp_time: RwLock::new(None),
-        }
-        .into()
+        Self { reference_time, ntp_time: RwLock::new(None) }.into()
     }
 
     fn ntp_time_to_pts_secs(&self, ntp_time: u64) -> f64 {
@@ -89,7 +85,8 @@ impl RtpNtpSyncPoint {
         if guard.is_some() {
             return;
         }
-        let rtp_timestamp_diff = cmp_rolled_rtp_timestamp as f64 - sr_rolled_rtp_timestamp as f64;
+        let rtp_timestamp_diff =
+            cmp_rolled_rtp_timestamp as f64 - sr_rolled_rtp_timestamp as f64;
 
         let rtp_diff_secs = rtp_timestamp_diff / clock_rate as f64;
 
@@ -149,7 +146,11 @@ pub(crate) struct RtpTimestampSync {
 }
 
 impl RtpTimestampSync {
-    pub fn new(ntp_sync_point: Arc<RtpNtpSyncPoint>, clock_rate: u32, real_time: bool) -> Self {
+    pub fn new(
+        ntp_sync_point: Arc<RtpNtpSyncPoint>,
+        clock_rate: u32,
+        real_time: bool,
+    ) -> Self {
         Self {
             sync_offset_secs: None,
             target_offset_secs: None,
@@ -204,17 +205,19 @@ impl RtpTimestampSync {
         }
         self.last_max_recv_time = Some(Instant::now());
 
-        let rtp_timestamp_offset = *self.rtp_timestamp_offset.get_or_insert(rolled_timestamp);
+        let rtp_timestamp_offset =
+            *self.rtp_timestamp_offset.get_or_insert(rolled_timestamp);
 
         if rtp_timestamp_offset > rolled_timestamp {
-            warn!("RTP timestamp from before reference_time. Timestamp smaller than the offset.")
+            warn!(
+                "RTP timestamp from before reference_time. Timestamp smaller than the offset."
+            )
         }
 
         let timestamp = rolled_timestamp as f64 - rtp_timestamp_offset as f64;
         let pts_secs = (timestamp / self.clock_rate as f64) + sync_offset_secs;
 
-        self.first_reference_packet
-            .get_or_insert((rolled_timestamp, pts_secs));
+        self.first_reference_packet.get_or_insert((rolled_timestamp, pts_secs));
 
         if pts_secs < 0.0 {
             warn!(pts_secs, "PTS from before queue start");
@@ -236,16 +239,12 @@ impl RtpTimestampSync {
         else {
             return;
         };
-        let last_max = self
-            .last_max_rolled_rtp_timestamp
-            .unwrap_or(rolled_timestamp);
+        let last_max = self.last_max_rolled_rtp_timestamp.unwrap_or(rolled_timestamp);
         let rtp_delta_secs =
             rolled_timestamp.saturating_sub(last_max) as f64 / self.clock_rate as f64;
         let max_step_secs = rtp_delta_secs * CONVERGENCE_RATIO;
-        let new_sync_offset_secs = target.clamp(
-            sync_offset_secs - max_step_secs,
-            sync_offset_secs + max_step_secs,
-        );
+        let new_sync_offset_secs = target
+            .clamp(sync_offset_secs - max_step_secs, sync_offset_secs + max_step_secs);
         self.sync_offset_secs = Some(new_sync_offset_secs);
     }
 
@@ -273,7 +272,8 @@ impl RtpTimestampSync {
         }
 
         let wall_gap_secs = prev_recv_time.elapsed().as_secs_f64();
-        let rtp_gap_secs = (rolled_timestamp - prev_rolled) as f64 / self.clock_rate as f64;
+        let rtp_gap_secs =
+            (rolled_timestamp - prev_rolled) as f64 / self.clock_rate as f64;
         let skew_secs = wall_gap_secs - rtp_gap_secs;
         if skew_secs <= RESUME_SKEW_SNAP_THRESHOLD.as_secs_f64() {
             return;
@@ -289,7 +289,8 @@ impl RtpTimestampSync {
     }
 
     pub fn on_sender_report(&mut self, sr_ntp_time: u64, sr_rtp_timestamp: u32) {
-        let Some((ref_rolled_rtp_timestamp, ref_pts_secs)) = self.first_reference_packet else {
+        let Some((ref_rolled_rtp_timestamp, ref_pts_secs)) = self.first_reference_packet
+        else {
             return;
         };
 
@@ -308,7 +309,8 @@ impl RtpTimestampSync {
         // timestamp)
         let sr_pts_secs = self.ntp_sync_point.ntp_time_to_pts_secs(sr_ntp_time);
 
-        let rtp_timestamp_diff = ref_rolled_rtp_timestamp as f64 - sr_rolled_rtp_timestamp as f64;
+        let rtp_timestamp_diff =
+            ref_rolled_rtp_timestamp as f64 - sr_rolled_rtp_timestamp as f64;
         // PTS of the ref packet calculated based on a new sender report. We are shifting
         // pts of a sender report by diff calculated from their rtp timestamps
         let new_ref_pts_secs = sr_pts_secs + rtp_timestamp_diff / self.clock_rate as f64;

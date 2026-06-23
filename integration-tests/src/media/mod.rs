@@ -287,10 +287,7 @@ impl Asset {
                 })
             }
             Asset::Pattern { video, resolution } => Ok(ResolvedAsset {
-                kind: ResolvedKind::Pattern {
-                    video: *video,
-                    resolution: *resolution,
-                },
+                kind: ResolvedKind::Pattern { video: *video, resolution: *resolution },
                 video: Some(*video),
                 audio: None,
             }),
@@ -337,10 +334,7 @@ pub struct ResolvedAsset {
 
 pub enum ResolvedKind {
     File(PathBuf),
-    Pattern {
-        video: VideoCodec,
-        resolution: Resolution,
-    },
+    Pattern { video: VideoCodec, resolution: Resolution },
 }
 
 impl ResolvedAsset {
@@ -391,17 +385,9 @@ impl TestSample {
 #[derive(Clone, Debug)]
 pub enum Send {
     /// RTP over UDP. When both ports are None an error is returned on spawn.
-    RtpUdpClient {
-        ip: String,
-        video_port: Option<u16>,
-        audio_port: Option<u16>,
-    },
+    RtpUdpClient { ip: String, video_port: Option<u16>, audio_port: Option<u16> },
     /// RTP over TCP (GStreamer only).
-    RtpTcpClient {
-        ip: String,
-        video_port: Option<u16>,
-        audio_port: Option<u16>,
-    },
+    RtpTcpClient { ip: String, video_port: Option<u16>, audio_port: Option<u16> },
     /// RTMP push to a full URL.
     RtmpClient { url: String },
 }
@@ -430,11 +416,7 @@ pub struct SendRtpUdp {
 
 impl Default for SendRtpUdp {
     fn default() -> Self {
-        Self {
-            ip: "127.0.0.1".to_string(),
-            video_port: None,
-            audio_port: None,
-        }
+        Self { ip: "127.0.0.1".to_string(), video_port: None, audio_port: None }
     }
 }
 
@@ -473,11 +455,7 @@ pub struct SendRtpTcp {
 
 impl Default for SendRtpTcp {
     fn default() -> Self {
-        Self {
-            ip: "127.0.0.1".to_string(),
-            video_port: None,
-            audio_port: None,
-        }
+        Self { ip: "127.0.0.1".to_string(), video_port: None, audio_port: None }
     }
 }
 
@@ -517,16 +495,9 @@ pub struct RtpVideo {
 #[derive(Clone, Debug)]
 pub enum Receive {
     /// Bind a UDP socket and receive RTP packets.
-    RtpUdpListener {
-        video: Option<RtpVideo>,
-        audio_port: Option<u16>,
-    },
+    RtpUdpListener { video: Option<RtpVideo>, audio_port: Option<u16> },
     /// Connect (TCP client) to a remote RTP-over-TCP server.
-    RtpTcpClient {
-        ip: String,
-        video: Option<RtpVideo>,
-        audio_port: Option<u16>,
-    },
+    RtpTcpClient { ip: String, video: Option<RtpVideo>, audio_port: Option<u16> },
     /// Listen for an incoming RTMP push.
     RtmpListener { port: u16 },
     /// Play an HLS playlist from disk.
@@ -546,9 +517,7 @@ impl Receive {
         Receive::RtmpListener { port }
     }
     pub fn hls_player(playlist: impl Into<PathBuf>) -> Self {
-        Receive::HlsPlayer {
-            playlist: playlist.into(),
-        }
+        Receive::HlsPlayer { playlist: playlist.into() }
     }
 }
 
@@ -572,10 +541,7 @@ impl ReceiveRtpUdp {
 
 impl From<ReceiveRtpUdp> for Receive {
     fn from(b: ReceiveRtpUdp) -> Self {
-        Receive::RtpUdpListener {
-            video: b.video,
-            audio_port: b.audio_port,
-        }
+        Receive::RtpUdpListener { video: b.video, audio_port: b.audio_port }
     }
 }
 
@@ -589,11 +555,7 @@ pub struct ReceiveRtpTcp {
 
 impl Default for ReceiveRtpTcp {
     fn default() -> Self {
-        Self {
-            ip: "127.0.0.1".to_string(),
-            video: None,
-            audio_port: None,
-        }
+        Self { ip: "127.0.0.1".to_string(), video: None, audio_port: None }
     }
 }
 
@@ -614,11 +576,7 @@ impl ReceiveRtpTcp {
 
 impl From<ReceiveRtpTcp> for Receive {
     fn from(b: ReceiveRtpTcp) -> Self {
-        Receive::RtpTcpClient {
-            ip: b.ip,
-            video: b.video,
-            audio_port: b.audio_port,
-        }
+        Receive::RtpTcpClient { ip: b.ip, video: b.video, audio_port: b.audio_port }
     }
 }
 
@@ -679,11 +637,7 @@ pub struct MediaReceiver {
 
 impl MediaReceiver {
     pub fn new(from: impl Into<Receive>) -> Self {
-        Self {
-            from: from.into(),
-            backend: Backend::default(),
-            stdio: false,
-        }
+        Self { from: from.into(), backend: Backend::default(), stdio: false }
     }
     pub fn with_backend(mut self, backend: Backend) -> Self {
         self.backend = backend;

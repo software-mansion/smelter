@@ -34,10 +34,7 @@ impl DebugMessenger {
                 .create_debug_utils_messenger(&debug_messenger_create_info, None)?
         };
 
-        Ok(Self {
-            instance,
-            messenger,
-        })
+        Ok(Self { instance, messenger })
     }
 }
 
@@ -75,18 +72,11 @@ unsafe extern "system" fn debug_messenger_callback(
     }
 
     let message_id = unsafe {
-        callback_data
-            .message_id_name_as_c_str()
-            .unwrap_or(c"")
-            .to_string_lossy()
+        callback_data.message_id_name_as_c_str().unwrap_or(c"").to_string_lossy()
     };
 
-    let message = unsafe {
-        callback_data
-            .message_as_c_str()
-            .unwrap_or(c"")
-            .to_string_lossy()
-    };
+    let message =
+        unsafe { callback_data.message_as_c_str().unwrap_or(c"").to_string_lossy() };
 
     let t = format!("{message_types:?}");
     match message_severity {
@@ -178,9 +168,8 @@ impl QueryPool {
         mut profile: Option<vk::VideoProfileInfoKHR>,
         mut p_next: Option<T>,
     ) -> Result<Self, VulkanCommonError> {
-        let mut create_info = vk::QueryPoolCreateInfo::default()
-            .query_type(ty)
-            .query_count(count);
+        let mut create_info =
+            vk::QueryPoolCreateInfo::default().query_type(ty).query_count(count);
 
         if let Some(profile) = profile.as_mut() {
             create_info = create_info.push_next(profile);
@@ -209,8 +198,12 @@ impl QueryPool {
 
     pub(crate) fn begin_query(&self, buffer: vk::CommandBuffer) {
         unsafe {
-            self.device
-                .cmd_begin_query(buffer, self.pool, 0, vk::QueryControlFlags::empty())
+            self.device.cmd_begin_query(
+                buffer,
+                self.pool,
+                0,
+                vk::QueryControlFlags::empty(),
+            )
         }
     }
 

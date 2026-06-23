@@ -14,10 +14,7 @@ pub(crate) struct AudioSamplesBuffer {
 
 impl AudioSamplesBuffer {
     pub fn new(channels: AudioChannels) -> Self {
-        Self {
-            buffer: VecDeque::new(),
-            channels,
-        }
+        Self { buffer: VecDeque::new(), channels }
     }
 
     pub fn push_back(&mut self, batch: AudioSamples) {
@@ -45,7 +42,9 @@ impl AudioSamplesBuffer {
     pub fn read_samples(&mut self, sample_count: usize) -> AudioSamples {
         let mut samples = match self.channels {
             AudioChannels::Mono => AudioSamples::Mono(Vec::with_capacity(sample_count)),
-            AudioChannels::Stereo => AudioSamples::Stereo(Vec::with_capacity(sample_count)),
+            AudioChannels::Stereo => {
+                AudioSamples::Stereo(Vec::with_capacity(sample_count))
+            }
         };
 
         let mut samples_to_read = sample_count;
@@ -129,9 +128,6 @@ impl Adapter<'_, f64> for AudioSamplesBuffer {
     }
 
     fn frames(&self) -> usize {
-        self.buffer
-            .iter()
-            .map(|(batch, read_samples)| batch.len() - read_samples)
-            .sum()
+        self.buffer.iter().map(|(batch, read_samples)| batch.len() - read_samples).sum()
     }
 }

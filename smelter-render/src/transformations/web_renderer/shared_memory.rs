@@ -18,16 +18,10 @@ impl SharedMemory {
     }
 
     pub fn from_path(path: PathBuf, size: usize) -> Result<Self, SharedMemoryError> {
-        let inner = ShmemConf::new()
-            .flink(&path)
-            .size(size)
-            .force_create_flink()
-            .create()?;
+        let inner =
+            ShmemConf::new().flink(&path).size(size).force_create_flink().create()?;
 
-        Ok(Self {
-            inner: Some(inner),
-            path,
-        })
+        Ok(Self { inner: Some(inner), path })
     }
 
     pub fn to_path_string(&self) -> String {
@@ -65,12 +59,15 @@ impl SharedMemory {
         Ok(())
     }
 
-    fn init_shared_memory_folder(root_shmem_folder: &Path) -> Result<(), SharedMemoryError> {
+    fn init_shared_memory_folder(
+        root_shmem_folder: &Path,
+    ) -> Result<(), SharedMemoryError> {
         if root_shmem_folder.exists() {
             return Ok(());
         }
 
-        fs::create_dir_all(root_shmem_folder).map_err(SharedMemoryError::CreateShmemFolderFailed)
+        fs::create_dir_all(root_shmem_folder)
+            .map_err(SharedMemoryError::CreateShmemFolderFailed)
     }
 }
 
@@ -82,10 +79,7 @@ pub enum SharedMemoryError {
     #[error(
         "Tried to write outside of the shared memory bounds: {shared_memory_len} < {write_len}"
     )]
-    OutOfBounds {
-        shared_memory_len: usize,
-        write_len: usize,
-    },
+    OutOfBounds { shared_memory_len: usize, write_len: usize },
 
     #[error("Browser frame is no longer alive")]
     FrameNotAlive(#[from] libcef::FrameError),

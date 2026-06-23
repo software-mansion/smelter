@@ -48,10 +48,7 @@ fn yuv_test_gradient() {
                 children: vec![],
                 shader_id: shader_id.clone(),
                 shader_param: None,
-                size: Size {
-                    width: width as f32,
-                    height: height as f32,
-                },
+                size: Size { width: width as f32, height: height as f32 },
             })),
             Step::RenderWithSnapshot(Duration::ZERO),
         ],
@@ -92,10 +89,7 @@ fn yuv_test_uniform_color() {
                 id: None,
                 children: vec![],
                 direction: ViewChildrenDirection::Row,
-                position: Position::Static {
-                    width: None,
-                    height: None,
-                },
+                position: Position::Static { width: None, height: None },
                 transition: None,
                 overflow: Overflow::Hidden,
                 background_color: RGBAColor(50, 0, 0, 255),

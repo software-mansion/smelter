@@ -175,9 +175,11 @@ fn rtmp_video_only() {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::Avcc,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::Avcc,
                         },
                     )),
                     audio: None,
@@ -266,7 +268,8 @@ fn rtmp_video_and_audio() {
                     },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Ultrafast,
+                            preset:
+                                smelter_core::codecs::FfmpegH264EncoderPreset::Ultrafast,
                             bitrate: Some(smelter_core::codecs::VideoEncoderBitrate {
                                 average_bitrate: 4000000,
                                 max_bitrate: 5000000,
@@ -276,9 +279,11 @@ fn rtmp_video_and_audio() {
                                 width: 1280,
                                 height: 720,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::Avcc,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::Avcc,
                         },
                     )),
                     audio: Some(smelter_core::codecs::AudioEncoderOptions::FdkAac(
@@ -334,8 +339,10 @@ fn rtmp_vulkan_h264_encoder() {
                             },
                             bitrate: None,
                             keyframe_interval: Duration::from_millis(3000),
-                            preset: smelter_core::codecs::VulkanH264EncoderPreset::HighQuality,
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::Avcc,
+                            preset:
+                                smelter_core::codecs::VulkanH264EncoderPreset::HighQuality,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::Avcc,
                         },
                     )),
                     audio: None,
@@ -388,9 +395,11 @@ fn rtmp_vbr_bitrate() {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::Avcc,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::Avcc,
                         },
                     )),
                     audio: None,
@@ -437,9 +446,11 @@ fn rtmp_send_eos_when_any_of() {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::Avcc,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::Avcc,
                         },
                     )),
                     audio: None,
@@ -494,9 +505,11 @@ fn rtmp_send_eos_when_all_inputs() {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::Avcc,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::Avcc,
                         },
                     )),
                     audio: None,
@@ -610,10 +623,11 @@ fn rtp_udp_video_only() {
         CoreOutput {
             output_options: smelter_core::ProtocolOutputOptions::Rtp(
                 smelter_core::protocols::RtpOutputOptions {
-                    connection_options: smelter_core::protocols::RtpOutputConnectionOptions::Udp {
-                        port: smelter_core::protocols::Port(9002),
-                        ip: Arc::from("127.0.0.1"),
-                    },
+                    connection_options:
+                        smelter_core::protocols::RtpOutputConnectionOptions::Udp {
+                            port: smelter_core::protocols::Port(9002),
+                            ip: Arc::from("127.0.0.1"),
+                        },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
                             preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
@@ -623,9 +637,11 @@ fn rtp_udp_video_only() {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: None,
@@ -669,9 +685,11 @@ fn rtp_tcp_server_video() {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: None,
@@ -702,7 +720,9 @@ fn rtp_tcp_server_port_range() {
                 smelter_core::protocols::RtpOutputOptions {
                     connection_options:
                         smelter_core::protocols::RtpOutputConnectionOptions::TcpServer {
-                            port: smelter_core::protocols::PortOrRange::Range((9000, 9010)),
+                            port: smelter_core::protocols::PortOrRange::Range((
+                                9000, 9010,
+                            )),
                         },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
@@ -713,9 +733,11 @@ fn rtp_tcp_server_port_range() {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: None,
@@ -748,10 +770,11 @@ fn rtp_vp8_encoder() {
         CoreOutput {
             output_options: smelter_core::ProtocolOutputOptions::Rtp(
                 smelter_core::protocols::RtpOutputOptions {
-                    connection_options: smelter_core::protocols::RtpOutputConnectionOptions::Udp {
-                        port: smelter_core::protocols::Port(9002),
-                        ip: Arc::from("127.0.0.1"),
-                    },
+                    connection_options:
+                        smelter_core::protocols::RtpOutputConnectionOptions::Udp {
+                            port: smelter_core::protocols::Port(9002),
+                            ip: Arc::from("127.0.0.1"),
+                        },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegVp8(
                         smelter_core::codecs::FfmpegVp8EncoderOptions {
                             bitrate: Some(smelter_core::codecs::VideoEncoderBitrate {
@@ -795,10 +818,11 @@ fn rtp_vp9_encoder() {
         CoreOutput {
             output_options: smelter_core::ProtocolOutputOptions::Rtp(
                 smelter_core::protocols::RtpOutputOptions {
-                    connection_options: smelter_core::protocols::RtpOutputConnectionOptions::Udp {
-                        port: smelter_core::protocols::Port(9002),
-                        ip: Arc::from("127.0.0.1"),
-                    },
+                    connection_options:
+                        smelter_core::protocols::RtpOutputConnectionOptions::Udp {
+                            port: smelter_core::protocols::Port(9002),
+                            ip: Arc::from("127.0.0.1"),
+                        },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegVp9(
                         smelter_core::codecs::FfmpegVp9EncoderOptions {
                             resolution: smelter_render::Resolution {
@@ -807,7 +831,8 @@ fn rtp_vp9_encoder() {
                             },
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV444P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV444P,
                             raw_options: vec![],
                         },
                     )),
@@ -843,10 +868,11 @@ fn rtp_audio_opus() {
         CoreOutput {
             output_options: smelter_core::ProtocolOutputOptions::Rtp(
                 smelter_core::protocols::RtpOutputOptions {
-                    connection_options: smelter_core::protocols::RtpOutputConnectionOptions::Udp {
-                        port: smelter_core::protocols::Port(9002),
-                        ip: Arc::from("127.0.0.1"),
-                    },
+                    connection_options:
+                        smelter_core::protocols::RtpOutputConnectionOptions::Udp {
+                            port: smelter_core::protocols::Port(9002),
+                            ip: Arc::from("127.0.0.1"),
+                        },
                     video: None,
                     audio: Some(smelter_core::codecs::AudioEncoderOptions::Opus(
                         smelter_core::codecs::OpusEncoderOptions {
@@ -891,10 +917,11 @@ fn rtp_video_and_audio() {
         CoreOutput {
             output_options: smelter_core::ProtocolOutputOptions::Rtp(
                 smelter_core::protocols::RtpOutputOptions {
-                    connection_options: smelter_core::protocols::RtpOutputConnectionOptions::Udp {
-                        port: smelter_core::protocols::Port(9002),
-                        ip: Arc::from("127.0.0.1"),
-                    },
+                    connection_options:
+                        smelter_core::protocols::RtpOutputConnectionOptions::Udp {
+                            port: smelter_core::protocols::Port(9002),
+                            ip: Arc::from("127.0.0.1"),
+                        },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
                             preset: smelter_core::codecs::FfmpegH264EncoderPreset::Medium,
@@ -904,9 +931,11 @@ fn rtp_video_and_audio() {
                                 width: 1280,
                                 height: 720,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: Some(smelter_core::codecs::AudioEncoderOptions::Opus(
@@ -1044,9 +1073,11 @@ fn mp4_video_only() {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: None,
@@ -1127,9 +1158,11 @@ fn mp4_video_and_audio_with_ffmpeg_options() {
                                 width: 1280,
                                 height: 720,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![(Arc::from("crf"), Arc::from("23"))],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: Some(smelter_core::codecs::AudioEncoderOptions::FdkAac(
@@ -1177,8 +1210,10 @@ fn mp4_vulkan_encoder() {
                             },
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
-                            preset: smelter_core::codecs::VulkanH264EncoderPreset::HighQuality,
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            preset:
+                                smelter_core::codecs::VulkanH264EncoderPreset::HighQuality,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: None,
@@ -1225,10 +1260,7 @@ fn whip_video_only() {
                     video: Some(smelter_core::protocols::VideoWhipOptions {
                         encoder_preferences: vec![
                             smelter_core::protocols::WhipVideoEncoderOptions::Any(
-                                smelter_render::Resolution {
-                                    width: 1920,
-                                    height: 1080,
-                                },
+                                smelter_render::Resolution { width: 1920, height: 1080 },
                             ),
                         ],
                     }),
@@ -1334,7 +1366,8 @@ fn whip_audio_only() {
                             smelter_core::protocols::WhipAudioEncoderOptions::Opus(
                                 smelter_core::codecs::OpusEncoderOptions {
                                     channels: smelter_core::AudioChannels::Stereo,
-                                    preset: smelter_core::codecs::OpusEncoderPreset::Quality,
+                                    preset:
+                                        smelter_core::codecs::OpusEncoderPreset::Quality,
                                     sample_rate: 48000,
                                     forward_error_correction: true,
                                     packet_loss: 0,
@@ -1384,7 +1417,8 @@ fn whip_video_and_audio() {
                                     },
                                     bitrate: None,
                                     keyframe_interval: default_keyframe_interval(),
-                                    pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                                    pixel_format:
+                                        smelter_core::codecs::OutputPixelFormat::YUV420P,
                                     raw_options: vec![],
                                 },
                             ),
@@ -1455,9 +1489,11 @@ fn whep_video_only() {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: None,
@@ -1587,7 +1623,8 @@ fn whep_vp9_encoder() {
                                 max_bitrate: 6250000,
                             }),
                             keyframe_interval: default_keyframe_interval(),
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV422P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV422P,
                             raw_options: vec![],
                         },
                     )),
@@ -1653,16 +1690,19 @@ fn hls_video_only() {
                     max_playlist_size: None,
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Veryfast,
+                            preset:
+                                smelter_core::codecs::FfmpegH264EncoderPreset::Veryfast,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
                                 width: 1920,
                                 height: 1080,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: None,
@@ -1738,9 +1778,11 @@ fn hls_video_and_audio_with_playlist_size() {
                                 width: 1280,
                                 height: 720,
                             },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            pixel_format:
+                                smelter_core::codecs::OutputPixelFormat::YUV420P,
                             raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: Some(smelter_core::codecs::AudioEncoderOptions::FdkAac(
@@ -1783,8 +1825,10 @@ fn hls_vulkan_encoder() {
                             },
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
-                            preset: smelter_core::codecs::VulkanH264EncoderPreset::HighQuality,
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                            preset:
+                                smelter_core::codecs::VulkanH264EncoderPreset::HighQuality,
+                            bitstream_format:
+                                smelter_core::codecs::H264BitstreamFormat::AnnexB,
                         },
                     )),
                     audio: None,

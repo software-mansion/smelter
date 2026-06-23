@@ -98,19 +98,12 @@ where
         options: Encoder::Options,
         source: crossbeam_channel::Receiver<PipelineEvent<Frame>>,
     ) -> Result<(Self, VideoEncoderStreamContext), EncoderInitError> {
-        let (keyframe_request_sender, keyframe_request_receiver) = crossbeam_channel::unbounded();
+        let (keyframe_request_sender, keyframe_request_receiver) =
+            crossbeam_channel::unbounded();
         let (encoder, config) = Encoder::new(&ctx, options)?;
         Ok((
-            Self {
-                encoder,
-                source,
-                eos_sent: false,
-                keyframe_request_receiver,
-            },
-            VideoEncoderStreamContext {
-                keyframe_request_sender,
-                config,
-            },
+            Self { encoder, source, eos_sent: false, keyframe_request_receiver },
+            VideoEncoderStreamContext { keyframe_request_sender, config },
         ))
     }
 
@@ -137,7 +130,9 @@ where
                     Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
                         let chunks = self.encoder.poll_output();
                         if !chunks.is_empty() {
-                            return Some(chunks.into_iter().map(PipelineEvent::Data).collect());
+                            return Some(
+                                chunks.into_iter().map(PipelineEvent::Data).collect(),
+                            );
                         }
                     }
                     Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break None,
@@ -195,21 +190,14 @@ where
         let (encoder, config) = Encoder::new(&ctx, options)?;
 
         Ok((
-            Self {
-                encoder,
-                source,
-                packet_loss_receiver,
-                eos_sent: false,
-            },
-            AudioEncoderStreamContext {
-                packet_loss_sender,
-                config,
-            },
+            Self { encoder, source, packet_loss_receiver, eos_sent: false },
+            AudioEncoderStreamContext { packet_loss_sender, config },
         ))
     }
 
     fn updated_packet_loss(&mut self) -> Option<i32> {
-        let packet_loss_changed = self.packet_loss_receiver.has_changed().unwrap_or(false);
+        let packet_loss_changed =
+            self.packet_loss_receiver.has_changed().unwrap_or(false);
         match packet_loss_changed {
             true => Some(*self.packet_loss_receiver.borrow_and_update()),
             false => None,

@@ -5,9 +5,9 @@ use integration_tests_macros::render_test;
 use smelter_render::{
     InputId, Resolution,
     scene::{
-        AbsolutePosition, Component, HorizontalAlign, HorizontalPosition, InputStreamComponent,
-        Position, RGBAColor, RescalerComponent, TextComponent, TextDimensions, TilesComponent,
-        VerticalAlign, VerticalPosition, ViewComponent,
+        AbsolutePosition, Component, HorizontalAlign, HorizontalPosition,
+        InputStreamComponent, Position, RGBAColor, RescalerComponent, TextComponent,
+        TextDimensions, TilesComponent, VerticalAlign, VerticalPosition, ViewComponent,
     },
 };
 
@@ -42,10 +42,7 @@ pub const TESTS: &[RenderTest] = &[
     VIDEO_CALL_WITH_LABELS,
 ];
 
-const PORTRAIT_RESOLUTION: Resolution = Resolution {
-    width: 360,
-    height: 640,
-};
+const PORTRAIT_RESOLUTION: Resolution = Resolution { width: 360, height: 640 };
 
 const BG: RGBAColor = RGBAColor(0x33, 0x33, 0x33, 255);
 
@@ -54,9 +51,7 @@ fn inputs(count: usize) -> Vec<TestInput> {
 }
 
 fn portrait_inputs(count: usize) -> Vec<TestInput> {
-    (1..=count)
-        .map(|i| TestInput::new_with_resolution(i, PORTRAIT_RESOLUTION))
-        .collect()
+    (1..=count).map(|i| TestInput::new_with_resolution(i, PORTRAIT_RESOLUTION)).collect()
 }
 
 fn input_streams(count: usize) -> Vec<Component> {

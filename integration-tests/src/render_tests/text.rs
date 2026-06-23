@@ -3,8 +3,8 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Result;
 use integration_tests_macros::render_test;
 use smelter_render::scene::{
-    Component, HorizontalAlign, Overflow, RGBAColor, TextComponent, TextDimensions, TextWeight,
-    TextWrap, ViewComponent,
+    Component, HorizontalAlign, Overflow, RGBAColor, TextComponent, TextDimensions,
+    TextWeight, TextWrap, ViewComponent,
 };
 
 use crate::render_tests::{RenderTest, harness::test_case::TestRunner};
@@ -47,10 +47,7 @@ fn align_center() -> Result<()> {
         line_height: 100.0,
         font_family: Arc::from("Inter"),
         align: HorizontalAlign::Center,
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 200.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 200.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -66,10 +63,7 @@ fn align_right() -> Result<()> {
         line_height: 100.0,
         font_family: Arc::from("Inter"),
         align: HorizontalAlign::Right,
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 200.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 200.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -86,10 +80,7 @@ fn bold_text() -> Result<()> {
         font_family: Arc::from("Inter"),
         align: HorizontalAlign::Right,
         weight: TextWeight::Bold,
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 200.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 200.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -100,14 +91,13 @@ fn bold_text() -> Result<()> {
 fn dimensions_fitted_column_with_long_text() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME);
     runner.update_scene(view_with(TextComponent {
-        text: Arc::from("Example long text that should be longer that underlaying texture."),
+        text: Arc::from(
+            "Example long text that should be longer that underlaying texture.",
+        ),
         font_size: 30.0,
         line_height: 30.0,
         font_family: Arc::from("Inter"),
-        dimensions: TextDimensions::FittedColumn {
-            width: 300.0,
-            max_height: 4320.0,
-        },
+        dimensions: TextDimensions::FittedColumn { width: 300.0, max_height: 4320.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -122,10 +112,7 @@ fn dimensions_fitted_column_with_short_text() -> Result<()> {
         font_size: 30.0,
         line_height: 30.0,
         font_family: Arc::from("Inter"),
-        dimensions: TextDimensions::FittedColumn {
-            width: 300.0,
-            max_height: 4320.0,
-        },
+        dimensions: TextDimensions::FittedColumn { width: 300.0, max_height: 4320.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -155,10 +142,7 @@ fn dimensions_fixed() -> Result<()> {
         font_size: 100.0,
         line_height: 100.0,
         font_family: Arc::from("Inter"),
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 200.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 200.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -173,10 +157,7 @@ fn dimensions_fixed_with_overflow() -> Result<()> {
         font_size: 120.0,
         line_height: 120.0,
         font_family: Arc::from("Inter"),
-        dimensions: TextDimensions::Fixed {
-            width: 640.0,
-            height: 80.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 640.0, height: 80.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -194,10 +175,7 @@ fn red_text_on_blue_background() -> Result<()> {
         wrap: TextWrap::Word,
         color: RGBAColor(255, 0, 0, 255),
         background_color: RGBAColor(0, 0, 255, 255),
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 500.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 500.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -213,10 +191,7 @@ fn wrap_glyph() -> Result<()> {
         line_height: 50.0,
         font_family: Arc::from("Inter"),
         wrap: TextWrap::Glyph,
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 500.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 500.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -232,10 +207,7 @@ fn wrap_none() -> Result<()> {
         line_height: 50.0,
         font_family: Arc::from("Inter"),
         wrap: TextWrap::None,
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 500.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 500.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -251,10 +223,7 @@ fn wrap_word() -> Result<()> {
         line_height: 50.0,
         font_family: Arc::from("Inter"),
         wrap: TextWrap::Word,
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 500.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 500.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
@@ -270,10 +239,7 @@ fn remove_text_in_view() -> Result<()> {
         line_height: 100.0,
         font_family: Arc::from("Inter"),
         align: HorizontalAlign::Center,
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 200.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 200.0 },
         ..Default::default()
     }));
     runner.update_scene(Component::View(ViewComponent::default()));
@@ -289,10 +255,7 @@ fn remove_text_as_root() -> Result<()> {
         font_size: 100.0,
         line_height: 100.0,
         font_family: Arc::from("Inter"),
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 200.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 200.0 },
         ..Default::default()
     }));
     runner.update_scene(Component::View(ViewComponent::default()));
@@ -308,10 +271,7 @@ fn text_as_root() -> Result<()> {
         font_size: 100.0,
         line_height: 100.0,
         font_family: Arc::from("Inter"),
-        dimensions: TextDimensions::Fixed {
-            width: 1000.0,
-            height: 200.0,
-        },
+        dimensions: TextDimensions::Fixed { width: 1000.0, height: 200.0 },
         ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);

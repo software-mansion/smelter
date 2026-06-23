@@ -234,7 +234,10 @@ impl AudioTag {
         }
     }
 
-    fn parse_aac(data: Bytes, channels: AudioChannels) -> Result<Self, FlvAudioTagParseError> {
+    fn parse_aac(
+        data: Bytes,
+        channels: AudioChannels,
+    ) -> Result<Self, FlvAudioTagParseError> {
         if data.len() < 2 {
             return Err(FlvAudioTagParseError::TooShort);
         }
@@ -258,7 +261,8 @@ impl AudioTag {
         let sound_type = self.channels.into_raw();
 
         // 4 bits format, 2 bits sound rate, 1 bit sample size, 1 bit sound type
-        let first_byte = (sound_format << 4) | (sound_rate << 2) | (sample_size << 1) | sound_type;
+        let first_byte =
+            (sound_format << 4) | (sound_rate << 2) | (sample_size << 1) | sound_type;
         match self.codec {
             LegacyFlvAudioCodec::Aac => Ok(self.serialize_aac(first_byte)?),
             _ => {

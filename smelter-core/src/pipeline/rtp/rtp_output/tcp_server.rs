@@ -18,7 +18,9 @@ use crate::{
 
 use super::RtpBinaryPacketStream;
 
-pub(super) fn tcp_socket(port: PortOrRange) -> Result<(socket2::Socket, Port), OutputInitError> {
+pub(super) fn tcp_socket(
+    port: PortOrRange,
+) -> Result<(socket2::Socket, Port), OutputInitError> {
     let socket = socket2::Socket::new(
         socket2::Domain::IPV4,
         socket2::Type::STREAM,
@@ -38,12 +40,12 @@ pub(super) fn run_tcp_sender_thread(
     packet_stream: RtpBinaryPacketStream,
 ) {
     // make accept non blocking so we have a chance to handle should_close value
-    socket
-        .set_nonblocking(true)
-        .expect("Cannot set non-blocking");
+    socket.set_nonblocking(true).expect("Cannot set non-blocking");
 
     let mut connected_socket = None;
-    while !should_close.load(std::sync::atomic::Ordering::Relaxed) && connected_socket.is_none() {
+    while !should_close.load(std::sync::atomic::Ordering::Relaxed)
+        && connected_socket.is_none()
+    {
         // accept only one connection at the time
         let Ok((socket, _)) = socket.accept() else {
             thread::sleep(Duration::from_millis(50));
@@ -77,14 +79,12 @@ impl From<BindToPortError> for OutputInitError {
     fn from(value: BindToPortError) -> Self {
         match value {
             BindToPortError::SocketBind(err) => OutputInitError::SocketError(err),
-            BindToPortError::PortAlreadyInUse(port) => OutputInitError::PortAlreadyInUse(port),
-            BindToPortError::AllPortsAlreadyInUse {
-                lower_bound,
-                upper_bound,
-            } => OutputInitError::AllPortsAlreadyInUse {
-                lower_bound,
-                upper_bound,
-            },
+            BindToPortError::PortAlreadyInUse(port) => {
+                OutputInitError::PortAlreadyInUse(port)
+            }
+            BindToPortError::AllPortsAlreadyInUse { lower_bound, upper_bound } => {
+                OutputInitError::AllPortsAlreadyInUse { lower_bound, upper_bound }
+            }
         }
     }
 }
@@ -98,16 +98,11 @@ impl TcpWritePacketStream {
     fn new(socket: socket2::Socket, should_close: Arc<AtomicBool>) -> Self {
         // Timeout to make sure we are not left with unregistered
         // connections that are still maintained by a client side.
-        socket
-            .set_nonblocking(false)
-            .expect("Cannot set blocking tcp output stream");
+        socket.set_nonblocking(false).expect("Cannot set blocking tcp output stream");
         socket
             .set_write_timeout(Some(Duration::from_secs(30)))
             .expect("Cannot set write timeout");
-        Self {
-            socket,
-            should_close,
-        }
+        Self { socket, should_close }
     }
 
     fn write_packet(&mut self, data: bytes::Bytes) -> io::Result<()> {
@@ -127,7 +122,8 @@ impl TcpWritePacketStream {
                     written_bytes += bytes;
                 }
                 Err(err) => {
-                    let should_close = self.should_close.load(std::sync::atomic::Ordering::Relaxed);
+                    let should_close =
+                        self.should_close.load(std::sync::atomic::Ordering::Relaxed);
                     match err.kind() {
                         std::io::ErrorKind::WouldBlock if !should_close => {
                             continue;

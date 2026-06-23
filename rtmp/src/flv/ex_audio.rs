@@ -77,7 +77,10 @@ impl TryFrom<ExAudioFourCc> for RtmpAudioCodec {
         match four_cc {
             ExAudioFourCc::Aac => Ok(RtmpAudioCodec::Aac),
             ExAudioFourCc::Opus => Ok(RtmpAudioCodec::Opus),
-            ExAudioFourCc::Mp3 | ExAudioFourCc::Flac | ExAudioFourCc::Ac3 | ExAudioFourCc::Eac3 => {
+            ExAudioFourCc::Mp3
+            | ExAudioFourCc::Flac
+            | ExAudioFourCc::Ac3
+            | ExAudioFourCc::Eac3 => {
                 Err(AudioCodecConversionError::UnsupportedEnhancedFlv(four_cc))
             }
         }
@@ -152,17 +155,13 @@ impl ExAudioTag {
         let packet_type = ExAudioPacketType::from_raw(data[0] & 0b00001111)?;
 
         // Process ModEx to resolve the final packet type and collect modifiers.
-        let (packet_type, rest, timestamp_offset_nanos) = if packet_type == ExAudioPacketType::ModEx
-        {
-            let result = resolve_mod_ex(data.slice(1..))?;
-            (
-                result.packet_type,
-                result.remaining,
-                result.timestamp_offset_nanos,
-            )
-        } else {
-            (packet_type, data.slice(1..), None)
-        };
+        let (packet_type, rest, timestamp_offset_nanos) =
+            if packet_type == ExAudioPacketType::ModEx {
+                let result = resolve_mod_ex(data.slice(1..))?;
+                (result.packet_type, result.remaining, result.timestamp_offset_nanos)
+            } else {
+                (packet_type, data.slice(1..), None)
+            };
 
         if packet_type == ExAudioPacketType::Multitrack {
             return Err(FlvAudioTagParseError::UnsupportedPacketType(
@@ -181,16 +180,16 @@ impl ExAudioTag {
             ExAudioPacketType::SequenceStart => ExAudioPacket::SequenceStart(body_data),
             ExAudioPacketType::CodedFrames => ExAudioPacket::CodedFrames(body_data),
             ExAudioPacketType::SequenceEnd => ExAudioPacket::SequenceEnd,
-            ExAudioPacketType::MultichannelConfig => ExAudioPacket::MultichannelConfig(body_data),
+            ExAudioPacketType::MultichannelConfig => {
+                ExAudioPacket::MultichannelConfig(body_data)
+            }
             ExAudioPacketType::Multitrack => unreachable!("Multitrack is handled above"),
-            ExAudioPacketType::ModEx => unreachable!("ModEx should have been resolved above"),
+            ExAudioPacketType::ModEx => {
+                unreachable!("ModEx should have been resolved above")
+            }
         };
 
-        Ok(ExAudioTag {
-            four_cc,
-            packet,
-            timestamp_offset_nanos,
-        })
+        Ok(ExAudioTag { four_cc, packet, timestamp_offset_nanos })
     }
 
     pub(super) fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
@@ -202,11 +201,8 @@ impl ExAudioTag {
         };
 
         let has_mod_ex = self.timestamp_offset_nanos.is_some();
-        let header_packet_type = if has_mod_ex {
-            ExAudioPacketType::ModEx
-        } else {
-            wire_packet_type
-        };
+        let header_packet_type =
+            if has_mod_ex { ExAudioPacketType::ModEx } else { wire_packet_type };
 
         let first_byte = (EX_AUDIO_SOUND_FORMAT << 4) | header_packet_type.into_raw();
 
@@ -302,10 +298,7 @@ mod tests {
         ]);
 
         let err = ExAudioTag::parse(data).unwrap_err();
-        assert!(matches!(
-            err,
-            FlvAudioTagParseError::UnsupportedPacketType(5)
-        ));
+        assert!(matches!(err, FlvAudioTagParseError::UnsupportedPacketType(5)));
     }
 
     #[test]

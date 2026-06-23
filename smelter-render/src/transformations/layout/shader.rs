@@ -44,18 +44,16 @@ impl LayoutShader {
         let params_bind_groups = ParamsBindGroups::new(wgpu_ctx);
 
         let pipeline_layout =
-            wgpu_ctx
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: LABEL,
-                    bind_group_layouts: &[
-                        Some(&wgpu_ctx.format.single_texture_layout),
-                        Some(&params_bind_groups.bind_group_1_layout),
-                        Some(&params_bind_groups.bind_group_2_layout),
-                        Some(&sampler.bind_group_layout),
-                    ],
-                    immediate_size: 16,
-                });
+            wgpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: LABEL,
+                bind_group_layouts: &[
+                    Some(&wgpu_ctx.format.single_texture_layout),
+                    Some(&params_bind_groups.bind_group_1_layout),
+                    Some(&params_bind_groups.bind_group_2_layout),
+                    Some(&sampler.bind_group_layout),
+                ],
+                immediate_size: 16,
+            });
 
         let pipeline = common_pipeline::create_render_pipeline(
             "Layout node",
@@ -65,11 +63,7 @@ impl LayoutShader {
             wgpu_ctx.default_view_format(),
         );
 
-        Ok(Self {
-            pipeline,
-            sampler,
-            params_bind_groups,
-        })
+        Ok(Self { pipeline, sampler, params_bind_groups })
     }
 
     pub fn render(
@@ -81,9 +75,8 @@ impl LayoutShader {
         target: &NodeTextureState,
         encoder: &mut wgpu::CommandEncoder,
     ) {
-        let layout_infos = self
-            .params_bind_groups
-            .update(wgpu_ctx, output_resolution, layouts);
+        let layout_infos =
+            self.params_bind_groups.update(wgpu_ctx, output_resolution, layouts);
 
         if layout_infos.len() != texture_views.len() {
             error!(
@@ -96,43 +89,39 @@ impl LayoutShader {
         let input_texture_bgs: Vec<wgpu::BindGroup> = texture_views
             .iter()
             .map(|view| {
-                wgpu_ctx
-                    .device
-                    .create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: &wgpu_ctx.format.single_texture_layout,
-                        label: LABEL,
-                        entries: &[wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(view),
-                        }],
-                    })
+                wgpu_ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &wgpu_ctx.format.single_texture_layout,
+                    label: LABEL,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(view),
+                    }],
+                })
             })
             .collect();
 
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: LABEL,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    view: target.view(),
-                    resolve_target: None,
-                    depth_slice: None,
-                })],
-                // TODO: depth stencil attachments
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut render_pass =
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: LABEL,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        view: target.view(),
+                        resolve_target: None,
+                        depth_slice: None,
+                    })],
+                    // TODO: depth stencil attachments
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
 
-            for (index, (texture_bg, layout_info)) in input_texture_bgs
-                .iter()
-                .zip(layout_infos.iter())
-                .take(100)
-                .enumerate()
+            for (index, (texture_bg, layout_info)) in
+                input_texture_bgs.iter().zip(layout_infos.iter()).take(100).enumerate()
             {
                 render_pass.set_pipeline(&self.pipeline);
 
@@ -140,7 +129,11 @@ impl LayoutShader {
 
                 render_pass.set_bind_group(0, texture_bg, &[]);
                 render_pass.set_bind_group(1, &self.params_bind_groups.bind_group_1, &[]);
-                render_pass.set_bind_group(2, &self.params_bind_groups.bind_groups_2[index].0, &[]);
+                render_pass.set_bind_group(
+                    2,
+                    &self.params_bind_groups.bind_groups_2[index].0,
+                    &[],
+                );
                 render_pass.set_bind_group(3, &self.sampler.bind_group, &[]);
 
                 wgpu_ctx.plane.draw(&mut render_pass);

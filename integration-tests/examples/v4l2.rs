@@ -7,10 +7,7 @@ use integration_tests::{
     media::{MediaReceiver, Receive, VideoCodec},
 };
 
-const VIDEO_RESOLUTION: Resolution = Resolution {
-    width: 1920,
-    height: 1080,
-};
+const VIDEO_RESOLUTION: Resolution = Resolution { width: 1920, height: 1080 };
 
 const OUTPUT_PORT: u16 = 8002;
 
@@ -19,7 +16,8 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264)).spawn()?;
+    MediaReceiver::new(Receive::rtp_udp_listener().video(OUTPUT_PORT, VideoCodec::H264))
+        .spawn()?;
 
     examples::post(
         "input/input_1/register",

@@ -4,7 +4,9 @@ use tracing::info;
 use rand::Rng;
 use webrtc::rtp::{
     self,
-    codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader, vp9::Vp9Payloader},
+    codecs::{
+        h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader, vp9::Vp9Payloader,
+    },
 };
 
 use crate::prelude::*;
@@ -105,11 +107,7 @@ where
     Source: Iterator<Item = PipelineEvent<EncodedOutputChunk>>,
 {
     pub fn new(options: PayloaderOptions, source: Source) -> Self {
-        Self {
-            payloader: Payloader::new(options),
-            source,
-            eos_sent: false,
-        }
+        Self { payloader: Payloader::new(options), source, eos_sent: false }
     }
 }
 
@@ -123,10 +121,7 @@ where
         match self.source.next() {
             Some(PipelineEvent::Data(chunk)) => match self.payloader.payload(chunk) {
                 Ok(packets) => Some(
-                    packets
-                        .into_iter()
-                        .map(|p| Ok(PipelineEvent::Data(p)))
-                        .collect(),
+                    packets.into_iter().map(|p| Ok(PipelineEvent::Data(p))).collect(),
                 ),
                 Err(err) => Some(vec![Err(err)]),
             },

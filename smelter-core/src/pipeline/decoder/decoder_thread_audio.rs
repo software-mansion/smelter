@@ -34,7 +34,9 @@ where
     type SpawnOutput = DecoderThreadHandle;
     type SpawnError = DecoderInitError;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let AudioDecoderThreadOptions {
             ctx,
             decoder_options,
@@ -45,7 +47,9 @@ where
         let (chunk_sender, chunk_receiver) = duration_bounded(buffer_size);
 
         let chunk_stream = chunk_receiver.into_iter().map(|event| match event {
-            PipelineEvent::Data(chunk) => PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)),
+            PipelineEvent::Data(chunk) => {
+                PipelineEvent::Data(EncodedInputEvent::Chunk(chunk))
+            }
             PipelineEvent::EOS => PipelineEvent::EOS,
         });
 
@@ -64,7 +68,9 @@ where
     fn run(self) {
         for event in self.stream {
             if self.samples_sender.send(event).is_err() {
-                warn!("Failed to send decoded audio samples from decoder. Channel closed.");
+                warn!(
+                    "Failed to send decoded audio samples from decoder. Channel closed."
+                );
                 return;
             }
         }

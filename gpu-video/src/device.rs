@@ -41,17 +41,13 @@ pub(crate) const REQUIRED_EXTENSIONS: &[&CStr] =
 
 pub(crate) const DECODE_EXTENSIONS: &[&CStr] = &[vk::KHR_VIDEO_DECODE_QUEUE_NAME];
 
-pub(crate) const DECODE_CODEC_EXTENSIONS: &[&CStr] = &[
-    vk::KHR_VIDEO_DECODE_H264_NAME,
-    vk::KHR_VIDEO_DECODE_H265_NAME,
-];
+pub(crate) const DECODE_CODEC_EXTENSIONS: &[&CStr] =
+    &[vk::KHR_VIDEO_DECODE_H264_NAME, vk::KHR_VIDEO_DECODE_H265_NAME];
 
 pub(crate) const ENCODE_EXTENSIONS: &[&CStr] = &[vk::KHR_VIDEO_ENCODE_QUEUE_NAME];
 
-pub(crate) const ENCODE_CODEC_EXTENSIONS: &[&CStr] = &[
-    vk::KHR_VIDEO_ENCODE_H264_NAME,
-    vk::KHR_VIDEO_ENCODE_H265_NAME,
-];
+pub(crate) const ENCODE_CODEC_EXTENSIONS: &[&CStr] =
+    &[vk::KHR_VIDEO_ENCODE_H264_NAME, vk::KHR_VIDEO_ENCODE_H265_NAME];
 
 /// Describes a [`VulkanDevice`].
 /// Used by [`VulkanAdapter::create_device`]
@@ -76,10 +72,7 @@ pub struct Rational {
 
 impl From<u32> for Rational {
     fn from(value: u32) -> Self {
-        Rational {
-            numerator: value,
-            denominator: std::num::NonZeroU32::new(1).unwrap(),
-        }
+        Rational { numerator: value, denominator: std::num::NonZeroU32::new(1).unwrap() }
     }
 }
 
@@ -140,11 +133,7 @@ impl From<&h264_reader::nal::sps::SeqParameterSet> for ColorSpace {
             return ColorSpace::Unspecified;
         };
 
-        match (
-            cd.colour_primaries,
-            cd.transfer_characteristics,
-            cd.matrix_coefficients,
-        ) {
+        match (cd.colour_primaries, cd.transfer_characteristics, cd.matrix_coefficients) {
             (1, 1, 1) => ColorSpace::BT709,
             (6, 6, 6) => ColorSpace::BT601Ntsc,
             (5, 6, 5) => ColorSpace::BT601Pal,
@@ -308,11 +297,15 @@ impl VulkanDevice {
             .collect::<Vec<_>>();
 
         #[cfg(feature = "wgpu")]
-        append_wgpu_device_extensions(&adapter, descriptor.wgpu_features, &mut required_extensions);
+        append_wgpu_device_extensions(
+            &adapter,
+            descriptor.wgpu_features,
+            &mut required_extensions,
+        );
 
         #[cfg(all(feature = "quicksync", target_os = "linux"))]
         if adapter.supports_quicksync_dmabuf_interop() {
-            for extension in crate::dmabuf::REQUIRED_SYNC_VULKAN_DEVICE_EXTENSIONS {
+            for extension in crate::dmabuf::REQUIRED_VULKAN_DEVICE_EXTENSIONS {
                 push_extension(&mut required_extensions, extension);
             }
         }
@@ -320,10 +313,8 @@ impl VulkanDevice {
         #[cfg(not(feature = "wgpu"))]
         required_extensions.push(ash::khr::timeline_semaphore::NAME);
 
-        let required_extensions_as_ptrs = required_extensions
-            .iter()
-            .map(|e| e.as_ptr())
-            .collect::<Vec<_>>();
+        let required_extensions_as_ptrs =
+            required_extensions.iter().map(|e| e.as_ptr()).collect::<Vec<_>>();
 
         let VulkanAdapter {
             physical_device,
@@ -335,18 +326,18 @@ impl VulkanDevice {
         } = adapter;
 
         let queue_create_infos = queue_indices.queue_create_infos();
-        let queue_create_infos = queue_create_infos
-            .iter()
-            .map(|q| q.info())
-            .collect::<Vec<_>>();
+        let queue_create_infos =
+            queue_create_infos.iter().map(|q| q.info()).collect::<Vec<_>>();
 
         let mut vk_synch_2_feature =
             vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
         let mut vk_video_maintenance1_feature =
-            vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default().video_maintenance1(true);
+            vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default()
+                .video_maintenance1(true);
 
-        let mut vk_descriptor_feature = vk::PhysicalDeviceDescriptorIndexingFeatures::default()
-            .descriptor_binding_partially_bound(true);
+        let mut vk_descriptor_feature =
+            vk::PhysicalDeviceDescriptorIndexingFeatures::default()
+                .descriptor_binding_partially_bound(true);
 
         let device_create_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_create_infos)
@@ -368,17 +359,18 @@ impl VulkanDevice {
 
         #[cfg(not(feature = "wgpu"))]
         let mut timeline_semaphore_feature =
-            vk::PhysicalDeviceTimelineSemaphoreFeatures::default().timeline_semaphore(true);
+            vk::PhysicalDeviceTimelineSemaphoreFeatures::default()
+                .timeline_semaphore(true);
         #[cfg(not(feature = "wgpu"))]
-        let device_create_info = device_create_info.push_next(&mut timeline_semaphore_feature);
+        let device_create_info =
+            device_create_info.push_next(&mut timeline_semaphore_feature);
 
         let device = unsafe {
-            instance
-                .instance
-                .create_device(physical_device, &device_create_info, None)?
+            instance.instance.create_device(physical_device, &device_create_info, None)?
         };
 
-        let video_queue_ext = ash::khr::video_queue::Device::new(&instance.instance, &device);
+        let video_queue_ext =
+            ash::khr::video_queue::Device::new(&instance.instance, &device);
         let video_decode_queue_ext =
             ash::khr::video_decode_queue::Device::new(&instance.instance, &device);
 
@@ -386,7 +378,8 @@ impl VulkanDevice {
             ash::khr::video_encode_queue::Device::new(&instance.instance, &device);
 
         #[cfg(feature = "vk-validation")]
-        let debug_utils_ext = ash::ext::debug_utils::Device::new(&instance.instance, &device);
+        let debug_utils_ext =
+            ash::ext::debug_utils::Device::new(&instance.instance, &device);
 
         let device = Arc::new(Device {
             device,
@@ -399,41 +392,41 @@ impl VulkanDevice {
         });
 
         let h264_decode_queues =
-            queue_indices
-                .h264_decode
-                .as_ref()
-                .map_or(Vec::new(), |queue_family_index| {
-                    (0..queue_family_index.queue_count)
-                        .map(|idx| queue_from_device(device.clone(), queue_family_index, idx))
-                        .collect::<Vec<_>>()
-                });
+            queue_indices.h264_decode.as_ref().map_or(Vec::new(), |queue_family_index| {
+                (0..queue_family_index.queue_count)
+                    .map(|idx| queue_from_device(device.clone(), queue_family_index, idx))
+                    .collect::<Vec<_>>()
+            });
         let h264_encode_queues =
-            queue_indices
-                .encode
-                .as_ref()
-                .map_or(Vec::new(), |queue_family_index| {
-                    (0..queue_family_index.queue_count)
-                        .map(|idx| queue_from_device(device.clone(), queue_family_index, idx))
-                        .collect::<Vec<_>>()
-                });
-        let transfer_queue = queue_from_device(device.clone(), &queue_indices.transfer, 0);
-        let compute_queue =
-            if queue_indices.compute.family_index == queue_indices.transfer.family_index {
-                if queue_indices.transfer.queue_count > 1 {
-                    queue_from_device(device.clone(), &queue_indices.transfer, 1)
-                } else {
-                    transfer_queue.clone()
-                }
+            queue_indices.encode.as_ref().map_or(Vec::new(), |queue_family_index| {
+                (0..queue_family_index.queue_count)
+                    .map(|idx| queue_from_device(device.clone(), queue_family_index, idx))
+                    .collect::<Vec<_>>()
+            });
+        let transfer_queue =
+            queue_from_device(device.clone(), &queue_indices.transfer, 0);
+        let compute_queue = if queue_indices.compute.family_index
+            == queue_indices.transfer.family_index
+        {
+            if queue_indices.transfer.queue_count > 1 {
+                queue_from_device(device.clone(), &queue_indices.transfer, 1)
             } else {
-                queue_from_device(device.clone(), &queue_indices.compute, 0)
-            };
-        let wgpu_queue =
-            queue_from_device(device.clone(), &queue_indices.graphics_transfer_compute, 0);
+                transfer_queue.clone()
+            }
+        } else {
+            queue_from_device(device.clone(), &queue_indices.compute, 0)
+        };
+        let wgpu_queue = queue_from_device(
+            device.clone(),
+            &queue_indices.graphics_transfer_compute,
+            0,
+        );
 
         let queues = Queues {
             transfer: transfer_queue,
             compute: compute_queue,
-            h264_decode: VideoQueues::new(h264_decode_queues.into_boxed_slice()).map(Arc::new),
+            h264_decode: VideoQueues::new(h264_decode_queues.into_boxed_slice())
+                .map(Arc::new),
             encode: VideoQueues::new(h264_encode_queues.into_boxed_slice()).map(Arc::new),
             wgpu: wgpu_queue,
         };
@@ -467,7 +460,9 @@ impl VulkanDevice {
         })
     }
 
-    pub(crate) fn decoding_device(self: &Arc<Self>) -> Result<DecodingDevice, VulkanDecoderError> {
+    pub(crate) fn decoding_device(
+        self: &Arc<Self>,
+    ) -> Result<DecodingDevice, VulkanDecoderError> {
         let decode_caps = self
             .native_decode_capabilities
             .as_ref()
@@ -512,12 +507,7 @@ impl VulkanDevice {
         )?;
         let frame_sorter = FrameSorter::<RawFrameData>::new();
 
-        Ok(BytesDecoder {
-            parser,
-            reference_ctx,
-            vulkan_decoder,
-            frame_sorter,
-        })
+        Ok(BytesDecoder { parser, reference_ctx, vulkan_decoder, frame_sorter })
     }
 
     /// Create a single-input multiple-output transcoder.
@@ -526,12 +516,16 @@ impl VulkanDevice {
     pub fn create_transcoder(
         self: &Arc<Self>,
         parameters: TranscoderParameters,
-    ) -> Result<crate::vulkan_transcoder::Transcoder, crate::vulkan_transcoder::TranscoderError>
-    {
+    ) -> Result<
+        crate::vulkan_transcoder::Transcoder,
+        crate::vulkan_transcoder::TranscoderError,
+    > {
         crate::vulkan_transcoder::Transcoder::new(self.clone(), parameters)
     }
 
-    pub(crate) fn encoding_device(self: &Arc<Self>) -> Result<EncodingDevice, VulkanEncoderError> {
+    pub(crate) fn encoding_device(
+        self: &Arc<Self>,
+    ) -> Result<EncodingDevice, VulkanEncoderError> {
         Ok(EncodingDevice {
             vulkan_device: self.clone(),
             encode_queues: self
@@ -558,9 +552,7 @@ impl VulkanDevice {
         )?;
         let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
 
-        Ok(BytesEncoderH264 {
-            vulkan_encoder: encoder,
-        })
+        Ok(BytesEncoderH264 { vulkan_encoder: encoder })
     }
 
     pub fn create_bytes_encoder_h265(
@@ -575,9 +567,7 @@ impl VulkanDevice {
         )?;
         let encoder = VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?;
 
-        Ok(BytesEncoderH265 {
-            vulkan_encoder: encoder,
-        })
+        Ok(BytesEncoderH265 { vulkan_encoder: encoder })
     }
 
     pub fn decode_capabilities(&self) -> DecodeCapabilities {
@@ -635,14 +625,11 @@ impl VulkanDevice {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
 
-        let caps = caps
-            .h265
-            .as_ref()
-            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+        let caps =
+            caps.h265.as_ref().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
         Ok(Self::encoder_output_parameters_low_latency(
-            caps.max_profile()
-                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
+            caps.max_profile().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             rate_control,
         ))
     }
@@ -655,14 +642,11 @@ impl VulkanDevice {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
 
-        let caps = caps
-            .h264
-            .as_ref()
-            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+        let caps =
+            caps.h264.as_ref().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
         Ok(Self::encoder_output_parameters_low_latency(
-            caps.max_profile()
-                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
+            caps.max_profile().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             rate_control,
         ))
     }
@@ -675,15 +659,12 @@ impl VulkanDevice {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
 
-        let caps = caps
-            .h265
-            .as_ref()
-            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+        let caps =
+            caps.h265.as_ref().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
         let quality_level = caps
             .profile(
-                caps.max_profile()
-                    .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
+                caps.max_profile().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             )
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
             .encode_capabilities
@@ -691,8 +672,7 @@ impl VulkanDevice {
             - 1;
 
         Ok(Self::encoder_output_parameters_high_quality(
-            caps.max_profile()
-                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
+            caps.max_profile().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             rate_control,
             quality_level,
         ))
@@ -706,15 +686,12 @@ impl VulkanDevice {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
 
-        let caps = caps
-            .h264
-            .as_ref()
-            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
+        let caps =
+            caps.h264.as_ref().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
 
         let quality_level = caps
             .profile(
-                caps.max_profile()
-                    .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
+                caps.max_profile().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             )
             .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?
             .encode_capabilities
@@ -722,8 +699,7 @@ impl VulkanDevice {
             - 1;
 
         Ok(Self::encoder_output_parameters_high_quality(
-            caps.max_profile()
-                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
+            caps.max_profile().ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             rate_control,
             quality_level,
         ))
@@ -807,7 +783,9 @@ impl VulkanDevice {
         if framerate.numerator == 0 {
             return Err(VulkanEncoderError::ParametersError {
                 field: "framerate",
-                problem: format!("Framerate is {framerate:?}. The numerator should be != 0.",),
+                problem: format!(
+                    "Framerate is {framerate:?}. The numerator should be != 0.",
+                ),
             });
         }
         let usage_flags = encoder_parameters
@@ -820,9 +798,7 @@ impl VulkanDevice {
             .content_flags
             .unwrap_or(vk::VideoEncodeContentFlagsKHR::DEFAULT);
         let color_space = encoder_parameters.color_space.unwrap_or_default();
-        let color_range = encoder_parameters
-            .color_range
-            .unwrap_or(ColorRange::Limited);
+        let color_range = encoder_parameters.color_range.unwrap_or(ColorRange::Limited);
 
         Ok(FullEncoderParameters {
             idr_period,
@@ -898,7 +874,8 @@ fn queue_from_device(
     queue_index: usize,
 ) -> Queue {
     let queue = unsafe {
-        device.get_device_queue(queue_family_index.family_index as u32, queue_index as u32)
+        device
+            .get_device_queue(queue_family_index.family_index as u32, queue_index as u32)
     };
     Queue {
         queue: Arc::new(queue.into()),

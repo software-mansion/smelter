@@ -16,14 +16,8 @@ pub struct BitmapNodeState {
 
 #[derive(Debug)]
 pub enum BitmapAsset {
-    Srgb {
-        texture: RgbaSrgbTexture,
-        bg: wgpu::BindGroup,
-    },
-    Linear {
-        texture: RgbaLinearTexture,
-        bg: wgpu::BindGroup,
-    },
+    Srgb { texture: RgbaSrgbTexture, bg: wgpu::BindGroup },
+    Linear { texture: RgbaLinearTexture, bg: wgpu::BindGroup },
 }
 
 impl BitmapAsset {
@@ -33,10 +27,8 @@ impl BitmapAsset {
         format: ImageFormat,
     ) -> Result<Self, image::ImageError> {
         let img = image::load_from_memory_with_format(&data, format)?;
-        let resolution = Resolution {
-            width: img.width() as usize,
-            height: img.height() as usize,
-        };
+        let resolution =
+            Resolution { width: img.width() as usize, height: img.height() as usize };
 
         match ctx.mode {
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {
@@ -44,20 +36,14 @@ impl BitmapAsset {
                 texture.upload(ctx, &img.to_rgba8());
                 ctx.queue.submit([]);
 
-                Ok(Self::Srgb {
-                    bg: texture.new_bind_group(ctx),
-                    texture,
-                })
+                Ok(Self::Srgb { bg: texture.new_bind_group(ctx), texture })
             }
             RenderingMode::CpuOptimized => {
                 let texture = RgbaLinearTexture::new(ctx, resolution);
                 texture.upload(ctx, &img.to_rgba8());
                 ctx.queue.submit([]);
 
-                Ok(Self::Linear {
-                    bg: texture.new_bind_group(ctx),
-                    texture,
-                })
+                Ok(Self::Linear { bg: texture.new_bind_group(ctx), texture })
             }
         }
     }
@@ -74,14 +60,10 @@ impl BitmapAsset {
 
         match &self {
             BitmapAsset::Srgb { bg, .. } => {
-                ctx.utils
-                    .srgb_rgba_add_premult_alpha
-                    .render(ctx, bg, target.view());
+                ctx.utils.srgb_rgba_add_premult_alpha.render(ctx, bg, target.view());
             }
             BitmapAsset::Linear { bg, .. } => {
-                ctx.utils
-                    .linear_rgba_add_premult_alpha
-                    .render(ctx, bg, target.view());
+                ctx.utils.linear_rgba_add_premult_alpha.render(ctx, bg, target.view());
             }
         }
         state.was_rendered = true;
@@ -101,10 +83,7 @@ impl BitmapAsset {
 
 impl BitmapNodeState {
     pub fn new(resolution: Resolution) -> Self {
-        Self {
-            was_rendered: false,
-            resolution,
-        }
+        Self { was_rendered: false, resolution }
     }
     pub fn resolution(&self) -> Resolution {
         self.resolution

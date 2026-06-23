@@ -5,9 +5,9 @@ use integration_tests_macros::render_test;
 use smelter_render::{
     InputId, RenderingMode, Resolution,
     scene::{
-        AbsolutePosition, BorderRadius, BoxShadow, Component, HorizontalAlign, HorizontalPosition,
-        InputStreamComponent, Position, RGBAColor, RescaleMode, RescalerComponent, VerticalAlign,
-        VerticalPosition, ViewComponent,
+        AbsolutePosition, BorderRadius, BoxShadow, Component, HorizontalAlign,
+        HorizontalPosition, InputStreamComponent, Position, RGBAColor, RescaleMode,
+        RescalerComponent, VerticalAlign, VerticalPosition, ViewComponent,
     },
 };
 
@@ -64,25 +64,18 @@ fn input_stream(id: &str) -> Component {
 }
 
 fn box_shadow_offset_30(color: RGBAColor) -> BoxShadow {
-    BoxShadow {
-        offset_x: 60.0,
-        offset_y: 30.0,
-        blur_radius: 30.0,
-        color,
-    }
+    BoxShadow { offset_x: 60.0, offset_y: 30.0, blur_radius: 30.0, color }
 }
 
 #[render_test(description = "")]
 fn fit_view_with_known_height() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         children: vec![
             Component::View(ViewComponent {
                 background_color: RED,
-                position: Position::Static {
-                    width: Some(160.0),
-                    height: Some(90.0),
-                },
+                position: Position::Static { width: Some(160.0), height: Some(90.0) },
                 ..Default::default()
             }),
             Component::Rescaler(RescalerComponent {
@@ -96,10 +89,7 @@ fn fit_view_with_known_height() -> Result<()> {
                 mode: RescaleMode::Fit,
                 child: Box::new(Component::View(ViewComponent {
                     background_color: BLUE,
-                    position: Position::Static {
-                        width: None,
-                        height: Some(100.0),
-                    },
+                    position: Position::Static { width: None, height: Some(100.0) },
                     ..Default::default()
                 })),
                 ..Default::default()
@@ -113,15 +103,13 @@ fn fit_view_with_known_height() -> Result<()> {
 
 #[render_test(description = "")]
 fn fit_view_with_known_width() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         children: vec![
             Component::View(ViewComponent {
                 background_color: RED,
-                position: Position::Static {
-                    width: Some(160.0),
-                    height: Some(90.0),
-                },
+                position: Position::Static { width: Some(160.0), height: Some(90.0) },
                 ..Default::default()
             }),
             Component::Rescaler(RescalerComponent {
@@ -135,10 +123,7 @@ fn fit_view_with_known_width() -> Result<()> {
                 mode: RescaleMode::Fit,
                 child: Box::new(Component::View(ViewComponent {
                     background_color: BLUE,
-                    position: Position::Static {
-                        width: Some(200.0),
-                        height: None,
-                    },
+                    position: Position::Static { width: Some(200.0), height: None },
                     ..Default::default()
                 })),
                 ..Default::default()
@@ -152,15 +137,13 @@ fn fit_view_with_known_width() -> Result<()> {
 
 #[render_test(description = "")]
 fn fit_view_with_unknown_width_and_height() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         children: vec![
             Component::View(ViewComponent {
                 background_color: RED,
-                position: Position::Static {
-                    width: Some(160.0),
-                    height: Some(90.0),
-                },
+                position: Position::Static { width: Some(160.0), height: Some(90.0) },
                 ..Default::default()
             }),
             Component::Rescaler(RescalerComponent {
@@ -187,32 +170,20 @@ fn fit_view_with_unknown_width_and_height() -> Result<()> {
 
 #[render_test(description = "")]
 fn fill_input_stream_inverted_aspect_ratio_align_top_left() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
-            1,
-            Resolution {
-                width: 360,
-                height: 640,
-            },
-        )]);
-    runner.update_scene(fill_input_stream_scene(
-        HorizontalAlign::Left,
-        VerticalAlign::Top,
-    ));
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(1, Resolution { width: 360, height: 640 }),
+    ]);
+    runner
+        .update_scene(fill_input_stream_scene(HorizontalAlign::Left, VerticalAlign::Top));
     runner.snapshot(Duration::ZERO);
     runner.finish()
 }
 
 #[render_test(description = "")]
 fn fill_input_stream_inverted_aspect_ratio_align_bottom_right() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
-            1,
-            Resolution {
-                width: 360,
-                height: 640,
-            },
-        )]);
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(1, Resolution { width: 360, height: 640 }),
+    ]);
     runner.update_scene(fill_input_stream_scene(
         HorizontalAlign::Right,
         VerticalAlign::Bottom,
@@ -223,14 +194,15 @@ fn fill_input_stream_inverted_aspect_ratio_align_bottom_right() -> Result<()> {
 
 #[render_test(description = "")]
 fn fill_input_stream_lower_aspect_ratio_align_bottom_right() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(
             1,
             Resolution {
                 width: DEFAULT_RESOLUTION.width,
                 height: DEFAULT_RESOLUTION.height - 100,
             },
-        )]);
+        ),
+    ]);
     runner.update_scene(fill_input_stream_scene(
         HorizontalAlign::Right,
         VerticalAlign::Bottom,
@@ -241,14 +213,15 @@ fn fill_input_stream_lower_aspect_ratio_align_bottom_right() -> Result<()> {
 
 #[render_test(description = "")]
 fn fill_input_stream_lower_aspect_ratio() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(
             1,
             Resolution {
                 width: DEFAULT_RESOLUTION.width,
                 height: DEFAULT_RESOLUTION.height - 100,
             },
-        )]);
+        ),
+    ]);
     runner.update_scene(fill_input_stream_scene(
         HorizontalAlign::Center,
         VerticalAlign::Center,
@@ -259,14 +232,15 @@ fn fill_input_stream_lower_aspect_ratio() -> Result<()> {
 
 #[render_test(description = "")]
 fn fill_input_stream_higher_aspect_ratio() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(
             1,
             Resolution {
                 width: DEFAULT_RESOLUTION.width,
                 height: DEFAULT_RESOLUTION.height + 100,
             },
-        )]);
+        ),
+    ]);
     runner.update_scene(fill_input_stream_scene(
         HorizontalAlign::Center,
         VerticalAlign::Center,
@@ -277,14 +251,9 @@ fn fill_input_stream_higher_aspect_ratio() -> Result<()> {
 
 #[render_test(description = "")]
 fn fill_input_stream_inverted_aspect_ratio() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
-            1,
-            Resolution {
-                width: 360,
-                height: 640,
-            },
-        )]);
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(1, Resolution { width: 360, height: 640 }),
+    ]);
     runner.update_scene(fill_input_stream_scene(
         HorizontalAlign::Center,
         VerticalAlign::Center,
@@ -295,7 +264,8 @@ fn fill_input_stream_inverted_aspect_ratio() -> Result<()> {
 
 #[render_test(description = "")]
 fn fill_input_stream_matching_aspect_ratio() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(fill_input_stream_scene(
         HorizontalAlign::Center,
         VerticalAlign::Center,
@@ -306,14 +276,15 @@ fn fill_input_stream_matching_aspect_ratio() -> Result<()> {
 
 #[render_test(description = "")]
 fn fit_input_stream_lower_aspect_ratio() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(
             1,
             Resolution {
                 width: DEFAULT_RESOLUTION.width,
                 height: DEFAULT_RESOLUTION.height - 100,
             },
-        )]);
+        ),
+    ]);
     runner.update_scene(fit_input_stream_scene(
         HorizontalAlign::Center,
         VerticalAlign::Center,
@@ -324,14 +295,15 @@ fn fit_input_stream_lower_aspect_ratio() -> Result<()> {
 
 #[render_test(description = "")]
 fn fit_input_stream_higher_aspect_ratio() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(
             1,
             Resolution {
                 width: DEFAULT_RESOLUTION.width,
                 height: DEFAULT_RESOLUTION.height + 100,
             },
-        )]);
+        ),
+    ]);
     runner.update_scene(fit_input_stream_scene(
         HorizontalAlign::Center,
         VerticalAlign::Center,
@@ -342,14 +314,15 @@ fn fit_input_stream_higher_aspect_ratio() -> Result<()> {
 
 #[render_test(description = "")]
 fn fit_input_stream_higher_aspect_ratio_small_resolution() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(
             1,
             Resolution {
                 width: DEFAULT_RESOLUTION.width / 10,
                 height: (DEFAULT_RESOLUTION.height + 100) / 10,
             },
-        )]);
+        ),
+    ]);
     runner.update_scene(fit_input_stream_scene(
         HorizontalAlign::Center,
         VerticalAlign::Center,
@@ -360,32 +333,20 @@ fn fit_input_stream_higher_aspect_ratio_small_resolution() -> Result<()> {
 
 #[render_test(description = "")]
 fn fit_input_stream_inverted_aspect_ratio_align_top_left() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
-            1,
-            Resolution {
-                width: 360,
-                height: 640,
-            },
-        )]);
-    runner.update_scene(fit_input_stream_scene(
-        HorizontalAlign::Left,
-        VerticalAlign::Top,
-    ));
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(1, Resolution { width: 360, height: 640 }),
+    ]);
+    runner
+        .update_scene(fit_input_stream_scene(HorizontalAlign::Left, VerticalAlign::Top));
     runner.snapshot(Duration::ZERO);
     runner.finish()
 }
 
 #[render_test(description = "")]
 fn fit_input_stream_inverted_aspect_ratio_align_bottom_right() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
-            1,
-            Resolution {
-                width: 360,
-                height: 640,
-            },
-        )]);
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(1, Resolution { width: 360, height: 640 }),
+    ]);
     runner.update_scene(fit_input_stream_scene(
         HorizontalAlign::Right,
         VerticalAlign::Bottom,
@@ -396,14 +357,15 @@ fn fit_input_stream_inverted_aspect_ratio_align_bottom_right() -> Result<()> {
 
 #[render_test(description = "")]
 fn fit_input_stream_lower_aspect_ratio_align_bottom_right() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(
             1,
             Resolution {
                 width: DEFAULT_RESOLUTION.width,
                 height: DEFAULT_RESOLUTION.height - 100,
             },
-        )]);
+        ),
+    ]);
     runner.update_scene(fit_input_stream_scene(
         HorizontalAlign::Right,
         VerticalAlign::Bottom,
@@ -414,14 +376,9 @@ fn fit_input_stream_lower_aspect_ratio_align_bottom_right() -> Result<()> {
 
 #[render_test(description = "")]
 fn fit_input_stream_inverted_aspect_ratio() -> Result<()> {
-    let mut runner =
-        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new_with_resolution(
-            1,
-            Resolution {
-                width: 360,
-                height: 640,
-            },
-        )]);
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
+        TestInput::new_with_resolution(1, Resolution { width: 360, height: 640 }),
+    ]);
     runner.update_scene(fit_input_stream_scene(
         HorizontalAlign::Center,
         VerticalAlign::Center,
@@ -432,7 +389,8 @@ fn fit_input_stream_inverted_aspect_ratio() -> Result<()> {
 
 #[render_test(description = "")]
 fn fit_input_stream_matching_aspect_ratio() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(fit_input_stream_scene(
         HorizontalAlign::Center,
         VerticalAlign::Center,
@@ -449,10 +407,7 @@ fn fill_input_stream_scene(
         children: vec![
             Component::View(ViewComponent {
                 background_color: RED,
-                position: Position::Static {
-                    width: Some(160.0),
-                    height: Some(90.0),
-                },
+                position: Position::Static { width: Some(160.0), height: Some(90.0) },
                 ..Default::default()
             }),
             Component::Rescaler(RescalerComponent {
@@ -482,10 +437,7 @@ fn fit_input_stream_scene(
         children: vec![
             Component::View(ViewComponent {
                 background_color: RED,
-                position: Position::Static {
-                    width: Some(160.0),
-                    height: Some(90.0),
-                },
+                position: Position::Static { width: Some(160.0), height: Some(90.0) },
                 ..Default::default()
             }),
             Component::Rescaler(RescalerComponent {
@@ -509,7 +461,8 @@ fn fit_input_stream_scene(
 
 #[render_test(description = "")]
 fn border_radius() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
@@ -535,7 +488,8 @@ fn border_radius() -> Result<()> {
 
 #[render_test(description = "")]
 fn border_width() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
@@ -562,7 +516,8 @@ fn border_width() -> Result<()> {
 
 #[render_test(description = "")]
 fn box_shadow() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
@@ -588,7 +543,8 @@ fn box_shadow() -> Result<()> {
 
 #[render_test(description = "")]
 fn border_radius_border_box_shadow() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
@@ -617,7 +573,8 @@ fn border_radius_border_box_shadow() -> Result<()> {
 
 #[render_test(description = "")]
 fn border_radius_box_shadow() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
@@ -644,7 +601,8 @@ fn border_radius_box_shadow() -> Result<()> {
 
 #[render_test(description = "")]
 fn border_radius_box_shadow_fit_input_stream() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
@@ -671,7 +629,8 @@ fn border_radius_box_shadow_fit_input_stream() -> Result<()> {
 
 #[render_test(description = "")]
 fn border_radius_box_shadow_fill_input_stream() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
@@ -698,7 +657,8 @@ fn border_radius_box_shadow_fill_input_stream() -> Result<()> {
 
 #[render_test(description = "")]
 fn nested_border_width_radius() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
@@ -736,7 +696,8 @@ fn nested_border_width_radius() -> Result<()> {
 
 #[render_test(description = "")]
 fn nested_border_width_radius_aligned() -> Result<()> {
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
@@ -775,21 +736,16 @@ fn nested_border_width_radius_aligned() -> Result<()> {
 #[render_test(description = "")]
 fn border_radius_border_box_shadow_rescaled() -> Result<()> {
     // it is supposed to be cut off because of the rescaler that wraps it
-    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
+    let mut runner =
+        TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![TestInput::new(1)]);
     runner.update_scene(Component::View(ViewComponent {
         background_color: YELLOW,
         children: vec![Component::Rescaler(RescalerComponent {
-            position: Position::Static {
-                width: Some(600.0),
-                height: Some(300.0),
-            },
+            position: Position::Static { width: Some(600.0), height: Some(300.0) },
             horizontal_align: HorizontalAlign::Center,
             vertical_align: VerticalAlign::Center,
             child: Box::new(Component::Rescaler(RescalerComponent {
-                position: Position::Static {
-                    width: Some(200.0),
-                    height: Some(200.0),
-                },
+                position: Position::Static { width: Some(200.0), height: Some(200.0) },
                 border_radius: BorderRadius::new_with_radius(50.0),
                 border_width: 20.0,
                 border_color: WHITE,
@@ -814,16 +770,10 @@ fn border_radius_border_box_shadow_rescaled() -> Result<()> {
 fn scaling_filter_bilinear() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME)
         .with_rendering_mode(RenderingMode::CpuOptimized)
-        .with_resolution(Resolution {
-            width: 1920,
-            height: 1080,
-        })
+        .with_resolution(Resolution { width: 1920, height: 1080 })
         .with_inputs(vec![TestInput::new_multiscale_grid(
             1,
-            Resolution {
-                width: 5760,
-                height: 3240,
-            },
+            Resolution { width: 5760, height: 3240 },
         )]);
     runner.update_scene(Component::Rescaler(RescalerComponent {
         mode: RescaleMode::Fit,
@@ -838,16 +788,10 @@ fn scaling_filter_bilinear() -> Result<()> {
 fn scaling_filter_lanczos3() -> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME)
         .with_rendering_mode(RenderingMode::GpuOptimized)
-        .with_resolution(Resolution {
-            width: 1920,
-            height: 1080,
-        })
+        .with_resolution(Resolution { width: 1920, height: 1080 })
         .with_inputs(vec![TestInput::new_multiscale_grid(
             1,
-            Resolution {
-                width: 5760,
-                height: 3240,
-            },
+            Resolution { width: 5760, height: 3240 },
         )]);
     runner.update_scene(Component::Rescaler(RescalerComponent {
         mode: RescaleMode::Fit,

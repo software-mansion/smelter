@@ -3,8 +3,8 @@ use std::{ops::Deref, time::Duration};
 use crate::transformations::layout::NestedLayout;
 
 use super::{
-    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, IntermediateNode, Position,
-    RGBAColor, RescaleMode, SceneError, Size, StatefulComponent, VerticalAlign,
+    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, IntermediateNode,
+    Position, RGBAColor, RescaleMode, SceneError, Size, StatefulComponent, VerticalAlign,
     components::RescalerComponent,
     layout::StatefulLayoutComponent,
     scene_state::BuildStateTreeCtx,
@@ -82,8 +82,7 @@ impl StatefulRescalerComponent {
     }
 
     pub(super) fn layout(&mut self, size: Size, pts: Duration) -> NestedLayout {
-        self.transition_snapshot(pts)
-            .layout(size, &mut self.child, pts)
+        self.transition_snapshot(pts).layout(size, &mut self.child, pts)
     }
 }
 
@@ -106,7 +105,8 @@ impl RescalerComponent {
 
         // TODO: to handle cases like transition from top to bottom this view needs
         // to be further processed to use the same type of coordinates as end
-        let start = previous_state.map(|state| state.transition_snapshot(ctx.last_render_pts));
+        let start =
+            previous_state.map(|state| state.transition_snapshot(ctx.last_render_pts));
         let end = RescalerComponentParam {
             id: self.id,
             position: self.position,
@@ -119,9 +119,7 @@ impl RescalerComponent {
             box_shadow: self.box_shadow,
         };
 
-        let props_changed = previous_state
-            .map(|state| state.end != end)
-            .unwrap_or(false);
+        let props_changed = previous_state.map(|state| state.end != end).unwrap_or(false);
         let interrupt_previous_transition =
             self.transition.map(|t| t.should_interrupt).unwrap_or(false);
         let transition = TransitionState::new(
@@ -140,8 +138,6 @@ impl RescalerComponent {
             transition,
             child: Box::new(Component::stateful_component(*self.child, ctx)?),
         };
-        Ok(StatefulComponent::Layout(
-            StatefulLayoutComponent::Rescaler(rescaler).into(),
-        ))
+        Ok(StatefulComponent::Layout(StatefulLayoutComponent::Rescaler(rescaler).into()))
     }
 }

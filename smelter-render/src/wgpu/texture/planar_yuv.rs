@@ -25,23 +25,14 @@ where
     F: FnOnce() -> Result<Bytes, E>,
 {
     pub fn new(y: F, u: F, v: F) -> Self {
-        Self {
-            y,
-            u,
-            v,
-            _phantom: PhantomData,
-        }
+        Self { y, u, v, _phantom: PhantomData }
     }
 
     /// `device.poll(wgpu::MaintainBase::Wait)` needs to be called after download
     /// is started, but before this method is called.
     pub fn wait(self) -> Result<YuvPlanes, E> {
         let YuvPendingDownload { y, u, v, _phantom } = self;
-        Ok(YuvPlanes {
-            y_plane: y()?,
-            u_plane: u()?,
-            v_plane: v()?,
-        })
+        Ok(YuvPlanes { y_plane: y()?, u_plane: u()?, v_plane: v()? })
     }
 }
 
@@ -75,12 +66,9 @@ impl PlanarYuvTextures {
                 resolution.width / 2,
                 resolution.height,
             ),
-            YuvVariant::YUV444 => (
-                resolution.width,
-                resolution.height,
-                resolution.width,
-                resolution.height,
-            ),
+            YuvVariant::YUV444 => {
+                (resolution.width, resolution.height, resolution.width, resolution.height)
+            }
         };
         let y = Self::new_plane(ctx, resolution.width, resolution.height);
         let u = Self::new_plane(ctx, u_width, u_height);
@@ -171,9 +159,8 @@ impl PlanarYuvTextures {
     }
 
     pub fn copy_to_buffers(&self, ctx: &WgpuCtx, buffers: &[Buffer; 3]) {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        let mut encoder =
+            ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("transfer result yuv texture to buffers encoder"),
             });
 
@@ -192,14 +179,8 @@ impl PlanarYuvTextures {
 
     pub fn fill_with_color(&self, ctx: &WgpuCtx, color: RGBColor) {
         let (y, u, v) = color.to_yuv();
-        ctx.utils
-            .r8_fill_with_value
-            .fill(ctx, self.plane_view(0), y);
-        ctx.utils
-            .r8_fill_with_value
-            .fill(ctx, self.plane_view(1), u);
-        ctx.utils
-            .r8_fill_with_value
-            .fill(ctx, self.plane_view(2), v);
+        ctx.utils.r8_fill_with_value.fill(ctx, self.plane_view(0), y);
+        ctx.utils.r8_fill_with_value.fill(ctx, self.plane_view(1), u);
+        ctx.utils.r8_fill_with_value.fill(ctx, self.plane_view(2), v);
     }
 }

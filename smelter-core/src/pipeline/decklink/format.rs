@@ -36,11 +36,7 @@ impl Format {
             PixelFormat::Format10BitYUVA => (BitDepth::Depth10Bit, Colorspace::YCbCr422),
             _ => (BitDepth::Unknown, Colorspace::Unknown),
         };
-        Self {
-            display_mode,
-            bit_depth,
-            colorspace,
-        }
+        Self { display_mode, bit_depth, colorspace }
     }
 
     pub fn from_mode_change(
@@ -64,10 +60,6 @@ impl Format {
         } else {
             Colorspace::Unknown
         };
-        Self {
-            display_mode,
-            bit_depth,
-            colorspace,
-        }
+        Self { display_mode, bit_depth, colorspace }
     }
 }

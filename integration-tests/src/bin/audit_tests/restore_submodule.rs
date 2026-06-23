@@ -50,7 +50,9 @@ pub(crate) fn diff_snapshot_submodule() -> Result<()> {
     .raw_prompt()
     {
         Ok(s) => s.index,
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => return Ok(()),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => {
+            return Ok(());
+        }
         Err(e) => return Err(e.into()),
     };
     let commit = &commits[selected_idx];
@@ -82,7 +84,8 @@ pub(crate) fn diff_snapshot_submodule() -> Result<()> {
     reset_workdir(&pipeline_dest)?;
     reset_workdir(&render_dest)?;
 
-    let pipeline_summary = restore_pipeline_snapshots(&submodule, &commit.sha, &pipeline_dest)?;
+    let pipeline_summary =
+        restore_pipeline_snapshots(&submodule, &commit.sha, &pipeline_dest)?;
     let render_summary = restore_render_snapshots(&submodule, &commit.sha, &render_dest)?;
 
     info!(
@@ -117,9 +120,11 @@ struct DiffSummary {
 
 fn reset_workdir(dest: &Path) -> Result<()> {
     if dest.exists() {
-        fs::remove_dir_all(dest).with_context(|| format!("Failed to clear {}", dest.display()))?;
+        fs::remove_dir_all(dest)
+            .with_context(|| format!("Failed to clear {}", dest.display()))?;
     }
-    fs::create_dir_all(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
+    fs::create_dir_all(dest)
+        .with_context(|| format!("Failed to create {}", dest.display()))?;
     Ok(())
 }
 
@@ -154,14 +159,8 @@ fn restore_pipeline_snapshots(
             summary.skipped_identical += 1;
             continue;
         }
-        fs::write(
-            dest.join(format!("actual_dump_{}", test.snapshot_name)),
-            &current,
-        )?;
-        fs::write(
-            dest.join(format!("expected_dump_{}", test.snapshot_name)),
-            &old,
-        )?;
+        fs::write(dest.join(format!("actual_dump_{}", test.snapshot_name)), &current)?;
+        fs::write(dest.join(format!("expected_dump_{}", test.snapshot_name)), &old)?;
         summary.written += 1;
     }
     Ok(summary)
@@ -283,12 +282,7 @@ fn list_snapshot_commits(submodule: &std::path::Path) -> Result<Vec<SnapshotComm
             let sha = parts.next()?.to_string();
             let date = parts.next()?.to_string();
             let subject = parts.next().unwrap_or("").to_string();
-            Some(SnapshotCommit {
-                sha,
-                date,
-                subject,
-                ref_name: None,
-            })
+            Some(SnapshotCommit { sha, date, subject, ref_name: None })
         })
         .collect();
 
@@ -310,11 +304,7 @@ fn list_snapshot_commits(submodule: &std::path::Path) -> Result<Vec<SnapshotComm
     let pinned_shas: std::collections::HashSet<String> =
         pinned.iter().map(|c| c.sha.clone()).collect();
     let mut result = pinned;
-    result.extend(
-        log_commits
-            .into_iter()
-            .filter(|c| !pinned_shas.contains(&c.sha)),
-    );
+    result.extend(log_commits.into_iter().filter(|c| !pinned_shas.contains(&c.sha)));
     Ok(result)
 }
 
@@ -359,10 +349,7 @@ fn fetch_origin(submodule: &std::path::Path) -> Result<()> {
 /// picker shows `name (sha7)` instead of just the short sha.
 fn resolve_named(submodule: &std::path::Path, name: &str) -> Option<SnapshotCommit> {
     let commit = log_one(submodule, name)?;
-    Some(SnapshotCommit {
-        ref_name: Some(name.to_string()),
-        ..commit
-    })
+    Some(SnapshotCommit { ref_name: Some(name.to_string()), ..commit })
 }
 
 fn log_one(submodule: &std::path::Path, revision: &str) -> Option<SnapshotCommit> {
@@ -395,7 +382,11 @@ fn log_one(submodule: &std::path::Path, revision: &str) -> Option<SnapshotCommit
 /// Read a single file at `relative_path` as it existed at `sha` in
 /// the submodule's history. Returns `None` if the file didn't exist
 /// at that revision (or `git show` failed for any other reason).
-fn read_blob_at(submodule: &std::path::Path, sha: &str, relative_path: &str) -> Option<Vec<u8>> {
+fn read_blob_at(
+    submodule: &std::path::Path,
+    sha: &str,
+    relative_path: &str,
+) -> Option<Vec<u8>> {
     let output = Command::new("git")
         .args([
             "-C",

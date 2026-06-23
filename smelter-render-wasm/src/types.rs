@@ -53,8 +53,8 @@ impl TryFrom<InputFrameSet> for wasm::InputFrameSet {
             .as_f64()
             .ok_or_else(|| JsValue::from_str("Expected ptsMs to be a number."))?;
 
-        let frames =
-            js_sys::Reflect::get(&value.obj, &"frames".into())?.dyn_into::<js_sys::Array>()?;
+        let frames = js_sys::Reflect::get(&value.obj, &"frames".into())?
+            .dyn_into::<js_sys::Array>()?;
 
         Ok(Self {
             pts: Duration::from_secs_f64(pts_ms / 1000.0),
@@ -94,11 +94,7 @@ impl TryFrom<JsValue> for wasm::InputFrame {
             ));
         };
 
-        Ok(Self {
-            id,
-            pts: Duration::from_secs_f64(pts_ms / 1000.0),
-            frame,
-        })
+        Ok(Self { id, pts: Duration::from_secs_f64(pts_ms / 1000.0), frame })
     }
 }
 
@@ -108,11 +104,7 @@ impl From<wasm::OutputFrameSet> for OutputFrameSet {
         result.set("ptsMs", value.pts.as_millis());
         result.set(
             "frames",
-            value
-                .frames
-                .into_iter()
-                .map(|frame| frame.into())
-                .collect::<Vec<JsValue>>(),
+            value.frames.into_iter().map(|frame| frame.into()).collect::<Vec<JsValue>>(),
         );
         OutputFrameSet { obj: result.into() }
     }

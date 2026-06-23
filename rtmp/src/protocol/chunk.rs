@@ -171,9 +171,8 @@ impl ChunkMessageHeader {
                 if data.len() < offset + 3 {
                     return Err(ParseChunkError::NotEnoughData);
                 }
-                let header = Self::TimestampOnly {
-                    timestamp_delta: read_u24(data, offset),
-                };
+                let header =
+                    Self::TimestampOnly { timestamp_delta: read_u24(data, offset) };
                 (header, offset + 3)
             }
             ChunkType::NoHeader => (Self::NoHeader, offset),
@@ -228,7 +227,10 @@ impl ChunkMessageHeader {
 pub(crate) struct ChunkExtendedTimestamp(pub u32);
 
 impl ChunkExtendedTimestamp {
-    pub fn try_read(data: &VecDeque<u8>, offset: usize) -> Result<(Self, usize), ParseChunkError> {
+    pub fn try_read(
+        data: &VecDeque<u8>,
+        offset: usize,
+    ) -> Result<(Self, usize), ParseChunkError> {
         if data.len() < offset + 4 {
             return Err(ParseChunkError::NotEnoughData);
         }
@@ -268,7 +270,10 @@ pub(crate) struct VirtualMessageHeader {
 }
 
 impl VirtualMessageHeader {
-    pub fn from_msg(prev: Option<Self>, msg_header: ChunkMessageHeader) -> Result<Self, String> {
+    pub fn from_msg(
+        prev: Option<Self>,
+        msg_header: ChunkMessageHeader,
+    ) -> Result<Self, String> {
         match (msg_header, prev) {
             (
                 ChunkMessageHeader::Full {
@@ -305,12 +310,18 @@ impl VirtualMessageHeader {
                 // If we send Type-3 just after Type-0 then the second packet delta
                 // will be the same as an absolute timestamp  (See 5.3.1.2.4)
                 prev.timestamp = match prev.timestamp {
-                    ChunkHeaderTimestamp::Timestamp(ts) => ChunkHeaderTimestamp::Delta(ts),
-                    ChunkHeaderTimestamp::Delta(delta) => ChunkHeaderTimestamp::Delta(delta),
+                    ChunkHeaderTimestamp::Timestamp(ts) => {
+                        ChunkHeaderTimestamp::Delta(ts)
+                    }
+                    ChunkHeaderTimestamp::Delta(delta) => {
+                        ChunkHeaderTimestamp::Delta(delta)
+                    }
                 };
                 Ok(prev)
             }
-            (_, None) => Err("Type-0 header needs to be a first packet in a chunk stream".into()),
+            (_, None) => {
+                Err("Type-0 header needs to be a first packet in a chunk stream".into())
+            }
         }
     }
 }

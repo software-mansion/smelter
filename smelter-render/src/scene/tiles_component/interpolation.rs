@@ -20,10 +20,8 @@ impl ContinuousValue for Vec<Option<Tile>> {
             .enumerate()
             .filter_map(|(index, tile)| tile.as_ref().map(|tile| (&tile.id, index)))
             .collect();
-        let end_id_set: HashSet<&TileId> = end
-            .iter()
-            .filter_map(|tile| tile.as_ref().map(|tile| &tile.id))
-            .collect();
+        let end_id_set: HashSet<&TileId> =
+            end.iter().filter_map(|tile| tile.as_ref().map(|tile| &tile.id)).collect();
 
         if state.0 >= 1.0 {
             return end.clone();
@@ -38,9 +36,9 @@ impl ContinuousValue for Vec<Option<Tile>> {
                     .and_then(|old_tile| {
                         // For each tile that existed before the last update (exists in both `start` and `end`)
                         // interpolate between those 2 states.
-                        old_tile
-                            .as_ref()
-                            .map(|old_tile| ContinuousValue::interpolate(old_tile, tile, state))
+                        old_tile.as_ref().map(|old_tile| {
+                            ContinuousValue::interpolate(old_tile, tile, state)
+                        })
                     })
                     .or_else(|| {
                         // Handle a new tile (`tile` did not exist in the `start` state). Tiles that existed before
@@ -53,9 +51,11 @@ impl ContinuousValue for Vec<Option<Tile>> {
                             .iter()
                             .flatten()
                             .find(|start_tile| are_positions_equal(start_tile, tile))
-                            .and_then(|start_tile| match end_id_set.contains(&start_tile.id) {
-                                true => None,
-                                false => Some(tile.clone()),
+                            .and_then(|start_tile| {
+                                match end_id_set.contains(&start_tile.id) {
+                                    true => None,
+                                    false => Some(tile.clone()),
+                                }
                             })
                     })
             })

@@ -44,7 +44,11 @@ pub(crate) struct RtpJitterBufferSharedContext {
 }
 
 impl RtpJitterBufferSharedContext {
-    pub fn new(ctx: &Arc<PipelineCtx>, mode: RtpJitterBufferMode, reference_time: Instant) -> Self {
+    pub fn new(
+        ctx: &Arc<PipelineCtx>,
+        mode: RtpJitterBufferMode,
+        reference_time: Instant,
+    ) -> Self {
         let ntp_sync_point = RtpNtpSyncPoint::new(reference_time);
         Self {
             mode,
@@ -120,15 +124,13 @@ impl RtpJitterBuffer {
         clock_rate: u32,
         on_stats_event: Box<dyn FnMut(RtpJitterBufferStatsEvent) + 'static + Send>,
     ) -> Self {
-        let RtpJitterBufferSharedContext {
-            mode,
-            ntp_sync_point,
-            input_buffer,
-        } = shared_ctx;
+        let RtpJitterBufferSharedContext { mode, ntp_sync_point, input_buffer } =
+            shared_ctx;
         // Real-time mode treats RTP timestamps as wall-clock-aligned and
         // enables synchronization features better for that use case.
         let real_time = matches!(mode, RtpJitterBufferMode::RealTime { .. });
-        let timestamp_sync = RtpTimestampSync::new(ntp_sync_point.clone(), clock_rate, real_time);
+        let timestamp_sync =
+            RtpTimestampSync::new(ntp_sync_point.clone(), clock_rate, real_time);
 
         Self {
             mode,
@@ -143,14 +145,12 @@ impl RtpJitterBuffer {
     }
 
     pub fn on_sender_report(&mut self, ntp_time: u64, rtp_timestamp: u32) {
-        self.timestamp_sync
-            .on_sender_report(ntp_time, rtp_timestamp);
+        self.timestamp_sync.on_sender_report(ntp_time, rtp_timestamp);
     }
 
     pub fn write_packet(&mut self, packet: webrtc::rtp::packet::Packet) {
-        let sequence_number = self
-            .seq_num_rollover
-            .rolled_sequence_number(packet.header.sequence_number);
+        let sequence_number =
+            self.seq_num_rollover.rolled_sequence_number(packet.header.sequence_number);
 
         if let Some(last_returned) = self.next_seq_num
             && last_returned > sequence_number
@@ -165,9 +165,7 @@ impl RtpJitterBuffer {
         ));
 
         // pts relative to reference_time in ntp_sync_point
-        let pts = self
-            .timestamp_sync
-            .pts_from_timestamp(packet.header.timestamp);
+        let pts = self.timestamp_sync.pts_from_timestamp(packet.header.timestamp);
 
         // We estimate buffer size here, but actual calculation and
         // packet smoothing happens when removing packet from jitter buffer.
@@ -190,8 +188,7 @@ impl RtpJitterBuffer {
         ));
 
         trace!(packet=?packet.header, ?pts, buffer_size=self.packets.len(), "Writing packet to jitter buffer");
-        self.packets
-            .insert(sequence_number, JitterBufferPacket { packet, pts });
+        self.packets.insert(sequence_number, JitterBufferPacket { packet, pts });
     }
 
     pub fn try_read_packet(&mut self) -> Option<RtpInputEvent> {
@@ -252,10 +249,7 @@ impl RtpJitterBuffer {
         ));
 
         self.next_seq_num = Some(seq_num + 1);
-        Some(RtpInputEvent::Packet(RtpPacket {
-            packet: packet.packet,
-            timestamp,
-        }))
+        Some(RtpInputEvent::Packet(RtpPacket { packet: packet.packet, timestamp }))
     }
 
     pub fn peek_next_pts(&self) -> Option<Duration> {
@@ -273,10 +267,9 @@ enum BufferingStrategy {
 impl fmt::Debug for BufferingStrategy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::FixedOffset { offset } => f
-                .debug_struct("FixedOffset")
-                .field("offset", offset)
-                .finish(),
+            Self::FixedOffset { offset } => {
+                f.debug_struct("FixedOffset").field("offset", offset).finish()
+            }
             Self::LatencyOptimized(_) => f.debug_tuple("LatencyOptimized").finish(),
         }
     }
@@ -338,11 +331,7 @@ impl LatencyOptimizedBuffer {
     fn new(reference_time: Instant, desired_size: (Duration, Duration)) -> Self {
         let inner = InnerLatencyOptimizedBuffer::new(reference_time, desired_size);
         let size = inner.target_size;
-        Self {
-            inner: Arc::new(Mutex::new(inner)),
-            size,
-            max_pts: None,
-        }
+        Self { inner: Arc::new(Mutex::new(inner)), size, max_pts: None }
     }
 
     /// Decides the size of the buffer, but the change will be applied
@@ -523,7 +512,8 @@ impl InnerLatencyOptimizedBuffer {
     fn on_new_packet(&mut self, pts: Duration) {
         let next_pts = pts + self.target_size;
         let effective_buffer = next_pts.saturating_sub(self.reference_time.elapsed());
-        let observed = LatencyTrend::from_effective_buffer(effective_buffer, &self.thresholds);
+        let observed =
+            LatencyTrend::from_effective_buffer(effective_buffer, &self.thresholds);
         trace!(
             ?effective_buffer,
             target_size=?self.target_size,
@@ -548,11 +538,15 @@ impl InnerLatencyOptimizedBuffer {
         };
 
         match self.resolve_trend(pts) {
-            LatencyTrend::ShrinkFast => self.scale_target(-Self::SHRINK_FAST_RATE, stream_delta),
+            LatencyTrend::ShrinkFast => {
+                self.scale_target(-Self::SHRINK_FAST_RATE, stream_delta)
+            }
             LatencyTrend::Shrink => self.scale_target(-Self::SHRINK_RATE, stream_delta),
             LatencyTrend::Stable => {}
             LatencyTrend::Grow => self.scale_target(Self::GROW_RATE, stream_delta),
-            LatencyTrend::GrowFast => self.scale_target(Self::GROW_FAST_RATE, stream_delta),
+            LatencyTrend::GrowFast => {
+                self.scale_target(Self::GROW_FAST_RATE, stream_delta)
+            }
             LatencyTrend::JumpGrow => self.try_grow_jump(pts, stream_delta),
         }
     }

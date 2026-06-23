@@ -6,7 +6,9 @@ use smelter_api::*;
 use smelter_render::Resolution;
 use smelter_render::image::{ImageSource, ImageType};
 use smelter_render::shader;
-use smelter_render::web_renderer::{WebEmbeddingMethod, WebRendererSpec as RenderWebRendererSpec};
+use smelter_render::web_renderer::{
+    WebEmbeddingMethod, WebRendererSpec as RenderWebRendererSpec,
+};
 
 type RendererSpec = smelter_render::RendererSpec;
 
@@ -50,18 +52,14 @@ fn check_serde_err<T: serde::de::DeserializeOwned>(raw: serde_json::Value) {
 
 fn image_url(url: &str, image_type: ImageType) -> RendererSpec {
     RendererSpec::Image(smelter_render::image::ImageSpec {
-        src: ImageSource::Url {
-            url: Arc::from(url),
-        },
+        src: ImageSource::Url { url: Arc::from(url) },
         image_type,
     })
 }
 
 fn image_path(path: &str, image_type: ImageType) -> RendererSpec {
     RendererSpec::Image(smelter_render::image::ImageSpec {
-        src: ImageSource::LocalPath {
-            path: Arc::from(Path::new(path)),
-        },
+        src: ImageSource::LocalPath { path: Arc::from(Path::new(path)) },
         image_type,
     })
 }
@@ -341,9 +339,7 @@ fn shader_empty_source() {
                 "source": ""
             }
         }),
-        RendererSpec::Shader(shader::ShaderSpec {
-            source: Arc::from(""),
-        }),
+        RendererSpec::Shader(shader::ShaderSpec { source: Arc::from("") }),
     );
 }
 
@@ -377,10 +373,7 @@ fn web_renderer_minimal() {
         }),
         RendererSpec::WebRenderer(RenderWebRendererSpec {
             url: Arc::from("https://example.com"),
-            resolution: Resolution {
-                width: 1920,
-                height: 1080,
-            },
+            resolution: Resolution { width: 1920, height: 1080 },
             embedding_method: WebEmbeddingMethod::NativeEmbeddingOverContent,
         }),
     );
@@ -398,10 +391,7 @@ fn web_renderer_chromium_embedding() {
         }),
         RendererSpec::WebRenderer(RenderWebRendererSpec {
             url: Arc::from("https://example.com"),
-            resolution: Resolution {
-                width: 1920,
-                height: 1080,
-            },
+            resolution: Resolution { width: 1920, height: 1080 },
             embedding_method: WebEmbeddingMethod::ChromiumEmbedding,
         }),
     );
@@ -419,10 +409,7 @@ fn web_renderer_native_over_content() {
         }),
         RendererSpec::WebRenderer(RenderWebRendererSpec {
             url: Arc::from("https://example.com"),
-            resolution: Resolution {
-                width: 1280,
-                height: 720,
-            },
+            resolution: Resolution { width: 1280, height: 720 },
             embedding_method: WebEmbeddingMethod::NativeEmbeddingOverContent,
         }),
     );
@@ -440,10 +427,7 @@ fn web_renderer_native_under_content() {
         }),
         RendererSpec::WebRenderer(RenderWebRendererSpec {
             url: Arc::from("https://example.com"),
-            resolution: Resolution {
-                width: 1280,
-                height: 720,
-            },
+            resolution: Resolution { width: 1280, height: 720 },
             embedding_method: WebEmbeddingMethod::NativeEmbeddingUnderContent,
         }),
     );

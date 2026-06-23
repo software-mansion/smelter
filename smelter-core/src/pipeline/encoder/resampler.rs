@@ -17,19 +17,18 @@ pub(crate) struct ResampledForEncoderStream<
     eos_sent: bool,
 }
 
-impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> ResampledForEncoderStream<Source> {
+impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>>
+    ResampledForEncoderStream<Source>
+{
     pub fn new(
         source: Source,
         input_sample_rate: u32,
         output_sample_rate: u32,
         channels: AudioChannels,
     ) -> Result<Self, rubato::ResamplerConstructionError> {
-        let resampler = OutputResampler::new(input_sample_rate, output_sample_rate, channels)?;
-        Ok(Self {
-            resampler,
-            source,
-            eos_sent: false,
-        })
+        let resampler =
+            OutputResampler::new(input_sample_rate, output_sample_rate, channels)?;
+        Ok(Self { resampler, source, eos_sent: false })
     }
 }
 
@@ -99,7 +98,8 @@ impl OutputResampler {
         // resampler delay expressed as time
         let output_delay = resampler.output_delay();
 
-        let mut resampler_output_buffer = ResamplerOutputBuffer::new(channels, samples_in_batch);
+        let mut resampler_output_buffer =
+            ResamplerOutputBuffer::new(channels, samples_in_batch);
         resampler_output_buffer.samples_to_drop = output_delay;
 
         Ok(Self {
@@ -138,18 +138,19 @@ impl OutputResampler {
             return None;
         }
 
-        let (consumed_samples, generated_samples) = match self.resampler.process_into_buffer(
-            &self.resampler_input_buffer,
-            &mut self.resampler_output_buffer,
-            None,
-        ) {
-            Ok(result) => result,
-            Err(err) => {
-                error!("Resampling error: {err}");
-                self.resampler_output_buffer.fill_with(&0.0);
-                (0, self.resampler_output_buffer.frames())
-            }
-        };
+        let (consumed_samples, generated_samples) =
+            match self.resampler.process_into_buffer(
+                &self.resampler_input_buffer,
+                &mut self.resampler_output_buffer,
+                None,
+            ) {
+                Ok(result) => result,
+                Err(err) => {
+                    error!("Resampling error: {err}");
+                    self.resampler_output_buffer.fill_with(&0.0);
+                    (0, self.resampler_output_buffer.frames())
+                }
+            };
 
         self.resampler_input_buffer.drain_samples(consumed_samples);
         if generated_samples != self.resampler_output_buffer.frames() {
@@ -192,13 +193,20 @@ impl ResamplerOutputBuffer {
         self.samples_to_drop = 0;
         match &self.buffer {
             AudioSamples::Mono(samples) => AudioSamples::Mono(samples[start..].to_vec()),
-            AudioSamples::Stereo(samples) => AudioSamples::Stereo(samples[start..].to_vec()),
+            AudioSamples::Stereo(samples) => {
+                AudioSamples::Stereo(samples[start..].to_vec())
+            }
         }
     }
 }
 
 impl AdapterMut<'_, f64> for ResamplerOutputBuffer {
-    unsafe fn write_sample_unchecked(&mut self, channel: usize, frame: usize, value: &f64) -> bool {
+    unsafe fn write_sample_unchecked(
+        &mut self,
+        channel: usize,
+        frame: usize,
+        value: &f64,
+    ) -> bool {
         match &mut self.buffer {
             AudioSamples::Mono(samples) => {
                 if channel != 0 {

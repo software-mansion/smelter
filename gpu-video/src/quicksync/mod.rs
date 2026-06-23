@@ -8,6 +8,28 @@ mod sys;
 mod va;
 mod vpl;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Nv12Plane {
+    Y,
+    Uv,
+}
+
+impl Nv12Plane {
+    fn aspect(self) -> wgpu::TextureAspect {
+        match self {
+            Self::Y => wgpu::TextureAspect::Plane0,
+            Self::Uv => wgpu::TextureAspect::Plane1,
+        }
+    }
+
+    fn bytes_per_texel(self) -> u32 {
+        match self {
+            Self::Y => 1,
+            Self::Uv => 2,
+        }
+    }
+}
+
 #[cfg(feature = "wgpu")]
 fn required_wgpu_features() -> wgpu::Features {
     crate::dmabuf::required_wgpu_features()
@@ -51,12 +73,12 @@ pub fn create_wgpu_device(
     };
     let capabilities = hal_adapter.physical_device_capabilities();
     if let Some(extension) =
-        crate::dmabuf::missing_required_sync_vulkan_device_extension(|extension| {
+        crate::dmabuf::missing_required_vulkan_device_extension(|extension| {
             capabilities.supports_extension(extension)
         })
     {
         return Err(format!(
-            "Intel Quick Sync DMA-BUF sync requires Vulkan device extension {}",
+            "Intel Quick Sync DMA-BUF interop requires Vulkan device extension {}",
             extension.to_string_lossy()
         ));
     }
@@ -67,7 +89,7 @@ pub fn create_wgpu_device(
             &descriptor.required_limits,
             &descriptor.memory_hints,
             Some(Box::new(move |args| {
-                for extension in crate::dmabuf::REQUIRED_SYNC_VULKAN_DEVICE_EXTENSIONS {
+                for extension in crate::dmabuf::REQUIRED_VULKAN_DEVICE_EXTENSIONS {
                     if !args.extensions.contains(&extension) {
                         args.extensions.push(extension);
                     }
@@ -88,7 +110,7 @@ fn supports_required_vulkan_device_extensions(adapter: &wgpu::Adapter) -> bool {
     };
 
     let capabilities = hal_adapter.physical_device_capabilities();
-    crate::dmabuf::missing_required_sync_vulkan_device_extension(|extension| {
+    crate::dmabuf::missing_required_vulkan_device_extension(|extension| {
         capabilities.supports_extension(extension)
     })
     .is_none()
@@ -99,7 +121,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wgpu_features_require_dma_buf_import_and_sync_extensions() {
+    fn wgpu_features_require_dma_buf_import_and_vulkan_extensions() {
         let required = required_wgpu_features();
 
         assert_eq!(supported_wgpu_features_from(required, true), required);

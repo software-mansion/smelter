@@ -1,11 +1,12 @@
 use tracing::debug;
 use webrtc::{
     api::{
-        APIBuilder, interceptor_registry::register_default_interceptors, media_engine::MediaEngine,
+        APIBuilder, interceptor_registry::register_default_interceptors,
+        media_engine::MediaEngine,
     },
     ice_transport::{
-        ice_connection_state::RTCIceConnectionState, ice_gatherer::OnLocalCandidateHdlrFn,
-        ice_server::RTCIceServer,
+        ice_connection_state::RTCIceConnectionState,
+        ice_gatherer::OnLocalCandidateHdlrFn, ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
     peer_connection::{
@@ -68,20 +69,19 @@ impl PeerConnection {
             },
         ));
 
-        Ok(Self {
-            pc: peer_connection,
-        })
+        Ok(Self { pc: peer_connection })
     }
 
     pub fn on_connection_state_change(
         &self,
         f: impl Fn(RTCPeerConnectionState) + Send + Sync + 'static,
     ) {
-        self.pc
-            .on_peer_connection_state_change(Box::new(move |state: RTCPeerConnectionState| {
+        self.pc.on_peer_connection_state_change(Box::new(
+            move |state: RTCPeerConnectionState| {
                 f(state);
                 Box::pin(async {})
-            }));
+            },
+        ));
     }
 
     pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WebrtcClientError> {
@@ -141,10 +141,7 @@ impl PeerConnection {
     }
 
     pub async fn create_offer(&self) -> Result<RTCSessionDescription, WebrtcClientError> {
-        self.pc
-            .create_offer(None)
-            .await
-            .map_err(WebrtcClientError::OfferCreationError)
+        self.pc.create_offer(None).await.map_err(WebrtcClientError::OfferCreationError)
     }
 
     pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
@@ -156,9 +153,7 @@ impl PeerConnection {
     }
 
     pub fn downgrade(&self) -> WeakPeerConnection {
-        WeakPeerConnection {
-            pc: Arc::downgrade(&self.pc),
-        }
+        WeakPeerConnection { pc: Arc::downgrade(&self.pc) }
     }
 }
 

@@ -28,40 +28,46 @@ impl WgpuNv12ToRgbaConverter {
             _ => return Err(WgpuConverterInitError::OnlyLimitedBT709Supported),
         }
 
-        let nv12_planes_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+        let nv12_planes_bgl =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float {
+                                filterable: true,
+                            },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float {
+                                filterable: true,
+                            },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-            ],
-        });
+                ],
+            });
 
         let sampler = WgpuSampler::new(device);
-        let shader_module =
-            device.create_shader_module(wgpu::include_wgsl!("../shaders/nv12_to_rgba.wgsl"));
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("gpu-video nv12 to rgba converter pipeline layout"),
-            bind_group_layouts: &[Some(&nv12_planes_bgl), Some(&sampler.bgl)],
-            immediate_size: 0,
-        });
+        let shader_module = device
+            .create_shader_module(wgpu::include_wgsl!("../shaders/nv12_to_rgba.wgsl"));
+        let pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("gpu-video nv12 to rgba converter pipeline layout"),
+                bind_group_layouts: &[Some(&nv12_planes_bgl), Some(&sampler.bgl)],
+                immediate_size: 0,
+            });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("gpu-video nv12 to rgba converter pipeline"),
@@ -85,13 +91,7 @@ impl WgpuNv12ToRgbaConverter {
             cache: None,
         });
 
-        Ok(Self {
-            pipeline,
-            params,
-            nv12_planes_bgl,
-            sampler,
-            device: device.clone(),
-        })
+        Ok(Self { pipeline, params, nv12_planes_bgl, sampler, device: device.clone() })
     }
 
     /// Creates [`wgpu::BindGroup`] for [`OutputFrame<wgpu::Texture>`].
@@ -147,22 +147,25 @@ impl WgpuNv12ToRgbaConverter {
         src_nv12_bind_group: &wgpu::BindGroup,
         dst_rgba_view: &wgpu::TextureView,
     ) {
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: dst_rgba_view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::DontCare(unsafe { wgpu::LoadOpDontCare::enabled() }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
+        let mut render_pass =
+            command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: dst_rgba_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::DontCare(unsafe {
+                            wgpu::LoadOpDontCare::enabled()
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
 
         render_pass.set_bind_group(0, src_nv12_bind_group, &[]);
         render_pass.set_bind_group(1, &self.sampler.bg, &[]);

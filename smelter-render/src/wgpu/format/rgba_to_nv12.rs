@@ -17,18 +17,20 @@ impl RgbaToNv12Converter {
         device: &wgpu::Device,
         single_texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let shader_module = device.create_shader_module(wgpu::include_wgsl!("rgba_to_nv12.wgsl"));
+        let shader_module =
+            device.create_shader_module(wgpu::include_wgsl!("rgba_to_nv12.wgsl"));
 
         let sampler = Sampler::new(device);
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("RGBA to NV12 color converter render pipeline layout"),
-            bind_group_layouts: &[
-                Some(single_texture_bind_group_layout),
-                Some(&sampler.bind_group_layout),
-            ],
-            immediate_size: 0,
-        });
+        let pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("RGBA to NV12 color converter render pipeline layout"),
+                bind_group_layouts: &[
+                    Some(single_texture_bind_group_layout),
+                    Some(&sampler.bind_group_layout),
+                ],
+                immediate_size: 0,
+            });
         let y_pipeline = create_converting_pipeline(
             device,
             &pipeline_layout,
@@ -44,25 +46,21 @@ impl RgbaToNv12Converter {
             wgpu::TextureFormat::Rg8Unorm,
         );
 
-        Self {
-            y_pipeline,
-            uv_pipeline,
-            sampler,
-        }
+        Self { y_pipeline, uv_pipeline, sampler }
     }
 
-    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst_texture: &NV12Texture) {
+    pub fn encode_convert(
+        &self,
+        ctx: &WgpuCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        src_bg: &wgpu::BindGroup,
+        dst_texture: &NV12Texture,
+    ) {
         let (dst_y_view, dst_uv_view) = dst_texture.views();
-
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("RGBA to NV12 color converter encoder"),
-            });
 
         convert_plane(
             ctx,
-            &mut encoder,
+            encoder,
             &self.y_pipeline,
             &self.sampler.bind_group,
             src_bg,
@@ -70,14 +68,12 @@ impl RgbaToNv12Converter {
         );
         convert_plane(
             ctx,
-            &mut encoder,
+            encoder,
             &self.uv_pipeline,
             &self.sampler.bind_group,
             src_bg,
             dst_uv_view,
         );
-
-        ctx.queue.submit(Some(encoder.finish()));
     }
 }
 

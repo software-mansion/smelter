@@ -9,8 +9,9 @@ use crate::{
     vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     vulkan_transcoder::TranscoderError,
     wrappers::{
-        CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
-        Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
+        CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet,
+        DescriptorSetLayout, Image, ImageView, PipelineLayout, ProfileInfo,
+        SemaphoreWaitValue, ShaderModule,
     },
 };
 
@@ -68,11 +69,7 @@ impl ResizingImageBundle {
             vk::ImageUsageFlags::STORAGE,
         )?;
 
-        Ok(Self {
-            image,
-            view_y,
-            view_uv,
-        })
+        Ok(Self { image, view_y, view_uv })
     }
 }
 
@@ -84,11 +81,7 @@ struct ImageHeap {
 
 impl ImageHeap {
     fn new(device: Arc<VulkanDevice>, configs: Vec<OutputConfig>) -> Self {
-        Self {
-            device,
-            freelist: Vec::new(),
-            configs,
-        }
+        Self { device, freelist: Vec::new(), configs }
     }
 
     fn free(&mut self, images: Box<[ResizingImageBundle]>) {
@@ -112,7 +105,10 @@ impl ImageHeap {
                 self.device.queues.compute.family_index as u32,
             ];
             let create_info = vk::ImageCreateInfo::default()
-                .flags(vk::ImageCreateFlags::EXTENDED_USAGE | vk::ImageCreateFlags::MUTABLE_FORMAT)
+                .flags(
+                    vk::ImageCreateFlags::EXTENDED_USAGE
+                        | vk::ImageCreateFlags::MUTABLE_FORMAT,
+                )
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
                 .extent(vk::Extent3D {
@@ -124,7 +120,10 @@ impl ImageHeap {
                 .array_layers(1)
                 .samples(vk::SampleCountFlags::TYPE_1)
                 .tiling(vk::ImageTiling::OPTIMAL)
-                .usage(vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
+                .usage(
+                    vk::ImageUsageFlags::STORAGE
+                        | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR,
+                )
                 .sharing_mode(vk::SharingMode::CONCURRENT)
                 .queue_family_indices(&queue_indices)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
@@ -136,9 +135,7 @@ impl ImageHeap {
                 tracker.image_layout_tracker.clone(),
             )?);
 
-            self.device
-                .device
-                .set_label(image.image, Some("resize image"))?;
+            self.device.device.set_label(image.image, Some("resize image"))?;
 
             result.push(ResizingImageBundle::new(image, 0)?);
         }
@@ -173,12 +170,7 @@ impl DescriptorHeap {
         layout_input: Arc<DescriptorSetLayout>,
         layout_output: Arc<DescriptorSetLayout>,
     ) -> Self {
-        Self {
-            pool,
-            freelist: Vec::new(),
-            layout_input,
-            layout_output,
-        }
+        Self { pool, freelist: Vec::new(), layout_input, layout_output }
     }
 
     fn free(&mut self, descriptors: Descriptors) {
@@ -201,18 +193,16 @@ impl DescriptorHeap {
 
         let mut descriptor_set_outputs = DescriptorSet::new(
             self.pool.clone(),
-            &vk::DescriptorSetAllocateInfo::default()
-                .set_layouts(&[self.layout_output.set_layout, self.layout_output.set_layout]),
+            &vk::DescriptorSetAllocateInfo::default().set_layouts(&[
+                self.layout_output.set_layout,
+                self.layout_output.set_layout,
+            ]),
         )?;
 
         let output_uv = descriptor_set_outputs.pop().unwrap();
         let output_y = descriptor_set_outputs.pop().unwrap();
 
-        Ok(Descriptors {
-            input,
-            output_y,
-            output_uv,
-        })
+        Ok(Descriptors { input, output_y, output_uv })
     }
 }
 
@@ -270,8 +260,8 @@ impl ResizingPipeline {
             .stage_flags(vk::ShaderStageFlags::COMPUTE)];
 
         let flags = [vk::DescriptorBindingFlags::PARTIALLY_BOUND];
-        let mut binding_flags =
-            vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&flags);
+        let mut binding_flags = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
+            .binding_flags(&flags);
 
         let layout_output = Arc::new(DescriptorSetLayout::new(
             device.device.clone(),
@@ -287,11 +277,8 @@ impl ResizingPipeline {
         );
         let image_heap = ImageHeap::new(device.clone(), configs);
 
-        let layouts = [
-            layout_input.set_layout,
-            layout_output.set_layout,
-            layout_output.set_layout,
-        ];
+        let layouts =
+            [layout_input.set_layout, layout_output.set_layout, layout_output.set_layout];
         let push_constants = [vk::PushConstantRange::default()
             .size(std::mem::size_of::<PushConstants>() as u32)
             .offset(0)
@@ -333,13 +320,7 @@ impl ResizingPipeline {
         let buffer_pool =
             CommandBufferPool::new(device.clone(), device.queues.compute.family_index)?;
 
-        Ok(Self {
-            image_heap,
-            descriptor_heap,
-            pipeline,
-            buffer_pool,
-            device,
-        })
+        Ok(Self { image_heap, descriptor_heap, pipeline, buffer_pool, device })
     }
 
     pub(crate) fn free_submission(&mut self, submission: ResizeSubmission) {
@@ -386,16 +367,8 @@ impl ResizingPipeline {
                 std::slice::from_ref(&image_info_input_uv),
                 1,
             ),
-            (
-                descriptors.output_y.descriptor_set,
-                &image_infos_output_y,
-                0,
-            ),
-            (
-                descriptors.output_uv.descriptor_set,
-                &image_infos_output_uv,
-                0,
-            ),
+            (descriptors.output_y.descriptor_set, &image_infos_output_y, 0),
+            (descriptors.output_uv.descriptor_set, &image_infos_output_uv, 0),
         ]
         .into_iter()
         .map(|(descriptor_set, image_infos, binding)| {
@@ -427,9 +400,7 @@ impl ResizingPipeline {
         let descriptors = self.write_descriptors(&input, &outputs)?;
 
         let mut buffer = self.buffer_pool.begin_buffer()?;
-        self.device
-            .device
-            .set_label(buffer.buffer(), Some("resize pipeline buffer"))?;
+        self.device.device.set_label(buffer.buffer(), Some("resize pipeline buffer"))?;
 
         input.image.transition_layout_single_layer(
             &mut buffer,
@@ -451,8 +422,9 @@ impl ResizingPipeline {
         let dispatch_size = outputs
             .iter()
             .map(|ResizingImageBundle { image, .. }| {
-                (image.extent.width.next_multiple_of(16) * image.extent.height.next_multiple_of(16))
-                    .div_ceil(256)
+                (image.extent.width.next_multiple_of(16)
+                    * image.extent.height.next_multiple_of(16))
+                .div_ceil(256)
             })
             .sum::<u32>();
 
@@ -475,7 +447,8 @@ impl ResizingPipeline {
                 &[],
             );
 
-            let push_constants = PushConstants::new(&self.image_heap.configs, input_cropped_extent);
+            let push_constants =
+                PushConstants::new(&self.image_heap.configs, input_cropped_extent);
             self.device.device.cmd_push_constants(
                 buffer.buffer(),
                 self.pipeline.layout.layout,
@@ -483,13 +456,12 @@ impl ResizingPipeline {
                 0,
                 bytemuck::bytes_of(&push_constants),
             );
-            self.device
-                .device
-                .cmd_dispatch(buffer.buffer(), dispatch_size, 1, 1);
+            self.device.device.cmd_dispatch(buffer.buffer(), dispatch_size, 1, 1);
         }
 
         let buffer = buffer.end()?;
-        let buffer_info = vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer());
+        let buffer_info =
+            vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer());
 
         let encoder_semaphore_submit_infos = encoder_trackers
             .iter_mut()
@@ -521,8 +493,10 @@ impl ResizingPipeline {
             waits.push(wait);
         }
 
-        signals
-            .push(decoder_semaphore_submit_info.signal_info(vk::PipelineStageFlags2::ALL_COMMANDS));
+        signals.push(
+            decoder_semaphore_submit_info
+                .signal_info(vk::PipelineStageFlags2::ALL_COMMANDS),
+        );
 
         let submit_info = vk::SubmitInfo2::default()
             .command_buffer_infos(std::slice::from_ref(&buffer_info))
@@ -544,14 +518,13 @@ impl ResizingPipeline {
 
         decoder_semaphore_submit_info.mark_submitted();
 
-        Ok(ResizeSubmission {
-            outputs,
-            _input: input,
-            descriptors,
-        })
+        Ok(ResizeSubmission { outputs, _input: input, descriptors })
     }
 
-    pub(crate) fn mark_command_buffers_completed(&self, decoder_wait_value: SemaphoreWaitValue) {
+    pub(crate) fn mark_command_buffers_completed(
+        &self,
+        decoder_wait_value: SemaphoreWaitValue,
+    ) {
         self.buffer_pool.mark_submitted_as_free(decoder_wait_value);
     }
 }

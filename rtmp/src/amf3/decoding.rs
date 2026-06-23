@@ -30,12 +30,7 @@ where
     T: Buf,
 {
     pub(crate) fn new(amf_buf: T) -> Self {
-        Self {
-            buf: amf_buf,
-            strings: vec![],
-            traits: vec![],
-            complexes: vec![],
-        }
+        Self { buf: amf_buf, strings: vec![], traits: vec![], complexes: vec![] }
     }
 
     fn decode_buf(mut self) -> Result<Vec<Amf3Value>, AmfDecodingError> {
@@ -103,8 +98,8 @@ where
             }
 
             let utf8 = decoder.buf.copy_to_bytes(size);
-            let xml =
-                String::from_utf8(utf8.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
+            let xml = String::from_utf8(utf8.to_vec())
+                .map_err(|_| AmfDecodingError::InvalidUtf8)?;
 
             let amf_value = Amf3Value::XmlDoc(xml);
             decoder.complexes.push(amf_value.clone());
@@ -135,13 +130,10 @@ where
                 return Err(AmfDecodingError::InsufficientData);
             }
 
-            let associative = decoder
-                .decode_pairs()?
-                .into_iter()
-                .collect::<HashMap<_, _>>();
-            let dense = (0..size)
-                .map(|_| decoder.decode_value())
-                .collect::<Result<_, _>>()?;
+            let associative =
+                decoder.decode_pairs()?.into_iter().collect::<HashMap<_, _>>();
+            let dense =
+                (0..size).map(|_| decoder.decode_value()).collect::<Result<_, _>>()?;
 
             Ok(Amf3Value::Array { associative, dense })
         };
@@ -183,8 +175,8 @@ where
             }
 
             let utf8 = decoder.buf.copy_to_bytes(size);
-            let xml =
-                String::from_utf8(utf8.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
+            let xml = String::from_utf8(utf8.to_vec())
+                .map_err(|_| AmfDecodingError::InvalidUtf8)?;
 
             let amf_value = Amf3Value::Xml(xml);
             decoder.complexes.push(amf_value.clone());
@@ -220,14 +212,10 @@ where
 
             let fixed_length = decoder.buf.get_u8() == 0x01;
 
-            let values = (0..(item_count * ITEM_SIZE))
-                .map(|_| decoder.buf.get_i32())
-                .collect();
+            let values =
+                (0..(item_count * ITEM_SIZE)).map(|_| decoder.buf.get_i32()).collect();
 
-            let amf_value = Amf3Value::VectorInt {
-                fixed_length,
-                values,
-            };
+            let amf_value = Amf3Value::VectorInt { fixed_length, values };
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
         };
@@ -245,14 +233,10 @@ where
 
             let fixed_length = decoder.buf.get_u8() == 0x01;
 
-            let values = (0..(item_count * ITEM_SIZE))
-                .map(|_| decoder.buf.get_u32())
-                .collect();
+            let values =
+                (0..(item_count * ITEM_SIZE)).map(|_| decoder.buf.get_u32()).collect();
 
-            let amf_value = Amf3Value::VectorUInt {
-                fixed_length,
-                values,
-            };
+            let amf_value = Amf3Value::VectorUInt { fixed_length, values };
 
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
@@ -271,14 +255,10 @@ where
 
             let fixed_length = decoder.buf.get_u8() == 0x01;
 
-            let values = (0..(item_count * ITEM_SIZE))
-                .map(|_| decoder.buf.get_f64())
-                .collect();
+            let values =
+                (0..(item_count * ITEM_SIZE)).map(|_| decoder.buf.get_f64()).collect();
 
-            let amf_value = Amf3Value::VectorDouble {
-                fixed_length,
-                values,
-            };
+            let amf_value = Amf3Value::VectorDouble { fixed_length, values };
 
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
@@ -295,21 +275,13 @@ where
 
             let fixed_length = decoder.buf.get_u8() == 0x01;
             let class_name = decoder.decode_string_raw()?;
-            let class_name = if class_name == "*" {
-                None
-            } else {
-                Some(class_name)
-            };
+            let class_name = if class_name == "*" { None } else { Some(class_name) };
 
             let values = (0..item_count)
                 .map(|_| decoder.decode_value())
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = Amf3Value::VectorObject {
-                fixed_length,
-                class_name,
-                values,
-            };
+            let amf_value = Amf3Value::VectorObject { fixed_length, class_name, values };
 
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
@@ -334,10 +306,7 @@ where
                 })
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = Amf3Value::Dictionary {
-                weak_references,
-                entries,
-            };
+            let amf_value = Amf3Value::Dictionary { weak_references, entries };
 
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
@@ -413,11 +382,7 @@ where
 
     fn decode_i29(&mut self) -> Result<i32, AmfDecodingError> {
         let u29 = self.decode_u29()?;
-        if u29 & (1 << 28) != 0 {
-            Ok((u29 as i32) - (1 << 29))
-        } else {
-            Ok(u29 as i32)
-        }
+        if u29 & (1 << 28) != 0 { Ok((u29 as i32) - (1 << 29)) } else { Ok(u29 as i32) }
     }
 
     fn decode_string_raw(&mut self) -> Result<String, AmfDecodingError> {
@@ -440,8 +405,8 @@ where
                     }
 
                     let utf8 = self.buf.copy_to_bytes(size).to_vec();
-                    let string =
-                        String::from_utf8(utf8).map_err(|_| AmfDecodingError::InvalidUtf8)?;
+                    let string = String::from_utf8(utf8)
+                        .map_err(|_| AmfDecodingError::InvalidUtf8)?;
                     self.strings.push(string.clone());
                     string
                 }
@@ -497,21 +462,13 @@ where
             let sealed_members = trait_marker >> 1;
 
             let class_name = self.decode_string_raw()?;
-            let class_name = if class_name.is_empty() {
-                None
-            } else {
-                Some(class_name)
-            };
+            let class_name = if class_name.is_empty() { None } else { Some(class_name) };
 
             let field_names = (0..sealed_members)
                 .map(|_| self.decode_string_raw())
                 .collect::<Result<_, _>>()?;
 
-            let amf_trait = Trait {
-                class_name,
-                dynamic,
-                field_names,
-            };
+            let amf_trait = Trait { class_name, dynamic, field_names };
 
             self.traits.push(amf_trait.clone());
             Ok(amf_trait)
@@ -535,7 +492,8 @@ mod decode_test {
         let actual = decoder.decode_i29().unwrap();
         assert_eq!(actual, expected);
 
-        let mut decoder = Amf3DecoderState::new(Bytes::from_iter([0b10010000, 0b01011001]));
+        let mut decoder =
+            Amf3DecoderState::new(Bytes::from_iter([0b10010000, 0b01011001]));
         let expected = 2137;
         let actual = decoder.decode_i29().unwrap();
         assert_eq!(actual, expected);

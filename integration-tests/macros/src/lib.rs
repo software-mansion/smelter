@@ -1,13 +1,14 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    Expr, ExprLit, ItemFn, Lit, LitStr, Meta, Stmt, Token, parse_macro_input, parse_quote,
-    punctuated::Punctuated,
+    Expr, ExprLit, ItemFn, Lit, LitStr, Meta, Stmt, Token, parse_macro_input,
+    parse_quote, punctuated::Punctuated,
 };
 
 #[proc_macro_attribute]
 pub fn pipeline_test(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr with Punctuated::<Meta, Token![,]>::parse_terminated);
+    let args =
+        parse_macro_input!(attr with Punctuated::<Meta, Token![,]>::parse_terminated);
     let mut input = parse_macro_input!(item as ItemFn);
 
     let fn_name = &input.sig.ident;
@@ -25,9 +26,7 @@ pub fn pipeline_test(attr: TokenStream, item: TokenStream) -> TokenStream {
                     snapshot_name_value = Some(value.clone());
                 }
                 if path.is_ident("description")
-                    && let Expr::Lit(ExprLit {
-                        lit: Lit::Str(s), ..
-                    }) = value
+                    && let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = value
                 {
                     let dedented = dedent(&s.value());
                     let new_lit = LitStr::new(&dedented, s.span());
@@ -37,8 +36,8 @@ pub fn pipeline_test(attr: TokenStream, item: TokenStream) -> TokenStream {
                 field_assignments.push(quote! { #path: #value });
             }
             other => {
-                let err =
-                    syn::Error::new_spanned(other, "expected `name = value`").to_compile_error();
+                let err = syn::Error::new_spanned(other, "expected `name = value`")
+                    .to_compile_error();
                 return err.into();
             }
         }
@@ -69,7 +68,8 @@ pub fn pipeline_test(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn render_test(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr with Punctuated::<Meta, Token![,]>::parse_terminated);
+    let args =
+        parse_macro_input!(attr with Punctuated::<Meta, Token![,]>::parse_terminated);
     let mut input = parse_macro_input!(item as ItemFn);
 
     let fn_name = &input.sig.ident;
@@ -95,9 +95,7 @@ pub fn render_test(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let path = &nv.path;
                 let value = &nv.value;
                 if path.is_ident("description")
-                    && let Expr::Lit(ExprLit {
-                        lit: Lit::Str(s), ..
-                    }) = value
+                    && let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = value
                 {
                     let dedented = dedent(&s.value());
                     let new_lit = LitStr::new(&dedented, s.span());
@@ -107,8 +105,8 @@ pub fn render_test(attr: TokenStream, item: TokenStream) -> TokenStream {
                 field_assignments.push(quote! { #path: #value });
             }
             other => {
-                let err =
-                    syn::Error::new_spanned(other, "expected `name = value`").to_compile_error();
+                let err = syn::Error::new_spanned(other, "expected `name = value`")
+                    .to_compile_error();
                 return err.into();
             }
         }

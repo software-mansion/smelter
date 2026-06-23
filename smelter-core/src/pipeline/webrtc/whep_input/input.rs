@@ -18,8 +18,10 @@ use crate::{
             peer_connection_recvonly::RecvonlyPeerConnection,
             supported_codec_parameters::opus_codec_params,
             whep_input::{
-                WhepTrackContext, listen_for_trickle_candidates::listen_for_trickle_candidates,
-                on_track::handle_on_track, resolve_video_preferences::resolve_video_preferences,
+                WhepTrackContext,
+                listen_for_trickle_candidates::listen_for_trickle_candidates,
+                on_track::handle_on_track,
+                resolve_video_preferences::resolve_video_preferences,
             },
         },
     },
@@ -80,11 +82,8 @@ impl WhepInput {
             kind: InputProtocolKind::Whep,
         });
 
-        let span = span!(
-            Level::INFO,
-            "WHEP client task",
-            input_id = input_ref.to_string()
-        );
+        let span =
+            span!(Level::INFO, "WHEP client task", input_id = input_ref.to_string());
         let ctx_clone = ctx.clone();
         ctx.tokio_rt.spawn(
             async {
@@ -149,8 +148,11 @@ async fn init_whep_client(
 
     // WHEP input creates the offer (client side), so use hardcoded audio codec defaults.
     // Our decoder supports only stereo.
-    let audio_codecs_params = opus_codec_params(true /* fec_first */, AudioChannels::Stereo);
-    let pc = RecvonlyPeerConnection::new(&ctx, &video_codecs_params, &audio_codecs_params).await?;
+    let audio_codecs_params =
+        opus_codec_params(true /* fec_first */, AudioChannels::Stereo);
+    let pc =
+        RecvonlyPeerConnection::new(&ctx, &video_codecs_params, &audio_codecs_params)
+            .await?;
 
     let _video_transceiver = pc.new_video_track(&video_codecs_params).await?;
     let _audio_transceiver = pc.new_audio_track().await?;
@@ -158,10 +160,7 @@ async fn init_whep_client(
     let offer = pc.create_offer().await?;
     debug!("SDP offer: {}", offer.sdp);
 
-    let SdpAnswer {
-        session_url,
-        answer,
-    } = client.send_offer(&offer).await?;
+    let SdpAnswer { session_url, answer } = client.send_offer(&offer).await?;
     debug!("SDP answer: {}", answer.sdp);
 
     pc.set_local_description(offer).await?;
@@ -184,11 +183,12 @@ async fn init_whep_client(
             ctx.queue_ctx.sync_point,
         );
 
-        let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: true,
-            audio: true,
-            offset: QueueTrackOffset::Pts(Duration::ZERO),
-        });
+        let (mut video_sender, mut audio_sender) =
+            queue_input.queue_new_track(QueueTrackOptions {
+                video: true,
+                audio: true,
+                offset: QueueTrackOffset::Pts(Duration::ZERO),
+            });
 
         pc.on_track(move |track_ctx| {
             let ctx = WhepTrackContext::new(track_ctx, &ctx, &buffer);
@@ -203,12 +203,7 @@ async fn init_whep_client(
     }
 
     Ok((
-        Input::Whep(WhepInput {
-            ctx,
-            session_url,
-            client,
-            _peer_connection: pc,
-        }),
+        Input::Whep(WhepInput { ctx, session_url, client, _peer_connection: pc }),
         InputInitInfo::Other,
         queue_input,
     ))

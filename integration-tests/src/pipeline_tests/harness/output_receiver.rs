@@ -47,9 +47,7 @@ impl OutputReceiver {
             }
         });
 
-        Ok(Self {
-            receiver: dump_receiver,
-        })
+        Ok(Self { receiver: dump_receiver })
     }
 
     pub fn wait_for_output(self) -> Result<Bytes> {
@@ -58,7 +56,10 @@ impl OutputReceiver {
             .context("Failed to receive output dump")
     }
 
-    fn setup_socket(port: u16, protocol: &CommunicationProtocol) -> Result<socket2::Socket> {
+    fn setup_socket(
+        port: u16,
+        protocol: &CommunicationProtocol,
+    ) -> Result<socket2::Socket> {
         let socket = match protocol {
             CommunicationProtocol::Udp => socket2::Socket::new(
                 socket2::Domain::IPV4,
@@ -74,11 +75,14 @@ impl OutputReceiver {
 
         match protocol {
             CommunicationProtocol::Udp => {
-                socket.bind(&SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), port).into())?;
+                socket.bind(
+                    &SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), port).into(),
+                )?;
             }
             CommunicationProtocol::Tcp => {
-                socket
-                    .connect(&SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), port).into())?;
+                socket.connect(
+                    &SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), port).into(),
+                )?;
             }
         }
 
@@ -112,11 +116,12 @@ impl OutputReceiver {
 
 fn unmarshal_packet(mut buffer: Bytes) -> Result<Packet> {
     let rtp_packet = rtp::packet::Packet::unmarshal(&mut buffer.clone())?;
-    let packet = if rtp_packet.header.payload_type < 64 || rtp_packet.header.payload_type > 95 {
-        Packet::Rtp(buffer)
-    } else {
-        rtcp::goodbye::Goodbye::unmarshal(&mut buffer).map(|_| Packet::RtcpGoodbye)?
-    };
+    let packet =
+        if rtp_packet.header.payload_type < 64 || rtp_packet.header.payload_type > 95 {
+            Packet::Rtp(buffer)
+        } else {
+            rtcp::goodbye::Goodbye::unmarshal(&mut buffer).map(|_| Packet::RtcpGoodbye)?
+        };
 
     Ok(packet)
 }

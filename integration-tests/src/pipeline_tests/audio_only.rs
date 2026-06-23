@@ -10,13 +10,15 @@ use crate::{
     pipeline_tests::{
         PipelineTest,
         harness::{
-            AudioCompareConfig, FftCompareConfig, OutputReceiver, PacketSender, compare_audio_dumps,
+            AudioCompareConfig, FftCompareConfig, OutputReceiver, PacketSender,
+            compare_audio_dumps,
         },
     },
 };
 
 fn artificial_fft(allowed_failed_batches: u32) -> FftCompareConfig {
-    let mut cfg = FftCompareConfig::artificial(vec![Duration::ZERO..Duration::from_secs(10)]);
+    let mut cfg =
+        FftCompareConfig::artificial(vec![Duration::ZERO..Duration::from_secs(10)]);
     cfg.allowed_failed_batches = allowed_failed_batches;
     cfg
 }
@@ -121,10 +123,7 @@ pub fn audio_mixing_with_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(artificial_fft(0)),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(artificial_fft(0)), ..Default::default() },
     )?;
 
     Ok(())
@@ -224,10 +223,7 @@ pub fn audio_mixing_no_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(artificial_fft(2)),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(artificial_fft(2)), ..Default::default() },
     )?;
 
     Ok(())
@@ -341,10 +337,7 @@ pub fn audio_mixing_track_insertion_with_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(artificial_fft(0)),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(artificial_fft(0)), ..Default::default() },
     )?;
 
     Ok(())
@@ -418,10 +411,7 @@ pub fn single_input_opus() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(artificial_fft(0)),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(artificial_fft(0)), ..Default::default() },
     )?;
 
     Ok(())
@@ -552,10 +542,8 @@ pub fn single_input_aac_mp4() -> Result<()> {
         }),
     )?;
 
-    let input_path = submodule_root_path()
-        .join("rtp_packet_dumps")
-        .join("inputs")
-        .join("a_aac.mp4");
+    let input_path =
+        submodule_root_path().join("rtp_packet_dumps").join("inputs").join("a_aac.mp4");
 
     instance.send_request(
         "input/input_1/register",
@@ -572,10 +560,7 @@ pub fn single_input_aac_mp4() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(artificial_fft(0)),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(artificial_fft(0)), ..Default::default() },
     )?;
 
     Ok(())
@@ -655,10 +640,7 @@ fn audio_early_streaming_with_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(artificial_fft(0)),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(artificial_fft(0)), ..Default::default() },
     )?;
 
     Ok(())
@@ -737,10 +719,7 @@ fn audio_early_streaming_no_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioCompareConfig {
-            fft: Some(artificial_fft(2)),
-            ..Default::default()
-        },
+        AudioCompareConfig { fft: Some(artificial_fft(2)), ..Default::default() },
     )?;
 
     Ok(())

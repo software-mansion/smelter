@@ -6,8 +6,8 @@ use smelter_render::{
     InputId,
     scene::{
         AbsolutePosition, Component, ComponentId, HorizontalAlign, HorizontalPosition,
-        InputStreamComponent, InterpolationKind, Position, RGBAColor, TilesComponent, Transition,
-        VerticalPosition, ViewComponent,
+        InputStreamComponent, InterpolationKind, Position, RGBAColor, TilesComponent,
+        Transition, VerticalPosition, ViewComponent,
     },
 };
 
@@ -264,12 +264,7 @@ fn add_input_on_2nd_pos_to_3_tiles_scene() -> Result<()> {
     runner.update_scene(Component::Tiles(TilesComponent {
         id: Some(ComponentId(TILES_ID.into())),
         transition: Some(linear_500ms(false)),
-        children: vec![
-            input(1, false),
-            input(4, true),
-            input(2, false),
-            input(3, false),
-        ],
+        children: vec![input(1, false), input(4, true), input(2, false), input(3, false)],
         ..Default::default()
     }));
     runner.snapshot(Duration::from_millis(0));
@@ -356,12 +351,7 @@ fn replace_component_by_changing_id_and_add_new_component() -> Result<()> {
     runner.update_scene(Component::Tiles(TilesComponent {
         id: Some(ComponentId(TILES_ID.into())),
         transition: Some(linear_500ms(false)),
-        children: vec![
-            input(1, true),
-            input(4, true),
-            input(3, true),
-            input(5, false),
-        ],
+        children: vec![input(1, true), input(4, true), input(3, true), input(5, false)],
         ..Default::default()
     }));
     runner.snapshot(Duration::from_millis(1));
@@ -400,7 +390,8 @@ fn replace_component_by_changing_id_add_margin() -> Result<()> {
 }
 
 #[render_test(description = "")]
-fn replace_component_by_changing_id_add_new_component_last_row_center_aligned() -> Result<()> {
+fn replace_component_by_changing_id_add_new_component_last_row_center_aligned()
+-> Result<()> {
     let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
         TestInput::new(1),
         TestInput::new(2),
@@ -419,12 +410,7 @@ fn replace_component_by_changing_id_add_new_component_last_row_center_aligned() 
         id: Some(ComponentId(TILES_ID.into())),
         transition: Some(linear_500ms(false)),
         horizontal_align: HorizontalAlign::Center,
-        children: vec![
-            input(1, true),
-            input(2, true),
-            input(4, true),
-            input(5, false),
-        ],
+        children: vec![input(1, true), input(2, true), input(4, true), input(5, false)],
         ..Default::default()
     }));
     runner.snapshot(Duration::from_millis(1));
@@ -435,7 +421,8 @@ fn replace_component_by_changing_id_add_new_component_last_row_center_aligned() 
 }
 
 #[render_test(description = "")]
-fn replace_component_by_changing_id_add_new_component_last_row_left_aligned() -> Result<()> {
+fn replace_component_by_changing_id_add_new_component_last_row_left_aligned() -> Result<()>
+{
     let mut runner = TestRunner::new(MODULE, TEST_NAME).with_inputs(vec![
         TestInput::new(1),
         TestInput::new(2),
@@ -454,12 +441,7 @@ fn replace_component_by_changing_id_add_new_component_last_row_left_aligned() ->
         id: Some(ComponentId(TILES_ID.into())),
         transition: Some(linear_500ms(false)),
         horizontal_align: HorizontalAlign::Left,
-        children: vec![
-            input(1, true),
-            input(2, true),
-            input(4, true),
-            input(5, false),
-        ],
+        children: vec![input(1, true), input(2, true), input(4, true), input(5, false)],
         ..Default::default()
     }));
     runner.snapshot(Duration::from_millis(1));

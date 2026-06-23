@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use crate::{
-    scene::{BorderRadius, RGBAColor, Size, StatefulComponent, layout::StatefulLayoutComponent},
+    scene::{
+        BorderRadius, RGBAColor, Size, StatefulComponent, layout::StatefulLayoutComponent,
+    },
     transformations::layout::{LayoutContent, NestedLayout},
 };
 
@@ -40,26 +42,27 @@ pub(super) fn layout_tiles(
     }
 }
 
-fn layout_child(child: &mut StatefulComponent, tile: Option<Tile>, pts: Duration) -> NestedLayout {
+fn layout_child(
+    child: &mut StatefulComponent,
+    tile: Option<Tile>,
+    pts: Duration,
+) -> NestedLayout {
     let Some(tile) = tile else {
         // If tile does not need to be rendered we still need to create empty layout that has
         // child_nodes_count. Without this element children index offsets will not be calculated
         // correctly.
         let child_nodes_count = match child {
-            StatefulComponent::Layout(layout_component) => layout_component.node_children().len(),
+            StatefulComponent::Layout(layout_component) => {
+                layout_component.node_children().len()
+            }
             _ => 1,
         };
         return NestedLayout::child_nodes_placeholder(child_nodes_count);
     };
     match child {
         StatefulComponent::Layout(layout_component) => {
-            let children_layouts = layout_component.layout(
-                Size {
-                    width: tile.width,
-                    height: tile.height,
-                },
-                pts,
-            );
+            let children_layouts = layout_component
+                .layout(Size { width: tile.width, height: tile.height }, pts);
             NestedLayout {
                 top: tile.top,
                 left: tile.left,

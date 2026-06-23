@@ -96,7 +96,8 @@ fn run_demo() {
             Action::Reset => match examples::post("reset", &json!({})) {
                 Ok(_) => {
                     state = if should_reread_json_dump(JSON_ENV)
-                        && let Some(new_state) = SmelterState::try_read_dump_from_env(JSON_ENV)
+                        && let Some(new_state) =
+                            SmelterState::try_read_dump_from_env(JSON_ENV)
                     {
                         options.retain(|opt| *opt != Action::Start);
                         new_state

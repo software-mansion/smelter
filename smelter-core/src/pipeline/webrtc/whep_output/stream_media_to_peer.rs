@@ -3,7 +3,9 @@ use std::sync::Arc;
 use smelter_render::error::ErrorStack;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, trace};
-use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
+use webrtc::track::track_local::{
+    TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP,
+};
 
 use crate::{
     event::Event,
@@ -28,12 +30,8 @@ pub async fn stream_media_to_peer(
     let mut next_audio_event = None;
 
     loop {
-        match (
-            &next_video_event,
-            &next_audio_event,
-            &mut video_stream,
-            &mut audio_stream,
-        ) {
+        match (&next_video_event, &next_audio_event, &mut video_stream, &mut audio_stream)
+        {
             (None, None, Some(video_stream), Some(audio_stream)) => {
                 tokio::select! {
                     Ok(event) = video_stream.receiver.recv() => {
@@ -90,22 +88,26 @@ pub async fn stream_media_to_peer(
 
                 if let Some(stream) = stream {
                     let result =
-                        send_chunk_to_peer(chunk, &stream.track, &mut stream.payloader).await;
+                        send_chunk_to_peer(chunk, &stream.track, &mut stream.payloader)
+                            .await;
                     if let Err(err) = result {
                         error!("{}", ErrorStack::new(&err).into_string());
                         break;
                     }
                 }
             }
-            Ok(EncodedOutputEvent::VideoEOS) => info!("Received video EOS event on WHEP output"),
-            Ok(EncodedOutputEvent::AudioEOS) => info!("Received audio EOS event on WHEP output"),
+            Ok(EncodedOutputEvent::VideoEOS) => {
+                info!("Received video EOS event on WHEP output")
+            }
+            Ok(EncodedOutputEvent::AudioEOS) => {
+                info!("Received audio EOS event on WHEP output")
+            }
             Err(TryGetEventError::Finished) => break,
             Err(TryGetEventError::Empty) => {}
         }
     }
 
-    ctx.event_emitter
-        .emit(Event::OutputDone(output_ref.id().clone()));
+    ctx.event_emitter.emit(Event::OutputDone(output_ref.id().clone()));
     debug!("Closing WHEP sender thread.");
 }
 

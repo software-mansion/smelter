@@ -20,7 +20,9 @@ use crate::pipeline::webrtc::{
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct WhepOutputsState(Arc<Mutex<HashMap<Ref<OutputId>, WhepOutputConnectionState>>>);
+pub(crate) struct WhepOutputsState(
+    Arc<Mutex<HashMap<Ref<OutputId>, WhepOutputConnectionState>>>,
+);
 
 impl WhepOutputsState {
     pub fn get_with<
@@ -45,9 +47,7 @@ impl WhepOutputsState {
         output_id: &str,
     ) -> Result<Ref<OutputId>, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
-        let entry = guard
-            .iter()
-            .find(|(output_ref, _)| &*output_ref.id().0 == output_id);
+        let entry = guard.iter().find(|(output_ref, _)| &*output_ref.id().0 == output_id);
         match entry {
             Some((output_ref, _)) => Ok(output_ref.clone()),
             None => Err(WhipWhepServerError::NotFound(format!(
@@ -56,7 +56,11 @@ impl WhepOutputsState {
         }
     }
 
-    pub fn add_output(&self, output_id: &Ref<OutputId>, options: WhepOutputConnectionStateOptions) {
+    pub fn add_output(
+        &self,
+        output_id: &Ref<OutputId>,
+        options: WhepOutputConnectionStateOptions,
+    ) {
         let mut guard = self.0.lock().unwrap();
         guard.insert(output_id.clone(), WhepOutputConnectionState::new(options));
     }

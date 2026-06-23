@@ -18,16 +18,18 @@ impl RgbaToYuvConverter {
     ) -> Self {
         let sampler = Sampler::new(device);
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("RGBA to YUV color converter pipeline layout"),
-            bind_group_layouts: &[
-                Some(single_texture_bind_group_layout),
-                Some(&sampler.bind_group_layout),
-            ],
-            immediate_size: 4,
-        });
+        let pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("RGBA to YUV color converter pipeline layout"),
+                bind_group_layouts: &[
+                    Some(single_texture_bind_group_layout),
+                    Some(&sampler.bind_group_layout),
+                ],
+                immediate_size: 4,
+            });
 
-        let shader_module = device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv.wgsl"));
+        let shader_module =
+            device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv.wgsl"));
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("RGBA to YUV color converter pipeline"),
@@ -64,47 +66,42 @@ impl RgbaToYuvConverter {
         Self { pipeline, sampler }
     }
 
-    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst: &PlanarYuvTextures) {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+    pub fn convert(
+        &self,
+        ctx: &WgpuCtx,
+        src_bg: &wgpu::BindGroup,
+        dst: &PlanarYuvTextures,
+    ) {
+        let mut encoder =
+            ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("RGBA to YUV color converter command encoder"),
             });
 
         for plane in [0, 1, 2] {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("YUV to RGBA color converter render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    ops: wgpu::Operations {
-                        // We want the background to be black. Black in YUV is y = 0, u = 0.5, v = 0.5
-                        // Therefore, we set the clear color to 0, 0, 0 when drawing the y plane
-                        // and to 0.5, 0.5, 0.5 when drawing the u and v planes.
-                        load: wgpu::LoadOp::Clear(if plane == 0 {
-                            wgpu::Color {
-                                r: 0.0,
-                                g: 0.0,
-                                b: 0.0,
-                                a: 1.0,
-                            }
-                        } else {
-                            wgpu::Color {
-                                r: 0.5,
-                                g: 0.5,
-                                b: 0.5,
-                                a: 1.0,
-                            }
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    view: dst.plane_view(plane),
-                    resolve_target: None,
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut render_pass =
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("YUV to RGBA color converter render pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        ops: wgpu::Operations {
+                            // We want the background to be black. Black in YUV is y = 0, u = 0.5, v = 0.5
+                            // Therefore, we set the clear color to 0, 0, 0 when drawing the y plane
+                            // and to 0.5, 0.5, 0.5 when drawing the u and v planes.
+                            load: wgpu::LoadOp::Clear(if plane == 0 {
+                                wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }
+                            } else {
+                                wgpu::Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 }
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        view: dst.plane_view(plane),
+                        resolve_target: None,
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
 
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_immediates(0, &(plane as u32).to_le_bytes());

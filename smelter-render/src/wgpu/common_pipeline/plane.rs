@@ -9,22 +9,10 @@ const INDICES: [u16; 6] = [
 ];
 
 const VERTICES: [Vertex; 4] = [
-    Vertex {
-        position: [1.0, -1.0, 0.0],
-        texture_coords: [1.0, 1.0],
-    },
-    Vertex {
-        position: [1.0, 1.0, 0.0],
-        texture_coords: [1.0, 0.0],
-    },
-    Vertex {
-        position: [-1.0, 1.0, 0.0],
-        texture_coords: [0.0, 0.0],
-    },
-    Vertex {
-        position: [-1.0, -1.0, 0.0],
-        texture_coords: [0.0, 1.0],
-    },
+    Vertex { position: [1.0, -1.0, 0.0], texture_coords: [1.0, 1.0] },
+    Vertex { position: [1.0, 1.0, 0.0], texture_coords: [1.0, 0.0] },
+    Vertex { position: [-1.0, 1.0, 0.0], texture_coords: [0.0, 0.0] },
+    Vertex { position: [-1.0, -1.0, 0.0], texture_coords: [0.0, 1.0] },
 ];
 
 pub const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint16;
@@ -37,11 +25,12 @@ pub struct Plane {
 
 impl Plane {
     pub fn new(device: &wgpu::Device) -> Self {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vertex buffer"),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            contents: bytemuck::cast_slice(&VERTICES),
-        });
+        let vertex_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("vertex buffer"),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                contents: bytemuck::cast_slice(&VERTICES),
+            });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("index buffer"),
@@ -49,10 +38,7 @@ impl Plane {
             contents: bytemuck::cast_slice(&INDICES),
         });
 
-        Self {
-            vertex_buffer,
-            index_buffer,
-        }
+        Self { vertex_buffer, index_buffer }
     }
 
     pub fn draw<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>) {

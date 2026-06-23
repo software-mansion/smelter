@@ -43,10 +43,7 @@ pub(super) async fn handle_ws_upgrade(socket: WebSocket) {
         .spawn(move || {
             let receiver = subscribe();
             for event in receiver {
-                if event_sender_2
-                    .blocking_send(InternalMessage::Event(event))
-                    .is_err()
-                {
+                if event_sender_2.blocking_send(InternalMessage::Event(event)).is_err() {
                     return;
                 }
             }
@@ -58,7 +55,8 @@ pub(super) async fn handle_ws_upgrade(socket: WebSocket) {
             match event {
                 InternalMessage::Event(event) => {
                     let serialized = event_to_json(event).to_string();
-                    if let Err(err) = socket_sender.send(Message::Text(serialized)).await {
+                    if let Err(err) = socket_sender.send(Message::Text(serialized)).await
+                    {
                         debug!(%err, "WebSocket send error.");
                         return;
                     }

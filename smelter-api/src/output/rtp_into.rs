@@ -5,13 +5,7 @@ impl TryFrom<RtpOutput> for core::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: RtpOutput) -> Result<Self, Self::Error> {
-        let RtpOutput {
-            port,
-            ip,
-            transport_protocol,
-            video,
-            audio,
-        } = request;
+        let RtpOutput { port, ip, transport_protocol, video, audio } = request;
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(
@@ -60,7 +54,9 @@ impl TryFrom<RtpOutput> for core::RegisterOutputOptions {
             None => (None, None),
         };
 
-        let connection_options = match transport_protocol.unwrap_or(TransportProtocol::Udp) {
+        let connection_options = match transport_protocol
+            .unwrap_or(TransportProtocol::Udp)
+        {
             TransportProtocol::Udp => {
                 let core::PortOrRange::Exact(port) = port.try_into()? else {
                     return Err(TypeError::new(
@@ -72,10 +68,7 @@ impl TryFrom<RtpOutput> for core::RegisterOutputOptions {
                         "\"ip\" field is required when registering output UDP stream (transport_protocol=\"udp\").",
                     ));
                 };
-                core::RtpOutputConnectionOptions::Udp {
-                    port: core::Port(port),
-                    ip,
-                }
+                core::RtpOutputConnectionOptions::Udp { port: core::Port(port), ip }
             }
             TransportProtocol::TcpServer => {
                 if ip.is_some() {
@@ -84,9 +77,7 @@ impl TryFrom<RtpOutput> for core::RegisterOutputOptions {
                     ));
                 }
 
-                core::RtpOutputConnectionOptions::TcpServer {
-                    port: port.try_into()?,
-                }
+                core::RtpOutputConnectionOptions::TcpServer { port: port.try_into()? }
             }
         };
 
@@ -129,22 +120,23 @@ impl RtpVideoEncoderOptions {
                     .collect(),
                 bitstream_format: core::H264BitstreamFormat::AnnexB,
             }),
-            RtpVideoEncoderOptions::VulkanH264 {
-                bitrate,
-                keyframe_interval_ms,
-            } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
-                resolution: resolution.into(),
-                bitrate: bitrate
-                    .map(|bitrate| {
-                        Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
-                            bitrate.try_into()?,
-                        ))
-                    })
-                    .transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
-                preset: core::VulkanH264EncoderPreset::HighQuality,
-                bitstream_format: core::H264BitstreamFormat::AnnexB,
-            }),
+            RtpVideoEncoderOptions::VulkanH264 { bitrate, keyframe_interval_ms } => {
+                core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
+                    resolution: resolution.into(),
+                    bitrate: bitrate
+                        .map(|bitrate| {
+                            Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
+                                bitrate.try_into()?,
+                            ))
+                        })
+                        .transpose()?,
+                    keyframe_interval: duration_from_keyframe_interval(
+                        keyframe_interval_ms,
+                    )?,
+                    preset: core::VulkanH264EncoderPreset::HighQuality,
+                    bitstream_format: core::H264BitstreamFormat::AnnexB,
+                })
+            }
             RtpVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
                 keyframe_interval_ms,

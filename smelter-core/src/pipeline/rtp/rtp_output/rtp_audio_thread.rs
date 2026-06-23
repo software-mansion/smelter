@@ -9,7 +9,9 @@ use crate::prelude::*;
 use crate::{
     error::EncoderInitError,
     pipeline::{
-        encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
+        encoder::{
+            AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream,
+        },
         rtp::payloader::{PayloaderOptions, PayloaderStream},
     },
     utils::{InitializableThread, ThreadMetadata},
@@ -44,7 +46,9 @@ where
     type SpawnOutput = RtpAudioTrackThreadHandle;
     type SpawnError = EncoderInitError;
 
-    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let RtpAudioTrackThreadOptions {
             ctx,
             output_ref,
@@ -65,10 +69,14 @@ where
         )?
         .flatten();
 
-        let (encoded_stream, _encoder_ctx) =
-            AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
+        let (encoded_stream, _encoder_ctx) = AudioEncoderStream::<Encoder, _>::new(
+            ctx,
+            encoder_options,
+            resampled_stream,
+        )?;
 
-        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
+        let payloaded_stream =
+            PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
         let stream = payloaded_stream.flatten().map(move |event| match event {
             // Ok(PipelineEvent::Data(packet)) => RtpOutputEvent::Data(packet),
@@ -86,14 +94,9 @@ where
             Err(err) => RtpOutputEvent::Err(err),
         });
 
-        let state = Self {
-            stream: Box::new(stream),
-            chunks_sender,
-            _encoder: PhantomData,
-        };
-        let output = RtpAudioTrackThreadHandle {
-            sample_batch_sender,
-        };
+        let state =
+            Self { stream: Box::new(stream), chunks_sender, _encoder: PhantomData };
+        let output = RtpAudioTrackThreadHandle { sample_batch_sender };
         Ok((state, output))
     }
 

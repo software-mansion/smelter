@@ -31,18 +31,24 @@ impl ReinterpretToSrgb {
         });
     }
 
-    pub fn convert(&mut self, ctx: &WgpuCtx, source: &wgpu::Texture, dest: &wgpu::Texture) {
+    pub fn convert(
+        &mut self,
+        ctx: &WgpuCtx,
+        source: &wgpu::Texture,
+        dest: &wgpu::Texture,
+    ) {
         let size = source.size();
         if dest.size() != source.size() {
-            error!("Destination and source sizes does not match when reinterpreting to sRGB.");
+            error!(
+                "Destination and source sizes does not match when reinterpreting to sRGB."
+            );
             return;
         }
 
         self.ensure_size(ctx, size);
 
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        let mut encoder =
+            ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("copy static image asset to texture"),
             });
 

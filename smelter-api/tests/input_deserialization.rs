@@ -7,9 +7,10 @@ use smelter_api::*;
 use smelter_core::QueueInputOptions;
 use smelter_core::codecs::VideoDecoderOptions;
 use smelter_core::protocols::{
-    HlsInputOptions, HlsInputVideoDecoders, Mp4InputOptions, Mp4InputSource, Mp4InputVideoDecoders,
-    PortOrRange, RtmpServerInputDecoders, RtmpServerInputOptions, RtpAudioOptions, RtpInputOptions,
-    RtpInputTransportProtocol, WebrtcVideoDecoderOptions, WhepInputOptions, WhipInputOptions,
+    HlsInputOptions, HlsInputVideoDecoders, Mp4InputOptions, Mp4InputSource,
+    Mp4InputVideoDecoders, PortOrRange, RtmpServerInputDecoders, RtmpServerInputOptions,
+    RtpAudioOptions, RtpInputOptions, RtpInputTransportProtocol,
+    WebrtcVideoDecoderOptions, WhepInputOptions, WhipInputOptions,
 };
 
 #[cfg(target_os = "linux")]
@@ -926,10 +927,7 @@ fn v4l2_with_all_options() {
         }),
         CoreInput::V4l2(V4l2InputOptions {
             path: Arc::from(Path::new("/dev/video0")),
-            resolution: Some(smelter_render::Resolution {
-                width: 1920,
-                height: 1080,
-            }),
+            resolution: Some(smelter_render::Resolution { width: 1920, height: 1080 }),
             format: V4l2Format::Nv12,
             framerate: Some(smelter_render::Framerate { num: 30, den: 1 }),
             queue_options: QueueInputOptions {
@@ -957,10 +955,7 @@ fn v4l2_fractional_framerate() {
             path: Arc::from(Path::new("/dev/video0")),
             resolution: None,
             format: V4l2Format::Yuyv,
-            framerate: Some(smelter_render::Framerate {
-                num: 30000,
-                den: 1001,
-            }),
+            framerate: Some(smelter_render::Framerate { num: 30000, den: 1001 }),
             queue_options: default_queue(),
         }),
     );

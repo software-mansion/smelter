@@ -14,10 +14,9 @@ unsafe extern "C" fn mallinfo() -> libc::mallinfo {
         let version = version.to_string_lossy();
         let version_parts = version.split('.').collect::<Vec<_>>();
         match version_parts.as_slice() {
-            [major, minor] => (
-                major.parse::<u32>().unwrap_or(0),
-                minor.parse::<u32>().unwrap_or(0),
-            ),
+            [major, minor] => {
+                (major.parse::<u32>().unwrap_or(0), minor.parse::<u32>().unwrap_or(0))
+            }
             _ => (0, 0),
         }
     };

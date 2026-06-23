@@ -46,10 +46,7 @@ impl From<Mp4OutputOptions> for Mp4Output {
     fn from(value: Mp4OutputOptions) -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("mp4_output_{suffix}");
-        Self {
-            name,
-            options: value,
-        }
+        Self { name, options: value }
     }
 }
 
@@ -90,12 +87,7 @@ impl Mp4OutputBuilder {
         let suffix = rand::rng().next_u32();
         let name = format!("mp4_output_{suffix}");
         let path = env::current_dir().unwrap().join("example_output.mp4");
-        Self {
-            name,
-            path,
-            video: None,
-            audio: None,
-        }
+        Self { name, path, video: None, audio: None }
     }
 
     pub fn prompt(self) -> Result<Self> {
@@ -140,8 +132,10 @@ impl Mp4OutputBuilder {
     }
 
     fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+        let video_options =
+            vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
+        let video_selection =
+            Select::new("Set video stream?", video_options).prompt_skippable()?;
 
         match video_selection {
             Some(Mp4RegisterOptions::SetVideoStream) => {
@@ -153,7 +147,8 @@ impl Mp4OutputBuilder {
                     video.scene = scene;
                 }
 
-                let encoder_options = vec![VideoEncoder::FfmpegH264, VideoEncoder::VulkanH264];
+                let encoder_options =
+                    vec![VideoEncoder::FfmpegH264, VideoEncoder::VulkanH264];
                 let encoder_choice =
                     Select::new("Select encoder (ESC for ffmpeg_h264):", encoder_options)
                         .prompt_skippable()?;
@@ -169,7 +164,8 @@ impl Mp4OutputBuilder {
     }
 
     fn prompt_audio(self) -> Result<Self> {
-        let audio_options = vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
+        let audio_options =
+            vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
         let audio_selection =
             Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
 
@@ -198,15 +194,9 @@ impl Mp4OutputBuilder {
     }
 
     pub fn build(self) -> Mp4Output {
-        let options = Mp4OutputOptions {
-            path: self.path,
-            video: self.video,
-            audio: self.audio,
-        };
-        Mp4Output {
-            name: self.name,
-            options,
-        }
+        let options =
+            Mp4OutputOptions { path: self.path, video: self.video, audio: self.audio };
+        Mp4Output { name: self.name, options }
     }
 }
 
@@ -242,10 +232,7 @@ impl Mp4OutputVideoOptions {
 
 impl Default for Mp4OutputVideoOptions {
     fn default() -> Self {
-        let resolution = VideoResolution {
-            width: 1920,
-            height: 1080,
-        };
+        let resolution = VideoResolution { width: 1920, height: 1080 };
         let root_id = "root".to_string();
         Self {
             resolution,
@@ -307,8 +294,6 @@ impl Mp4OutputAudioOptions {
 
 impl Default for Mp4OutputAudioOptions {
     fn default() -> Self {
-        Self {
-            encoder: AudioEncoder::Aac,
-        }
+        Self { encoder: AudioEncoder::Aac }
     }
 }

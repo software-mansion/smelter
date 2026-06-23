@@ -13,10 +13,7 @@ pub struct SlidingWindowValue<Value: Copy> {
 
 impl<Value: Copy> SlidingWindowValue<Value> {
     pub fn new(window_size: Duration) -> Self {
-        Self {
-            window_size,
-            buffer: VecDeque::new(),
-        }
+        Self { window_size, buffer: VecDeque::new() }
     }
 
     pub fn push(&mut self, val: Value) {
@@ -42,21 +39,13 @@ impl<Value: Ord + Copy + Default> SlidingWindowValue<Value> {
     pub fn max(&mut self) -> Value {
         let now = Instant::now();
         self.drop_older(now);
-        self.buffer
-            .iter()
-            .map(|(_, v)| *v)
-            .max()
-            .unwrap_or_default()
+        self.buffer.iter().map(|(_, v)| *v).max().unwrap_or_default()
     }
 
     pub fn min(&mut self) -> Value {
         let now = Instant::now();
         self.drop_older(now);
-        self.buffer
-            .iter()
-            .map(|(_, v)| *v)
-            .min()
-            .unwrap_or_default()
+        self.buffer.iter().map(|(_, v)| *v).min().unwrap_or_default()
     }
 }
 
