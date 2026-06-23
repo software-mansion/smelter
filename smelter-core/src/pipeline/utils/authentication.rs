@@ -1,18 +1,17 @@
 use std::fmt::Write;
 
 use sha3::{Digest, Sha3_512};
-use tracing::error;
+use tracing::warn;
 
 /// Computes a SHA3-512 hash of the token and returns it as a lowercase hex string.
 fn hash_token(token: &str) -> String {
     let digest = Sha3_512::digest(token.as_bytes());
-    let hash = digest.iter().fold(String::new(), |mut acc, byte| {
+    digest.iter().fold(String::new(), |mut acc, byte| {
         if let Err(err) = write!(acc, "{byte:02x}") {
-            error!("Cannot hash token: {err:?}")
+            warn!("Cannot hash token: {err:?}");
         }
         acc
-    });
-    hash
+    })
 }
 
 /// Validates a provided token against the expected one by comparing their
