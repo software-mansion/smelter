@@ -7,10 +7,11 @@ use crate::{
     adapter::{VideoAdapterBackend, VideoAdapterInfo},
     device::{
         DECODE_CODEC_EXTENSIONS, DECODE_EXTENSIONS, ENCODE_CODEC_EXTENSIONS, ENCODE_EXTENSIONS,
-        REQUIRED_EXTENSIONS, VideoDevice, VideoDeviceDescriptor,
+        REQUIRED_EXTENSIONS, VideoDeviceDescriptor,
         caps::{NativeDecodeCapabilities, NativeEncodeCapabilities},
         queues::{QueueIndex, QueueIndices},
     },
+    vulkan::vulkan_device::VulkanDevice,
     vulkan::vulkan_instance::VulkanInstance,
 };
 
@@ -310,7 +311,7 @@ impl VideoAdapterBackend for VulkanAdapter<'_> {
         self: Box<Self>,
         desc: &VideoDeviceDescriptor,
     ) -> Result<crate::VideoDevice, VideoDeviceInitError> {
-        VideoDevice::create_and_register(*self, desc.clone()).map_err(Into::into)
+        VulkanDevice::create_and_register(*self, desc.clone()).map_err(Into::into)
     }
 }
 

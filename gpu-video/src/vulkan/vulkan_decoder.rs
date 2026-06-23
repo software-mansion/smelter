@@ -9,7 +9,8 @@ use session_resources::VideoSessionResources;
 use crate::{
     RawFrameData,
     codec::h264::parameters::SeqParameterSetExt as _,
-    device::{ColorRange, ColorSpace, DecodingDevice},
+    device::{ColorRange, ColorSpace},
+    vulkan::vulkan_device::DecodingDevice,
     parser::{
         decoder_instructions::DecoderInstruction,
         reference_manager::{DecodeInformation, ReferenceId},

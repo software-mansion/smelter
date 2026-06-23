@@ -10,7 +10,8 @@ use tracing::warn;
 use crate::{
     EncodedOutputChunk, InputFrame, RawFrameData, VulkanCommonError,
     codec::EncodeCodec,
-    device::{ColorRange, ColorSpace, EncodingDevice, Rational},
+    device::{ColorRange, ColorSpace, Rational},
+    vulkan::vulkan_device::EncodingDevice,
     wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
         ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
@@ -21,6 +22,7 @@ use crate::{
 
 const MB: u64 = 1024 * 1024;
 
+// TODO: Split into vulkanencoderError
 #[derive(Debug, thiserror::Error)]
 pub enum VideoEncoderError {
     #[error("Vulkan error: {0}")]

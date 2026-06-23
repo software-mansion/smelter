@@ -98,13 +98,14 @@ use crate::codec::h264::H264Codec;
 use crate::codec::h264::encode::H264WriteParametersInfo;
 use crate::codec::h265::H265Codec;
 use crate::codec::h265::encode::H265WriteParametersInfo;
+use crate::device::caps::QualityLevel;
 use crate::device::{
     ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
-    EncoderParametersH265,
+    EncoderParametersH265, VideoDeviceBackend,
 };
 use crate::parameters::{H264Profile, H265Profile, RateControl};
 use crate::parser::h264::AccessUnit;
-use crate::vulkan::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
+use crate::vulkan::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use ash::vk;
 use std::sync::Arc;
 
@@ -175,16 +176,7 @@ pub enum VideoInstanceInitError {
     BackendError(VideoBackendError)
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum VulkanDeviceInitError {
-    #[error("Vulkan error: {0}")]
-    VkError(#[from] vk::Result),
-
-    #[cfg(feature = "wgpu")]
-    #[error(transparent)]
-    WgpuError(#[from] WgpuInitError),
-}
-
+// TODO: remove it
 #[derive(thiserror::Error, Debug)]
 pub enum VulkanCommonError {
     #[error("Vulkan error: {0}")]
@@ -226,10 +218,10 @@ pub enum VulkanCommonError {
     },
 }
 
+// TODO: update changelog
 /// Open connection to a coding-capable device
-#[derive(Debug)]
 pub struct VideoDevice {
-    pub(crate) inner: Arc<crate::device::VideoDevice>,
+    pub(crate) inner: Arc<dyn VideoDeviceBackend>,
 
     #[cfg(feature = "wgpu")]
     pub(crate) wgpu_device: Option<wgpu::Device>,
@@ -240,26 +232,7 @@ impl VideoDevice {
         &self,
         parameters: DecoderParameters,
     ) -> Result<BytesDecoder, VideoDecoderError> {
-        let parser = H264Parser::default();
-        let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
-
-        let vulkan_decoder = VulkanDecoder::new(
-            Arc::new(self.inner.decoding_device()?),
-            parameters.usage_flags,
-            ImageModifiers {
-                additional_queue_index: self.inner.queues.transfer.family_index,
-                create_flags: Default::default(),
-                usage_flags: Default::default(),
-            },
-        )?;
-        let frame_sorter = FrameSorter::<RawFrameData>::new();
-
-        Ok(BytesDecoder {
-            parser,
-            reference_ctx,
-            vulkan_decoder,
-            frame_sorter,
-        })
+        self.inner.clone().create_bytes_decoder_h264(parameters)
     }
 
     #[cfg(feature = "wgpu")]
@@ -267,31 +240,9 @@ impl VideoDevice {
         &self,
         parameters: DecoderParameters,
     ) -> Result<WgpuTexturesDecoder, VideoDecoderError> {
-        let Some(wgpu_device) = self.wgpu_device.clone() else {
-            return Err(VideoDecoderError::VideoDeviceWithoutWgpu);
-        };
-
-        let parser = H264Parser::default();
-        let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
-
-        let vulkan_decoder = VulkanDecoder::new(
-            Arc::new(self.inner.decoding_device()?),
-            parameters.usage_flags,
-            ImageModifiers {
-                additional_queue_index: self.inner.queues.transfer.family_index,
-                create_flags: Default::default(),
-                usage_flags: Default::default(),
-            },
-        )?;
-        let frame_sorter = FrameSorter::<wgpu::Texture>::new();
-
-        Ok(crate::WgpuTexturesDecoder {
-            wgpu_device,
-            parser,
-            reference_ctx,
-            vulkan_decoder,
-            frame_sorter,
-        })
+        self.inner
+            .clone()
+            .create_wgpu_textures_decoder_h264(self.wgpu_device.clone(), parameters)
     }
 
     /// Create a single-input multiple-output transcoder.
@@ -302,41 +253,21 @@ impl VideoDevice {
         parameters: crate::parameters::TranscoderParameters,
     ) -> Result<crate::vulkan_transcoder::Transcoder, crate::vulkan_transcoder::VideoTranscoderError>
     {
-        crate::vulkan_transcoder::Transcoder::new(self.inner.clone(), parameters)
+        self.inner.clone().create_transcoder(parameters)
     }
 
     pub fn create_bytes_encoder_h264(
         &self,
         parameters: EncoderParametersH264,
     ) -> Result<BytesEncoderH264, VideoEncoderError> {
-        let parameters = self.inner.validate_and_fill_encoder_parameters(
-            parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
-        )?;
-        let encoder = VulkanEncoder::new(Arc::new(self.inner.encoding_device()?), parameters)?;
-
-        Ok(BytesEncoderH264 {
-            vulkan_encoder: encoder,
-        })
+        self.inner.clone().create_bytes_encoder_h264(parameters)
     }
 
     pub fn create_bytes_encoder_h265(
         &self,
         parameters: EncoderParametersH265,
     ) -> Result<BytesEncoderH265, VideoEncoderError> {
-        let parameters = self.inner.validate_and_fill_encoder_parameters(
-            parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
-        )?;
-        let encoder = VulkanEncoder::new(Arc::new(self.inner.encoding_device()?), parameters)?;
-
-        Ok(BytesEncoderH265 {
-            vulkan_encoder: encoder,
-        })
+        self.inner.clone().create_bytes_encoder_h265(parameters)
     }
 
     #[cfg(feature = "wgpu")]
@@ -345,22 +276,11 @@ impl VideoDevice {
         queue: &wgpu::Queue,
         parameters: EncoderParametersH264,
     ) -> Result<WgpuTexturesEncoderH264, VideoEncoderError> {
-        let Some(wgpu_device) = self.wgpu_device.clone() else {
-            return Err(VideoEncoderError::VideoDeviceWithoutWgpu);
-        };
-
-        let parameters = self.inner.validate_and_fill_encoder_parameters(
-            parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
-        )?;
-        let encoder = VulkanEncoder::new(Arc::new(self.inner.encoding_device()?), parameters)?;
-        Ok(crate::WgpuTexturesEncoderH264 {
-            wgpu_device,
-            wgpu_queue: queue.clone(),
-            vulkan_encoder: encoder,
-        })
+        self.inner.clone().create_wgpu_textures_encoder_h264(
+            self.wgpu_device.clone(),
+            queue,
+            parameters,
+        )
     }
 
     #[cfg(feature = "wgpu")]
@@ -369,88 +289,58 @@ impl VideoDevice {
         queue: &wgpu::Queue,
         parameters: EncoderParametersH265,
     ) -> Result<WgpuTexturesEncoderH265, VideoEncoderError> {
-        let Some(wgpu_device) = self.wgpu_device.clone() else {
-            return Err(VideoEncoderError::VideoDeviceWithoutWgpu);
-        };
-
-        let parameters = self.inner.validate_and_fill_encoder_parameters(
-            parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
-        )?;
-        let encoder = VulkanEncoder::new(Arc::new(self.inner.encoding_device()?), parameters)?;
-        Ok(crate::WgpuTexturesEncoderH265 {
-            wgpu_device,
-            wgpu_queue: queue.clone(),
-            vulkan_encoder: encoder,
-        })
+        self.inner.clone().create_wgpu_textures_encoder_h265(
+            self.wgpu_device.clone(),
+            queue,
+            parameters,
+        )
     }
 
     pub fn decode_capabilities(&self) -> DecodeCapabilities {
-        self.inner.adapter_info.decode_capabilities
+        self.inner.decode_capabilities()
     }
 
     pub fn encode_capabilities(&self) -> EncodeCapabilities {
-        self.inner.adapter_info.encode_capabilities
+        self.inner.encode_capabilities()
     }
 
     pub fn encoder_output_parameters_h265_low_latency(
         &self,
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters<H265Profile>, VideoEncoderError> {
-        let Some(caps) = self.inner.native_encode_capabilities.as_ref() else {
+        let Some(caps) = self.encode_capabilities().h265 else {
             return Err(VideoEncoderError::VulkanEncoderUnsupported);
         };
 
-        let caps = caps
-            .h265
-            .as_ref()
-            .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?;
-
-        Ok(
-            crate::device::VideoDevice::encoder_output_parameters_low_latency(
-                caps.max_profile()
-                    .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
-                rate_control,
-            ),
-        )
+        Ok(Self::encoder_output_parameters_low_latency(
+            caps.max_profile()
+                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+            rate_control,
+        ))
     }
 
     pub fn encoder_output_parameters_h264_low_latency(
         &self,
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters<H264Profile>, VideoEncoderError> {
-        let Some(caps) = self.inner.native_encode_capabilities.as_ref() else {
+        let Some(caps) = self.encode_capabilities().h264 else {
             return Err(VideoEncoderError::VulkanEncoderUnsupported);
         };
 
-        let caps = caps
-            .h264
-            .as_ref()
-            .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?;
-
-        Ok(
-            crate::device::VideoDevice::encoder_output_parameters_low_latency(
-                caps.max_profile()
-                    .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
-                rate_control,
-            ),
-        )
+        Ok(Self::encoder_output_parameters_low_latency(
+            caps.max_profile()
+                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+            rate_control,
+        ))
     }
 
     pub fn encoder_output_parameters_h265_high_quality(
         &self,
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters<H265Profile>, VideoEncoderError> {
-        let Some(caps) = self.inner.native_encode_capabilities.as_ref() else {
+        let Some(caps) = self.encode_capabilities().h265 else {
             return Err(VideoEncoderError::VulkanEncoderUnsupported);
         };
-
-        let caps = caps
-            .h265
-            .as_ref()
-            .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?;
 
         let quality_level = caps
             .profile(
@@ -458,32 +348,23 @@ impl VideoDevice {
                     .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
             )
             .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?
-            .encode_capabilities
-            .max_quality_levels
-            - 1;
+            .quality_level;
 
-        Ok(
-            crate::device::VideoDevice::encoder_output_parameters_high_quality(
-                caps.max_profile()
-                    .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
-                rate_control,
-                quality_level,
-            ),
-        )
+        Ok(Self::encoder_output_parameters_high_quality(
+            caps.max_profile()
+                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+            rate_control,
+            quality_level,
+        ))
     }
 
     pub fn encoder_output_parameters_h264_high_quality(
         &self,
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters<H264Profile>, VideoEncoderError> {
-        let Some(caps) = self.inner.native_encode_capabilities.as_ref() else {
+        let Some(caps) = self.encode_capabilities().h264 else {
             return Err(VideoEncoderError::VulkanEncoderUnsupported);
         };
-
-        let caps = caps
-            .h264
-            .as_ref()
-            .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?;
 
         let quality_level = caps
             .profile(
@@ -491,26 +372,59 @@ impl VideoDevice {
                     .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
             )
             .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?
-            .encode_capabilities
-            .max_quality_levels
-            - 1;
+            .quality_level;
 
-        Ok(
-            crate::device::VideoDevice::encoder_output_parameters_high_quality(
-                caps.max_profile()
-                    .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
-                rate_control,
-                quality_level,
-            ),
-        )
+        Ok(Self::encoder_output_parameters_high_quality(
+            caps.max_profile()
+                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+            rate_control,
+            quality_level,
+        ))
     }
 
-    pub fn supports_decoding(&self) -> bool {
-        self.inner.adapter_info.supports_decoding
+    pub fn encoder_output_parameters_low_latency<P>(
+        profile: P,
+        rate_control: RateControl,
+    ) -> EncoderOutputParameters<P> {
+        EncoderOutputParameters {
+            profile,
+            idr_period: None,
+            max_references: None,
+            rate_control,
+            quality_level: QualityLevel::Low,
+            usage_flags: Some(parameters::EncoderUsageFlags::DEFAULT),
+            content_flags: Some(parameters::EncoderContentFlags::DEFAULT),
+            tuning_mode: Some(parameters::EncoderTuningMode::LOW_LATENCY),
+            inline_stream_params: None,
+            color_space: None,
+            color_range: None,
+        }
     }
 
-    pub fn supports_encoding(&self) -> bool {
-        self.inner.adapter_info.supports_encoding
+    pub fn encoder_output_parameters_high_quality<P>(
+        profile: P,
+        rate_control: RateControl,
+        quality_level: QualityLevel,
+    ) -> EncoderOutputParameters<P> {
+        EncoderOutputParameters {
+            profile,
+            idr_period: None,
+            max_references: None,
+            rate_control,
+            quality_level,
+            usage_flags: Some(parameters::EncoderUsageFlags::DEFAULT),
+            content_flags: Some(parameters::EncoderContentFlags::DEFAULT),
+            tuning_mode: Some(parameters::EncoderTuningMode::HIGH_QUALITY),
+            inline_stream_params: None,
+            color_space: None,
+            color_range: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for VideoDevice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VideoDevice").finish()
     }
 }
 

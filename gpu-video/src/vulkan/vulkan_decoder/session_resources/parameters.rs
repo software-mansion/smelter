@@ -9,7 +9,7 @@ use crate::{
         H264Codec, H264VkParameters,
         parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
     },
-    device::VideoDevice,
+    vulkan::vulkan_device::VulkanDevice,
     vulkan::vulkan_decoder::{Device, VideoSessionParameters},
 };
 
@@ -29,7 +29,7 @@ pub(crate) struct VideoSessionParametersManager {
 
 impl VideoSessionParametersManager {
     pub(crate) fn new(
-        vulkan_ctx: &VideoDevice,
+        vulkan_ctx: &VulkanDevice,
         session: vk::VideoSessionKHR,
     ) -> Result<Self, VulkanDecoderError> {
         Ok(Self {

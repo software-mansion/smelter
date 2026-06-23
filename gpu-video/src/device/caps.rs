@@ -59,6 +59,23 @@ pub(crate) fn query_video_format_properties<'a>(
     Ok(format_properties)
 }
 
+// TODO: export
+#[derive(Debug, Clone, Copy)]
+pub enum QualityLevel {
+    Low,
+    High,
+}
+
+impl QualityLevel {
+    pub(crate) fn from_max_quality_level(max_level: u32) -> Self {
+        if max_level > 1 {
+            Self::High
+        } else {
+            Self::Low
+        }
+    }
+}
+
 /// The device capabilities for encoding
 #[derive(Debug, Clone, Copy)]
 pub struct EncodeCapabilities {
@@ -74,6 +91,22 @@ pub struct EncodeH265Capabilities {
     pub main_profile: Option<EncodeProfileCapabilities>,
 }
 
+impl EncodeH265Capabilities {
+    pub fn profile(&self, profile: H265Profile) -> Option<&EncodeProfileCapabilities> {
+        match profile {
+            H265Profile::Main => self.main_profile.as_ref(),
+        }
+    }
+
+    pub fn max_profile(&self) -> Option<H265Profile> {
+        if self.main_profile.is_some() {
+            Some(H265Profile::Main)
+        } else {
+            None
+        }
+    }
+}
+
 /// The device capabilities for H264 encoding.
 ///
 /// See [`H264Profile`] for information about what profiles are.
@@ -82,6 +115,28 @@ pub struct EncodeH264Capabilities {
     pub baseline_profile: Option<EncodeProfileCapabilities>,
     pub main_profile: Option<EncodeProfileCapabilities>,
     pub high_profile: Option<EncodeProfileCapabilities>,
+}
+
+impl EncodeH264Capabilities {
+    pub fn profile(&self, profile: H264Profile) -> Option<&EncodeProfileCapabilities> {
+        match profile {
+            H264Profile::Baseline => self.baseline_profile.as_ref(),
+            H264Profile::Main => self.main_profile.as_ref(),
+            H264Profile::High => self.high_profile.as_ref(),
+        }
+    }
+
+    pub fn max_profile(&self) -> Option<H264Profile> {
+        if self.high_profile.is_some() {
+            Some(H264Profile::High)
+        } else if self.main_profile.is_some() {
+            Some(H264Profile::Main)
+        } else if self.baseline_profile.is_some() {
+            Some(H264Profile::Baseline)
+        } else {
+            None
+        }
+    }
 }
 
 /// The device capabilities for encoding in a specific codec, at a specific profile
@@ -97,10 +152,10 @@ pub struct EncodeProfileCapabilities {
     pub max_height: u32,
     /// The supported rate control modes in bitflag form
     pub supported_rate_control: vk::VideoEncodeRateControlModeFlagsKHR,
-    /// Maximum number of back references a P-frame can have
+    /// The maximum number of back references a P-frame can have
     pub max_references: u32,
-    /// The count of [Vulkan Video encode quality levels](https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#encode-quality-level)
-    pub quality_levels: u32,
+    /// The maximum supported quality level
+    pub quality_level: QualityLevel,
 }
 
 #[derive(Debug, Clone)]
@@ -186,14 +241,6 @@ impl NativeEncodeH265Capabilities {
             H265Profile::Main => self.main.as_ref(),
         }
     }
-
-    pub(crate) fn max_profile(&self) -> Option<H265Profile> {
-        if self.main.is_some() {
-            Some(H265Profile::Main)
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -255,18 +302,6 @@ impl NativeEncodeH264Capabilities {
             H264Profile::Baseline => self.baseline.as_ref(),
             H264Profile::Main => self.main.as_ref(),
             H264Profile::High => self.high.as_ref(),
-        }
-    }
-
-    pub(crate) fn max_profile(&self) -> Option<H264Profile> {
-        if self.high.is_some() {
-            Some(H264Profile::High)
-        } else if self.main.is_some() {
-            Some(H264Profile::Main)
-        } else if self.baseline.is_some() {
-            Some(H264Profile::Baseline)
-        } else {
-            None
         }
     }
 }
@@ -363,7 +398,7 @@ impl NativeEncodeProfileCapabilities<H264Codec> {
             max_references: self
                 .codec_encode_capabilities
                 .max_p_picture_l0_reference_count,
-            quality_levels: self.encode_capabilities.max_quality_levels,
+            quality_level: QualityLevel::from_max_quality_level(self.encode_capabilities.max_quality_levels),
         }
     }
 }
@@ -379,7 +414,7 @@ impl NativeEncodeProfileCapabilities<H265Codec> {
             max_references: self
                 .codec_encode_capabilities
                 .max_p_picture_l0_reference_count,
-            quality_levels: self.encode_capabilities.max_quality_levels,
+            quality_level: QualityLevel::from_max_quality_level(self.encode_capabilities.max_quality_levels),
         }
     }
 }

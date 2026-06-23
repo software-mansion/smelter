@@ -5,7 +5,7 @@ use ash::vk;
 use crate::{
     VulkanDecoderError,
     codec::h264::parameters::H264DecodeProfileInfo,
-    device::DecodingDevice,
+    vulkan::vulkan_device::DecodingDevice,
     vulkan::vulkan_decoder::Image,
     wrappers::{
         CodingImageBundle, DecodedPicturesBuffer, ImageLayoutTracker, ImageWithView,

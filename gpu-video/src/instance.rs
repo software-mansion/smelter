@@ -16,8 +16,6 @@ pub struct VideoInstanceDescriptor {
     pub enable_api_dump: bool,
 }
 
-// TODO: What error type should VideoInstance (it can't contain vulkan/metal specific things?)
-// TODO: orginize things
 pub trait VideoInstanceBackend {
     fn iter_adapters<'a>(
         &'a self,
