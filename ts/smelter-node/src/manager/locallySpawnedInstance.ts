@@ -57,7 +57,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   constructor(opts: LocallySpawnedInstanceOptions) {
     this.port = opts.port;
     this.workingdir = opts.workingdir ?? path.join(os.tmpdir(), `smelter-${uuidv4()}`);
-    this.mainExecutablePath = opts.mainExecutablePath;
+    this.mainExecutablePath = opts.mainExecutablePath ?? process.env.SMELTER_PATH;
     this.dependencyCheckPath = opts.dependencyCheckPath;
     this.enableWebRenderer = opts.enableWebRenderer ?? false;
     this.wsConnection = new WebSocketConnection(`ws://127.0.0.1:${this.port}/ws`);
@@ -67,7 +67,6 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     const port = process.env.SMELTER_API_PORT ? Number(process.env.SMELTER_API_PORT) : 8000;
     return new LocallySpawnedInstanceManager({
       port,
-      mainExecutablePath: process.env.SMELTER_PATH,
     });
   }
 
