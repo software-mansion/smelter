@@ -358,6 +358,7 @@ impl<'a> VulkanDecoder<'a> {
                 &self.decoding_device,
                 self.tracker.command_buffer_pools.decode.begin_buffer()?,
                 &mut self.tracker,
+                sps.coded_size(),
             )?;
         }
 

@@ -86,7 +86,7 @@ impl<'a> VideoSessionResources<'a> {
             )));
         }
 
-        let max_coded_extent = sps.coded_size()?;
+        let max_coded_extent = sps.coded_size();
         // +1 for current frame
         let max_dpb_slots = sps.max_num_ref_frames + 1;
         let max_active_references = sps.max_num_ref_frames;
@@ -166,7 +166,7 @@ impl<'a> VideoSessionResources<'a> {
         usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
     ) -> Result<(), VulkanDecoderError> {
         let new_session_params = SessionParams {
-            max_coded_extent: sps.coded_size()?,
+            max_coded_extent: sps.coded_size(),
             max_dpb_slots: sps.max_num_ref_frames + 1, // +1 for current frame
             max_active_references: sps.max_num_ref_frames,
             max_num_reorder_frames: calculate_max_num_reorder_frames(&sps)?,
@@ -203,17 +203,31 @@ impl<'a> VideoSessionResources<'a> {
         decoding_device: &DecodingDevice,
         decode_buffer: OpenCommandBuffer,
         tracker: &mut DecoderTracker,
+        picture_coded_extent: vk::Extent2D,
     ) -> Result<(), VulkanDecoderError> {
-        let Some(new_params) = self.parameters_scheduled_for_reset.take() else {
-            return Ok(());
+        if let Some(new_params) = self.parameters_scheduled_for_reset.take() {
+            if self.parameters.is_valid(&new_params) {
+                // no need to change the session
+                self.parameters.max_num_reorder_frames = new_params.max_num_reorder_frames;
+            } else {
+                self.recreate_session(new_params, decoding_device, decode_buffer, tracker)?;
+            }
         };
 
-        if self.parameters.is_valid(&new_params) {
-            // no need to change the session
-            self.parameters.max_num_reorder_frames = new_params.max_num_reorder_frames;
-            return Ok(());
-        }
+        // The active SPS can have coded_extent smaller than max_coded_extent
+        self.decoding_images
+            .update_coded_extent(picture_coded_extent)?;
 
+        Ok(())
+    }
+
+    fn recreate_session(
+        &mut self,
+        params: SessionParams<'a>,
+        decoding_device: &DecodingDevice,
+        decode_buffer: OpenCommandBuffer,
+        tracker: &mut DecoderTracker,
+    ) -> Result<(), VulkanDecoderError> {
         let max_level_idc = vk_to_h264_level_idc(
             decoding_device
                 .profile_capabilities
@@ -221,37 +235,37 @@ impl<'a> VideoSessionResources<'a> {
                 .max_level_idc,
         )?;
 
-        if new_params.level_idc > max_level_idc {
+        if params.level_idc > max_level_idc {
             return Err(VulkanDecoderError::InvalidInputData(format!(
                 "stream has level_idc = {}, while the GPU can decode at most {}",
-                new_params.level_idc, max_level_idc
+                params.level_idc, max_level_idc
             )));
         }
 
-        if self.parameters.profile_info != new_params.profile_info {
+        if self.parameters.profile_info != params.profile_info {
             self.decode_query_pool = match decoding_device
                 .h264_decode_queues
                 .supports_result_status_queries()
             {
                 true => Some(Arc::new(DecodingQueryPool::new(
                     decoding_device.vulkan_device.device.clone(),
-                    new_params.profile_info.profile_info.profile_info,
+                    params.profile_info.profile_info.profile_info,
                 )?)),
                 false => None,
             };
             self.decode_buffer_pool = DecodeInputBufferPool::new(
                 decoding_device.allocator.clone(),
-                new_params.profile_info.clone(),
+                params.profile_info.clone(),
             );
         }
 
         self.video_session = Arc::new(VideoSession::new(
             &decoding_device.vulkan_device,
             &decoding_device.h264_decode_queues,
-            &new_params.profile_info.profile_info.profile_info,
-            new_params.max_coded_extent,
-            new_params.max_dpb_slots,
-            new_params.max_active_references,
+            &params.profile_info.profile_info.profile_info,
+            params.max_coded_extent,
+            params.max_dpb_slots,
+            params.max_active_references,
             vk::VideoSessionCreateFlagsKHR::empty(),
             &decoding_device
                 .profile_capabilities
@@ -264,7 +278,7 @@ impl<'a> VideoSessionResources<'a> {
 
         self.decoding_images = Self::new_decoding_images(
             decoding_device,
-            &new_params.profile_info,
+            &params.profile_info,
             self.video_session.max_coded_extent,
             self.video_session.max_dpb_slots,
             decode_buffer,
@@ -272,7 +286,7 @@ impl<'a> VideoSessionResources<'a> {
             self.image_modifiers,
         )?;
 
-        self.parameters = new_params;
+        self.parameters = params;
 
         Ok(())
     }

@@ -50,7 +50,7 @@ impl<'a> DecodingImages<'a> {
         profile: &H264DecodeProfileInfo,
         dpb_format: &vk::VideoFormatPropertiesKHR<'a>,
         dst_format: &Option<vk::VideoFormatPropertiesKHR<'a>>,
-        dimensions: vk::Extent2D,
+        max_coded_extent: vk::Extent2D,
         max_dpb_slots: u32,
         additional_queue_index: u32,
     ) -> Result<Self, VulkanDecoderError> {
@@ -77,7 +77,7 @@ impl<'a> DecodingImages<'a> {
             &profile.profile_info.profile_info,
             dpb_image_usage,
             dpb_format,
-            dimensions,
+            max_coded_extent,
             max_dpb_slots,
             if dst_format.is_some() {
                 None
@@ -98,7 +98,7 @@ impl<'a> DecodingImages<'a> {
                     command_buffer,
                     image_tracker,
                     &dst_format,
-                    dimensions,
+                    max_coded_extent,
                     dst_image_usage,
                     false,
                     &profile.profile_info.profile_info,
@@ -135,6 +135,18 @@ impl<'a> DecodingImages<'a> {
         i: usize,
     ) -> Option<&vk::VideoPictureResourceInfoKHR<'_>> {
         self.dpb.video_resource_info(i)
+    }
+
+    pub(crate) fn update_coded_extent(
+        &mut self,
+        coded_extent: vk::Extent2D,
+    ) -> Result<(), VulkanDecoderError> {
+        self.dpb.update_coded_extent(coded_extent)?;
+        if let Some(dst) = &mut self.dst_image {
+            dst.update_coded_extent(coded_extent)?;
+        }
+
+        Ok(())
     }
 
     pub(crate) fn free_reference_picture(&mut self, i: usize) {
