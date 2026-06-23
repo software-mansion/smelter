@@ -14,7 +14,7 @@ pub async fn handle_terminate_whip_session(
     let input_ref = state.inputs.resolve_input_ref(&input_id)?;
     let session_id = Arc::from(session_id);
 
-    state.inputs.validate_token(&input_ref, &headers).await?;
+    state.inputs.validate_token(&input_ref, &headers)?;
     state.inputs.validate_session_id(&input_ref, &session_id)?;
 
     let session = state

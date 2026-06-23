@@ -18,7 +18,7 @@ pub(super) fn generate_token() -> Arc<str> {
     Arc::from(token)
 }
 
-pub(super) async fn validate_bearer_token(
+pub(super) fn validate_bearer_token(
     expected_token: &str,
     auth_header_value: Option<&HeaderValue>,
 ) -> Result<(), WhipWhepServerError> {

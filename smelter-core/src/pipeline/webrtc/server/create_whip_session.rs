@@ -25,7 +25,7 @@ pub async fn handle_create_whip_session(
     let input_ref = state.inputs.resolve_input_ref(&input_id)?;
 
     validate_sdp_content_type(&headers)?;
-    state.inputs.validate_token(&input_ref, &headers).await?;
+    state.inputs.validate_token(&input_ref, &headers)?;
 
     let offer = RTCSessionDescription::offer(offer)?;
 
