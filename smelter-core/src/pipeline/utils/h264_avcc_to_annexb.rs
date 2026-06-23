@@ -1,5 +1,6 @@
 use bytes::{Buf, Bytes, BytesMut};
 use std::io::Read;
+use tracing::warn;
 
 use crate::pipeline::decoder::BytestreamTransformer;
 use crate::prelude::*;
@@ -56,7 +57,12 @@ impl BytestreamTransformer for H264AvccToAnnexB {
             let len = u32::from_be_bytes(len);
 
             let mut nalu = BytesMut::zeroed(len as usize);
-            reader.read_exact(&mut nalu).unwrap();
+            if reader.read_exact(&mut nalu).is_err() {
+                // Truncated/broken input - the declared NAL length exceeds the
+                // remaining bytes. Drop the incomplete NAL instead of panicking.
+                warn!("Dropping truncated H.264 NAL unit (expected {len} bytes).");
+                break;
+            }
 
             data.extend_from_slice(&[0, 0, 0, 1]);
             data.extend_from_slice(&nalu);
