@@ -127,8 +127,8 @@ impl WhepOutputsState {
         output_ref: &Ref<OutputId>,
         headers: &HeaderMap,
     ) -> Result<(), WhipWhepServerError> {
-        let bearer_token_hash = match self.0.lock().unwrap().get_mut(output_ref) {
-            Some(output) => output.bearer_token_hash.clone(),
+        let bearer_token = match self.0.lock().unwrap().get_mut(output_ref) {
+            Some(output) => output.bearer_token.clone(),
             None => {
                 return Err(WhipWhepServerError::NotFound(format!(
                     "Output {output_ref} not found"
@@ -136,8 +136,8 @@ impl WhepOutputsState {
             }
         };
 
-        match bearer_token_hash {
-            Some(hash) => validate_token(&hash, headers.get("Authorization")).await,
+        match bearer_token {
+            Some(token) => validate_token(&token, headers.get("Authorization")).await,
             None => Ok(()), // Bearer token not required, treat as validated
         }
     }
@@ -145,16 +145,14 @@ impl WhepOutputsState {
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhepOutputConnectionStateOptions {
-    /// SHA3-512 hash (lowercase hex) of the bearer token, not the plaintext token.
-    pub bearer_token_hash: Option<Arc<str>>,
+    pub bearer_token: Option<Arc<str>>,
     pub video_options: Option<WhepVideoConnectionOptions>,
     pub audio_options: Option<WhepAudioConnectionOptions>,
 }
 
 #[derive(Debug)]
 pub(crate) struct WhepOutputConnectionState {
-    /// SHA3-512 hash (lowercase hex) of the bearer token, not the plaintext token.
-    pub bearer_token_hash: Option<Arc<str>>,
+    pub bearer_token: Option<Arc<str>>,
     pub sessions: HashMap<Arc<str>, PeerConnection>,
     pub video_options: Option<WhepVideoConnectionOptions>,
     pub audio_options: Option<WhepAudioConnectionOptions>,
@@ -177,7 +175,7 @@ pub(crate) struct WhepAudioConnectionOptions {
 impl WhepOutputConnectionState {
     pub fn new(options: WhepOutputConnectionStateOptions) -> Self {
         WhepOutputConnectionState {
-            bearer_token_hash: options.bearer_token_hash,
+            bearer_token: options.bearer_token,
             sessions: HashMap::new(),
             video_options: options.video_options,
             audio_options: options.audio_options,

@@ -113,8 +113,8 @@ impl WhipInputsState {
         input_ref: &Ref<InputId>,
         headers: &HeaderMap,
     ) -> Result<(), WhipWhepServerError> {
-        let bearer_token_hash = match self.0.lock().unwrap().get_mut(input_ref) {
-            Some(input) => input.bearer_token_hash.clone(),
+        let bearer_token = match self.0.lock().unwrap().get_mut(input_ref) {
+            Some(input) => input.bearer_token.clone(),
             None => {
                 return Err(WhipWhepServerError::NotFound(format!(
                     "Input {input_ref} not found"
@@ -122,14 +122,13 @@ impl WhipInputsState {
             }
         };
 
-        validate_token(&bearer_token_hash, headers.get("Authorization")).await
+        validate_token(&bearer_token, headers.get("Authorization")).await
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhipInputStateOptions {
-    /// SHA3-512 hash (lowercase hex) of the bearer token, not the plaintext token.
-    pub bearer_token_hash: Arc<str>,
+    pub bearer_token: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub jitter_buffer_size: Option<Duration>,
     pub queue_input: WeakQueueInput,
@@ -137,8 +136,7 @@ pub(crate) struct WhipInputStateOptions {
 
 #[derive(Debug)]
 pub(crate) struct WhipInputState {
-    /// SHA3-512 hash (lowercase hex) of the bearer token, not the plaintext token.
-    pub bearer_token_hash: Arc<str>,
+    pub bearer_token: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub jitter_buffer_size: Option<Duration>,
     pub queue_input: WeakQueueInput,
@@ -154,7 +152,7 @@ pub(crate) struct WhipInputSession {
 impl WhipInputState {
     pub fn new(options: WhipInputStateOptions) -> Self {
         WhipInputState {
-            bearer_token_hash: options.bearer_token_hash,
+            bearer_token: options.bearer_token,
             video_preferences: options.video_preferences,
             jitter_buffer_size: options.jitter_buffer_size,
             queue_input: options.queue_input,

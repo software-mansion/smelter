@@ -32,7 +32,7 @@ pub(super) fn hash_token(token: &str) -> Arc<str> {
 }
 
 pub(super) async fn validate_token(
-    expected_hash: &str,
+    expected_token: &str,
     auth_header_value: Option<&HeaderValue>,
 ) -> Result<(), WhipWhepServerError> {
     match auth_header_value {
@@ -42,8 +42,7 @@ pub(super) async fn validate_token(
             })?;
 
             if let Some(token_from_header) = auth_str.strip_prefix("Bearer ") {
-                let hash_from_header = hash_token(token_from_header);
-                if hash_from_header.as_ref() == expected_hash {
+                if hash_token(token_from_header) == hash_token(expected_token) {
                     Ok(())
                 } else {
                     Err(WhipWhepServerError::Unauthorized(
