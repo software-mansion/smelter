@@ -115,7 +115,6 @@ async fn handle_broadcast(
 
     let discovered = read_catalog(&broadcast).await?;
 
-    let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
     let mut handler = BroadcastHandler::new(
         ctx.clone(),
         input_ref.clone(),
@@ -123,7 +122,6 @@ async fn handle_broadcast(
         discovered,
         decoders,
         should_close,
-        stats_sender,
     );
 
     let (video_sender, audio_sender) = {
@@ -165,12 +163,13 @@ impl BroadcastHandler {
         tracks: DiscoveredTracks,
         decoders: MoqServerInputDecoders,
         should_close: Arc<AtomicBool>,
-        stats_sender: MoqStatsSender,
     ) -> Self {
         // Shared across audio and video so both tracks are normalized against
         // the same first PTS, preserving A/V synchronization. Whichever track
         // produces the first frame sets the common zero point for both.
         let first_pts = Arc::new(Mutex::new(None));
+
+        let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
 
         let track_ctx = TrackCtx {
             ctx,
