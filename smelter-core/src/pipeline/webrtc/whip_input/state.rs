@@ -108,7 +108,7 @@ impl WhipInputsState {
         }
     }
 
-    pub async fn validate_token(
+    pub fn validate_token(
         &self,
         input_ref: &Ref<InputId>,
         headers: &HeaderMap,
@@ -122,7 +122,7 @@ impl WhipInputsState {
             }
         };
 
-        validate_token(&bearer_token, headers.get("Authorization")).await
+        validate_token(&bearer_token, headers.get("Authorization"))
     }
 }
 

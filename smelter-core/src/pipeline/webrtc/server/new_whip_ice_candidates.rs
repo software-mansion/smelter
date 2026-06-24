@@ -21,7 +21,7 @@ pub async fn handle_new_whip_ice_candidates(
     let session_id = Arc::from(session_id);
 
     validate_content_type(&headers)?;
-    state.inputs.validate_token(&input_ref, &headers).await?;
+    state.inputs.validate_token(&input_ref, &headers)?;
     state.inputs.validate_session_id(&input_ref, &session_id)?;
 
     let session = state

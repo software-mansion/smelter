@@ -33,7 +33,7 @@ pub async fn handle_create_whep_session(
 
     validate_sdp_content_type(&headers)?;
     let outputs = state.outputs;
-    outputs.validate_token(&output_ref, &headers).await?;
+    outputs.validate_token(&output_ref, &headers)?;
     let ctx = state.ctx.clone();
 
     let (video_encoder, video_receiver, keyframe_request_sender) =

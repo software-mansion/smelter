@@ -122,7 +122,7 @@ impl WhepOutputsState {
         }
     }
 
-    pub async fn validate_token(
+    pub fn validate_token(
         &self,
         output_ref: &Ref<OutputId>,
         headers: &HeaderMap,
@@ -137,7 +137,7 @@ impl WhepOutputsState {
         };
 
         match bearer_token {
-            Some(token) => validate_token(&token, headers.get("Authorization")).await,
+            Some(token) => validate_token(&token, headers.get("Authorization")),
             None => Ok(()), // Bearer token not required, treat as validated
         }
     }

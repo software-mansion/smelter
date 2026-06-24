@@ -22,7 +22,7 @@ pub async fn handle_new_whep_ice_candidates(
     let session_id = Arc::from(session_id);
 
     validate_content_type(&headers)?;
-    state.outputs.validate_token(&output_ref, &headers).await?;
+    state.outputs.validate_token(&output_ref, &headers)?;
 
     let peer_connection = state.outputs.get_session(&output_ref, &session_id)?;
 
