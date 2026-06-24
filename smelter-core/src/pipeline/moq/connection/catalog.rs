@@ -111,21 +111,18 @@ fn discover_video(
     };
 
     let codec = match &config.codec {
-        MoqVideoCodec::H264(_) => Ok(VideoCodec::H264),
-        _ => Err("Unsupported video codec. Use H264."),
+        MoqVideoCodec::H264(_) => VideoCodec::H264,
+        _ => {
+            warn!("Unsupported video codec. Use H264.");
+            return Ok(None);
+        }
     };
-    if let Err(msg) = &codec {
-        warn!("{msg}");
-    }
     let container = match &config.container {
         CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
         _ => {
             warn!("Unsupported video container. Only CMAF is supported.");
             return Ok(None);
         }
-    };
-    let Ok(codec) = codec else {
-        return Ok(None);
     };
 
     let description = match (catalog_type, &container) {
@@ -150,22 +147,19 @@ fn discover_audio(
     };
 
     let codec = match &config.codec {
-        MoqAudioCodec::Opus => Ok(AudioCodec::Opus),
-        MoqAudioCodec::AAC(_) => Ok(AudioCodec::Aac),
-        _ => Err("Unsupported audio codec. Use AAC or Opus."),
+        MoqAudioCodec::Opus => AudioCodec::Opus,
+        MoqAudioCodec::AAC(_) => AudioCodec::Aac,
+        _ => {
+            warn!("Unsupported audio codec. Use AAC or Opus.");
+            return Ok(None);
+        }
     };
-    if let Err(msg) = &codec {
-        warn!("{msg}");
-    }
     let container = match &config.container {
         CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
         _ => {
             warn!("Unsupported audio container. Only CMAF is supported.");
             return Ok(None);
         }
-    };
-    let Ok(codec) = codec else {
-        return Ok(None);
     };
 
     // TODO: (@jbrs): It needs to be reconsidered how decoder config should be handled,
