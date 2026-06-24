@@ -2,6 +2,7 @@ use bytes::{Bytes, BytesMut};
 use hang::catalog::{
     AudioCodec as MoqAudioCodec, Container as CatalogContainer, VideoCodec as MoqVideoCodec,
 };
+use moq_mux::catalog::hang::Container;
 use moq_mux::container::fmp4;
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use tracing::{debug, warn};
@@ -46,7 +47,7 @@ pub(super) async fn read_catalog(
 async fn read_hang_catalog(
     broadcast: &BroadcastConsumer,
 ) -> Result<DiscoveredTracks, MoqCatalogError> {
-    use moq_mux::catalog::hang::{Catalog, Consumer, Container};
+    use moq_mux::catalog::hang::{Catalog, Consumer};
 
     let catalog_track = broadcast
         .subscribe_track(&hang::Catalog::default_track())
@@ -60,53 +61,8 @@ async fn read_hang_catalog(
 
     debug!(?catalog, "Received MoQ Hang catalog");
 
-    let video = match catalog.video.renditions.first_key_value() {
-        Some((name, config)) => match (video_codec(&config.codec), &config.container) {
-            (Ok(codec), CatalogContainer::Cmaf { init, .. }) => {
-                let wire = fmp4::Wire::from_init(init)?;
-                Some(DiscoveredVideo {
-                    name: name.clone(),
-                    container: Container::Cmaf(wire),
-                    codec,
-                    description: config.description.clone(),
-                })
-            }
-            (codec_res, container) => {
-                if let Err(msg) = codec_res {
-                    warn!("{msg}");
-                }
-                if !matches!(container, CatalogContainer::Cmaf { .. }) {
-                    warn!("Unsupported video container, only CMAF is supported.");
-                }
-                None
-            }
-        },
-        None => None,
-    };
-
-    let audio = match catalog.audio.renditions.first_key_value() {
-        Some((name, config)) => match (audio_codec(&config.codec), &config.container) {
-            (Ok(codec), CatalogContainer::Cmaf { init, .. }) => {
-                let wire = fmp4::Wire::from_init(init)?;
-                Some(DiscoveredAudio {
-                    name: name.clone(),
-                    container: Container::Cmaf(wire),
-                    codec,
-                    description: config.description.clone(),
-                })
-            }
-            (codec_res, container) => {
-                if let Err(msg) = codec_res {
-                    warn!("{msg}");
-                }
-                if !matches!(container, CatalogContainer::Cmaf { .. }) {
-                    warn!("Unsupported audio container, only CMAF is supported.");
-                }
-                None
-            }
-        },
-        None => None,
-    };
+    let video = discover_video(&catalog.video, CatalogType::Hang)?;
+    let audio = discover_audio(&catalog.audio, CatalogType::Hang)?;
 
     if video.is_none() && audio.is_none() {
         return Err(MoqCatalogError::CatalogNoTracks);
@@ -118,7 +74,7 @@ async fn read_hang_catalog(
 async fn read_msf_catalog(
     broadcast: &BroadcastConsumer,
 ) -> Result<DiscoveredTracks, MoqCatalogError> {
-    use moq_mux::catalog::{hang::Container, msf::Consumer};
+    use moq_mux::catalog::msf::Consumer;
 
     let catalog_track = broadcast
         .subscribe_track(&Track::new(moq_msf::DEFAULT_NAME))
@@ -131,81 +87,101 @@ async fn read_msf_catalog(
         .ok_or(MoqCatalogError::CatalogEmpty)?;
     debug!(?catalog, "Received MoQ MSF catalog");
 
-    let video = match catalog.video.renditions.first_key_value() {
-        Some((name, config)) => match (video_codec(&config.codec), &config.container) {
-            (Ok(codec), CatalogContainer::Cmaf { init, .. }) => {
-                let wire = fmp4::Wire::from_init(init)?;
-                let description = match extract_codec_description(&wire) {
-                    Ok(config) => Some(config),
-                    Err(error) => {
-                        warn!(%error, "Failed to extract video config from CMAF container.");
-                        None
-                    }
-                };
-
-                Some(DiscoveredVideo {
-                    name: name.clone(),
-                    container: Container::Cmaf(wire),
-                    codec,
-                    description,
-                })
-            }
-            (codec_res, container) => {
-                if let Err(msg) = codec_res {
-                    warn!("{msg}");
-                }
-                if !matches!(container, CatalogContainer::Cmaf { .. }) {
-                    warn!("Unsupported video container, only CMAF is supported.");
-                }
-                None
-            }
-        },
-        None => None,
-    };
-
-    let audio = match catalog.audio.renditions.first_key_value() {
-        Some((name, config)) => match (audio_codec(&config.codec), &config.container) {
-            // TODO: (@jbrs): It needs to be reconsidered how decoder config should be handled,
-            // where should it be extracted from the container, here or in the decoder.
-            // Return to that when adding additional containers.
-            (Ok(codec), CatalogContainer::Cmaf { init, .. }) => {
-                let wire = fmp4::Wire::from_init(init)?;
-                let description = match &config.codec {
-                    MoqAudioCodec::AAC(_) => match extract_codec_description(&wire) {
-                        Ok(config) => Some(config),
-                        Err(error) => {
-                            warn!(%error, "Failed to extract AAC audio config from CMAF container.");
-                            None
-                        }
-                    },
-                    _ => None,
-                };
-
-                Some(DiscoveredAudio {
-                    name: name.clone(),
-                    container: Container::Cmaf(wire),
-                    codec,
-                    description,
-                })
-            }
-            (codec_res, container) => {
-                if let Err(msg) = codec_res {
-                    warn!("{msg}");
-                }
-                if !matches!(container, CatalogContainer::Cmaf { .. }) {
-                    warn!("Unsupported audio container, only CMAF is supported.");
-                }
-                None
-            }
-        },
-        None => None,
-    };
+    let video = discover_video(&catalog.video, CatalogType::Msf)?;
+    let audio = discover_audio(&catalog.audio, CatalogType::Msf)?;
 
     if video.is_none() && audio.is_none() {
         return Err(MoqCatalogError::CatalogNoTracks);
     }
 
     Ok(DiscoveredTracks { video, audio })
+}
+
+enum CatalogType {
+    Hang,
+    Msf,
+}
+
+fn discover_video(
+    video: &hang::catalog::Video,
+    catalog_type: CatalogType,
+) -> Result<Option<DiscoveredVideo>, MoqCatalogError> {
+    let Some((name, config)) = video.renditions.first_key_value() else {
+        return Ok(None);
+    };
+
+    let codec = match &config.codec {
+        MoqVideoCodec::H264(_) => Ok(VideoCodec::H264),
+        _ => Err("Unsupported video codec. Use H264."),
+    };
+    if let Err(msg) = &codec {
+        warn!("{msg}");
+    }
+    let container = match &config.container {
+        CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
+        _ => {
+            warn!("Unsupported video container. Only CMAF is supported.");
+            return Ok(None);
+        }
+    };
+    let Ok(codec) = codec else {
+        return Ok(None);
+    };
+
+    let description = match (catalog_type, &container) {
+        (CatalogType::Msf, Container::Cmaf(wire)) => Some(extract_codec_description(wire)?),
+        (_, _) => config.description.clone(),
+    };
+
+    Ok(Some(DiscoveredVideo {
+        name: name.clone(),
+        container,
+        codec,
+        description,
+    }))
+}
+
+fn discover_audio(
+    audio: &hang::catalog::Audio,
+    catalog_type: CatalogType,
+) -> Result<Option<DiscoveredAudio>, MoqCatalogError> {
+    let Some((name, config)) = audio.renditions.first_key_value() else {
+        return Ok(None);
+    };
+
+    let codec = match &config.codec {
+        MoqAudioCodec::Opus => Ok(AudioCodec::Opus),
+        MoqAudioCodec::AAC(_) => Ok(AudioCodec::Aac),
+        _ => Err("Unsupported audio codec. Use AAC or Opus."),
+    };
+    if let Err(msg) = &codec {
+        warn!("{msg}");
+    }
+    let container = match &config.container {
+        CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
+        _ => {
+            warn!("Unsupported audio container. Only CMAF is supported.");
+            return Ok(None);
+        }
+    };
+    let Ok(codec) = codec else {
+        return Ok(None);
+    };
+
+    // TODO: (@jbrs): It needs to be reconsidered how decoder config should be handled,
+    // where should it be extracted from the container, here or in the decoder.
+    // Return to that when adding additional containers.
+    let description = match (catalog_type, &container) {
+        (CatalogType::Msf, Container::Cmaf(wire)) => Some(extract_codec_description(wire)?),
+        (_, _) => config.description.clone(),
+    };
+
+    Ok(Some(DiscoveredAudio {
+        name: name.clone(),
+        container,
+        codec,
+        description,
+    }))
 }
 
 fn extract_codec_description(cmaf: &fmp4::Wire) -> Result<Bytes, MoqCatalogError> {
@@ -240,20 +216,5 @@ fn extract_codec_description(cmaf: &fmp4::Wire) -> Result<Bytes, MoqCatalogError
         _ => Err(MoqCatalogError::CodecConfigExtractionError(
             "unsupported codec in CMAF init segment",
         )),
-    }
-}
-
-fn audio_codec(codec: &MoqAudioCodec) -> Result<AudioCodec, &'static str> {
-    match codec {
-        MoqAudioCodec::Opus => Ok(AudioCodec::Opus),
-        MoqAudioCodec::AAC(_) => Ok(AudioCodec::Aac),
-        _ => Err("Unsupported audio codec. Use AAC or Opus."),
-    }
-}
-
-fn video_codec(codec: &MoqVideoCodec) -> Result<VideoCodec, &'static str> {
-    match codec {
-        MoqVideoCodec::H264(_) => Ok(VideoCodec::H264),
-        _ => Err("Unsupported video codec. Use H264."),
     }
 }
