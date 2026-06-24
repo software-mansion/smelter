@@ -3,12 +3,11 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
+use sha3::{Digest, Sha3_512};
 use tokio::task::JoinHandle;
 use tracing::error;
 
-use crate::{
-    pipeline::moq::server::MoqSession, queue::WeakQueueInput, utils::authentication::validate_token,
-};
+use crate::{pipeline::moq::server::MoqSession, queue::WeakQueueInput};
 
 use crate::prelude::*;
 
@@ -107,7 +106,9 @@ impl MoqServerState {
             input.auth_token.clone()
         };
 
-        match validate_token(&expected_token, provided_token) {
+        let expected_token_hash = Sha3_512::digest(expected_token.as_bytes());
+        let provided_token_hash = Sha3_512::digest(provided_token.as_bytes());
+        match expected_token_hash == provided_token_hash {
             true => Ok(()),
             false => Err(MoqServerError::InvalidToken(input_ref.id().clone())),
         }
