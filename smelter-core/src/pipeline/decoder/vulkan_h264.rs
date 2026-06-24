@@ -107,10 +107,12 @@ fn from_vk_frame(frame: gpu_video::OutputFrame<wgpu::Texture>) -> Frame {
         width: data.width() as usize,
         height: data.height() as usize,
     };
+    let pts = Duration::from_micros(metadata.pts.unwrap());
 
+    trace!(?pts, "H264 Vulkan decoder produced a frame.");
     Frame {
         data: FrameData::Nv12WgpuTexture(data.into()),
-        pts: Duration::from_micros(metadata.pts.unwrap()),
+        pts,
         resolution,
     }
 }
