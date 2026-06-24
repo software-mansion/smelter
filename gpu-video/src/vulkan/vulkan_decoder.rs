@@ -6,9 +6,9 @@ use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
 
+use crate::decoder::VideoDecoderBackend;
 use crate::frame_sorter::{DecodeResult, DecodeResultMetadata};
 use crate::vulkan::VulkanCommonError;
-use crate::wrappers::*;
 use crate::{
     RawFrameData,
     codec::h264::parameters::SeqParameterSetExt as _,
@@ -19,6 +19,7 @@ use crate::{
     },
     vulkan::vulkan_device::DecodingDevice,
 };
+use crate::{VideoBackendError, VideoDecoderError, wrappers::*};
 
 mod session_resources;
 
@@ -160,6 +161,33 @@ pub enum VulkanDecoderError {
 
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
+}
+
+impl From<VulkanDecoderError> for VideoDecoderError {
+    fn from(err: VulkanDecoderError) -> Self {
+        Self::BackendError(VideoBackendError {
+            message: err.to_string(),
+            source: Some(Box::new(err)),
+        })
+    }
+}
+
+impl VideoDecoderBackend for VulkanDecoder<'static> {
+    fn decode_to_bytes(
+        &mut self,
+        decoder_instructions: &[DecoderInstruction],
+    ) -> Result<Vec<DecodeResult<RawFrameData>>, VideoDecoderError> {
+        VulkanDecoder::decode_to_bytes(self, decoder_instructions).map_err(Into::into)
+    }
+
+    fn decode_to_wgpu_textures(
+        &mut self,
+        wgpu_device: &wgpu::Device,
+        decoder_instructions: &[DecoderInstruction],
+    ) -> Result<Vec<DecodeResult<wgpu::Texture>>, VideoDecoderError> {
+        VulkanDecoder::decode_to_wgpu_textures(self, wgpu_device, decoder_instructions)
+            .map_err(Into::into)
+    }
 }
 
 impl VulkanDecoder<'_> {

@@ -22,6 +22,10 @@ mod vulkan_transcoder;
 pub(crate) mod wgpu_helpers;
 #[cfg(vulkan)]
 pub(crate) mod wrappers;
+#[cfg(vulkan)]
+pub(crate) mod decoder;
+#[cfg(vulkan)]
+pub(crate) mod encoder;
 
 // TODO: make sure it's not vulkan specific
 #[cfg(vulkan)]

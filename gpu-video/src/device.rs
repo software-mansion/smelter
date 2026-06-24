@@ -5,12 +5,13 @@ use std::sync::Arc;
 use ash::vk;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
+use crate::decoder::BytesDecoder;
 use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, H265Profile,
     RateControl,
 };
 
-use crate::{BytesDecoder, BytesEncoderH264, BytesEncoderH265, VideoDecoderError, VideoEncoderError};
+use crate::{BytesEncoderH264, BytesEncoderH265, VideoDecoderError, VideoEncoderError};
 
 pub(crate) mod caps;
 pub(crate) mod queues;
@@ -279,7 +280,7 @@ pub(crate) trait VideoDeviceBackend {
         self: Arc<Self>,
         wgpu_device: wgpu::Device,
         parameters: DecoderParameters,
-    ) -> Result<crate::WgpuTexturesDecoder, VideoDecoderError>;
+    ) -> Result<crate::decoder::WgpuTexturesDecoder, VideoDecoderError>;
 
     #[cfg(feature = "wgpu")]
     fn create_wgpu_textures_encoder_h264(

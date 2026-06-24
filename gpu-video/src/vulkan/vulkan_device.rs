@@ -12,6 +12,7 @@ use crate::codec::EncodeCodec;
 use crate::codec::h264::H264Codec;
 #[cfg(feature = "wgpu")]
 use crate::codec::h265::H265Codec;
+use crate::decoder::BytesDecoder;
 use crate::device::caps::{
     NativeDecodeCapabilities, NativeDecodeProfileCapabilities, NativeEncodeCapabilities,
 };
@@ -28,8 +29,8 @@ use crate::vulkan::vulkan_adapter::VulkanAdapter;
 use crate::vulkan::vulkan_decoder::{ImageModifiers, VulkanDecoder};
 use crate::vulkan::vulkan_encoder::{VulkanEncoder, VulkanEncoderError, VulkanEncoderParameters};
 use crate::{
-    BytesDecoder, BytesEncoderH264, BytesEncoderH265, RawFrameData, VideoBackendError,
-    VideoDecoderError, VideoDeviceInitError, VideoEncoderError, VulkanDecoderError, wrappers::*,
+    BytesEncoderH264, BytesEncoderH265, RawFrameData, VideoBackendError, VideoDecoderError,
+    VideoDeviceInitError, VideoEncoderError, VulkanDecoderError, wrappers::*,
 };
 
 pub(crate) struct VulkanDevice {
@@ -47,7 +48,7 @@ impl VideoDeviceBackend for VulkanDevice {
         self: Arc<Self>,
         parameters: DecoderParameters,
     ) -> Result<BytesDecoder, VideoDecoderError> {
-        VulkanDevice::create_bytes_decoder_h264(self, parameters)
+        VulkanDevice::create_bytes_decoder_h264(self, parameters).map_err(Into::into)
     }
 
     #[cfg(feature = "wgpu")]
@@ -55,8 +56,9 @@ impl VideoDeviceBackend for VulkanDevice {
         self: Arc<Self>,
         wgpu_device: wgpu::Device,
         parameters: DecoderParameters,
-    ) -> Result<crate::WgpuTexturesDecoder, VideoDecoderError> {
+    ) -> Result<crate::decoder::WgpuTexturesDecoder, VideoDecoderError> {
         VulkanDevice::create_wgpu_textures_decoder_h264(self, wgpu_device, parameters)
+            .map_err(Into::into)
     }
 
     fn create_bytes_encoder_h264(
@@ -388,11 +390,11 @@ impl VulkanDevice {
     pub fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: DecoderParameters,
-    ) -> Result<BytesDecoder, VideoDecoderError> {
+    ) -> Result<BytesDecoder, VulkanDecoderError> {
         let parser = H264Parser::default();
         let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
 
-        let vulkan_decoder = VulkanDecoder::new(
+        let decoder = VulkanDecoder::new(
             Arc::new(self.decoding_device()?),
             parameters.usage_flags,
             ImageModifiers {
@@ -406,7 +408,7 @@ impl VulkanDevice {
         Ok(BytesDecoder {
             parser,
             reference_ctx,
-            vulkan_decoder,
+            decoder: Box::new(decoder),
             frame_sorter,
         })
     }
@@ -416,12 +418,11 @@ impl VulkanDevice {
         self: Arc<Self>,
         wgpu_device: wgpu::Device,
         parameters: DecoderParameters,
-        // TODO: Use vulkan decoder error here and in other places
-    ) -> Result<crate::WgpuTexturesDecoder, VideoDecoderError> {
+    ) -> Result<crate::decoder::WgpuTexturesDecoder, VulkanDecoderError> {
         let parser = H264Parser::default();
         let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
 
-        let vulkan_decoder = VulkanDecoder::new(
+        let decoder = VulkanDecoder::new(
             Arc::new(self.decoding_device()?),
             parameters.usage_flags,
             ImageModifiers {
@@ -432,11 +433,11 @@ impl VulkanDevice {
         )?;
         let frame_sorter = FrameSorter::<wgpu::Texture>::new();
 
-        Ok(crate::WgpuTexturesDecoder {
+        Ok(crate::decoder::WgpuTexturesDecoder {
             wgpu_device,
             parser,
             reference_ctx,
-            vulkan_decoder,
+            decoder: Box::new(decoder),
             frame_sorter,
         })
     }
