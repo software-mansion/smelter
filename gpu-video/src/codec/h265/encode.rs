@@ -11,9 +11,7 @@ use crate::{
                 VkH265PictureParameterSet, VkH265SequenceParameterSet, VkH265VideoParameterSet,
             },
         },
-    },
-    parameters::RateControl,
-    wrappers::ProfileInfo,
+    }, parameters::RateControl, vulkan::vulkan_encoder::VulkanEncoderError, wrappers::ProfileInfo
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -30,7 +28,7 @@ pub(crate) struct H265WriteParametersInfo {
 
 impl EncodeCodec for H265Codec {
     fn profile_info<'a>(
-        params: &crate::vulkan::vulkan_encoder::FullEncoderParameters<Self>,
+        params: &crate::vulkan::vulkan_encoder::VulkanEncoderParameters<Self>,
     ) -> crate::wrappers::ProfileInfo<'a> {
         let h265_profile = vk::VideoEncodeH265ProfileInfoKHR::default()
             .std_profile_idc(params.profile.to_profile_idc());
@@ -56,9 +54,9 @@ impl EncodeCodec for H265Codec {
     }
 
     fn codec_parameters(
-        parameters: &crate::vulkan::vulkan_encoder::FullEncoderParameters<Self>,
+        parameters: &crate::vulkan::vulkan_encoder::VulkanEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
-    ) -> Result<Self::OwnedParameters, crate::VideoEncoderError> {
+    ) -> Result<Self::OwnedParameters, VulkanEncoderError> {
         Ok(Self::OwnedParameters {
             vps: vec![VkH265VideoParameterSet::new_encode(parameters)],
             sps: vec![VkH265SequenceParameterSet::new_encode(

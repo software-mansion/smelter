@@ -7,8 +7,10 @@ use std::{
 use ash::vk;
 use tracing::warn;
 
+#[cfg(feature = "wgpu")]
+use crate::VideoEncoderError;
 use crate::{
-    EncodedOutputChunk, InputFrame, RawFrameData,
+    EncodedOutputChunk, InputFrame, RawFrameData, VideoBackendError,
     codec::EncodeCodec,
     device::{ColorRange, ColorSpace, Rational},
     vulkan::{VulkanCommonError, vulkan_device::EncodingDevice},
@@ -24,6 +26,26 @@ const MB: u64 = 1024 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum VulkanEncoderError {
+    #[error("The device does not support Vulkan Video encoding")]
+    VulkanEncoderUnsupported,
+
+    #[error("The profile '{0}' is not supported by this device")]
+    ProfileUnsupported(String),
+
+    #[error("Invalid encoder parameters, field: {field} - problem: {problem}")]
+    ParametersError {
+        field: &'static str,
+        problem: String,
+    },
+
+    #[error(
+        "The byte length of the provided frame ({bytes}) is not the same as the picture size calculated from the dimensions ({size_from_resolution})"
+    )]
+    InconsistentPictureByteSize {
+        bytes: usize,
+        size_from_resolution: usize,
+    },
+
     #[error("Vulkan error: {0}")]
     VkError(#[from] ash::vk::Result),
 
@@ -38,6 +60,39 @@ pub enum VulkanEncoderError {
 
     #[error("Encode operation failed with status {0:?}")]
     EncodeOperationFailed(vk::QueryResultStatusKHR),
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    WgpuTextureEncoderError(#[from] crate::WgpuTextureEncoderError),
+}
+
+impl From<VulkanEncoderError> for VideoEncoderError {
+    fn from(err: VulkanEncoderError) -> Self {
+        match err {
+            VulkanEncoderError::VulkanEncoderUnsupported => VideoEncoderError::EncoderUnsupported,
+            VulkanEncoderError::ProfileUnsupported(profile) => {
+                VideoEncoderError::ProfileUnsupported(profile)
+            }
+            VulkanEncoderError::ParametersError { field, problem } => {
+                VideoEncoderError::ParametersError { field, problem }
+            }
+            VulkanEncoderError::InconsistentPictureByteSize {
+                bytes,
+                size_from_resolution,
+            } => VideoEncoderError::InconsistentPictureByteSize {
+                bytes,
+                size_from_resolution,
+            },
+            VulkanEncoderError::WgpuTextureEncoderError(err) => {
+                VideoEncoderError::WgpuTextureEncoderError(err)
+            }
+            // TODO: manally match all variants
+            err => Self::BackendError(VideoBackendError {
+                message: err.to_string(),
+                source: Some(Box::new(err)),
+            }),
+        }
+    }
 }
 
 struct VideoSessionResources<'a> {
@@ -55,7 +110,7 @@ impl VideoSessionResources<'_> {
         encoding_device: &EncodingDevice,
         command_buffer: &mut OpenCommandBuffer,
         image_tracker: Arc<Mutex<ImageLayoutTracker>>,
-        parameters: &FullEncoderParameters<C>,
+        parameters: &VulkanEncoderParameters<C>,
         profile_info: &vk::VideoProfileInfoKHR,
     ) -> Result<Self, VulkanEncoderError> {
         let encode_capabilities = C::encode_codec_profile_capabilities(
@@ -217,7 +272,7 @@ pub(crate) struct EncoderCommandBufferPools {
 }
 
 impl EncoderCommandBufferPools {
-    fn new(device: &EncodingDevice) -> Result<Self, VideoEncoderError> {
+    fn new(device: &EncodingDevice) -> Result<Self, VulkanEncoderError> {
         let transfer = CommandBufferPool::new(
             device.vulkan_device.clone(),
             device.queues.transfer.family_index,
@@ -238,19 +293,20 @@ impl CommandBufferPoolStorage for EncoderCommandBufferPools {
     }
 }
 
+// TODO: Replace with VideoEncoderBackend?
 pub(crate) trait Encoder<'a> {
     fn encode<'b>(
         &'b mut self,
         image: Arc<Image>,
         force_idr: bool,
         pts: Option<u64>,
-    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VideoEncoderError>;
+    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VulkanEncoderError>;
     fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind>;
     fn download_output(
         &mut self,
         is_idr: bool,
         pts: Option<u64>,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError>;
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError>;
 }
 
 pub(crate) struct EncoderTrackerKind {}
@@ -272,7 +328,7 @@ pub(crate) struct EncodeSubmission<'borrow, 'encoder> {
 }
 
 impl<'a, 'b> EncodeSubmission<'a, 'b> {
-    pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.encoder.download_output(self.is_idr, self.pts)
     }
 
@@ -281,7 +337,7 @@ impl<'a, 'b> EncodeSubmission<'a, 'b> {
         self.encoder.tracker().mark_waited(self.wait_value);
     }
 
-    pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VideoEncoderError> {
+    pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VulkanEncoderError> {
         self.encoder.tracker().wait_for(self.wait_value, timeout)?;
         Ok(())
     }
@@ -299,7 +355,7 @@ impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
     pub(crate) fn wait(
         mut self,
         timeout: u64,
-    ) -> Result<WaitedEncodeSubmission<'a, 'b>, VideoEncoderError> {
+    ) -> Result<WaitedEncodeSubmission<'a, 'b>, VulkanEncoderError> {
         self.0.wait(timeout)?;
         Ok(WaitedEncodeSubmission(self.0))
     }
@@ -307,7 +363,7 @@ impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
     pub(crate) fn wait_and_download(
         self,
         timeout: u64,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let waited = self.wait(timeout)?;
         waited.download()
     }
@@ -316,7 +372,7 @@ impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
 pub struct WaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
 
 impl<'a, 'b> WaitedEncodeSubmission<'a, 'b> {
-    pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.0.download()
     }
 }
@@ -339,26 +395,27 @@ pub struct VulkanEncoder<'a, C: EncodeCodec> {
     encoding_device: Arc<EncodingDevice>,
 }
 
+// TODO: expose in hal
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct FullEncoderParameters<C: EncodeCodec> {
-    pub(crate) idr_period: NonZeroU32,
-    pub(crate) width: NonZeroU32,
-    pub(crate) height: NonZeroU32,
-    pub(crate) rate_control: RateControl,
-    pub(crate) max_references: NonZeroU32,
-    pub(crate) profile: C::Profile,
-    pub(crate) quality_level: u32,
-    pub(crate) framerate: Rational,
-    pub(crate) usage_flags: vk::VideoEncodeUsageFlagsKHR,
-    pub(crate) tuning_mode: vk::VideoEncodeTuningModeKHR,
-    pub(crate) content_flags: vk::VideoEncodeContentFlagsKHR,
-    pub(crate) inline_stream_params: bool,
-    pub(crate) color_space: ColorSpace,
-    pub(crate) color_range: ColorRange,
+pub(crate) struct VulkanEncoderParameters<C: EncodeCodec> {
+    pub idr_period: NonZeroU32,
+    pub width: NonZeroU32,
+    pub height: NonZeroU32,
+    pub rate_control: RateControl,
+    pub max_references: NonZeroU32,
+    pub profile: C::Profile,
+    pub quality_level: u32,
+    pub framerate: Rational,
+    pub usage_flags: vk::VideoEncodeUsageFlagsKHR,
+    pub tuning_mode: vk::VideoEncodeTuningModeKHR,
+    pub content_flags: vk::VideoEncodeContentFlagsKHR,
+    pub inline_stream_params: bool,
+    pub color_space: ColorSpace,
+    pub color_range: ColorRange,
 }
 
-impl<C: EncodeCodec> From<&FullEncoderParameters<C>> for vk::VideoEncodeUsageInfoKHR<'_> {
-    fn from(params: &FullEncoderParameters<C>) -> Self {
+impl<C: EncodeCodec> From<&VulkanEncoderParameters<C>> for vk::VideoEncodeUsageInfoKHR<'_> {
+    fn from(params: &VulkanEncoderParameters<C>) -> Self {
         vk::VideoEncodeUsageInfoKHR::default()
             .video_usage_hints(params.usage_flags)
             .tuning_mode(params.tuning_mode)
@@ -371,8 +428,8 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
 
     pub(crate) fn new(
         encoding_device: Arc<EncodingDevice>,
-        parameters: FullEncoderParameters<C>,
-    ) -> Result<Self, VideoEncoderError> {
+        parameters: VulkanEncoderParameters<C>,
+    ) -> Result<Self, VulkanEncoderError> {
         let profile_info = C::profile_info(&parameters);
 
         let command_buffer_pools = EncoderCommandBufferPools::new(&encoding_device)?;
@@ -541,7 +598,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     fn transfer_buffer_to_image(
         &mut self,
         frame: &InputFrame<RawFrameData>,
-    ) -> Result<(Image, Buffer), VideoEncoderError> {
+    ) -> Result<(Image, Buffer), VulkanEncoderError> {
         let extent = vk::Extent3D {
             width: frame.data.width,
             height: frame.data.height,
@@ -550,7 +607,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
 
         if frame.data.width as usize * frame.data.height as usize * 3 / 2 != frame.data.frame.len()
         {
-            return Err(VideoEncoderError::InconsistentPictureByteSize {
+            return Err(VulkanEncoderError::InconsistentPictureByteSize {
                 bytes: frame.data.frame.len(),
                 size_from_resolution: frame.data.width as usize * frame.data.height as usize * 3
                     / 2,
@@ -667,7 +724,8 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
         frame: &InputFrame<wgpu::Texture>,
-    ) -> Result<wgpu::hal::vulkan::CommandEncoder, WgpuTextureEncoderError> {
+    ) -> Result<wgpu::hal::vulkan::CommandEncoder, VulkanEncoderError> {
+        use crate::WgpuTextureEncoderError;
         use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
         let encode_texture_extent = wgpu::Extent3d {
@@ -677,18 +735,21 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         };
 
         if !frame.data.usage().contains(wgpu::TextureUsages::COPY_SRC) {
-            return Err(WgpuTextureEncoderError::NoCopySrcTextureUsage(
-                frame.data.usage(),
-            ));
+            return Err(
+                crate::WgpuTextureEncoderError::NoCopySrcTextureUsage(frame.data.usage()).into(),
+            );
         }
         if frame.data.format() != wgpu::TextureFormat::NV12 {
-            return Err(WgpuTextureEncoderError::NotNV12Texture(frame.data.format()));
+            return Err(crate::WgpuTextureEncoderError::NotNV12Texture(frame.data.format()).into());
         }
         if frame.data.size() != encode_texture_extent {
-            return Err(WgpuTextureEncoderError::InconsistentPictureDimensions {
-                provided_dimensions: frame.data.size(),
-                expected_dimensions: encode_texture_extent,
-            });
+            return Err(
+                crate::WgpuTextureEncoderError::InconsistentPictureDimensions {
+                    provided_dimensions: frame.data.size(),
+                    expected_dimensions: encode_texture_extent,
+                }
+                .into(),
+            );
         }
 
         let hal_device = unsafe { wgpu_device.as_hal::<VkApi>().unwrap() };
@@ -769,8 +830,12 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
                 .unwrap()
         };
         let command_buffer = unsafe {
-            hal_encoder.begin_encoding(None)?;
-            hal_encoder.end_encoding()?
+            hal_encoder
+                .begin_encoding(None)
+                .map_err(WgpuTextureEncoderError::from)?;
+            hal_encoder
+                .end_encoding()
+                .map_err(WgpuTextureEncoderError::from)?
         };
 
         let mut semaphore_submit_info = self
@@ -778,11 +843,13 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             .semaphore_tracker
             .next_submit_info(EncoderTrackerWaitState::CopyImageToImage);
         unsafe {
-            hal_queue.submit(
-                &[&command_buffer],
-                &[],
-                semaphore_submit_info.wgpu_wait_info(),
-            )?;
+            hal_queue
+                .submit(
+                    &[&command_buffer],
+                    &[],
+                    semaphore_submit_info.wgpu_wait_info(),
+                )
+                .map_err(WgpuTextureEncoderError::from)?;
         }
 
         semaphore_submit_info.mark_submitted();
@@ -793,7 +860,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     pub fn stream_parameters(
         &self,
         info: C::CodecWriteParametersInfo,
-    ) -> Result<Vec<u8>, VideoEncoderError> {
+    ) -> Result<Vec<u8>, VulkanEncoderError> {
         let mut codec_get_info = C::codec_session_parameters_get_info(info);
 
         let get_info = vk::VideoEncodeSessionParametersGetInfoKHR::default()
@@ -821,6 +888,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
 
         self.encode(image, force_idr, frame.pts)?
             .wait_and_download(u64::MAX)
+            .map_err(Into::into)
     }
 
     #[cfg(feature = "wgpu")]
@@ -835,6 +903,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
 
         self.encode(self.input_image.clone(), force_idr, frame.pts)?
             .wait_and_download(u64::MAX)
+            .map_err(Into::into)
     }
 
     fn encoder_rate_control_for<'b>(
@@ -939,7 +1008,7 @@ impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
         image: Arc<Image>,
         force_idr: bool,
         pts: Option<u64>,
-    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VideoEncoderError> {
+    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VulkanEncoderError> {
         let is_idr = force_idr || self.idr_period_counter == 0;
 
         if is_idr {
@@ -1167,11 +1236,11 @@ impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
         &mut self,
         is_idr: bool,
         pts: Option<u64>,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let feedback = self.query_pool.get_result_blocking()?;
 
         if feedback.status != vk::QueryResultStatusKHR::COMPLETE {
-            return Err(VideoEncoderError::EncodeOperationFailed(feedback.status));
+            return Err(VulkanEncoderError::EncodeOperationFailed(feedback.status));
         }
 
         let mut output = if is_idr && self.inline_stream_params {

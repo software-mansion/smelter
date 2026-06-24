@@ -9,7 +9,7 @@ use crate::{
         NativeEncodeQualityLevelProperties,
     },
     parameters::RateControl,
-    vulkan::vulkan_encoder::FullEncoderParameters,
+    vulkan::vulkan_encoder::{VulkanEncoderError, VulkanEncoderParameters},
     wrappers::ProfileInfo,
 };
 
@@ -17,7 +17,7 @@ pub(crate) mod h264;
 pub(crate) mod h265;
 
 pub(crate) trait EncodeCodec: Codec {
-    fn profile_info<'a>(params: &FullEncoderParameters<Self>) -> ProfileInfo<'a>;
+    fn profile_info<'a>(params: &VulkanEncoderParameters<Self>) -> ProfileInfo<'a>;
     fn encode_profile_capabilities(
         caps: &Self::NativeEncodeCodecCapabilities,
         profile: Self::Profile,
@@ -25,16 +25,16 @@ pub(crate) trait EncodeCodec: Codec {
     fn encode_codec_profile_capabilities(
         caps: &NativeEncodeCapabilities,
         profile: Self::Profile,
-    ) -> Result<&NativeEncodeProfileCapabilities<Self>, VideoEncoderError> {
+    ) -> Result<&NativeEncodeProfileCapabilities<Self>, VulkanEncoderError> {
         let codec_caps = Self::encode_codec_capabilities(caps)
-            .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?;
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
         Self::encode_profile_capabilities(codec_caps, profile)
-            .ok_or_else(|| VideoEncoderError::ProfileUnsupported(format!("{profile:?}")))
+            .ok_or_else(|| VulkanEncoderError::ProfileUnsupported(format!("{profile:?}")))
     }
     fn codec_parameters(
-        parameters: &FullEncoderParameters<Self>,
+        parameters: &VulkanEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
-    ) -> Result<Self::OwnedParameters, VideoEncoderError>;
+    ) -> Result<Self::OwnedParameters, VulkanEncoderError>;
     fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters) -> Self::VkParameters<'a>;
 
     type BitstreamUnitData;

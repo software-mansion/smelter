@@ -29,6 +29,7 @@ pub(crate) struct H265VkParameters {
     pub(crate) pps: Vec<vk::native::StdVideoH265PictureParameterSet>,
 }
 
+// TODO: should it be public
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct H265Codec;
 

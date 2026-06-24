@@ -59,23 +59,6 @@ pub(crate) fn query_video_format_properties<'a>(
     Ok(format_properties)
 }
 
-// TODO: export
-#[derive(Debug, Clone, Copy)]
-pub enum QualityLevel {
-    Low,
-    High,
-}
-
-impl QualityLevel {
-    pub(crate) fn from_max_quality_level(max_level: u32) -> Self {
-        if max_level > 1 {
-            Self::High
-        } else {
-            Self::Low
-        }
-    }
-}
-
 /// The device capabilities for encoding
 #[derive(Debug, Clone, Copy)]
 pub struct EncodeCapabilities {
@@ -92,12 +75,6 @@ pub struct EncodeH265Capabilities {
 }
 
 impl EncodeH265Capabilities {
-    pub fn profile(&self, profile: H265Profile) -> Option<&EncodeProfileCapabilities> {
-        match profile {
-            H265Profile::Main => self.main_profile.as_ref(),
-        }
-    }
-
     pub fn max_profile(&self) -> Option<H265Profile> {
         if self.main_profile.is_some() {
             Some(H265Profile::Main)
@@ -118,14 +95,6 @@ pub struct EncodeH264Capabilities {
 }
 
 impl EncodeH264Capabilities {
-    pub fn profile(&self, profile: H264Profile) -> Option<&EncodeProfileCapabilities> {
-        match profile {
-            H264Profile::Baseline => self.baseline_profile.as_ref(),
-            H264Profile::Main => self.main_profile.as_ref(),
-            H264Profile::High => self.high_profile.as_ref(),
-        }
-    }
-
     pub fn max_profile(&self) -> Option<H264Profile> {
         if self.high_profile.is_some() {
             Some(H264Profile::High)
@@ -154,14 +123,13 @@ pub struct EncodeProfileCapabilities {
     pub supported_rate_control: vk::VideoEncodeRateControlModeFlagsKHR,
     /// The maximum number of back references a P-frame can have
     pub max_references: u32,
-    /// The maximum supported quality level
-    pub quality_level: QualityLevel,
 }
 
+// TOOD: expose
 #[derive(Debug, Clone)]
 pub(crate) struct NativeEncodeCapabilities {
-    pub(crate) h264: Option<NativeEncodeH264Capabilities>,
-    pub(crate) h265: Option<NativeEncodeH265Capabilities>,
+    pub h264: Option<NativeEncodeH264Capabilities>,
+    pub h265: Option<NativeEncodeH265Capabilities>,
 }
 
 impl NativeEncodeCapabilities {
@@ -199,9 +167,10 @@ impl NativeEncodeCapabilities {
     }
 }
 
+// TOOD: expose
 #[derive(Debug, Clone)]
 pub(crate) struct NativeEncodeH265Capabilities {
-    pub(crate) main: Option<NativeEncodeProfileCapabilities<H265Codec>>,
+    pub main: Option<NativeEncodeProfileCapabilities<H265Codec>>,
 }
 
 impl NativeEncodeH265Capabilities {
@@ -307,15 +276,16 @@ impl NativeEncodeH264Capabilities {
 }
 
 // TODO: vulkan specific, move it to vulkan/ ?
+// TODO: expose
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub(crate) struct NativeEncodeProfileCapabilities<C: CodecCapabilities> {
-    pub(crate) video_capabilities: vk::VideoCapabilitiesKHR<'static>,
-    pub(crate) encode_capabilities: vk::VideoEncodeCapabilitiesKHR<'static>,
-    pub(crate) encode_dpb_properties: Vec<vk::VideoFormatPropertiesKHR<'static>>,
-    pub(crate) encode_src_properties: Vec<vk::VideoFormatPropertiesKHR<'static>>,
-    pub(crate) quality_level_properties: Vec<NativeEncodeQualityLevelProperties<C>>,
-    pub(crate) codec_encode_capabilities: C::CodecSpecificEncodeCapabilities<'static>,
+    pub video_capabilities: vk::VideoCapabilitiesKHR<'static>,
+    pub encode_capabilities: vk::VideoEncodeCapabilitiesKHR<'static>,
+    pub encode_dpb_properties: Vec<vk::VideoFormatPropertiesKHR<'static>>,
+    pub encode_src_properties: Vec<vk::VideoFormatPropertiesKHR<'static>>,
+    pub quality_level_properties: Vec<NativeEncodeQualityLevelProperties<C>>,
+    pub codec_encode_capabilities: C::CodecSpecificEncodeCapabilities<'static>,
 }
 
 impl<C: CodecCapabilities> NativeEncodeProfileCapabilities<C> {
@@ -398,7 +368,6 @@ impl NativeEncodeProfileCapabilities<H264Codec> {
             max_references: self
                 .codec_encode_capabilities
                 .max_p_picture_l0_reference_count,
-            quality_level: QualityLevel::from_max_quality_level(self.encode_capabilities.max_quality_levels),
         }
     }
 }
@@ -414,16 +383,14 @@ impl NativeEncodeProfileCapabilities<H265Codec> {
             max_references: self
                 .codec_encode_capabilities
                 .max_p_picture_l0_reference_count,
-            quality_level: QualityLevel::from_max_quality_level(self.encode_capabilities.max_quality_levels),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeEncodeQualityLevelProperties<C: CodecCapabilities> {
-    pub(crate) quality_level_properties: vk::VideoEncodeQualityLevelPropertiesKHR<'static>,
-    pub(crate) codec_quality_level_properties:
-        C::CodecSpecificEncodeQualityLevelProperties<'static>,
+    pub quality_level_properties: vk::VideoEncodeQualityLevelPropertiesKHR<'static>,
+    pub codec_quality_level_properties: C::CodecSpecificEncodeQualityLevelProperties<'static>,
 }
 
 impl<C: CodecCapabilities> NativeEncodeQualityLevelProperties<C> {
@@ -533,10 +500,11 @@ pub struct DecodeH264ProfileCapabilities {
     pub max_level_idc: u8,
 }
 
+// TODO: expose hal
 #[derive(Debug, Clone)]
 pub(crate) struct NativeDecodeCapabilities {
-    pub(crate) h264: Option<NativeDecodeH264Capabilities>,
-    pub(crate) h265: Option<NativeDecodeH265Capabilities>,
+    pub h264: Option<NativeDecodeH264Capabilities>,
+    pub h265: Option<NativeDecodeH265Capabilities>,
 }
 
 impl NativeDecodeCapabilities {
@@ -576,7 +544,7 @@ impl NativeDecodeCapabilities {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeDecodeH265Capabilities {
-    pub(crate) main: Option<NativeDecodeProfileCapabilities<H265Codec>>,
+    pub main: Option<NativeDecodeProfileCapabilities<H265Codec>>,
 }
 
 impl NativeDecodeH265Capabilities {
@@ -612,9 +580,9 @@ impl NativeDecodeH265Capabilities {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeDecodeH264Capabilities {
-    pub(crate) baseline: Option<NativeDecodeProfileCapabilities<H264Codec>>,
-    pub(crate) main: Option<NativeDecodeProfileCapabilities<H264Codec>>,
-    pub(crate) high: Option<NativeDecodeProfileCapabilities<H264Codec>>,
+    pub baseline: Option<NativeDecodeProfileCapabilities<H264Codec>>,
+    pub main: Option<NativeDecodeProfileCapabilities<H264Codec>>,
+    pub high: Option<NativeDecodeProfileCapabilities<H264Codec>>,
 }
 
 impl NativeDecodeH264Capabilities {
@@ -689,12 +657,12 @@ impl NativeDecodeH264Capabilities {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeDecodeProfileCapabilities<C: CodecCapabilities> {
-    pub(crate) video_capabilities: vk::VideoCapabilitiesKHR<'static>,
+    pub video_capabilities: vk::VideoCapabilitiesKHR<'static>,
     #[allow(dead_code)]
-    pub(crate) decode_capabilities: vk::VideoDecodeCapabilitiesKHR<'static>,
-    pub(crate) codec_decode_capabilities: C::CodecSpecificDecodeCapabilities<'static>,
-    pub(crate) dpb_format_properties: vk::VideoFormatPropertiesKHR<'static>,
-    pub(crate) dst_format_properties: Option<vk::VideoFormatPropertiesKHR<'static>>,
+    pub decode_capabilities: vk::VideoDecodeCapabilitiesKHR<'static>,
+    pub codec_decode_capabilities: C::CodecSpecificDecodeCapabilities<'static>,
+    pub dpb_format_properties: vk::VideoFormatPropertiesKHR<'static>,
+    pub dst_format_properties: Option<vk::VideoFormatPropertiesKHR<'static>>,
 }
 
 impl<C: CodecCapabilities> NativeDecodeProfileCapabilities<C> {

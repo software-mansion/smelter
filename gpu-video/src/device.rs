@@ -5,7 +5,6 @@ use std::sync::Arc;
 use ash::vk;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
-use crate::device::caps::QualityLevel;
 use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, H265Profile,
     RateControl,
@@ -197,6 +196,15 @@ impl From<ColorSpace> for CodecColorDescription {
     }
 }
 
+// TODO: docs
+// TODO: move to encoders
+#[derive(Debug, Clone, Copy)]
+pub enum EncoderPreset {
+    Speed,
+    Quality,
+}
+
+// TODO: move to encoder
 /// Parameters that describe an encoded output.
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderOutputParameters<P> {
@@ -211,10 +219,8 @@ pub struct EncoderOutputParameters<P> {
     pub max_references: Option<NonZeroU32>,
     /// The profile must be supported by the device
     pub profile: P,
-    // TODO: update docs
-    /// The value must be less than
-    /// [`EncodeProfileCapabilities::quality_levels`](crate::capabilities::EncodeProfileCapabilities::quality_levels)
-    pub quality_level: QualityLevel,
+    /// TODO: docs
+    pub preset: EncoderPreset,
     /// A hint indicating what the encoded content is going to be used for.
     ///
     /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
@@ -279,7 +285,7 @@ pub(crate) trait VideoDeviceBackend {
     fn create_wgpu_textures_encoder_h264(
         self: Arc<Self>,
         wgpu_device: wgpu::Device,
-        queue: &wgpu::Queue,
+        wgpu_queue: wgpu::Queue,
         parameters: EncoderParametersH264,
     ) -> Result<crate::WgpuTexturesEncoderH264, VideoEncoderError>;
 
@@ -287,7 +293,7 @@ pub(crate) trait VideoDeviceBackend {
     fn create_wgpu_textures_encoder_h265(
         self: Arc<Self>,
         wgpu_device: wgpu::Device,
-        queue: &wgpu::Queue,
+        wgpu_queue: wgpu::Queue,
         parameters: EncoderParametersH265,
     ) -> Result<crate::WgpuTexturesEncoderH265, VideoEncoderError>;
 

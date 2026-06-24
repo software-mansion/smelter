@@ -4,7 +4,7 @@ use crate::{
     VulkanDecoderError,
     codec::h265::H265Codec,
     device::{CodecColorDescription, ColorRange},
-    vulkan::vulkan_encoder::FullEncoderParameters,
+    vulkan::vulkan_encoder::VulkanEncoderParameters,
 };
 
 pub(crate) struct VkH265VideoParameterSet {
@@ -14,7 +14,7 @@ pub(crate) struct VkH265VideoParameterSet {
 }
 
 fn profile_tier_level(
-    params: &FullEncoderParameters<H265Codec>,
+    params: &VulkanEncoderParameters<H265Codec>,
 ) -> vk::native::StdVideoH265ProfileTierLevel {
     vk::native::StdVideoH265ProfileTierLevel {
         flags: vk::native::StdVideoH265ProfileTierLevelFlags {
@@ -30,7 +30,7 @@ fn profile_tier_level(
 }
 
 fn dec_pic_buf_mgr(
-    params: &FullEncoderParameters<H265Codec>,
+    params: &VulkanEncoderParameters<H265Codec>,
 ) -> vk::native::StdVideoH265DecPicBufMgr {
     let mut dec_pic_buf_mgr = vk::native::StdVideoH265DecPicBufMgr {
         max_num_reorder_pics: [0; 7],
@@ -45,7 +45,7 @@ fn dec_pic_buf_mgr(
 }
 
 fn vui(
-    params: &FullEncoderParameters<H265Codec>,
+    params: &VulkanEncoderParameters<H265Codec>,
 ) -> vk::native::StdVideoH265SequenceParameterSetVui {
     let video_full_range_flag = match params.color_range {
         ColorRange::Full => 1,
@@ -107,7 +107,7 @@ fn vui(
 }
 
 impl VkH265VideoParameterSet {
-    pub(crate) fn new_encode(params: &FullEncoderParameters<H265Codec>) -> Self {
+    pub(crate) fn new_encode(params: &VulkanEncoderParameters<H265Codec>) -> Self {
         let profile_tier_level = Box::new(profile_tier_level(params));
 
         let dec_pic_buf_mgr = Box::new(dec_pic_buf_mgr(params));
@@ -146,7 +146,7 @@ pub(crate) struct VkH265SequenceParameterSet {
 
 impl VkH265SequenceParameterSet {
     pub(crate) fn new_encode(
-        params: &FullEncoderParameters<H265Codec>,
+        params: &VulkanEncoderParameters<H265Codec>,
         caps: &vk::VideoEncodeH265CapabilitiesKHR<'_>,
     ) -> Self {
         let profile_tier_level = Box::new(profile_tier_level(params));
