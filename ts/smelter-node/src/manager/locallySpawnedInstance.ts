@@ -32,8 +32,7 @@ const REPO = `software-mansion/smelter`;
 export type LocallySpawnedInstanceOptions = {
   port: number;
   workingdir?: string;
-  mainExecutablePath?: string;
-  dependencyCheckPath?: string;
+  executablePath?: string;
   enableWebRenderer?: boolean;
 };
 
@@ -48,8 +47,7 @@ type ExecutablePaths = {
 class LocallySpawnedInstanceManager implements SmelterManager {
   private port: number;
   private workingdir: string;
-  private mainExecutablePath?: string;
-  private dependencyCheckPath?: string;
+  private executablePath?: string;
   private wsConnection: WebSocketConnection;
   private enableWebRenderer?: boolean;
   private childSpawnPromise?: SpawnPromise;
@@ -57,23 +55,19 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   constructor(opts: LocallySpawnedInstanceOptions) {
     this.port = opts.port;
     this.workingdir = opts.workingdir ?? path.join(os.tmpdir(), `smelter-${uuidv4()}`);
-    this.mainExecutablePath = opts.mainExecutablePath ?? process.env.SMELTER_PATH;
-    this.dependencyCheckPath = opts.dependencyCheckPath;
+    this.executablePath = opts.executablePath ?? process.env.SMELTER_PATH;
     this.enableWebRenderer = opts.enableWebRenderer ?? false;
     this.wsConnection = new WebSocketConnection(`ws://127.0.0.1:${this.port}/ws`);
   }
 
   public static defaultManager(): LocallySpawnedInstanceManager {
     const port = process.env.SMELTER_API_PORT ? Number(process.env.SMELTER_API_PORT) : 8000;
-    return new LocallySpawnedInstanceManager({
-      port,
-    });
+    return new LocallySpawnedInstanceManager({ port });
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
-    const { mainProcess: mainProcessPath, dependencyCheck: dependencyCheckPath } = this
-      .mainExecutablePath
-      ? { mainProcess: this.mainExecutablePath, dependencyCheck: this.dependencyCheckPath }
+    const resolvedPaths = this.executablePath
+      ? { mainProcess: this.executablePath, dependencyCheck: undefined }
       : await prepareExecutable(this.enableWebRenderer);
 
     const { level, format } = smelterInstanceLoggerOptions();
@@ -101,15 +95,15 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       }
     };
 
-    if (dependencyCheckPath) {
+    if (resolvedPaths.dependencyCheck) {
       try {
-        await spawn(dependencyCheckPath, [], {});
+        await spawn(resolvedPaths.dependencyCheck, [], {});
       } catch (err) {
         executableError(err, 'Dependency check failed');
       }
     }
 
-    this.childSpawnPromise = spawn(mainProcessPath, [], { env, stdio: 'inherit' });
+    this.childSpawnPromise = spawn(resolvedPaths.mainProcess, [], { env, stdio: 'inherit' });
     this.childSpawnPromise.catch(err => executableError(err, 'Smelter instance failed'));
 
     await retry(async () => {
