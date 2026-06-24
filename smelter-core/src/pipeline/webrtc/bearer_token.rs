@@ -2,9 +2,10 @@ use std::{fmt::Write, sync::Arc};
 
 use axum::http::HeaderValue;
 use rand::RngCore;
+use sha3::{Digest, Sha3_512};
 use tracing::error;
 
-use crate::pipeline::{utils::authentication::validate_token, webrtc::error::WhipWhepServerError};
+use crate::pipeline::webrtc::error::WhipWhepServerError;
 
 pub(super) fn generate_token() -> Arc<str> {
     let mut bytes = [0u8; 16];
@@ -18,7 +19,7 @@ pub(super) fn generate_token() -> Arc<str> {
     Arc::from(token)
 }
 
-pub(super) fn validate_bearer_token(
+pub(super) fn validate_token(
     expected_token: &str,
     auth_header_value: Option<&HeaderValue>,
 ) -> Result<(), WhipWhepServerError> {
@@ -29,7 +30,9 @@ pub(super) fn validate_bearer_token(
             })?;
 
             if let Some(token_from_header) = auth_str.strip_prefix("Bearer ") {
-                if validate_token(expected_token, token_from_header) {
+                let expected_token_hash = Sha3_512::digest(expected_token.as_bytes());
+                let provided_token_hash = Sha3_512::digest(token_from_header.as_bytes());
+                if expected_token_hash == provided_token_hash {
                     Ok(())
                 } else {
                     Err(WhipWhepServerError::Unauthorized(

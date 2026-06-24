@@ -4,9 +4,10 @@ use std::{
     thread::JoinHandle,
 };
 
+use sha3::{Digest, Sha3_512};
 use tracing::error;
 
-use crate::{queue::WeakQueueInput, utils::authentication::validate_token};
+use crate::queue::WeakQueueInput;
 
 use crate::prelude::*;
 
@@ -89,7 +90,10 @@ impl RtmpInputsState {
         let (input_ref, _) = guard
             .iter()
             .find(|(input_ref, input)| {
-                input_ref.id().0.as_ref() == app && validate_token(&input.stream_key, stream_key)
+                let expected_stream_key_hash = Sha3_512::digest(input.stream_key.as_bytes());
+                let provided_stream_key_hash = Sha3_512::digest(stream_key.as_bytes());
+                input_ref.id().0.as_ref() == app
+                    && expected_stream_key_hash == provided_stream_key_hash
             })
             .ok_or_else(|| RtmpServerError::NotRegisteredAppStreamKeyPair {
                 app: app.into(),
