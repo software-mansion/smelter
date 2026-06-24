@@ -2256,6 +2256,27 @@
           {
             "allOf": [
               {
+                "$ref": "#/components/schemas/MoqServerInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "moq_server"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/Mp4InputStatsReport"
               },
               {
@@ -2468,6 +2489,46 @@
           }
         },
         "additionalProperties": false
+      },
+      "MoqServerInputStatsReport": {
+        "type": "object",
+        "description": "Stats report for `MoQ` server input.",
+        "required": [
+          "video",
+          "audio"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/MoqServerInputTrackStatsReport",
+            "description": "Stats for the video track."
+          },
+          "audio": {
+            "$ref": "#/components/schemas/MoqServerInputTrackStatsReport",
+            "description": "Stats for the audio track."
+          }
+        }
+      },
+      "MoqServerInputTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for a track in `MoQ` server input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate in the 1-second window.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate in the 1-minute window.",
+            "minimum": 0
+          }
+        }
       },
       "MoqVideoDecoderOptions": {
         "type": "string",

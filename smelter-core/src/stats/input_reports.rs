@@ -11,6 +11,7 @@ pub enum InputStatsReport {
     Whep(WhepInputStatsReport),
     Hls(HlsInputStatsReport),
     Rtmp(RtmpInputStatsReport),
+    MoqServer(MoqServerInputStatsReport),
     Mp4(Mp4InputStatsReport),
 }
 
@@ -113,6 +114,26 @@ pub struct RtmpInputStatsReport {
 /// Stats report for a track in `RTMP` input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct RtmpInputTrackStatsReport {
+    /// Bitrate in the 1-second window.
+    pub bitrate_1_second: u64,
+
+    /// Bitrate in the 1-minute window.
+    pub bitrate_1_minute: u64,
+}
+
+/// Stats report for `MoQ` server input.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct MoqServerInputStatsReport {
+    /// Stats for the video track.
+    pub video: MoqServerInputTrackStatsReport,
+
+    /// Stats for the audio track.
+    pub audio: MoqServerInputTrackStatsReport,
+}
+
+/// Stats report for a track in `MoQ` server input.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct MoqServerInputTrackStatsReport {
     /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 

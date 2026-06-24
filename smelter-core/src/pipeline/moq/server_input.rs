@@ -25,6 +25,11 @@ impl MoqServerInput {
             return Err(MoqServerError::ServerNotRunning.into());
         };
 
+        ctx.stats_sender.send(StatsEvent::NewInput {
+            input_ref: input_ref.clone(),
+            kind: InputProtocolKind::MoqServer,
+        });
+
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
 
         state.server_state.add_input(

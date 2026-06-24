@@ -58,6 +58,7 @@ struct TrackCtx {
     decoders: MoqServerInputDecoders,
     first_pts: Arc<Mutex<Option<Duration>>>,
     should_close: Arc<AtomicBool>,
+    stats_sender: MoqStatsSender,
 }
 
 pub(crate) fn start_broadcast_handler_task(
@@ -168,6 +169,8 @@ impl BroadcastHandler {
         // produces the first frame sets the common zero point for both.
         let first_pts = Arc::new(Mutex::new(None));
 
+        let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
+
         let track_ctx = TrackCtx {
             ctx,
             input_ref,
@@ -175,6 +178,7 @@ impl BroadcastHandler {
             decoders,
             first_pts,
             should_close,
+            stats_sender,
         };
         Self { track_ctx, tracks }
     }
@@ -248,6 +252,7 @@ async fn run_video_track(
         decoders,
         first_pts,
         should_close,
+        stats_sender,
     } = track_ctx;
 
     let decoder_handle = spawn_video_decoder(&ctx, &input_ref, &decoders, &video, frame_sender)?;
@@ -264,6 +269,7 @@ async fn run_video_track(
         let Some(frame) = consumer.read().await? else {
             break;
         };
+        stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Video);
 
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
@@ -310,6 +316,7 @@ async fn run_audio_track(
         decoders: _,
         first_pts,
         should_close,
+        stats_sender,
     } = track_ctx;
 
     let decoder_handle = spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender)?;
@@ -325,6 +332,7 @@ async fn run_audio_track(
         let Some(frame) = consumer.read().await? else {
             break;
         };
+        stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Audio);
 
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
@@ -468,4 +476,25 @@ fn normalize_pts(first_pts: &Arc<Mutex<Option<Duration>>>, raw_pts: Duration) ->
     let mut first_pts = first_pts.lock().unwrap();
     let first = *first_pts.get_or_insert(raw_pts);
     raw_pts.saturating_sub(first)
+}
+#[derive(Clone)]
+struct MoqStatsSender {
+    input_ref: Ref<InputId>,
+    stats_sender: StatsSender,
+}
+
+impl MoqStatsSender {
+    fn new(input_ref: Ref<InputId>, stats_sender: StatsSender) -> Self {
+        Self {
+            input_ref,
+            stats_sender,
+        }
+    }
+
+    fn bytes_received_event(&self, size: usize, track_kind: StatsTrackKind) {
+        self.stats_sender.send(
+            MoqServerInputTrackStatsEvent::BytesReceived(size)
+                .into_event(&self.input_ref, track_kind),
+        );
+    }
 }
