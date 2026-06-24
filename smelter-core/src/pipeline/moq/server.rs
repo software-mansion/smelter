@@ -151,7 +151,8 @@ async fn handle_incoming_connection(
     ctx: &Arc<PipelineCtx>,
 ) -> Result<(MoqSession, OriginConsumer, Ref<InputId>), MoqServerError> {
     let Some(url) = request.url() else {
-        reject_request(request, 400).await;
+        // This error is safe to ignore as it comes only if the connection is already dead.
+        _ = request.close(400).await;
         return Err(MoqServerError::UrlNotFound);
     };
 
@@ -159,7 +160,7 @@ async fn handle_incoming_connection(
     let input_name = match urlencoding::decode(input_name_encoded) {
         Ok(decoded) => decoded.into_owned(),
         Err(error) => {
-            reject_request(request, 400).await;
+            _ = request.close(400).await;
             return Err(MoqServerError::UrlDecodeFailed(error));
         }
     };
@@ -167,7 +168,7 @@ async fn handle_incoming_connection(
     let input_ref = match moq_inputs.find_by_url(&input_name) {
         Ok(input_ref) => input_ref,
         Err(error) => {
-            reject_request(request, 404).await;
+            _ = request.close(404).await;
             return Err(error);
         }
     };
@@ -178,7 +179,7 @@ async fn handle_incoming_connection(
         .map(|(_key, value)| value);
 
     let Some(auth_token) = auth_token else {
-        reject_request(request, 401).await;
+        _ = request.close(401).await;
         return Err(MoqServerError::MissingToken(input_ref.id().clone()));
     };
 
@@ -189,7 +190,7 @@ async fn handle_incoming_connection(
             // Should never happen
             _ => 400,
         };
-        reject_request(request, reject_code).await;
+        _ = request.close(reject_code).await;
         return Err(auth_error);
     }
 
@@ -203,12 +204,6 @@ async fn handle_incoming_connection(
     };
 
     Ok((session, consumer, input_ref))
-}
-
-async fn reject_request(request: Request, code: u16) {
-    if let Err(error) = request.close(code).await {
-        warn!(%error, "Error while rejecting MoQ connection.");
-    }
 }
 
 async fn handle_session(
