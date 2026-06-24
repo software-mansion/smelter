@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
-use crate::VulkanCommonError;
+use crate::vulkan::VulkanCommonError;
 use crate::wrappers::*;
 
 #[derive(Clone)]

@@ -4,9 +4,9 @@ use ash::vk::{self, Handle};
 use vk_mem::Alloc;
 
 use crate::{
-    VulkanCommonError, VulkanDecoderError,
+    VulkanDecoderError,
     codec::h264::parameters::H264DecodeProfileInfo,
-    vulkan::vulkan_device::{EncodingDevice, VulkanDeviceInitError},
+    vulkan::{VulkanCommonError, vulkan_device::{EncodingDevice, VulkanDeviceInitError}},
     wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
 };
 

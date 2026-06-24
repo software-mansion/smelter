@@ -3,12 +3,7 @@ use std::sync::{Arc, Mutex};
 use ash::vk;
 
 use crate::{
-    VulkanCommonError,
-    codec::Codec,
-    device::queues::VideoQueues,
-    vulkan::vulkan_device::VulkanDevice,
-    parser::reference_manager::{PictureInfo, ReferencePictureInfo},
-    wrappers::{ImageLayoutTracker, OpenCommandBuffer},
+    codec::Codec, device::queues::VideoQueues, parser::reference_manager::{PictureInfo, ReferencePictureInfo}, vulkan::{VulkanCommonError, vulkan_device::VulkanDevice}, wrappers::{ImageLayoutTracker, OpenCommandBuffer}
 };
 
 use super::{Device, Image, ImageView, MemoryAllocation, VideoQueueExt};

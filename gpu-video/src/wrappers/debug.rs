@@ -3,7 +3,7 @@ use std::{ffi::c_void, sync::Arc};
 use ash::vk::{self, QueryType};
 use tracing::{error, info, trace, warn};
 
-use crate::{VulkanCommonError, VulkanDecoderError, vulkan::vulkan_instance::VulkanInstanceInitError};
+use crate::{VulkanDecoderError, vulkan::{VulkanCommonError, vulkan_instance::VulkanInstanceInitError}};
 
 use super::{Device, Instance};
 

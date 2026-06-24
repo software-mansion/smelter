@@ -7,8 +7,7 @@ use ash::vk::{self, Handle};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    VulkanCommonError,
-    vulkan::vulkan_device::VulkanDevice,
+    vulkan::{VulkanCommonError, vulkan_device::VulkanDevice},
     wrappers::{ImageKey, ImageLayoutTracker, SemaphoreWaitValue},
 };
 
@@ -18,7 +17,10 @@ struct CommandPool {
 }
 
 impl CommandPool {
-    fn new(device: Arc<VulkanDevice>, queue_family_index: usize) -> Result<Self, VulkanCommonError> {
+    fn new(
+        device: Arc<VulkanDevice>,
+        queue_family_index: usize,
+    ) -> Result<Self, VulkanCommonError> {
         let create_info = vk::CommandPoolCreateInfo::default()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue_family_index as u32);

@@ -48,7 +48,7 @@ impl VideoInstance {
                 (!descriptor.supports_decoding || adapter.supports_decoding())
                     && (!descriptor.supports_encoding || adapter.supports_encoding())
             })
-            .ok_or(VideoInstanceInitError::NoAdapter)
+            .ok_or(VideoInstanceInitError::NoAdapterFound)
     }
 
     /// Iterator over all available [`VideoAdapter`]s that support at least decoding or encoding.

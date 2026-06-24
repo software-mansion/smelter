@@ -7,6 +7,9 @@ pub(crate) mod codec;
 #[cfg(vulkan)]
 mod device;
 // TODO: cfg(vulkan) will not be needed once we add proper metal support
+// Maybe move frame sorter to decoder/ and all decoders too?
+#[cfg(vulkan)]
+mod frame_sorter;
 #[cfg(all(vulkan, feature = "wgpu"))]
 mod global_registry;
 #[cfg(vulkan)]

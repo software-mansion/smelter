@@ -5,13 +5,13 @@ use crate::{
         h264::{H264Codec, encode::H264WriteParametersInfo},
         h265::{H265Codec, encode::H265WriteParametersInfo},
     },
+    frame_sorter::FrameSorter,
     parser::{
         decoder_instructions::compile_to_decoder_instructions,
         h264::{AccessUnit, H264Parser},
         reference_manager::ReferenceContext,
     },
-    vulkan::vulkan_decoder::{FrameSorter, VulkanDecoder},
-    vulkan::vulkan_encoder::VulkanEncoder,
+    vulkan::{vulkan_decoder::VulkanDecoder, vulkan_encoder::VulkanEncoder},
 };
 
 /// A decoder that outputs frames stored as [`wgpu::Texture`]s

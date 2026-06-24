@@ -6,22 +6,21 @@ use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
 
+use crate::frame_sorter::{DecodeResult, DecodeResultMetadata};
+use crate::vulkan::VulkanCommonError;
+use crate::wrappers::*;
 use crate::{
     RawFrameData,
     codec::h264::parameters::SeqParameterSetExt as _,
     device::{ColorRange, ColorSpace},
-    vulkan::vulkan_device::DecodingDevice,
     parser::{
         decoder_instructions::DecoderInstruction,
         reference_manager::{DecodeInformation, ReferenceId},
     },
+    vulkan::vulkan_device::DecodingDevice,
 };
-use crate::{VulkanCommonError, wrappers::*};
 
-mod frame_sorter;
 mod session_resources;
-
-pub(crate) use frame_sorter::FrameSorter;
 
 pub struct VulkanDecoder<'a> {
     video_session_resources: Option<VideoSessionResources<'a>>,
@@ -73,20 +72,6 @@ pub(crate) struct DecodeSubmissionImageInfo {
     pub(crate) image: Arc<Image>,
     pub(crate) layer: u32,
     pub(crate) cropped_extent: vk::Extent2D,
-}
-
-pub(crate) struct DecodeResultMetadata {
-    pub(crate) pts: Option<u64>,
-    pub(crate) pic_order_cnt: i32,
-    pub(crate) max_num_reorder_frames: u64,
-    pub(crate) is_idr: bool,
-    pub(crate) color_space: ColorSpace,
-    pub(crate) color_range: ColorRange,
-}
-
-pub(crate) struct DecodeResult<T> {
-    pub(crate) frame: T,
-    pub(crate) metadata: DecodeResultMetadata,
 }
 
 /// Vulkan resources that must be kept alive while a decode submission is in flight.

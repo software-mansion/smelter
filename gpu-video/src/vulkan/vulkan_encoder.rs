@@ -8,10 +8,10 @@ use ash::vk;
 use tracing::warn;
 
 use crate::{
-    EncodedOutputChunk, InputFrame, RawFrameData, VulkanCommonError,
+    EncodedOutputChunk, InputFrame, RawFrameData,
     codec::EncodeCodec,
     device::{ColorRange, ColorSpace, Rational},
-    vulkan::vulkan_device::EncodingDevice,
+    vulkan::{VulkanCommonError, vulkan_device::EncodingDevice},
     wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
         ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
@@ -22,9 +22,8 @@ use crate::{
 
 const MB: u64 = 1024 * 1024;
 
-// TODO: Split into vulkanencoderError
 #[derive(Debug, thiserror::Error)]
-pub enum VideoEncoderError {
+pub enum VulkanEncoderError {
     #[error("Vulkan error: {0}")]
     VkError(#[from] ash::vk::Result),
 
@@ -34,68 +33,11 @@ pub enum VideoEncoderError {
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
 
-    #[error("The device does not support Vulkan Video encoding")]
-    VulkanEncoderUnsupported,
-
-    #[error(
-        "The byte length of the provided frame ({bytes}) is not the same as the picture size calculated from the dimensions ({size_from_resolution})"
-    )]
-    InconsistentPictureByteSize {
-        bytes: usize,
-        size_from_resolution: usize,
-    },
-
-    #[error("The profile '{0}' is not supported by this device")]
-    ProfileUnsupported(String),
-
     #[error("This device does not support the required capabilities: {0}")]
     UnsupportedDeviceCapabilities(&'static str),
 
     #[error("Encode operation failed with status {0:?}")]
     EncodeOperationFailed(vk::QueryResultStatusKHR),
-
-    #[error("Invalid encoder parameters, field: {field} - problem: {problem}")]
-    ParametersError {
-        field: &'static str,
-        problem: String,
-    },
-
-    #[error("Framerate numerator * 2 must fit in u32")]
-    FramerateOverflow,
-
-    #[cfg(feature = "wgpu")]
-    #[error(transparent)]
-    WgpuTextureEncoderError(#[from] WgpuTextureEncoderError),
-
-    #[cfg(feature = "wgpu")]
-    #[error(
-        "VideoDevice was created without wgpu support. Initialize wgpu::Device using VideoAdapterExt::request_device_with_video_support"
-    )]
-    VideoDeviceWithoutWgpu,
-}
-
-#[cfg(feature = "wgpu")]
-#[derive(Debug, thiserror::Error)]
-pub enum WgpuTextureEncoderError {
-    #[error("The supplied texture's format is {0:?}, when it should be NV12")]
-    NotNV12Texture(wgpu::TextureFormat),
-
-    #[error("The supplied texture does not have COPY_SRC usage. Texture's usages: {0:?}")]
-    NoCopySrcTextureUsage(wgpu::TextureUsages),
-
-    #[error(
-        "The dimensions of the provided frame ({provided_dimensions:?}) are not the same as the expected dimensions ({expected_dimensions:?})"
-    )]
-    InconsistentPictureDimensions {
-        provided_dimensions: wgpu::Extent3d,
-        expected_dimensions: wgpu::Extent3d,
-    },
-
-    #[error("Wgpu device error: {0}")]
-    WgpuDeviceError(#[from] wgpu::hal::DeviceError),
-
-    #[error(transparent)]
-    VulkanCommonError(#[from] VulkanCommonError),
 }
 
 struct VideoSessionResources<'a> {
@@ -115,7 +57,7 @@ impl VideoSessionResources<'_> {
         image_tracker: Arc<Mutex<ImageLayoutTracker>>,
         parameters: &FullEncoderParameters<C>,
         profile_info: &vk::VideoProfileInfoKHR,
-    ) -> Result<Self, VideoEncoderError> {
+    ) -> Result<Self, VulkanEncoderError> {
         let encode_capabilities = C::encode_codec_profile_capabilities(
             &encoding_device.native_encode_capabilities,
             parameters.profile,
@@ -199,7 +141,7 @@ impl EncodingQueryPool {
         encoding_device: &EncodingDevice,
         profile: C::Profile,
         profile_info: vk::VideoProfileInfoKHR,
-    ) -> Result<Self, VideoEncoderError> {
+    ) -> Result<Self, VulkanEncoderError> {
         let encode_capabilities = C::encode_codec_profile_capabilities(
             &encoding_device.native_encode_capabilities,
             profile,
@@ -210,7 +152,7 @@ impl EncodingQueryPool {
             .supported_encode_feedback_flags
             .contains(vk::VideoEncodeFeedbackFlagsKHR::BITSTREAM_BYTES_WRITTEN)
         {
-            return Err(VideoEncoderError::UnsupportedDeviceCapabilities(
+            return Err(VulkanEncoderError::UnsupportedDeviceCapabilities(
                 "VkVideoEncodeFeedbackFlagsKHR::BITSTREAM_BYTES_WRITTEN",
             ));
         }
@@ -231,7 +173,7 @@ impl EncodingQueryPool {
         Ok(Self { pool })
     }
 
-    pub(crate) fn get_result_blocking(&self) -> Result<EncodeFeedback, VideoEncoderError> {
+    pub(crate) fn get_result_blocking(&self) -> Result<EncodeFeedback, VulkanEncoderError> {
         let mut result = [EncodeFeedback {
             offset: 0,
             bytes_written: 0,

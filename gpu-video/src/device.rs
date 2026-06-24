@@ -271,14 +271,14 @@ pub(crate) trait VideoDeviceBackend {
     #[cfg(feature = "wgpu")]
     fn create_wgpu_textures_decoder_h264(
         self: Arc<Self>,
-        wgpu_device: Option<wgpu::Device>,
+        wgpu_device: wgpu::Device,
         parameters: DecoderParameters,
     ) -> Result<crate::WgpuTexturesDecoder, VideoDecoderError>;
 
     #[cfg(feature = "wgpu")]
     fn create_wgpu_textures_encoder_h264(
         self: Arc<Self>,
-        wgpu_device: Option<wgpu::Device>,
+        wgpu_device: wgpu::Device,
         queue: &wgpu::Queue,
         parameters: EncoderParametersH264,
     ) -> Result<crate::WgpuTexturesEncoderH264, VideoEncoderError>;
@@ -286,7 +286,7 @@ pub(crate) trait VideoDeviceBackend {
     #[cfg(feature = "wgpu")]
     fn create_wgpu_textures_encoder_h265(
         self: Arc<Self>,
-        wgpu_device: Option<wgpu::Device>,
+        wgpu_device: wgpu::Device,
         queue: &wgpu::Queue,
         parameters: EncoderParametersH265,
     ) -> Result<crate::WgpuTexturesEncoderH265, VideoEncoderError>;

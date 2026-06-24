@@ -1,8 +1,6 @@
 use std::collections::BinaryHeap;
 
-use crate::{FrameMetadata, OutputFrame};
-
-use super::DecodeResult;
+use crate::{FrameMetadata, OutputFrame, device::{ColorRange, ColorSpace}};
 
 impl<T> PartialEq for DecodeResult<T> {
     fn eq(&self, other: &Self) -> bool {
@@ -98,4 +96,18 @@ impl<T> FrameSorter<T> {
 
         result
     }
+}
+
+pub(crate) struct DecodeResultMetadata {
+    pub(crate) pts: Option<u64>,
+    pub(crate) pic_order_cnt: i32,
+    pub(crate) max_num_reorder_frames: u64,
+    pub(crate) is_idr: bool,
+    pub(crate) color_space: ColorSpace,
+    pub(crate) color_range: ColorRange,
+}
+
+pub(crate) struct DecodeResult<T> {
+    pub(crate) frame: T,
+    pub(crate) metadata: DecodeResultMetadata,
 }

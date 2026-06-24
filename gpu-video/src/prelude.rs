@@ -103,10 +103,10 @@ use crate::device::{
     ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
     EncoderParametersH265, VideoDeviceBackend,
 };
+use crate::frame_sorter::FrameSorter;
 use crate::parameters::{H264Profile, H265Profile, RateControl};
 use crate::parser::h264::AccessUnit;
-use crate::vulkan::vulkan_decoder::{FrameSorter, VulkanDecoder};
-use ash::vk;
+use crate::vulkan::vulkan_decoder::VulkanDecoder;
 use std::sync::Arc;
 
 #[cfg(feature = "wgpu")]
@@ -121,7 +121,6 @@ pub use crate::adapter::VideoAdapter;
 pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 pub use crate::vulkan::vulkan_decoder::VulkanDecoderError;
-pub use crate::vulkan::vulkan_encoder::VideoEncoderError;
 #[cfg(feature = "transcoder")]
 pub use crate::vulkan_transcoder::{Transcoder, VideoTranscoderError};
 
@@ -130,8 +129,8 @@ use crate::parser::{
     reference_manager::ReferenceContext,
 };
 use crate::vulkan::vulkan_encoder::VulkanEncoder;
-use crate::wrappers::ImageKey;
 
+// TODO: move it to decoders/
 #[derive(Debug, thiserror::Error)]
 pub enum VideoDecoderError {
     #[error("Decoder error: {0}")]
@@ -150,6 +149,68 @@ pub enum VideoDecoderError {
     VideoDeviceWithoutWgpu,
 }
 
+// TODO: move it to encoders/
+#[derive(Debug, thiserror::Error)]
+pub enum VideoEncoderError {
+    #[error("The device does not support Vulkan Video encoding")]
+    VulkanEncoderUnsupported,
+
+    #[error("The profile '{0}' is not supported by this device")]
+    ProfileUnsupported(String),
+
+    #[error("Framerate numerator * 2 must fit in u32")]
+    FramerateOverflow,
+
+    #[cfg(feature = "wgpu")]
+    #[error(
+        "VideoDevice was created without wgpu support. Initialize wgpu::Device using VideoAdapterExt::request_device_with_video_support"
+    )]
+    VideoDeviceWithoutWgpu,
+
+    #[error("Invalid encoder parameters, field: {field} - problem: {problem}")]
+    ParametersError {
+        field: &'static str,
+        problem: String,
+    },
+
+    #[error(
+        "The byte length of the provided frame ({bytes}) is not the same as the picture size calculated from the dimensions ({size_from_resolution})"
+    )]
+    InconsistentPictureByteSize {
+        bytes: usize,
+        size_from_resolution: usize,
+    },
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    WgpuTextureEncoderError(#[from] WgpuTextureEncoderError),
+}
+
+#[cfg(feature = "wgpu")]
+#[derive(Debug, thiserror::Error)]
+pub enum WgpuTextureEncoderError {
+    #[error("The supplied texture's format is {0:?}, when it should be NV12")]
+    NotNV12Texture(wgpu::TextureFormat),
+
+    #[error("The supplied texture does not have COPY_SRC usage. Texture's usages: {0:?}")]
+    NoCopySrcTextureUsage(wgpu::TextureUsages),
+
+    #[error(
+        "The dimensions of the provided frame ({provided_dimensions:?}) are not the same as the expected dimensions ({expected_dimensions:?})"
+    )]
+    InconsistentPictureDimensions {
+        provided_dimensions: wgpu::Extent3d,
+        expected_dimensions: wgpu::Extent3d,
+    },
+
+    #[error("Wgpu device error: {0}")]
+    WgpuDeviceError(#[from] wgpu::hal::DeviceError),
+
+    // TODO: remove it
+    #[error(transparent)]
+    VulkanCommonError(#[from] crate::vulkan::VulkanCommonError),
+}
+
 #[derive(thiserror::Error, Debug)]
 #[error("{message}")]
 pub struct VideoBackendError {
@@ -164,58 +225,16 @@ pub enum VideoDeviceInitError {
     NotSuitableAdapter,
 
     #[error(transparent)]
-    BackendError(VideoBackendError)
+    BackendError(VideoBackendError),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum VideoInstanceInitError {
-    #[error("Cannot find a suitable adapter")]
-    NoAdapter,
+    #[error("Cannot find a suitable adapters for a video device")]
+    NoAdapterFound,
 
     #[error(transparent)]
-    BackendError(VideoBackendError)
-}
-
-// TODO: remove it
-#[derive(thiserror::Error, Debug)]
-pub enum VulkanCommonError {
-    #[error("Vulkan error: {0}")]
-    VkError(#[from] vk::Result),
-
-    #[error("Cannot find a queue with index {0}")]
-    NoQueue(usize),
-
-    #[error("Memory copy requested to a buffer that is not set up for receiving input")]
-    UploadToImproperBuffer,
-
-    #[error("A slot in the Decoded Pictures Buffer was requested, but all slots are taken")]
-    NoFreeSlotsInDpb,
-
-    #[error("DPB can have at most 32 slots, {0} was requested")]
-    DpbTooLong(u32),
-
-    #[error("Tried to wait for an unsignaled semaphore value")]
-    SemaphoreWaitOnUnsignaledValue,
-
-    #[error("Tried to register {0:x?} as a new image, while it already exists")]
-    RegisteredNewImageTwice(ImageKey),
-
-    #[error("Tried to access state of image {0:x?}, which does not exist")]
-    TriedToAccessNonexistentImageState(ImageKey),
-
-    #[error("Tried to unregister image {0:x?} that was not registered")]
-    UnregisteredNonexistentImage(ImageKey),
-
-    #[error("Unsupported image aspect: {0:?}")]
-    UnsupportedImageAspect(vk::ImageAspectFlags),
-
-    #[error(
-        "The reference image is smaller than the requested extent. Requested: {requested:?}, max allowed: {max_extent:?}"
-    )]
-    ReferenceImageTooSmall {
-        requested: vk::Extent2D,
-        max_extent: vk::Extent2D,
-    },
+    BackendError(VideoBackendError),
 }
 
 // TODO: update changelog
@@ -240,9 +259,13 @@ impl VideoDevice {
         &self,
         parameters: DecoderParameters,
     ) -> Result<WgpuTexturesDecoder, VideoDecoderError> {
+        let Some(wgpu_device) = self.wgpu_device.clone() else {
+            return Err(VideoDecoderError::VideoDeviceWithoutWgpu);
+        };
+
         self.inner
             .clone()
-            .create_wgpu_textures_decoder_h264(self.wgpu_device.clone(), parameters)
+            .create_wgpu_textures_decoder_h264(wgpu_device, parameters)
     }
 
     /// Create a single-input multiple-output transcoder.
@@ -276,11 +299,13 @@ impl VideoDevice {
         queue: &wgpu::Queue,
         parameters: EncoderParametersH264,
     ) -> Result<WgpuTexturesEncoderH264, VideoEncoderError> {
-        self.inner.clone().create_wgpu_textures_encoder_h264(
-            self.wgpu_device.clone(),
-            queue,
-            parameters,
-        )
+        let Some(wgpu_device) = self.wgpu_device.clone() else {
+            return Err(VideoEncoderError::VideoDeviceWithoutWgpu);
+        };
+
+        self.inner
+            .clone()
+            .create_wgpu_textures_encoder_h264(wgpu_device, queue, parameters)
     }
 
     #[cfg(feature = "wgpu")]
@@ -289,11 +314,13 @@ impl VideoDevice {
         queue: &wgpu::Queue,
         parameters: EncoderParametersH265,
     ) -> Result<WgpuTexturesEncoderH265, VideoEncoderError> {
-        self.inner.clone().create_wgpu_textures_encoder_h265(
-            self.wgpu_device.clone(),
-            queue,
-            parameters,
-        )
+        let Some(wgpu_device) = self.wgpu_device.clone() else {
+            return Err(VideoEncoderError::VideoDeviceWithoutWgpu);
+        };
+
+        self.inner
+            .clone()
+            .create_wgpu_textures_encoder_h265(wgpu_device, queue, parameters)
     }
 
     pub fn decode_capabilities(&self) -> DecodeCapabilities {
