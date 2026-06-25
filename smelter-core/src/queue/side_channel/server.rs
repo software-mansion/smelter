@@ -171,6 +171,13 @@ fn run_accept_clients_thread(
         match listener.accept() {
             Ok((stream, _)) => {
                 debug!("Side channel: new client connected");
+                // The listener is non-blocking, and on macOS/BSD accept() inherits that flag
+                // onto the accepted stream (unlike Linux). A non-blocking stream makes
+                // `write_all` fail with `WouldBlock` as soon as the kernel send buffer is full,
+                if let Err(e) = stream.set_nonblocking(false) {
+                    error!("Side channel: failed to set client stream to blocking: {e}");
+                    continue;
+                }
                 let (sender, receiver) =
                     crossbeam_channel::bounded::<Bytes>(client_channel_capacity);
                 let client_span = Span::current();
