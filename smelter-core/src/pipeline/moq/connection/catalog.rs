@@ -104,18 +104,28 @@ fn discover_video(
         return Ok(None);
     };
 
-    let codec = match &config.codec {
-        MoqVideoCodec::H264(_) => VideoCodec::H264,
-        _ => {
-            warn!("Unsupported video codec. Use H264.");
-            return Ok(None);
-        }
-    };
     let container = match &config.container {
         CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
         CatalogContainer::Legacy => Container::Legacy,
         _ => {
             warn!("Unsupported video container. Only CMAF and Legacy are supported.");
+            return Ok(None);
+        }
+    };
+    let codec = match &config.codec {
+        MoqVideoCodec::H264(h264) => {
+            if let Container::Legacy = container
+                && !h264.inline
+            {
+                warn!(
+                    "Unsupported H264 setup: Legacy container requires H264 to be in the annexB format."
+                );
+                return Ok(None);
+            }
+            VideoCodec::H264
+        }
+        _ => {
+            warn!("Unsupported video codec. Use H264.");
             return Ok(None);
         }
     };
@@ -146,19 +156,19 @@ fn discover_audio(
         return Ok(None);
     };
 
-    let codec = match &config.codec {
-        MoqAudioCodec::Opus => AudioCodec::Opus,
-        MoqAudioCodec::AAC(_) => AudioCodec::Aac,
-        _ => {
-            warn!("Unsupported audio codec. Use AAC or Opus.");
-            return Ok(None);
-        }
-    };
     let container = match &config.container {
         CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
         CatalogContainer::Legacy => Container::Legacy,
         _ => {
             warn!("Unsupported audio container. Only CMAF and Legacy are supported.");
+            return Ok(None);
+        }
+    };
+    let codec = match &config.codec {
+        MoqAudioCodec::Opus => AudioCodec::Opus,
+        MoqAudioCodec::AAC(_) => AudioCodec::Aac,
+        _ => {
+            warn!("Unsupported audio codec. Use AAC or Opus.");
             return Ok(None);
         }
     };
