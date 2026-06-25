@@ -26,7 +26,6 @@ async function run() {
     new LocallySpawnedInstanceManager({
       enableWebRenderer: true,
       port: 8081,
-      mainExecutablePath: process.env.SMELTER_PATH,
     })
   );
   await smelter.init();
