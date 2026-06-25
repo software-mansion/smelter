@@ -127,6 +127,7 @@ fn discover_video(
 
     let description = match (catalog_type, &container) {
         (CatalogType::Msf, Container::Cmaf(wire)) => Some(extract_codec_description(wire)?),
+        // There is no data to extract from in other containers.
         (_, _) => config.description.clone(),
     };
 
@@ -167,6 +168,7 @@ fn discover_audio(
     // Return to that when adding additional containers.
     let description = match (catalog_type, &container) {
         (CatalogType::Msf, Container::Cmaf(wire)) => Some(extract_codec_description(wire)?),
+        // There is no data to extract from in other containers.
         (_, _) => config.description.clone(),
     };
 
