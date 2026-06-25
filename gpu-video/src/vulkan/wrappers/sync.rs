@@ -6,7 +6,7 @@ use std::{
 use ash::vk;
 use rustc_hash::FxHashMap;
 
-use crate::{vulkan::VulkanCommonError, wrappers::ImageKey};
+use crate::{vulkan::VulkanCommonError, vulkan::wrappers::ImageKey};
 
 use super::Device;
 

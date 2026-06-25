@@ -21,9 +21,10 @@ keywords = ["vulkan", "video", "wgpu", "decoding", "encoding"]
 
 [features]
 expose-parsers = []
+expose-backends = []
 wgpu = ["dep:wgpu"]
 transcoder = ["dep:naga", "dep:bytemuck"]
-default = ["wgpu", "transcoder"] # TODO: remove transdoer
+default = ["wgpu"]
 
 [dependencies]
 bytemuck = { version = "1.19.0", features = ["derive"], optional = true }

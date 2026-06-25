@@ -7,7 +7,7 @@ use crate::{
     adapter::VideoAdapter,
     instance::{VideoInstanceBackend, VideoInstanceDescriptor},
     vulkan::vulkan_adapter::VulkanAdapter,
-    wrappers::*,
+    vulkan::wrappers::*,
 };
 
 // TODO: hal feature for all hal structs

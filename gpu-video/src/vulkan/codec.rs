@@ -9,7 +9,7 @@ use crate::{
     },
     parameters::RateControl,
     vulkan::vulkan_encoder::{VulkanEncoderError, VulkanEncoderParameters},
-    wrappers::ProfileInfo,
+    vulkan::wrappers::ProfileInfo,
 };
 
 pub(crate) mod h264;

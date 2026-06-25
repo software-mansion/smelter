@@ -8,7 +8,7 @@ use crate::{
     vulkan::vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
     vulkan::vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     vulkan_transcoder::VideoTranscoderError,
-    wrappers::{
+    vulkan::wrappers::{
         CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
         Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
     },

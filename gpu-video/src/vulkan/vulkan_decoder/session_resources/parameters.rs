@@ -5,7 +5,7 @@ use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 
 use crate::{
     VulkanDecoderError,
-    codec::h264::{
+    vulkan::codec::h264::{
         H264Codec, H264VkParameters,
         parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
     },

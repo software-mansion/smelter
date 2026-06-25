@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::{
     EncodedInputChunk, EncodedOutputChunk, OutputFrame,
-    codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
+    vulkan::codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
     decoder::VideoDecoderError,
     device::{EncoderOutputParameters, Rational},
     encoder::VideoEncoderError,
@@ -22,7 +22,7 @@ use crate::{
         vulkan_encoder::{Encoder, VulkanEncoder, VulkanEncoderParameters},
     },
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
-    wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
+    vulkan::wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
 };
 
 mod pipeline;

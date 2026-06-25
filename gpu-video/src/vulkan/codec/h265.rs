@@ -3,7 +3,7 @@ use std::ptr::null_mut;
 use ash::vk;
 
 use crate::{
-    codec::{
+    vulkan::codec::{
         Codec, CodecCapabilities, CodecSpecificDecodeCapabilities, CodecSpecificEncodeCapabilities,
         CodecSpecificEncoderQualityLevelProperties,
         h265::parameters::{

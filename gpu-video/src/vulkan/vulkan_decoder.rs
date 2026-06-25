@@ -11,7 +11,7 @@ use crate::frame_sorter::{DecodeResult, DecodeResultMetadata};
 use crate::vulkan::VulkanCommonError;
 use crate::{
     RawFrameData,
-    codec::h264::parameters::SeqParameterSetExt as _,
+    vulkan::codec::h264::parameters::SeqParameterSetExt as _,
     device::{ColorRange, ColorSpace},
     parser::{
         decoder_instructions::DecoderInstruction,
@@ -19,7 +19,7 @@ use crate::{
     },
     vulkan::vulkan_device::DecodingDevice,
 };
-use crate::{VideoBackendError, wrappers::*};
+use crate::{VideoBackendError, vulkan::wrappers::*};
 
 mod session_resources;
 

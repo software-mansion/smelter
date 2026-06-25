@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use ash::vk;
 
 use crate::{
-    codec::{
+    vulkan::codec::{
         EncodeCodec,
         h265::{
             H265Codec, H265VkParameters,
@@ -11,7 +11,7 @@ use crate::{
                 VkH265PictureParameterSet, VkH265SequenceParameterSet, VkH265VideoParameterSet,
             },
         },
-    }, parameters::RateControl, vulkan::vulkan_encoder::VulkanEncoderError, wrappers::ProfileInfo
+    }, parameters::RateControl, vulkan::vulkan_encoder::VulkanEncoderError, vulkan::wrappers::ProfileInfo
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -29,7 +29,7 @@ pub(crate) struct H265WriteParametersInfo {
 impl EncodeCodec for H265Codec {
     fn profile_info<'a>(
         params: &crate::vulkan::vulkan_encoder::VulkanEncoderParameters<Self>,
-    ) -> crate::wrappers::ProfileInfo<'a> {
+    ) -> crate::vulkan::wrappers::ProfileInfo<'a> {
         let h265_profile = vk::VideoEncodeH265ProfileInfoKHR::default()
             .std_profile_idc(params.profile.to_profile_idc());
         let h265_profile = Box::new(h265_profile);

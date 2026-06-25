@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     vulkan::{VulkanCommonError, vulkan_device::VulkanDevice},
-    wrappers::{ImageKey, ImageLayoutTracker, SemaphoreWaitValue},
+    vulkan::wrappers::{ImageKey, ImageLayoutTracker, SemaphoreWaitValue},
 };
 
 struct CommandPool {

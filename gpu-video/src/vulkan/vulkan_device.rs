@@ -8,10 +8,10 @@ use ash::vk;
 #[cfg(feature = "wgpu")]
 use crate::WgpuInitError;
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities, VideoAdapterInfo};
-use crate::codec::EncodeCodec;
-use crate::codec::h264::H264Codec;
+use crate::vulkan::codec::EncodeCodec;
+use crate::vulkan::codec::h264::H264Codec;
 #[cfg(feature = "wgpu")]
-use crate::codec::h265::H265Codec;
+use crate::vulkan::codec::h265::H265Codec;
 use crate::decoder::{BytesDecoder, VideoDecoderError};
 use crate::device::caps::{
     NativeDecodeCapabilities, NativeDecodeProfileCapabilities, NativeEncodeCapabilities,
@@ -30,7 +30,7 @@ use crate::vulkan::vulkan_adapter::VulkanAdapter;
 use crate::vulkan::vulkan_decoder::{ImageModifiers, VulkanDecoder};
 use crate::vulkan::vulkan_encoder::{VulkanEncoder, VulkanEncoderError, VulkanEncoderParameters};
 use crate::{
-    RawFrameData, VideoBackendError, VideoDeviceInitError, VulkanDecoderError, wrappers::*,
+    RawFrameData, VideoBackendError, VideoDeviceInitError, VulkanDecoderError, vulkan::wrappers::*,
 };
 
 pub(crate) struct VulkanDevice {

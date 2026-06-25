@@ -1,14 +1,14 @@
 use ash::vk;
 
-use crate::wrappers::ImageKey;
+use self::wrappers::ImageKey;
 
+pub(crate) mod codec;
 pub(crate) mod vulkan_adapter;
 pub(crate) mod vulkan_decoder;
 pub(crate) mod vulkan_device;
 pub(crate) mod vulkan_encoder;
 pub(crate) mod vulkan_instance;
-
-// TODO: move wrappers
+pub(crate) mod wrappers;
 
 #[derive(thiserror::Error, Debug)]
 pub enum VulkanCommonError {

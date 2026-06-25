@@ -9,7 +9,7 @@ use tracing::warn;
 
 use crate::{
     EncodedOutputChunk, InputFrame, RawFrameData, VideoBackendError,
-    codec::{
+    vulkan::codec::{
         EncodeCodec,
         h264::{H264Codec, encode::H264WriteParametersInfo},
         h265::{H265Codec, encode::H265WriteParametersInfo},
@@ -19,7 +19,7 @@ use crate::{
         H264VideoEncoderBackend, H265VideoEncoderBackend, VideoEncoderBackend, VideoEncoderError,
     },
     vulkan::{VulkanCommonError, vulkan_device::EncodingDevice},
-    wrappers::{
+    vulkan::wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
         ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
         SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt, VideoQueueExt, VideoSession,

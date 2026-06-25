@@ -3,7 +3,7 @@ use std::{collections::VecDeque, num::NonZeroU32};
 use ash::vk;
 
 use crate::{
-    codec::{
+    vulkan::codec::{
         EncodeCodec,
         h264::{
             H264Codec,
@@ -13,7 +13,7 @@ use crate::{
     device::caps::{NativeEncodeProfileCapabilities, NativeEncodeQualityLevelProperties},
     parameters::RateControl,
     vulkan::vulkan_encoder::VulkanEncoderError,
-    wrappers::ProfileInfo,
+    vulkan::wrappers::ProfileInfo,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -39,7 +39,7 @@ impl EncodeCodec for H264Codec {
 
     fn profile_info<'a>(
         params: &crate::vulkan::vulkan_encoder::VulkanEncoderParameters<Self>,
-    ) -> crate::wrappers::ProfileInfo<'a> {
+    ) -> crate::vulkan::wrappers::ProfileInfo<'a> {
         let h264_profile = vk::VideoEncodeH264ProfileInfoKHR::default()
             .std_profile_idc(params.profile.to_profile_idc());
 

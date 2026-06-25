@@ -3,16 +3,16 @@ use std::ptr::null_mut;
 use ash::vk;
 
 use crate::VulkanDecoderError;
-use crate::codec::CodecCapabilities;
-use crate::codec::CodecSpecificEncoderQualityLevelProperties as _;
-use crate::codec::h264::H264Codec;
-use crate::codec::h264::parameters::vk_to_h264_level_idc;
-use crate::codec::h265::H265Codec;
-use crate::codec::h265::parameters::vk_to_h265_level_idc;
+use crate::vulkan::codec::CodecCapabilities;
+use crate::vulkan::codec::CodecSpecificEncoderQualityLevelProperties as _;
+use crate::vulkan::codec::h264::H264Codec;
+use crate::vulkan::codec::h264::parameters::vk_to_h264_level_idc;
+use crate::vulkan::codec::h265::H265Codec;
+use crate::vulkan::codec::h265::parameters::vk_to_h265_level_idc;
 use crate::parameters::H264Profile;
 use crate::parameters::H265Profile;
 use crate::vulkan::vulkan_adapter::VulkanAdapterInitError;
-use crate::wrappers::*;
+use crate::vulkan::wrappers::*;
 
 pub(crate) fn query_video_format_properties<'a>(
     device: vk::PhysicalDevice,

@@ -5,9 +5,9 @@ use vk_mem::Alloc;
 
 use crate::{
     VulkanDecoderError,
-    codec::h264::parameters::H264DecodeProfileInfo,
+    vulkan::codec::h264::parameters::H264DecodeProfileInfo,
     vulkan::{VulkanCommonError, vulkan_device::{EncodingDevice, VulkanDeviceInitError}},
-    wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
+    vulkan::wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
 };
 
 use super::{Device, Instance};

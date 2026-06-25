@@ -3,8 +3,6 @@
 #[cfg(vulkan)]
 mod adapter;
 #[cfg(vulkan)]
-pub(crate) mod codec;
-#[cfg(vulkan)]
 mod device;
 // TODO: cfg(vulkan) will not be needed once we add proper metal support
 // Maybe move frame sorter to decoder/ and all decoders too?
@@ -21,13 +19,11 @@ mod vulkan_transcoder;
 #[cfg(all(vulkan, feature = "wgpu"))]
 pub(crate) mod wgpu_helpers;
 #[cfg(vulkan)]
-pub(crate) mod wrappers;
-#[cfg(vulkan)]
 pub(crate) mod decoder;
 #[cfg(vulkan)]
 pub(crate) mod encoder;
 
-// TODO: make sure it's not vulkan specific
+// TODO: This probably won't be needed once we will support metal
 #[cfg(vulkan)]
 mod prelude;
 #[cfg(vulkan)]

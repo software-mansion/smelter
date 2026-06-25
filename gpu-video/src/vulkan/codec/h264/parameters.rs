@@ -6,7 +6,7 @@ use crate::{
     device::{CodecColorDescription, ColorRange, ColorSpace, Rational},
     parameters::H264Profile,
     vulkan::vulkan_encoder::VulkanEncoderError,
-    wrappers::ProfileInfo,
+    vulkan::wrappers::ProfileInfo,
 };
 
 const MACROBLOCK_SIZE: u32 = 16;
