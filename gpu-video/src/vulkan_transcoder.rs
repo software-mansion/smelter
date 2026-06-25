@@ -3,21 +3,24 @@ use std::{num::NonZeroU32, sync::Arc};
 use ash::vk;
 
 use crate::{
-    EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoDecoderError, VideoEncoderError,
-    VulkanCommonError,
+    EncodedInputChunk, EncodedOutputChunk, OutputFrame,
     codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
+    decoder::VideoDecoderError,
     device::{EncoderOutputParameters, Rational},
-    vulkan::vulkan_device::VulkanDevice,
+    encoder::VideoEncoderError,
+    frame_sorter::{DecodeResult, FrameSorter},
     parameters::{H264Profile, H265Profile, ScalingAlgorithm},
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
         h264::H264Parser,
         reference_manager::ReferenceContext,
     },
-    vulkan::vulkan_decoder::{
-        DecodeResult, FrameSorter, ImageModifiers, InFlightDecodeResources, VulkanDecoder,
+    vulkan::{
+        VulkanCommonError,
+        vulkan_decoder::{ImageModifiers, InFlightDecodeResources, VulkanDecoder},
+        vulkan_device::VulkanDevice,
+        vulkan_encoder::{Encoder, VulkanEncoder, VulkanEncoderParameters},
     },
-    vulkan::vulkan_encoder::{Encoder, FullEncoderParameters, VulkanEncoder},
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
     wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
 };
@@ -50,8 +53,8 @@ pub enum AnyEncoderParameters {
 
 #[derive(Debug, Clone, Copy)]
 enum AnyFullEncoderParameters {
-    H264(FullEncoderParameters<H264Codec>),
-    H265(FullEncoderParameters<H265Codec>),
+    H264(VulkanEncoderParameters<H264Codec>),
+    H265(VulkanEncoderParameters<H265Codec>),
 }
 
 /// Configuration for a transcoder
@@ -94,11 +97,7 @@ impl Transcoder {
         config: TranscoderParameters,
     ) -> Result<Self, VideoTranscoderError> {
         let decoder = VulkanDecoder::new(
-            Arc::new(
-                device
-                    .decoding_device()
-                    .map_err(VideoDecoderError::VulkanDecoderError)?,
-            ),
+            Arc::new(device.decoding_device().map_err(VideoDecoderError::from)?),
             vk::VideoDecodeUsageFlagsKHR::TRANSCODING,
             ImageModifiers {
                 create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
@@ -107,7 +106,7 @@ impl Transcoder {
                 additional_queue_index: device.queues.compute.family_index,
             },
         )
-        .map_err(VideoDecoderError::VulkanDecoderError)?;
+        .map_err(VideoDecoderError::from)?;
 
         let parser = H264Parser::default();
         let reference_ctx = ReferenceContext::default();
@@ -141,7 +140,8 @@ impl Transcoder {
                     )
                     .map(AnyFullEncoderParameters::H265),
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(VideoEncoderError::from)?;
 
         let encoders = parameters
             .iter()
@@ -157,7 +157,8 @@ impl Transcoder {
                     .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
                     .map(|e| Box::new(e) as Box<dyn Encoder>),
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(VideoEncoderError::from)?;
 
         let pipeline_output_configs =
             make_pipeline_output_configs(&parameters, &scaling_algorithms);
@@ -288,7 +289,9 @@ impl Transcoder {
             .iter_mut()
             .zip(resized_images.data.images.outputs.iter())
         {
-            let submit = encoder.encode(frame.image.clone(), false, resized_images.metadata.pts)?;
+            let submit = encoder
+                .encode(frame.image.clone(), false, resized_images.metadata.pts)
+                .map_err(VideoEncoderError::from)?;
             submits.push(submit);
         }
 
@@ -314,7 +317,7 @@ impl Transcoder {
         let mut results = Vec::new();
         for submit in submits {
             let waited = submit.mark_waited();
-            let result = waited.download()?;
+            let result = waited.download().map_err(VideoEncoderError::from)?;
             results.push(result);
         }
 
@@ -332,7 +335,7 @@ impl Transcoder {
         if let Some(query_pool) = resized_images.data.decode_query_pool {
             query_pool
                 .check_results_blocking()
-                .map_err(VideoDecoderError::VulkanDecoderError)?;
+                .map_err(VideoDecoderError::from)?;
         }
 
         Ok(results)
