@@ -169,19 +169,19 @@ fn discover_audio(
         }
     };
 
-    // TODO: (@jbrs): It needs to be reconsidered how decoder config should be handled,
-    // where should it be extracted from the container, here or in the decoder.
-    // Return to that when adding additional containers.
-    let description = match (catalog_type, &container) {
-        (CatalogType::Msf, Container::Cmaf(wire)) => match extract_codec_description(wire) {
-            Ok(desc) => Some(desc),
-            Err(error) => {
-                warn!(%error, "Failed to extract audio decoder config from container. Audio will not play.");
-                None
+    // Decoder config extraction is necessary only for AAC. Opus is self-contained and does not need
+    // description
+    let description = match (catalog_type, &codec, &container) {
+        (CatalogType::Msf, AudioCodec::Aac, Container::Cmaf(wire)) => {
+            match extract_codec_description(wire) {
+                Ok(desc) => Some(desc),
+                Err(error) => {
+                    warn!(%error, "Failed to extract audio decoder config from container. Audio will not play.");
+                    return Ok(None);
+                }
             }
-        },
-        // There is no data to extract from in other containers.
-        (_, _) => config.description.clone(),
+        }
+        (_, _, _) => config.description.clone(),
     };
 
     Ok(Some(DiscoveredAudio {
