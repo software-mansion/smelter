@@ -130,7 +130,7 @@ fn discover_video(
             Ok(desc) => Some(desc),
             Err(error) => {
                 warn!(%error, "Failed to extract video decoder config from container. Video will not play.");
-                None
+                return Ok(None);
             }
         },
         // There is no data to extract from in other containers.
