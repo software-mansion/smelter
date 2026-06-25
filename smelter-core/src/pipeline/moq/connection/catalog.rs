@@ -113,8 +113,9 @@ fn discover_video(
     };
     let container = match &config.container {
         CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
+        CatalogContainer::Legacy => Container::Legacy,
         _ => {
-            warn!("Unsupported video container. Only CMAF is supported.");
+            warn!("Unsupported video container. Only CMAF and Legacy are supported.");
             return Ok(None);
         }
     };
@@ -155,8 +156,9 @@ fn discover_audio(
     };
     let container = match &config.container {
         CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
+        CatalogContainer::Legacy => Container::Legacy,
         _ => {
-            warn!("Unsupported audio container. Only CMAF is supported.");
+            warn!("Unsupported audio container. Only CMAF and Legacy are supported.");
             return Ok(None);
         }
     };
