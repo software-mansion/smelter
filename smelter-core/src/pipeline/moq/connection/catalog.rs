@@ -126,7 +126,13 @@ fn discover_video(
     };
 
     let description = match (catalog_type, &container) {
-        (CatalogType::Msf, Container::Cmaf(wire)) => Some(extract_codec_description(wire)?),
+        (CatalogType::Msf, Container::Cmaf(wire)) => match extract_codec_description(wire) {
+            Ok(desc) => Some(desc),
+            Err(error) => {
+                warn!(%error, "Failed to extract video decoder config from container. Video will not play.");
+                None
+            }
+        },
         // There is no data to extract from in other containers.
         (_, _) => config.description.clone(),
     };
@@ -167,7 +173,13 @@ fn discover_audio(
     // where should it be extracted from the container, here or in the decoder.
     // Return to that when adding additional containers.
     let description = match (catalog_type, &container) {
-        (CatalogType::Msf, Container::Cmaf(wire)) => Some(extract_codec_description(wire)?),
+        (CatalogType::Msf, Container::Cmaf(wire)) => match extract_codec_description(wire) {
+            Ok(desc) => Some(desc),
+            Err(error) => {
+                warn!(%error, "Failed to extract audio decoder config from container. Audio will not play.");
+                None
+            }
+        },
         // There is no data to extract from in other containers.
         (_, _) => config.description.clone(),
     };
