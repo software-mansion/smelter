@@ -113,17 +113,7 @@ fn discover_video(
         }
     };
     let codec = match &config.codec {
-        MoqVideoCodec::H264(h264) => {
-            if let Container::Legacy = container
-                && !h264.inline
-            {
-                warn!(
-                    "Unsupported H264 setup: Legacy container requires H264 to be in the annexB format."
-                );
-                return Ok(None);
-            }
-            VideoCodec::H264
-        }
+        MoqVideoCodec::H264(_) => VideoCodec::H264,
         _ => {
             warn!("Unsupported video codec. Use H264.");
             return Ok(None);
