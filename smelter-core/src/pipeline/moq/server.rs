@@ -1,6 +1,6 @@
 use std::{ops::Deref, sync::Arc, time::Duration};
 
-use hang::moq_net::OriginConsumer;
+use hang::moq_net::{OriginConsumer, OriginProducer};
 use moq_native::{
     Request, ServerConfig, ServerTlsConfig,
     moq_net::{Origin, Session},
@@ -119,17 +119,32 @@ async fn run_accept_loop(
     ctx: Arc<PipelineCtx>,
 ) {
     while let Some(request) = server.accept().await {
-        let (session, consumer, input_ref) =
-            match handle_incoming_connection(request, &moq_inputs, &ctx).await {
-                Ok(sci) => sci,
-                Err(error) => {
-                    warn!(
-                        "MoQ connection rejected: {}",
-                        ErrorStack::new(&error).into_string()
-                    );
-                    continue;
-                }
-            };
+        let (origin, input_ref) = match handle_incoming_connection(&request, &moq_inputs).await {
+            Ok(sci) => sci,
+            Err(error) => {
+                warn!(
+                    "MoQ connection rejected: {}",
+                    ErrorStack::new(&error).into_string()
+                );
+                let rejection_code = match error {
+                    MoqServerError::UrlNotFound | MoqServerError::UrlDecodeFailed(_) => 400,
+                    MoqServerError::PathNotFound(_) | MoqServerError::InputNotFound(_) => 404,
+                    MoqServerError::MissingToken(_) | MoqServerError::InvalidToken(_) => 401,
+                    _ => 400,
+                };
+                _ = request.close(rejection_code).await;
+                continue;
+            }
+        };
+        let consumer = origin.consume();
+        let session = match request.with_consume(origin).ok().await {
+            Ok(session) => MoqSession::new(session, ctx.tokio_rt.clone()),
+            Err(error) => {
+                warn!(%error, "MoQ handshake failed.");
+                continue;
+            }
+        };
+
         let moq_inputs = moq_inputs.clone();
         let ctx = ctx.clone();
 
@@ -146,13 +161,10 @@ async fn run_accept_loop(
 }
 
 async fn handle_incoming_connection(
-    request: Request,
+    request: &Request,
     moq_inputs: &MoqServerState,
-    ctx: &Arc<PipelineCtx>,
-) -> Result<(MoqSession, OriginConsumer, Ref<InputId>), MoqServerError> {
+) -> Result<(OriginProducer, Ref<InputId>), MoqServerError> {
     let Some(url) = request.url() else {
-        // This error is safe to ignore as it comes only if the connection is already dead.
-        _ = request.close(400).await;
         return Err(MoqServerError::UrlNotFound);
     };
 
@@ -160,7 +172,6 @@ async fn handle_incoming_connection(
     let input_name = match urlencoding::decode(input_name_encoded) {
         Ok(decoded) => decoded.into_owned(),
         Err(error) => {
-            _ = request.close(400).await;
             return Err(MoqServerError::UrlDecodeFailed(error));
         }
     };
@@ -168,7 +179,6 @@ async fn handle_incoming_connection(
     let input_ref = match moq_inputs.find_by_url(&input_name) {
         Ok(input_ref) => input_ref,
         Err(error) => {
-            _ = request.close(404).await;
             return Err(error);
         }
     };
@@ -179,31 +189,12 @@ async fn handle_incoming_connection(
         .map(|(_key, value)| value);
 
     let Some(auth_token) = auth_token else {
-        _ = request.close(401).await;
         return Err(MoqServerError::MissingToken(input_ref.id().clone()));
     };
-
-    if let Err(auth_error) = moq_inputs.validate_auth_token(&input_ref, &auth_token) {
-        let reject_code = match auth_error {
-            MoqServerError::InvalidToken(_) => 401,
-            MoqServerError::InputNotFound(_) => 404,
-            // Should never happen
-            _ => 400,
-        };
-        _ = request.close(reject_code).await;
-        return Err(auth_error);
-    }
+    moq_inputs.validate_auth_token(&input_ref, &auth_token)?;
 
     let origin = Origin::random().produce();
-    let consumer = origin.consume();
-    let session = match request.with_consume(origin).ok().await {
-        Ok(session) => MoqSession::new(session, ctx.tokio_rt.clone()),
-        Err(error) => {
-            return Err(MoqServerError::MoqHandshakeFailed(error));
-        }
-    };
-
-    Ok((session, consumer, input_ref))
+    Ok((origin, input_ref))
 }
 
 async fn handle_session(
