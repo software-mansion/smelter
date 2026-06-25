@@ -13,7 +13,7 @@ mod wgpu_api;
 pub use wgpu_api::*;
 
 /// Backend implementation behind a [`VideoAdapter`].
-pub trait VideoAdapterBackend {
+pub(crate) trait VideoAdapterBackend {
     fn info(&self) -> &VideoAdapterInfo;
 
     fn create_device(

@@ -3,7 +3,6 @@ use std::{collections::VecDeque, num::NonZeroU32};
 use ash::vk;
 
 use crate::{
-    VideoEncoderError,
     device::caps::{
         NativeEncodeCapabilities, NativeEncodeProfileCapabilities,
         NativeEncodeQualityLevelProperties,

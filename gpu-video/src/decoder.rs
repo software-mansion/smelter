@@ -1,5 +1,6 @@
 use crate::{
-    DecoderEvent, EncodedInputChunk, OutputFrame, RawFrameData, VideoDecoderError,
+    DecoderEvent, EncodedInputChunk, H264ParserError, OutputFrame, RawFrameData,
+    ReferenceManagementError, VideoBackendError,
     frame_sorter::{DecodeResult, FrameSorter},
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
@@ -8,7 +9,7 @@ use crate::{
     },
 };
 
-pub trait VideoDecoderBackend {
+pub(crate) trait VideoDecoderBackend {
     fn decode_to_bytes(
         &mut self,
         decoder_instructions: &[DecoderInstruction],
@@ -160,4 +161,22 @@ impl WgpuTexturesDecoder {
         let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
         Ok(sorted_frames)
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum VideoDecoderError {
+    #[error("H264 parser error: {0}")]
+    ParserError(#[from] H264ParserError),
+
+    #[error("Reference management error: {0}")]
+    ReferenceManagementError(#[from] ReferenceManagementError),
+
+    #[cfg(feature = "wgpu")]
+    #[error(
+        "VideoDevice was created without wgpu support. Initialize wgpu::Device using VideoAdapterExt::request_device_with_video_support"
+    )]
+    VideoDeviceWithoutWgpu,
+
+    #[error("Encoder error: {0}")]
+    BackendError(VideoBackendError),
 }

@@ -88,25 +88,15 @@ pub mod parameters {
     }
 }
 
-#[cfg(feature = "wgpu")]
-mod wgpu_api;
-#[cfg(feature = "wgpu")]
-pub use wgpu_api::*;
-
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
-use crate::codec::h264::H264Codec;
-use crate::codec::h264::encode::H264WriteParametersInfo;
-use crate::codec::h265::H265Codec;
-use crate::codec::h265::encode::H265WriteParametersInfo;
-use crate::decoder::BytesDecoder;
+use crate::decoder::{BytesDecoder, VideoDecoderError};
 use crate::device::{
     ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
     EncoderParametersH265, EncoderPreset, VideoDeviceBackend,
 };
-use crate::frame_sorter::FrameSorter;
+use crate::encoder::{BytesEncoderH264, BytesEncoderH265, VideoEncoderError};
 use crate::parameters::{H264Profile, H265Profile, RateControl};
 use crate::parser::h264::AccessUnit;
-use crate::vulkan::vulkan_decoder::VulkanDecoder;
 use std::sync::Arc;
 
 #[cfg(feature = "wgpu")]
@@ -123,91 +113,6 @@ pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManag
 pub use crate::vulkan::vulkan_decoder::VulkanDecoderError;
 #[cfg(feature = "transcoder")]
 pub use crate::vulkan_transcoder::{Transcoder, VideoTranscoderError};
-
-use crate::parser::{
-    decoder_instructions::compile_to_decoder_instructions, h264::H264Parser,
-    reference_manager::ReferenceContext,
-};
-use crate::vulkan::vulkan_encoder::VulkanEncoder;
-
-// TODO: move it to decoders/
-#[derive(Debug, thiserror::Error)]
-pub enum VideoDecoderError {
-    #[error("H264 parser error: {0}")]
-    ParserError(#[from] H264ParserError),
-
-    #[error("Reference management error: {0}")]
-    ReferenceManagementError(#[from] ReferenceManagementError),
-
-    #[cfg(feature = "wgpu")]
-    #[error(
-        "VideoDevice was created without wgpu support. Initialize wgpu::Device using VideoAdapterExt::request_device_with_video_support"
-    )]
-    VideoDeviceWithoutWgpu,
-
-    #[error("Encoder error: {0}")]
-    BackendError(VideoBackendError),
-}
-
-// TODO: it's not clear to me which things should be here and what should be in backend error
-// maybe wrap it and include it in vulkan_encoder_error
-// TODO: move it to encoders/
-#[derive(Debug, thiserror::Error)]
-pub enum VideoEncoderError {
-    #[error("The device does not support encoding")]
-    EncoderUnsupported,
-
-    #[error("The profile '{0}' is not supported by this device")]
-    ProfileUnsupported(String),
-
-    #[cfg(feature = "wgpu")]
-    #[error(
-        "VideoDevice was created without wgpu support. Initialize wgpu::Device using VideoAdapterExt::request_device_with_video_support"
-    )]
-    VideoDeviceWithoutWgpu,
-
-    #[error("Invalid encoder parameters, field: {field} - problem: {problem}")]
-    ParametersError {
-        field: &'static str,
-        problem: String,
-    },
-
-    #[error(
-        "The byte length of the provided frame ({bytes}) is not the same as the picture size calculated from the dimensions ({size_from_resolution})"
-    )]
-    InconsistentPictureByteSize {
-        bytes: usize,
-        size_from_resolution: usize,
-    },
-
-    #[cfg(feature = "wgpu")]
-    #[error(transparent)]
-    WgpuTextureEncoderError(#[from] WgpuTextureEncoderError),
-
-    #[error("Encoder error: {0}")]
-    BackendError(VideoBackendError),
-}
-
-#[cfg(feature = "wgpu")]
-#[derive(Debug, thiserror::Error)]
-pub enum WgpuTextureEncoderError {
-    #[error("The supplied texture's format is {0:?}, when it should be NV12")]
-    NotNV12Texture(wgpu::TextureFormat),
-
-    #[error("The supplied texture does not have COPY_SRC usage. Texture's usages: {0:?}")]
-    NoCopySrcTextureUsage(wgpu::TextureUsages),
-
-    #[error(
-        "The dimensions of the provided frame ({provided_dimensions:?}) are not the same as the expected dimensions ({expected_dimensions:?})"
-    )]
-    InconsistentPictureDimensions {
-        provided_dimensions: wgpu::Extent3d,
-        expected_dimensions: wgpu::Extent3d,
-    },
-
-    #[error("Wgpu device error: {0}")]
-    WgpuDeviceError(#[from] wgpu::hal::DeviceError),
-}
 
 #[derive(thiserror::Error, Debug)]
 #[error("{message}")]
@@ -234,6 +139,22 @@ pub enum VideoInstanceInitError {
 
     #[error(transparent)]
     BackendError(VideoBackendError),
+}
+
+#[cfg(feature = "wgpu")]
+#[derive(thiserror::Error, Debug)]
+pub enum WgpuInitError {
+    #[error("Wgpu instance error: {0}")]
+    WgpuInstanceError(#[from] wgpu::hal::InstanceError),
+
+    #[error("Wgpu device error: {0}")]
+    WgpuDeviceError(#[from] wgpu::hal::DeviceError),
+
+    #[error("Wgpu request device error: {0}")]
+    WgpuRequestDeviceError(#[from] wgpu::RequestDeviceError),
+
+    #[error("Cannot create a wgpu adapter")]
+    WgpuAdapterNotCreated,
 }
 
 // TODO: update changelog
@@ -297,7 +218,7 @@ impl VideoDevice {
         &self,
         wgpu_queue: &wgpu::Queue,
         parameters: EncoderParametersH264,
-    ) -> Result<WgpuTexturesEncoderH264, VideoEncoderError> {
+    ) -> Result<crate::encoder::WgpuTexturesEncoderH264, VideoEncoderError> {
         let Some(wgpu_device) = self.wgpu_device.clone() else {
             return Err(VideoEncoderError::VideoDeviceWithoutWgpu);
         };
@@ -314,7 +235,7 @@ impl VideoDevice {
         &self,
         wgpu_queue: &wgpu::Queue,
         parameters: EncoderParametersH265,
-    ) -> Result<WgpuTexturesEncoderH265, VideoEncoderError> {
+    ) -> Result<crate::encoder::WgpuTexturesEncoderH265, VideoEncoderError> {
         let Some(wgpu_device) = self.wgpu_device.clone() else {
             return Err(VideoEncoderError::VideoDeviceWithoutWgpu);
         };
@@ -519,107 +440,4 @@ pub struct RawFrameData {
     pub frame: Vec<u8>,
     pub width: u32,
     pub height: u32,
-}
-
-/// An H.265 (HEVC) encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
-pub struct BytesEncoderH265 {
-    pub(crate) vulkan_encoder: VulkanEncoder<'static, H265Codec>,
-}
-
-impl BytesEncoderH265 {
-    /// The result is a chunk of H265 bitstream.
-    ///
-    /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
-    /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
-    /// Otherwise, the encoder will decide which frames should be coded this way.
-    pub fn encode(
-        &mut self,
-        frame: &InputFrame<RawFrameData>,
-        force_keyframe: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
-        self.vulkan_encoder.encode_bytes(frame, force_keyframe)
-    }
-
-    /// Retrieve encoded VPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn vps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H265WriteParametersInfo {
-                write_vps: true,
-                write_sps: false,
-                write_pps: false,
-            })
-    }
-
-    /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H265WriteParametersInfo {
-                write_vps: false,
-                write_sps: true,
-                write_pps: false,
-            })
-    }
-
-    /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H265WriteParametersInfo {
-                write_vps: false,
-                write_sps: false,
-                write_pps: true,
-            })
-    }
-}
-
-/// An H.264 (AVC) encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
-pub struct BytesEncoderH264 {
-    pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
-}
-
-impl BytesEncoderH264 {
-    /// The result is a chunk of H264 bitstream.
-    ///
-    /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
-    /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
-    /// Otherwise, the encoder will decide which frames should be coded this way.
-    pub fn encode(
-        &mut self,
-        frame: &InputFrame<RawFrameData>,
-        force_keyframe: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
-        self.vulkan_encoder.encode_bytes(frame, force_keyframe)
-    }
-
-    /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H264WriteParametersInfo {
-                write_sps: true,
-                write_pps: false,
-            })
-    }
-
-    /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H264WriteParametersInfo {
-                write_sps: false,
-                write_pps: true,
-            })
-    }
 }

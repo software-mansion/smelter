@@ -6,7 +6,7 @@ use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
 
-use crate::decoder::VideoDecoderBackend;
+use crate::decoder::{VideoDecoderBackend, VideoDecoderError};
 use crate::frame_sorter::{DecodeResult, DecodeResultMetadata};
 use crate::vulkan::VulkanCommonError;
 use crate::{
@@ -19,7 +19,7 @@ use crate::{
     },
     vulkan::vulkan_device::DecodingDevice,
 };
-use crate::{VideoBackendError, VideoDecoderError, wrappers::*};
+use crate::{VideoBackendError, wrappers::*};
 
 mod session_resources;
 
@@ -172,7 +172,7 @@ impl From<VulkanDecoderError> for VideoDecoderError {
     }
 }
 
-impl VideoDecoderBackend for VulkanDecoder<'static> {
+impl VideoDecoderBackend for VulkanDecoder<'_> {
     fn decode_to_bytes(
         &mut self,
         decoder_instructions: &[DecoderInstruction],

@@ -3,13 +3,17 @@ use std::{collections::VecDeque, num::NonZeroU32};
 use ash::vk;
 
 use crate::{
-    VideoEncoderError, codec::{
+    codec::{
         EncodeCodec,
         h264::{
             H264Codec,
             parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
         },
-    }, device::caps::{NativeEncodeProfileCapabilities, NativeEncodeQualityLevelProperties}, parameters::RateControl, vulkan::vulkan_encoder::VulkanEncoderError, wrappers::ProfileInfo
+    },
+    device::caps::{NativeEncodeProfileCapabilities, NativeEncodeQualityLevelProperties},
+    parameters::RateControl,
+    vulkan::vulkan_encoder::VulkanEncoderError,
+    wrappers::ProfileInfo,
 };
 
 #[derive(Debug, Clone, Copy, Default)]

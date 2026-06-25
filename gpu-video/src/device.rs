@@ -5,13 +5,12 @@ use std::sync::Arc;
 use ash::vk;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
-use crate::decoder::BytesDecoder;
+use crate::decoder::{BytesDecoder, VideoDecoderError};
+use crate::encoder::{BytesEncoderH264, BytesEncoderH265, VideoEncoderError};
 use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, H265Profile,
     RateControl,
 };
-
-use crate::{BytesEncoderH264, BytesEncoderH265, VideoDecoderError, VideoEncoderError};
 
 pub(crate) mod caps;
 pub(crate) mod queues;
@@ -288,7 +287,7 @@ pub(crate) trait VideoDeviceBackend {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: EncoderParametersH264,
-    ) -> Result<crate::WgpuTexturesEncoderH264, VideoEncoderError>;
+    ) -> Result<crate::encoder::WgpuTexturesEncoderH264, VideoEncoderError>;
 
     #[cfg(feature = "wgpu")]
     fn create_wgpu_textures_encoder_h265(
@@ -296,7 +295,7 @@ pub(crate) trait VideoDeviceBackend {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: EncoderParametersH265,
-    ) -> Result<crate::WgpuTexturesEncoderH265, VideoEncoderError>;
+    ) -> Result<crate::encoder::WgpuTexturesEncoderH265, VideoEncoderError>;
 
     #[cfg(feature = "transcoder")]
     fn create_transcoder(

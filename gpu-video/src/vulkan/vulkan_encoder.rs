@@ -7,12 +7,17 @@ use std::{
 use ash::vk;
 use tracing::warn;
 
-#[cfg(feature = "wgpu")]
-use crate::VideoEncoderError;
 use crate::{
     EncodedOutputChunk, InputFrame, RawFrameData, VideoBackendError,
-    codec::EncodeCodec,
+    codec::{
+        EncodeCodec,
+        h264::{H264Codec, encode::H264WriteParametersInfo},
+        h265::{H265Codec, encode::H265WriteParametersInfo},
+    },
     device::{ColorRange, ColorSpace, Rational},
+    encoder::{
+        H264VideoEncoderBackend, H265VideoEncoderBackend, VideoEncoderBackend, VideoEncoderError,
+    },
     vulkan::{VulkanCommonError, vulkan_device::EncodingDevice},
     wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
@@ -63,7 +68,7 @@ pub enum VulkanEncoderError {
 
     #[cfg(feature = "wgpu")]
     #[error(transparent)]
-    WgpuTextureEncoderError(#[from] crate::WgpuTextureEncoderError),
+    WgpuTextureEncoderError(#[from] crate::encoder::WgpuTextureEncoderError),
 }
 
 impl From<VulkanEncoderError> for VideoEncoderError {
@@ -293,7 +298,6 @@ impl CommandBufferPoolStorage for EncoderCommandBufferPools {
     }
 }
 
-// TODO: Replace with VideoEncoderBackend?
 pub(crate) trait Encoder<'a> {
     fn encode<'b>(
         &'b mut self,
@@ -420,6 +424,73 @@ impl<C: EncodeCodec> From<&VulkanEncoderParameters<C>> for vk::VideoEncodeUsageI
             .video_usage_hints(params.usage_flags)
             .tuning_mode(params.tuning_mode)
             .video_content_hints(params.content_flags)
+    }
+}
+
+impl<'a, C: EncodeCodec + 'a> VideoEncoderBackend for VulkanEncoder<'a, C> {
+    fn encode_bytes(
+        &mut self,
+        frame: &InputFrame<RawFrameData>,
+        force_idr: bool,
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+        VulkanEncoder::encode_bytes(self, frame, force_idr)
+    }
+
+    fn encode_texture(
+        &mut self,
+        wgpu_device: &wgpu::Device,
+        wgpu_queue: &wgpu::Queue,
+        frame: InputFrame<wgpu::Texture>,
+        force_idr: bool,
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+        VulkanEncoder::encode_texture(self, wgpu_device, wgpu_queue, frame, force_idr)
+    }
+}
+
+impl<'a> H264VideoEncoderBackend for VulkanEncoder<'a, H264Codec> {
+    fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
+        self.stream_parameters(H264WriteParametersInfo {
+            write_sps: true,
+            write_pps: false,
+        })
+        .map_err(Into::into)
+    }
+
+    fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
+        self.stream_parameters(H264WriteParametersInfo {
+            write_sps: false,
+            write_pps: true,
+        })
+        .map_err(Into::into)
+    }
+}
+
+impl<'a> H265VideoEncoderBackend for VulkanEncoder<'a, H265Codec> {
+    fn vps(&self) -> Result<Vec<u8>, VideoEncoderError> {
+        self.stream_parameters(H265WriteParametersInfo {
+            write_vps: true,
+            write_sps: false,
+            write_pps: false,
+        })
+        .map_err(Into::into)
+    }
+
+    fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
+        self.stream_parameters(H265WriteParametersInfo {
+            write_vps: false,
+            write_sps: true,
+            write_pps: false,
+        })
+        .map_err(Into::into)
+    }
+
+    fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
+        self.stream_parameters(H265WriteParametersInfo {
+            write_vps: false,
+            write_sps: false,
+            write_pps: true,
+        })
+        .map_err(Into::into)
     }
 }
 
@@ -725,7 +796,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         wgpu_queue: &wgpu::Queue,
         frame: &InputFrame<wgpu::Texture>,
     ) -> Result<wgpu::hal::vulkan::CommandEncoder, VulkanEncoderError> {
-        use crate::WgpuTextureEncoderError;
+        use crate::encoder::WgpuTextureEncoderError;
         use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
         let encode_texture_extent = wgpu::Extent3d {
@@ -735,21 +806,17 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         };
 
         if !frame.data.usage().contains(wgpu::TextureUsages::COPY_SRC) {
-            return Err(
-                crate::WgpuTextureEncoderError::NoCopySrcTextureUsage(frame.data.usage()).into(),
-            );
+            return Err(WgpuTextureEncoderError::NoCopySrcTextureUsage(frame.data.usage()).into());
         }
         if frame.data.format() != wgpu::TextureFormat::NV12 {
-            return Err(crate::WgpuTextureEncoderError::NotNV12Texture(frame.data.format()).into());
+            return Err(WgpuTextureEncoderError::NotNV12Texture(frame.data.format()).into());
         }
         if frame.data.size() != encode_texture_extent {
-            return Err(
-                crate::WgpuTextureEncoderError::InconsistentPictureDimensions {
-                    provided_dimensions: frame.data.size(),
-                    expected_dimensions: encode_texture_extent,
-                }
-                .into(),
-            );
+            return Err(WgpuTextureEncoderError::InconsistentPictureDimensions {
+                provided_dimensions: frame.data.size(),
+                expected_dimensions: encode_texture_extent,
+            }
+            .into());
         }
 
         let hal_device = unsafe { wgpu_device.as_hal::<VkApi>().unwrap() };
