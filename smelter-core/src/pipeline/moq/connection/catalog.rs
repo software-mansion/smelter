@@ -129,7 +129,7 @@ fn discover_video(
         (CatalogType::Msf, Container::Cmaf(wire)) => match extract_codec_description(wire) {
             Ok(desc) => Some(desc),
             Err(error) => {
-                warn!(%error, "Failed to extract video decoder config from container. Video will not play.");
+                warn!(%error, "Failed to extract video decoder config from container; skipping video track.");
                 return Ok(None);
             }
         },
@@ -176,7 +176,7 @@ fn discover_audio(
             match extract_codec_description(wire) {
                 Ok(desc) => Some(desc),
                 Err(error) => {
-                    warn!(%error, "Failed to extract audio decoder config from container. Audio will not play.");
+                    warn!(%error, "Failed to extract audio decoder config from container; skipping audio track.");
                     return Ok(None);
                 }
             }
