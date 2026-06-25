@@ -1,12 +1,10 @@
 pub mod capabilities {
-    pub use crate::adapter::VideoAdapterInfo;
+    pub use crate::adapter::{DeviceType, VideoAdapterInfo};
     pub use crate::device::caps::{
         DecodeCapabilities, DecodeH264Capabilities, DecodeH264ProfileCapabilities,
         DecodeH265Capabilities, DecodeH265ProfileCapabilities, EncodeCapabilities,
         EncodeH264Capabilities, EncodeH265Capabilities, EncodeProfileCapabilities,
     };
-
-    pub use ash::vk::PhysicalDeviceType as VulkanDeviceType;
 }
 
 pub mod parameters {
@@ -150,28 +148,29 @@ pub enum VideoDecoderError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum VideoInitError {
-    #[error("Error loading vulkan: {0}")]
-    LoadingError(#[from] ash::LoadingError),
+#[error("{message}")]
+pub struct VideoBackendError {
+    pub message: String,
+    #[source]
+    pub source: Box<dyn std::error::Error + Send + Sync + 'static>,
+}
 
-    #[error("Vulkan error: {0}")]
-    VkError(#[from] vk::Result),
+#[derive(thiserror::Error, Debug)]
+pub enum VideoInstanceInitError {
+    #[error("Cannot find a suitable adapters for a video device")]
+    NoAdapterFound,
 
-    #[error("Cannot find a suitable physical device")]
-    NoDevice,
+    #[error("Instance error: {0}")]
+    BackendError(VideoBackendError),
+}
 
-    #[error("Missing required extension: {0}")]
-    MissingExtension(String),
+#[derive(thiserror::Error, Debug)]
+pub enum VideoDeviceInitError {
+    #[error("The chosen adapter is not suitable for a video device")]
+    NotSuitableAdapter,
 
-    #[error("String conversion error: {0}")]
-    StringConversionError(#[from] std::ffi::FromBytesUntilNulError),
-
-    #[error("Profile does not support NV12 texture format")]
-    NoNV12ProfileSupport,
-
-    #[cfg(feature = "wgpu")]
-    #[error(transparent)]
-    WgpuError(#[from] WgpuInitError),
+    #[error("Device error: {0}")]
+    BackendError(VideoBackendError),
 }
 
 #[derive(thiserror::Error, Debug)]

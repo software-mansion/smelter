@@ -21,6 +21,7 @@ keywords = ["vulkan", "video", "wgpu", "decoding", "encoding"]
 
 [features]
 expose-parsers = []
+expose-backends = []
 wgpu = ["dep:wgpu"]
 transcoder = ["dep:naga", "dep:bytemuck"]
 default = ["wgpu"]

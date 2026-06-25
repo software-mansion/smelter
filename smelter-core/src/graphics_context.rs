@@ -129,7 +129,11 @@ pub enum CreateGraphicsContextError {
 
     #[cfg(feature = "gpu-video")]
     #[error(transparent)]
-    VulkanInitError(#[from] gpu_video::VideoInitError),
+    VideoInstanceInitError(#[from] gpu_video::backends::vulkan::VulkanInstanceInitError),
+
+    #[cfg(feature = "gpu-video")]
+    #[error(transparent)]
+    VideoDeviceInitError(#[from] gpu_video::VideoDeviceInitError),
 
     #[cfg(feature = "gpu-video")]
     #[error(transparent)]

@@ -1,7 +1,8 @@
 use ash::{Entry, vk};
 use gpu_video::{
-    VideoAdapterExt, VideoInstance,
-    capabilities::VulkanDeviceType,
+    VideoAdapterExt,
+    backends::vulkan::VulkanInstance,
+    capabilities::DeviceType,
     parameters::{VideoDeviceDescriptor, VideoInstanceDescriptor},
 };
 use itertools::Itertools;
@@ -38,7 +39,7 @@ pub fn create_vulkan_graphics_ctx(
     let mut extensions =
         wgpu::hal::vulkan::Instance::desired_extensions(&entry, api_version, instance_flags)?;
 
-    let video_instance = VideoInstance::new_from_entry(
+    let video_instance = VulkanInstance::new_from_entry(
         entry.clone(),
         &mut extensions,
         &VideoInstanceDescriptor {
@@ -97,8 +98,8 @@ pub fn create_vulkan_graphics_ctx(
                     (false, false) => 2,
                 };
                 let performance_based_priority = match info.device_type {
-                    VulkanDeviceType::DISCRETE_GPU => 0,
-                    VulkanDeviceType::INTEGRATED_GPU => 1,
+                    DeviceType::DiscreteGpu => 0,
+                    DeviceType::IntegratedGpu => 1,
                     _ => 3,
                 };
 
