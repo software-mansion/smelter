@@ -378,17 +378,26 @@ fn spawn_video_decoder(
     video: &DiscoveredVideo,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    // Only CMAF H264 is allowed right now, other codecs are rejected before this function
-    let avcc_bytes = video
-        .description
-        .clone()
-        .ok_or(MoqConnectionError::InvalidAvcc)?;
+    let transformer = {
+        match &video.description {
+            Some(desc) => {
+                let h264_config = H264AvcDecoderConfig::parse(desc.clone())
+                    .map_err(|_| MoqConnectionError::InvalidAvcc)?;
 
-    let h264_config =
-        H264AvcDecoderConfig::parse(avcc_bytes).map_err(|_| MoqConnectionError::InvalidAvcc)?;
+                Some(H264AvccToAnnexB::new(h264_config))
+            }
+            None => None,
+        }
+    };
+    if let Container::Cmaf(_) = video.container
+        && transformer.is_none()
+    {
+        return Err(MoqConnectionError::MissingAvcc);
+    }
+
     let options = VideoDecoderThreadOptions {
         ctx: ctx.clone(),
-        transformer: Some(H264AvccToAnnexB::new(h264_config)),
+        transformer,
         frame_sender,
         input_buffer_size: MOQ_MAX_BUFFER,
     };
@@ -422,13 +431,16 @@ fn spawn_audio_decoder(
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
     match &audio.codec {
         AudioCodec::Aac => {
-            let asc = audio
-                .description
-                .clone()
-                .ok_or(MoqConnectionError::MissingAsc)?;
+            let asc = audio.description.clone();
+            if let Container::Cmaf(_) = audio.container
+                && asc.is_none()
+            {
+                return Err(MoqConnectionError::MissingAsc);
+            }
+
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
-                decoder_options: FdkAacDecoderOptions { asc: Some(asc) },
+                decoder_options: FdkAacDecoderOptions { asc },
                 samples_sender: sample_sender,
                 input_buffer_size: MOQ_MAX_BUFFER,
             };
@@ -468,6 +480,9 @@ enum MoqConnectionError {
 
     #[error("Invalid H264 decoder config.")]
     InvalidAvcc,
+
+    #[error("Missing H264 decoder config.")]
+    MissingAvcc,
 
     #[error("Missing AAC decoder config.")]
     MissingAsc,
