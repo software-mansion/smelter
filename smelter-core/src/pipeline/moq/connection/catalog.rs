@@ -113,10 +113,8 @@ fn discover_video(
     };
     let container = match &config.container {
         CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
-        _ => {
-            warn!("Unsupported video container. Only CMAF is supported.");
-            return Ok(None);
-        }
+        CatalogContainer::Legacy => Container::Legacy,
+        CatalogContainer::Loc => Container::Loc,
     };
 
     let description = match (&config.description, &container) {
@@ -155,10 +153,8 @@ fn discover_audio(
     };
     let container = match &config.container {
         CatalogContainer::Cmaf { init, .. } => Container::Cmaf(fmp4::Wire::from_init(init)?),
-        _ => {
-            warn!("Unsupported audio container. Only CMAF is supported.");
-            return Ok(None);
-        }
+        CatalogContainer::Legacy => Container::Legacy,
+        CatalogContainer::Loc => Container::Loc,
     };
 
     // Decoder config extraction is necessary only for AAC. Opus is self-contained and does not need
