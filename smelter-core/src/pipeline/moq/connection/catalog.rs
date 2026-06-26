@@ -120,7 +120,6 @@ fn discover_video(
     };
 
     let description = match (&config.description, &container) {
-        (Some(desc), _) => Some(desc.clone()),
         (None, Container::Cmaf(wire)) => match extract_codec_description(wire) {
             Ok(desc) => Some(desc),
             Err(error) => {
@@ -128,7 +127,7 @@ fn discover_video(
                 return Ok(None);
             }
         },
-        (None, _) => config.description.clone(),
+        _ => config.description.clone(),
     };
 
     Ok(Some(DiscoveredVideo {
@@ -164,16 +163,15 @@ fn discover_audio(
 
     // Decoder config extraction is necessary only for AAC. Opus is self-contained and does not need
     // description
-    let description = match (&config.description, &container) {
-        (Some(desc), _) => Some(desc.clone()),
-        (None, Container::Cmaf(wire)) => match extract_codec_description(wire) {
+    let description = match (&config.description, &codec, &container) {
+        (None, AudioCodec::Aac, Container::Cmaf(wire)) => match extract_codec_description(wire) {
             Ok(desc) => Some(desc),
             Err(error) => {
-                warn!(%error, "Failed to extract video decoder config from container; skipping video track.");
+                warn!(%error, "Failed to extract audio decoder config from container; skipping audio track.");
                 return Ok(None);
             }
         },
-        (None, _) => config.description.clone(),
+        _ => config.description.clone(),
     };
 
     Ok(Some(DiscoveredAudio {
