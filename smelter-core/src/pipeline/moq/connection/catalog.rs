@@ -61,8 +61,8 @@ async fn read_hang_catalog(
 
     debug!(?catalog, "Received MoQ Hang catalog");
 
-    let video = discover_video(&catalog.video, CatalogType::Hang)?;
-    let audio = discover_audio(&catalog.audio, CatalogType::Hang)?;
+    let video = discover_video(&catalog.video)?;
+    let audio = discover_audio(&catalog.audio)?;
 
     if video.is_none() && audio.is_none() {
         return Err(MoqCatalogError::CatalogNoTracks);
@@ -87,8 +87,8 @@ async fn read_msf_catalog(
         .ok_or(MoqCatalogError::CatalogEmpty)?;
     debug!(?catalog, "Received MoQ MSF catalog");
 
-    let video = discover_video(&catalog.video, CatalogType::Msf)?;
-    let audio = discover_audio(&catalog.audio, CatalogType::Msf)?;
+    let video = discover_video(&catalog.video)?;
+    let audio = discover_audio(&catalog.audio)?;
 
     if video.is_none() && audio.is_none() {
         return Err(MoqCatalogError::CatalogNoTracks);
@@ -97,14 +97,8 @@ async fn read_msf_catalog(
     Ok(DiscoveredTracks { video, audio })
 }
 
-enum CatalogType {
-    Hang,
-    Msf,
-}
-
 fn discover_video(
     video: &hang::catalog::Video,
-    catalog_type: CatalogType,
 ) -> Result<Option<DiscoveredVideo>, MoqCatalogError> {
     let Some((name, config)) = video.renditions.first_key_value() else {
         return Ok(None);
@@ -125,16 +119,16 @@ fn discover_video(
         }
     };
 
-    let description = match (catalog_type, &container) {
-        (CatalogType::Msf, Container::Cmaf(wire)) => match extract_codec_description(wire) {
+    let description = match (&config.description, &container) {
+        (Some(desc), _) => Some(desc.clone()),
+        (None, Container::Cmaf(wire)) => match extract_codec_description(wire) {
             Ok(desc) => Some(desc),
             Err(error) => {
-                warn!(%error, "Failed to extract video decoder config from container; skipping video track.");
+                warn!(%error, "Failed to extract video decoder config from container; skipping audio track.");
                 return Ok(None);
             }
         },
-        // There is no data to extract from in other containers.
-        (_, _) => config.description.clone(),
+        (None, _) => config.description.clone(),
     };
 
     Ok(Some(DiscoveredVideo {
@@ -147,7 +141,6 @@ fn discover_video(
 
 fn discover_audio(
     audio: &hang::catalog::Audio,
-    catalog_type: CatalogType,
 ) -> Result<Option<DiscoveredAudio>, MoqCatalogError> {
     let Some((name, config)) = audio.renditions.first_key_value() else {
         return Ok(None);
@@ -171,17 +164,16 @@ fn discover_audio(
 
     // Decoder config extraction is necessary only for AAC. Opus is self-contained and does not need
     // description
-    let description = match (catalog_type, &codec, &container) {
-        (CatalogType::Msf, AudioCodec::Aac, Container::Cmaf(wire)) => {
-            match extract_codec_description(wire) {
-                Ok(desc) => Some(desc),
-                Err(error) => {
-                    warn!(%error, "Failed to extract audio decoder config from container; skipping audio track.");
-                    return Ok(None);
-                }
+    let description = match (&config.description, &container) {
+        (Some(desc), _) => Some(desc.clone()),
+        (None, Container::Cmaf(wire)) => match extract_codec_description(wire) {
+            Ok(desc) => Some(desc),
+            Err(error) => {
+                warn!(%error, "Failed to extract video decoder config from container; skipping video track.");
+                return Ok(None);
             }
-        }
-        (_, _, _) => config.description.clone(),
+        },
+        (None, _) => config.description.clone(),
     };
 
     Ok(Some(DiscoveredAudio {
