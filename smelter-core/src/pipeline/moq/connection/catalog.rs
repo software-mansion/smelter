@@ -123,7 +123,7 @@ fn discover_video(
         (None, Container::Cmaf(wire)) => match extract_codec_description(wire) {
             Ok(desc) => Some(desc),
             Err(error) => {
-                warn!(%error, "Failed to extract video decoder config from container; skipping audio track.");
+                warn!(%error, "Failed to extract video decoder config from container; skipping video track.");
                 return Ok(None);
             }
         },
