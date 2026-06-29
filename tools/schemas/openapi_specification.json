@@ -2452,7 +2452,14 @@
       },
       "MoqInputServer": {
         "type": "object",
+        "required": [
+          "auth_token"
+        ],
         "properties": {
+          "auth_token": {
+            "type": "string",
+            "description": "Token used for authentication in MoQ server input. The broadcaster must provide\nit as a `token` query parameter when connecting"
+          },
           "required": {
             "type": [
               "boolean",

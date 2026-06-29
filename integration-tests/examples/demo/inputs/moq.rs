@@ -11,6 +11,7 @@ use serde_json::json;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoqInput {
     pub name: String,
+    pub auth_token: String,
 }
 
 impl MoqInput {
@@ -19,7 +20,8 @@ impl MoqInput {
             "type": "moq_server",
             "decoder_map": {
                 "h264": "ffmpeg_h264",
-            }
+            },
+            "auth_token": self.auth_token,
         })
     }
 
@@ -32,12 +34,14 @@ impl MoqInput {
 
 pub struct MoqInputBuilder {
     name: String,
+    auth_token: String,
 }
 
 impl MoqInputBuilder {
     pub fn new() -> Self {
         let name = Self::generate_name();
-        Self { name }
+        let auth_token = "example".to_string();
+        Self { name, auth_token }
     }
 
     fn generate_name() -> String {
@@ -48,7 +52,7 @@ impl MoqInputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_name()
+        self.prompt_name()?.prompt_token()
     }
 
     fn prompt_name(self) -> Result<Self> {
@@ -60,12 +64,29 @@ impl MoqInputBuilder {
         }
     }
 
+    fn prompt_token(self) -> Result<Self> {
+        let token_input = Text::new("Auth token (ESC for \"example\"):").prompt_skippable()?;
+
+        match token_input {
+            Some(token) if !token.trim().is_empty() => Ok(self.with_token(token)),
+            None | Some(_) => Ok(self),
+        }
+    }
+
     pub fn with_name(mut self, name: String) -> Self {
         self.name = name;
         self
     }
 
+    pub fn with_token(mut self, auth_token: String) -> Self {
+        self.auth_token = auth_token;
+        self
+    }
+
     pub fn build(self) -> MoqInput {
-        MoqInput { name: self.name }
+        MoqInput {
+            name: self.name,
+            auth_token: self.auth_token,
+        }
     }
 }

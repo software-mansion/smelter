@@ -36,6 +36,7 @@ impl MoqServerInput {
             &input_ref,
             MoqInputStateOptions {
                 queue_input: queue_input.downgrade(),
+                auth_token: options.auth_token,
                 decoders: options.decoders,
             },
         )?;

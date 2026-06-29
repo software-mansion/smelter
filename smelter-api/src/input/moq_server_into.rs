@@ -6,6 +6,7 @@ impl TryFrom<MoqInputServer> for core::RegisterInputOptions {
 
     fn try_from(value: MoqInputServer) -> Result<Self, Self::Error> {
         let MoqInputServer {
+            auth_token,
             required,
             decoder_map,
             side_channel,
@@ -24,6 +25,7 @@ impl TryFrom<MoqInputServer> for core::RegisterInputOptions {
             .transpose()?;
 
         let input_options = core::MoqServerInputOptions {
+            auth_token,
             decoders: core::MoqServerInputDecoders { h264 },
             queue_options: core::QueueInputOptions {
                 required: required.unwrap_or(false),
