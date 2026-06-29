@@ -126,13 +126,7 @@ async fn run_accept_loop(
                     "MoQ connection rejected: {}",
                     ErrorStack::new(&err).into_string()
                 );
-                let rejection_code = match err {
-                    MoqServerError::UrlNotFound | MoqServerError::UrlDecodeFailed(_) => 400,
-                    MoqServerError::PathNotFound(_) | MoqServerError::InputNotFound(_) => 404,
-                    MoqServerError::MissingToken(_) | MoqServerError::InvalidToken(_) => 401,
-                    _ => 400,
-                };
-                _ = request.close(rejection_code).await;
+                _ = request.close(err.http_status_code()).await;
                 continue;
             }
         };

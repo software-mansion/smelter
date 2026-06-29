@@ -53,3 +53,14 @@ pub enum MoqServerError {
     #[error("MoQ handshake failed: {0}")]
     MoqHandshakeFailed(#[source] anyhow::Error),
 }
+
+impl MoqServerError {
+    pub fn http_status_code(&self) -> u16 {
+        match self {
+            Self::UrlNotFound | Self::UrlDecodeFailed(_) => 400,
+            Self::PathNotFound(_) | Self::InputNotFound(_) => 404,
+            Self::MissingToken(_) | Self::InvalidToken(_) => 401,
+            _ => 400,
+        }
+    }
+}
