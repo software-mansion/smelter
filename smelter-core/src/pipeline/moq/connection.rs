@@ -49,11 +49,6 @@ struct AudioTrack {
     description: Option<Bytes>,
 }
 
-struct DiscoveredTracks {
-    video: Option<VideoTrack>,
-    audio: Option<AudioTrack>,
-}
-
 #[derive(Clone)]
 struct TrackCtx {
     ctx: Arc<PipelineCtx>,
@@ -117,13 +112,14 @@ async fn handle_broadcast(
 ) -> Result<(), MoqConnectionError> {
     info!("MoQ broadcast connection established");
 
-    let discovered = read_catalog(&broadcast).await?;
+    let (video, audio) = read_catalog(&broadcast).await?;
 
     let mut handler = BroadcastHandler::new(
         ctx.clone(),
         input_ref.clone(),
         broadcast,
-        discovered,
+        video,
+        audio,
         decoders,
         should_close,
     );
@@ -156,7 +152,8 @@ async fn handle_broadcast(
 
 struct BroadcastHandler {
     track_ctx: TrackCtx,
-    tracks: DiscoveredTracks,
+    video: Option<VideoTrack>,
+    audio: Option<AudioTrack>,
 }
 
 impl BroadcastHandler {
@@ -164,7 +161,8 @@ impl BroadcastHandler {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         broadcast: BroadcastConsumer,
-        tracks: DiscoveredTracks,
+        video: Option<VideoTrack>,
+        audio: Option<AudioTrack>,
         decoders: MoqServerInputDecoders,
         should_close: Arc<AtomicBool>,
     ) -> Self {
@@ -184,22 +182,26 @@ impl BroadcastHandler {
             should_close,
             stats_sender,
         };
-        Self { track_ctx, tracks }
+        Self {
+            track_ctx,
+            video,
+            audio,
+        }
     }
 
     fn has_video(&self) -> bool {
-        self.tracks.video.is_some()
+        self.video.is_some()
     }
 
     fn has_audio(&self) -> bool {
-        self.tracks.audio.is_some()
+        self.audio.is_some()
     }
 
     fn handle_video_track(
         &mut self,
         frame_sender: Option<QueueSender<Frame>>,
     ) -> Option<tokio::task::JoinHandle<()>> {
-        let (Some(video), Some(frame_sender)) = (self.tracks.video.take(), frame_sender) else {
+        let (Some(video), Some(frame_sender)) = (self.video.take(), frame_sender) else {
             return None;
         };
 
@@ -223,7 +225,7 @@ impl BroadcastHandler {
         &mut self,
         sample_sender: Option<QueueSender<InputAudioSamples>>,
     ) -> Option<tokio::task::JoinHandle<()>> {
-        let (Some(audio), Some(sample_sender)) = (self.tracks.audio.take(), sample_sender) else {
+        let (Some(audio), Some(sample_sender)) = (self.audio.take(), sample_sender) else {
             return None;
         };
 

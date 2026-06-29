@@ -7,7 +7,7 @@ use moq_mux::container::fmp4;
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use tracing::{debug, warn};
 
-use crate::pipeline::moq::connection::{AudioTrack, DiscoveredTracks, VideoTrack};
+use crate::pipeline::moq::connection::{AudioTrack, VideoTrack};
 
 use crate::prelude::*;
 
@@ -31,7 +31,7 @@ pub(super) enum MoqCatalogError {
 
 pub(super) async fn read_catalog(
     broadcast: &BroadcastConsumer,
-) -> Result<DiscoveredTracks, MoqCatalogError> {
+) -> Result<(Option<VideoTrack>, Option<AudioTrack>), MoqCatalogError> {
     match read_hang_catalog(broadcast).await {
         Ok(tracks) => Ok(tracks),
         Err(error) => {
@@ -46,7 +46,7 @@ pub(super) async fn read_catalog(
 
 async fn read_hang_catalog(
     broadcast: &BroadcastConsumer,
-) -> Result<DiscoveredTracks, MoqCatalogError> {
+) -> Result<(Option<VideoTrack>, Option<AudioTrack>), MoqCatalogError> {
     use moq_mux::catalog::hang::{Catalog, Consumer};
 
     let catalog_track = broadcast
@@ -61,19 +61,19 @@ async fn read_hang_catalog(
 
     debug!(?catalog, "Received MoQ Hang catalog");
 
-    let video = discover_video(&catalog.video)?;
-    let audio = discover_audio(&catalog.audio)?;
+    let video = find_first_video(&catalog.video)?;
+    let audio = find_first_audio(&catalog.audio)?;
 
     if video.is_none() && audio.is_none() {
         return Err(MoqCatalogError::CatalogNoTracks);
     }
 
-    Ok(DiscoveredTracks { video, audio })
+    Ok((video, audio))
 }
 
 async fn read_msf_catalog(
     broadcast: &BroadcastConsumer,
-) -> Result<DiscoveredTracks, MoqCatalogError> {
+) -> Result<(Option<VideoTrack>, Option<AudioTrack>), MoqCatalogError> {
     use moq_mux::catalog::msf::Consumer;
 
     let catalog_track = broadcast
@@ -87,17 +87,17 @@ async fn read_msf_catalog(
         .ok_or(MoqCatalogError::CatalogEmpty)?;
     debug!(?catalog, "Received MoQ MSF catalog");
 
-    let video = discover_video(&catalog.video)?;
-    let audio = discover_audio(&catalog.audio)?;
+    let video = find_first_video(&catalog.video)?;
+    let audio = find_first_audio(&catalog.audio)?;
 
     if video.is_none() && audio.is_none() {
         return Err(MoqCatalogError::CatalogNoTracks);
     }
 
-    Ok(DiscoveredTracks { video, audio })
+    Ok((video, audio))
 }
 
-fn discover_video(video: &hang::catalog::Video) -> Result<Option<VideoTrack>, MoqCatalogError> {
+fn find_first_video(video: &hang::catalog::Video) -> Result<Option<VideoTrack>, MoqCatalogError> {
     let Some((name, config)) = video.renditions.first_key_value() else {
         return Ok(None);
     };
@@ -134,7 +134,7 @@ fn discover_video(video: &hang::catalog::Video) -> Result<Option<VideoTrack>, Mo
     }))
 }
 
-fn discover_audio(audio: &hang::catalog::Audio) -> Result<Option<AudioTrack>, MoqCatalogError> {
+fn find_first_audio(audio: &hang::catalog::Audio) -> Result<Option<AudioTrack>, MoqCatalogError> {
     let Some((name, config)) = audio.renditions.first_key_value() else {
         return Ok(None);
     };
