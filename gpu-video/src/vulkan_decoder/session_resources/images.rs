@@ -4,13 +4,13 @@ use ash::vk;
 
 use crate::{
     VulkanDecoderError,
-    codec::h264::parameters::H264DecodeProfileInfo,
-    device::DecodingDevice,
-    vulkan_decoder::Image,
-    wrappers::{
+    backends::vulkan::codec::h264::parameters::H264DecodeProfileInfo,
+    backends::vulkan::vulkan_device::DecodingDevice,
+    backends::vulkan::wrappers::{
         CodingImageBundle, DecodedPicturesBuffer, ImageLayoutTracker, ImageWithView,
         OpenCommandBuffer,
     },
+    vulkan_decoder::Image,
 };
 
 pub(crate) struct DecodingImages<'a> {

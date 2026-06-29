@@ -16,7 +16,7 @@ pub struct VideoInstanceDescriptor {
     pub enable_api_dump: bool,
 }
 
-pub(crate) trait VideoInstanceBackend {
+pub(crate) trait VideoInstanceBackend: Send + Sync {
     fn iter_adapters<'a>(
         &'a self,
     ) -> Result<Box<dyn Iterator<Item = VideoAdapter<'a>> + 'a>, VideoInstanceInitError>;

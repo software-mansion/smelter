@@ -6,8 +6,8 @@ use crate::{
     VideoBackendError, VideoInstanceInitError,
     adapter::VideoAdapter,
     backends::vulkan::vulkan_adapter::VulkanAdapter,
+    backends::vulkan::wrappers::*,
     instance::{VideoInstanceBackend, VideoInstanceDescriptor},
-    wrappers::*,
 };
 
 pub struct VulkanInstance {

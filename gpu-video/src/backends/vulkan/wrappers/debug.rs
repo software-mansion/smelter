@@ -3,7 +3,10 @@ use std::{ffi::c_void, sync::Arc};
 use ash::vk::{self, QueryType};
 use tracing::{error, info, trace, warn};
 
-use crate::{VulkanCommonError, VulkanDecoderError, backends::vulkan::VulkanInstanceInitError};
+use crate::{
+    VulkanDecoderError,
+    backends::vulkan::{VulkanCommonError, VulkanInstanceInitError},
+};
 
 use super::{Device, Instance};
 

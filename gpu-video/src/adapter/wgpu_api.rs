@@ -1,7 +1,7 @@
 use crate::{
     VideoDeviceInitError,
     adapter::{VideoAdapterBackend, VideoAdapterInfo},
-    device::{VideoDevice, VideoDeviceDescriptor},
+    device::VideoDeviceDescriptor,
 };
 
 #[cfg(vulkan)]
@@ -31,7 +31,13 @@ impl VideoAdapterExt for wgpu::Adapter {
         desc: &VideoDeviceDescriptor,
     ) -> Result<(wgpu::Device, wgpu::Queue), VideoDeviceInitError> {
         with_video_adapter_from_wgpu(self, |adapter| {
-            VideoDevice::create_and_register_wgpu(self, adapter, desc.clone()).map_err(Into::into)
+            #[cfg(vulkan)]
+            crate::backends::vulkan::VulkanDevice::create_and_register_wgpu(
+                self,
+                adapter,
+                desc.clone(),
+            )
+            .map_err(Into::into)
         })
         .ok_or(VideoDeviceInitError::NotSuitableAdapter)?
     }

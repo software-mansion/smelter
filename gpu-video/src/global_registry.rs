@@ -3,18 +3,18 @@ use std::sync::{Arc, LazyLock, RwLock};
 use ash::vk;
 use rustc_hash::FxHashMap;
 
-use crate::device::VideoDevice;
+use crate::device::VideoDeviceBackend;
 
 #[derive(Default)]
 pub(crate) struct GlobalRegistry {
-    devices: FxHashMap<VideoDeviceKey, Arc<VideoDevice>>,
+    devices: FxHashMap<VideoDeviceKey, Arc<dyn VideoDeviceBackend>>,
 }
 
 static REGISTRY: LazyLock<RwLock<GlobalRegistry>> =
     LazyLock::new(|| RwLock::new(GlobalRegistry::default()));
 
 impl GlobalRegistry {
-    pub(crate) fn register_device(key: VideoDeviceKey, device: Arc<VideoDevice>) {
+    pub(crate) fn register_device(key: VideoDeviceKey, device: Arc<dyn VideoDeviceBackend>) {
         let mut registry = REGISTRY.write().unwrap();
 
         use std::collections::hash_map::Entry;
@@ -35,7 +35,9 @@ impl GlobalRegistry {
         }
     }
 
-    pub(crate) fn get_device(key: &VideoDeviceKey) -> Result<Arc<VideoDevice>, RegistryError> {
+    pub(crate) fn get_device(
+        key: &VideoDeviceKey,
+    ) -> Result<Arc<dyn VideoDeviceBackend>, RegistryError> {
         let registry = REGISTRY.read().unwrap();
         registry
             .devices

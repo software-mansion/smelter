@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ash::vk;
 
-use crate::VulkanCommonError;
+use crate::backends::vulkan::VulkanCommonError;
 
 use super::Device;
 

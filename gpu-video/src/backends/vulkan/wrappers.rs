@@ -20,7 +20,7 @@ pub(crate) use sync::*;
 pub(crate) use video::*;
 pub(crate) use vk_extensions::*;
 
-use crate::VulkanCommonError;
+use crate::backends::vulkan::VulkanCommonError;
 
 pub(crate) struct Instance {
     pub(crate) instance: ash::Instance,

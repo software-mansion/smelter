@@ -4,13 +4,13 @@ use ash::vk;
 
 use crate::{
     VideoEncoderError,
-    device::caps::{
+    backends::vulkan::vulkan_device::caps::{
         NativeEncodeCapabilities, NativeEncodeProfileCapabilities,
         NativeEncodeQualityLevelProperties,
     },
+    backends::vulkan::wrappers::ProfileInfo,
     parameters::RateControl,
     vulkan_encoder::FullEncoderParameters,
-    wrappers::ProfileInfo,
 };
 
 pub(crate) mod h264;

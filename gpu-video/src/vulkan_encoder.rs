@@ -8,15 +8,19 @@ use ash::vk;
 use tracing::warn;
 
 use crate::{
-    EncodedOutputChunk, InputFrame, RawFrameData, VulkanCommonError,
-    codec::EncodeCodec,
-    device::{ColorRange, ColorSpace, EncodingDevice, Rational},
-    wrappers::{
-        Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
-        ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
-        SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
-        VideoSessionParameters,
+    EncodedOutputChunk, InputFrame, RawFrameData,
+    backends::vulkan::{
+        VulkanCommonError,
+        codec::EncodeCodec,
+        vulkan_device::EncodingDevice,
+        wrappers::{
+            Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
+            ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
+            SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt, VideoQueueExt,
+            VideoSession, VideoSessionParameters,
+        },
     },
+    device::{ColorRange, ColorSpace, Rational},
 };
 
 const MB: u64 = 1024 * 1024;

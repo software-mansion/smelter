@@ -3,17 +3,23 @@ use std::num::NonZeroU32;
 use ash::vk;
 
 use crate::{
-    codec::{
-        EncodeCodec,
-        h265::{
-            H265Codec, H265VkParameters,
-            parameters::{
-                VkH265PictureParameterSet, VkH265SequenceParameterSet, VkH265VideoParameterSet,
+    VideoEncoderError,
+    backends::vulkan::{
+        codec::{
+            EncodeCodec,
+            h265::{
+                H265Codec, H265VkParameters,
+                parameters::{
+                    VkH265PictureParameterSet, VkH265SequenceParameterSet, VkH265VideoParameterSet,
+                },
             },
         },
+        vulkan_device::caps::{
+            NativeEncodeProfileCapabilities, NativeEncodeQualityLevelProperties,
+        },
+        wrappers::ProfileInfo,
     },
     parameters::RateControl,
-    wrappers::ProfileInfo,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -31,7 +37,7 @@ pub(crate) struct H265WriteParametersInfo {
 impl EncodeCodec for H265Codec {
     fn profile_info<'a>(
         params: &crate::vulkan_encoder::FullEncoderParameters<Self>,
-    ) -> crate::wrappers::ProfileInfo<'a> {
+    ) -> ProfileInfo<'a> {
         let h265_profile = vk::VideoEncodeH265ProfileInfoKHR::default()
             .std_profile_idc(params.profile.to_profile_idc());
         let h265_profile = Box::new(h265_profile);
@@ -51,14 +57,14 @@ impl EncodeCodec for H265Codec {
     fn encode_profile_capabilities(
         caps: &Self::NativeEncodeCodecCapabilities,
         profile: Self::Profile,
-    ) -> Option<&crate::device::caps::NativeEncodeProfileCapabilities<Self>> {
+    ) -> Option<&NativeEncodeProfileCapabilities<Self>> {
         caps.profile(profile)
     }
 
     fn codec_parameters(
         parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
-    ) -> Result<Self::OwnedParameters, crate::VideoEncoderError> {
+    ) -> Result<Self::OwnedParameters, VideoEncoderError> {
         Ok(Self::OwnedParameters {
             vps: vec![VkH265VideoParameterSet::new_encode(parameters)],
             sps: vec![VkH265SequenceParameterSet::new_encode(
@@ -130,8 +136,8 @@ impl EncodeCodec for H265Codec {
     type BitstreamUnitInfo<'a> = vk::VideoEncodeH265NaluSliceSegmentInfoKHR<'a>;
     fn bitstream_unit_info<'a>(
         data: &'a Self::BitstreamUnitData,
-        rate_control: crate::parameters::RateControl,
-        capabilities: &crate::device::caps::NativeEncodeQualityLevelProperties<Self>,
+        rate_control: RateControl,
+        capabilities: &NativeEncodeQualityLevelProperties<Self>,
         is_idr: bool,
     ) -> Self::BitstreamUnitInfo<'a> {
         let mut slice_info =
@@ -309,7 +315,7 @@ impl EncodeCodec for H265Codec {
     type CodecRateControlLayerInfo<'a> = vk::VideoEncodeH265RateControlLayerInfoKHR<'a>;
     type CodecRateControlInfo<'a> = vk::VideoEncodeH265RateControlInfoKHR<'a>;
     fn codec_rate_control_layer_info<'a>(
-        rate_control: crate::parameters::RateControl,
+        rate_control: RateControl,
     ) -> Option<Vec<Self::CodecRateControlLayerInfo<'a>>> {
         let layer_info = vk::VideoEncodeH265RateControlLayerInfoKHR::default()
             .use_max_qp(false)

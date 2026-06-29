@@ -3,15 +3,15 @@ use std::{io::Cursor, sync::Arc};
 use ash::vk;
 
 use crate::{
-    device::VideoDevice,
+    backends::vulkan::VulkanDevice,
+    backends::vulkan::wrappers::{
+        CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
+        Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
+    },
     parameters::ScalingAlgorithm,
     vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
     vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     vulkan_transcoder::VideoTranscoderError,
-    wrappers::{
-        CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
-        Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
-    },
 };
 
 const MAX_OUTPUTS: u32 = 8;
@@ -78,12 +78,12 @@ impl ResizingImageBundle {
 
 struct ImageHeap {
     freelist: Vec<Box<[ResizingImageBundle]>>,
-    device: Arc<VideoDevice>,
+    device: Arc<VulkanDevice>,
     configs: Vec<OutputConfig>,
 }
 
 impl ImageHeap {
-    fn new(device: Arc<VideoDevice>, configs: Vec<OutputConfig>) -> Self {
+    fn new(device: Arc<VulkanDevice>, configs: Vec<OutputConfig>) -> Self {
         Self {
             device,
             freelist: Vec::new(),
@@ -221,12 +221,12 @@ pub(crate) struct ResizingPipeline {
     image_heap: ImageHeap,
     pipeline: ComputePipeline,
     buffer_pool: CommandBufferPool,
-    device: Arc<VideoDevice>,
+    device: Arc<VulkanDevice>,
 }
 
 impl ResizingPipeline {
     pub(crate) fn new(
-        device: Arc<VideoDevice>,
+        device: Arc<VulkanDevice>,
         configs: Vec<OutputConfig>,
     ) -> Result<Self, VideoTranscoderError> {
         if configs.is_empty() || configs.len() > MAX_OUTPUTS as usize {

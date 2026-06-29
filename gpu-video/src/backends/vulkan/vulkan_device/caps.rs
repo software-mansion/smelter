@@ -3,16 +3,23 @@ use std::ptr::null_mut;
 use ash::vk;
 
 use crate::VulkanDecoderError;
-use crate::backends::vulkan::VulkanAdapterInitError;
-use crate::codec::CodecCapabilities;
-use crate::codec::CodecSpecificEncoderQualityLevelProperties as _;
-use crate::codec::h264::H264Codec;
-use crate::codec::h264::parameters::vk_to_h264_level_idc;
-use crate::codec::h265::H265Codec;
-use crate::codec::h265::parameters::vk_to_h265_level_idc;
+use crate::backends::vulkan::{
+    VulkanAdapterInitError,
+    codec::h264::H264Codec,
+    codec::h264::parameters::vk_to_h264_level_idc,
+    codec::h265::H265Codec,
+    codec::h265::parameters::vk_to_h265_level_idc,
+    codec::{CodecCapabilities, CodecSpecificEncoderQualityLevelProperties},
+    wrappers::*,
+};
+use crate::capabilities::{
+    DecodeCapabilities, DecodeH264Capabilities, DecodeH264ProfileCapabilities,
+    DecodeH265Capabilities, DecodeH265ProfileCapabilities, EncodeCapabilities,
+    EncodeH264Capabilities, EncodeH265Capabilities, EncodeProfileCapabilities,
+    RateControlCapabilities,
+};
 use crate::parameters::H264Profile;
 use crate::parameters::H265Profile;
-use crate::wrappers::*;
 
 pub(crate) fn query_video_format_properties<'a>(
     device: vk::PhysicalDevice,
@@ -57,50 +64,6 @@ pub(crate) fn query_video_format_properties<'a>(
     }
 
     Ok(format_properties)
-}
-
-/// The device capabilities for encoding
-#[derive(Debug, Clone, Copy)]
-pub struct EncodeCapabilities {
-    pub h264: Option<EncodeH264Capabilities>,
-    pub h265: Option<EncodeH265Capabilities>,
-}
-
-/// The device capabilities for H265 encoding.
-///
-/// See [`H265Profile`] for information about what profiles are.
-#[derive(Debug, Clone, Copy)]
-pub struct EncodeH265Capabilities {
-    pub main_profile: Option<EncodeProfileCapabilities>,
-}
-
-/// The device capabilities for H264 encoding.
-///
-/// See [`H264Profile`] for information about what profiles are.
-#[derive(Debug, Clone, Copy)]
-pub struct EncodeH264Capabilities {
-    pub baseline_profile: Option<EncodeProfileCapabilities>,
-    pub main_profile: Option<EncodeProfileCapabilities>,
-    pub high_profile: Option<EncodeProfileCapabilities>,
-}
-
-/// The device capabilities for encoding in a specific codec, at a specific profile
-#[derive(Debug, Clone, Copy)]
-pub struct EncodeProfileCapabilities {
-    /// The minimum width of the coded image
-    pub min_width: u32,
-    /// The maximum width of the coded image
-    pub max_width: u32,
-    /// The minimum height of the coded image
-    pub min_height: u32,
-    /// The maximum height of the coded image
-    pub max_height: u32,
-    /// The supported rate control modes in bitflag form
-    pub supported_rate_control: vk::VideoEncodeRateControlModeFlagsKHR,
-    /// Maximum number of back references a P-frame can have
-    pub max_references: u32,
-    /// The count of [Vulkan Video encode quality levels](https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#encode-quality-level)
-    pub quality_levels: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -186,14 +149,6 @@ impl NativeEncodeH265Capabilities {
             H265Profile::Main => self.main.as_ref(),
         }
     }
-
-    pub(crate) fn max_profile(&self) -> Option<H265Profile> {
-        if self.main.is_some() {
-            Some(H265Profile::Main)
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -255,18 +210,6 @@ impl NativeEncodeH264Capabilities {
             H264Profile::Baseline => self.baseline.as_ref(),
             H264Profile::Main => self.main.as_ref(),
             H264Profile::High => self.high.as_ref(),
-        }
-    }
-
-    pub(crate) fn max_profile(&self) -> Option<H264Profile> {
-        if self.high.is_some() {
-            Some(H264Profile::High)
-        } else if self.main.is_some() {
-            Some(H264Profile::Main)
-        } else if self.baseline.is_some() {
-            Some(H264Profile::Baseline)
-        } else {
-            None
         }
     }
 }
@@ -358,7 +301,7 @@ impl NativeEncodeProfileCapabilities<H264Codec> {
             max_width: self.video_capabilities.max_coded_extent.width,
             min_height: self.video_capabilities.min_coded_extent.height,
             max_height: self.video_capabilities.max_coded_extent.height,
-            supported_rate_control: self.encode_capabilities.rate_control_modes,
+            rate_control: self.encode_capabilities.rate_control_modes.into(),
             max_references: self
                 .codec_encode_capabilities
                 .max_p_picture_l0_reference_count,
@@ -374,11 +317,20 @@ impl NativeEncodeProfileCapabilities<H265Codec> {
             max_width: self.video_capabilities.max_coded_extent.width,
             min_height: self.video_capabilities.min_coded_extent.height,
             max_height: self.video_capabilities.max_coded_extent.height,
-            supported_rate_control: self.encode_capabilities.rate_control_modes,
+            rate_control: self.encode_capabilities.rate_control_modes.into(),
             max_references: self
                 .codec_encode_capabilities
                 .max_p_picture_l0_reference_count,
             quality_levels: self.encode_capabilities.max_quality_levels,
+        }
+    }
+}
+
+impl From<vk::VideoEncodeRateControlModeFlagsKHR> for RateControlCapabilities {
+    fn from(flags: vk::VideoEncodeRateControlModeFlagsKHR) -> Self {
+        Self {
+            vbr_supported: flags.contains(vk::VideoEncodeRateControlModeFlagsKHR::VBR),
+            cbr_supported: flags.contains(vk::VideoEncodeRateControlModeFlagsKHR::CBR),
         }
     }
 }
@@ -440,61 +392,6 @@ impl<C: CodecCapabilities> NativeEncodeQualityLevelProperties<C> {
                 == 0
             && self.codec_quality_level_properties.zeroed()
     }
-}
-
-/// The device capabilities for decoding
-#[derive(Debug, Clone, Copy)]
-pub struct DecodeCapabilities {
-    pub h264: Option<DecodeH264Capabilities>,
-    pub h265: Option<DecodeH265Capabilities>,
-}
-
-/// The device capabilities for H265 decoding.
-///
-/// See [`H265Profile`] for information about what profiles are.
-#[derive(Debug, Clone, Copy)]
-pub struct DecodeH265Capabilities {
-    pub main_profile: Option<DecodeH265ProfileCapabilities>,
-}
-
-/// The device capabilities for H265 decoding in a specific profile
-#[derive(Debug, Clone, Copy)]
-pub struct DecodeH265ProfileCapabilities {
-    /// The minimum width of the coded image
-    pub min_width: u32,
-    /// The maximum width of the coded image
-    pub max_width: u32,
-    /// The minimum height of the coded image
-    pub min_height: u32,
-    /// The maximum height of the coded image
-    pub max_height: u32,
-    /// The maximum H265 level
-    pub max_level_idc: u8,
-}
-
-/// The device capabilities for H264 decoding.
-///
-/// See [`H264Profile`] for information about what profiles are.
-#[derive(Debug, Clone, Copy)]
-pub struct DecodeH264Capabilities {
-    pub baseline_profile: Option<DecodeH264ProfileCapabilities>,
-    pub main_profile: Option<DecodeH264ProfileCapabilities>,
-    pub high_profile: Option<DecodeH264ProfileCapabilities>,
-}
-
-/// The device capabilities for H264 decoding in a specific profile
-#[derive(Debug, Clone, Copy)]
-pub struct DecodeH264ProfileCapabilities {
-    /// The minimum width of the coded image
-    pub min_width: u32,
-    /// The maximum width of the coded image
-    pub max_width: u32,
-    /// The minimum height of the coded image
-    pub min_height: u32,
-    /// The maximum height of the coded image
-    pub max_height: u32,
-    /// The maximum H264 level
-    pub max_level_idc: u8,
 }
 
 #[derive(Debug, Clone)]

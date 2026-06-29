@@ -6,16 +6,17 @@ use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
 
+use crate::backends::vulkan::{VulkanCommonError, wrappers::*};
 use crate::{
     RawFrameData,
-    codec::h264::parameters::SeqParameterSetExt as _,
-    device::{ColorRange, ColorSpace, DecodingDevice},
+    backends::vulkan::codec::h264::parameters::SeqParameterSetExt as _,
+    backends::vulkan::vulkan_device::DecodingDevice,
+    device::{ColorRange, ColorSpace},
     parser::{
         decoder_instructions::DecoderInstruction,
         reference_manager::{DecodeInformation, ReferenceId},
     },
 };
-use crate::{VulkanCommonError, wrappers::*};
 
 mod frame_sorter;
 mod session_resources;
