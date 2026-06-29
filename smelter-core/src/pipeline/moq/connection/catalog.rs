@@ -104,6 +104,7 @@ fn find_first_video(video: &hang::catalog::Video) -> Result<Option<VideoTrack>, 
 
     let codec = match &config.codec {
         MoqVideoCodec::H264(_) => VideoCodec::H264,
+        MoqVideoCodec::VP8 => VideoCodec::Vp8,
         _ => {
             warn!("Unsupported video codec. Use H264.");
             return Ok(None);
@@ -115,8 +116,8 @@ fn find_first_video(video: &hang::catalog::Video) -> Result<Option<VideoTrack>, 
         CatalogContainer::Loc => Container::Loc,
     };
 
-    let description = match (&config.description, &container) {
-        (None, Container::Cmaf(wire)) => match extract_codec_description(wire) {
+    let description = match (&config.description, &codec, &container) {
+        (None, VideoCodec::H264, Container::Cmaf(wire)) => match extract_codec_description(wire) {
             Ok(desc) => Some(desc),
             Err(error) => {
                 warn!(%error, "Failed to extract video decoder config from container; skipping video track.");
