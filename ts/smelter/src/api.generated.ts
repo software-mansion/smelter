@@ -19,267 +19,289 @@ export type ApiTypes =
   | StatsReport;
 export type RegisterInput =
   | {
-    type: "rtp_stream";
-    /**
-     * UDP port or port range on which the compositor should listen for the stream.
-     */
-    port: PortOrPortRange;
-    /**
-     * Transport protocol.
-     */
-    transport_protocol?: TransportProtocol | null;
-    /**
-     * Parameters of a video source included in the RTP stream.
-     */
-    video?: InputRtpVideoOptions | null;
-    /**
-     * Parameters of an audio source included in the RTP stream.
-     */
-    audio?: InputRtpAudioOptions | null;
-    /**
-     * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
-     */
-    required?: boolean | null;
-    /**
-     * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
-     */
-    offset_ms?: number | null;
-    /**
-     * Size of the jitter buffer in milliseconds. Controls how long packets are held to absorb network jitter and reorder out-of-order packets. Higher values increase latency but improve resilience to packet loss and reordering.
-     */
-    buffer_size_ms?: number | null;
-    /**
-     * Enable side channel for video and/or audio track.
-     */
-    side_channel?: SideChannel | null;
-  }
+      type: "rtp_stream";
+      /**
+       * UDP port or port range on which the compositor should listen for the stream.
+       */
+      port: PortOrPortRange;
+      /**
+       * Transport protocol.
+       */
+      transport_protocol?: TransportProtocol | null;
+      /**
+       * Parameters of a video source included in the RTP stream.
+       */
+      video?: InputRtpVideoOptions | null;
+      /**
+       * Parameters of an audio source included in the RTP stream.
+       */
+      audio?: InputRtpAudioOptions | null;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
+       */
+      offset_ms?: number | null;
+      /**
+       * Size of the jitter buffer in milliseconds. Controls how long packets are held to absorb network jitter and reorder out-of-order packets. Higher values increase latency but improve resilience to packet loss and reordering.
+       */
+      buffer_size_ms?: number | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
   | {
-    type: "rtmp_server";
-    /**
-     * The RTMP stream key.
-     *
-     * In most RTMP clients you will need to provide url in following format `rtmp://<ip_address>:<port>/<input_id>/<stream_key>`
-     */
-    stream_key: string;
-    /**
-     * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
-     */
-    required?: boolean | null;
-    /**
-     * Assigns which decoder should be used for media encoded with a specific codec.
-     */
-    decoder_map?: {
-      [k: string]: RtmpVideoDecoderOptions;
-    } | null;
-    /**
-     * Enable side channel for video and/or audio track.
-     */
-    side_channel?: SideChannel | null;
-  }
+      type: "rtmp_server";
+      /**
+       * The RTMP stream key.
+       *
+       * In most RTMP clients you will need to provide url in following format `rtmp://<ip_address>:<port>/<input_id>/<stream_key>`
+       */
+      stream_key: string;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Assigns which decoder should be used for media encoded with a specific codec.
+       */
+      decoder_map?: {
+        [k: string]: RtmpVideoDecoderOptions;
+      } | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
   | {
-    type: "mp4";
-    /**
-     * URL of the MP4 file.
-     */
-    url?: string | null;
-    /**
-     * Path to the MP4 file.
-     */
-    path?: string | null;
-    /**
-     * (**default=`false`**) If input should be played in the loop. <span class="badge badge--primary">Added in v0.4.0</span>
-     */
-    loop?: boolean | null;
-    /**
-     * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
-     */
-    required?: boolean | null;
-    /**
-     * Offset in milliseconds relative to the pipeline start (start request). If offset is not defined then stream is synchronized based on the first frames delivery time.
-     */
-    offset_ms?: number | null;
-    /**
-     * Start playing from a specific timestamp in milliseconds. If loop is enabled after first iteration is done it will start from the beginning.
-     */
-    seek_ms?: number | null;
-    /**
-     * Assigns which decoder should be used for media encoded with a specific codec.
-     */
-    decoder_map?: {
-      [k: string]: Mp4VideoDecoderOptions;
-    } | null;
-    /**
-     * Enable side channel for video and/or audio track.
-     */
-    side_channel?: SideChannel | null;
-  }
+      type: "moq_server";
+      /**
+       * Token used for authentication in MoQ server input. The broadcaster must provide it as a `token` query parameter when connecting
+       */
+      auth_token: string;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Assigns which decoder should be used for media encoded with a specific codec.
+       */
+      decoder_map?: {
+        [k: string]: MoqVideoDecoderOptions;
+      } | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
   | {
-    type: "whip_server";
-    /**
-     * Parameters of a video source included in the RTP stream.
-     */
-    video?: InputWhipVideoOptions | null;
-    /**
-     * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
-     */
-    bearer_token?: string | null;
-    /**
-     * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
-     */
-    required?: boolean | null;
-    /**
-     * Minimum and starting size of the jitter buffer in milliseconds. The buffer adapts dynamically based on observed network jitter but will not shrink below this value. Higher values trade latency for resilience.
-     */
-    buffer_size_ms?: number | null;
-    /**
-     * Enable side channel for video and/or audio track.
-     */
-    side_channel?: SideChannel | null;
-  }
+      type: "mp4";
+      /**
+       * URL of the MP4 file.
+       */
+      url?: string | null;
+      /**
+       * Path to the MP4 file.
+       */
+      path?: string | null;
+      /**
+       * (**default=`false`**) If input should be played in the loop. <span class="badge badge--primary">Added in v0.4.0</span>
+       */
+      loop?: boolean | null;
+      /**
+       * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request). If offset is not defined then stream is synchronized based on the first frames delivery time.
+       */
+      offset_ms?: number | null;
+      /**
+       * Start playing from a specific timestamp in milliseconds. If loop is enabled after first iteration is done it will start from the beginning.
+       */
+      seek_ms?: number | null;
+      /**
+       * Assigns which decoder should be used for media encoded with a specific codec.
+       */
+      decoder_map?: {
+        [k: string]: Mp4VideoDecoderOptions;
+      } | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
   | {
-    type: "whep_client";
-    /**
-     * WHEP server endpoint URL
-     */
-    endpoint_url: string;
-    /**
-     * Optional Bearer token for auth
-     */
-    bearer_token?: string | null;
-    /**
-     * Parameters of a video source included in the RTP stream.
-     */
-    video?: InputWhepVideoOptions | null;
-    /**
-     * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
-     */
-    required?: boolean | null;
-    /**
-     * Minimum and starting size of the jitter buffer in milliseconds. The buffer adapts dynamically based on observed network jitter but will not shrink below this value. Higher values trade latency for resilience.
-     */
-    buffer_size_ms?: number | null;
-    /**
-     * Enable side channel for video and/or audio track.
-     */
-    side_channel?: SideChannel | null;
-  }
+      type: "whip_server";
+      /**
+       * Parameters of a video source included in the RTP stream.
+       */
+      video?: InputWhipVideoOptions | null;
+      /**
+       * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
+       */
+      bearer_token?: string | null;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Minimum and starting size of the jitter buffer in milliseconds. The buffer adapts dynamically based on observed network jitter but will not shrink below this value. Higher values trade latency for resilience.
+       */
+      buffer_size_ms?: number | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
   | {
-    type: "hls";
-    /**
-     * URL to HLS playlist
-     */
-    url: string;
-    /**
-     * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
-     */
-    required?: boolean | null;
-    /**
-     * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
-     */
-    offset_ms?: number | null;
-    /**
-     * Assigns which decoder should be used for media encoded with a specific codec.
-     */
-    decoder_map?: {
-      [k: string]: HlsVideoDecoderOptions;
-    } | null;
-    /**
-     * Enable side channel for video and/or audio track.
-     */
-    side_channel?: SideChannel | null;
-  }
+      type: "whep_client";
+      /**
+       * WHEP server endpoint URL
+       */
+      endpoint_url: string;
+      /**
+       * Optional Bearer token for auth
+       */
+      bearer_token?: string | null;
+      /**
+       * Parameters of a video source included in the RTP stream.
+       */
+      video?: InputWhepVideoOptions | null;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Minimum and starting size of the jitter buffer in milliseconds. The buffer adapts dynamically based on observed network jitter but will not shrink below this value. Higher values trade latency for resilience.
+       */
+      buffer_size_ms?: number | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
   | {
-    type: "v4l2";
-    /**
-     * Path to the V4L2 device.
-     *
-     * Typically looks like either of: - `/dev/video[N]`, where `[N]` is the OS-assigned device number - `/dev/v4l/by-id/[ID]`, where `[ID]` is the unique device id - `/dev/v4l/by-path/[PATH]`, where `[PATH]` is the PCI/USB device path
-     *
-     * While the numbers assigned in `/dev/video<N>` paths can differ depending on device detection order, the `by-id` paths are always the same for a given device, and the `by-path` paths should be the same for specific ports.
-     */
-    path: string;
-    /**
-     * The format that will be negotiated with the device.
-     */
-    format: V4L2InputFormat;
-    /**
-     * The requested resolution that will be negotiated with the device. If not provided, the input will use the default resolution for the given format.
-     */
-    resolution?: Resolution | null;
-    /**
-     * The framerate that will be negotiated with the device.
-     *
-     * Must be either an unsigned integer, or a string in the \"NUM/DEN\" format, where NUM and DEN are both unsigned integers. If not provided, the input will use the default framerate for the given format and resolution.
-     */
-    framerate?: Framerate | null;
-    /**
-     * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
-     */
-    required?: boolean | null;
-    /**
-     * Enable side channel for video and/or audio track.
-     */
-    side_channel?: SideChannel | null;
-  }
+      type: "hls";
+      /**
+       * URL to HLS playlist
+       */
+      url: string;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
+       */
+      offset_ms?: number | null;
+      /**
+       * Assigns which decoder should be used for media encoded with a specific codec.
+       */
+      decoder_map?: {
+        [k: string]: HlsVideoDecoderOptions;
+      } | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
   | {
-    type: "decklink";
-    /**
-     * Single DeckLink device can consist of multiple sub-devices. This field defines index of sub-device that should be used.
-     *
-     * The input device is selected based on fields `subdevice_index`, `persistent_id` **AND** `display_name`. All of them need to match the device if they are specified. If nothing is matched, the error response will list available devices.
-     */
-    subdevice_index?: number | null;
-    /**
-     * Select sub-device to use based on the display name. This is the value you see in e.g. Blackmagic Media Express app. like "DeckLink Quad HDMI Recorder (3)"
-     *
-     * The input device is selected based on fields `subdevice_index`, `persistent_id` **AND** `display_name`. All of them need to match the device if they are specified. If nothing is matched, the error response will list available devices.
-     */
-    display_name?: string | null;
-    /**
-     * Persistent ID of a device represented by 32-bit hex number. Each DeckLink sub-device has a separate id.
-     *
-     * The input device is selected based on fields `subdevice_index`, `persistent_id` **AND** `display_name`. All of them need to match the device if they are specified. If nothing is matched, the error response will list available devices.
-     */
-    persistent_id?: string | null;
-    /**
-     * (**default=`true`**) Enable audio support.
-     */
-    enable_audio?: boolean | null;
-    /**
-     * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
-     */
-    required?: boolean | null;
-    /**
-     * Enable side channel for video and/or audio track.
-     */
-    side_channel?: SideChannel | null;
-  };
+      type: "v4l2";
+      /**
+       * Path to the V4L2 device.
+       *
+       * Typically looks like either of: - `/dev/video[N]`, where `[N]` is the OS-assigned device number - `/dev/v4l/by-id/[ID]`, where `[ID]` is the unique device id - `/dev/v4l/by-path/[PATH]`, where `[PATH]` is the PCI/USB device path
+       *
+       * While the numbers assigned in `/dev/video<N>` paths can differ depending on device detection order, the `by-id` paths are always the same for a given device, and the `by-path` paths should be the same for specific ports.
+       */
+      path: string;
+      /**
+       * The format that will be negotiated with the device.
+       */
+      format: V4L2InputFormat;
+      /**
+       * The requested resolution that will be negotiated with the device. If not provided, the input will use the default resolution for the given format.
+       */
+      resolution?: Resolution | null;
+      /**
+       * The framerate that will be negotiated with the device.
+       *
+       * Must be either an unsigned integer, or a string in the \"NUM/DEN\" format, where NUM and DEN are both unsigned integers. If not provided, the input will use the default framerate for the given format and resolution.
+       */
+      framerate?: Framerate | null;
+      /**
+       * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
+  | {
+      type: "decklink";
+      /**
+       * Single DeckLink device can consist of multiple sub-devices. This field defines index of sub-device that should be used.
+       *
+       * The input device is selected based on fields `subdevice_index`, `persistent_id` **AND** `display_name`. All of them need to match the device if they are specified. If nothing is matched, the error response will list available devices.
+       */
+      subdevice_index?: number | null;
+      /**
+       * Select sub-device to use based on the display name. This is the value you see in e.g. Blackmagic Media Express app. like "DeckLink Quad HDMI Recorder (3)"
+       *
+       * The input device is selected based on fields `subdevice_index`, `persistent_id` **AND** `display_name`. All of them need to match the device if they are specified. If nothing is matched, the error response will list available devices.
+       */
+      display_name?: string | null;
+      /**
+       * Persistent ID of a device represented by 32-bit hex number. Each DeckLink sub-device has a separate id.
+       *
+       * The input device is selected based on fields `subdevice_index`, `persistent_id` **AND** `display_name`. All of them need to match the device if they are specified. If nothing is matched, the error response will list available devices.
+       */
+      persistent_id?: string | null;
+      /**
+       * (**default=`true`**) Enable audio support.
+       */
+      enable_audio?: boolean | null;
+      /**
+       * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    };
 export type PortOrPortRange = string | number;
 export type TransportProtocol = "udp" | "tcp_server";
 export type RtpVideoDecoderOptions = "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type InputRtpAudioOptions =
   | {
-    decoder: "opus";
-  }
+      decoder: "opus";
+    }
   | {
-    decoder: "aac";
-    /**
-     * AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1 The config should be encoded as described in [RFC 3640](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).
-     *
-     * The simplest way to obtain this value when using ffmpeg to stream to the compositor is to pass the additional `-sdp_file FILENAME` option to ffmpeg. This will cause it to write out an sdp file, which will contain this field. Programs which have the ability to stream AAC to the compositor should provide this information.
-     *
-     * In MP4 files, the ASC is embedded inside the esds box (note that it is not the whole box, only a part of it). This also applies to fragmented MP4s downloaded over HLS, if the playlist uses MP4s instead of MPEG Transport Streams
-     *
-     * In FLV files and the RTMP protocol, the ASC can be found in the `AACAUDIODATA` tag.
-     */
-    audio_specific_config: string;
-    /**
-     * (**default=`"high_bitrate"`**) Specifies the [RFC 3640 mode](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that should be used when depacketizing this stream.
-     */
-    rtp_mode?: AacRtpMode | null;
-  };
+      decoder: "aac";
+      /**
+       * AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1 The config should be encoded as described in [RFC 3640](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).
+       *
+       * The simplest way to obtain this value when using ffmpeg to stream to the compositor is to pass the additional `-sdp_file FILENAME` option to ffmpeg. This will cause it to write out an sdp file, which will contain this field. Programs which have the ability to stream AAC to the compositor should provide this information.
+       *
+       * In MP4 files, the ASC is embedded inside the esds box (note that it is not the whole box, only a part of it). This also applies to fragmented MP4s downloaded over HLS, if the playlist uses MP4s instead of MPEG Transport Streams
+       *
+       * In FLV files and the RTMP protocol, the ASC can be found in the `AACAUDIODATA` tag.
+       */
+      audio_specific_config: string;
+      /**
+       * (**default=`"high_bitrate"`**) Specifies the [RFC 3640 mode](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that should be used when depacketizing this stream.
+       */
+      rtp_mode?: AacRtpMode | null;
+    };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
 export type RtmpVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type MoqVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type WhepVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
@@ -288,196 +310,196 @@ export type V4L2InputFormat = "yuyv" | "nv12";
 export type Framerate = string | number;
 export type RegisterOutput =
   | {
-    type: "rtp_stream";
-    /**
-     * Depends on the value of the `transport_protocol` field: - `udp` - An UDP port number that RTP packets will be sent to. - `tcp_server` - A local TCP port number or a port range that Smelter will listen for incoming connections.
-     */
-    port: PortOrPortRange;
-    /**
-     * IP address to which RTP packets should be sent. This field is only valid if `transport_protocol` field is set to `udp`.
-     */
-    ip?: string | null;
-    /**
-     * (**default=`"udp"`**) Transport layer protocol that will be used to send RTP packets.
-     */
-    transport_protocol?: TransportProtocol | null;
-    /**
-     * Parameters of a video included in the RTP stream.
-     */
-    video?: OutputRtpVideoOptions | null;
-    /**
-     * Parameters of an audio included in the RTP stream.
-     */
-    audio?: OutputRtpAudioOptions | null;
-  }
+      type: "rtp_stream";
+      /**
+       * Depends on the value of the `transport_protocol` field: - `udp` - An UDP port number that RTP packets will be sent to. - `tcp_server` - A local TCP port number or a port range that Smelter will listen for incoming connections.
+       */
+      port: PortOrPortRange;
+      /**
+       * IP address to which RTP packets should be sent. This field is only valid if `transport_protocol` field is set to `udp`.
+       */
+      ip?: string | null;
+      /**
+       * (**default=`"udp"`**) Transport layer protocol that will be used to send RTP packets.
+       */
+      transport_protocol?: TransportProtocol | null;
+      /**
+       * Parameters of a video included in the RTP stream.
+       */
+      video?: OutputRtpVideoOptions | null;
+      /**
+       * Parameters of an audio included in the RTP stream.
+       */
+      audio?: OutputRtpAudioOptions | null;
+    }
   | {
-    type: "rtmp_client";
-    /**
-     * RTMP endpoint url.
-     */
-    url: string;
-    /**
-     * Video stream configuration.
-     */
-    video?: OutputRtmpClientVideoOptions | null;
-    /**
-     * Audio stream configuration.
-     */
-    audio?: OutputRtmpClientAudioOptions | null;
-  }
+      type: "rtmp_client";
+      /**
+       * RTMP endpoint url.
+       */
+      url: string;
+      /**
+       * Video stream configuration.
+       */
+      video?: OutputRtmpClientVideoOptions | null;
+      /**
+       * Audio stream configuration.
+       */
+      audio?: OutputRtmpClientAudioOptions | null;
+    }
   | {
-    type: "mp4";
-    /**
-     * Path to output MP4 file.
-     */
-    path: string;
-    /**
-     * Video stream configuration.
-     */
-    video?: OutputMp4VideoOptions | null;
-    /**
-     * Audio stream configuration.
-     */
-    audio?: OutputMp4AudioOptions | null;
-    /**
-     * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "mp4";
+      /**
+       * Path to output MP4 file.
+       */
+      path: string;
+      /**
+       * Video stream configuration.
+       */
+      video?: OutputMp4VideoOptions | null;
+      /**
+       * Audio stream configuration.
+       */
+      audio?: OutputMp4AudioOptions | null;
+      /**
+       * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "whip_client";
-    /**
-     * WHIP server endpoint
-     */
-    endpoint_url: string;
-    bearer_token?: string | null;
-    /**
-     * Video track configuration.
-     */
-    video?: OutputWhipVideoOptions | null;
-    /**
-     * Audio track configuration.
-     */
-    audio?: OutputWhipAudioOptions | null;
-  }
+      type: "whip_client";
+      /**
+       * WHIP server endpoint
+       */
+      endpoint_url: string;
+      bearer_token?: string | null;
+      /**
+       * Video track configuration.
+       */
+      video?: OutputWhipVideoOptions | null;
+      /**
+       * Audio track configuration.
+       */
+      audio?: OutputWhipAudioOptions | null;
+    }
   | {
-    type: "whep_server";
-    /**
-     * Token used for authentication in WHEP protocol. If not provided, the bearer token is not required to establish the session.
-     */
-    bearer_token?: string | null;
-    /**
-     * Video track configuration.
-     */
-    video?: OutputWhepVideoOptions | null;
-    /**
-     * Audio track configuration.
-     */
-    audio?: OutputWhepAudioOptions | null;
-  }
+      type: "whep_server";
+      /**
+       * Token used for authentication in WHEP protocol. If not provided, the bearer token is not required to establish the session.
+       */
+      bearer_token?: string | null;
+      /**
+       * Video track configuration.
+       */
+      video?: OutputWhepVideoOptions | null;
+      /**
+       * Audio track configuration.
+       */
+      audio?: OutputWhepAudioOptions | null;
+    }
   | {
-    type: "hls";
-    /**
-     * Path to output HLS playlist.
-     */
-    path: string;
-    /**
-     * Number of segments kept in the playlist. When the limit is reached the oldest segment is removed. If not specified, no segments will removed.
-     */
-    max_playlist_size?: number | null;
-    /**
-     * Video track configuration.
-     */
-    video?: OutputHlsVideoOptions | null;
-    /**
-     * Audio track configuration.
-     */
-    audio?: OutputHlsAudioOptions | null;
-    /**
-     * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more. Note: keys here may override defaults, including `hls_list_size` derived from `max_playlist_size`.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  };
+      type: "hls";
+      /**
+       * Path to output HLS playlist.
+       */
+      path: string;
+      /**
+       * Number of segments kept in the playlist. When the limit is reached the oldest segment is removed. If not specified, no segments will removed.
+       */
+      max_playlist_size?: number | null;
+      /**
+       * Video track configuration.
+       */
+      video?: OutputHlsVideoOptions | null;
+      /**
+       * Audio track configuration.
+       */
+      audio?: OutputHlsAudioOptions | null;
+      /**
+       * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more. Note: keys here may override defaults, including `hls_list_size` derived from `max_playlist_size`.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    };
 export type InputId = string;
 export type RtpVideoEncoderOptions =
   | {
-    type: "ffmpeg_h264";
-    /**
-     * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
-     */
-    preset?: H264EncoderPreset | null;
-    /**
-     * Encoding bitrate. Default value depends on chosen encoder.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format.
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "ffmpeg_vp8";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_vp8";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "ffmpeg_vp9";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format.
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_vp9";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "vulkan_h264";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-  };
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+    };
 export type H264EncoderPreset =
   | "ultrafast"
   | "superfast"
@@ -492,369 +514,369 @@ export type H264EncoderPreset =
 export type VideoEncoderBitrate =
   | number
   | {
-    /**
-     * Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average, but may temporarily increase it to the provided max bitrate.
-     */
-    average_bitrate: number;
-    /**
-     * Max bitrate measured in bits/second.
-     */
-    max_bitrate: number;
-  };
+      /**
+       * Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average, but may temporarily increase it to the provided max bitrate.
+       */
+      average_bitrate: number;
+      /**
+       * Max bitrate measured in bits/second.
+       */
+      max_bitrate: number;
+    };
 export type PixelFormat = "yuv420p" | "yuv422p" | "yuv444p";
 export type Component =
   | {
-    type: "input_stream";
-    /**
-     * Id of a component.
-     */
-    id?: ComponentId | null;
-    /**
-     * Id of an input. It identifies a stream registered using a [`RegisterInputStream`](../routes.md#register-input) request.
-     */
-    input_id: InputId;
-  }
+      type: "input_stream";
+      /**
+       * Id of a component.
+       */
+      id?: ComponentId | null;
+      /**
+       * Id of an input. It identifies a stream registered using a [`RegisterInputStream`](../routes.md#register-input) request.
+       */
+      input_id: InputId;
+    }
   | {
-    type: "view";
-    /**
-     * Id of a component.
-     */
-    id?: ComponentId | null;
-    /**
-     * List of component's children.
-     */
-    children?: Component[] | null;
-    /**
-     * Width of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
-     */
-    width?: number | null;
-    /**
-     * Height of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
-     */
-    height?: number | null;
-    /**
-     * Direction defines how static children are positioned inside a View component.
-     */
-    direction?: ViewDirection | null;
-    /**
-     * Distance in pixels between this component's top edge and its parent's top edge (including a border). If this field is defined, then the component will ignore a layout defined by its parent.
-     */
-    top?: number | null;
-    /**
-     * Distance in pixels between this component's left edge and its parent's left edge (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
-     */
-    left?: number | null;
-    /**
-     * Distance in pixels between the bottom edge of this component and the bottom edge of its parent (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
-     */
-    bottom?: number | null;
-    /**
-     * Distance in pixels between this component's right edge and its parent's right edge. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
-     */
-    right?: number | null;
-    /**
-     * Rotation of a component in degrees. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
-     */
-    rotation?: number | null;
-    /**
-     * Defines how this component will behave during a scene update. This will only have an effect if the previous scene already contained a `View` component with the same id.
-     */
-    transition?: Transition | null;
-    /**
-     * (**default=`"hidden"`**) Controls what happens to content that is too big to fit into an area.
-     */
-    overflow?: Overflow | null;
-    /**
-     * (**default=`"#00000000"`**) Background color in a `"#RRGGBBAA"` format.
-     */
-    background_color?: RGBAColor | null;
-    /**
-     * (**default=`0.0`**) Radius of a rounded corner.
-     */
-    border_radius?: number | null;
-    /**
-     * (**default=`0.0`**) Border width.
-     */
-    border_width?: number | null;
-    /**
-     * (**default=`"#00000000"`**) Border color in a `"#RRGGBBAA"` format.
-     */
-    border_color?: RGBAColor | null;
-    /**
-     * List of box shadows.
-     */
-    box_shadow?: BoxShadow[] | null;
-    /**
-     * (**default=`0.0`**) Padding for all sides of the component.
-     */
-    padding?: number | null;
-    /**
-     * (**default=`0.0`**) Padding for the top and bottom of the component.
-     */
-    padding_vertical?: number | null;
-    /**
-     * (**default=`0.0`**) Padding for the left and right of the component.
-     */
-    padding_horizontal?: number | null;
-    /**
-     * (**default=`0.0`**) Padding on top side in pixels.
-     */
-    padding_top?: number | null;
-    /**
-     * (**default=`0.0`**) Padding on right side in pixels.
-     */
-    padding_right?: number | null;
-    /**
-     * (**default=`0.0`**) Padding on bottom side in pixels.
-     */
-    padding_bottom?: number | null;
-    /**
-     * (**default=`0.0`**) Padding on left side in pixels.
-     */
-    padding_left?: number | null;
-  }
+      type: "view";
+      /**
+       * Id of a component.
+       */
+      id?: ComponentId | null;
+      /**
+       * List of component's children.
+       */
+      children?: Component[] | null;
+      /**
+       * Width of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
+       */
+      width?: number | null;
+      /**
+       * Height of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
+       */
+      height?: number | null;
+      /**
+       * Direction defines how static children are positioned inside a View component.
+       */
+      direction?: ViewDirection | null;
+      /**
+       * Distance in pixels between this component's top edge and its parent's top edge (including a border). If this field is defined, then the component will ignore a layout defined by its parent.
+       */
+      top?: number | null;
+      /**
+       * Distance in pixels between this component's left edge and its parent's left edge (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
+       */
+      left?: number | null;
+      /**
+       * Distance in pixels between the bottom edge of this component and the bottom edge of its parent (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
+       */
+      bottom?: number | null;
+      /**
+       * Distance in pixels between this component's right edge and its parent's right edge. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
+       */
+      right?: number | null;
+      /**
+       * Rotation of a component in degrees. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
+       */
+      rotation?: number | null;
+      /**
+       * Defines how this component will behave during a scene update. This will only have an effect if the previous scene already contained a `View` component with the same id.
+       */
+      transition?: Transition | null;
+      /**
+       * (**default=`"hidden"`**) Controls what happens to content that is too big to fit into an area.
+       */
+      overflow?: Overflow | null;
+      /**
+       * (**default=`"#00000000"`**) Background color in a `"#RRGGBBAA"` format.
+       */
+      background_color?: RGBAColor | null;
+      /**
+       * (**default=`0.0`**) Radius of a rounded corner.
+       */
+      border_radius?: number | null;
+      /**
+       * (**default=`0.0`**) Border width.
+       */
+      border_width?: number | null;
+      /**
+       * (**default=`"#00000000"`**) Border color in a `"#RRGGBBAA"` format.
+       */
+      border_color?: RGBAColor | null;
+      /**
+       * List of box shadows.
+       */
+      box_shadow?: BoxShadow[] | null;
+      /**
+       * (**default=`0.0`**) Padding for all sides of the component.
+       */
+      padding?: number | null;
+      /**
+       * (**default=`0.0`**) Padding for the top and bottom of the component.
+       */
+      padding_vertical?: number | null;
+      /**
+       * (**default=`0.0`**) Padding for the left and right of the component.
+       */
+      padding_horizontal?: number | null;
+      /**
+       * (**default=`0.0`**) Padding on top side in pixels.
+       */
+      padding_top?: number | null;
+      /**
+       * (**default=`0.0`**) Padding on right side in pixels.
+       */
+      padding_right?: number | null;
+      /**
+       * (**default=`0.0`**) Padding on bottom side in pixels.
+       */
+      padding_bottom?: number | null;
+      /**
+       * (**default=`0.0`**) Padding on left side in pixels.
+       */
+      padding_left?: number | null;
+    }
   | {
-    type: "web_view";
-    /**
-     * Id of a component.
-     */
-    id?: ComponentId | null;
-    /**
-     * List of component's children.
-     */
-    children?: Component[] | null;
-    /**
-     * Id of a web renderer instance. It identifies an instance registered using a [`register web renderer`](../routes.md#register-web-renderer-instance) request.
-     *
-     * :::warning You can only refer to specific instances in one Component at a time. :::
-     */
-    instance_id: RendererId;
-  }
+      type: "web_view";
+      /**
+       * Id of a component.
+       */
+      id?: ComponentId | null;
+      /**
+       * List of component's children.
+       */
+      children?: Component[] | null;
+      /**
+       * Id of a web renderer instance. It identifies an instance registered using a [`register web renderer`](../routes.md#register-web-renderer-instance) request.
+       *
+       * :::warning You can only refer to specific instances in one Component at a time. :::
+       */
+      instance_id: RendererId;
+    }
   | {
-    type: "shader";
-    /**
-     * Id of a component.
-     */
-    id?: ComponentId | null;
-    /**
-     * List of component's children.
-     */
-    children?: Component[] | null;
-    /**
-     * Id of a shader. It identifies a shader registered using a [`register shader`](../routes.md#register-shader) request.
-     */
-    shader_id: RendererId;
-    /**
-     * Object that will be serialized into a `struct` and passed inside the shader as:
-     *
-     * ```wgsl @group(1) @binding(0) var<uniform> ``` :::note This object's structure must match the structure defined in a shader source code. Currently, we do not handle memory layout automatically. To achieve the correct memory alignment, you might need to pad your data with additional fields. See [WGSL documentation](https://www.w3.org/TR/WGSL/#alignment-and-size) for more details. :::
-     */
-    shader_param?: ShaderParam | null;
-    /**
-     * Resolution of a texture where shader will be executed.
-     */
-    resolution: Resolution;
-  }
+      type: "shader";
+      /**
+       * Id of a component.
+       */
+      id?: ComponentId | null;
+      /**
+       * List of component's children.
+       */
+      children?: Component[] | null;
+      /**
+       * Id of a shader. It identifies a shader registered using a [`register shader`](../routes.md#register-shader) request.
+       */
+      shader_id: RendererId;
+      /**
+       * Object that will be serialized into a `struct` and passed inside the shader as:
+       *
+       * ```wgsl @group(1) @binding(0) var<uniform> ``` :::note This object's structure must match the structure defined in a shader source code. Currently, we do not handle memory layout automatically. To achieve the correct memory alignment, you might need to pad your data with additional fields. See [WGSL documentation](https://www.w3.org/TR/WGSL/#alignment-and-size) for more details. :::
+       */
+      shader_param?: ShaderParam | null;
+      /**
+       * Resolution of a texture where shader will be executed.
+       */
+      resolution: Resolution;
+    }
   | {
-    type: "image";
-    /**
-     * Id of a component.
-     */
-    id?: ComponentId | null;
-    /**
-     * Id of an image. It identifies an image registered using a [`register image`](../routes.md#register-image) request.
-     */
-    image_id: RendererId;
-    /**
-     * Width of the image in pixels. If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.
-     */
-    width?: number | null;
-    /**
-     * Height of the image in pixels. If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.
-     */
-    height?: number | null;
-  }
+      type: "image";
+      /**
+       * Id of a component.
+       */
+      id?: ComponentId | null;
+      /**
+       * Id of an image. It identifies an image registered using a [`register image`](../routes.md#register-image) request.
+       */
+      image_id: RendererId;
+      /**
+       * Width of the image in pixels. If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.
+       */
+      width?: number | null;
+      /**
+       * Height of the image in pixels. If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.
+       */
+      height?: number | null;
+    }
   | {
-    type: "text";
-    /**
-     * Id of a component.
-     */
-    id?: ComponentId | null;
-    /**
-     * Text that will be rendered.
-     */
-    text: string;
-    /**
-     * Width of a texture that text will be rendered on. If not provided, the resulting texture will be sized based on the defined text but limited to `max_width` value.
-     */
-    width?: number | null;
-    /**
-     * Height of a texture that text will be rendered on. If not provided, the resulting texture will be sized based on the defined text but limited to `max_height` value. It's an error to provide `height` if `width` is not defined.
-     */
-    height?: number | null;
-    /**
-     * (**default=`7682`**) Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is ignored if `width` is defined.
-     */
-    max_width?: number | null;
-    /**
-     * (**default=`4320`**) Maximal `height`. Limits the height of the texture that the text will be rendered on. Value is ignored if height is defined.
-     */
-    max_height?: number | null;
-    /**
-     * Font size in pixels.
-     */
-    font_size: number;
-    /**
-     * Distance between lines in pixels. Defaults to the value of the `font_size` property.
-     */
-    line_height?: number | null;
-    /**
-     * (**default=`"#FFFFFFFF"`**) Font color in `#RRGGBBAA` format.
-     */
-    color?: RGBAColor | null;
-    /**
-     * (**default=`"#00000000"`**) Background color in `#RRGGBBAA` format.
-     */
-    background_color?: RGBAColor | null;
-    /**
-     * (**default=`"Verdana"`**) Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific font. "generic-family" values like e.g. "sans-serif" will not work.
-     */
-    font_family?: string | null;
-    /**
-     * (**default=`"normal"`**) Font style. The selected font needs to support the specified style.
-     */
-    style?: TextStyle | null;
-    /**
-     * (**default=`"left"`**) Text align.
-     */
-    align?: HorizontalAlign | null;
-    /**
-     * (**default=`"none"`**) Text wrapping options.
-     */
-    wrap?: TextWrapMode | null;
-    /**
-     * (**default=`"normal"`**) Font weight. The selected font needs to support the specified weight.
-     */
-    weight?: TextWeight | null;
-  }
+      type: "text";
+      /**
+       * Id of a component.
+       */
+      id?: ComponentId | null;
+      /**
+       * Text that will be rendered.
+       */
+      text: string;
+      /**
+       * Width of a texture that text will be rendered on. If not provided, the resulting texture will be sized based on the defined text but limited to `max_width` value.
+       */
+      width?: number | null;
+      /**
+       * Height of a texture that text will be rendered on. If not provided, the resulting texture will be sized based on the defined text but limited to `max_height` value. It's an error to provide `height` if `width` is not defined.
+       */
+      height?: number | null;
+      /**
+       * (**default=`7682`**) Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is ignored if `width` is defined.
+       */
+      max_width?: number | null;
+      /**
+       * (**default=`4320`**) Maximal `height`. Limits the height of the texture that the text will be rendered on. Value is ignored if height is defined.
+       */
+      max_height?: number | null;
+      /**
+       * Font size in pixels.
+       */
+      font_size: number;
+      /**
+       * Distance between lines in pixels. Defaults to the value of the `font_size` property.
+       */
+      line_height?: number | null;
+      /**
+       * (**default=`"#FFFFFFFF"`**) Font color in `#RRGGBBAA` format.
+       */
+      color?: RGBAColor | null;
+      /**
+       * (**default=`"#00000000"`**) Background color in `#RRGGBBAA` format.
+       */
+      background_color?: RGBAColor | null;
+      /**
+       * (**default=`"Verdana"`**) Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific font. "generic-family" values like e.g. "sans-serif" will not work.
+       */
+      font_family?: string | null;
+      /**
+       * (**default=`"normal"`**) Font style. The selected font needs to support the specified style.
+       */
+      style?: TextStyle | null;
+      /**
+       * (**default=`"left"`**) Text align.
+       */
+      align?: HorizontalAlign | null;
+      /**
+       * (**default=`"none"`**) Text wrapping options.
+       */
+      wrap?: TextWrapMode | null;
+      /**
+       * (**default=`"normal"`**) Font weight. The selected font needs to support the specified weight.
+       */
+      weight?: TextWeight | null;
+    }
   | {
-    type: "tiles";
-    /**
-     * Id of a component.
-     */
-    id?: ComponentId | null;
-    /**
-     * List of component's children.
-     */
-    children?: Component[] | null;
-    /**
-     * Width of a component in pixels. Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
-     */
-    width?: number | null;
-    /**
-     * Height of a component in pixels. Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
-     */
-    height?: number | null;
-    /**
-     * (**default=`"#00000000"`**) Background color in a `"#RRGGBBAA"` format.
-     */
-    background_color?: RGBAColor | null;
-    /**
-     * (**default=`"16:9"`**) Aspect ratio of a tile in `"W:H"` format, where W and H are integers.
-     */
-    tile_aspect_ratio?: AspectRatio | null;
-    /**
-     * (**default=`0`**) Margin of each tile in pixels.
-     */
-    margin?: number | null;
-    /**
-     * (**default=`0`**) Padding on each tile in pixels.
-     */
-    padding?: number | null;
-    /**
-     * (**default=`"center"`**) Horizontal alignment of tiles.
-     */
-    horizontal_align?: HorizontalAlign | null;
-    /**
-     * (**default=`"center"`**) Vertical alignment of tiles.
-     */
-    vertical_align?: VerticalAlign | null;
-    /**
-     * Defines how this component will behave during a scene update. This will only have an effect if the previous scene already contained a `Tiles` component with the same id.
-     */
-    transition?: Transition | null;
-  }
+      type: "tiles";
+      /**
+       * Id of a component.
+       */
+      id?: ComponentId | null;
+      /**
+       * List of component's children.
+       */
+      children?: Component[] | null;
+      /**
+       * Width of a component in pixels. Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
+       */
+      width?: number | null;
+      /**
+       * Height of a component in pixels. Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
+       */
+      height?: number | null;
+      /**
+       * (**default=`"#00000000"`**) Background color in a `"#RRGGBBAA"` format.
+       */
+      background_color?: RGBAColor | null;
+      /**
+       * (**default=`"16:9"`**) Aspect ratio of a tile in `"W:H"` format, where W and H are integers.
+       */
+      tile_aspect_ratio?: AspectRatio | null;
+      /**
+       * (**default=`0`**) Margin of each tile in pixels.
+       */
+      margin?: number | null;
+      /**
+       * (**default=`0`**) Padding on each tile in pixels.
+       */
+      padding?: number | null;
+      /**
+       * (**default=`"center"`**) Horizontal alignment of tiles.
+       */
+      horizontal_align?: HorizontalAlign | null;
+      /**
+       * (**default=`"center"`**) Vertical alignment of tiles.
+       */
+      vertical_align?: VerticalAlign | null;
+      /**
+       * Defines how this component will behave during a scene update. This will only have an effect if the previous scene already contained a `Tiles` component with the same id.
+       */
+      transition?: Transition | null;
+    }
   | {
-    type: "rescaler";
-    /**
-     * Id of a component.
-     */
-    id?: ComponentId | null;
-    /**
-     * List of component's children.
-     */
-    child: Component;
-    /**
-     * (**default=`"fit"`**) Resize mode:
-     */
-    mode?: RescaleMode | null;
-    /**
-     * (**default=`"center"`**) Horizontal alignment.
-     */
-    horizontal_align?: HorizontalAlign | null;
-    /**
-     * (**default=`"center"`**) Vertical alignment.
-     */
-    vertical_align?: VerticalAlign | null;
-    /**
-     * Width of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
-     */
-    width?: number | null;
-    /**
-     * Height of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
-     */
-    height?: number | null;
-    /**
-     * Distance in pixels between this component's top edge and its parent's top edge (including a border). If this field is defined, then the component will ignore a layout defined by its parent.
-     */
-    top?: number | null;
-    /**
-     * Distance in pixels between this component's left edge and its parent's left edge (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
-     */
-    left?: number | null;
-    /**
-     * Distance in pixels between the bottom edge of this component and the bottom edge of its parent (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
-     */
-    bottom?: number | null;
-    /**
-     * Distance in pixels between this component's right edge and its parent's right edge. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
-     */
-    right?: number | null;
-    /**
-     * Rotation of a component in degrees. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
-     */
-    rotation?: number | null;
-    /**
-     * Defines how this component will behave during a scene update. This will only have an effect if the previous scene already contained a `Rescaler` component with the same id.
-     */
-    transition?: Transition | null;
-    /**
-     * (**default=`0.0`**) Radius of a rounded corner.
-     */
-    border_radius?: number | null;
-    /**
-     * (**default=`0.0`**) Border width.
-     */
-    border_width?: number | null;
-    /**
-     * (**default=`"#00000000"`**) Border color in a `"#RRGGBBAA"` format.
-     */
-    border_color?: RGBAColor | null;
-    /**
-     * List of box shadows.
-     */
-    box_shadow?: BoxShadow[] | null;
-  };
+      type: "rescaler";
+      /**
+       * Id of a component.
+       */
+      id?: ComponentId | null;
+      /**
+       * List of component's children.
+       */
+      child: Component;
+      /**
+       * (**default=`"fit"`**) Resize mode:
+       */
+      mode?: RescaleMode | null;
+      /**
+       * (**default=`"center"`**) Horizontal alignment.
+       */
+      horizontal_align?: HorizontalAlign | null;
+      /**
+       * (**default=`"center"`**) Vertical alignment.
+       */
+      vertical_align?: VerticalAlign | null;
+      /**
+       * Width of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
+       */
+      width?: number | null;
+      /**
+       * Height of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections "Absolute positioning" and "Static positioning" of that component. - If the parent component is not a layout, then this field is required.
+       */
+      height?: number | null;
+      /**
+       * Distance in pixels between this component's top edge and its parent's top edge (including a border). If this field is defined, then the component will ignore a layout defined by its parent.
+       */
+      top?: number | null;
+      /**
+       * Distance in pixels between this component's left edge and its parent's left edge (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
+       */
+      left?: number | null;
+      /**
+       * Distance in pixels between the bottom edge of this component and the bottom edge of its parent (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
+       */
+      bottom?: number | null;
+      /**
+       * Distance in pixels between this component's right edge and its parent's right edge. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
+       */
+      right?: number | null;
+      /**
+       * Rotation of a component in degrees. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.
+       */
+      rotation?: number | null;
+      /**
+       * Defines how this component will behave during a scene update. This will only have an effect if the previous scene already contained a `Rescaler` component with the same id.
+       */
+      transition?: Transition | null;
+      /**
+       * (**default=`0.0`**) Radius of a rounded corner.
+       */
+      border_radius?: number | null;
+      /**
+       * (**default=`0.0`**) Border width.
+       */
+      border_width?: number | null;
+      /**
+       * (**default=`"#00000000"`**) Border color in a `"#RRGGBBAA"` format.
+       */
+      border_color?: RGBAColor | null;
+      /**
+       * List of box shadows.
+       */
+      box_shadow?: BoxShadow[] | null;
+    };
 export type ComponentId = string;
 export type ViewDirection = "row" | "column";
 /**
@@ -864,72 +886,72 @@ export type ViewDirection = "row" | "column";
  */
 export type EasingFunction =
   | {
-    function_name: "linear";
-  }
+      function_name: "linear";
+    }
   | {
-    function_name: "bounce";
-  }
+      function_name: "bounce";
+    }
   | {
-    function_name: "cubic_bezier";
-    /**
-     * @minItems 4
-     * @maxItems 4
-     */
-    points: [number, number, number, number];
-  };
+      function_name: "cubic_bezier";
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      points: [number, number, number, number];
+    };
 export type Overflow = "visible" | "hidden" | "fit";
 export type RGBAColor = string;
 export type RendererId = string;
 export type ShaderParam =
   | {
-    type: "f32";
-    value: number;
-  }
+      type: "f32";
+      value: number;
+    }
   | {
-    type: "u32";
-    value: number;
-  }
+      type: "u32";
+      value: number;
+    }
   | {
-    type: "i32";
-    value: number;
-  }
+      type: "i32";
+      value: number;
+    }
   | {
-    type: "list";
-    value: ShaderParam[];
-  }
+      type: "list";
+      value: ShaderParam[];
+    }
   | {
-    type: "struct";
-    value: ShaderParamStructField[];
-  };
+      type: "struct";
+      value: ShaderParamStructField[];
+    };
 export type ShaderParamStructField = {
   field_name: string;
 } & ShaderParamStructField1;
 export type ShaderParamStructField1 =
   | {
-    type: "f32";
-    value: number;
-    field_name?: string;
-  }
+      type: "f32";
+      value: number;
+      field_name?: string;
+    }
   | {
-    type: "u32";
-    value: number;
-    field_name?: string;
-  }
+      type: "u32";
+      value: number;
+      field_name?: string;
+    }
   | {
-    type: "i32";
-    value: number;
-    field_name?: string;
-  }
+      type: "i32";
+      value: number;
+      field_name?: string;
+    }
   | {
-    type: "list";
-    value: ShaderParam[];
-    field_name?: string;
-  }
+      type: "list";
+      value: ShaderParam[];
+      field_name?: string;
+    }
   | {
-    type: "struct";
-    value: ShaderParamStructField[];
-    field_name?: string;
-  };
+      type: "struct";
+      value: ShaderParamStructField[];
+      field_name?: string;
+    };
 export type TextStyle = "normal" | "italic" | "oblique";
 export type HorizontalAlign = "left" | "right" | "justified" | "center";
 export type TextWrapMode = "none" | "glyph" | "word";
@@ -973,135 +995,135 @@ export type OpusEncoderPreset = "quality" | "voip" | "lowest_latency";
 export type AudioChannels = "mono" | "stereo";
 export type RtmpClientVideoEncoderOptions =
   | {
-    type: "ffmpeg_h264";
-    /**
-     * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
-     */
-    preset?: H264EncoderPreset | null;
-    /**
-     * Encoding bitrate. Default value depends on chosen encoder.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "ffmpeg_vp8";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_vp8";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "ffmpeg_vp9";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format.
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_vp9";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "vulkan_h264";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-  };
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+    };
 export type RtmpClientAudioEncoderOptions =
   | {
-    type: "aac";
-    /**
-     * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
-     */
-    sample_rate?: number | null;
-  }
+      type: "aac";
+      /**
+       * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+       */
+      sample_rate?: number | null;
+    }
   | {
-    type: "opus";
-    /**
-     * (**default=`"voip"`**) Audio output encoder preset.
-     */
-    preset?: OpusEncoderPreset | null;
-    /**
-     * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
-     */
-    sample_rate?: number | null;
-  };
+      type: "opus";
+      /**
+       * (**default=`"voip"`**) Audio output encoder preset.
+       */
+      preset?: OpusEncoderPreset | null;
+      /**
+       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       */
+      sample_rate?: number | null;
+    };
 export type Mp4VideoEncoderOptions =
   | {
-    type: "ffmpeg_h264";
-    /**
-     * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
-     */
-    preset?: H264EncoderPreset | null;
-    /**
-     * Encoding bitrate. Default value depends on chosen encoder.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format.
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "vulkan_h264";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-  };
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+    };
 export type Mp4AudioEncoderOptions = {
   type: "aac";
   /**
@@ -1111,176 +1133,176 @@ export type Mp4AudioEncoderOptions = {
 };
 export type WhipVideoEncoderOptions =
   | {
-    type: "ffmpeg_h264";
-    /**
-     * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
-     */
-    preset?: H264EncoderPreset | null;
-    /**
-     * Encoding bitrate. Default value depends on chosen encoder.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "ffmpeg_vp8";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_vp8";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "ffmpeg_vp9";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_vp9";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "vulkan_h264";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-  }
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+    }
   | {
-    type: "any";
-  };
+      type: "any";
+    };
 export type WhipAudioEncoderOptions =
   | {
-    type: "opus";
-    /**
-     * (**default="voip"**) Specifies preset for audio output encoder.
-     */
-    preset?: OpusEncoderPreset | null;
-    /**
-     * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
-     */
-    sample_rate?: number | null;
-    /**
-     * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
-     */
-    forward_error_correction?: boolean | null;
-  }
+      type: "opus";
+      /**
+       * (**default="voip"**) Specifies preset for audio output encoder.
+       */
+      preset?: OpusEncoderPreset | null;
+      /**
+       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       */
+      sample_rate?: number | null;
+      /**
+       * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+       */
+      forward_error_correction?: boolean | null;
+    }
   | {
-    type: "any";
-  };
+      type: "any";
+    };
 export type WhepVideoEncoderOptions =
   | {
-    type: "ffmpeg_h264";
-    /**
-     * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
-     */
-    preset?: H264EncoderPreset | null;
-    /**
-     * Encoding bitrate. Default value depends on chosen encoder.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format.
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "ffmpeg_vp8";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_vp8";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "ffmpeg_vp9";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format.
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_vp9";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "vulkan_h264";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-  };
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+    };
 export type WhepAudioEncoderOptions = {
   type: "opus";
   /**
@@ -1302,41 +1324,41 @@ export type WhepAudioEncoderOptions = {
 };
 export type HlsVideoEncoderOptions =
   | {
-    type: "ffmpeg_h264";
-    /**
-     * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
-     */
-    preset?: H264EncoderPreset | null;
-    /**
-     * Encoding bitrate. Default value depends on chosen encoder.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-    /**
-     * (**default=`"yuv420p"`**) Encoder pixel format
-     */
-    pixel_format?: PixelFormat | null;
-    /**
-     * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-     */
-    ffmpeg_options?: {
-      [k: string]: string;
-    } | null;
-  }
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
   | {
-    type: "vulkan_h264";
-    /**
-     * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-     */
-    bitrate?: VideoEncoderBitrate | null;
-    /**
-     * (**default=`5000`**) Interval between keyframes, in milliseconds.
-     */
-    keyframe_interval_ms?: number | null;
-  };
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+    };
 export type HlsAudioEncoderOptions = {
   type: "aac";
   /**
@@ -1346,31 +1368,31 @@ export type HlsAudioEncoderOptions = {
 };
 export type ImageSpec =
   | {
-    asset_type: "png";
-    url?: string | null;
-    path?: string | null;
-  }
+      asset_type: "png";
+      url?: string | null;
+      path?: string | null;
+    }
   | {
-    asset_type: "jpeg";
-    url?: string | null;
-    path?: string | null;
-  }
+      asset_type: "jpeg";
+      url?: string | null;
+      path?: string | null;
+    }
   | {
-    asset_type: "svg";
-    url?: string | null;
-    path?: string | null;
-    resolution?: Resolution | null;
-  }
+      asset_type: "svg";
+      url?: string | null;
+      path?: string | null;
+      resolution?: Resolution | null;
+    }
   | {
-    asset_type: "gif";
-    url?: string | null;
-    path?: string | null;
-  }
+      asset_type: "gif";
+      url?: string | null;
+      path?: string | null;
+    }
   | {
-    asset_type: "auto";
-    url?: string | null;
-    path?: string | null;
-  };
+      asset_type: "auto";
+      url?: string | null;
+      path?: string | null;
+    };
 export type WebEmbeddingMethod =
   | "chromium_embedding"
   | "native_embedding_over_content"
@@ -1380,149 +1402,160 @@ export type WebEmbeddingMethod =
  */
 export type InputStatsReport =
   | {
-    type: "rtp";
-    /**
-     * Stats for the video track.
-     */
-    video_rtp: RtpJitterBufferStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio_rtp: RtpJitterBufferStatsReport;
-  }
+      type: "rtp";
+      /**
+       * Stats for the video track.
+       */
+      video_rtp: RtpJitterBufferStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio_rtp: RtpJitterBufferStatsReport;
+    }
   | {
-    type: "whip";
-    /**
-     * Stats for the video track.
-     */
-    video_rtp: RtpJitterBufferStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio_rtp: RtpJitterBufferStatsReport;
-  }
+      type: "whip";
+      /**
+       * Stats for the video track.
+       */
+      video_rtp: RtpJitterBufferStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio_rtp: RtpJitterBufferStatsReport;
+    }
   | {
-    type: "whep";
-    /**
-     * Stats for the video track.
-     */
-    video_rtp: RtpJitterBufferStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio_rtp: RtpJitterBufferStatsReport;
-  }
+      type: "whep";
+      /**
+       * Stats for the video track.
+       */
+      video_rtp: RtpJitterBufferStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio_rtp: RtpJitterBufferStatsReport;
+    }
   | {
-    type: "hls";
-    /**
-     * Stats for the video track.
-     */
-    video: HlsInputTrackStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio: HlsInputTrackStatsReport;
-  }
+      type: "hls";
+      /**
+       * Stats for the video track.
+       */
+      video: HlsInputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: HlsInputTrackStatsReport;
+    }
   | {
-    type: "rtmp";
-    /**
-     * Stats for the video track.
-     */
-    video: RtmpInputTrackStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio: RtmpInputTrackStatsReport;
-  }
+      type: "rtmp";
+      /**
+       * Stats for the video track.
+       */
+      video: RtmpInputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: RtmpInputTrackStatsReport;
+    }
   | {
-    type: "mp4";
-    /**
-     * Stats for the video track.
-     */
-    video: Mp4InputTrackStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio: Mp4InputTrackStatsReport;
-  };
+      type: "moq_server";
+      /**
+       * Stats for the video track.
+       */
+      video: MoqServerInputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: MoqServerInputTrackStatsReport;
+    }
+  | {
+      type: "mp4";
+      /**
+       * Stats for the video track.
+       */
+      video: Mp4InputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: Mp4InputTrackStatsReport;
+    };
 /**
  * Stats report for outputs.
  */
 export type OutputStatsReport =
   | {
-    type: "whep";
-    /**
-     * Stats for the video track.
-     */
-    video: WhepOutputTrackStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio: WhepOutputTrackStatsReport;
-    /**
-     * Count of currently connected peers.
-     */
-    connected_peers: number;
-  }
+      type: "whep";
+      /**
+       * Stats for the video track.
+       */
+      video: WhepOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: WhepOutputTrackStatsReport;
+      /**
+       * Count of currently connected peers.
+       */
+      connected_peers: number;
+    }
   | {
-    type: "whip";
-    /**
-     * Stats for the video track.
-     */
-    video: WhipOutputTrackStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio: WhipOutputTrackStatsReport;
-    /**
-     * Indicator if the output is connected to the `WHIP` server.
-     */
-    is_connected: boolean;
-  }
+      type: "whip";
+      /**
+       * Stats for the video track.
+       */
+      video: WhipOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: WhipOutputTrackStatsReport;
+      /**
+       * Indicator if the output is connected to the `WHIP` server.
+       */
+      is_connected: boolean;
+    }
   | {
-    type: "hls";
-    /**
-     * Stats for the video track.
-     */
-    video: HlsOutputTrackStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio: HlsOutputTrackStatsReport;
-  }
+      type: "hls";
+      /**
+       * Stats for the video track.
+       */
+      video: HlsOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: HlsOutputTrackStatsReport;
+    }
   | {
-    type: "mp4";
-    /**
-     * Stats for the video track.
-     */
-    video: Mp4OutputTrackStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio: Mp4OutputTrackStatsReport;
-  }
+      type: "mp4";
+      /**
+       * Stats for the video track.
+       */
+      video: Mp4OutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: Mp4OutputTrackStatsReport;
+    }
   | {
-    type: "rtmp";
-    /**
-     * Stats for the video track.
-     */
-    video: RtmpOutputTrackStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio: RtmpOutputTrackStatsReport;
-  }
+      type: "rtmp";
+      /**
+       * Stats for the video track.
+       */
+      video: RtmpOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: RtmpOutputTrackStatsReport;
+    }
   | {
-    type: "rtp";
-    /**
-     * Stats for the video track.
-     */
-    video: RtpOutputTrackStatsReport;
-    /**
-     * Stats for the audio track.
-     */
-    audio: RtpOutputTrackStatsReport;
-  };
+      type: "rtp";
+      /**
+       * Stats for the video track.
+       */
+      video: RtpOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: RtpOutputTrackStatsReport;
+    };
 
 export interface InputRtpVideoOptions {
   decoder: RtpVideoDecoderOptions;
@@ -2037,6 +2070,19 @@ export interface HlsInputTrackSlidingWindowStatsReport {
  * Stats report for a track in `RTMP` input.
  */
 export interface RtmpInputTrackStatsReport {
+  /**
+   * Bitrate in the 1-second window.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate in the 1-minute window.
+   */
+  bitrate_1_minute: number;
+}
+/**
+ * Stats report for a track in `MoQ` server input.
+ */
+export interface MoqServerInputTrackStatsReport {
   /**
    * Bitrate in the 1-second window.
    */
