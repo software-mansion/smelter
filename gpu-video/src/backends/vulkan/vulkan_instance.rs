@@ -154,9 +154,16 @@ pub enum VulkanInstanceInitError {
 
 impl From<VulkanInstanceInitError> for VideoInstanceInitError {
     fn from(err: VulkanInstanceInitError) -> Self {
-        Self::BackendError(VideoBackendError {
-            message: err.to_string(),
-            source: Box::new(err),
-        })
+        match err {
+            VulkanInstanceInitError::LoadingError(_)
+            | VulkanInstanceInitError::VkError(_)
+            | VulkanInstanceInitError::MissingExtension(_)
+            | VulkanInstanceInitError::InvalidLayerName(_) => {
+                Self::BackendError(VideoBackendError {
+                    message: err.to_string(),
+                    source: Box::new(err),
+                })
+            }
+        }
     }
 }

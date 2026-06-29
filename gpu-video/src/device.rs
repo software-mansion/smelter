@@ -756,10 +756,17 @@ pub enum VulkanDeviceInitError {
 
 impl From<VulkanDeviceInitError> for VideoDeviceInitError {
     fn from(err: VulkanDeviceInitError) -> Self {
-        Self::BackendError(crate::VideoBackendError {
-            message: err.to_string(),
-            source: Box::new(err),
-        })
+        match err {
+            VulkanDeviceInitError::VkError(_) => Self::BackendError(crate::VideoBackendError {
+                message: err.to_string(),
+                source: Box::new(err),
+            }),
+            #[cfg(feature = "wgpu")]
+            VulkanDeviceInitError::WgpuError(_) => Self::BackendError(crate::VideoBackendError {
+                message: err.to_string(),
+                source: Box::new(err),
+            }),
+        }
     }
 }
 
