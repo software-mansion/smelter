@@ -1,7 +1,7 @@
 use std::{ptr, sync::Arc, time::Duration};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
-use ffmpeg_next::{self as ffmpeg, Dictionary, Rational, Rescale};
+use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
 use smelter_render::{Framerate, OutputId};
 use tracing::{debug, error};
 
@@ -19,7 +19,7 @@ use crate::{
             ffmpeg_h264::FfmpegH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
-        ffmpeg_utils::{StreamMutExt, write_extradata},
+        ffmpeg_utils::{FfmpegOptions, StreamMutExt, write_extradata},
         output::{Output, OutputAudio, OutputVideo},
         utils::InitializableThread,
     },
@@ -75,20 +75,19 @@ impl HlsOutput {
             None => None,
         };
 
-        let ffmpeg_options = Dictionary::from_iter([
+        // 0 means no list size limit
+        let list_size = options.max_playlist_size.unwrap_or(0).to_string();
+        let mut ffmpeg_options = FfmpegOptions::from(&[
             ("segment_format", "mpegts"),
             ("segment_list_type", "m3u8"),
             ("segment_list_flags", "cache+live"),
             ("hls_flags", "delete_segments"),
-            (
-                "hls_list_size",
-                // 0 means no list size limit
-                &options.max_playlist_size.unwrap_or(0).to_string(),
-            ),
+            ("hls_list_size", list_size.as_str()),
         ]);
+        ffmpeg_options.append(&options.raw_options);
 
         output_ctx
-            .write_header_with(ffmpeg_options)
+            .write_header_with(ffmpeg_options.into_dictionary())
             .map_err(OutputInitError::FfmpegError)?;
 
         let (video_encoder, video_stream) = match video {
