@@ -16,7 +16,9 @@ use crate::{
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac::FdkAacDecoder,
-            ffmpeg_h264, vulkan_h264,
+            ffmpeg_h264,
+            libopus::OpusDecoder,
+            vulkan_h264,
         },
         moq::state::MoqInputState,
     },
@@ -33,21 +35,18 @@ mod catalog;
 const MOQ_BUFFER: Duration = Duration::from_secs(1);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
-struct DiscoveredVideo {
+struct VideoTrack {
     name: String,
+    codec: VideoCodec,
     container: Container,
     description: Option<Bytes>,
 }
 
-struct DiscoveredAudio {
+struct AudioTrack {
     name: String,
+    codec: AudioCodec,
     container: Container,
     description: Option<Bytes>,
-}
-
-struct DiscoveredTracks {
-    video: Option<DiscoveredVideo>,
-    audio: Option<DiscoveredAudio>,
 }
 
 #[derive(Clone)]
@@ -113,13 +112,14 @@ async fn handle_broadcast(
 ) -> Result<(), MoqConnectionError> {
     info!("MoQ broadcast connection established");
 
-    let discovered = read_catalog(&broadcast).await?;
+    let (video, audio) = read_catalog(&broadcast).await?;
 
     let mut handler = BroadcastHandler::new(
         ctx.clone(),
         input_ref.clone(),
         broadcast,
-        discovered,
+        video,
+        audio,
         decoders,
         should_close,
     );
@@ -152,7 +152,8 @@ async fn handle_broadcast(
 
 struct BroadcastHandler {
     track_ctx: TrackCtx,
-    tracks: DiscoveredTracks,
+    video: Option<VideoTrack>,
+    audio: Option<AudioTrack>,
 }
 
 impl BroadcastHandler {
@@ -160,7 +161,8 @@ impl BroadcastHandler {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         broadcast: BroadcastConsumer,
-        tracks: DiscoveredTracks,
+        video: Option<VideoTrack>,
+        audio: Option<AudioTrack>,
         decoders: MoqServerInputDecoders,
         should_close: Arc<AtomicBool>,
     ) -> Self {
@@ -180,22 +182,26 @@ impl BroadcastHandler {
             should_close,
             stats_sender,
         };
-        Self { track_ctx, tracks }
+        Self {
+            track_ctx,
+            video,
+            audio,
+        }
     }
 
     fn has_video(&self) -> bool {
-        self.tracks.video.is_some()
+        self.video.is_some()
     }
 
     fn has_audio(&self) -> bool {
-        self.tracks.audio.is_some()
+        self.audio.is_some()
     }
 
     fn handle_video_track(
         &mut self,
         frame_sender: Option<QueueSender<Frame>>,
     ) -> Option<tokio::task::JoinHandle<()>> {
-        let (Some(video), Some(frame_sender)) = (self.tracks.video.take(), frame_sender) else {
+        let (Some(video), Some(frame_sender)) = (self.video.take(), frame_sender) else {
             return None;
         };
 
@@ -219,7 +225,7 @@ impl BroadcastHandler {
         &mut self,
         sample_sender: Option<QueueSender<InputAudioSamples>>,
     ) -> Option<tokio::task::JoinHandle<()>> {
-        let (Some(audio), Some(sample_sender)) = (self.tracks.audio.take(), sample_sender) else {
+        let (Some(audio), Some(sample_sender)) = (self.audio.take(), sample_sender) else {
             return None;
         };
 
@@ -242,7 +248,7 @@ impl BroadcastHandler {
 
 async fn run_video_track(
     track_ctx: TrackCtx,
-    video: DiscoveredVideo,
+    video: VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<(), MoqConnectionError> {
     let TrackCtx {
@@ -280,7 +286,7 @@ async fn run_video_track(
             data: payload,
             pts,
             dts: None,
-            kind: MediaKind::Video(VideoCodec::H264),
+            kind: MediaKind::Video(video.codec),
             present: true,
         };
 
@@ -306,7 +312,7 @@ async fn run_video_track(
 
 async fn run_audio_track(
     track_ctx: TrackCtx,
-    audio: DiscoveredAudio,
+    audio: AudioTrack,
     sample_sender: QueueSender<InputAudioSamples>,
 ) -> Result<(), MoqConnectionError> {
     let TrackCtx {
@@ -343,7 +349,7 @@ async fn run_audio_track(
             data: payload,
             pts,
             dts: None,
-            kind: MediaKind::Audio(AudioCodec::Aac),
+            kind: MediaKind::Audio(audio.codec),
             present: true,
         };
 
@@ -371,20 +377,29 @@ fn spawn_video_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     decoders: &MoqServerInputDecoders,
-    video: &DiscoveredVideo,
+    video: &VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    // Only CMAF H264 is allowed right now, other codecs are rejected before this function
-    let avcc_bytes = video
-        .description
-        .clone()
-        .ok_or(MoqConnectionError::InvalidAvcc)?;
+    let transformer = {
+        match &video.description {
+            Some(desc) => {
+                let h264_config = H264AvcDecoderConfig::parse(desc.clone())
+                    .map_err(|_| MoqConnectionError::InvalidAvcc)?;
 
-    let h264_config =
-        H264AvcDecoderConfig::parse(avcc_bytes).map_err(|_| MoqConnectionError::InvalidAvcc)?;
+                Some(H264AvccToAnnexB::new(h264_config))
+            }
+            None => None,
+        }
+    };
+    if let Container::Cmaf(_) = video.container
+        && transformer.is_none()
+    {
+        return Err(MoqConnectionError::MissingAvcc);
+    }
+
     let options = VideoDecoderThreadOptions {
         ctx: ctx.clone(),
-        transformer: Some(H264AvccToAnnexB::new(h264_config)),
+        transformer,
         frame_sender,
         input_buffer_size: MOQ_MAX_BUFFER,
     };
@@ -413,21 +428,21 @@ fn spawn_video_decoder(
 fn spawn_audio_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    audio: &DiscoveredAudio,
+    audio: &AudioTrack,
     sample_sender: QueueSender<InputAudioSamples>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    // Only AAC is allowed right now, different codecs are rejected before this function is called
-    let asc = audio
-        .description
-        .clone()
-        .ok_or(MoqConnectionError::MissingAsc)?;
-    let aac_decoder_options = AudioDecoderOptions::FdkAac(FdkAacDecoderOptions { asc: Some(asc) });
+    match &audio.codec {
+        AudioCodec::Aac => {
+            let asc = audio.description.clone();
+            if let Container::Cmaf(_) = audio.container
+                && asc.is_none()
+            {
+                return Err(MoqConnectionError::MissingAsc);
+            }
 
-    match aac_decoder_options {
-        AudioDecoderOptions::FdkAac(decoder_options) => {
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
-                decoder_options,
+                decoder_options: FdkAacDecoderOptions { asc },
                 samples_sender: sample_sender,
                 input_buffer_size: MOQ_MAX_BUFFER,
             };
@@ -436,7 +451,18 @@ fn spawn_audio_decoder(
                 options,
             )?)
         }
-        _ => Err(MoqConnectionError::UnsupportedAudioCodec),
+        AudioCodec::Opus => {
+            let options = AudioDecoderThreadOptions {
+                ctx: ctx.clone(),
+                decoder_options: (),
+                samples_sender: sample_sender,
+                input_buffer_size: MOQ_MAX_BUFFER,
+            };
+            Ok(AudioDecoderThread::<OpusDecoder>::spawn(
+                input_ref.clone(),
+                options,
+            )?)
+        }
     }
 }
 
@@ -457,8 +483,8 @@ enum MoqConnectionError {
     #[error("Invalid H264 decoder config.")]
     InvalidAvcc,
 
-    #[error("Unsupported audio codec, AAC expected.")]
-    UnsupportedAudioCodec,
+    #[error("Missing H264 decoder config.")]
+    MissingAvcc,
 
     #[error("Missing AAC decoder config.")]
     MissingAsc,
