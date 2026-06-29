@@ -35,14 +35,14 @@ mod catalog;
 const MOQ_BUFFER: Duration = Duration::from_secs(1);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
-struct DiscoveredVideo {
+struct VideoTrack {
     name: String,
     codec: VideoCodec,
     container: Container,
     description: Option<Bytes>,
 }
 
-struct DiscoveredAudio {
+struct AudioTrack {
     name: String,
     codec: AudioCodec,
     container: Container,
@@ -50,8 +50,8 @@ struct DiscoveredAudio {
 }
 
 struct DiscoveredTracks {
-    video: Option<DiscoveredVideo>,
-    audio: Option<DiscoveredAudio>,
+    video: Option<VideoTrack>,
+    audio: Option<AudioTrack>,
 }
 
 #[derive(Clone)]
@@ -246,7 +246,7 @@ impl BroadcastHandler {
 
 async fn run_video_track(
     track_ctx: TrackCtx,
-    video: DiscoveredVideo,
+    video: VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<(), MoqConnectionError> {
     let TrackCtx {
@@ -310,7 +310,7 @@ async fn run_video_track(
 
 async fn run_audio_track(
     track_ctx: TrackCtx,
-    audio: DiscoveredAudio,
+    audio: AudioTrack,
     sample_sender: QueueSender<InputAudioSamples>,
 ) -> Result<(), MoqConnectionError> {
     let TrackCtx {
@@ -375,7 +375,7 @@ fn spawn_video_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     decoders: &MoqServerInputDecoders,
-    video: &DiscoveredVideo,
+    video: &VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
     let transformer = {
@@ -426,7 +426,7 @@ fn spawn_video_decoder(
 fn spawn_audio_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    audio: &DiscoveredAudio,
+    audio: &AudioTrack,
     sample_sender: QueueSender<InputAudioSamples>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
     match &audio.codec {

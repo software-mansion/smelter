@@ -7,7 +7,7 @@ use moq_mux::container::fmp4;
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use tracing::{debug, warn};
 
-use crate::pipeline::moq::connection::{DiscoveredAudio, DiscoveredTracks, DiscoveredVideo};
+use crate::pipeline::moq::connection::{AudioTrack, DiscoveredTracks, VideoTrack};
 
 use crate::prelude::*;
 
@@ -97,9 +97,7 @@ async fn read_msf_catalog(
     Ok(DiscoveredTracks { video, audio })
 }
 
-fn discover_video(
-    video: &hang::catalog::Video,
-) -> Result<Option<DiscoveredVideo>, MoqCatalogError> {
+fn discover_video(video: &hang::catalog::Video) -> Result<Option<VideoTrack>, MoqCatalogError> {
     let Some((name, config)) = video.renditions.first_key_value() else {
         return Ok(None);
     };
@@ -128,7 +126,7 @@ fn discover_video(
         _ => config.description.clone(),
     };
 
-    Ok(Some(DiscoveredVideo {
+    Ok(Some(VideoTrack {
         name: name.clone(),
         container,
         codec,
@@ -136,9 +134,7 @@ fn discover_video(
     }))
 }
 
-fn discover_audio(
-    audio: &hang::catalog::Audio,
-) -> Result<Option<DiscoveredAudio>, MoqCatalogError> {
+fn discover_audio(audio: &hang::catalog::Audio) -> Result<Option<AudioTrack>, MoqCatalogError> {
     let Some((name, config)) = audio.renditions.first_key_value() else {
         return Ok(None);
     };
@@ -170,7 +166,7 @@ fn discover_audio(
         _ => config.description.clone(),
     };
 
-    Ok(Some(DiscoveredAudio {
+    Ok(Some(AudioTrack {
         name: name.clone(),
         container,
         codec,
