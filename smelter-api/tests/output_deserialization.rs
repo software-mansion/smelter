@@ -1666,6 +1666,7 @@ fn hls_video_only() {
                         },
                     )),
                     audio: None,
+                    raw_options: vec![],
                 },
             ),
             video: Some(default_video()),
@@ -1698,6 +1699,7 @@ fn hls_audio_only() {
                             sample_rate: 48000,
                         },
                     )),
+                    raw_options: vec![],
                 },
             ),
             video: None,
@@ -1749,6 +1751,7 @@ fn hls_video_and_audio_with_playlist_size() {
                             sample_rate: 44100,
                         },
                     )),
+                    raw_options: vec![],
                 },
             ),
             video: Some(default_video()),
@@ -1788,10 +1791,66 @@ fn hls_vulkan_encoder() {
                         },
                     )),
                     audio: None,
+                    raw_options: vec![],
                 },
             ),
             video: Some(default_video()),
             audio: None,
+        },
+    );
+}
+
+#[test]
+fn hls_video_and_audio_with_ffmpeg_options() {
+    check_hls(
+        json!({
+            "output": {
+                "path": "/tmp/stream.m3u8",
+                "video": {
+                    "resolution": { "width": 1280, "height": 720 },
+                    "encoder": {
+                        "type": "ffmpeg_h264",
+                        "ffmpeg_options": { "crf": "23" }
+                    },
+                    "initial": video_scene()
+                },
+                "audio": {
+                    "encoder": { "type": "aac" },
+                    "initial": audio_scene()
+                },
+                "ffmpeg_options": { "hls_list_size": "5" }
+            }
+        }),
+        CoreOutput {
+            output_options: smelter_core::ProtocolOutputOptions::Hls(
+                smelter_core::protocols::HlsOutputOptions {
+                    output_path: Arc::from(Path::new("/tmp/stream.m3u8")),
+                    max_playlist_size: None,
+                    video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
+                        smelter_core::codecs::FfmpegH264EncoderOptions {
+                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            bitrate: None,
+                            keyframe_interval: default_keyframe_interval(),
+                            resolution: smelter_render::Resolution {
+                                width: 1280,
+                                height: 720,
+                            },
+                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
+                            raw_options: vec![(Arc::from("crf"), Arc::from("23"))],
+                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
+                        },
+                    )),
+                    audio: Some(smelter_core::codecs::AudioEncoderOptions::FdkAac(
+                        smelter_core::codecs::FdkAacEncoderOptions {
+                            channels: smelter_core::AudioChannels::Stereo,
+                            sample_rate: 44100,
+                        },
+                    )),
+                    raw_options: vec![(Arc::from("hls_list_size"), Arc::from("5"))],
+                },
+            ),
+            video: Some(default_video()),
+            audio: Some(default_audio()),
         },
     );
 }

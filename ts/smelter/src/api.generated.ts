@@ -395,6 +395,12 @@ export type RegisterOutput =
        * Audio track configuration.
        */
       audio?: OutputHlsAudioOptions | null;
+      /**
+       * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more. Note: keys here may override defaults, including `hls_list_size` derived from `max_playlist_size`.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
     };
 export type InputId = string;
 export type RtpVideoEncoderOptions =

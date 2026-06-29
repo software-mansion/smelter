@@ -19,6 +19,9 @@ pub struct HlsOutput {
     pub video: Option<OutputHlsVideoOptions>,
     /// Audio track configuration.
     pub audio: Option<OutputHlsAudioOptions>,
+    /// Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+    /// Note: keys here may override defaults, including `hls_list_size` derived from `max_playlist_size`.
+    pub ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]

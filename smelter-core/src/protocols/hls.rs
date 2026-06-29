@@ -17,6 +17,7 @@ pub struct HlsOutputOptions {
     pub max_playlist_size: Option<usize>,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
+    pub raw_options: Vec<(Arc<str>, Arc<str>)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

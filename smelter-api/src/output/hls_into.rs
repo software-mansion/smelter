@@ -10,6 +10,7 @@ impl TryFrom<HlsOutput> for core::RegisterOutputOptions {
             max_playlist_size,
             video,
             audio,
+            ffmpeg_options,
         } = request;
 
         if video.is_none() && audio.is_none() {
@@ -64,6 +65,7 @@ impl TryFrom<HlsOutput> for core::RegisterOutputOptions {
             max_playlist_size,
             video: video_encoder_options,
             audio: audio_encoder_options,
+            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         });
 
         Ok(Self {
