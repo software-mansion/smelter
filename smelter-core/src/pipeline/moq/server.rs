@@ -88,7 +88,7 @@ pub async fn spawn_moq_server(
 
     let server = match try_start_server(config).await {
         Ok(server) => server,
-        Err(error) => return Err(InitPipelineError::MoqServerInitError(error)),
+        Err(err) => return Err(InitPipelineError::MoqServerInitError(err)),
     };
 
     let accept_task = tokio::spawn(run_accept_loop(server, state.server_state.clone(), ctx));
@@ -121,12 +121,12 @@ async fn run_accept_loop(
     while let Some(request) = server.accept().await {
         let (origin, input_ref) = match handle_incoming_connection(&request, &moq_inputs).await {
             Ok(sci) => sci,
-            Err(error) => {
+            Err(err) => {
                 warn!(
                     "MoQ connection rejected: {}",
-                    ErrorStack::new(&error).into_string()
+                    ErrorStack::new(&err).into_string()
                 );
-                let rejection_code = match error {
+                let rejection_code = match err {
                     MoqServerError::UrlNotFound | MoqServerError::UrlDecodeFailed(_) => 400,
                     MoqServerError::PathNotFound(_) | MoqServerError::InputNotFound(_) => 404,
                     MoqServerError::MissingToken(_) | MoqServerError::InvalidToken(_) => 401,
@@ -171,17 +171,10 @@ async fn handle_incoming_connection(
     let input_name_encoded = url.path().trim_start_matches('/');
     let input_name = match urlencoding::decode(input_name_encoded) {
         Ok(decoded) => decoded.into_owned(),
-        Err(error) => {
-            return Err(MoqServerError::UrlDecodeFailed(error));
-        }
+        Err(err) => return Err(MoqServerError::UrlDecodeFailed(err)),
     };
 
-    let input_ref = match moq_inputs.find_by_url(&input_name) {
-        Ok(input_ref) => input_ref,
-        Err(error) => {
-            return Err(error);
-        }
-    };
+    let input_ref = moq_inputs.find_by_url(&input_name)?;
 
     let auth_token = url
         .query_pairs()
