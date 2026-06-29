@@ -1,15 +1,75 @@
 pub(crate) mod codec;
 pub(crate) mod vulkan_adapter;
+pub(crate) mod vulkan_decoder;
 pub(crate) mod vulkan_device;
+pub(crate) mod vulkan_encoder;
 pub(crate) mod vulkan_instance;
 pub(crate) mod wrappers;
+
+use std::sync::Arc;
 
 pub use vulkan_adapter::{VulkanAdapter, VulkanAdapterInfo, VulkanAdapterInitError};
 pub use vulkan_device::{VulkanDevice, VulkanDeviceInitError};
 pub use vulkan_instance::{VulkanInstance, VulkanInstanceInitError};
 
-use crate::backends::vulkan::wrappers::ImageKey;
+use crate::{
+    VideoInstanceInitError,
+    backends::{CoreBackend, vulkan::wrappers::ImageKey},
+    instance::{VideoInstanceBackend, VideoInstanceDescriptor},
+};
 use ash::vk;
+
+pub struct VulkanBackend;
+
+impl CoreBackend for VulkanBackend {
+    fn new_instance(
+        &self,
+        desc: &VideoInstanceDescriptor,
+    ) -> Result<Arc<dyn VideoInstanceBackend>, VideoInstanceInitError> {
+        VulkanInstance::new(desc)
+            .map(|instance| Arc::new(instance) as Arc<dyn VideoInstanceBackend>)
+            .map_err(Into::into)
+    }
+}
+
+#[cfg(feature = "wgpu")]
+impl super::WgpuBackend for VulkanBackend {
+    fn device_key_from_wgpu_device(
+        &self,
+        device: &wgpu::Device,
+    ) -> crate::global_registry::VideoDeviceKey {
+        use ash::vk::Handle;
+
+        let hal_device = unsafe { device.as_hal::<wgpu::hal::vulkan::Api>().unwrap() };
+        crate::global_registry::VideoDeviceKey::Vulkan {
+            device_handle: hal_device.raw_device().handle().as_raw(),
+            queue_handle: hal_device.raw_queue().as_raw(),
+        }
+    }
+
+    fn retrieve_adapter_info(
+        &self,
+        wgpu_adapter: &wgpu::Adapter,
+    ) -> Option<crate::adapter::VideoAdapterInfo> {
+        use crate::adapter::VideoAdapterBackend;
+        use vulkan_adapter::with_vulkan_adapter_from_wgpu;
+
+        with_vulkan_adapter_from_wgpu(wgpu_adapter, |adapter| adapter.build_info())
+    }
+
+    fn create_and_register_device(
+        &self,
+        wgpu_adapter: &wgpu::Adapter,
+        desc: &crate::device::VideoDeviceDescriptor,
+    ) -> Result<(wgpu::Device, wgpu::Queue), crate::VideoDeviceInitError> {
+        use vulkan_adapter::with_vulkan_adapter_from_wgpu;
+        with_vulkan_adapter_from_wgpu(wgpu_adapter, |vulkan_adapter| {
+            VulkanDevice::create_and_register_wgpu(wgpu_adapter, vulkan_adapter, desc.clone())
+                .map_err(Into::into)
+        })
+        .ok_or(crate::VideoDeviceInitError::NotSuitableAdapter)?
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum VulkanCommonError {

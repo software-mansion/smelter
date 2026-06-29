@@ -1,6 +1,5 @@
 use std::sync::{Arc, LazyLock, RwLock};
 
-use ash::vk;
 use rustc_hash::FxHashMap;
 
 use crate::device::VideoDeviceBackend;
@@ -47,17 +46,13 @@ impl GlobalRegistry {
     }
 }
 
-// TODO: metal key
-#[cfg(vulkan)]
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub(crate) struct VideoDeviceKey(pub(crate) vk::Device, pub(crate) vk::Queue);
-
-#[cfg(all(vulkan, feature = "wgpu"))]
-impl From<&wgpu::Device> for VideoDeviceKey {
-    fn from(device: &wgpu::Device) -> Self {
-        let hal_device = unsafe { device.as_hal::<wgpu::hal::vulkan::Api>().unwrap() };
-        Self(hal_device.raw_device().handle(), hal_device.raw_queue())
-    }
+pub(crate) enum VideoDeviceKey {
+    Vulkan {
+        device_handle: u64,
+        queue_handle: u64,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]

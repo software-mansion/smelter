@@ -180,7 +180,7 @@ pub enum VulkanDecoderError {
 impl VulkanDecoder<'_> {
     pub fn new(
         decoding_device: Arc<DecodingDevice>,
-        usage_flags: crate::parameters::DecoderUsageFlags,
+        usage_flags: crate::parameters::DecoderUsage,
         image_modifiers: ImageModifiers,
     ) -> Result<Self, VulkanDecoderError> {
         let command_buffer_pools = DecoderCommandBufferPools {
@@ -200,7 +200,8 @@ impl VulkanDecoder<'_> {
             Some("decoder"),
         )?;
 
-        let usage_info = vk::VideoDecodeUsageInfoKHR::default().video_usage_hints(usage_flags);
+        let usage_info =
+            vk::VideoDecodeUsageInfoKHR::default().video_usage_hints(usage_flags.into());
 
         Ok(Self {
             decoding_device,

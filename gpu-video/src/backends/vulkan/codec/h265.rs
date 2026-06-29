@@ -152,3 +152,13 @@ impl<'a> CodecSpecificEncoderQualityLevelProperties
             && self.preferred_max_l1_reference_count == 0
     }
 }
+
+impl H265Profile {
+    pub(crate) fn to_profile_idc(self) -> ash::vk::native::StdVideoH265ProfileIdc {
+        match self {
+            H265Profile::Main => {
+                ash::vk::native::StdVideoH265ProfileIdc_STD_VIDEO_H265_PROFILE_IDC_MAIN
+            }
+        }
+    }
+}

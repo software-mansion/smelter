@@ -2,10 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
-use crate::parameters::{
-    EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, H265Profile,
-    RateControl,
-};
+use crate::parameters::{EncoderContent, EncoderUsage, H264Profile, H265Profile, RateControl};
 use crate::{
     BytesDecoder, BytesEncoderH264, BytesEncoderH265, VideoDecoderError, VideoEncoderError,
 };
@@ -67,9 +64,7 @@ pub struct DecoderParameters {
     pub missed_frame_handling: MissedFrameHandling,
 
     /// A hint indicating what kind of content the decoder is going to be used for.
-    ///
-    /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
-    pub usage_flags: crate::parameters::DecoderUsageFlags,
+    pub usage_flags: crate::parameters::DecoderUsage,
 }
 
 /// Things the encoder needs to know about the video
@@ -199,15 +194,9 @@ pub struct EncoderOutputParameters<P> {
     /// A hint indicating what the encoder should prioritize.
     pub preset: EncoderPreset,
     /// A hint indicating what the encoded content is going to be used for.
-    ///
-    /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
-    pub usage_flags: Option<EncoderUsageFlags>,
-    /// A hint indicating how to tune the encoder implementation.
-    pub tuning_mode: Option<EncoderTuningMode>,
+    pub usage_flags: Option<EncoderUsage>,
     /// A hint indicating what kind of content the encoder is going to be used for.
-    ///
-    /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
-    pub content_flags: Option<EncoderContentFlags>,
+    pub content_flags: Option<EncoderContent>,
     /// Whether to prepend SPS/PPS NAL units inline before IDR frames.
     /// If `false`, SPS/PPS can be retrieved separately using methods defined on the encoder.
     /// If [`None`], defaults to `true`.
@@ -234,7 +223,7 @@ pub struct EncoderParametersH265 {
     pub output_parameters: EncoderOutputParameters<H265Profile>,
 }
 
-pub(crate) trait VideoDeviceBackend: Send + Sync {
+pub(crate) trait CoreVideoDeviceBackend: Send + Sync {
     fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: DecoderParameters,
@@ -250,29 +239,6 @@ pub(crate) trait VideoDeviceBackend: Send + Sync {
         parameters: EncoderParametersH265,
     ) -> Result<BytesEncoderH265, VideoEncoderError>;
 
-    #[cfg(feature = "wgpu")]
-    fn create_wgpu_textures_decoder_h264(
-        self: Arc<Self>,
-        wgpu_device: wgpu::Device,
-        parameters: DecoderParameters,
-    ) -> Result<crate::WgpuTexturesDecoder, VideoDecoderError>;
-
-    #[cfg(feature = "wgpu")]
-    fn create_wgpu_textures_encoder_h264(
-        self: Arc<Self>,
-        wgpu_device: wgpu::Device,
-        wgpu_queue: wgpu::Queue,
-        parameters: EncoderParametersH264,
-    ) -> Result<crate::WgpuTexturesEncoderH264, VideoEncoderError>;
-
-    #[cfg(feature = "wgpu")]
-    fn create_wgpu_textures_encoder_h265(
-        self: Arc<Self>,
-        wgpu_device: wgpu::Device,
-        wgpu_queue: wgpu::Queue,
-        parameters: EncoderParametersH265,
-    ) -> Result<crate::WgpuTexturesEncoderH265, VideoEncoderError>;
-
     #[cfg(feature = "transcoder")]
     fn create_transcoder(
         self: Arc<Self>,
@@ -283,3 +249,16 @@ pub(crate) trait VideoDeviceBackend: Send + Sync {
 
     fn encode_capabilities(&self) -> EncodeCapabilities;
 }
+
+#[cfg(feature = "wgpu")]
+pub(crate) trait VideoDeviceBackend:
+    CoreVideoDeviceBackend + WgpuVideoDeviceBackend
+{
+}
+#[cfg(feature = "wgpu")]
+impl<D: CoreVideoDeviceBackend + WgpuVideoDeviceBackend> VideoDeviceBackend for D {}
+
+#[cfg(not(feature = "wgpu"))]
+pub(crate) trait VideoDeviceBackend: CoreVideoDeviceBackend {}
+#[cfg(not(feature = "wgpu"))]
+impl<D: CoreVideoDeviceBackend> VideoDeviceBackend for D {}

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     VideoInstanceInitError,
     adapter::{VideoAdapter, VideoAdapterDescriptor},
-    backends,
+    backends::{CoreBackend, default_backend},
 };
 
 /// Describes a [`VideoInstance`].
@@ -30,12 +30,8 @@ pub struct VideoInstance {
 
 impl VideoInstance {
     pub fn new(desc: &VideoInstanceDescriptor) -> Result<Self, VideoInstanceInitError> {
-        #[cfg(vulkan)]
-        let instance = backends::vulkan::VulkanInstance::new(desc)?;
-
-        Ok(Self {
-            instance: Arc::new(instance),
-        })
+        let instance = default_backend().new_instance(desc)?;
+        Ok(Self { instance })
     }
 
     /// Creates an adapter that meets requirements specified in the descriptor.

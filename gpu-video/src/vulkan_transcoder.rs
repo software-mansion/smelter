@@ -10,7 +10,7 @@ use crate::{
         wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
     },
     device::{EncoderOutputParameters, Rational},
-    parameters::{H264Profile, H265Profile, ScalingAlgorithm},
+    parameters::{DecoderUsage, H264Profile, H265Profile, ScalingAlgorithm},
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
         h264::H264Parser,
@@ -100,7 +100,7 @@ impl Transcoder {
                     .decoding_device()
                     .map_err(VideoDecoderError::VulkanDecoderError)?,
             ),
-            vk::VideoDecodeUsageFlagsKHR::TRANSCODING,
+            DecoderUsage::Transcoding,
             ImageModifiers {
                 create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
                     | vk::ImageCreateFlags::MUTABLE_FORMAT,

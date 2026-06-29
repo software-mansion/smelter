@@ -1,11 +1,9 @@
 use crate::{
     VideoDeviceInitError,
-    adapter::{VideoAdapterBackend, VideoAdapterInfo},
+    adapter::VideoAdapterInfo,
+    backends::{WgpuBackend, backend_from_wgpu},
     device::VideoDeviceDescriptor,
 };
-
-#[cfg(vulkan)]
-use crate::backends::vulkan::vulkan_adapter::with_video_adapter_from_wgpu;
 
 /// [`wgpu::Adapter`] extension that exposes video capabilities of an adapter.
 pub trait VideoAdapterExt {
@@ -23,22 +21,16 @@ pub trait VideoAdapterExt {
 
 impl VideoAdapterExt for wgpu::Adapter {
     fn video_adapter_info(&self) -> Option<VideoAdapterInfo> {
-        with_video_adapter_from_wgpu(self, |adapter| adapter.build_info())
+        let backend = backend_from_wgpu(self.get_info().backend)?;
+        backend.retrieve_adapter_info(self)
     }
 
     fn request_device_with_video_support(
         &self,
         desc: &VideoDeviceDescriptor,
     ) -> Result<(wgpu::Device, wgpu::Queue), VideoDeviceInitError> {
-        with_video_adapter_from_wgpu(self, |adapter| {
-            #[cfg(vulkan)]
-            crate::backends::vulkan::VulkanDevice::create_and_register_wgpu(
-                self,
-                adapter,
-                desc.clone(),
-            )
-            .map_err(Into::into)
-        })
-        .ok_or(VideoDeviceInitError::NotSuitableAdapter)?
+        let backend = backend_from_wgpu(self.get_info().backend)
+            .ok_or(VideoDeviceInitError::NotSuitableAdapter)?;
+        backend.create_and_register_device(self, desc)
     }
 }

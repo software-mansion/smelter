@@ -144,3 +144,19 @@ impl<'a> CodecSpecificEncoderQualityLevelProperties
             && self.preferred_std_entropy_coding_mode_flag == 0
     }
 }
+
+impl H264Profile {
+    pub(crate) fn to_profile_idc(self) -> ash::vk::native::StdVideoH264ProfileIdc {
+        match self {
+            H264Profile::Baseline => {
+                ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE
+            }
+            H264Profile::Main => {
+                ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN
+            }
+            H264Profile::High => {
+                ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH
+            }
+        }
+    }
+}

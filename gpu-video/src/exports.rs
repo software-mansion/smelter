@@ -18,13 +18,34 @@ pub mod parameters {
     #[cfg(feature = "wgpu")]
     pub use crate::wgpu_helpers::WgpuConverterParameters;
 
-    // TODO: What about these
-    pub use ash::vk::VideoDecodeUsageFlagsKHR as DecoderUsageFlags;
+    /// A hint indicating what kind of content the decoder is going to be used for.
+    #[derive(Debug, Clone, Copy, Default)]
+    pub enum DecoderUsage {
+        #[default]
+        Default,
+        Transcoding,
+        Offline,
+        Streaming,
+    }
 
-    // TODO: And what about these
-    pub use ash::vk::VideoEncodeContentFlagsKHR as EncoderContentFlags;
-    pub use ash::vk::VideoEncodeTuningModeKHR as EncoderTuningMode;
-    pub use ash::vk::VideoEncodeUsageFlagsKHR as EncoderUsageFlags;
+    #[derive(Debug, Clone, Copy, Default)]
+    pub enum EncoderUsage {
+        #[default]
+        Default,
+        Transcoding,
+        Streaming,
+        Recording,
+        Conferencing,
+    }
+
+    #[derive(Debug, Clone, Copy, Default)]
+    pub enum EncoderContent {
+        #[default]
+        Default,
+        Camera,
+        Desktop,
+        Rendered,
+    }
 
     /// Scaling algorithm used when resizing frames in the transcoder.
     #[derive(Debug, Clone, Copy, Default)]
@@ -45,39 +66,13 @@ pub mod parameters {
         High,
     }
 
-    impl H264Profile {
-        #[cfg(vulkan)]
-        pub(crate) fn to_profile_idc(self) -> ash::vk::native::StdVideoH264ProfileIdc {
-            match self {
-                H264Profile::Baseline => {
-                    ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE
-                }
-                H264Profile::Main => {
-                    ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN
-                }
-                H264Profile::High => {
-                    ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH
-                }
-            }
-        }
-    }
+    // TODO:
 
     /// A profile in H.265 is a set of codec features used while encoding a specific video.
     /// Right now, only Main is available.
     #[derive(Debug, Clone, Copy)]
     pub enum H265Profile {
         Main,
-    }
-
-    impl H265Profile {
-        #[cfg(vulkan)]
-        pub(crate) fn to_profile_idc(self) -> ash::vk::native::StdVideoH265ProfileIdc {
-            match self {
-                H265Profile::Main => {
-                    ash::vk::native::StdVideoH265ProfileIdc_STD_VIDEO_H265_PROFILE_IDC_MAIN
-                }
-            }
-        }
     }
 }
 
@@ -342,9 +337,8 @@ impl VideoDevice {
             max_references: None,
             rate_control,
             preset: EncoderPreset::Speed,
-            usage_flags: Some(crate::parameters::EncoderUsageFlags::DEFAULT),
-            content_flags: Some(crate::parameters::EncoderContentFlags::DEFAULT),
-            tuning_mode: Some(crate::parameters::EncoderTuningMode::LOW_LATENCY),
+            usage_flags: Some(crate::parameters::EncoderUsage::Default),
+            content_flags: Some(crate::parameters::EncoderContent::Default),
             inline_stream_params: None,
             color_space: None,
             color_range: None,
@@ -361,9 +355,8 @@ impl VideoDevice {
             max_references: None,
             rate_control,
             preset: EncoderPreset::Quality,
-            usage_flags: Some(crate::parameters::EncoderUsageFlags::DEFAULT),
-            content_flags: Some(crate::parameters::EncoderContentFlags::DEFAULT),
-            tuning_mode: Some(crate::parameters::EncoderTuningMode::HIGH_QUALITY),
+            usage_flags: Some(crate::parameters::EncoderUsage::Default),
+            content_flags: Some(crate::parameters::EncoderContent::Default),
             inline_stream_params: None,
             color_space: None,
             color_range: None,

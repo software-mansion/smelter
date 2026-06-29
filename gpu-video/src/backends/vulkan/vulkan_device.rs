@@ -11,8 +11,8 @@ use crate::backends::vulkan::wrappers::*;
 use crate::backends::vulkan::{VulkanAdapter, VulkanAdapterInfo};
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::device::{
-    ColorRange, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
-    EncoderParametersH265, EncoderPreset, Rational, VideoDeviceBackend, VideoDeviceDescriptor,
+    ColorRange, CoreVideoDeviceBackend, DecoderParameters, EncoderOutputParameters,
+    EncoderParametersH264, EncoderParametersH265, EncoderPreset, Rational, VideoDeviceDescriptor,
 };
 use crate::parser::h264::H264Parser;
 use crate::parser::reference_manager::ReferenceContext;
@@ -28,6 +28,9 @@ use self::caps::{
 };
 use self::queues::{Queue, QueueIndex, Queues, VideoQueues};
 
+#[cfg(feature = "wgpu")]
+mod wgpu_api;
+
 pub(crate) mod caps;
 pub(crate) mod queues;
 
@@ -41,7 +44,7 @@ pub struct VulkanDevice {
     pub(crate) device: Arc<Device>,
 }
 
-impl VideoDeviceBackend for VulkanDevice {
+impl CoreVideoDeviceBackend for VulkanDevice {
     fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: DecoderParameters,
@@ -61,36 +64,6 @@ impl VideoDeviceBackend for VulkanDevice {
         parameters: EncoderParametersH265,
     ) -> Result<BytesEncoderH265, VideoEncoderError> {
         VulkanDevice::create_bytes_encoder_h265(self, parameters)
-    }
-
-    #[cfg(feature = "wgpu")]
-    fn create_wgpu_textures_decoder_h264(
-        self: Arc<Self>,
-        wgpu_device: wgpu::Device,
-        parameters: DecoderParameters,
-    ) -> Result<crate::WgpuTexturesDecoder, VideoDecoderError> {
-        VulkanDevice::create_wgpu_textures_decoder_h264(self, wgpu_device, parameters)
-            .map_err(Into::into)
-    }
-
-    #[cfg(feature = "wgpu")]
-    fn create_wgpu_textures_encoder_h264(
-        self: Arc<Self>,
-        wgpu_device: wgpu::Device,
-        wgpu_queue: wgpu::Queue,
-        parameters: EncoderParametersH264,
-    ) -> Result<crate::WgpuTexturesEncoderH264, VideoEncoderError> {
-        VulkanDevice::create_wgpu_textures_encoder_h264(self, wgpu_device, wgpu_queue, parameters)
-    }
-
-    #[cfg(feature = "wgpu")]
-    fn create_wgpu_textures_encoder_h265(
-        self: Arc<Self>,
-        wgpu_device: wgpu::Device,
-        wgpu_queue: wgpu::Queue,
-        parameters: EncoderParametersH265,
-    ) -> Result<crate::WgpuTexturesEncoderH265, VideoEncoderError> {
-        VulkanDevice::create_wgpu_textures_encoder_h265(self, wgpu_device, wgpu_queue, parameters)
     }
 
     #[cfg(feature = "transcoder")]
@@ -133,106 +106,6 @@ impl VulkanDevice {
             #[cfg(feature = "wgpu")]
             wgpu_device: None,
         })
-    }
-
-    #[cfg(feature = "wgpu")]
-    pub(crate) fn create_and_register_wgpu(
-        wgpu_adapter: &wgpu::Adapter,
-        video_adapter: VulkanAdapter<'_>,
-        desc: VideoDeviceDescriptor,
-    ) -> Result<(wgpu::Device, wgpu::Queue), VulkanDeviceInitError> {
-        use std::sync::OnceLock;
-
-        use crate::{
-            WgpuInitError,
-            global_registry::{GlobalRegistry, VideoDeviceKey},
-        };
-        use wgpu::hal::vulkan::Api as VkApi;
-
-        let hal_adapter = unsafe { wgpu_adapter.as_hal::<VkApi>().unwrap() };
-
-        let wgpu_queue_family_index = video_adapter
-            .queue_indices
-            .graphics_transfer_compute
-            .family_index as u32;
-        let mut required_extensions = video_adapter.required_extensions();
-
-        let wgpu_features = desc.wgpu_features | wgpu::Features::TEXTURE_FORMAT_NV12;
-        let mut wgpu_extensions = hal_adapter.required_device_extensions(wgpu_features);
-        required_extensions.append(&mut wgpu_extensions);
-
-        let mut wgpu_physical_device_features = unsafe {
-            wgpu_adapter
-                .as_hal::<wgpu::hal::vulkan::Api>()
-                .unwrap()
-                .physical_device_features(&required_extensions, desc.wgpu_features)
-        };
-
-        let mut device_create_info = vk::DeviceCreateInfo::default();
-        device_create_info = wgpu_physical_device_features.add_to_device_create(device_create_info);
-
-        let video_device =
-            Self::new_from_create_info(video_adapter, &required_extensions, device_create_info)?;
-
-        let VideoDeviceDescriptor {
-            wgpu_features,
-            wgpu_experimental_features,
-            wgpu_limits,
-        } = desc;
-
-        let wgpu_features = wgpu_features | wgpu::Features::TEXTURE_FORMAT_NV12;
-        let device_key_for_dropping = Arc::new(OnceLock::new());
-        let device_key_for_dropping_clone = device_key_for_dropping.clone();
-
-        let hal_adapter = unsafe { wgpu_adapter.as_hal::<wgpu::hal::vulkan::Api>().unwrap() };
-        let device_clone = video_device.device.clone();
-        let wgpu_device = unsafe {
-            hal_adapter
-                .device_from_raw(
-                    device_clone.device.clone(),
-                    Some(Box::new(move || {
-                        match device_key_for_dropping_clone.get() {
-                            Some(key) => GlobalRegistry::unregister_device(key),
-                            None => {
-                                tracing::debug!(
-                                    "Tried to drop device not registered in the global registry"
-                                )
-                            }
-                        }
-
-                        drop(device_clone);
-                    })),
-                    &required_extensions,
-                    wgpu_features,
-                    &wgpu_limits,
-                    &wgpu::MemoryHints::default(),
-                    wgpu_queue_family_index,
-                    0,
-                )
-                .map_err(WgpuInitError::WgpuDeviceError)?
-        };
-
-        let (wgpu_device, wgpu_queue) = unsafe {
-            wgpu_adapter
-                .create_device_from_hal(
-                    wgpu_device,
-                    &wgpu::DeviceDescriptor {
-                        label: Some("wgpu device created by the vulkan video decoder"),
-                        memory_hints: wgpu::MemoryHints::default(),
-                        required_limits: wgpu_limits,
-                        required_features: wgpu_features,
-                        trace: wgpu::Trace::Off,
-                        experimental_features: wgpu_experimental_features,
-                    },
-                )
-                .map_err(WgpuInitError::WgpuRequestDeviceError)?
-        };
-
-        let device_key = VideoDeviceKey::from(&wgpu_device);
-        device_key_for_dropping.set(device_key).unwrap();
-        GlobalRegistry::register_device(device_key, video_device);
-
-        Ok((wgpu_device, wgpu_queue))
     }
 
     fn new_from_create_info(
@@ -385,35 +258,6 @@ impl VulkanDevice {
         })
     }
 
-    #[cfg(feature = "wgpu")]
-    pub fn create_wgpu_textures_decoder_h264(
-        self: Arc<Self>,
-        wgpu_device: wgpu::Device,
-        parameters: DecoderParameters,
-    ) -> Result<crate::WgpuTexturesDecoder, VulkanDecoderError> {
-        let parser = H264Parser::default();
-        let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
-
-        let vulkan_decoder = VulkanDecoder::new(
-            Arc::new(self.decoding_device()?),
-            parameters.usage_flags,
-            ImageModifiers {
-                additional_queue_index: self.queues.transfer.family_index,
-                create_flags: Default::default(),
-                usage_flags: Default::default(),
-            },
-        )?;
-        let frame_sorter = FrameSorter::<wgpu::Texture>::new();
-
-        Ok(crate::WgpuTexturesDecoder {
-            wgpu_device,
-            parser,
-            reference_ctx,
-            vulkan_decoder,
-            frame_sorter,
-        })
-    }
-
     pub fn create_bytes_encoder_h264(
         self: Arc<Self>,
         parameters: EncoderParametersH264,
@@ -442,48 +286,6 @@ impl VulkanDevice {
         )?;
 
         Ok(BytesEncoderH265 {
-            vulkan_encoder: VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?,
-        })
-    }
-
-    #[cfg(feature = "wgpu")]
-    pub fn create_wgpu_textures_encoder_h264(
-        self: Arc<Self>,
-        wgpu_device: wgpu::Device,
-        wgpu_queue: wgpu::Queue,
-        parameters: EncoderParametersH264,
-    ) -> Result<crate::WgpuTexturesEncoderH264, VideoEncoderError> {
-        let parameters = self.validate_and_fill_encoder_parameters(
-            parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
-        )?;
-
-        Ok(crate::WgpuTexturesEncoderH264 {
-            wgpu_device,
-            wgpu_queue,
-            vulkan_encoder: VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?,
-        })
-    }
-
-    #[cfg(feature = "wgpu")]
-    pub fn create_wgpu_textures_encoder_h265(
-        self: Arc<Self>,
-        wgpu_device: wgpu::Device,
-        wgpu_queue: wgpu::Queue,
-        parameters: EncoderParametersH265,
-    ) -> Result<crate::WgpuTexturesEncoderH265, VideoEncoderError> {
-        let parameters = self.validate_and_fill_encoder_parameters(
-            parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
-        )?;
-
-        Ok(crate::WgpuTexturesEncoderH265 {
-            wgpu_device,
-            wgpu_queue,
             vulkan_encoder: VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?,
         })
     }
@@ -623,15 +425,9 @@ impl VulkanDevice {
                 problem: format!("Framerate is {framerate:?}. The numerator should be != 0.",),
             });
         }
-        let usage_flags = encoder_parameters
-            .usage_flags
-            .unwrap_or(vk::VideoEncodeUsageFlagsKHR::DEFAULT);
-        let tuning_mode = encoder_parameters
-            .tuning_mode
-            .unwrap_or(vk::VideoEncodeTuningModeKHR::DEFAULT);
-        let content_flags = encoder_parameters
-            .content_flags
-            .unwrap_or(vk::VideoEncodeContentFlagsKHR::DEFAULT);
+        let usage_flags = encoder_parameters.usage_flags.unwrap_or_default().into();
+        let tuning_mode = vk::VideoEncodeTuningModeKHR::DEFAULT;
+        let content_flags = encoder_parameters.content_flags.unwrap_or_default().into();
         let color_space = encoder_parameters.color_space.unwrap_or_default();
         let color_range = encoder_parameters
             .color_range
