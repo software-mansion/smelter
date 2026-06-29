@@ -120,7 +120,7 @@ async fn run_accept_loop(
 ) {
     while let Some(request) = server.accept().await {
         let (origin, input_ref) = match handle_incoming_connection(&request, &moq_inputs).await {
-            Ok(sci) => sci,
+            Ok(oi) => oi,
             Err(err) => {
                 warn!(
                     "MoQ connection rejected: {}",
