@@ -75,14 +75,16 @@ impl HlsOutput {
             None => None,
         };
 
-        // 0 means no list size limit
-        let list_size = options.max_playlist_size.unwrap_or(0).to_string();
         let mut ffmpeg_options = FfmpegOptions::from(&[
             ("segment_format", "mpegts"),
             ("segment_list_type", "m3u8"),
             ("segment_list_flags", "cache+live"),
             ("hls_flags", "delete_segments"),
-            ("hls_list_size", list_size.as_str()),
+            (
+                "hls_list_size",
+                // 0 means no list size limit
+                &options.max_playlist_size.unwrap_or(0).to_string(),
+            ),
         ]);
         ffmpeg_options.append(&options.raw_options);
 
