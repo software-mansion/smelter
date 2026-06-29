@@ -81,6 +81,11 @@ impl HlsOutput {
             "path": self.path,
             "video": self.options.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.options.audio.as_ref().map(|a| a.serialize_register(inputs)),
+            // CMAF muxing
+            // "ffmpeg_options": {
+            //     "hls_segment_type": "fmp4",
+            //     "hls_flags": "delete_segments+independent_segments",
+            // }
         })
     }
 
