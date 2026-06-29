@@ -4,9 +4,9 @@ use ash::vk::{self, Handle};
 use vk_mem::Alloc;
 
 use crate::{
-    VideoInitError, VulkanCommonError, VulkanDecoderError,
+    VulkanCommonError, VulkanDecoderError,
     codec::h264::parameters::H264DecodeProfileInfo,
-    device::EncodingDevice,
+    device::{EncodingDevice, VulkanDeviceInitError},
     wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
 };
 
@@ -23,7 +23,7 @@ impl Allocator {
         instance: Arc<Instance>,
         physical_device: vk::PhysicalDevice,
         device: Arc<Device>,
-    ) -> Result<Self, VideoInitError> {
+    ) -> Result<Self, VulkanDeviceInitError> {
         let mut allocator_create_info =
             vk_mem::AllocatorCreateInfo::new(&instance, &device, physical_device);
         allocator_create_info.vulkan_api_version = vk::API_VERSION_1_3;
