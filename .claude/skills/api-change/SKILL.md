@@ -30,4 +30,6 @@ Run the API change workflow. All steps must pass before the change is considered
    In most cases you will need to:
    - add/modify type in `ts/smelter` package e.g. `ts/smelter/src/types/input.ts`
    - add/modify mapping in `ts/smelter-core` package e.g. `ts/smelter-core/src/api/input.ts`. In most cases it will be just switching snake case to camel case, but consider if there are more idiomatic alternatives.
+   - add/modify type in `ts/smelter-node/src/api.ts`.
+   - add/modify type in `ts/smelter-web-client/src/api.ts`.
    Inform user if it's not obvious how the changes should be adapted.
