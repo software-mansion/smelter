@@ -16,7 +16,7 @@ use crate::{
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac::FdkAacDecoder,
-            ffmpeg_h264, ffmpeg_vp8,
+            ffmpeg_h264, ffmpeg_vp8, ffmpeg_vp9,
             libopus::OpusDecoder,
             vulkan_h264,
         },
@@ -411,7 +411,7 @@ fn spawn_video_decoder(
             }
         }),
         VideoCodec::Vp8 => VideoDecoderOptions::FfmpegVp8,
-        VideoCodec::Vp9 => todo!(),
+        VideoCodec::Vp9 => VideoDecoderOptions::FfmpegVp9,
     };
 
     match decoder_opt {
@@ -429,7 +429,12 @@ fn spawn_video_decoder(
                 options,
             )?,
         ),
-        VideoDecoderOptions::FfmpegVp9 => todo!(),
+        VideoDecoderOptions::FfmpegVp9 => Ok(
+            VideoDecoderThread::<ffmpeg_vp9::FfmpegVp9Decoder, _>::spawn(
+                input_ref.clone(),
+                options,
+            )?,
+        ),
     }
 }
 
