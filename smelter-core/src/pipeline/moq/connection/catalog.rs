@@ -105,8 +105,9 @@ fn find_first_video(video: &hang::catalog::Video) -> Result<Option<VideoTrack>, 
     let codec = match &config.codec {
         MoqVideoCodec::H264(_) => VideoCodec::H264,
         MoqVideoCodec::VP8 => VideoCodec::Vp8,
+        MoqVideoCodec::VP9(_) => VideoCodec::Vp9,
         _ => {
-            warn!("Unsupported video codec. Use H264.");
+            warn!("Unsupported video codec. Use H264, VP8 or VP9.");
             return Ok(None);
         }
     };
