@@ -1,12 +1,13 @@
 use crate::common_core::prelude as core;
 use crate::*;
 
-impl TryFrom<MoqServerInput> for core::RegisterInputOptions {
+impl TryFrom<MoqClientInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
-    fn try_from(value: MoqServerInput) -> Result<Self, Self::Error> {
-        let MoqServerInput {
-            auth_token,
+    fn try_from(value: MoqClientInput) -> Result<Self, Self::Error> {
+        let MoqClientInput {
+            endpoint_url,
+            broadcast_path,
             required,
             decoder_map,
             side_channel,
@@ -17,19 +18,20 @@ impl TryFrom<MoqServerInput> for core::RegisterInputOptions {
 
         let h264 = decoder_map
             .as_ref()
-            .and_then(|decoders| decoders.get(&InputMoqServerCodec::H264))
+            .and_then(|decoders| decoders.get(&InputMoqClientCodec::H264))
             .map(|decoder| match decoder {
-                MoqServerVideoDecoderOptions::FfmpegH264 => {
+                MoqClientVideoDecoderOptions::FfmpegH264 => {
                     Ok(core::VideoDecoderOptions::FfmpegH264)
                 }
-                MoqServerVideoDecoderOptions::VulkanH264 => {
+                MoqClientVideoDecoderOptions::VulkanH264 => {
                     Ok(core::VideoDecoderOptions::VulkanH264)
                 }
             })
             .transpose()?;
 
-        let input_options = core::MoqServerInputOptions {
-            auth_token,
+        let input_options = core::MoqClientInputOptions {
+            endpoint_url,
+            broadcast_path,
             decoders: core::MoqInputDecoders { h264 },
             queue_options: core::QueueInputOptions {
                 required: required.unwrap_or(false),
@@ -39,6 +41,6 @@ impl TryFrom<MoqServerInput> for core::RegisterInputOptions {
             },
         };
 
-        Ok(core::RegisterInputOptions::MoqServer(input_options))
+        Ok(core::RegisterInputOptions::MoqClient(input_options))
     }
 }

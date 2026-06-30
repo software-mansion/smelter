@@ -1,46 +1,25 @@
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use hang::moq_net::{OriginConsumer, OriginProducer};
-use moq_native::{
-    Request, ServerConfig, ServerTlsConfig,
-    moq_net::{Origin, Session},
-};
+use moq_native::{Request, ServerConfig, ServerTlsConfig, moq_net::Origin};
 use smelter_render::error::ErrorStack;
-use tracing::{info, warn};
+use tracing::{Instrument, Level, info, span, warn};
 
-use crate::pipeline::moq::{
-    certificate::load_or_create_self_signed_tls, connection::start_broadcast_handler_task,
-    state::MoqServerState,
+use crate::{
+    pipeline::moq::{
+        MoqSession,
+        input::connection::{BroadcastCtx, MoqEndpointKind, handle_broadcast},
+        server::{certificate::load_or_create_self_signed_tls, state::MoqServerState},
+    },
+    queue::WeakQueueInput,
 };
 
 use crate::prelude::*;
 
-pub struct MoqSession {
-    session: Session,
-    rt: Arc<tokio::runtime::Runtime>,
-}
+mod certificate;
+pub(crate) mod state;
 
-impl MoqSession {
-    fn new(session: Session, rt: Arc<tokio::runtime::Runtime>) -> Self {
-        Self { session, rt }
-    }
-}
-
-impl Deref for MoqSession {
-    type Target = Session;
-
-    fn deref(&self) -> &Self::Target {
-        &self.session
-    }
-}
-
-impl Drop for MoqSession {
-    fn drop(&mut self) {
-        let _guard = self.rt.enter();
-        self.session.close(hang::moq_net::Error::Cancel);
-        tracing::info!("MoQ session closed!");
-    }
-}
+pub(crate) use certificate::SelfSignedTlsError;
 
 pub struct MoqPipelineState {
     pub port: u16,
@@ -88,7 +67,7 @@ pub async fn spawn_moq_server(
 
     let server = match try_start_server(config).await {
         Ok(server) => server,
-        Err(err) => return Err(InitPipelineError::MoqServerInitError(err)),
+        Err(err) => return Err(InitPipelineError::MoqServerInitError(format!("{err}"))),
     };
 
     let accept_task = tokio::spawn(run_accept_loop(server, state.server_state.clone(), ctx));
@@ -202,11 +181,51 @@ async fn handle_session(
 
     moq_inputs.get_mut_with(&input_ref, |input| {
         input.ensure_no_active_connection(&input_ref)?;
-        let Some(handle) = start_broadcast_handler_task(ctx, &input_ref, input, broadcast) else {
+        let broadcast_ctx = BroadcastCtx {
+            broadcast,
+            decoders: input.decoders,
+            should_close: input.should_close.clone(),
+            endpoint_kind: MoqEndpointKind::Server,
+        };
+        let Some(handle) =
+            start_broadcast_handler_task(ctx, &input_ref, input.queue_input.clone(), broadcast_ctx)
+        else {
             return Err(MoqServerError::QueueDropped);
         };
         input.connection_task_handle = Some(handle);
         input.session = Some(session);
         Ok(())
     })
+}
+
+fn start_broadcast_handler_task(
+    ctx: Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
+    queue_input: WeakQueueInput,
+    broadcast_ctx: BroadcastCtx,
+) -> Option<tokio::task::JoinHandle<()>> {
+    let input_ref = input_ref.clone();
+    let rt = ctx.tokio_rt.clone();
+
+    let span = span!(
+        Level::INFO,
+        "MoQ server input",
+        input_id = input_ref.to_string()
+    );
+
+    let handle = rt.spawn(
+        async move {
+            let broadcast_result =
+                handle_broadcast(ctx, input_ref.clone(), queue_input, broadcast_ctx).await;
+            if let Err(error) = broadcast_result {
+                warn!(
+                    "Failed to receive broadcast: {}",
+                    ErrorStack::new(&error).into_string()
+                );
+            }
+        }
+        .instrument(span),
+    );
+
+    Some(handle)
 }

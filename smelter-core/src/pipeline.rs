@@ -82,6 +82,8 @@ pub struct PipelineOptions {
 
     pub rtmp_server: PipelineRtmpServerOptions,
     pub moq_server: PipelineMoqServerOptions,
+
+    pub moq_disable_tls_verification: bool,
 }
 
 #[derive(Debug)]
@@ -136,6 +138,8 @@ pub(crate) struct PipelineCtx {
     pub stats_sender: StatsSender,
     pub webrtc_stun_servers: Arc<Vec<String>>,
     pub webrtc_setting_engine: WebrtcSettingEngineCtx,
+    pub moq_disable_tls_verification: bool,
+
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
     rtmp_state: Option<Arc<RtmpPipelineState>>,

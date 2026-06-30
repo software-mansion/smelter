@@ -624,6 +624,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         webrtc_setting_engine,
         rtmp_state: rtmp_state.clone(),
         moq_state: moq_state.clone(),
+        moq_disable_tls_verification: opts.moq_disable_tls_verification,
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {

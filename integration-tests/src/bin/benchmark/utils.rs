@@ -45,6 +45,7 @@ pub fn benchmark_pipeline_options(
         webrtc_nat_1to1_ips: Arc::new(vec![]),
         rtmp_server: PipelineRtmpServerOptions::Disable,
         moq_server: PipelineMoqServerOptions::Disable,
+        moq_disable_tls_verification: true,
         wgpu_options: PipelineWgpuOptions::Context(graphics_context),
         side_channel_socket_dir: None,
     }

@@ -2290,6 +2290,27 @@
           {
             "allOf": [
               {
+                "$ref": "#/components/schemas/MoqClientInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "moq_client"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/Mp4InputStatsReport"
               },
               {
@@ -2463,7 +2484,106 @@
           }
         }
       },
-      "MoqInputServer": {
+      "MoqClientInput": {
+        "type": "object",
+        "required": [
+          "endpoint_url",
+          "broadcast_path"
+        ],
+        "properties": {
+          "endpoint_url": {
+            "type": "string",
+            "description": "URL of the MoQ relay to connect to. Must use the `https://` scheme."
+          },
+          "broadcast_path": {
+            "type": "string",
+            "description": "Path of the broadcast to subscribe to on the relay."
+          },
+          "required": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+          },
+          "decoder_map": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Assigns which decoder should be used for media encoded with a specific codec.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MoqClientVideoDecoderOptions"
+            },
+            "propertyNames": {
+              "type": "string",
+              "enum": [
+                "h264"
+              ]
+            }
+          },
+          "side_channel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SideChannel",
+                "description": "Enable side channel for video and/or audio track."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MoqClientInputStatsReport": {
+        "type": "object",
+        "description": "Stats report for `MoQ` client input.",
+        "required": [
+          "video",
+          "audio"
+        ],
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/MoqClientInputTrackStatsReport",
+            "description": "Stats for the video track."
+          },
+          "audio": {
+            "$ref": "#/components/schemas/MoqClientInputTrackStatsReport",
+            "description": "Stats for the audio track."
+          }
+        }
+      },
+      "MoqClientInputTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for a track in `MoQ` client input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate in the 1-second window.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate in the 1-minute window.",
+            "minimum": 0
+          }
+        }
+      },
+      "MoqClientVideoDecoderOptions": {
+        "type": "string",
+        "enum": [
+          "ffmpeg_h264",
+          "vulkan_h264"
+        ]
+      },
+      "MoqServerInput": {
         "type": "object",
         "required": [
           "auth_token"
@@ -2487,7 +2607,7 @@
             ],
             "description": "Assigns which decoder should be used for media encoded with a specific codec.",
             "additionalProperties": {
-              "$ref": "#/components/schemas/MoqVideoDecoderOptions"
+              "$ref": "#/components/schemas/MoqServerVideoDecoderOptions"
             },
             "propertyNames": {
               "type": "string",
@@ -2550,7 +2670,7 @@
           }
         }
       },
-      "MoqVideoDecoderOptions": {
+      "MoqServerVideoDecoderOptions": {
         "type": "string",
         "enum": [
           "ffmpeg_h264",
@@ -3708,7 +3828,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/MoqInputServer"
+                "$ref": "#/components/schemas/MoqServerInput"
               },
               {
                 "type": "object",
@@ -3720,6 +3840,27 @@
                     "type": "string",
                     "enum": [
                       "moq_server"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoqClientInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "moq_client"
                     ]
                   }
                 }

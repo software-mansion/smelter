@@ -158,5 +158,7 @@ pub fn pipeline_options_from_config(
             },
             false => PipelineMoqServerOptions::Disable,
         },
+
+        moq_disable_tls_verification: opt.moq_disable_tls_verification,
     }
 }

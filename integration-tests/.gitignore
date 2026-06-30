@@ -5,3 +5,7 @@
 /examples/assets/image.png
 /examples/demo/*.json
 /test_workdir
+
+/moq_relay_config.toml
+/moq_key.jwk
+/moq_token.jwt
