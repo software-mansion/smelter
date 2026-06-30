@@ -182,19 +182,17 @@ fn extract_codec_description(container: &Container) -> Result<Option<Bytes>, Moq
         return Ok(None);
     };
 
-    let codec = cmaf.trak().mdia.minf.stbl.stsd.codecs.first().ok_or(
-        MoqCatalogError::CodecConfigExtractionError("CMAF init segment contains no codec entries"),
-    )?;
+    let codec = cmaf.trak().mdia.minf.stbl.stsd.codecs.first();
 
     match codec {
-        mp4_atom::Codec::Avc1(avc1) => {
+        Some(mp4_atom::Codec::Avc1(avc1)) => {
             let mut buf = BytesMut::new();
             avc1.avcc.encode_body(&mut buf).map_err(|_| {
                 MoqCatalogError::CodecConfigExtractionError("failed to encode AVCDecoderConfig")
             })?;
             Ok(Some(buf.freeze()))
         }
-        mp4_atom::Codec::Mp4a(mp4a) => {
+        Some(mp4_atom::Codec::Mp4a(mp4a)) => {
             let mut buf = BytesMut::new();
             mp4a.esds
                 .es_desc
