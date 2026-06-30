@@ -9,12 +9,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MoqInput {
+pub struct MoqServerInput {
     pub name: String,
     pub auth_token: String,
 }
 
-impl MoqInput {
+impl MoqServerInput {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "moq_server",
@@ -32,12 +32,12 @@ impl MoqInput {
     }
 }
 
-pub struct MoqInputBuilder {
+pub struct MoqServerInputBuilder {
     name: String,
     auth_token: String,
 }
 
-impl MoqInputBuilder {
+impl MoqServerInputBuilder {
     pub fn new() -> Self {
         let name = Self::generate_name();
         let auth_token = "example".to_string();
@@ -48,7 +48,7 @@ impl MoqInputBuilder {
         static LAST_INPUT: OnceLock<AtomicU32> = OnceLock::new();
         let atomic_suffix = LAST_INPUT.get_or_init(|| AtomicU32::new(0));
         let suffix = atomic_suffix.fetch_add(1, Ordering::Relaxed);
-        format!("input_moq_{suffix}")
+        format!("input_moq_server_{suffix}")
     }
 
     pub fn prompt(self) -> Result<Self> {
@@ -83,8 +83,8 @@ impl MoqInputBuilder {
         self
     }
 
-    pub fn build(self) -> MoqInput {
-        MoqInput {
+    pub fn build(self) -> MoqServerInput {
+        MoqServerInput {
             name: self.name,
             auth_token: self.auth_token,
         }

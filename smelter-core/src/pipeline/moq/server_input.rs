@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     pipeline::{
         input::Input,
-        moq::state::{MoqInputStateOptions, MoqServerState},
+        moq::server_state::{MoqServerInputStateOptions, MoqServerState},
     },
     queue::QueueInput,
 };
@@ -34,7 +34,7 @@ impl MoqServerInput {
 
         state.server_state.add_input(
             &input_ref,
-            MoqInputStateOptions {
+            MoqServerInputStateOptions {
                 queue_input: queue_input.downgrade(),
                 auth_token: options.auth_token,
                 decoders: options.decoders,
