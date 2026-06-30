@@ -380,21 +380,18 @@ fn spawn_video_decoder(
     video: &VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    let transformer = match (&video.codec, &video.description) {
-        (VideoCodec::H264, Some(desc)) => {
+    let transformer = match (&video.codec, &video.container, &video.description) {
+        (VideoCodec::H264, Container::Cmaf(_), Some(desc)) => {
             let h264_config = H264AvcDecoderConfig::parse(desc.clone())
                 .map_err(|_| MoqConnectionError::InvalidAvcc)?;
 
             Some(H264AvccToAnnexB::new(h264_config))
         }
+        (VideoCodec::H264, Container::Cmaf(_), None) => {
+            return Err(MoqConnectionError::MissingAvcc);
+        }
         _ => None,
     };
-    if let Container::Cmaf(_) = video.container
-        && video.codec == VideoCodec::H264
-        && transformer.is_none()
-    {
-        return Err(MoqConnectionError::MissingAvcc);
-    }
 
     let options = VideoDecoderThreadOptions {
         ctx: ctx.clone(),
