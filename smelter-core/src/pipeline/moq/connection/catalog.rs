@@ -119,7 +119,13 @@ fn find_first_video(video: &hang::catalog::Video) -> Result<Option<VideoTrack>, 
 
     let description = match &config.description {
         Some(desc) => Some(desc.clone()),
-        None => extract_codec_description(&container)?,
+        None => match extract_codec_description(&container) {
+            Ok(desc) => desc,
+            Err(error) => {
+                warn!(%error, "Failed to extract video decoder config from container; skipping video track.");
+                return Ok(None);
+            }
+        },
     };
 
     Ok(Some(VideoTrack {
@@ -151,7 +157,13 @@ fn find_first_audio(audio: &hang::catalog::Audio) -> Result<Option<AudioTrack>, 
 
     let description = match &config.description {
         Some(desc) => Some(desc.clone()),
-        None => extract_codec_description(&container)?,
+        None => match extract_codec_description(&container) {
+            Ok(desc) => desc,
+            Err(error) => {
+                warn!(%error, "Failed to extract audio decoder config from container; skipping audio track.");
+                return Ok(None);
+            }
+        },
     };
 
     Ok(Some(AudioTrack {
