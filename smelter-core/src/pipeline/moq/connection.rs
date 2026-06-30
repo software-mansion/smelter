@@ -10,19 +10,16 @@ use smelter_render::error::ErrorStack;
 use tracing::{Instrument, Level, Span, debug, info, span, trace, warn};
 
 use crate::{
-    pipeline::{
-        decoder::{
-            DecoderThreadHandle,
-            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
-            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
-            fdk_aac::FdkAacDecoder,
-            ffmpeg_h264::FfmpegH264Decoder,
-            ffmpeg_vp8::FfmpegVp8Decoder,
-            ffmpeg_vp9::FfmpegVp9Decoder,
-            libopus::OpusDecoder,
-            vulkan_h264::VulkanH264Decoder,
-        },
-        moq::state::MoqInputState,
+    pipeline::decoder::{
+        DecoderThreadHandle,
+        decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
+        decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
+        fdk_aac::FdkAacDecoder,
+        ffmpeg_h264::FfmpegH264Decoder,
+        ffmpeg_vp8::FfmpegVp8Decoder,
+        ffmpeg_vp9::FfmpegVp9Decoder,
+        libopus::OpusDecoder,
+        vulkan_h264::VulkanH264Decoder,
     },
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
     utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread},
@@ -56,7 +53,7 @@ struct TrackCtx {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
     broadcast: BroadcastConsumer,
-    decoders: MoqServerInputDecoders,
+    decoders: MoqInputDecoders,
     first_pts: Arc<Mutex<Option<Duration>>>,
     should_close: Arc<AtomicBool>,
     stats_sender: MoqStatsSender,
@@ -65,20 +62,15 @@ struct TrackCtx {
 pub(crate) fn start_broadcast_handler_task(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    input: &MoqInputState,
+    queue_input: WeakQueueInput,
+    decoders: MoqInputDecoders,
+    should_close: Arc<AtomicBool>,
     broadcast: BroadcastConsumer,
 ) -> Option<tokio::task::JoinHandle<()>> {
-    let queue_input = input.queue_input.clone();
     let input_ref = input_ref.clone();
-    let decoders = input.decoders;
     let rt = ctx.tokio_rt.clone();
-    let should_close = input.should_close.clone();
 
-    let span = span!(
-        Level::INFO,
-        "MoQ server input",
-        input_id = input_ref.to_string()
-    );
+    let span = span!(Level::INFO, "MoQ input", input_id = input_ref.to_string());
 
     let handle = rt.spawn(
         async move {
@@ -107,7 +99,7 @@ pub(crate) fn start_broadcast_handler_task(
 async fn handle_broadcast(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    decoders: MoqServerInputDecoders,
+    decoders: MoqInputDecoders,
     queue_input: WeakQueueInput,
     broadcast: BroadcastConsumer,
     should_close: Arc<AtomicBool>,
@@ -165,7 +157,7 @@ impl BroadcastHandler {
         broadcast: BroadcastConsumer,
         video: Option<VideoTrack>,
         audio: Option<AudioTrack>,
-        decoders: MoqServerInputDecoders,
+        decoders: MoqInputDecoders,
         should_close: Arc<AtomicBool>,
     ) -> Self {
         // Shared across audio and video so both tracks are normalized against
@@ -378,7 +370,7 @@ async fn run_audio_track(
 fn spawn_video_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    decoders: &MoqServerInputDecoders,
+    decoders: &MoqInputDecoders,
     video: &VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
@@ -411,7 +403,7 @@ fn spawn_video_decoder(
 fn spawn_h264_video_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    decoders: &MoqServerInputDecoders,
+    decoders: &MoqInputDecoders,
     video: &VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {

@@ -71,6 +71,7 @@ impl InputStatsState {
             InputProtocolKind::Mp4 => InputStatsState::Mp4(Mp4InputState::new()),
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
             InputProtocolKind::MoqServer => InputStatsState::MoqServer(MoqServerInputState::new()),
+            InputProtocolKind::MoqClient => unimplemented!(),
             InputProtocolKind::V4l2 => unimplemented!(),
             InputProtocolKind::DeckLink => unimplemented!(),
             InputProtocolKind::RawDataChannel => unimplemented!(),

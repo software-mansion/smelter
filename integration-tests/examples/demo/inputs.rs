@@ -5,12 +5,13 @@ use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
 use crate::inputs::{
-    hls::HlsInput, moq::MoqInput, mp4::Mp4Input, rtmp::RtmpInput, rtp::RtpInput, whep::WhepInput,
-    whip::WhipInput,
+    hls::HlsInput, moq_client::MoqClientInput, moq_server::MoqServerInput, mp4::Mp4Input,
+    rtmp::RtmpInput, rtp::RtpInput, whep::WhepInput, whip::WhipInput,
 };
 
 pub mod hls;
-pub mod moq;
+pub mod moq_client;
+pub mod moq_server;
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
@@ -26,7 +27,8 @@ pub enum InputHandle {
     Hls(HlsInput),
     Whip(WhipInput),
     Whep(WhepInput),
-    MoqServer(MoqInput),
+    MoqServer(MoqServerInput),
+    MoqClient(MoqClientInput),
 }
 
 impl InputHandle {
@@ -39,6 +41,7 @@ impl InputHandle {
             Self::Whip(i) => &i.name,
             Self::Whep(i) => &i.name,
             Self::MoqServer(i) => &i.name,
+            Self::MoqClient(i) => &i.name,
         }
     }
 
@@ -51,6 +54,7 @@ impl InputHandle {
             Self::Whip(i) => i.serialize_register(),
             Self::Whep(i) => i.serialize_register(),
             Self::MoqServer(i) => i.serialize_register(),
+            Self::MoqClient(i) => i.serialize_register(),
         }
     }
 
@@ -116,7 +120,10 @@ pub enum InputProtocol {
     Hls,
 
     #[strum(to_string = "moq_server")]
-    Moq,
+    MoqServer,
+
+    #[strum(to_string = "moq_client")]
+    MoqClient,
 }
 
 #[derive(Debug, EnumIter, Display, PartialEq, Clone, Copy, Serialize, Deserialize)]

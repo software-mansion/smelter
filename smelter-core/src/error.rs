@@ -247,7 +247,10 @@ pub enum InputInitError {
     Rtmp(#[from] RtmpServerError),
 
     #[error(transparent)]
-    Moq(#[from] MoqServerError),
+    MoqServer(#[from] MoqServerError),
+
+    #[error(transparent)]
+    MoqClient(#[from] MoqClientError),
 
     #[cfg(feature = "decklink")]
     #[error(transparent)]

@@ -8,13 +8,21 @@ use crate::queue::QueueInputOptions;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoqServerInputOptions {
-    pub decoders: MoqServerInputDecoders,
+    pub decoders: MoqInputDecoders,
     pub auth_token: Arc<str>,
     pub queue_options: QueueInputOptions,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct MoqClientInputOptions {
+    pub url: Arc<str>,
+    pub broadcast_path: Arc<str>,
+    pub decoders: MoqInputDecoders,
+    pub queue_options: QueueInputOptions,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MoqServerInputDecoders {
+pub struct MoqInputDecoders {
     pub h264: Option<VideoDecoderOptions>,
 }
 
@@ -52,6 +60,21 @@ pub enum MoqServerError {
 
     #[error("MoQ handshake failed: {0}")]
     MoqHandshakeFailed(#[source] anyhow::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MoqClientError {
+    #[error("Invalid MoQ relay URL \"{0}\": {1}")]
+    InvalidUrl(Arc<str>, #[source] url::ParseError),
+
+    #[error("Unsupported MoQ relay URL scheme \"{0}\", only \"https\" is supported.")]
+    InvalidScheme(String),
+
+    #[error("Failed to initialize MoQ client: {0}")]
+    ClientInitFailed(#[source] anyhow::Error),
+
+    #[error("Failed to connect to MoQ relay: {0}")]
+    ConnectFailed(#[source] anyhow::Error),
 }
 
 impl MoqServerError {

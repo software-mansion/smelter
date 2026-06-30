@@ -1,36 +1,38 @@
 use std::{
     collections::HashMap,
+    ops::Deref,
     sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
+use hang::moq_net::Session;
 use sha3::{Digest, Sha3_512};
 use tokio::task::JoinHandle;
 use tracing::error;
 
-use crate::{pipeline::moq::server::MoqSession, queue::WeakQueueInput};
+use crate::{pipeline::moq::MoqSession, queue::WeakQueueInput};
 
 use crate::prelude::*;
 
 #[derive(Clone, Default)]
-pub(crate) struct MoqServerState(Arc<Mutex<HashMap<Ref<InputId>, MoqInputState>>>);
+pub(crate) struct MoqServerState(Arc<Mutex<HashMap<Ref<InputId>, MoqServerInputState>>>);
 
-pub(crate) struct MoqInputState {
+pub(crate) struct MoqServerInputState {
     pub queue_input: WeakQueueInput,
     pub auth_token: Arc<str>,
-    pub decoders: MoqServerInputDecoders,
+    pub decoders: MoqInputDecoders,
     pub should_close: Arc<AtomicBool>,
     pub connection_task_handle: Option<JoinHandle<()>>,
     pub session: Option<MoqSession>,
 }
 
-pub(crate) struct MoqInputStateOptions {
+pub(crate) struct MoqServerInputStateOptions {
     pub queue_input: WeakQueueInput,
     pub auth_token: Arc<str>,
-    pub decoders: MoqServerInputDecoders,
+    pub decoders: MoqInputDecoders,
 }
 
-impl MoqInputState {
-    fn new(options: MoqInputStateOptions) -> Self {
+impl MoqServerInputState {
+    fn new(options: MoqServerInputStateOptions) -> Self {
         Self {
             queue_input: options.queue_input,
             auth_token: options.auth_token,
@@ -43,7 +45,7 @@ impl MoqInputState {
 }
 
 impl MoqServerState {
-    pub fn get_mut_with<T, F: FnOnce(&mut MoqInputState) -> Result<T, MoqServerError>>(
+    pub fn get_mut_with<T, F: FnOnce(&mut MoqServerInputState) -> Result<T, MoqServerError>>(
         &self,
         input_ref: &Ref<InputId>,
         f: F,
@@ -58,7 +60,7 @@ impl MoqServerState {
     pub(crate) fn add_input(
         &self,
         input_ref: &Ref<InputId>,
-        options: MoqInputStateOptions,
+        options: MoqServerInputStateOptions,
     ) -> Result<(), MoqServerError> {
         let mut guard = self.0.lock().unwrap();
         if guard.contains_key(input_ref) {
@@ -66,7 +68,7 @@ impl MoqServerState {
                 input_ref.id().clone(),
             ));
         }
-        guard.insert(input_ref.clone(), MoqInputState::new(options));
+        guard.insert(input_ref.clone(), MoqServerInputState::new(options));
         Ok(())
     }
 
@@ -115,7 +117,7 @@ impl MoqServerState {
     }
 }
 
-impl MoqInputState {
+impl MoqServerInputState {
     pub fn ensure_no_active_connection(
         &self,
         input_ref: &Ref<InputId>,
