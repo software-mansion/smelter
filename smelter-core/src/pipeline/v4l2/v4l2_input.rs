@@ -76,11 +76,9 @@ impl V4l2Input {
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let device_config = V4l2DeviceConfig::initialize(&opts)?;
 
-        let mut stream =
+        let stream =
             MmapStream::with_buffers(&device_config.device, v4l::buffer::Type::VideoCapture, 4)
                 .map_err(V4l2InputError::IoError)?;
-        // the library recommends to skip the first frame
-        stream.next().map_err(V4l2InputError::IoError)?;
 
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
         let (Some(video_sender), _) = queue_input.queue_new_track(QueueTrackOptions {
@@ -285,6 +283,8 @@ struct InputState<'a> {
 
 impl InputState<'_> {
     fn run(&mut self) {
+        // the library recommends to skip the first frame
+        let mut skip_first = true;
         loop {
             if self.should_close.load(std::sync::atomic::Ordering::Relaxed) {
                 return;
@@ -297,6 +297,11 @@ impl InputState<'_> {
                     continue;
                 }
             };
+
+            if skip_first {
+                skip_first = false;
+                continue;
+            }
 
             let V4l2DeviceConfig {
                 resolution, format, ..
