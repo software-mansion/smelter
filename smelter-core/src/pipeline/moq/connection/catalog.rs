@@ -117,15 +117,9 @@ fn find_first_video(video: &hang::catalog::Video) -> Result<Option<VideoTrack>, 
         CatalogContainer::Loc => Container::Loc,
     };
 
-    let description = match (&config.description, &codec, &container) {
-        (None, VideoCodec::H264, Container::Cmaf(wire)) => match extract_codec_description(wire) {
-            Ok(desc) => Some(desc),
-            Err(error) => {
-                warn!(%error, "Failed to extract video decoder config from container; skipping video track.");
-                return Ok(None);
-            }
-        },
-        _ => config.description.clone(),
+    let description = match &config.description {
+        Some(desc) => Some(desc.clone()),
+        None => extract_codec_description(&container)?,
     };
 
     Ok(Some(VideoTrack {
@@ -155,17 +149,9 @@ fn find_first_audio(audio: &hang::catalog::Audio) -> Result<Option<AudioTrack>, 
         CatalogContainer::Loc => Container::Loc,
     };
 
-    // Decoder config extraction is necessary only for AAC. Opus is self-contained and does not need
-    // description
-    let description = match (&config.description, &codec, &container) {
-        (None, AudioCodec::Aac, Container::Cmaf(wire)) => match extract_codec_description(wire) {
-            Ok(desc) => Some(desc),
-            Err(error) => {
-                warn!(%error, "Failed to extract audio decoder config from container; skipping audio track.");
-                return Ok(None);
-            }
-        },
-        _ => config.description.clone(),
+    let description = match &config.description {
+        Some(desc) => Some(desc.clone()),
+        None => extract_codec_description(&container)?,
     };
 
     Ok(Some(AudioTrack {
@@ -176,8 +162,13 @@ fn find_first_audio(audio: &hang::catalog::Audio) -> Result<Option<AudioTrack>, 
     }))
 }
 
-fn extract_codec_description(cmaf: &fmp4::Wire) -> Result<Bytes, MoqCatalogError> {
+fn extract_codec_description(container: &Container) -> Result<Option<Bytes>, MoqCatalogError> {
     use mp4_atom::{Atom, Encode};
+
+    // There is no data to extract from in other containers.
+    let Container::Cmaf(cmaf) = container else {
+        return Ok(None);
+    };
 
     let codec = cmaf.trak().mdia.minf.stbl.stsd.codecs.first().ok_or(
         MoqCatalogError::CodecConfigExtractionError("CMAF init segment contains no codec entries"),
@@ -189,7 +180,7 @@ fn extract_codec_description(cmaf: &fmp4::Wire) -> Result<Bytes, MoqCatalogError
             avc1.avcc.encode_body(&mut buf).map_err(|_| {
                 MoqCatalogError::CodecConfigExtractionError("failed to encode AVCDecoderConfig")
             })?;
-            Ok(buf.freeze())
+            Ok(Some(buf.freeze()))
         }
         mp4_atom::Codec::Mp4a(mp4a) => {
             let mut buf = BytesMut::new();
@@ -203,10 +194,8 @@ fn extract_codec_description(cmaf: &fmp4::Wire) -> Result<Bytes, MoqCatalogError
                         "failed to encode AudioSpecificConfig",
                     )
                 })?;
-            Ok(buf.freeze())
+            Ok(Some(buf.freeze()))
         }
-        _ => Err(MoqCatalogError::CodecConfigExtractionError(
-            "unsupported codec in CMAF init segment",
-        )),
+        _ => Ok(None),
     }
 }
