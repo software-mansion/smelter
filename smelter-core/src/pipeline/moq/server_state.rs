@@ -1,10 +1,8 @@
 use std::{
     collections::HashMap,
-    ops::Deref,
     sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
-use hang::moq_net::Session;
 use sha3::{Digest, Sha3_512};
 use tokio::task::JoinHandle;
 use tracing::warn;

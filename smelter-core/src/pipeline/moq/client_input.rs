@@ -19,8 +19,7 @@ use url::Url;
 use crate::prelude::*;
 
 pub struct MoqClientInput {
-    client_input_state: MoqClientInputState,
-    input_ref: Ref<InputId>,
+    _state: MoqClientInputState,
 }
 
 impl MoqClientInput {
@@ -37,7 +36,6 @@ impl MoqClientInput {
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
 
         let state_options = MoqClientInputStateOptions {
-            url: options.url.clone(),
             queue_input: queue_input.downgrade(),
             decoders: options.decoders,
         };
@@ -54,10 +52,7 @@ impl MoqClientInput {
         );
 
         Ok((
-            Input::MoqClient(MoqClientInput {
-                input_ref,
-                client_input_state: state,
-            }),
+            Input::MoqClient(MoqClientInput { _state: state }),
             InputInitInfo::Other,
             queue_input,
         ))
@@ -65,7 +60,6 @@ impl MoqClientInput {
 }
 
 pub(crate) struct MoqClientInputState {
-    pub url: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: MoqInputDecoders,
     pub should_close: Arc<AtomicBool>,
@@ -73,7 +67,6 @@ pub(crate) struct MoqClientInputState {
 }
 
 pub(crate) struct MoqClientInputStateOptions {
-    pub url: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: MoqInputDecoders,
 }
@@ -81,7 +74,6 @@ pub(crate) struct MoqClientInputStateOptions {
 impl MoqClientInputState {
     pub(super) fn new(options: MoqClientInputStateOptions) -> Self {
         Self {
-            url: options.url,
             queue_input: options.queue_input,
             decoders: options.decoders,
             should_close: Arc::new(false.into()),
@@ -118,6 +110,13 @@ impl MoqClientInputState {
         info!(moq_version = ?session.version(), "MoQ client session established");
         self.session = Some(session);
         Ok(consumer)
+    }
+}
+
+impl Drop for MoqClientInputState {
+    fn drop(&mut self) {
+        self.should_close
+            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
