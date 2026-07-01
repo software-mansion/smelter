@@ -7,8 +7,10 @@ use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
 
 use crate::backends::vulkan::{VulkanCommonError, wrappers::*};
+use crate::decoder::{VideoDecoderBackend, VideoDecoderError};
+use crate::frame_sorter::{DecodeResult, DecodeResultMetadata};
 use crate::{
-    RawFrameData,
+    RawFrameData, VideoBackendError,
     backends::vulkan::codec::h264::parameters::SeqParameterSetExt as _,
     backends::vulkan::vulkan_device::DecodingDevice,
     device::{ColorRange, ColorSpace},
@@ -18,10 +20,7 @@ use crate::{
     },
 };
 
-mod frame_sorter;
 mod session_resources;
-
-pub(crate) use frame_sorter::FrameSorter;
 
 pub struct VulkanDecoder<'a> {
     video_session_resources: Option<VideoSessionResources<'a>>,
@@ -73,20 +72,6 @@ pub(crate) struct DecodeSubmissionImageInfo {
     pub(crate) image: Arc<Image>,
     pub(crate) layer: u32,
     pub(crate) cropped_extent: vk::Extent2D,
-}
-
-pub(crate) struct DecodeResultMetadata {
-    pub(crate) pts: Option<u64>,
-    pub(crate) pic_order_cnt: i32,
-    pub(crate) max_num_reorder_frames: u64,
-    pub(crate) is_idr: bool,
-    pub(crate) color_space: ColorSpace,
-    pub(crate) color_range: ColorRange,
-}
-
-pub(crate) struct DecodeResult<T> {
-    pub(crate) frame: T,
-    pub(crate) metadata: DecodeResultMetadata,
 }
 
 /// Vulkan resources that must be kept alive while a decode submission is in flight.
@@ -175,6 +160,34 @@ pub enum VulkanDecoderError {
 
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
+}
+
+impl From<VulkanDecoderError> for VideoDecoderError {
+    fn from(err: VulkanDecoderError) -> Self {
+        Self::BackendError(VideoBackendError {
+            message: err.to_string(),
+            source: Box::new(err),
+        })
+    }
+}
+
+impl VideoDecoderBackend for VulkanDecoder<'_> {
+    fn decode_to_bytes(
+        &mut self,
+        decoder_instructions: &[DecoderInstruction],
+    ) -> Result<Vec<DecodeResult<RawFrameData>>, VideoDecoderError> {
+        VulkanDecoder::decode_to_bytes(self, decoder_instructions).map_err(Into::into)
+    }
+
+    #[cfg(feature = "wgpu")]
+    fn decode_to_wgpu_textures(
+        &mut self,
+        wgpu_device: &wgpu::Device,
+        decoder_instructions: &[DecoderInstruction],
+    ) -> Result<Vec<DecodeResult<wgpu::Texture>>, VideoDecoderError> {
+        VulkanDecoder::decode_to_wgpu_textures(self, wgpu_device, decoder_instructions)
+            .map_err(Into::into)
+    }
 }
 
 impl VulkanDecoder<'_> {

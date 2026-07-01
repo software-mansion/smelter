@@ -14,10 +14,11 @@ use crate::device::{
     ColorRange, CoreVideoDeviceBackend, DecoderParameters, EncoderOutputParameters,
     EncoderParametersH264, EncoderParametersH265, Rational, VideoDeviceDescriptor,
 };
+use crate::frame_sorter::FrameSorter;
 use crate::parameters::EncoderPreset;
 use crate::parser::h264::H264Parser;
 use crate::parser::reference_manager::ReferenceContext;
-use crate::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
+use crate::vulkan_decoder::{ImageModifiers, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{
     BytesDecoder, BytesEncoderH264, BytesEncoderH265, RawFrameData, VideoBackendError,
@@ -254,7 +255,7 @@ impl VulkanDevice {
         Ok(BytesDecoder {
             parser,
             reference_ctx,
-            vulkan_decoder,
+            decoder: Box::new(vulkan_decoder),
             frame_sorter,
         })
     }

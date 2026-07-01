@@ -16,7 +16,11 @@ mod adapter;
 #[cfg(vulkan)]
 pub mod capabilities;
 #[cfg(vulkan)]
+pub(crate) mod decoder;
+#[cfg(vulkan)]
 mod device;
+#[cfg(vulkan)]
+mod frame_sorter;
 #[cfg(all(vulkan, feature = "wgpu"))]
 mod global_registry;
 #[cfg(vulkan)]
