@@ -13,9 +13,9 @@ use crate::{
     state::Response,
 };
 use smelter_api::{
-    DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, MoqInputServer, Mp4Input, Mp4Output,
-    OutputId, RendererId, RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec, V4l2Input,
-    WebRendererSpec, WhepInput, WhepOutput, WhipInput, WhipOutput,
+    DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, MoqClientInput, MoqServerInput, Mp4Input,
+    Mp4Output, OutputId, RendererId, RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec,
+    V4l2Input, WebRendererSpec, WhepInput, WhepOutput, WhipInput, WhipOutput,
 };
 
 use super::ApiState;
@@ -25,7 +25,8 @@ use super::ApiState;
 pub enum RegisterInput {
     RtpStream(RtpInput),
     RtmpServer(RtmpInput),
-    MoqServer(MoqInputServer),
+    MoqServer(MoqServerInput),
+    MoqClient(MoqClientInput),
     Mp4(Mp4Input),
     WhipServer(WhipInput),
     WhepClient(WhepInput),
@@ -72,8 +73,11 @@ pub async fn handle_input(
             RegisterInput::RtmpServer(rtmp) => {
                 Pipeline::register_input(&api.pipeline()?, input_id.into(), rtmp.try_into()?)?
             }
-            RegisterInput::MoqServer(moq) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), moq.try_into()?)?
+            RegisterInput::MoqServer(moq_server) => {
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), moq_server.try_into()?)?
+            }
+            RegisterInput::MoqClient(moq_client) => {
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), moq_client.try_into()?)?
             }
             RegisterInput::Mp4(mp4) => {
                 Pipeline::register_input(&api.pipeline()?, input_id.into(), mp4.try_into()?)?
