@@ -380,17 +380,31 @@ fn spawn_video_decoder(
     video: &VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    let transformer = match (&video.description, &video.codec, &video.container) {
-        (None, VideoCodec::H264, Container::Cmaf(_)) => {
-            return Err(MoqConnectionError::MissingAvcc);
-        }
-        (Some(desc), VideoCodec::H264, _) => {
-            let h264_config = H264AvcDecoderConfig::parse(desc.clone())
-                .map_err(|_| MoqConnectionError::InvalidAvcc)?;
+    let (decoder_opt, transformer) = match &video.codec {
+        VideoCodec::H264 => {
+            let transformer = match (&video.description, &video.container) {
+                (None, Container::Cmaf(_)) => {
+                    return Err(MoqConnectionError::MissingAvcc);
+                }
+                (Some(desc), _) => {
+                    let h264_config = H264AvcDecoderConfig::parse(desc.clone())
+                        .map_err(|_| MoqConnectionError::InvalidAvcc)?;
+                    Some(H264AvccToAnnexB::new(h264_config))
+                }
+                (None, _) => None,
+            };
 
-            Some(H264AvccToAnnexB::new(h264_config))
+            let decoder_opt = decoders.h264.unwrap_or_else(|| {
+                match ctx.graphics_context.has_vulkan_decoder_support() {
+                    true => VideoDecoderOptions::VulkanH264,
+                    false => VideoDecoderOptions::FfmpegH264,
+                }
+            });
+
+            (decoder_opt, transformer)
         }
-        _ => None,
+        VideoCodec::Vp8 => (VideoDecoderOptions::FfmpegVp8, None),
+        VideoCodec::Vp9 => (VideoDecoderOptions::FfmpegVp9, None),
     };
 
     let options = VideoDecoderThreadOptions {
@@ -400,39 +414,31 @@ fn spawn_video_decoder(
         input_buffer_size: MOQ_MAX_BUFFER,
     };
 
-    let decoder_opt = match &video.codec {
-        VideoCodec::H264 => decoders.h264.unwrap_or_else(|| {
-            match ctx.graphics_context.has_vulkan_decoder_support() {
-                true => VideoDecoderOptions::VulkanH264,
-                false => VideoDecoderOptions::FfmpegH264,
+    let handle =
+        match decoder_opt {
+            VideoDecoderOptions::FfmpegH264 => VideoDecoderThread::<
+                ffmpeg_h264::FfmpegH264Decoder,
+                _,
+            >::spawn(input_ref.clone(), options)?,
+            VideoDecoderOptions::VulkanH264 => VideoDecoderThread::<
+                vulkan_h264::VulkanH264Decoder,
+                _,
+            >::spawn(input_ref.clone(), options)?,
+            VideoDecoderOptions::FfmpegVp8 => {
+                VideoDecoderThread::<ffmpeg_vp8::FfmpegVp8Decoder, _>::spawn(
+                    input_ref.clone(),
+                    options,
+                )?
             }
-        }),
-        VideoCodec::Vp8 => VideoDecoderOptions::FfmpegVp8,
-        VideoCodec::Vp9 => VideoDecoderOptions::FfmpegVp9,
-    };
+            VideoDecoderOptions::FfmpegVp9 => {
+                VideoDecoderThread::<ffmpeg_vp9::FfmpegVp9Decoder, _>::spawn(
+                    input_ref.clone(),
+                    options,
+                )?
+            }
+        };
 
-    match decoder_opt {
-        VideoDecoderOptions::FfmpegH264 => Ok(VideoDecoderThread::<
-            ffmpeg_h264::FfmpegH264Decoder,
-            _,
-        >::spawn(input_ref.clone(), options)?),
-        VideoDecoderOptions::VulkanH264 => Ok(VideoDecoderThread::<
-            vulkan_h264::VulkanH264Decoder,
-            _,
-        >::spawn(input_ref.clone(), options)?),
-        VideoDecoderOptions::FfmpegVp8 => Ok(
-            VideoDecoderThread::<ffmpeg_vp8::FfmpegVp8Decoder, _>::spawn(
-                input_ref.clone(),
-                options,
-            )?,
-        ),
-        VideoDecoderOptions::FfmpegVp9 => Ok(
-            VideoDecoderThread::<ffmpeg_vp9::FfmpegVp9Decoder, _>::spawn(
-                input_ref.clone(),
-                options,
-            )?,
-        ),
-    }
+    Ok(handle)
 }
 
 fn spawn_audio_decoder(
