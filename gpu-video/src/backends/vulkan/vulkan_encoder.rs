@@ -1,6 +1,6 @@
 use ash::vk;
 
-use crate::parameters::{EncoderContent, EncoderUsage};
+use crate::parameters::EncoderUsage;
 
 impl From<EncoderUsage> for vk::VideoEncodeUsageFlagsKHR {
     fn from(usage: EncoderUsage) -> Self {
@@ -10,17 +10,6 @@ impl From<EncoderUsage> for vk::VideoEncodeUsageFlagsKHR {
             EncoderUsage::Streaming => Self::STREAMING,
             EncoderUsage::Recording => Self::RECORDING,
             EncoderUsage::Conferencing => Self::CONFERENCING,
-        }
-    }
-}
-
-impl From<EncoderContent> for vk::VideoEncodeContentFlagsKHR {
-    fn from(content: EncoderContent) -> Self {
-        match content {
-            EncoderContent::Default => Self::DEFAULT,
-            EncoderContent::Camera => Self::CAMERA,
-            EncoderContent::Desktop => Self::DESKTOP,
-            EncoderContent::Rendered => Self::RENDERED,
         }
     }
 }

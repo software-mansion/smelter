@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
-use crate::parameters::{EncoderContent, EncoderUsage, H264Profile, H265Profile, RateControl};
+use crate::parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl};
 use crate::{
     BytesDecoder, BytesEncoderH264, BytesEncoderH265, VideoDecoderError, VideoEncoderError,
 };
@@ -169,14 +169,6 @@ impl From<ColorSpace> for CodecColorDescription {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum EncoderPreset {
-    /// A hint for the encoder to prioritize speed over quality
-    Speed,
-    /// A hint for the encoder to prioritize quality over speed
-    Quality,
-}
-
 /// Parameters that describe an encoded output.
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderOutputParameters<P> {
@@ -195,8 +187,6 @@ pub struct EncoderOutputParameters<P> {
     pub preset: EncoderPreset,
     /// A hint indicating what the encoded content is going to be used for.
     pub usage_flags: Option<EncoderUsage>,
-    /// A hint indicating what kind of content the encoder is going to be used for.
-    pub content_flags: Option<EncoderContent>,
     /// Whether to prepend SPS/PPS NAL units inline before IDR frames.
     /// If `false`, SPS/PPS can be retrieved separately using methods defined on the encoder.
     /// If [`None`], defaults to `true`.

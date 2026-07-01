@@ -28,6 +28,7 @@ pub mod parameters {
         Streaming,
     }
 
+    /// A hint indicating what kind of content the encoder is going to be used for.
     #[derive(Debug, Clone, Copy, Default)]
     pub enum EncoderUsage {
         #[default]
@@ -38,13 +39,12 @@ pub mod parameters {
         Conferencing,
     }
 
-    #[derive(Debug, Clone, Copy, Default)]
-    pub enum EncoderContent {
-        #[default]
-        Default,
-        Camera,
-        Desktop,
-        Rendered,
+    /// A hint indicating what the encoder should prioritize.
+    #[derive(Debug, Clone, Copy)]
+    pub enum EncoderPreset {
+        HighQuality,
+        Balanced,
+        LowLatency,
     }
 
     /// Scaling algorithm used when resizing frames in the transcoder.
@@ -65,8 +65,6 @@ pub mod parameters {
         Main,
         High,
     }
-
-    // TODO:
 
     /// A profile in H.265 is a set of codec features used while encoding a specific video.
     /// Right now, only Main is available.
@@ -90,7 +88,7 @@ use crate::backends::vulkan::codec::h265::encode::H265WriteParametersInfo;
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::device::{
     ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
-    EncoderParametersH265, EncoderPreset, VideoDeviceBackend,
+    EncoderParametersH265, VideoDeviceBackend,
 };
 use crate::parameters::{H264Profile, H265Profile, RateControl};
 use crate::parser::h264::AccessUnit;
@@ -336,9 +334,8 @@ impl VideoDevice {
             idr_period: None,
             max_references: None,
             rate_control,
-            preset: EncoderPreset::Speed,
-            usage_flags: Some(crate::parameters::EncoderUsage::Default),
-            content_flags: Some(crate::parameters::EncoderContent::Default),
+            preset: parameters::EncoderPreset::LowLatency,
+            usage_flags: Some(parameters::EncoderUsage::Default),
             inline_stream_params: None,
             color_space: None,
             color_range: None,
@@ -354,9 +351,8 @@ impl VideoDevice {
             idr_period: None,
             max_references: None,
             rate_control,
-            preset: EncoderPreset::Quality,
-            usage_flags: Some(crate::parameters::EncoderUsage::Default),
-            content_flags: Some(crate::parameters::EncoderContent::Default),
+            preset: parameters::EncoderPreset::HighQuality,
+            usage_flags: Some(parameters::EncoderUsage::Default),
             inline_stream_params: None,
             color_space: None,
             color_range: None,

@@ -12,8 +12,9 @@ use crate::backends::vulkan::{VulkanAdapter, VulkanAdapterInfo};
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::device::{
     ColorRange, CoreVideoDeviceBackend, DecoderParameters, EncoderOutputParameters,
-    EncoderParametersH264, EncoderParametersH265, EncoderPreset, Rational, VideoDeviceDescriptor,
+    EncoderParametersH264, EncoderParametersH265, Rational, VideoDeviceDescriptor,
 };
+use crate::parameters::EncoderPreset;
 use crate::parser::h264::H264Parser;
 use crate::parser::reference_manager::ReferenceContext;
 use crate::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
@@ -352,12 +353,19 @@ impl VulkanDevice {
         let native_profile_caps =
             C::encode_codec_profile_capabilities(caps, encoder_parameters.profile)?;
 
-        let quality_level = match encoder_parameters.preset {
-            EncoderPreset::Speed => 0,
-            EncoderPreset::Quality => native_profile_caps
-                .quality_level_properties
-                .len()
-                .saturating_sub(1) as u32,
+        let (quality_level, tuning_mode) = match encoder_parameters.preset {
+            EncoderPreset::HighQuality => (
+                native_profile_caps
+                    .quality_level_properties
+                    .len()
+                    .saturating_sub(1) as u32,
+                vk::VideoEncodeTuningModeKHR::HIGH_QUALITY,
+            ),
+            EncoderPreset::Balanced => (
+                native_profile_caps.quality_level_properties.len() as u32 / 2,
+                vk::VideoEncodeTuningModeKHR::DEFAULT,
+            ),
+            EncoderPreset::LowLatency => (0, vk::VideoEncodeTuningModeKHR::LOW_LATENCY),
         };
 
         let native_quality_level_properties =
@@ -426,8 +434,7 @@ impl VulkanDevice {
             });
         }
         let usage_flags = encoder_parameters.usage_flags.unwrap_or_default().into();
-        let tuning_mode = vk::VideoEncodeTuningModeKHR::DEFAULT;
-        let content_flags = encoder_parameters.content_flags.unwrap_or_default().into();
+        let content_flags = vk::VideoEncodeContentFlagsKHR::DEFAULT;
         let color_space = encoder_parameters.color_space.unwrap_or_default();
         let color_range = encoder_parameters
             .color_range
