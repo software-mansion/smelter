@@ -11,13 +11,15 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     VulkanDecoderError,
-    codec::h264::parameters::{
+    backends::vulkan::codec::h264::parameters::{
         H264DecodeProfileInfo, SeqParameterSetExt as _, h264_level_idc_to_max_dpb_mbs,
         vk_to_h264_level_idc,
     },
-    device::DecodingDevice,
+    backends::vulkan::vulkan_device::DecodingDevice,
+    backends::vulkan::wrappers::{
+        DecodeInputBufferPool, DecodingQueryPool, OpenCommandBuffer, VideoSession,
+    },
     vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers},
-    wrappers::{DecodeInputBufferPool, DecodingQueryPool, OpenCommandBuffer, VideoSession},
 };
 
 mod images;

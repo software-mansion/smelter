@@ -5,12 +5,12 @@ use crate::{backends::vulkan::VulkanInstance, instance::VideoInstanceDescriptor}
 
 use super::VulkanAdapter;
 
-pub(crate) fn with_video_adapter_from_wgpu<F, R>(
+pub(crate) fn with_vulkan_adapter_from_wgpu<F, R>(
     wgpu_adapter: &wgpu::Adapter,
     use_adapter: F,
 ) -> Option<R>
 where
-    F: Fn(VulkanAdapter<'_>) -> R,
+    F: FnOnce(VulkanAdapter<'_>) -> R,
 {
     let hal_adapter = unsafe { wgpu_adapter.as_hal::<VkApi>()? };
     let physical_device = hal_adapter.raw_physical_device();

@@ -4,10 +4,13 @@ use ash::vk::{self, Handle};
 use vk_mem::Alloc;
 
 use crate::{
-    VulkanCommonError, VulkanDecoderError,
-    codec::h264::parameters::H264DecodeProfileInfo,
-    device::{EncodingDevice, VulkanDeviceInitError},
-    wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
+    VulkanDecoderError,
+    backends::vulkan::{
+        VulkanCommonError, VulkanDeviceInitError,
+        codec::h264::parameters::H264DecodeProfileInfo,
+        vulkan_device::EncodingDevice,
+        wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
+    },
 };
 
 use super::{Device, Instance};

@@ -3,9 +3,9 @@ use h264_reader::nal::sps::{FrameMbsFlags, SeqParameterSet};
 
 use crate::{
     VideoEncoderError, VulkanDecoderError,
+    backends::vulkan::wrappers::ProfileInfo,
     device::{CodecColorDescription, ColorRange, ColorSpace, Rational},
     parameters::H264Profile,
-    wrappers::ProfileInfo,
 };
 
 const MACROBLOCK_SIZE: u32 = 16;

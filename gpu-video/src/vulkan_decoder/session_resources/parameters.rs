@@ -5,11 +5,11 @@ use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 
 use crate::{
     VulkanDecoderError,
-    codec::h264::{
+    backends::vulkan::VulkanDevice,
+    backends::vulkan::codec::h264::{
         H264Codec, H264VkParameters,
         parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
     },
-    device::VideoDevice,
     vulkan_decoder::{Device, VideoSessionParameters},
 };
 
@@ -29,7 +29,7 @@ pub(crate) struct VideoSessionParametersManager {
 
 impl VideoSessionParametersManager {
     pub(crate) fn new(
-        vulkan_ctx: &VideoDevice,
+        vulkan_ctx: &VulkanDevice,
         session: vk::VideoSessionKHR,
     ) -> Result<Self, VulkanDecoderError> {
         Ok(Self {

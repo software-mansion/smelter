@@ -3,14 +3,16 @@ use std::ptr::null_mut;
 use ash::vk;
 
 use crate::{
-    codec::{
+    backends::vulkan::codec::{
         Codec, CodecCapabilities, CodecSpecificDecodeCapabilities, CodecSpecificEncodeCapabilities,
         CodecSpecificEncoderQualityLevelProperties,
         h265::parameters::{
             VkH265PictureParameterSet, VkH265SequenceParameterSet, VkH265VideoParameterSet,
         },
     },
-    device::caps::NativeEncodeH265Capabilities,
+    backends::vulkan::vulkan_device::caps::{
+        NativeEncodeCapabilities, NativeEncodeH265Capabilities,
+    },
     parameters::H265Profile,
 };
 
@@ -126,7 +128,7 @@ impl CodecCapabilities for H265Codec {
     }
 
     fn encode_codec_capabilities(
-        capabilities: &crate::device::caps::NativeEncodeCapabilities,
+        capabilities: &NativeEncodeCapabilities,
     ) -> Option<&Self::NativeEncodeCodecCapabilities> {
         capabilities.h265.as_ref()
     }
@@ -148,5 +150,15 @@ impl<'a> CodecSpecificEncoderQualityLevelProperties
             && self.preferred_constant_qp.qp_b == 0
             && self.preferred_max_l0_reference_count == 0
             && self.preferred_max_l1_reference_count == 0
+    }
+}
+
+impl H265Profile {
+    pub(crate) fn to_profile_idc(self) -> ash::vk::native::StdVideoH265ProfileIdc {
+        match self {
+            H265Profile::Main => {
+                ash::vk::native::StdVideoH265ProfileIdc_STD_VIDEO_H265_PROFILE_IDC_MAIN
+            }
+        }
     }
 }

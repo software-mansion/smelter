@@ -5,15 +5,31 @@ use tracing::{debug, debug_span, warn};
 use crate::{
     VideoDeviceInitError,
     adapter::{DeviceType, VideoAdapterBackend, VideoAdapterInfo},
-    backends::vulkan::vulkan_instance::VulkanInstance,
-    capabilities::{DecodeCapabilities, EncodeCapabilities},
-    device::{
-        DECODE_CODEC_EXTENSIONS, DECODE_EXTENSIONS, ENCODE_CODEC_EXTENSIONS, ENCODE_EXTENSIONS,
-        REQUIRED_EXTENSIONS, VideoDevice, VideoDeviceDescriptor,
-        caps::{NativeDecodeCapabilities, NativeEncodeCapabilities},
-        queues::{QueueIndex, QueueIndices},
+    backends::vulkan::{
+        VulkanDevice,
+        vulkan_device::{
+            caps::{NativeDecodeCapabilities, NativeEncodeCapabilities},
+            queues::{QueueIndex, QueueIndices},
+        },
+        vulkan_instance::VulkanInstance,
     },
+    capabilities::{DecodeCapabilities, EncodeCapabilities},
+    device::VideoDeviceDescriptor,
 };
+
+const REQUIRED_EXTENSIONS: &[&CStr] = &[vk::KHR_VIDEO_QUEUE_NAME, vk::KHR_VIDEO_MAINTENANCE1_NAME];
+
+const DECODE_EXTENSIONS: &[&CStr] = &[vk::KHR_VIDEO_DECODE_QUEUE_NAME];
+const DECODE_CODEC_EXTENSIONS: &[&CStr] = &[
+    vk::KHR_VIDEO_DECODE_H264_NAME,
+    vk::KHR_VIDEO_DECODE_H265_NAME,
+];
+
+const ENCODE_EXTENSIONS: &[&CStr] = &[vk::KHR_VIDEO_ENCODE_QUEUE_NAME];
+const ENCODE_CODEC_EXTENSIONS: &[&CStr] = &[
+    vk::KHR_VIDEO_ENCODE_H264_NAME,
+    vk::KHR_VIDEO_ENCODE_H265_NAME,
+];
 
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
@@ -304,6 +320,13 @@ impl<'a> VulkanAdapter<'a> {
             })
             .collect::<Vec<_>>()
     }
+
+    pub fn create_device(
+        self,
+        desc: &VideoDeviceDescriptor,
+    ) -> Result<crate::VideoDevice, VideoDeviceInitError> {
+        VulkanDevice::create(self, desc.clone()).map_err(Into::into)
+    }
 }
 
 impl VideoAdapterBackend for VulkanAdapter<'_> {
@@ -357,7 +380,7 @@ impl VideoAdapterBackend for VulkanAdapter<'_> {
         self: Box<Self>,
         desc: &VideoDeviceDescriptor,
     ) -> Result<crate::VideoDevice, VideoDeviceInitError> {
-        VideoDevice::create_and_register(*self, desc.clone()).map_err(Into::into)
+        VulkanAdapter::create_device(*self, desc)
     }
 }
 

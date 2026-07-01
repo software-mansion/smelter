@@ -3,11 +3,13 @@ use std::sync::{Arc, Mutex};
 use ash::vk;
 
 use crate::{
-    VulkanCommonError,
-    codec::Codec,
-    device::{VideoDevice, queues::VideoQueues},
+    backends::vulkan::{
+        VulkanCommonError,
+        codec::Codec,
+        vulkan_device::{VulkanDevice, queues::VideoQueues},
+        wrappers::{ImageLayoutTracker, OpenCommandBuffer},
+    },
     parser::reference_manager::{PictureInfo, ReferencePictureInfo},
-    wrappers::{ImageLayoutTracker, OpenCommandBuffer},
 };
 
 use super::{Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
@@ -110,7 +112,7 @@ pub(crate) struct VideoSession {
 impl VideoSession {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        vulkan_ctx: &VideoDevice,
+        vulkan_ctx: &VulkanDevice,
         queue: &VideoQueues,
         profile_info: &vk::VideoProfileInfoKHR,
         max_coded_extent: vk::Extent2D,
@@ -336,7 +338,7 @@ pub(crate) struct CodingImageBundle<'a> {
 impl<'a> CodingImageBundle<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        vulkan_ctx: &VideoDevice,
+        vulkan_ctx: &VulkanDevice,
         command_buffer: &mut OpenCommandBuffer,
         image_tracker: Arc<Mutex<ImageLayoutTracker>>,
         format: &vk::VideoFormatPropertiesKHR<'a>,
@@ -546,7 +548,7 @@ pub(crate) struct DecodedPicturesBuffer<'a> {
 impl<'a> DecodedPicturesBuffer<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        vulkan_ctx: &VideoDevice,
+        vulkan_ctx: &VulkanDevice,
         command_buffer: &mut OpenCommandBuffer,
         image_tracker: Arc<Mutex<ImageLayoutTracker>>,
         use_separate_images: bool,

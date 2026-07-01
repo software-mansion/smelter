@@ -2,8 +2,8 @@ use std::fmt::{self, Debug};
 
 use crate::{
     VideoDeviceInitError,
-    capabilities::EncodeCapabilities,
-    device::{VideoDeviceDescriptor, caps::DecodeCapabilities},
+    capabilities::{DecodeCapabilities, EncodeCapabilities},
+    device::VideoDeviceDescriptor,
 };
 
 #[cfg(feature = "wgpu")]

@@ -1,20 +1,19 @@
 use std::sync::{Arc, LazyLock, RwLock};
 
-use ash::vk;
 use rustc_hash::FxHashMap;
 
-use crate::device::VideoDevice;
+use crate::device::VideoDeviceBackend;
 
 #[derive(Default)]
 pub(crate) struct GlobalRegistry {
-    devices: FxHashMap<VideoDeviceKey, Arc<VideoDevice>>,
+    devices: FxHashMap<VideoDeviceKey, Arc<dyn VideoDeviceBackend>>,
 }
 
 static REGISTRY: LazyLock<RwLock<GlobalRegistry>> =
     LazyLock::new(|| RwLock::new(GlobalRegistry::default()));
 
 impl GlobalRegistry {
-    pub(crate) fn register_device(key: VideoDeviceKey, device: Arc<VideoDevice>) {
+    pub(crate) fn register_device(key: VideoDeviceKey, device: Arc<dyn VideoDeviceBackend>) {
         let mut registry = REGISTRY.write().unwrap();
 
         use std::collections::hash_map::Entry;
@@ -35,7 +34,9 @@ impl GlobalRegistry {
         }
     }
 
-    pub(crate) fn get_device(key: &VideoDeviceKey) -> Result<Arc<VideoDevice>, RegistryError> {
+    pub(crate) fn get_device(
+        key: &VideoDeviceKey,
+    ) -> Result<Arc<dyn VideoDeviceBackend>, RegistryError> {
         let registry = REGISTRY.read().unwrap();
         registry
             .devices
@@ -45,17 +46,13 @@ impl GlobalRegistry {
     }
 }
 
-// TODO: metal key
-#[cfg(vulkan)]
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub(crate) struct VideoDeviceKey(pub(crate) vk::Device, pub(crate) vk::Queue);
-
-#[cfg(all(vulkan, feature = "wgpu"))]
-impl From<&wgpu::Device> for VideoDeviceKey {
-    fn from(device: &wgpu::Device) -> Self {
-        let hal_device = unsafe { device.as_hal::<wgpu::hal::vulkan::Api>().unwrap() };
-        Self(hal_device.raw_device().handle(), hal_device.raw_queue())
-    }
+pub(crate) enum VideoDeviceKey {
+    Vulkan {
+        device_handle: u64,
+        queue_handle: u64,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]

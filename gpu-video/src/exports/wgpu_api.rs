@@ -1,7 +1,7 @@
 use crate::{
     DecoderEvent, EncodedInputChunk, EncodedOutputChunk, InputFrame, OutputFrame,
     VideoDecoderError, VideoEncoderError,
-    codec::{
+    backends::vulkan::codec::{
         h264::{H264Codec, encode::H264WriteParametersInfo},
         h265::{H265Codec, encode::H265WriteParametersInfo},
     },

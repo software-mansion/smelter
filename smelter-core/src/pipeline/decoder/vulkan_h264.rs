@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use gpu_video::{
     H264DecoderEvent, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
     WgpuTexturesDecoder,
-    parameters::{DecoderParameters, DecoderUsageFlags, MissedFrameHandling},
+    parameters::{DecoderParameters, DecoderUsage, MissedFrameHandling},
 };
 use smelter_render::{Frame, FrameData, Resolution};
 use tracing::{debug, info, trace, warn};
@@ -38,7 +38,7 @@ impl VideoDecoder for VulkanH264Decoder {
             .map_err(|_| DecoderInitError::VulkanContextRequiredForVulkanDecoder)?;
         let decoder = device.create_wgpu_textures_decoder_h264(DecoderParameters {
             missed_frame_handling: MissedFrameHandling::Strict,
-            usage_flags: DecoderUsageFlags::DEFAULT,
+            usage_flags: DecoderUsage::Default,
         })?;
         Ok(Self {
             decoder,

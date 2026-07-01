@@ -2,7 +2,7 @@ use ash::vk;
 
 use crate::{
     VulkanDecoderError,
-    codec::h265::H265Codec,
+    backends::vulkan::codec::h265::H265Codec,
     device::{CodecColorDescription, ColorRange},
     vulkan_encoder::FullEncoderParameters,
 };

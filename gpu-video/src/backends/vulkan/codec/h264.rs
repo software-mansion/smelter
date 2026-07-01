@@ -3,12 +3,14 @@ use std::ptr::null_mut;
 use ash::vk;
 
 use crate::{
-    codec::{
+    backends::vulkan::codec::{
         Codec, CodecCapabilities, CodecSpecificDecodeCapabilities, CodecSpecificEncodeCapabilities,
         CodecSpecificEncoderQualityLevelProperties,
         h264::parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
     },
-    device::caps::NativeEncodeH264Capabilities,
+    backends::vulkan::vulkan_device::caps::{
+        NativeEncodeCapabilities, NativeEncodeH264Capabilities,
+    },
     parameters::H264Profile,
 };
 
@@ -117,7 +119,7 @@ impl CodecCapabilities for H264Codec {
     }
 
     fn encode_codec_capabilities(
-        capabilities: &crate::device::caps::NativeEncodeCapabilities,
+        capabilities: &NativeEncodeCapabilities,
     ) -> Option<&Self::NativeEncodeCodecCapabilities> {
         capabilities.h264.as_ref()
     }
@@ -140,5 +142,21 @@ impl<'a> CodecSpecificEncoderQualityLevelProperties
             && self.preferred_max_l0_reference_count == 0
             && self.preferred_max_l1_reference_count == 0
             && self.preferred_std_entropy_coding_mode_flag == 0
+    }
+}
+
+impl H264Profile {
+    pub(crate) fn to_profile_idc(self) -> ash::vk::native::StdVideoH264ProfileIdc {
+        match self {
+            H264Profile::Baseline => {
+                ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE
+            }
+            H264Profile::Main => {
+                ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN
+            }
+            H264Profile::High => {
+                ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH
+            }
+        }
     }
 }

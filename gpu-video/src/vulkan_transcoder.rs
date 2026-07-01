@@ -4,10 +4,13 @@ use ash::vk;
 
 use crate::{
     EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoDecoderError, VideoEncoderError,
-    VulkanCommonError,
-    codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
-    device::{EncoderOutputParameters, Rational, VideoDevice},
-    parameters::{H264Profile, H265Profile, ScalingAlgorithm},
+    backends::vulkan::{
+        VulkanCommonError, VulkanDevice,
+        codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
+        wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
+    },
+    device::{EncoderOutputParameters, Rational},
+    parameters::{DecoderUsage, H264Profile, H265Profile, ScalingAlgorithm},
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
         h264::H264Parser,
@@ -18,7 +21,6 @@ use crate::{
     },
     vulkan_encoder::{Encoder, FullEncoderParameters, VulkanEncoder},
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
-    wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
 };
 
 mod pipeline;
@@ -78,7 +80,7 @@ pub(crate) struct ResizedImages {
 }
 
 pub struct Transcoder {
-    device: Arc<VideoDevice>,
+    device: Arc<VulkanDevice>,
     decoder: VulkanDecoder<'static>,
     parser: H264Parser,
     reference_ctx: ReferenceContext,
@@ -89,7 +91,7 @@ pub struct Transcoder {
 
 impl Transcoder {
     pub(crate) fn new(
-        device: Arc<VideoDevice>,
+        device: Arc<VulkanDevice>,
         config: TranscoderParameters,
     ) -> Result<Self, VideoTranscoderError> {
         let decoder = VulkanDecoder::new(
@@ -98,7 +100,7 @@ impl Transcoder {
                     .decoding_device()
                     .map_err(VideoDecoderError::VulkanDecoderError)?,
             ),
-            vk::VideoDecodeUsageFlagsKHR::TRANSCODING,
+            DecoderUsage::Transcoding,
             ImageModifiers {
                 create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
                     | vk::ImageCreateFlags::MUTABLE_FORMAT,
