@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use crate::{
     Resolution,
@@ -8,6 +12,7 @@ use crate::{
 };
 
 mod flatten;
+mod lanczos_horizontal;
 mod layout_renderer;
 mod params;
 mod shader;
@@ -25,8 +30,19 @@ pub(crate) trait LayoutProvider: Send {
 pub(crate) struct LayoutNode {
     layout_provider: Box<dyn LayoutProvider>,
     shader: Arc<LayoutShader>,
+    lanczos_horizontal: Arc<lanczos_horizontal::LanczosHorizontalShader>,
     mip_cache: HashMap<usize, MippedTexture>,
+    lanczos_cache: HashMap<usize, NodeTexture>,
     passthrough_child_index: Option<usize>,
+    direct_nv12_passthrough: bool,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct LayoutRenderStats {
+    pub(crate) total_ms: f64,
+    pub(crate) lanczos_passes: usize,
+    pub(crate) layout_passes: usize,
+    pub(crate) intermediate_4k_textures: usize,
 }
 
 /// When rendering we cut this fragment from texture and stretch it on
@@ -86,6 +102,7 @@ enum RenderLayoutContent {
         border_width: f32,
         crop: Crop,
         scaling_filter: ImageScalingFilter,
+        lanczos_vertical: bool,
         mip_level: f32,
     },
     #[allow(dead_code)]
@@ -155,18 +172,26 @@ pub struct NestedLayout {
 
 impl LayoutNode {
     pub fn new(ctx: &RenderCtx, layout_provider: Box<dyn LayoutProvider>) -> Self {
-        let shader = ctx.renderers.layout.0.clone();
+        let shader = ctx.renderers.layout.shader.clone();
+        let lanczos_horizontal = ctx.renderers.layout.lanczos_horizontal.clone();
 
         Self {
             layout_provider,
             shader,
+            lanczos_horizontal,
             mip_cache: HashMap::new(),
+            lanczos_cache: HashMap::new(),
             passthrough_child_index: None,
+            direct_nv12_passthrough: false,
         }
     }
 
     pub(crate) fn passthrough_child_index(&self) -> Option<usize> {
         self.passthrough_child_index
+    }
+
+    pub(crate) fn direct_nv12_passthrough_texture(&self) -> Option<&NodeTexture> {
+        self.direct_nv12_passthrough.then(|| self.lanczos_cache.get(&0)).flatten()
     }
 
     pub fn render(
@@ -175,7 +200,10 @@ impl LayoutNode {
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
         pts: Duration,
-    ) {
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> LayoutRenderStats {
+        let started = Instant::now();
+        let mut stats = LayoutRenderStats::default();
         let input_resolutions: Vec<Option<Resolution>> =
             sources.iter().map(|node_texture| node_texture.resolution()).collect();
         let output_resolution = self.layout_provider.resolution(pts);
@@ -186,9 +214,11 @@ impl LayoutNode {
             &input_resolutions,
             output_resolution,
         );
+        self.direct_nv12_passthrough = false;
         if self.passthrough_child_index.is_some() {
             self.mip_cache.clear();
-            return;
+            self.lanczos_cache.clear();
+            return stats;
         }
 
         // Apply global filter and compute mip levels for Lanczos3 child nodes.
@@ -228,10 +258,36 @@ impl LayoutNode {
             }
         }
 
-        let mut encoder =
-            ctx.wgpu_ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("layout node"),
-            });
+        if let Some((index, resolution)) = Self::direct_nv12_passthrough_for(
+            &layouts,
+            &input_resolutions,
+            output_resolution,
+        ) {
+            self.mip_cache.clear();
+            self.lanczos_cache.retain(|layout_index, _| *layout_index == 0);
+            let Some(source) = sources.get(index).and_then(|source| source.state()) else {
+                return stats;
+            };
+            let target = self
+                .lanczos_cache
+                .entry(0)
+                .or_default()
+                .ensure_size(ctx.wgpu_ctx, resolution);
+            self.lanczos_horizontal.render(
+                ctx.wgpu_ctx,
+                source,
+                source.resolution(),
+                target,
+                encoder,
+            );
+            self.direct_nv12_passthrough = true;
+            stats.lanczos_passes += 1;
+            if resolution.width >= 3840 && resolution.height >= 2160 {
+                stats.intermediate_4k_textures += 1;
+            }
+            stats.total_ms = started.elapsed().as_secs_f64() * 1000.0;
+            return stats;
+        }
 
         let format = ctx.wgpu_ctx.default_view_format();
         // Generate mipped textures for sources that need them
@@ -242,7 +298,7 @@ impl LayoutNode {
             {
                 let existing = self.mip_cache.remove(source_index);
                 let mipped = ctx.wgpu_ctx.utils.mipmap_generator.generate(
-                    &mut encoder,
+                    encoder,
                     ctx.wgpu_ctx,
                     state.texture(),
                     format,
@@ -254,10 +310,78 @@ impl LayoutNode {
             }
         }
 
+        let mut lanczos_textures_needed = Vec::new();
+        for (layout_index, layout) in layouts.iter_mut().enumerate() {
+            if self.should_use_separable_lanczos(layout, &input_resolutions) {
+                if let RenderLayoutContent::ChildNode {
+                    crop,
+                    lanczos_vertical,
+                    mip_level,
+                    ..
+                } = &mut layout.content
+                {
+                    *lanczos_vertical = true;
+                    *mip_level = 0.0;
+                    lanczos_textures_needed.push((
+                        layout_index,
+                        Resolution {
+                            width: layout.width.round() as usize,
+                            height: crop.height.round() as usize,
+                        },
+                    ));
+                    crop.top = 0.0;
+                    crop.left = 0.0;
+                    crop.width = layout.width.round();
+                    crop.height = crop.height.round();
+                }
+            }
+        }
+
+        self.lanczos_cache
+            .retain(|layout_index, _| lanczos_textures_needed.iter().any(|(needed, _)| needed == layout_index));
+        for (layout_index, resolution) in &lanczos_textures_needed {
+            let RenderLayoutContent::ChildNode { index, .. } =
+                &layouts[*layout_index].content
+            else {
+                continue;
+            };
+            let Some(source) = sources.get(*index).and_then(|source| source.state()) else {
+                continue;
+            };
+            let target = self
+                .lanczos_cache
+                .entry(*layout_index)
+                .or_default()
+                .ensure_size(ctx.wgpu_ctx, *resolution);
+            self.lanczos_horizontal.render(
+                ctx.wgpu_ctx,
+                source,
+                source.resolution(),
+                target,
+                encoder,
+            );
+            stats.lanczos_passes += 1;
+            if resolution.width >= 3840 && resolution.height >= 2160 {
+                stats.intermediate_4k_textures += 1;
+            }
+        }
+
         let resolved_views: Vec<&wgpu::TextureView> = layouts
             .iter()
-            .map(|layout| match &layout.content {
-                RenderLayoutContent::ChildNode { index, mip_level, .. } => {
+            .enumerate()
+            .map(|(layout_index, layout)| match &layout.content {
+                RenderLayoutContent::ChildNode {
+                    index,
+                    mip_level,
+                    lanczos_vertical,
+                    ..
+                } => {
+                    if *lanczos_vertical
+                        && let Some(texture) = self.lanczos_cache.get(&layout_index)
+                        && let Some(state) = texture.state()
+                    {
+                        return state.view();
+                    }
                     if *mip_level > 0.0
                         && let Some(mipped) = mipped_textures.get(index)
                     {
@@ -289,12 +413,51 @@ impl LayoutNode {
             layouts,
             &resolved_views,
             target,
-            &mut encoder,
+            encoder,
         );
-
-        ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
+        stats.layout_passes += 1;
+        if output_resolution.width >= 3840 && output_resolution.height >= 2160 {
+            stats.intermediate_4k_textures += 1;
+        }
 
         self.mip_cache = mipped_textures;
+        stats.total_ms = started.elapsed().as_secs_f64() * 1000.0;
+        stats
+    }
+
+    fn should_use_separable_lanczos(
+        &self,
+        layout: &RenderLayout,
+        input_resolutions: &[Option<Resolution>],
+    ) -> bool {
+        let RenderLayoutContent::ChildNode {
+            index,
+            crop,
+            scaling_filter: ImageScalingFilter::Lanczos3,
+            mip_level,
+            ..
+        } = &layout.content
+        else {
+            return false;
+        };
+        if *mip_level != 0.0
+            || layout.width <= 0.0
+            || layout.height <= 0.0
+            || !is_same_px(layout.width, layout.width.round())
+            || !is_same_px(crop.height, crop.height.round())
+        {
+            return false;
+        }
+        let Some(input_resolution) = input_resolutions.get(*index).copied().flatten()
+        else {
+            return false;
+        };
+        let full_source = is_same_px(crop.top, 0.0)
+            && is_same_px(crop.left, 0.0)
+            && is_same_px(crop.width, input_resolution.width as f32)
+            && is_same_px(crop.height, input_resolution.height as f32);
+        let upscale = layout.width > crop.width || layout.height > crop.height;
+        full_source && upscale
     }
 
     fn passthrough_child_index_for(
@@ -327,10 +490,52 @@ impl LayoutNode {
         let no_effects = is_same_px(layout.rotation_degrees, 0.0)
             && layout.masks.is_empty()
             && layout.border_radius == BorderRadius::ZERO
-            && *border_width == 0.0
-            && *border_alpha == 0;
+            && (*border_width == 0.0 || *border_alpha == 0);
 
         (same_resolution && full_output && full_crop && no_effects).then_some(*index)
+    }
+
+    fn direct_nv12_passthrough_for(
+        layouts: &[RenderLayout],
+        input_resolutions: &[Option<Resolution>],
+        output_resolution: Resolution,
+    ) -> Option<(usize, Resolution)> {
+        let [layout] = layouts else { return None };
+        let RenderLayoutContent::ChildNode {
+            index,
+            border_color: RGBAColor(_, _, _, border_alpha),
+            border_width,
+            crop,
+            scaling_filter: ImageScalingFilter::Lanczos3,
+            ..
+        } = &layout.content
+        else {
+            return None;
+        };
+        let input_resolution = input_resolutions.get(*index).copied().flatten()?;
+
+        let full_output = is_same_px(layout.top, 0.0)
+            && is_same_px(layout.left, 0.0)
+            && is_same_px(layout.width, output_resolution.width as f32)
+            && is_same_px(layout.height, output_resolution.height as f32);
+        let full_crop = is_same_px(crop.top, 0.0)
+            && is_same_px(crop.left, 0.0)
+            && is_same_px(crop.width, input_resolution.width as f32)
+            && is_same_px(crop.height, input_resolution.height as f32);
+        let no_effects = is_same_px(layout.rotation_degrees, 0.0)
+            && layout.masks.is_empty()
+            && layout.border_radius == BorderRadius::ZERO
+            && (*border_width == 0.0 || *border_alpha == 0);
+        let upscale = output_resolution.width > input_resolution.width
+            || output_resolution.height > input_resolution.height;
+
+        (full_output && full_crop && no_effects && upscale).then_some((
+            *index,
+            Resolution {
+                width: output_resolution.width,
+                height: input_resolution.height,
+            },
+        ))
     }
 }
 

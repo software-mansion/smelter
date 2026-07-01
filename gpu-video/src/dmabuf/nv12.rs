@@ -1,7 +1,10 @@
 use std::{
     fmt,
     os::fd::{AsFd, AsRawFd, IntoRawFd, OwnedFd},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use ash::vk;
@@ -36,7 +39,7 @@ pub(crate) struct DmaBufFrame {
 }
 
 impl DmaBufFrame {
-    fn new(texture: Arc<wgpu::Texture>, descriptor: Nv12DmaBufDescriptor) -> Self {
+    pub(crate) fn new(texture: Arc<wgpu::Texture>, descriptor: Nv12DmaBufDescriptor) -> Self {
         assert_eq!(
             texture.format(),
             wgpu::TextureFormat::NV12,
@@ -53,8 +56,31 @@ impl DmaBufFrame {
         self.descriptor.objects()
     }
 
-    pub(crate) fn sync_guard(&self) -> MutexGuard<'_, ()> {
+    pub(crate) fn sync_guard(&self) -> DmaBufSyncGuard {
         self.descriptor.sync_guard()
+    }
+}
+
+/// Owned mutual-exclusion guard serializing dma-buf sync_file export/import on a
+/// single [`DmaBufFrame`]. Backed by an atomic flag (not a `Mutex`) so the guard
+/// is `Send + Sync` and can be held inside a staged-write token across a batch of
+/// frames without poisoning the encoder pool's thread-safety.
+pub(crate) struct DmaBufSyncGuard {
+    flag: Arc<AtomicBool>,
+}
+
+impl DmaBufSyncGuard {
+    fn acquire(flag: Arc<AtomicBool>) -> Self {
+        while flag.swap(true, Ordering::Acquire) {
+            std::hint::spin_loop();
+        }
+        Self { flag }
+    }
+}
+
+impl Drop for DmaBufSyncGuard {
+    fn drop(&mut self) {
+        self.flag.store(false, Ordering::Release);
     }
 }
 
@@ -101,7 +127,7 @@ pub(crate) struct DmaBufPlane {
 pub(crate) struct Nv12DmaBufDescriptor {
     pub(crate) resolution: VideoResolution,
     memory: Nv12DmaBufMemory,
-    sync_lock: Arc<Mutex<()>>,
+    sync_flag: Arc<AtomicBool>,
 }
 
 impl Nv12DmaBufDescriptor {
@@ -111,7 +137,7 @@ impl Nv12DmaBufDescriptor {
         layer: Nv12DmaBufLayer,
     ) -> Result<Self, DmaBufError> {
         let memory = validate_nv12_dmabuf_layout(resolution, objects, layer)?;
-        Ok(Self { resolution, memory, sync_lock: Arc::new(Mutex::new(())) })
+        Ok(Self { resolution, memory, sync_flag: Arc::new(AtomicBool::new(false)) })
     }
 
     fn objects(&self) -> &[DmaBufObject] {
@@ -130,8 +156,8 @@ impl Nv12DmaBufDescriptor {
         self.memory.plane_layouts()
     }
 
-    fn sync_guard(&self) -> MutexGuard<'_, ()> {
-        self.sync_lock.lock().expect("DMA-BUF frame sync lock poisoned")
+    fn sync_guard(&self) -> DmaBufSyncGuard {
+        DmaBufSyncGuard::acquire(Arc::clone(&self.sync_flag))
     }
 }
 

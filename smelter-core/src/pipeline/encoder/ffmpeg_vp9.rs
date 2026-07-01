@@ -127,6 +127,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
             Self { encoder, packet: ffmpeg_next::Packet::empty() },
             VideoEncoderConfig {
                 resolution: options.resolution,
+                external_nv12_pool: None,
                 output_format: match options.pixel_format {
                     OutputPixelFormat::YUV420P => OutputFrameFormat::PlanarYuv420Bytes,
                     OutputPixelFormat::YUV422P => OutputFrameFormat::PlanarYuv422Bytes,

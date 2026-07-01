@@ -1,13 +1,17 @@
 mod decoder;
 mod encoder;
+// POC(dmabuf-import): throwaway spike proving external dma-buf -> VA -> oneVPL encode.
+#[cfg(test)]
+mod import_poc;
 
 use std::{collections::VecDeque, os::fd::AsFd, sync::Arc, time::Duration};
 
 pub use decoder::{QuickSyncH264DecoderError, WgpuTexturesDecoderH264};
+pub use crate::dmabuf::StagedDmaBufWrite;
 pub use encoder::{
-    H264EncodedOutputChunk, H264EncoderConfig, H264EncoderPreset, H264EncoderRateControl,
-    H264RateControlError, H264VariableBitrate, QuickSyncH264EncoderError,
-    WgpuTexturesEncoderH264,
+    AcquiredNv12Slot, H264EncodedOutputChunk, H264EncoderConfig, H264EncoderPreset,
+    H264EncoderRateControl, H264RateControlError, H264VariableBitrate,
+    QuickSyncH264EncoderError, WgpuTexturesEncoderH264, ZeroCopyNv12Pool,
 };
 
 use crate::{
@@ -150,6 +154,10 @@ impl H264Session {
         let session =
             Session::new(drm_node.render_node, Codec::H264, component, display.handle())?;
         Ok(Self { session, display })
+    }
+
+    pub(super) fn display(&self) -> &VaDisplay {
+        &self.display
     }
 
     pub(super) fn import_bgr4_surface(
@@ -319,6 +327,14 @@ impl<T> VplSyncQueue<T> {
 
     pub(super) fn is_empty(&self) -> bool {
         self.pending.is_empty()
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.pending.len()
+    }
+
+    pub(super) fn capacity(&self) -> usize {
+        self.capacity
     }
 
     pub(super) fn is_full(&self) -> bool {

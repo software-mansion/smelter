@@ -111,6 +111,7 @@ impl VideoEncoder for VulkanH264Encoder {
             Self { encoder, bitstream_format: options.bitstream_format },
             VideoEncoderConfig {
                 resolution: options.resolution,
+                external_nv12_pool: None,
                 output_format: OutputFrameFormat::Nv12WgpuTexture,
                 extradata,
             },

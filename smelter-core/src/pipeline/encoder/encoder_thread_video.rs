@@ -2,7 +2,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use crossbeam_channel::Sender;
 use smelter_render::Frame;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{
     prelude::*,
@@ -68,9 +68,25 @@ where
 
     fn run(self) {
         for event in self.stream {
-            if self.chunks_sender.send(event).is_err() {
-                warn!("Failed to send encoded video chunk from encoder. Channel closed.");
-                return;
+            // TEMP: handoff instrumentation (H3 encoder->mux send block)
+            match self.chunks_sender.try_send(event) {
+                Ok(()) => {}
+                Err(crossbeam_channel::TrySendError::Full(ev)) => {
+                    let h3_start = std::time::Instant::now();
+                    let sent = self.chunks_sender.send(ev);
+                    let h3_ms = h3_start.elapsed().as_secs_f64() * 1000.0;
+                    if h3_ms > 2.0 {
+                        info!(h3_ms, "handoff_h3 encoder->mux send block");
+                    }
+                    if sent.is_err() {
+                        warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+                        return;
+                    }
+                }
+                Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
+                    warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+                    return;
+                }
             }
         }
     }

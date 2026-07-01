@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tracing::error;
+use tracing::{error, info};
 
 use crate::RenderingMode;
 
@@ -87,6 +87,19 @@ impl WgpuCtx {
         let empty_rgba_srgb_texture = RgbaSrgbTexture::empty(&device);
 
         scope.pop()?;
+
+        info!(
+            target: "smelter_render::wgpu",
+            features = ?device.features(),
+            timestamp_query = device.features().contains(wgpu::Features::TIMESTAMP_QUERY),
+            timestamp_inside_encoders = device
+                .features()
+                .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS),
+            timestamp_inside_passes = device
+                .features()
+                .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES),
+            "Created wgpu render context"
+        );
 
         device.on_uncaptured_error(Arc::new(|e| {
             error!("wgpu error: {:?}", e);

@@ -1,5 +1,7 @@
 mod interop;
 mod nv12;
+// Renderable GPU-exported NV12 dma-buf backing the Quick Sync zero-copy pool.
+mod renderable;
 mod semaphore;
 mod sync;
 mod sync_file;
@@ -8,11 +10,17 @@ mod vulkan;
 use std::ffi::CStr;
 
 pub(crate) use interop::DmaBufInterop;
+pub(crate) use renderable::{RenderableNv12DmaBuf, export_renderable_nv12};
+#[cfg(test)]
+pub(crate) use renderable::probe_ccs_renderable_nv12;
 pub(crate) use nv12::{
     DRM_FORMAT_NV12, DmaBufError, DmaBufFrame, DmaBufObject, DmaBufPlane,
     Nv12DmaBufDescriptor, Nv12DmaBufLayer,
 };
 pub(crate) use sync::{DmaBufSyncFd, QuickSyncDmaBufSync};
+// Re-exported `pub` (not `pub(crate)`) so the quicksync H264 module can expose the
+// opaque staged-write token to the compositor across crates.
+pub use sync::StagedDmaBufWrite;
 
 pub(crate) fn required_wgpu_features() -> wgpu::Features {
     wgpu::Features::TEXTURE_FORMAT_NV12

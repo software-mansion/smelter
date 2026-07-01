@@ -76,6 +76,7 @@ impl VideoEncoder for FfmpegH264Encoder {
             },
             VideoEncoderConfig {
                 resolution: options.resolution,
+                external_nv12_pool: None,
                 output_format: match options.pixel_format {
                     OutputPixelFormat::YUV420P => OutputFrameFormat::PlanarYuv420Bytes,
                     OutputPixelFormat::YUV422P => OutputFrameFormat::PlanarYuv422Bytes,

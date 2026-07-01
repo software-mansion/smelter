@@ -50,6 +50,7 @@ impl Output for RawDataOutput {
         self.video.as_ref().map(|video| OutputVideo {
             resolution: video.1,
             frame_format: OutputFrameFormat::RgbaWgpuTexture,
+            external_nv12_pool: None,
             frame_sender: &video.0,
             keyframe_request_sender,
         })

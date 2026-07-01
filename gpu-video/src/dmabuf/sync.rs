@@ -9,6 +9,7 @@ use wgpu::hal::api::Vulkan as VkApi;
 use super::{
     DmaBufFrame, DmaBufInterop,
     interop::VulkanDmaBufDevice,
+    nv12::DmaBufSyncGuard,
     semaphore::{VulkanSemaphore, VulkanSemaphoreError},
     sync_file::{self, DmaBufAccess, SyncFile},
 };
@@ -142,27 +143,79 @@ impl QuickSyncDmaBufSync {
         command_buffers: impl IntoIterator<Item = wgpu::CommandBuffer>,
         label: &'static str,
     ) -> Result<(), QuickSyncDmaBufSyncError> {
-        let submitted_frame = frame.clone();
-        let sync_guard = frame.sync_guard();
+        let staged = self.stage_dma_buf_frame_access(frame, access, label)?;
+        self.queue.submit(command_buffers);
+        self.finish_dma_buf_write(staged)
+    }
+
+    /// Phase 1 of a batched zero-copy write: take the frame's sync guard, acquire
+    /// its dma-buf (wait semaphores), create the exportable release semaphore and
+    /// stage both onto the global wgpu queue — **without submitting**. The caller
+    /// records the GPU write into a shared command encoder, stages any number of
+    /// other frames the same way, then performs a single [`wgpu::Queue::submit`]
+    /// that consumes every staged semaphore at once. Pass each returned token to
+    /// [`Self::finish_dma_buf_write`] after that submit.
+    pub(crate) fn stage_dma_buf_write(
+        &self,
+        frame: &DmaBufFrame,
+        label: &'static str,
+    ) -> Result<StagedDmaBufWrite, QuickSyncDmaBufSyncError> {
+        self.stage_dma_buf_frame_access(frame, DmaBufAccess::Write, label)
+    }
+
+    fn stage_dma_buf_frame_access(
+        &self,
+        frame: &DmaBufFrame,
+        access: DmaBufAccess,
+        label: &'static str,
+    ) -> Result<StagedDmaBufWrite, QuickSyncDmaBufSyncError> {
+        let frame = frame.clone();
+        let guard = frame.sync_guard();
         let acquired =
-            self.acquire_dma_buf_frame(frame, access).map_err(label_error(label))?;
+            self.acquire_dma_buf_frame(&frame, access).map_err(label_error(label))?;
         let release = VulkanSemaphore::exportable(Arc::clone(&self.vulkan))
             .map_err(label_error(label))?;
-        let staged_submission = self
+        let staged = self
             .stage_submission_sync(&acquired, release.raw())
             .map_err(label_error(label))?;
+        Ok(StagedDmaBufWrite {
+            frame,
+            guard,
+            acquired,
+            release,
+            staged,
+            access,
+            label,
+        })
+    }
 
-        self.queue.submit(command_buffers);
-        staged_submission.consume();
+    /// Phase 2 of a batched zero-copy write, called after the single shared
+    /// submit: export the release semaphore as a sync_file and import it into the
+    /// dma-buf so VA waits for the GPU write, then register the per-frame resource
+    /// teardown on submitted-work-done. Mirrors the tail of the single-shot path.
+    pub(crate) fn finish_dma_buf_write(
+        &self,
+        token: StagedDmaBufWrite,
+    ) -> Result<(), QuickSyncDmaBufSyncError> {
+        let StagedDmaBufWrite {
+            frame,
+            guard,
+            acquired,
+            release,
+            staged,
+            access,
+            label,
+        } = token;
+        staged.consume();
 
         let release_result = release
             .export_sync_file()
             .map_err(QuickSyncDmaBufSyncError::from)
-            .and_then(|sync_file| self.release_dma_buf_frame(frame, access, &sync_file))
+            .and_then(|sync_file| self.release_dma_buf_frame(&frame, access, &sync_file))
             .map_err(label_error(label));
-        drop(sync_guard);
+        drop(guard);
         self.queue
-            .on_submitted_work_done(move || drop((submitted_frame, acquired, release)));
+            .on_submitted_work_done(move || drop((frame, acquired, release)));
         release_result
     }
 
@@ -252,6 +305,22 @@ impl QuickSyncDmaBufSync {
             consumed: false,
         })
     }
+}
+
+/// Opaque token carrying one frame's staged dma-buf write across a batched
+/// submit (see [`QuickSyncDmaBufSync::stage_dma_buf_write`]). Holds the sync
+/// guard, the acquire (wait) semaphores, the exportable release semaphore and the
+/// queue-staged sync handle until the caller calls
+/// [`QuickSyncDmaBufSync::finish_dma_buf_write`]. `Send + Sync` (the guard is an
+/// atomic flag, not a `MutexGuard`) so it can be returned to the renderer.
+pub struct StagedDmaBufWrite {
+    frame: DmaBufFrame,
+    guard: DmaBufSyncGuard,
+    acquired: Box<[VulkanSemaphore]>,
+    release: VulkanSemaphore,
+    staged: StagedSubmissionSync,
+    access: DmaBufAccess,
+    label: &'static str,
 }
 
 struct StagedSubmissionSync {

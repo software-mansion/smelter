@@ -7,7 +7,7 @@ use crate::InputId;
 use crate::scene::{
     self, ComponentId, ShaderComponentParams, image_component::ImageRenderParams,
 };
-use crate::transformations::layout::LayoutNode;
+use crate::transformations::layout::{LayoutNode, LayoutRenderStats};
 use crate::transformations::shader::Shader;
 use crate::transformations::shader::node::ShaderNode;
 
@@ -20,6 +20,25 @@ use crate::transformations::{
 use super::RenderCtx;
 use super::input_texture::InputTexture;
 use super::node_texture::NodeTexture;
+
+#[derive(Debug, Default)]
+pub(super) struct NodeRenderStats {
+    pub(super) layout_ms: f64,
+    pub(super) lanczos_passes: usize,
+    pub(super) layout_passes: usize,
+    pub(super) intermediate_4k_textures: usize,
+}
+
+impl From<LayoutRenderStats> for NodeRenderStats {
+    fn from(stats: LayoutRenderStats) -> Self {
+        Self {
+            layout_ms: stats.total_ms,
+            lanczos_passes: stats.lanczos_passes,
+            layout_passes: stats.layout_passes,
+            intermediate_4k_textures: stats.intermediate_4k_textures,
+        }
+    }
+}
 
 pub(super) enum InnerRenderNode {
     Shader(ShaderNode),
@@ -37,21 +56,33 @@ impl InnerRenderNode {
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
         pts: Duration,
-    ) {
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> NodeRenderStats {
         match self {
             InnerRenderNode::Shader(shader) => {
                 shader.render(ctx.wgpu_ctx, sources, target, pts);
+                NodeRenderStats::default()
             }
-            InnerRenderNode::Web(renderer) => renderer.render(ctx, sources, target),
+            InnerRenderNode::Web(renderer) => {
+                renderer.render(ctx, sources, target);
+                NodeRenderStats::default()
+            }
             InnerRenderNode::Text(renderer) => {
                 renderer.render(ctx, target);
+                NodeRenderStats::default()
             }
-            InnerRenderNode::Image(node) => node.render(ctx, target, pts),
+            InnerRenderNode::Image(node) => {
+                node.render(ctx, target, pts);
+                NodeRenderStats::default()
+            }
             InnerRenderNode::InputStreamRef(_) => {
                 // Nothing to do, textures on input nodes should be populated
                 // at the start of render loop
+                NodeRenderStats::default()
             }
-            InnerRenderNode::Layout(node) => node.render(ctx, sources, target, pts),
+            InnerRenderNode::Layout(node) => node
+                .render(ctx, sources, target, pts, encoder)
+                .into(),
         }
     }
 }
@@ -108,6 +139,13 @@ impl RenderNode {
                 .map(|child| child.output_texture(inputs))
                 .unwrap_or(&self.output),
             _non_input_stream => &self.output,
+        }
+    }
+
+    pub(super) fn direct_nv12_passthrough_texture(&self) -> Option<&NodeTexture> {
+        match &self.renderer {
+            InnerRenderNode::Layout(node) => node.direct_nv12_passthrough_texture(),
+            _ => None,
         }
     }
 

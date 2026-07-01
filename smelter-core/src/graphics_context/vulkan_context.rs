@@ -20,8 +20,11 @@ pub fn create_vulkan_graphics_ctx(
         ..
     } = opts;
 
-    let base_wgpu_features =
-        features | required_wgpu_features() | wgpu::Features::TEXTURE_FORMAT_NV12;
+    let base_wgpu_features = features
+        | required_wgpu_features()
+        | wgpu::Features::TEXTURE_FORMAT_NV12
+        | wgpu::Features::TIMESTAMP_QUERY
+        | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS;
     let limits = set_required_wgpu_limits(limits);
 
     let instance = match libvulkan_path {

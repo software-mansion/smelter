@@ -245,6 +245,7 @@ impl ParamsBindGroups {
                     border_color,
                     border_width,
                     scaling_filter,
+                    lanczos_vertical,
                     mip_level,
                 } => {
                     let layout_info = LayoutInfo {
@@ -252,9 +253,10 @@ impl ParamsBindGroups {
                         index: texture_params.len() as u32,
                         masks_len: masks.len() as u32,
                     };
-                    let scaling_filter_value: u32 = match scaling_filter {
-                        ImageScalingFilter::Bilinear => 0,
-                        ImageScalingFilter::Lanczos3 => 1,
+                    let scaling_filter_value: u32 = match (*scaling_filter, *lanczos_vertical) {
+                        (ImageScalingFilter::Bilinear, _) => 0,
+                        (ImageScalingFilter::Lanczos3, true) => 2,
+                        (ImageScalingFilter::Lanczos3, false) => 1,
                     };
                     let mut texture_params_bytes = [0u8; 80];
                     texture_params_bytes[0..16].copy_from_slice(&border_radius_bytes);

@@ -1,6 +1,6 @@
 use std::{iter, sync::Arc, time::Duration};
 
-use smelter_render::{Frame, OutputFrameFormat, Resolution};
+use smelter_render::{ExternalNv12FramePool, Frame, OutputFrameFormat, Resolution};
 use tokio::sync::watch;
 
 use crate::prelude::*;
@@ -37,6 +37,10 @@ pub(crate) struct VideoEncoderConfig {
     pub resolution: Resolution,
     pub output_format: OutputFrameFormat,
     pub extradata: Option<bytes::Bytes>,
+    /// Encoder-owned dma-buf NV12 pool for the zero-copy "reverse ownership"
+    /// path: when present, the compositor renders the NV12 output directly into
+    /// these surfaces (set only by the Quick Sync encoder on its zero-copy path).
+    pub external_nv12_pool: Option<Arc<dyn ExternalNv12FramePool>>,
 }
 
 pub(crate) trait VideoEncoder: Sized {

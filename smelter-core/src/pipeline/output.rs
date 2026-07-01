@@ -23,10 +23,11 @@ pub(crate) struct PipelineOutput {
     pub audio_end_condition: Option<PipelineOutputEndConditionState>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct OutputVideo<'a> {
     pub resolution: Resolution,
     pub frame_format: OutputFrameFormat,
+    pub external_nv12_pool: Option<Arc<dyn smelter_render::ExternalNv12FramePool>>,
     pub frame_sender: &'a Sender<PipelineEvent<Frame>>,
     pub keyframe_request_sender: &'a Sender<()>,
 }
@@ -135,6 +136,7 @@ where
             video_output.resolution,
             video_output.frame_format,
             video_opts.initial,
+            video_output.external_nv12_pool.clone(),
         );
 
         if let Err(err) = result {

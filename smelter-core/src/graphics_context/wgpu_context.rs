@@ -66,7 +66,12 @@ pub fn create_wgpu_graphics_ctx(
         return Err(CreateGraphicsContextError::NoAdapter);
     }
     let quicksync_features = quicksync_wgpu_features(&adapter);
-    let required_features = features | required_wgpu_features() | quicksync_features;
+    let required_features =
+        features
+            | required_wgpu_features()
+            | quicksync_features
+            | wgpu::Features::TIMESTAMP_QUERY
+            | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS;
 
     let missing_features = required_features.difference(adapter.features());
     if !missing_features.is_empty() {

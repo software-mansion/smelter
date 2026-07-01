@@ -104,6 +104,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
             Self { encoder, packet: ffmpeg_next::Packet::empty() },
             VideoEncoderConfig {
                 resolution: options.resolution,
+                external_nv12_pool: None,
                 output_format: OutputFrameFormat::PlanarYuv420Bytes,
                 extradata: None,
             },

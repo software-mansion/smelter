@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     collections::HashMap,
     fmt::{self, Display},
     sync::Arc,
@@ -173,4 +174,46 @@ pub enum OutputFrameFormat {
     PlanarYuv444Bytes,
     RgbaWgpuTexture,
     Nv12WgpuTexture,
+}
+
+/// A coded-size NV12 dma-buf slot acquired from an [`ExternalNv12FramePool`]. The
+/// compositor renders the visible region into `texture`, then stages the write via
+/// [`ExternalNv12FramePool::stage_write`] and finishes it after the batched
+/// submit. `index` identifies the slot for the pool; downstream the encoder maps
+/// the frame back to its surface by texture identity.
+pub struct ExternalNv12Frame {
+    pub index: usize,
+    pub texture: Arc<wgpu::Texture>,
+}
+
+/// A bounded pool of renderable, encoder-owned NV12 dma-buf textures the
+/// compositor renders its NV12 output *directly* into for zero-copy encode
+/// ("reverse ownership"). Implemented by the encoder (e.g. Intel Quick Sync) and
+/// injected into the output via [`OutputFrameFormat::Nv12WgpuTexture`] registration.
+///
+/// The pool textures are coded (16-aligned) size; the compositor renders the
+/// top-left [`Self::visible_resolution`] region and clears the surrounding coded
+/// padding to [`Self::padding_luma`] / [`Self::padding_chroma`].
+pub trait ExternalNv12FramePool: Send + Sync + std::fmt::Debug {
+    /// Acquire a free slot, or `None` if all slots are in flight (bounded; the
+    /// pool never grows).
+    fn acquire(&self) -> Option<ExternalNv12Frame>;
+
+    /// Stage the GPU-write fence for an acquired slot whose convert the compositor
+    /// already recorded into the shared output command encoder. Returns an opaque
+    /// token to hand back to [`Self::finish_write`] after the single batched
+    /// submit. Staging does **not** submit: all external outputs share one
+    /// `wgpu::CommandEncoder` and one `queue.submit` per frame (collapsing the
+    /// former per-output fenced submit that serialized the render thread).
+    fn stage_write(&self, index: usize) -> Result<Box<dyn Any + Send>, String>;
+
+    /// Complete a staged write (import the release fence into the dma-buf) after
+    /// the caller submitted the shared encoder. `token` is the value returned by
+    /// [`Self::stage_write`].
+    fn finish_write(&self, token: Box<dyn Any + Send>) -> Result<(), String>;
+
+    fn coded_resolution(&self) -> Resolution;
+    fn visible_resolution(&self) -> Resolution;
+    fn padding_luma(&self) -> f64;
+    fn padding_chroma(&self) -> f64;
 }

@@ -1,12 +1,12 @@
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use glyphon::fontdb;
 use tracing::trace;
 
 use crate::{
-    FrameSet, InputId, OutputFrameFormat, OutputId, RegistryType, RendererId,
-    RenderingMode, Resolution,
+    ExternalNv12FramePool, FrameSet, InputId, OutputFrameFormat, OutputId,
+    RegistryType, RendererId, RenderingMode, Resolution,
     error::{
         InitRendererEngineError, RegisterRendererError, RenderSceneError,
         UnregisterRendererError, UpdateSceneError,
@@ -183,12 +183,14 @@ impl Renderer {
         resolution: Resolution,
         output_format: OutputFrameFormat,
         scene_root: Component,
+        external_nv12_pool: Option<Arc<dyn ExternalNv12FramePool>>,
     ) -> Result<(), UpdateSceneError> {
         self.0.lock().unwrap().update_scene(
             output_id,
             resolution,
             scene_root,
             output_format,
+            external_nv12_pool,
         )
     }
 
@@ -249,17 +251,27 @@ impl InnerRenderer {
         self.scene.register_render_event(inputs.pts, input_resolutions);
 
         let pts = inputs.pts;
+        let render_started = Instant::now();
+        render_loop::emit_input_signal_snapshots(&inputs);
         trace!("Upload input textures");
-        populate_inputs(
+        let input_stats = populate_inputs(
             ctx,
             &mut self.render_graph,
             &mut self.texture_upload_belt,
             inputs,
         );
         trace!("Run render graph");
-        run_transforms(ctx, &mut self.render_graph, pts);
+        let transform_stats = run_transforms(ctx, &mut self.render_graph, pts);
         trace!("Download output textures");
-        let frames = read_outputs(ctx, &mut self.render_graph, pts);
+        let (frames, output_stats) = read_outputs(ctx, &mut self.render_graph, pts);
+        let total_ms = render_started.elapsed().as_secs_f64() * 1000.0;
+        render_loop::emit_render_frame_telemetry(
+            pts,
+            total_ms,
+            &input_stats,
+            &transform_stats,
+            &output_stats,
+        );
 
         scope.pop()?;
 
@@ -272,6 +284,7 @@ impl InnerRenderer {
         resolution: Resolution,
         scene_root: Component,
         output_format: OutputFrameFormat,
+        external_nv12_pool: Option<Arc<dyn ExternalNv12FramePool>>,
     ) -> Result<(), UpdateSceneError> {
         let output = OutputScene {
             output_id: output_id.clone(),
@@ -290,6 +303,7 @@ impl InnerRenderer {
             },
             output_node,
             output_format,
+            external_nv12_pool,
         )?;
         Ok(())
     }

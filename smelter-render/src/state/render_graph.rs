@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::scene::{self, OutputNode};
-use crate::{InputId, OutputFrameFormat, OutputId};
+use crate::{ExternalNv12FramePool, InputId, OutputFrameFormat, OutputId};
 use crate::{error::UpdateSceneError, wgpu::WgpuErrorScope};
 
 use super::input_texture::InputTexture;
@@ -41,6 +42,7 @@ impl RenderGraph {
         ctx: &RenderCtx,
         output: OutputNode,
         output_format: OutputFrameFormat,
+        external_nv12_pool: Option<Arc<dyn ExternalNv12FramePool>>,
     ) -> Result<(), UpdateSceneError> {
         // TODO: If we want nodes to be stateful we could try reusing nodes instead
         //       of recreating them on every scene update
@@ -52,6 +54,7 @@ impl RenderGraph {
                 ctx.wgpu_ctx,
                 output.resolution,
                 output_format,
+                external_nv12_pool,
             ),
         };
 

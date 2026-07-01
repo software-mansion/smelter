@@ -110,10 +110,16 @@ fn build_quicksync_va() {
             "va_wrapper.h",
             "#include <va/va.h>\n#include <va/va_drm.h>\n#include <va/va_drmcommon.h>\n",
         )
-        .allowlist_function("va(GetDisplayDRM|Initialize|Terminate|ExportSurfaceHandle)")
-        .allowlist_type("(VADisplay|VASurfaceID|VAStatus|.*VADRMPRIME.*)")
+        .allowlist_function(
+            "va(GetDisplayDRM|Initialize|Terminate|ExportSurfaceHandle|CreateSurfaces|DestroySurfaces)",
+        )
+        // POC(dmabuf-import): VASurfaceAttrib*/VAGenericValue* added for the external
+        // NV12 dma-buf import path (vaCreateSurfaces with DRM_PRIME_2).
+        .allowlist_type(
+            "(VADisplay|VASurfaceID|VAStatus|VASurfaceAttrib.*|VAGenericValue.*|.*VADRMPRIME.*)",
+        )
         .allowlist_var(
-            "VA_(STATUS_SUCCESS|EXPORT_SURFACE_READ_WRITE|SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2)",
+            "(VA_(STATUS_SUCCESS|EXPORT_SURFACE_READ_WRITE|SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2|SURFACE_ATTRIB_SETTABLE|FOURCC_NV12|RT_FORMAT_YUV420)|VASurfaceAttrib.*|VAGenericValue.*)",
         )
         .generate_comments(false)
         .derive_debug(false)

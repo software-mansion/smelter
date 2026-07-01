@@ -9,6 +9,8 @@ use super::WgpuCtx;
 pub struct RgbaToNv12Converter {
     y_pipeline: wgpu::RenderPipeline,
     uv_pipeline: wgpu::RenderPipeline,
+    vertical_lanczos_y_pipeline: wgpu::RenderPipeline,
+    vertical_lanczos_uv_pipeline: wgpu::RenderPipeline,
     sampler: Sampler,
 }
 
@@ -45,8 +47,28 @@ impl RgbaToNv12Converter {
             "fs_main_uv",
             wgpu::TextureFormat::Rg8Unorm,
         );
+        let vertical_lanczos_y_pipeline = create_converting_pipeline(
+            device,
+            &pipeline_layout,
+            &shader_module,
+            "fs_lanczos_vertical_y",
+            wgpu::TextureFormat::R8Unorm,
+        );
+        let vertical_lanczos_uv_pipeline = create_converting_pipeline(
+            device,
+            &pipeline_layout,
+            &shader_module,
+            "fs_lanczos_vertical_uv",
+            wgpu::TextureFormat::Rg8Unorm,
+        );
 
-        Self { y_pipeline, uv_pipeline, sampler }
+        Self {
+            y_pipeline,
+            uv_pipeline,
+            vertical_lanczos_y_pipeline,
+            vertical_lanczos_uv_pipeline,
+            sampler,
+        }
     }
 
     pub fn encode_convert(
@@ -57,7 +79,6 @@ impl RgbaToNv12Converter {
         dst_texture: &NV12Texture,
     ) {
         let (dst_y_view, dst_uv_view) = dst_texture.views();
-
         convert_plane(
             ctx,
             encoder,
@@ -70,6 +91,69 @@ impl RgbaToNv12Converter {
             ctx,
             encoder,
             &self.uv_pipeline,
+            &self.sampler.bind_group,
+            src_bg,
+            dst_uv_view,
+        );
+    }
+
+    /// Convert into a coded-size NV12 dma-buf target, rendering the composited
+    /// content only into the top-left `visible` region (via a per-plane viewport)
+    /// and clearing the surrounding coded padding to the encoder's padding luma /
+    /// chroma. Used by the Quick Sync zero-copy path.
+    pub fn encode_convert_external(
+        &self,
+        ctx: &WgpuCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        src_bg: &wgpu::BindGroup,
+        dst_texture: &NV12Texture,
+        visible: crate::Resolution,
+        padding_luma: f64,
+        padding_chroma: f64,
+    ) {
+        let (dst_y_view, dst_uv_view) = dst_texture.views();
+        convert_plane_viewport(
+            ctx,
+            encoder,
+            &self.y_pipeline,
+            &self.sampler.bind_group,
+            src_bg,
+            dst_y_view,
+            (visible.width as f32, visible.height as f32),
+            wgpu::Color { r: padding_luma, g: 0.0, b: 0.0, a: 1.0 },
+        );
+        convert_plane_viewport(
+            ctx,
+            encoder,
+            &self.uv_pipeline,
+            &self.sampler.bind_group,
+            src_bg,
+            dst_uv_view,
+            ((visible.width / 2) as f32, (visible.height / 2) as f32),
+            wgpu::Color { r: padding_chroma, g: padding_chroma, b: 0.0, a: 1.0 },
+        );
+    }
+
+    pub fn encode_lanczos_vertical_convert(
+        &self,
+        ctx: &WgpuCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        src_bg: &wgpu::BindGroup,
+        dst_texture: &NV12Texture,
+    ) {
+        let (dst_y_view, dst_uv_view) = dst_texture.views();
+        convert_plane(
+            ctx,
+            encoder,
+            &self.vertical_lanczos_y_pipeline,
+            &self.sampler.bind_group,
+            src_bg,
+            dst_y_view,
+        );
+        convert_plane(
+            ctx,
+            encoder,
+            &self.vertical_lanczos_uv_pipeline,
             &self.sampler.bind_group,
             src_bg,
             dst_uv_view,
@@ -113,6 +197,42 @@ fn create_converting_pipeline(
         },
         depth_stencil: None,
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn convert_plane_viewport(
+    ctx: &WgpuCtx,
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::RenderPipeline,
+    sampler_bg: &wgpu::BindGroup,
+    src_bg: &wgpu::BindGroup,
+    dst_view: &wgpu::TextureView,
+    viewport: (f32, f32),
+    clear: wgpu::Color,
+) {
+    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("rgba to nv12 external viewport pass"),
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        depth_stencil_attachment: None,
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: dst_view,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(clear),
+                store: wgpu::StoreOp::Store,
+            },
+            resolve_target: None,
+            depth_slice: None,
+        })],
+        multiview_mask: None,
+    });
+
+    render_pass.set_pipeline(pipeline);
+    render_pass.set_bind_group(0, src_bg, &[]);
+    render_pass.set_bind_group(1, sampler_bg, &[]);
+    render_pass.set_viewport(0.0, 0.0, viewport.0, viewport.1, 0.0, 1.0);
+
+    ctx.plane.draw(&mut render_pass);
 }
 
 fn convert_plane(

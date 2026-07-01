@@ -234,6 +234,56 @@ impl Session {
         Ok(syncp)
     }
 
+    /// POC(dmabuf-import): wrap an existing VA surface as an `mfxFrameSurface1`
+    /// the encoder can consume, via `mfxMemoryInterface::ImportFrameSurface`
+    /// (the symmetric counterpart of `export_va_surface`). Requests both
+    /// `IMPORT_SHARED` (zero-copy) and `IMPORT_COPY`; the runtime picks the best
+    /// it can and reports the actual mode back in `SurfaceFlags`. Returns the
+    /// imported surface plus that reported flag so the caller can tell whether
+    /// the import stayed zero-copy.
+    pub(super) fn import_va_surface(
+        &self,
+        va_display: DisplayHandle,
+        va_surface: SurfaceId,
+        component: Component,
+    ) -> Result<(FrameSurface, u32), VplError> {
+        let mut iface: *mut vpl::mfxMemoryInterface = std::ptr::null_mut();
+        check_status("MFXVideoCORE_GetHandle(MEMORY_INTERFACE)", unsafe {
+            vpl::MFXVideoCORE_GetHandle(
+                self.raw(),
+                vpl::mfxHandleType_MFX_HANDLE_MEMORY_INTERFACE,
+                &mut iface as *mut _ as *mut vpl::mfxHDL,
+            )
+        })?;
+        let iface = non_null(iface, "mfxMemoryInterface")?;
+        let import = required_function(
+            unsafe { iface.as_ref().ImportFrameSurface },
+            "mfxMemoryInterface::ImportFrameSurface",
+        )?;
+
+        let mut vaapi: vpl::mfxSurfaceVAAPI = unsafe { std::mem::zeroed() };
+        vaapi.SurfaceInterface.Header.SurfaceType =
+            vpl::mfxSurfaceType_MFX_SURFACE_TYPE_VAAPI;
+        vaapi.SurfaceInterface.Header.SurfaceFlags =
+            vpl::MFX_SURFACE_FLAG_IMPORT_SHARED | vpl::MFX_SURFACE_FLAG_IMPORT_COPY;
+        vaapi.SurfaceInterface.Header.StructSize =
+            std::mem::size_of::<vpl::mfxSurfaceVAAPI>() as u32;
+        vaapi.vaDisplay = va_display.as_ptr();
+        vaapi.vaSurfaceID = va_surface;
+
+        let mut imported = std::ptr::null_mut();
+        check_status("mfxMemoryInterface::ImportFrameSurface", unsafe {
+            import(
+                iface.as_ptr(),
+                component.surface_component(),
+                &mut vaapi.SurfaceInterface.Header,
+                &mut imported,
+            )
+        })?;
+        let reported_flags = vaapi.SurfaceInterface.Header.SurfaceFlags;
+        Ok((FrameSurface::new(imported)?, reported_flags))
+    }
+
     pub(super) fn export_va_surface(
         &self,
         surface: &FrameSurface,

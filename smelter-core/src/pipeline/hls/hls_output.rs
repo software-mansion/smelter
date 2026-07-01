@@ -279,6 +279,7 @@ impl Output for HlsOutput {
         self.video.as_ref().map(|video| OutputVideo {
             resolution: video.config.resolution,
             frame_format: video.config.output_format,
+            external_nv12_pool: video.config.external_nv12_pool.clone(),
             frame_sender: &video.frame_sender,
             keyframe_request_sender: &video.keyframe_request_sender,
         })

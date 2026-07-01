@@ -326,6 +326,7 @@ impl Pipeline {
             video_output.resolution,
             video_output.frame_format,
             scene_root,
+            video_output.external_nv12_pool.clone(),
         )
     }
 
@@ -473,9 +474,25 @@ fn run_renderer_thread(
                 continue;
             };
 
-            if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
-                warn!(?output_id, "Failed to send output frames. Channel closed.");
-                renderer.unregister_output(&output_id);
+            // TEMP: handoff instrumentation (H1 render->encoder send block)
+            match frame_sender.try_send(PipelineEvent::Data(frame)) {
+                Ok(()) => {}
+                Err(crossbeam_channel::TrySendError::Full(ev)) => {
+                    let h1_start = std::time::Instant::now();
+                    let sent = frame_sender.send(ev);
+                    let h1_ms = h1_start.elapsed().as_secs_f64() * 1000.0;
+                    if h1_ms > 2.0 {
+                        info!(?output_id, h1_ms, "handoff_h1 render->encoder send block");
+                    }
+                    if sent.is_err() {
+                        warn!(?output_id, "Failed to send output frames. Channel closed.");
+                        renderer.unregister_output(&output_id);
+                    }
+                }
+                Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
+                    warn!(?output_id, "Failed to send output frames. Channel closed.");
+                    renderer.unregister_output(&output_id);
+                }
             }
         }
     }

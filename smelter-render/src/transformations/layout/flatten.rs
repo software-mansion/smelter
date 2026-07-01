@@ -141,6 +141,7 @@ impl NestedLayout {
                 border_color: RGBAColor(_, _, _, _),
                 border_width: _,
                 scaling_filter: _,
+                lanczos_vertical: _,
                 mip_level: _,
             } => {
                 // TODO: handle a case when only border is visible (currently impossible)
@@ -187,6 +188,7 @@ impl NestedLayout {
                         border_width,
                         crop,
                         scaling_filter,
+                        lanczos_vertical,
                         mip_level,
                     } => RenderLayoutContent::ChildNode {
                         index,
@@ -194,6 +196,7 @@ impl NestedLayout {
                         border_width: border_width * unified_scale,
                         crop,
                         scaling_filter,
+                        lanczos_vertical,
                         mip_level,
                     },
                     RenderLayoutContent::BoxShadow { color, blur_radius } => {
@@ -248,6 +251,7 @@ impl NestedLayout {
                         border_color,
                         border_width,
                         scaling_filter,
+                        lanczos_vertical,
                         mip_level,
                     } => {
                         // Calculate how much top/left coordinates changed when cropping. It represents
@@ -281,6 +285,7 @@ impl NestedLayout {
                                 border_color,
                                 border_width,
                                 scaling_filter,
+                                lanczos_vertical,
                                 mip_level,
                             },
                             border_radius: child.border_radius * unified_scale,
@@ -337,6 +342,7 @@ impl NestedLayout {
                         border_color: self.border_color,
                         border_width: self.border_width,
                         scaling_filter: ImageScalingFilter::Bilinear,
+                        lanczos_vertical: false,
                         mip_level: 0.0,
                     }
                 }
