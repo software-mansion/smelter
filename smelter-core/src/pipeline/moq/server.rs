@@ -1,10 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use hang::moq_net::{OriginConsumer, OriginProducer};
-use moq_native::{
-    Request, ServerConfig, ServerTlsConfig,
-    moq_net::{Origin, Session},
-};
+use moq_native::{Request, ServerConfig, ServerTlsConfig, moq_net::Origin};
 use smelter_render::error::ErrorStack;
 use tracing::{info, warn};
 
