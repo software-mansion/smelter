@@ -16,9 +16,11 @@ use crate::{
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac::FdkAacDecoder,
-            ffmpeg_h264,
+            ffmpeg_h264::FfmpegH264Decoder,
+            ffmpeg_vp8::FfmpegVp8Decoder,
+            ffmpeg_vp9::FfmpegVp9Decoder,
             libopus::OpusDecoder,
-            vulkan_h264,
+            vulkan_h264::VulkanH264Decoder,
         },
         moq::state::MoqInputState,
     },
@@ -380,49 +382,65 @@ fn spawn_video_decoder(
     video: &VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
-    let transformer = {
-        match &video.description {
-            Some(desc) => {
-                let h264_config = H264AvcDecoderConfig::parse(desc.clone())
-                    .map_err(|_| MoqConnectionError::InvalidAvcc)?;
-
-                Some(H264AvccToAnnexB::new(h264_config))
-            }
-            None => None,
+    let handle = match &video.codec {
+        VideoCodec::H264 => {
+            spawn_h264_video_decoder(ctx, input_ref, decoders, video, frame_sender)?
         }
+        VideoCodec::Vp8 => VideoDecoderThread::<FfmpegVp8Decoder, _>::spawn(
+            input_ref.clone(),
+            VideoDecoderThreadOptions::<H264AvccToAnnexB> {
+                ctx: ctx.clone(),
+                transformer: None,
+                frame_sender,
+                input_buffer_size: MOQ_MAX_BUFFER,
+            },
+        )?,
+        VideoCodec::Vp9 => VideoDecoderThread::<FfmpegVp9Decoder, _>::spawn(
+            input_ref.clone(),
+            VideoDecoderThreadOptions::<H264AvccToAnnexB> {
+                ctx: ctx.clone(),
+                transformer: None,
+                frame_sender,
+                input_buffer_size: MOQ_MAX_BUFFER,
+            },
+        )?,
     };
-    if let Container::Cmaf(_) = video.container
-        && transformer.is_none()
-    {
-        return Err(MoqConnectionError::MissingAvcc);
-    }
+    Ok(handle)
+}
+
+fn spawn_h264_video_decoder(
+    ctx: &Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
+    decoders: &MoqServerInputDecoders,
+    video: &VideoTrack,
+    frame_sender: QueueSender<Frame>,
+) -> Result<DecoderThreadHandle, MoqConnectionError> {
+    let config = match &video.description {
+        Some(desc) => Some(H264AvcDecoderConfig::parse(desc.clone())?),
+        None => match &video.container {
+            Container::Cmaf(_) => return Err(MoqConnectionError::MissingAvcc),
+            _ => None,
+        },
+    };
 
     let options = VideoDecoderThreadOptions {
         ctx: ctx.clone(),
-        transformer,
+        transformer: config.map(H264AvccToAnnexB::new),
         frame_sender,
         input_buffer_size: MOQ_MAX_BUFFER,
     };
 
-    let h264_decoder = match decoders.h264 {
-        Some(decoder) => decoder,
-        None => match ctx.graphics_context.has_vulkan_decoder_support() {
-            true => VideoDecoderOptions::VulkanH264,
-            false => VideoDecoderOptions::FfmpegH264,
-        },
+    let default_decoder = match ctx.graphics_context.has_vulkan_decoder_support() {
+        true => VideoDecoderOptions::VulkanH264,
+        false => VideoDecoderOptions::FfmpegH264,
     };
-
-    match h264_decoder {
-        VideoDecoderOptions::FfmpegH264 => Ok(VideoDecoderThread::<
-            ffmpeg_h264::FfmpegH264Decoder,
-            _,
-        >::spawn(input_ref.clone(), options)?),
-        VideoDecoderOptions::VulkanH264 => Ok(VideoDecoderThread::<
-            vulkan_h264::VulkanH264Decoder,
-            _,
-        >::spawn(input_ref.clone(), options)?),
-        _ => Err(MoqConnectionError::UnsupportedVideoCodec),
-    }
+    let handle = match decoders.h264.unwrap_or(default_decoder) {
+        VideoDecoderOptions::VulkanH264 => {
+            VideoDecoderThread::<VulkanH264Decoder, _>::spawn(input_ref.clone(), options)?
+        }
+        _ => VideoDecoderThread::<FfmpegH264Decoder, _>::spawn(input_ref.clone(), options)?,
+    };
+    Ok(handle)
 }
 
 fn spawn_audio_decoder(
@@ -477,11 +495,8 @@ enum MoqConnectionError {
     #[error("Failed to initialize decoder: {0}")]
     InitDecoder(#[from] DecoderInitError),
 
-    #[error("Unsupported video codec, H264 expected.")]
-    UnsupportedVideoCodec,
-
     #[error("Invalid H264 decoder config.")]
-    InvalidAvcc,
+    InvalidAvcc(#[from] H264AvcDecoderConfigError),
 
     #[error("Missing H264 decoder config.")]
     MissingAvcc,
