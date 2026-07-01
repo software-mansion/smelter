@@ -3,17 +3,17 @@ use std::{cmp, collections::HashMap, sync::Arc};
 use ash::vk;
 use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 
-use crate::{
-    VulkanDecoderError,
-    backends::vulkan::VulkanDevice,
-    backends::vulkan::codec::h264::{
+use crate::backends::vulkan::{
+    VulkanDevice,
+    codec::h264::{
         H264Codec, H264VkParameters,
-        parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
+        parameters::{
+            H264DecodeProfileInfo, VkH264PictureParameterSet, VkH264SequenceParameterSet,
+        },
     },
-    vulkan_decoder::{Device, VideoSessionParameters},
+    vulkan_decoder::VulkanDecoderError,
+    wrappers::{Device, VideoSessionParameters},
 };
-
-use super::H264DecodeProfileInfo;
 
 /// Since `VideoSessionParameters` can only add sps and pps values (inserting sps or pps with an
 /// existing id is prohibited), this is an abstraction which provides the capability to replace an

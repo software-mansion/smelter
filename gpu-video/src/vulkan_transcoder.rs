@@ -5,19 +5,18 @@ use ash::vk;
 use crate::{
     EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoDecoderError, VideoEncoderError,
     backends::vulkan::{
-        VulkanCommonError, VulkanDevice,
+        VulkanCommonError, VulkanDecoder, VulkanDevice,
         codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
+        vulkan_decoder::{ImageModifiers, InFlightDecodeResources},
         wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
     },
     device::{EncoderOutputParameters, Rational},
+    frame_sorter::{DecodeResult, FrameSorter},
     parameters::{DecoderUsage, H264Profile, H265Profile, ScalingAlgorithm},
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
         h264::H264Parser,
         reference_manager::ReferenceContext,
-    },
-    vulkan_decoder::{
-        DecodeResult, FrameSorter, ImageModifiers, InFlightDecodeResources, VulkanDecoder,
     },
     vulkan_encoder::{Encoder, FullEncoderParameters, VulkanEncoder},
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
@@ -95,11 +94,7 @@ impl Transcoder {
         config: TranscoderParameters,
     ) -> Result<Self, VideoTranscoderError> {
         let decoder = VulkanDecoder::new(
-            Arc::new(
-                device
-                    .decoding_device()
-                    .map_err(VideoDecoderError::VulkanDecoderError)?,
-            ),
+            Arc::new(device.decoding_device().map_err(VideoDecoderError::from)?),
             DecoderUsage::Transcoding,
             ImageModifiers {
                 create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
@@ -108,7 +103,7 @@ impl Transcoder {
                 additional_queue_index: device.queues.compute.family_index,
             },
         )
-        .map_err(VideoDecoderError::VulkanDecoderError)?;
+        .map_err(VideoDecoderError::from)?;
 
         let parser = H264Parser::default();
         let reference_ctx = ReferenceContext::default();
@@ -333,7 +328,7 @@ impl Transcoder {
         if let Some(query_pool) = resized_images.data.decode_query_pool {
             query_pool
                 .check_results_blocking()
-                .map_err(VideoDecoderError::VulkanDecoderError)?;
+                .map_err(VideoDecoderError::from)?;
         }
 
         Ok(results)

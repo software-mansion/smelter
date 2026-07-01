@@ -7,21 +7,24 @@ use ash::vk;
 
 use crate::backends::vulkan::codec::EncodeCodec;
 use crate::backends::vulkan::codec::h264::H264Codec;
+use crate::backends::vulkan::vulkan_decoder::ImageModifiers;
 use crate::backends::vulkan::wrappers::*;
-use crate::backends::vulkan::{VulkanAdapter, VulkanAdapterInfo};
+use crate::backends::vulkan::{
+    VulkanAdapter, VulkanAdapterInfo, VulkanDecoder, VulkanDecoderError,
+};
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::device::{
     ColorRange, CoreVideoDeviceBackend, DecoderParameters, EncoderOutputParameters,
     EncoderParametersH264, EncoderParametersH265, Rational, VideoDeviceDescriptor,
 };
+use crate::frame_sorter::FrameSorter;
 use crate::parameters::EncoderPreset;
 use crate::parser::h264::H264Parser;
 use crate::parser::reference_manager::ReferenceContext;
-use crate::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{
     BytesDecoder, BytesEncoderH264, BytesEncoderH265, RawFrameData, VideoBackendError,
-    VideoDecoderError, VideoDeviceInitError, VideoEncoderError, VulkanDecoderError,
+    VideoDecoderError, VideoDeviceInitError, VideoEncoderError,
 };
 
 use self::caps::{
@@ -254,7 +257,7 @@ impl VulkanDevice {
         Ok(BytesDecoder {
             parser,
             reference_ctx,
-            vulkan_decoder,
+            decoder: Box::new(vulkan_decoder),
             frame_sorter,
         })
     }
