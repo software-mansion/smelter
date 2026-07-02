@@ -223,14 +223,12 @@ pub fn assert_audio_batch_eq_with_tolerance(
         };
         actual.eos == expected.eos
             && actual.batches.len() == expected.batches.len()
-            && actual
-                .batches
-                .iter()
-                .zip(&expected.batches)
-                .all(|((a_start, a_end), (e_start, e_end))| {
+            && actual.batches.iter().zip(&expected.batches).all(
+                |((a_start, a_end), (e_start, e_end))| {
                     a_start.abs_diff(*e_start) <= pts_tolerance
                         && a_end.abs_diff(*e_end) <= pts_tolerance
-                })
+                },
+            )
     };
     assert!(
         actual.start_pts == expected.start_pts

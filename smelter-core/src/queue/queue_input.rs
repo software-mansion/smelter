@@ -109,10 +109,7 @@ impl InnerQueueInput {
         pts_range: (Duration, Duration),
         queue_start_pts: Duration,
     ) -> Option<AudioEvent> {
-        let mut event = self
-            .audio
-            .as_mut()?
-            .pop_samples(pts_range, queue_start_pts);
+        let mut event = self.audio.as_mut()?.pop_samples(pts_range, queue_start_pts);
         if event.eos && !self.pending.is_empty() {
             let video_finished = self.video.as_mut().map(|v| v.is_finished()).unwrap_or(true);
             if video_finished {
