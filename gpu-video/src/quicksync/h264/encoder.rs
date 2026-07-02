@@ -308,26 +308,8 @@ impl WgpuTexturesEncoderH264 {
             });
         self.rgba_to_nv12
             .render(&mut encoder, texture, &input.imported.frame);
-        // Raw and wgpu commands cannot share an encoder, so the release barrier
-        // rides in its own command buffer submitted right after the copies.
-        let mut barrier_encoder =
-            self.device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Intel Quick Sync H264 external release barrier"),
-                });
-        super::release_planes_to_external(
-            &self.device,
-            &mut barrier_encoder,
-            [
-                input.imported.frame.y_texture(),
-                input.imported.frame.uv_texture(),
-            ],
-        );
         self.sync
-            .submit_frame_write(
-                input.imported.frame.sync(),
-                [encoder.finish(), barrier_encoder.finish()],
-            )
+            .submit_frame_write(input.imported.frame.sync(), [encoder.finish()])
             .map_err(|err| QuickSyncH264EncoderError::Encode(err.to_string()))?;
         Ok(())
     }
@@ -810,7 +792,7 @@ impl RgbaToNv12Renderer {
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    load: wgpu::LoadOp::DontCare(unsafe { wgpu::LoadOpDontCare::enabled() }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -824,6 +806,57 @@ impl RgbaToNv12Renderer {
 
 fn copy_plane(encoder: &mut wgpu::CommandEncoder, src: &wgpu::Texture, dst: &wgpu::Texture) {
     encoder.copy_texture_to_texture(src.as_image_copy(), dst.as_image_copy(), src.size());
+}
+
+struct H264LevelLimit {
+    level: u16,
+    max_macroblocks_per_second: u64,
+    max_macroblocks_per_frame: u64,
+}
+
+const H264_LEVEL_LIMITS: &[H264LevelLimit] = &[
+    H264LevelLimit {
+        level: vpl::MFX_LEVEL_AVC_4 as u16,
+        max_macroblocks_per_second: 245_760,
+        max_macroblocks_per_frame: 8_192,
+    },
+    H264LevelLimit {
+        level: vpl::MFX_LEVEL_AVC_42 as u16,
+        max_macroblocks_per_second: 522_240,
+        max_macroblocks_per_frame: 8_704,
+    },
+    H264LevelLimit {
+        level: vpl::MFX_LEVEL_AVC_5 as u16,
+        max_macroblocks_per_second: 589_824,
+        max_macroblocks_per_frame: 22_080,
+    },
+    H264LevelLimit {
+        level: vpl::MFX_LEVEL_AVC_51 as u16,
+        max_macroblocks_per_second: 983_040,
+        max_macroblocks_per_frame: 36_864,
+    },
+    H264LevelLimit {
+        level: vpl::MFX_LEVEL_AVC_52 as u16,
+        max_macroblocks_per_second: 2_073_600,
+        max_macroblocks_per_frame: 36_864,
+    },
+];
+
+fn h264_codec_level(coded_resolution: VideoResolution, framerate: VideoFramerate) -> u16 {
+    let macroblocks_per_frame =
+        u64::from(coded_resolution.width / 16) * u64::from(coded_resolution.height / 16);
+    let macroblocks_per_second = macroblocks_per_frame
+        .saturating_mul(u64::from(framerate.num.get()))
+        .div_ceil(u64::from(framerate.den.get()));
+
+    H264_LEVEL_LIMITS
+        .iter()
+        .find(|limit| {
+            macroblocks_per_frame <= limit.max_macroblocks_per_frame
+                && macroblocks_per_second <= limit.max_macroblocks_per_second
+        })
+        .map(|limit| limit.level)
+        .unwrap_or(vpl::MFX_LEVEL_AVC_52 as u16)
 }
 
 fn encoder_video_param(
@@ -852,7 +885,7 @@ fn encoder_video_param(
         mfx.FrameInfo = frame_info;
         mfx.CodecId = vpl::MFX_CODEC_AVC;
         mfx.CodecProfile = vpl::MFX_PROFILE_AVC_MAIN as u16;
-        mfx.CodecLevel = vpl::MFX_LEVEL_AVC_4 as u16;
+        mfx.CodecLevel = h264_codec_level(layout.coded, config.framerate);
         mfx.LowPower = vpl::MFX_CODINGOPTION_ON as u16;
         mfx.__bindgen_anon_1.__bindgen_anon_2.MaxDecFrameBuffering = 1;
 
@@ -967,7 +1000,6 @@ fn coding_option3() -> vpl::mfxExtCodingOption3 {
     option.Header.BufferSz = std::mem::size_of::<vpl::mfxExtCodingOption3>() as u32;
     option.LowDelayHrd = vpl::MFX_CODINGOPTION_ON as u16;
     option.LowDelayBRC = vpl::MFX_CODINGOPTION_ON as u16;
-    option.PRefType = vpl::MFX_P_REF_SIMPLE as u16;
     option.ScenarioInfo = vpl::MFX_SCENARIO_DISPLAY_REMOTING as u16;
     option.ContentInfo = vpl::MFX_CONTENT_NON_VIDEO_SCREEN as u16;
     option.NumRefActiveP[0] = 1;

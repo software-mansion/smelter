@@ -23,7 +23,6 @@ const IOC_SIZESHIFT: u64 = IOC_TYPESHIFT + IOC_TYPEBITS;
 const IOC_DIRSHIFT: u64 = IOC_SIZESHIFT + IOC_SIZEBITS;
 
 const IOC_WRITE: u64 = 1;
-const IOC_READ: u64 = 2;
 
 pub(super) enum SyncFile {
     Ready,

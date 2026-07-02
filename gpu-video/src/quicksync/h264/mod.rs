@@ -193,6 +193,11 @@ impl H264Session {
         let dma_buf = self
             .display
             .export_nv12_surface(exported.va_surface_id())?;
+        eprintln!(
+            "LAYOUT ours: {}x{} modifier={:#x} y_pitch={} y_offset={} uv_pitch={} uv_offset={}",
+            dma_buf.width, dma_buf.height, dma_buf.modifier,
+            dma_buf.y_pitch, dma_buf.y_offset, dma_buf.uv_pitch, dma_buf.uv_offset
+        );
         let sync_fd = clone_dma_buf_fd(&dma_buf.fd)?;
         let uv_fd = clone_dma_buf_fd(&dma_buf.fd)?;
 
@@ -284,64 +289,6 @@ impl Nv12DmaBufFrame {
 
     pub(super) fn sync(&self) -> &DmaBufSyncFd {
         &self.sync
-    }
-}
-
-// Copy-engine writes into the imported planes can linger in GPU caches that the
-// media engine never snoops. wgpu has no notion of foreign consumers and never
-// emits an external queue-family release, so record the barrier ourselves to
-// force those writes out to memory before oneVPL reads the surface.
-pub(super) fn release_planes_to_external(
-    device: &wgpu::Device,
-    encoder: &mut wgpu::CommandEncoder,
-    planes: [&wgpu::Texture; 2],
-) {
-    use ash::vk;
-    unsafe {
-        let images = planes.map(|plane| {
-            plane
-                .as_hal::<VkApi>()
-                .map(|texture| texture.raw_handle())
-        });
-        let hal_device = device.as_hal::<VkApi>();
-        encoder.as_hal_mut::<VkApi, _, _>(|hal_encoder| {
-            let (Some(hal_device), Some(hal_encoder)) = (hal_device.as_deref(), hal_encoder)
-            else {
-                return;
-            };
-            let barriers = images
-                .into_iter()
-                .flatten()
-                .map(|image| {
-                    vk::ImageMemoryBarrier::default()
-                        .src_access_mask(
-                            vk::AccessFlags::TRANSFER_WRITE | vk::AccessFlags::MEMORY_WRITE,
-                        )
-                        .dst_access_mask(vk::AccessFlags::empty())
-                        .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                        .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                        .src_queue_family_index(hal_device.queue_family_index())
-                        .dst_queue_family_index(vk::QUEUE_FAMILY_EXTERNAL)
-                        .image(image)
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                })
-                .collect::<Vec<_>>();
-            hal_device.raw_device().cmd_pipeline_barrier(
-                hal_encoder.raw_handle(),
-                vk::PipelineStageFlags::ALL_COMMANDS,
-                vk::PipelineStageFlags::ALL_COMMANDS,
-                vk::DependencyFlags::empty(),
-                &[],
-                &[],
-                &barriers,
-            );
-        });
     }
 }
 
