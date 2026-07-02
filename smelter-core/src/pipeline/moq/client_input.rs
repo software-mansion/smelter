@@ -19,7 +19,10 @@ use url::Url;
 use crate::prelude::*;
 
 pub struct MoqClientInput {
-    _state: MoqClientInputState,
+    pub queue_input: WeakQueueInput,
+    pub decoders: MoqInputDecoders,
+    pub should_close: Arc<AtomicBool>,
+    pub session: Option<MoqSession>,
 }
 
 impl MoqClientInput {
@@ -35,50 +38,25 @@ impl MoqClientInput {
 
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
 
-        let state_options = MoqClientInputStateOptions {
+        let mut input = Self {
             queue_input: queue_input.downgrade(),
             decoders: options.decoders,
+            should_close: Arc::new(false.into()),
+            session: None,
         };
-        let mut state = MoqClientInputState::new(state_options);
-        let consumer = state.connect(&ctx, &options.url)?;
+        let consumer = input.connect(&ctx, &options.url)?;
+
         spawn_broadcast_handler(
             ctx,
             input_ref.clone(),
-            state.queue_input.clone(),
-            state.decoders,
-            state.should_close.clone(),
+            input.queue_input.clone(),
+            input.decoders,
+            input.should_close.clone(),
             consumer,
             options.broadcast_path,
         );
 
-        Ok((
-            Input::MoqClient(MoqClientInput { _state: state }),
-            InputInitInfo::Other,
-            queue_input,
-        ))
-    }
-}
-
-pub(crate) struct MoqClientInputState {
-    pub queue_input: WeakQueueInput,
-    pub decoders: MoqInputDecoders,
-    pub should_close: Arc<AtomicBool>,
-    pub session: Option<MoqSession>,
-}
-
-pub(crate) struct MoqClientInputStateOptions {
-    pub queue_input: WeakQueueInput,
-    pub decoders: MoqInputDecoders,
-}
-
-impl MoqClientInputState {
-    pub(super) fn new(options: MoqClientInputStateOptions) -> Self {
-        Self {
-            queue_input: options.queue_input,
-            decoders: options.decoders,
-            should_close: Arc::new(false.into()),
-            session: None,
-        }
+        Ok((Input::MoqClient(input), InputInitInfo::Other, queue_input))
     }
 
     fn connect(
@@ -113,7 +91,7 @@ impl MoqClientInputState {
     }
 }
 
-impl Drop for MoqClientInputState {
+impl Drop for MoqClientInput {
     fn drop(&mut self) {
         self.should_close
             .store(true, std::sync::atomic::Ordering::Relaxed);
