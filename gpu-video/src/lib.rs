@@ -20,6 +20,8 @@ pub(crate) mod decoders;
 #[cfg(vulkan)]
 mod device;
 #[cfg(vulkan)]
+pub(crate) mod encoders;
+#[cfg(vulkan)]
 mod frame_sorter;
 #[cfg(all(vulkan, feature = "wgpu"))]
 mod global_registry;
@@ -33,9 +35,7 @@ mod exports;
 #[cfg(vulkan)]
 pub use exports::*;
 
-// TODO: The modules below should be made backend agnostic
-#[cfg(vulkan)]
-mod vulkan_encoder;
+// TODO: The module below should be made backend agnostic
 #[cfg(all(vulkan, feature = "transcoder"))]
 mod vulkan_transcoder;
 

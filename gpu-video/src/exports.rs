@@ -9,7 +9,6 @@ pub mod parameters {
 
     pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<H264Profile>;
 
-    pub use crate::vulkan_encoder::RateControl;
     #[cfg(feature = "transcoder")]
     pub use crate::vulkan_transcoder::{
         AnyEncoderParameters, TranscoderOutputParameters, TranscoderParameters,
@@ -17,6 +16,39 @@ pub mod parameters {
 
     #[cfg(feature = "wgpu")]
     pub use crate::wgpu_helpers::WgpuConverterParameters;
+
+    /// The rate control algorithm to be used by the encoder.
+    ///
+    /// Note: `EncoderDefault` is not a good default! For most implementations it is the same as
+    /// specifying `Disabled`.
+    ///
+    /// For most use cases, `Vbr` is the correct option
+    #[derive(Debug, Clone, Copy)]
+    pub enum RateControl {
+        /// Use the default setting of the encoder implementation.
+        EncoderDefault,
+
+        /// Variable bitrate rate control. This setting fits most use cases. The encoder will try to
+        /// keep the bitrate around the average, but may increase it temporarily up to the max when
+        /// necessary, in `virtual_buffer_size`-length windows. Bitrate is measured in bits/second.
+        VariableBitrate {
+            average_bitrate: u64,
+            max_bitrate: u64,
+            virtual_buffer_size: std::time::Duration,
+        },
+
+        /// Constant bitrate rate control. This setting is for environments that are more
+        /// bandwidth-constrained. The encoder will keep the bitrate at the specified value, in
+        /// `virtual_buffer_size`-length windows. Bitrate is measured in bits/second.
+        ConstantBitrate {
+            bitrate: u64,
+            virtual_buffer_size: std::time::Duration,
+        },
+
+        /// Rate control is turned off, frames are compressed with a constant rate. A more complicated
+        /// frame will just be bigger.
+        Disabled,
+    }
 
     /// A hint indicating what kind of content the decoder is going to be used for.
     #[derive(Debug, Clone, Copy, Default)]
@@ -79,12 +111,6 @@ mod wgpu_api;
 #[cfg(feature = "wgpu")]
 pub use wgpu_api::*;
 
-// TODO: make it backend agnostic (will be removed after decoder and encoder refactor)
-use crate::backends::vulkan::codec::h264::H264Codec;
-use crate::backends::vulkan::codec::h264::encode::H264WriteParametersInfo;
-use crate::backends::vulkan::codec::h265::H265Codec;
-use crate::backends::vulkan::codec::h265::encode::H265WriteParametersInfo;
-
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::device::{
     ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
@@ -106,13 +132,13 @@ pub use crate::adapter::VideoAdapter;
 #[cfg(feature = "wgpu")]
 pub use crate::decoders::WgpuTexturesDecoder;
 pub use crate::decoders::{BytesDecoder, VideoDecoderError};
+pub use crate::encoders::{BytesEncoderH264, BytesEncoderH265, VideoEncoderError};
+#[cfg(feature = "wgpu")]
+pub use crate::encoders::{WgpuTexturesEncoderH264, WgpuTexturesEncoderH265};
 pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
-pub use crate::vulkan_encoder::VideoEncoderError;
 #[cfg(feature = "transcoder")]
 pub use crate::vulkan_transcoder::{Transcoder, VideoTranscoderError};
-
-use crate::vulkan_encoder::VulkanEncoder;
 
 #[derive(thiserror::Error, Debug)]
 #[error("{message}")]
@@ -249,12 +275,12 @@ impl VideoDevice {
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters<H265Profile>, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h265 else {
-            return Err(VideoEncoderError::VulkanEncoderUnsupported);
+            return Err(VideoEncoderError::EncoderUnsupported);
         };
 
         Ok(Self::encoder_output_parameters_low_latency(
             caps.max_profile()
-                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+                .ok_or(VideoEncoderError::EncoderUnsupported)?,
             rate_control,
         ))
     }
@@ -264,12 +290,12 @@ impl VideoDevice {
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters<H264Profile>, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h264 else {
-            return Err(VideoEncoderError::VulkanEncoderUnsupported);
+            return Err(VideoEncoderError::EncoderUnsupported);
         };
 
         Ok(Self::encoder_output_parameters_low_latency(
             caps.max_profile()
-                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+                .ok_or(VideoEncoderError::EncoderUnsupported)?,
             rate_control,
         ))
     }
@@ -279,12 +305,12 @@ impl VideoDevice {
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters<H265Profile>, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h265 else {
-            return Err(VideoEncoderError::VulkanEncoderUnsupported);
+            return Err(VideoEncoderError::EncoderUnsupported);
         };
 
         Ok(Self::encoder_output_parameters_high_quality(
             caps.max_profile()
-                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+                .ok_or(VideoEncoderError::EncoderUnsupported)?,
             rate_control,
         ))
     }
@@ -294,12 +320,12 @@ impl VideoDevice {
         rate_control: RateControl,
     ) -> Result<EncoderOutputParameters<H264Profile>, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h264 else {
-            return Err(VideoEncoderError::VulkanEncoderUnsupported);
+            return Err(VideoEncoderError::EncoderUnsupported);
         };
 
         Ok(Self::encoder_output_parameters_high_quality(
             caps.max_profile()
-                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+                .ok_or(VideoEncoderError::EncoderUnsupported)?,
             rate_control,
         ))
     }
@@ -419,107 +445,4 @@ pub struct RawFrameData {
     pub frame: Vec<u8>,
     pub width: u32,
     pub height: u32,
-}
-
-/// An H.265 (HEVC) encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
-pub struct BytesEncoderH265 {
-    pub(crate) vulkan_encoder: VulkanEncoder<'static, H265Codec>,
-}
-
-impl BytesEncoderH265 {
-    /// The result is a chunk of H265 bitstream.
-    ///
-    /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
-    /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
-    /// Otherwise, the encoder will decide which frames should be coded this way.
-    pub fn encode(
-        &mut self,
-        frame: &InputFrame<RawFrameData>,
-        force_keyframe: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
-        self.vulkan_encoder.encode_bytes(frame, force_keyframe)
-    }
-
-    /// Retrieve encoded VPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn vps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H265WriteParametersInfo {
-                write_vps: true,
-                write_sps: false,
-                write_pps: false,
-            })
-    }
-
-    /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H265WriteParametersInfo {
-                write_vps: false,
-                write_sps: true,
-                write_pps: false,
-            })
-    }
-
-    /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H265WriteParametersInfo {
-                write_vps: false,
-                write_sps: false,
-                write_pps: true,
-            })
-    }
-}
-
-/// An H.264 (AVC) encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
-pub struct BytesEncoderH264 {
-    pub(crate) vulkan_encoder: VulkanEncoder<'static, H264Codec>,
-}
-
-impl BytesEncoderH264 {
-    /// The result is a chunk of H264 bitstream.
-    ///
-    /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
-    /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
-    /// Otherwise, the encoder will decide which frames should be coded this way.
-    pub fn encode(
-        &mut self,
-        frame: &InputFrame<RawFrameData>,
-        force_keyframe: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
-        self.vulkan_encoder.encode_bytes(frame, force_keyframe)
-    }
-
-    /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H264WriteParametersInfo {
-                write_sps: true,
-                write_pps: false,
-            })
-    }
-
-    /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
-    ///
-    /// Useful when `inline_stream_params` is `false` and the parameters need to be
-    /// sent out-of-band (e.g. in RTMP or MP4 headers).
-    pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.vulkan_encoder
-            .stream_parameters(H264WriteParametersInfo {
-                write_sps: false,
-                write_pps: true,
-            })
-    }
 }

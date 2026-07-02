@@ -18,6 +18,8 @@ pub(crate) mod wrappers;
 pub use vulkan_adapter::{VulkanAdapter, VulkanAdapterInfo, VulkanAdapterInitError};
 pub use vulkan_decoder::{VulkanDecoder, VulkanDecoderError};
 pub use vulkan_device::{VulkanDevice, VulkanDeviceInitError};
+// TODO: expose-backend api
+pub(crate) use vulkan_encoder::{VulkanEncoder, VulkanEncoderError};
 pub use vulkan_instance::{VulkanInstance, VulkanInstanceInitError};
 
 pub struct VulkanBackend;

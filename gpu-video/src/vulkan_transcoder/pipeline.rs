@@ -3,6 +3,7 @@ use std::{io::Cursor, sync::Arc};
 use ash::vk;
 
 use crate::{
+    backends::vulkan::vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     backends::vulkan::{
         VulkanDevice,
         vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
@@ -12,7 +13,6 @@ use crate::{
         },
     },
     parameters::ScalingAlgorithm,
-    vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     vulkan_transcoder::VideoTranscoderError,
 };
 

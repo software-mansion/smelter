@@ -3,7 +3,6 @@ use std::{collections::VecDeque, num::NonZeroU32};
 use ash::vk;
 
 use crate::{
-    VideoEncoderError,
     backends::vulkan::codec::{
         EncodeCodec,
         h264::{
@@ -14,9 +13,9 @@ use crate::{
     backends::vulkan::vulkan_device::caps::{
         NativeEncodeProfileCapabilities, NativeEncodeQualityLevelProperties,
     },
+    backends::vulkan::vulkan_encoder::{FullEncoderParameters, VulkanEncoderError},
     backends::vulkan::wrappers::ProfileInfo,
     parameters::RateControl,
-    vulkan_encoder::FullEncoderParameters,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -62,7 +61,7 @@ impl EncodeCodec for H264Codec {
     fn codec_parameters(
         parameters: &FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
-    ) -> Result<Self::OwnedParameters, VideoEncoderError> {
+    ) -> Result<Self::OwnedParameters, VulkanEncoderError> {
         let sps = VkH264SequenceParameterSet::new_encode(
             parameters.profile,
             parameters.width.get(),

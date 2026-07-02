@@ -3,14 +3,14 @@ use std::{collections::VecDeque, num::NonZeroU32};
 use ash::vk;
 
 use crate::{
-    VideoEncoderError,
+    backends::vulkan::VulkanEncoderError,
     backends::vulkan::vulkan_device::caps::{
         NativeEncodeCapabilities, NativeEncodeProfileCapabilities,
         NativeEncodeQualityLevelProperties,
     },
+    backends::vulkan::vulkan_encoder::FullEncoderParameters,
     backends::vulkan::wrappers::ProfileInfo,
     parameters::RateControl,
-    vulkan_encoder::FullEncoderParameters,
 };
 
 pub(crate) mod h264;
@@ -25,16 +25,16 @@ pub(crate) trait EncodeCodec: Codec {
     fn encode_codec_profile_capabilities(
         caps: &NativeEncodeCapabilities,
         profile: Self::Profile,
-    ) -> Result<&NativeEncodeProfileCapabilities<Self>, VideoEncoderError> {
+    ) -> Result<&NativeEncodeProfileCapabilities<Self>, VulkanEncoderError> {
         let codec_caps = Self::encode_codec_capabilities(caps)
-            .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?;
+            .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?;
         Self::encode_profile_capabilities(codec_caps, profile)
-            .ok_or_else(|| VideoEncoderError::ProfileUnsupported(format!("{profile:?}")))
+            .ok_or_else(|| VulkanEncoderError::ProfileUnsupported(format!("{profile:?}")))
     }
     fn codec_parameters(
         parameters: &FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
-    ) -> Result<Self::OwnedParameters, VideoEncoderError>;
+    ) -> Result<Self::OwnedParameters, VulkanEncoderError>;
     fn vk_parameters<'a>(parameters: &'a Self::OwnedParameters) -> Self::VkParameters<'a>;
 
     type BitstreamUnitData;
@@ -50,7 +50,7 @@ pub(crate) trait EncodeCodec: Codec {
         is_idr: bool,
     ) -> Self::BitstreamUnitInfo<'a>;
 
-    type ReferenceInfo: Copy + 'static;
+    type ReferenceInfo: Copy + Send + 'static;
     type ReferenceListInfo;
     fn reference_list_info(
         counters: &Self::EncodingCounters,
@@ -82,7 +82,7 @@ pub(crate) trait EncodeCodec: Codec {
         Self::dpb_slot_info(reference_info)
     }
 
-    type EncodingCounters: Default + Clone + Copy;
+    type EncodingCounters: Default + Clone + Copy + Send;
     fn advance_counters(counters: &mut Self::EncodingCounters, is_idr: bool);
     fn counters_idr(counters: &mut Self::EncodingCounters);
 
@@ -117,7 +117,7 @@ pub(crate) trait EncodeCodec: Codec {
 }
 
 pub(crate) trait Codec: CodecCapabilities + std::fmt::Debug + Clone {
-    type Profile: Copy + std::fmt::Debug;
+    type Profile: Copy + std::fmt::Debug + Send;
 
     // Parameters
     type OwnedParameters;
