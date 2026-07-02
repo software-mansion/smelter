@@ -378,7 +378,7 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
             // MoQ Server
             RegisterInputError::InputError(
                 _,
-                InputInitError::Moq(MoqServerError::ServerNotRunning),
+                InputInitError::MoqServer(MoqServerError::ServerNotRunning),
             ) => PipelineErrorInfo::new(MOQ_SERVER_NOT_RUNNING, ErrorType::UserError),
 
             // FFmpeg (used in HLS input)
