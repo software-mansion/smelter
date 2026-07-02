@@ -10,13 +10,7 @@ use crate::{
     wgpu::{WgpuCtx, utils::convert_to_shader_color},
 };
 
-use super::{BorderRadius, RenderLayout};
-
-const MAX_MASKS: usize = 20;
-const MAX_LAYOUTS_COUNT: usize = 100;
-const TEXTURE_PARAMS_BUFFER_SIZE: usize = MAX_LAYOUTS_COUNT * 80;
-const COLOR_PARAMS_SIZE: usize = MAX_LAYOUTS_COUNT * 80;
-const BOX_SHADOW_PARAMS_SIZE: usize = MAX_LAYOUTS_COUNT * 80;
+use super::{BorderRadius, LayoutLimits, RenderLayout};
 
 #[derive(Debug)]
 pub struct LayoutInfo {
@@ -37,6 +31,7 @@ impl LayoutInfo {
 
 #[derive(Debug)]
 pub struct ParamsBindGroups {
+    pub(super) limits: LayoutLimits,
     pub bind_group_1: wgpu::BindGroup,
     pub bind_group_1_layout: wgpu::BindGroupLayout,
     output_resolution_buffer: wgpu::Buffer,
@@ -48,11 +43,11 @@ pub struct ParamsBindGroups {
 }
 
 impl ParamsBindGroups {
-    pub fn new(ctx: &WgpuCtx) -> ParamsBindGroups {
+    pub fn new(ctx: &WgpuCtx, limits: LayoutLimits) -> ParamsBindGroups {
         let output_resolution_buffer = create_buffer(ctx, 16);
-        let texture_params_buffer = create_buffer(ctx, TEXTURE_PARAMS_BUFFER_SIZE);
-        let color_params_buffer = create_buffer(ctx, COLOR_PARAMS_SIZE);
-        let box_shadow_params_buffer = create_buffer(ctx, BOX_SHADOW_PARAMS_SIZE);
+        let texture_params_buffer = create_buffer(ctx, limits.max_layouts_count * 80);
+        let color_params_buffer = create_buffer(ctx, limits.max_layouts_count * 80);
+        let box_shadow_params_buffer = create_buffer(ctx, limits.max_layouts_count * 80);
 
         let bind_group_1_layout = ctx
             .device
@@ -141,9 +136,9 @@ impl ParamsBindGroups {
                     }],
                 });
 
-        let mut bind_groups_2 = Vec::with_capacity(100);
-        for _ in 0..100 {
-            let buffer = create_buffer(ctx, 20 * 32);
+        let mut bind_groups_2 = Vec::with_capacity(limits.max_layouts_count);
+        for _ in 0..limits.max_layouts_count {
+            let buffer = create_buffer(ctx, limits.max_masks_count * 32);
 
             let bind_group_2 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Bind group 2"),
@@ -157,6 +152,7 @@ impl ParamsBindGroups {
         }
 
         Self {
+            limits,
             bind_group_1,
             output_resolution_buffer,
             texture_params_buffer,
@@ -174,10 +170,14 @@ impl ParamsBindGroups {
         output_resolution: Resolution,
         layouts: Vec<RenderLayout>,
     ) -> Vec<LayoutInfo> {
-        if layouts.len() > MAX_LAYOUTS_COUNT {
+        let LayoutLimits {
+            max_layouts_count,
+            max_masks_count,
+        } = self.limits;
+        if layouts.len() > max_layouts_count {
             error!(
                 "Max layouts count ({}) exceeded ({}). Skipping rendering some of them.",
-                MAX_LAYOUTS_COUNT,
+                max_layouts_count,
                 layouts.len()
             )
         }
@@ -197,7 +197,7 @@ impl ParamsBindGroups {
         let mut color_params = Vec::new();
         let mut box_shadow_params = Vec::new();
 
-        for (index, layout) in layouts.iter().enumerate().take(MAX_LAYOUTS_COUNT) {
+        for (index, layout) in layouts.iter().enumerate().take(max_layouts_count) {
             let RenderLayout {
                 top,
                 left,
@@ -291,17 +291,17 @@ impl ParamsBindGroups {
                     layout_infos.push(layout_info);
                 }
             }
-            if masks.len() > MAX_MASKS {
+            if masks.len() > max_masks_count {
                 error!(
                     "Max parent border radiuses count ({}) exceeded ({}). Skipping rendering some og them.",
-                    MAX_MASKS,
+                    max_masks_count,
                     masks.len()
                 );
             }
 
             let mut masks_bytes = Vec::new();
 
-            for mask in masks.iter().take(20) {
+            for mask in masks.iter().take(max_masks_count) {
                 let mut mask_bytes = [0u8; 32];
                 mask_bytes[0..16].copy_from_slice(&borders_radius_to_bytes(mask.radius));
                 mask_bytes[16..20].copy_from_slice(&mask.top.to_le_bytes());
@@ -312,7 +312,7 @@ impl ParamsBindGroups {
                 masks_bytes.push(mask_bytes);
             }
 
-            masks_bytes.resize_with(20, || [0u8; 32]);
+            masks_bytes.resize_with(max_masks_count, || [0u8; 32]);
             match self.bind_groups_2.get(index) {
                 Some((_bg, buffer)) => {
                     ctx.queue.write_buffer(buffer, 0, &masks_bytes.concat());
@@ -325,9 +325,9 @@ impl ParamsBindGroups {
             ctx.queue
                 .write_buffer(&self.bind_groups_2[index].1, 0, &masks_bytes.concat());
         }
-        texture_params.resize_with(100, || [0u8; 80]);
-        color_params.resize_with(100, || [0u8; 80]);
-        box_shadow_params.resize_with(100, || [0u8; 64]);
+        texture_params.resize_with(max_layouts_count, || [0u8; 80]);
+        color_params.resize_with(max_layouts_count, || [0u8; 80]);
+        box_shadow_params.resize_with(max_layouts_count, || [0u8; 64]);
 
         ctx.queue
             .write_buffer(&self.texture_params_buffer, 0, &texture_params.concat());

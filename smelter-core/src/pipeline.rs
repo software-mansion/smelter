@@ -68,6 +68,7 @@ pub struct PipelineOptions {
     pub download_root: Arc<Path>,
 
     pub rendering_mode: RenderingMode,
+    pub max_layouts_count: usize,
     pub wgpu_options: PipelineWgpuOptions,
     pub tokio_rt: Option<Arc<Runtime>>,
 

@@ -6,6 +6,8 @@
 
 ### ✨ New features
 
+- Add `SMELTER_RENDER_MAX_LAYOUTS_COUNT` environment variable to configure the maximum number of layouts (default 100) by [@wkozyra95](https://github.com/wkozyra95)
+
 ### 🐛 Bug fixes
 
 - Fix `VIDEO_INPUT_DELIVERED`/`AUDIO_INPUT_DELIVERED` events not being sent before queue start ([#2068](https://github.com/software-mansion/smelter/pull/2068) by [@wkozyra95](https://github.com/wkozyra95))

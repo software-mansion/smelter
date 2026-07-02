@@ -7,7 +7,8 @@ use smelter_core::graphics_context::{
     GraphicsContext, GraphicsContextOptions, wgpu_context::create_wgpu_graphics_ctx,
 };
 use smelter_render::{
-    Frame, FrameData, Framerate, Renderer, RendererOptions, RenderingMode, YuvPlanes,
+    DEFAULT_MAX_LAYOUTS_COUNT, Frame, FrameData, Framerate, Renderer, RendererOptions,
+    RenderingMode, YuvPlanes,
 };
 use tracing::error;
 
@@ -90,6 +91,7 @@ pub(super) fn create_renderer(rendering_mode: RenderingMode) -> Renderer {
         stream_fallback_timeout: Duration::from_secs(3),
         load_system_fonts: false,
         rendering_mode,
+        max_layouts_count: DEFAULT_MAX_LAYOUTS_COUNT,
         device: wgpu_ctx.device,
         queue: wgpu_ctx.queue,
     })

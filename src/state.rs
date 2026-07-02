@@ -117,6 +117,7 @@ pub fn pipeline_options_from_config(
         output_framerate: opt.output_framerate,
 
         rendering_mode: opt.rendering_mode,
+        max_layouts_count: opt.render_max_layouts_count,
         tokio_rt: Some(tokio_rt.clone()),
 
         chromium_context: chromium_context.clone(),
