@@ -2,15 +2,14 @@ use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
-use crate::{
-    VulkanDecoderError,
-    backends::vulkan::codec::h264::parameters::H264DecodeProfileInfo,
-    backends::vulkan::vulkan_device::DecodingDevice,
-    backends::vulkan::wrappers::{
-        CodingImageBundle, DecodedPicturesBuffer, ImageLayoutTracker, ImageWithView,
+use crate::backends::vulkan::{
+    codec::h264::parameters::H264DecodeProfileInfo,
+    vulkan_decoder::VulkanDecoderError,
+    vulkan_device::DecodingDevice,
+    wrappers::{
+        CodingImageBundle, DecodedPicturesBuffer, Image, ImageLayoutTracker, ImageWithView,
         OpenCommandBuffer,
     },
-    vulkan_decoder::Image,
 };
 
 pub(crate) struct DecodingImages<'a> {

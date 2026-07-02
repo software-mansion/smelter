@@ -3,14 +3,12 @@ use std::sync::{Arc, Mutex, Weak};
 use ash::vk::{self, Handle};
 use vk_mem::Alloc;
 
-use crate::{
-    VulkanDecoderError,
-    backends::vulkan::{
-        VulkanCommonError, VulkanDeviceInitError,
-        codec::h264::parameters::H264DecodeProfileInfo,
-        vulkan_device::EncodingDevice,
-        wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
-    },
+use crate::backends::vulkan::{
+    VulkanCommonError, VulkanDeviceInitError,
+    codec::h264::parameters::H264DecodeProfileInfo,
+    vulkan_decoder::VulkanDecoderError,
+    vulkan_device::EncodingDevice,
+    wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
 };
 
 use super::{Device, Instance};

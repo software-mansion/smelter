@@ -1,3 +1,12 @@
+use std::sync::Arc;
+
+use crate::{
+    VideoInstanceInitError,
+    backends::{CoreBackend, vulkan::wrappers::ImageKey},
+    instance::{VideoInstanceBackend, VideoInstanceDescriptor},
+};
+use ash::vk;
+
 pub(crate) mod codec;
 pub(crate) mod vulkan_adapter;
 pub(crate) mod vulkan_decoder;
@@ -6,18 +15,10 @@ pub(crate) mod vulkan_encoder;
 pub(crate) mod vulkan_instance;
 pub(crate) mod wrappers;
 
-use std::sync::Arc;
-
 pub use vulkan_adapter::{VulkanAdapter, VulkanAdapterInfo, VulkanAdapterInitError};
+pub use vulkan_decoder::{VulkanDecoder, VulkanDecoderError};
 pub use vulkan_device::{VulkanDevice, VulkanDeviceInitError};
 pub use vulkan_instance::{VulkanInstance, VulkanInstanceInitError};
-
-use crate::{
-    VideoInstanceInitError,
-    backends::{CoreBackend, vulkan::wrappers::ImageKey},
-    instance::{VideoInstanceBackend, VideoInstanceDescriptor},
-};
-use ash::vk;
 
 pub struct VulkanBackend;
 

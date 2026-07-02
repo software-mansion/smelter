@@ -2,8 +2,8 @@ use ash::vk;
 use h264_reader::nal::sps::{FrameMbsFlags, SeqParameterSet};
 
 use crate::{
-    VideoEncoderError, VulkanDecoderError,
-    backends::vulkan::wrappers::ProfileInfo,
+    VideoEncoderError,
+    backends::vulkan::{vulkan_decoder::VulkanDecoderError, wrappers::ProfileInfo},
     device::{CodecColorDescription, ColorRange, ColorSpace, Rational},
     parameters::H264Profile,
 };

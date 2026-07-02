@@ -9,17 +9,14 @@ use images::DecodingImages;
 use parameters::{SessionParams, VideoSessionParametersManager};
 use rustc_hash::FxHashMap;
 
-use crate::{
-    VulkanDecoderError,
-    backends::vulkan::codec::h264::parameters::{
+use crate::backends::vulkan::{
+    codec::h264::parameters::{
         H264DecodeProfileInfo, SeqParameterSetExt as _, h264_level_idc_to_max_dpb_mbs,
         vk_to_h264_level_idc,
     },
-    backends::vulkan::vulkan_device::DecodingDevice,
-    backends::vulkan::wrappers::{
-        DecodeInputBufferPool, DecodingQueryPool, OpenCommandBuffer, VideoSession,
-    },
-    vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers},
+    vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers, VulkanDecoderError},
+    vulkan_device::DecodingDevice,
+    wrappers::{DecodeInputBufferPool, DecodingQueryPool, OpenCommandBuffer, VideoSession},
 };
 
 mod images;

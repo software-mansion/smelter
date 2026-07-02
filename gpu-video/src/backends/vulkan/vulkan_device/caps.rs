@@ -2,14 +2,14 @@ use std::ptr::null_mut;
 
 use ash::vk;
 
-use crate::VulkanDecoderError;
 use crate::backends::vulkan::{
     VulkanAdapterInitError,
-    codec::h264::H264Codec,
-    codec::h264::parameters::vk_to_h264_level_idc,
-    codec::h265::H265Codec,
-    codec::h265::parameters::vk_to_h265_level_idc,
-    codec::{CodecCapabilities, CodecSpecificEncoderQualityLevelProperties},
+    codec::{
+        CodecCapabilities, CodecSpecificEncoderQualityLevelProperties,
+        h264::{H264Codec, parameters::vk_to_h264_level_idc},
+        h265::{H265Codec, parameters::vk_to_h265_level_idc},
+    },
+    vulkan_decoder::VulkanDecoderError,
     wrappers::*,
 };
 use crate::capabilities::{

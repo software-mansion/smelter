@@ -3,13 +3,15 @@ use std::{io::Cursor, sync::Arc};
 use ash::vk;
 
 use crate::{
-    backends::vulkan::VulkanDevice,
-    backends::vulkan::wrappers::{
-        CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
-        Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
+    backends::vulkan::{
+        VulkanDevice,
+        vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
+        wrappers::{
+            CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
+            Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
+        },
     },
     parameters::ScalingAlgorithm,
-    vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
     vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     vulkan_transcoder::VideoTranscoderError,
 };

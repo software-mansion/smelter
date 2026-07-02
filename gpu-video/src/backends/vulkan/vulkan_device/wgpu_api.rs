@@ -4,18 +4,21 @@ use ash::vk;
 use wgpu::hal::vulkan::Api as VkApi;
 
 use crate::{
-    VideoDecoderError, VideoEncoderError, VulkanDecoderError, WgpuInitError, WgpuTexturesDecoder,
+    VideoDecoderError, VideoEncoderError, WgpuInitError, WgpuTexturesDecoder,
     backends::{
         WgpuBackend,
-        vulkan::{VulkanAdapter, VulkanBackend, VulkanDevice, VulkanDeviceInitError},
+        vulkan::{
+            VulkanAdapter, VulkanBackend, VulkanDevice, VulkanDeviceInitError,
+            vulkan_decoder::{ImageModifiers, VulkanDecoder, VulkanDecoderError},
+        },
     },
     device::{
         DecoderParameters, EncoderParametersH264, EncoderParametersH265, VideoDeviceDescriptor,
         WgpuVideoDeviceBackend,
     },
+    frame_sorter::FrameSorter,
     global_registry::GlobalRegistry,
     parser::{h264::H264Parser, reference_manager::ReferenceContext},
-    vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder},
     vulkan_encoder::VulkanEncoder,
 };
 
@@ -163,7 +166,7 @@ impl VulkanDevice {
             wgpu_device,
             parser,
             reference_ctx,
-            vulkan_decoder,
+            decoder: Box::new(vulkan_decoder),
             frame_sorter,
         })
     }
