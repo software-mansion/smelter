@@ -31,11 +31,6 @@ impl MoqClientInput {
         input_ref: Ref<InputId>,
         options: MoqClientInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
-        ctx.stats_sender.send(StatsEvent::NewInput {
-            input_ref: input_ref.clone(),
-            kind: InputProtocolKind::MoqClient,
-        });
-
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
 
         let mut input = Self {
