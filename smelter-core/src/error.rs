@@ -334,6 +334,7 @@ const WHEP_INVALID_SERVER_URL: &str = "WHEP_INVALID_SERVER_URL";
 const WHEP_REQUEST_FAILED: &str = "WHEP_REQUEST_FAILED";
 const WHEP_BAD_STATUS: &str = "WHEP_BAD_STATUS";
 const MOQ_SERVER_NOT_RUNNING: &str = "MOQ_SERVER_NOT_RUNNING";
+const MOQ_CLIENT_INVALID_URL: &str = "MOQ_CLIENT_INVALID_URL";
 
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
@@ -380,6 +381,12 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
                 _,
                 InputInitError::MoqServer(MoqServerError::ServerNotRunning),
             ) => PipelineErrorInfo::new(MOQ_SERVER_NOT_RUNNING, ErrorType::UserError),
+
+            // MoQ Client
+            RegisterInputError::InputError(
+                _,
+                InputInitError::MoqClient(MoqClientError::InvalidUrl(_, _)),
+            ) => PipelineErrorInfo::new(MOQ_CLIENT_INVALID_URL, ErrorType::UserError),
 
             // FFmpeg (used in HLS input)
             RegisterInputError::InputError(
