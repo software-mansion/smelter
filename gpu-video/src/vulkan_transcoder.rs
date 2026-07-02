@@ -3,7 +3,10 @@ use std::{num::NonZeroU32, sync::Arc};
 use ash::vk;
 
 use crate::{
-    EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoDecoderError, VideoEncoderError,
+    EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoDecoderError,
+    backends::vulkan::vulkan_encoder::{
+        Encoder, FullEncoderParameters, VulkanEncoder, VulkanEncoderError,
+    },
     backends::vulkan::{
         VulkanCommonError, VulkanDecoder, VulkanDevice,
         codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
@@ -18,7 +21,6 @@ use crate::{
         h264::H264Parser,
         reference_manager::ReferenceContext,
     },
-    vulkan_encoder::{Encoder, FullEncoderParameters, VulkanEncoder},
     vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
 };
 
@@ -26,11 +28,12 @@ mod pipeline;
 
 #[derive(Debug, thiserror::Error)]
 pub enum VideoTranscoderError {
+    // TODO: use vulkan error
     #[error(transparent)]
     Decoder(#[from] VideoDecoderError),
 
     #[error(transparent)]
-    Encoder(#[from] VideoEncoderError),
+    Encoder(#[from] VulkanEncoderError),
 
     #[error(transparent)]
     Common(#[from] VulkanCommonError),

@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use ash::vk;
 
 use crate::{
-    VideoEncoderError,
+    backends::vulkan::vulkan_encoder::VulkanEncoderError,
     backends::vulkan::{
         codec::{
             EncodeCodec,
@@ -36,7 +36,7 @@ pub(crate) struct H265WriteParametersInfo {
 
 impl EncodeCodec for H265Codec {
     fn profile_info<'a>(
-        params: &crate::vulkan_encoder::FullEncoderParameters<Self>,
+        params: &crate::backends::vulkan::vulkan_encoder::FullEncoderParameters<Self>,
     ) -> ProfileInfo<'a> {
         let h265_profile = vk::VideoEncodeH265ProfileInfoKHR::default()
             .std_profile_idc(params.profile.to_profile_idc());
@@ -62,9 +62,9 @@ impl EncodeCodec for H265Codec {
     }
 
     fn codec_parameters(
-        parameters: &crate::vulkan_encoder::FullEncoderParameters<Self>,
+        parameters: &crate::backends::vulkan::vulkan_encoder::FullEncoderParameters<Self>,
         codec_capabilities: &Self::CodecSpecificEncodeCapabilities<'_>,
-    ) -> Result<Self::OwnedParameters, VideoEncoderError> {
+    ) -> Result<Self::OwnedParameters, VulkanEncoderError> {
         Ok(Self::OwnedParameters {
             vps: vec![VkH265VideoParameterSet::new_encode(parameters)],
             sps: vec![VkH265SequenceParameterSet::new_encode(

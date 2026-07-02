@@ -1,9 +1,9 @@
 use ash::vk;
 
 use crate::{
+    backends::vulkan::vulkan_encoder::FullEncoderParameters,
     backends::vulkan::{codec::h265::H265Codec, vulkan_decoder::VulkanDecoderError},
     device::{CodecColorDescription, ColorRange},
-    vulkan_encoder::FullEncoderParameters,
 };
 
 pub(crate) struct VkH265VideoParameterSet {

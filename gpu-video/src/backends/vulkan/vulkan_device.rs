@@ -8,9 +8,11 @@ use ash::vk;
 use crate::backends::vulkan::codec::EncodeCodec;
 use crate::backends::vulkan::codec::h264::H264Codec;
 use crate::backends::vulkan::vulkan_decoder::ImageModifiers;
+use crate::backends::vulkan::vulkan_encoder::FullEncoderParameters;
 use crate::backends::vulkan::wrappers::*;
 use crate::backends::vulkan::{
-    VulkanAdapter, VulkanAdapterInfo, VulkanDecoder, VulkanDecoderError,
+    VulkanAdapter, VulkanAdapterInfo, VulkanDecoder, VulkanDecoderError, VulkanEncoder,
+    VulkanEncoderError,
 };
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::device::{
@@ -21,7 +23,6 @@ use crate::frame_sorter::FrameSorter;
 use crate::parameters::EncoderPreset;
 use crate::parser::h264::H264Parser;
 use crate::parser::reference_manager::ReferenceContext;
-use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{
     BytesDecoder, BytesEncoderH264, BytesEncoderH265, RawFrameData, VideoBackendError,
     VideoDecoderError, VideoDeviceInitError, VideoEncoderError,
@@ -60,14 +61,14 @@ impl CoreVideoDeviceBackend for VulkanDevice {
         self: Arc<Self>,
         parameters: EncoderParametersH264,
     ) -> Result<BytesEncoderH264, VideoEncoderError> {
-        VulkanDevice::create_bytes_encoder_h264(self, parameters)
+        VulkanDevice::create_bytes_encoder_h264(self, parameters).map_err(Into::into)
     }
 
     fn create_bytes_encoder_h265(
         self: Arc<Self>,
         parameters: EncoderParametersH265,
     ) -> Result<BytesEncoderH265, VideoEncoderError> {
-        VulkanDevice::create_bytes_encoder_h265(self, parameters)
+        VulkanDevice::create_bytes_encoder_h265(self, parameters).map_err(Into::into)
     }
 
     #[cfg(feature = "transcoder")]
@@ -265,7 +266,7 @@ impl VulkanDevice {
     pub fn create_bytes_encoder_h264(
         self: Arc<Self>,
         parameters: EncoderParametersH264,
-    ) -> Result<BytesEncoderH264, VideoEncoderError> {
+    ) -> Result<BytesEncoderH264, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
             parameters.output_parameters,
             parameters.input_parameters.width,
@@ -274,14 +275,17 @@ impl VulkanDevice {
         )?;
 
         Ok(BytesEncoderH264 {
-            vulkan_encoder: VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?,
+            encoder: Box::new(VulkanEncoder::new(
+                Arc::new(self.encoding_device()?),
+                parameters,
+            )?),
         })
     }
 
     pub fn create_bytes_encoder_h265(
         self: Arc<Self>,
         parameters: EncoderParametersH265,
-    ) -> Result<BytesEncoderH265, VideoEncoderError> {
+    ) -> Result<BytesEncoderH265, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
             parameters.output_parameters,
             parameters.input_parameters.width,
@@ -290,7 +294,10 @@ impl VulkanDevice {
         )?;
 
         Ok(BytesEncoderH265 {
-            vulkan_encoder: VulkanEncoder::new(Arc::new(self.encoding_device()?), parameters)?,
+            encoder: Box::new(VulkanEncoder::new(
+                Arc::new(self.encoding_device()?),
+                parameters,
+            )?),
         })
     }
 
@@ -302,18 +309,18 @@ impl VulkanDevice {
         self.native_encode_capabilities.as_ref()
     }
 
-    pub(crate) fn encoding_device(self: &Arc<Self>) -> Result<EncodingDevice, VideoEncoderError> {
+    pub(crate) fn encoding_device(self: &Arc<Self>) -> Result<EncodingDevice, VulkanEncoderError> {
         Ok(EncodingDevice {
             vulkan_device: self.clone(),
             encode_queues: self
                 .queues
                 .encode
                 .clone()
-                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
             native_encode_capabilities: self
                 .native_encode_capabilities
                 .clone()
-                .ok_or(VideoEncoderError::VulkanEncoderUnsupported)?,
+                .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
         })
     }
 
@@ -349,9 +356,9 @@ impl VulkanDevice {
         width: NonZeroU32,
         height: NonZeroU32,
         framerate: Rational,
-    ) -> Result<FullEncoderParameters<C>, VideoEncoderError> {
+    ) -> Result<FullEncoderParameters<C>, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities() else {
-            return Err(VideoEncoderError::VulkanEncoderUnsupported);
+            return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
         let native_profile_caps =
             C::encode_codec_profile_capabilities(caps, encoder_parameters.profile)?;
@@ -383,7 +390,7 @@ impl VulkanDevice {
         let max_extent = native_profile_caps.video_capabilities.max_coded_extent;
 
         if width.get() < min_extent.width || width.get() > max_extent.width {
-            return Err(VideoEncoderError::ParametersError {
+            return Err(VulkanEncoderError::ParametersError {
                 field: "width",
                 problem: format!(
                     "Width is {}, should be between {} and {}.",
@@ -393,7 +400,7 @@ impl VulkanDevice {
         }
 
         if height.get() < min_extent.height || height.get() > max_extent.height {
-            return Err(VideoEncoderError::ParametersError {
+            return Err(VulkanEncoderError::ParametersError {
                 field: "height",
                 problem: format!(
                     "Height is {}, should be between {} and {}.",
@@ -408,7 +415,7 @@ impl VulkanDevice {
             .rate_control_modes
             .contains(rate_control.to_vk())
         {
-            return Err(VideoEncoderError::ParametersError {
+            return Err(VulkanEncoderError::ParametersError {
                 field: "rate_control",
                 problem: format!(
                     "Rate control has mode {:?}. Supported modes are: {:?}.",
@@ -425,13 +432,13 @@ impl VulkanDevice {
         );
 
         if framerate.numerator.checked_mul(2).is_none() {
-            return Err(VideoEncoderError::ParametersError {
+            return Err(VulkanEncoderError::ParametersError {
                 field: "framerate",
                 problem: "Framerate numerator * 2 must fit in u32".to_string(),
             });
         }
         if framerate.numerator == 0 {
-            return Err(VideoEncoderError::ParametersError {
+            return Err(VulkanEncoderError::ParametersError {
                 field: "framerate",
                 problem: format!("Framerate is {framerate:?}. The numerator should be != 0.",),
             });
