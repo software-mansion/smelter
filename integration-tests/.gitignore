@@ -7,4 +7,5 @@
 /test_workdir
 
 /moq_relay_config.toml
-/test_key.jwk
+/moq_key.jwk
+/moq_token.jwt
