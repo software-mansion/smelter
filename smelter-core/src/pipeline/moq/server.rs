@@ -6,8 +6,10 @@ use smelter_render::error::ErrorStack;
 use tracing::{info, warn};
 
 use crate::pipeline::moq::{
-    MoqSession, certificate::load_or_create_self_signed_tls,
-    connection::{MoqEndpointKind, start_broadcast_handler_task}, server_state::MoqServerState,
+    MoqSession,
+    certificate::load_or_create_self_signed_tls,
+    connection::{MoqEndpointKind, start_broadcast_handler_task},
+    server_state::MoqServerState,
 };
 
 use crate::prelude::*;
