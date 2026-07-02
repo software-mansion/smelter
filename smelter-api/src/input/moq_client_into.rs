@@ -6,7 +6,7 @@ impl TryFrom<MoqClientInput> for core::RegisterInputOptions {
 
     fn try_from(value: MoqClientInput) -> Result<Self, Self::Error> {
         let MoqClientInput {
-            url,
+            endpoint_url,
             broadcast_path,
             required,
             decoder_map,
@@ -30,7 +30,7 @@ impl TryFrom<MoqClientInput> for core::RegisterInputOptions {
             .transpose()?;
 
         let input_options = core::MoqClientInputOptions {
-            url,
+            endpoint_url,
             broadcast_path,
             decoders: core::MoqInputDecoders { h264 },
             queue_options: core::QueueInputOptions {

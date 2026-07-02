@@ -15,7 +15,7 @@ pub struct MoqServerInputOptions {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoqClientInputOptions {
-    pub url: Arc<str>,
+    pub endpoint_url: Arc<str>,
     pub broadcast_path: Arc<str>,
     pub decoders: MoqInputDecoders,
     pub queue_options: QueueInputOptions,

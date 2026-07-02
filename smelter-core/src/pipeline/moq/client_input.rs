@@ -39,7 +39,7 @@ impl MoqClientInput {
             should_close: Arc::new(false.into()),
             session: None,
         };
-        let consumer = input.connect(&ctx, &options.url)?;
+        let consumer = input.connect(&ctx, &options.endpoint_url)?;
 
         input.spawn_broadcast_handler(ctx, input_ref, consumer, options.broadcast_path);
 

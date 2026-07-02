@@ -14,7 +14,7 @@ const MOQ_CLIENT_DEFAULT_BROADCAST_PATH: &str = "test";
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoqClientInput {
     pub name: String,
-    pub url: String,
+    pub endpoint_url: String,
     pub broadcast_path: String,
 }
 
@@ -22,7 +22,7 @@ impl MoqClientInput {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "moq_client",
-            "url": self.url,
+            "endpoint_url": self.endpoint_url,
             "broadcast_path": self.broadcast_path,
             "decoder_map": {
                 "h264": "ffmpeg_h264",
@@ -45,7 +45,7 @@ impl MoqClientInput {
 
 pub struct MoqClientInputBuilder {
     name: String,
-    url: String,
+    endpoint_url: String,
     broadcast_path: String,
 }
 
@@ -56,7 +56,7 @@ impl MoqClientInputBuilder {
         let broadcast_path = MOQ_CLIENT_DEFAULT_BROADCAST_PATH.to_string();
         Self {
             name,
-            url,
+            endpoint_url: url,
             broadcast_path,
         }
     }
@@ -83,7 +83,7 @@ impl MoqClientInputBuilder {
 
     fn prompt_url(self) -> Result<Self> {
         let url_input = Text::new("MoQ relay URL (ESC for default):")
-            .with_initial_value(&self.url)
+            .with_initial_value(&self.endpoint_url)
             .prompt_skippable()?;
 
         match url_input {
@@ -111,7 +111,7 @@ impl MoqClientInputBuilder {
     }
 
     pub fn with_url(mut self, url: String) -> Self {
-        self.url = url;
+        self.endpoint_url = url;
         self
     }
 
@@ -123,7 +123,7 @@ impl MoqClientInputBuilder {
     pub fn build(self) -> MoqClientInput {
         MoqClientInput {
             name: self.name,
-            url: self.url,
+            endpoint_url: self.endpoint_url,
             broadcast_path: self.broadcast_path,
         }
     }

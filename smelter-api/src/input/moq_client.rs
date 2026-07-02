@@ -10,7 +10,7 @@ use super::SideChannel;
 #[serde(deny_unknown_fields)]
 pub struct MoqClientInput {
     /// URL of the MoQ relay to connect to. Must use the `https://` scheme.
-    pub url: Arc<str>,
+    pub endpoint_url: Arc<str>,
     /// Path of the broadcast to subscribe to on the relay.
     pub broadcast_path: Arc<str>,
     /// (**default=`false`**) If input is required and the stream is not delivered
