@@ -5,7 +5,10 @@ use crate::{
     error::InputInitError,
     pipeline::{
         input::Input,
-        moq::{MoqSession, connection::{MoqEndpointKind, start_broadcast_handler_task}},
+        moq::{
+            MoqSession,
+            connection::{MoqEndpointKind, start_broadcast_handler_task},
+        },
     },
     prelude::MoqClientInputOptions,
     queue::{QueueInput, WeakQueueInput},
@@ -54,7 +57,7 @@ impl MoqClientInput {
         // TODO: (@jbrs) Is that necessary here for it to work like that?
         let url = Url::parse(url).map_err(|err| MoqClientError::InvalidUrl(Arc::from(url), err))?;
 
-        if url.scheme() != "https" {
+        if !matches!(url.scheme(), "https" | "http") {
             return Err(MoqClientError::InvalidScheme(url.scheme().to_string()));
         }
 
