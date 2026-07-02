@@ -46,15 +46,7 @@ impl MoqClientInput {
         };
         let consumer = input.connect(&ctx, &options.url)?;
 
-        spawn_broadcast_handler(
-            ctx,
-            input_ref.clone(),
-            input.queue_input.clone(),
-            input.decoders,
-            input.should_close.clone(),
-            consumer,
-            options.broadcast_path,
-        );
+        input.spawn_broadcast_handler(ctx, input_ref, consumer, options.broadcast_path);
 
         Ok((Input::MoqClient(input), InputInitInfo::Other, queue_input))
     }
@@ -64,6 +56,7 @@ impl MoqClientInput {
         ctx: &Arc<PipelineCtx>,
         url: &str,
     ) -> Result<OriginConsumer, MoqClientError> {
+        // TODO: (@jbrs) Is that necessary here for it to work like that?
         let url = Url::parse(url).map_err(|err| MoqClientError::InvalidUrl(Arc::from(url), err))?;
 
         if url.scheme() != "https" {
@@ -89,6 +82,49 @@ impl MoqClientInput {
         self.session = Some(session);
         Ok(consumer)
     }
+
+    fn spawn_broadcast_handler(
+        &self,
+        ctx: Arc<PipelineCtx>,
+        input_ref: Ref<InputId>,
+        mut consumer: OriginConsumer,
+        broadcast_path: Arc<str>,
+    ) {
+        let should_close = self.should_close.clone();
+        let decoders = self.decoders;
+        let queue_input = self.queue_input.clone();
+
+        let rt = ctx.tokio_rt.clone();
+        rt.spawn(async move {
+            let broadcast = loop {
+                if should_close.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+
+                let Some((path, Some(broadcast))) = consumer.announced().await else {
+                    warn!(%broadcast_path, "MoQ session closed before announcing required broadcast.");
+                    return;
+                };
+
+                if path.as_str() == broadcast_path.as_ref() {
+                    break broadcast;
+                }
+            };
+
+            if start_broadcast_handler_task(
+                ctx,
+                &input_ref,
+                queue_input,
+                decoders,
+                should_close,
+                broadcast,
+            )
+            .is_none()
+            {
+                warn!("Unable to spawn broadcast handler, input queue was dropped.")
+            }
+        });
+    }
 }
 
 impl Drop for MoqClientInput {
@@ -97,64 +133,3 @@ impl Drop for MoqClientInput {
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
-
-fn spawn_broadcast_handler(
-    ctx: Arc<PipelineCtx>,
-    input_ref: Ref<InputId>,
-    queue_input: WeakQueueInput,
-    decoders: MoqInputDecoders,
-    should_close: Arc<AtomicBool>,
-    mut consumer: OriginConsumer,
-    broadcast_path: Arc<str>,
-) {
-    let rt = ctx.tokio_rt.clone();
-    rt.spawn(async move {
-        let broadcast = loop {
-            if should_close.load(std::sync::atomic::Ordering::Relaxed) {
-                return;
-            }
-
-            let Some((path, Some(broadcast))) = consumer.announced().await else {
-                warn!(%broadcast_path, "MoQ session closed before announcing required broadcast.");
-                return;
-            };
-
-            if path.as_str() == broadcast_path.as_ref() {
-                break broadcast;
-            }
-        };
-
-        if start_broadcast_handler_task(
-            ctx,
-            &input_ref,
-            queue_input,
-            decoders,
-            should_close,
-            broadcast,
-        )
-        .is_none()
-        {
-            warn!("Unable to spawn broadcast handler, input queue was dropped.")
-        }
-    });
-}
-
-// XXX: Be sure to remove that
-// let span = span!(
-//     Level::INFO,
-//     "MoQ client input",
-//     input_id = input_ref.to_string()
-// );
-//
-// let handle = ctx.tokio_rt.spawn(
-//     async move {
-//         // waiting for the first announced path from the relay
-//         let Some((path, Some(_broadcast))) = consumer.announced().await else {
-//             warn!("MoQ session closed before announcing a broadcast");
-//             return;
-//         };
-//         info!(%path, "MoQ broadcast announced");
-//         todo!("broadcast handling")
-//     }
-//     .instrument(span),
-// );
