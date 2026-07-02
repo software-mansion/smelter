@@ -12,12 +12,11 @@ use tracing::info;
 use crate::{
     EncodedInputChunk, FrameMetadata, H264DecoderEvent, OutputFrame, VideoResolution,
     device::{ColorRange, ColorSpace},
-    dmabuf::QuickSyncDmaBufSync,
     parser::h264::{H264Parser, ParsedNalu},
     quicksync::{
         h264::{
             H264Session, H264SessionError, ImportedRgbaSurface, QUICKSYNC_ASYNC_DEPTH,
-            VplSyncQueue, init_dmabuf_sync, retry_device_busy, vpl_u16_dimension,
+            VplSyncQueue, retry_device_busy, vpl_u16_dimension,
         },
         vpl::{Component, FrameSurface, SyncWait, check_status_allow_warnings},
     },
@@ -27,7 +26,6 @@ const NO_TIMESTAMP: u64 = u64::MAX;
 
 pub struct WgpuTexturesDecoderH264 {
     decoder: QuickSyncH264Decoder,
-    sync: QuickSyncDmaBufSync,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     completed_copy: Arc<AtomicU64>,
@@ -51,11 +49,9 @@ impl WgpuTexturesDecoderH264 {
         adapter_info: &wgpu::AdapterInfo,
     ) -> Result<Self, QuickSyncH264DecoderError> {
         info!("Initializing Intel Quick Sync H264 decoder");
-        let sync = init_dmabuf_sync(&device, &queue)?;
         let decoder = QuickSyncH264Decoder::new(adapter_info)?;
         Ok(Self {
             decoder,
-            sync,
             device,
             queue,
             completed_copy: Arc::new(AtomicU64::new(0)),
@@ -154,13 +150,9 @@ impl WgpuTexturesDecoderH264 {
             texture.as_image_copy(),
             size,
         );
-        self.sync
-            .submit_frame_read(
-                imported.frame.sync(),
-                encoder,
-                "Intel Quick Sync H264 decoder output copy",
-            )
-            .map_err(|err| QuickSyncH264DecoderError::Decode(err.to_string()))?;
+        // The VPP output was CPU-synced above and the surface stays alive in
+        // pending_copies until this copy drains, so no DMA-BUF fences needed.
+        self.queue.submit([encoder.finish()]);
 
         let serial = self.next_copy;
         self.next_copy += 1;

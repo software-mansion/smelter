@@ -18,8 +18,8 @@ use crate::{
     parameters::{ColorRange, ColorSpace},
     quicksync::{
         h264::{
-            H264Session, H264SessionError, ImportedRgbaSurface, VplSyncQueue, init_dmabuf_sync,
-            progressive_frame_info, retry_device_busy, vpl_u16_dimension,
+            H264Session, H264SessionError, ImportedNv12Surface, Nv12DmaBufFrame, VplSyncQueue,
+            init_dmabuf_sync, progressive_frame_info, retry_device_busy, vpl_u16_dimension,
         },
         vpl::{Component, FrameSurface, Session, SyncWait, check_status_allow_warnings},
     },
@@ -30,7 +30,7 @@ const MIN_H264_BITSTREAM_BUFFER_SIZE: u32 = 1_500_000;
 const H264_ENCODER_MAX_DIMENSION: u32 =
     u16::MAX as u32 / H264_DIMENSION_ALIGNMENT * H264_DIMENSION_ALIGNMENT;
 const H264_VIDEO_FORMAT_UNSPECIFIED: u16 = 5;
-const QUICKSYNC_ENCODER_ASYNC_DEPTH: u16 = 1;
+const QUICKSYNC_ENCODER_ASYNC_DEPTH: u16 = 6;
 
 pub struct WgpuTexturesEncoderH264 {
     input_pool: VecDeque<EncodeInputSurface>,
@@ -38,7 +38,7 @@ pub struct WgpuTexturesEncoderH264 {
     sync: QuickSyncDmaBufSync,
     device: Arc<wgpu::Device>,
     resolution: VideoResolution,
-    rgba_to_rgb4: RgbaToRgb4Renderer,
+    rgba_to_nv12: RgbaToNv12Renderer,
 }
 
 pub struct H264EncodedOutputChunk<T> {
@@ -128,8 +128,16 @@ pub enum QuickSyncH264EncoderError {
     #[error("Intel Quick Sync H264 encoder requires input frames to carry PTS")]
     MissingPts,
 
-    #[error("Intel Quick Sync H264 encoder requires COPY_SRC texture usage, got {0:?}")]
-    NoCopySrcTextureUsage(wgpu::TextureUsages),
+    #[error("Intel Quick Sync H264 encoder requires TEXTURE_BINDING texture usage, got {0:?}")]
+    NoTextureBindingUsage(wgpu::TextureUsages),
+
+    #[error(
+        "Intel Quick Sync H264 encoder color conversion supports only limited-range BT.709, got {color_space:?} {color_range:?}"
+    )]
+    UnsupportedColorFormat {
+        color_space: ColorSpace,
+        color_range: ColorRange,
+    },
 
     #[error("Intel Quick Sync H264 encoder requires RGBA textures, got {0:?}")]
     UnsupportedInputTexture(wgpu::TextureFormat),
@@ -170,6 +178,15 @@ impl WgpuTexturesEncoderH264 {
         config: H264EncoderConfig<'_>,
     ) -> Result<Self, QuickSyncH264EncoderError> {
         let layout = h264_encoder_layout(config.resolution)?;
+        if !matches!(
+            (config.color_space, config.color_range),
+            (ColorSpace::BT709, ColorRange::Limited)
+        ) {
+            return Err(QuickSyncH264EncoderError::UnsupportedColorFormat {
+                color_space: config.color_space,
+                color_range: config.color_range,
+            });
+        }
         info!("Initializing Intel Quick Sync H264 encoder");
         let sync = init_dmabuf_sync(&device, &queue)?;
 
@@ -181,7 +198,13 @@ impl WgpuTexturesEncoderH264 {
             .map(|_| encoder.create_input_surface(&device))
             .collect::<Result<VecDeque<_>, _>>()
             .map_err(QuickSyncH264EncoderError::Encode)?;
-        let rgba_to_rgb4 = RgbaToRgb4Renderer::new(&device);
+        let y_plane = input_pool
+            .front()
+            .expect("encoder surface pool is never empty")
+            .imported
+            .frame
+            .y_texture();
+        let rgba_to_nv12 = RgbaToNv12Renderer::new(&device, &queue, y_plane, resolution);
 
         info!(
             width = resolution.width,
@@ -198,7 +221,7 @@ impl WgpuTexturesEncoderH264 {
             sync,
             device,
             resolution,
-            rgba_to_rgb4,
+            rgba_to_nv12,
         })
     }
 
@@ -220,10 +243,9 @@ impl WgpuTexturesEncoderH264 {
         }
 
         let input = self
-            .input_pool
-            .pop_front()
+            .pop_unlocked_input()
             .ok_or(QuickSyncH264EncoderError::InputSurfacePoolExhausted)?;
-        self.copy_input_to_surface(&frame.data, &input)?;
+        self.convert_input_to_surface(&frame.data, &input)?;
         self.encoder
             .encode(input, pts, force_keyframe)
             .map_err(QuickSyncH264EncoderError::Encode)?;
@@ -252,8 +274,8 @@ impl WgpuTexturesEncoderH264 {
         texture: &wgpu::Texture,
     ) -> Result<(), QuickSyncH264EncoderError> {
         let expected = self.resolution.extent_2d();
-        if !texture.usage().contains(wgpu::TextureUsages::COPY_SRC) {
-            return Err(QuickSyncH264EncoderError::NoCopySrcTextureUsage(
+        if !texture.usage().contains(wgpu::TextureUsages::TEXTURE_BINDING) {
+            return Err(QuickSyncH264EncoderError::NoTextureBindingUsage(
                 texture.usage(),
             ));
         }
@@ -274,7 +296,7 @@ impl WgpuTexturesEncoderH264 {
         Ok(())
     }
 
-    fn copy_input_to_surface(
+    fn convert_input_to_surface(
         &self,
         texture: &wgpu::Texture,
         input: &EncodeInputSurface,
@@ -282,18 +304,46 @@ impl WgpuTexturesEncoderH264 {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Intel Quick Sync H264 input copy"),
+                label: Some("Intel Quick Sync H264 input convert"),
             });
-        self.rgba_to_rgb4
-            .render(&mut encoder, texture, input.imported.frame.texture());
+        self.rgba_to_nv12
+            .render(&mut encoder, texture, &input.imported.frame);
+        // Raw and wgpu commands cannot share an encoder, so the release barrier
+        // rides in its own command buffer submitted right after the copies.
+        let mut barrier_encoder =
+            self.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Intel Quick Sync H264 external release barrier"),
+                });
+        super::release_planes_to_external(
+            &self.device,
+            &mut barrier_encoder,
+            [
+                input.imported.frame.y_texture(),
+                input.imported.frame.uv_texture(),
+            ],
+        );
         self.sync
             .submit_frame_write(
                 input.imported.frame.sync(),
-                encoder,
-                "Intel Quick Sync H264 RGBA to RGB4 input render",
+                [encoder.finish(), barrier_encoder.finish()],
             )
             .map_err(|err| QuickSyncH264EncoderError::Encode(err.to_string()))?;
         Ok(())
+    }
+
+    // Retiring a bitstream does not imply the encoder released its input: with
+    // VDENC the raw surface can stay referenced past its own frame. Honor the
+    // oneVPL Locked contract instead of trusting pool order.
+    fn pop_unlocked_input(&mut self) -> Option<EncodeInputSurface> {
+        for _ in 0..self.input_pool.len() {
+            let input = self.input_pool.pop_front()?;
+            if input.surface.locked() == 0 {
+                return Some(input);
+            }
+            self.input_pool.push_back(input);
+        }
+        None
     }
 
     fn retire_completed(
@@ -376,11 +426,11 @@ impl QuickSyncH264Encoder {
             .map_err(|err| err.to_string())?;
         let imported = self
             .quicksync
-            .import_rgb4_surface(
+            .import_nv12_surface(
                 device,
                 &surface,
-                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-                wgpu::TextureUses::COLOR_TARGET,
+                wgpu::TextureUsages::COPY_DST,
+                wgpu::TextureUses::COPY_DST,
             )
             .map_err(|err| err.to_string())?;
         Ok(EncodeInputSurface { imported, surface })
@@ -473,7 +523,7 @@ impl Drop for QuickSyncH264Encoder {
 }
 
 struct EncodeInputSurface {
-    imported: ImportedRgbaSurface,
+    imported: ImportedNv12Surface,
     surface: FrameSurface,
 }
 
@@ -577,62 +627,134 @@ fn complete_bitstream(
     })
 }
 
-struct RgbaToRgb4Renderer {
+struct RgbaToNv12Renderer {
     label: &'static str,
     device: wgpu::Device,
-    pipeline: wgpu::RenderPipeline,
+    y_pipeline: wgpu::RenderPipeline,
+    uv_pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
+    tex_scale: wgpu::Buffer,
+    y_intermediate: wgpu::Texture,
+    uv_intermediate: wgpu::Texture,
 }
 
-impl RgbaToRgb4Renderer {
-    fn new(device: &wgpu::Device) -> Self {
-        let label = "Intel Quick Sync RGBA to RGB4 input render";
+impl RgbaToNv12Renderer {
+    fn new(device: &wgpu::Device, queue: &wgpu::Queue, plane: &wgpu::Texture, visible: VideoResolution) -> Self {
+        let label = "Intel Quick Sync RGBA to NV12 input render";
         let shader =
-            device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_rgb4.wgsl"));
+            device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_nv12.wgsl"));
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some(label),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(label),
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = |entry_point: &str, format: wgpu::TextureFormat| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&pipeline_layout),
+                cache: None,
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some(entry_point),
+                    compilation_options: Default::default(),
+                    targets: &[Some(format.into())],
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                multiview_mask: None,
+                multisample: wgpu::MultisampleState::default(),
+                depth_stencil: None,
+            })
+        };
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(label),
-            layout: Some(&pipeline_layout),
-            cache: None,
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::TextureFormat::Bgra8Unorm.into())],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            multiview_mask: None,
-            multisample: wgpu::MultisampleState::default(),
-            depth_stencil: None,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
         });
+        let scale = [
+            plane.width() as f32 / visible.width as f32,
+            plane.height() as f32 / visible.height as f32,
+        ];
+        let mut contents = [0u8; 8];
+        contents[..4].copy_from_slice(&scale[0].to_ne_bytes());
+        contents[4..].copy_from_slice(&scale[1].to_ne_bytes());
+        let tex_scale = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(label),
+            size: contents.len() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        queue.write_buffer(&tex_scale, 0, &contents);
+        // Rendering straight into the exported DMA-BUF planes loses render-target
+        // compression, which is measurably slower on power-capped iGPUs. Render into
+        // regular textures instead and blit into the surface on the copy engine.
+        let intermediate = |format: wgpu::TextureFormat, size: wgpu::Extent3d| {
+            device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
+            })
+        };
+        let uv_size = wgpu::Extent3d {
+            width: plane.width() / 2,
+            height: plane.height() / 2,
+            depth_or_array_layers: 1,
+        };
         Self {
             label,
             device: device.clone(),
-            pipeline,
+            y_pipeline: pipeline("fs_main_y", wgpu::TextureFormat::R8Unorm),
+            uv_pipeline: pipeline("fs_main_uv", wgpu::TextureFormat::Rg8Unorm),
             bind_group_layout,
+            sampler,
+            tex_scale,
+            y_intermediate: intermediate(wgpu::TextureFormat::R8Unorm, plane.size()),
+            uv_intermediate: intermediate(wgpu::TextureFormat::Rg8Unorm, uv_size),
         }
     }
 
@@ -640,28 +762,51 @@ impl RgbaToRgb4Renderer {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         input: &wgpu::Texture,
-        output: &wgpu::Texture,
+        output: &Nv12DmaBufFrame,
     ) {
         let input_view = input.create_view(&wgpu::TextureViewDescriptor {
             format: Some(wgpu::TextureFormat::Rgba8Unorm),
             ..Default::default()
         });
-        let output_view = output.create_view(&Default::default());
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(self.label),
             layout: &self.bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&input_view),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&input_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.tex_scale.as_entire_binding(),
+                },
+            ],
         });
+        self.plane_pass(encoder, &self.y_pipeline, &bind_group, &self.y_intermediate);
+        self.plane_pass(encoder, &self.uv_pipeline, &bind_group, &self.uv_intermediate);
+        copy_plane(encoder, &self.y_intermediate, output.y_texture());
+        copy_plane(encoder, &self.uv_intermediate, output.uv_texture());
+    }
+
+    fn plane_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        pipeline: &wgpu::RenderPipeline,
+        bind_group: &wgpu::BindGroup,
+        plane: &wgpu::Texture,
+    ) {
+        let view = plane.create_view(&Default::default());
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(self.label),
             timestamp_writes: None,
             occlusion_query_set: None,
             depth_stencil_attachment: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &output_view,
+                view: &view,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -671,10 +816,14 @@ impl RgbaToRgb4Renderer {
             })],
             multiview_mask: None,
         });
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, bind_group, &[]);
         pass.draw(0..3, 0..1);
     }
+}
+
+fn copy_plane(encoder: &mut wgpu::CommandEncoder, src: &wgpu::Texture, dst: &wgpu::Texture) {
+    encoder.copy_texture_to_texture(src.as_image_copy(), dst.as_image_copy(), src.size());
 }
 
 fn encoder_video_param(
@@ -682,7 +831,7 @@ fn encoder_video_param(
     layout: H264EncoderLayout,
 ) -> Result<H264EncoderVideoParam, String> {
     let mut frame_info =
-        progressive_frame_info(vpl::MFX_FOURCC_RGB4, vpl::MFX_CHROMAFORMAT_YUV444 as u16);
+        progressive_frame_info(vpl::MFX_FOURCC_NV12, vpl::MFX_CHROMAFORMAT_YUV420 as u16);
     frame_info.BitDepthLuma = 8;
     frame_info.BitDepthChroma = 8;
     frame_info.FrameRateExtN = config.framerate.num.get();

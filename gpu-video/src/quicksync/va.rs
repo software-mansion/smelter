@@ -23,6 +23,9 @@ pub(super) enum VaError {
 
     #[error("DRM PRIME descriptor must contain exactly one single-plane layer")]
     UnsupportedSinglePlaneLayout,
+
+    #[error("DRM PRIME descriptor must contain two single-plane NV12 layers, got fourcc {0:#x}")]
+    UnsupportedNv12Layout(u32),
 }
 
 pub(super) struct VaDisplay {
@@ -60,6 +63,20 @@ impl VaDisplay {
         &self,
         surface_id: SurfaceId,
     ) -> Result<DrmPrimeSinglePlaneSurface, VaError> {
+        DrmPrimeSinglePlaneSurface::new(self.export_drm_prime_surface(surface_id)?)
+    }
+
+    pub(super) fn export_nv12_surface(
+        &self,
+        surface_id: SurfaceId,
+    ) -> Result<DrmPrimeNv12Surface, VaError> {
+        DrmPrimeNv12Surface::new(self.export_drm_prime_surface(surface_id)?)
+    }
+
+    fn export_drm_prime_surface(
+        &self,
+        surface_id: SurfaceId,
+    ) -> Result<ffi::VADRMPRIMESurfaceDescriptor, VaError> {
         let mut descriptor =
             unsafe { std::mem::zeroed::<ffi::VADRMPRIMESurfaceDescriptor>() };
         check_status("vaExportSurfaceHandle", unsafe {
@@ -67,11 +84,11 @@ impl VaDisplay {
                 self.handle.as_ptr(),
                 surface_id,
                 ffi::VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
-                ffi::VA_EXPORT_SURFACE_READ_WRITE,
+                ffi::VA_EXPORT_SURFACE_READ_WRITE | ffi::VA_EXPORT_SURFACE_SEPARATE_LAYERS,
                 &mut descriptor as *mut _ as *mut std::ffi::c_void,
             )
         })?;
-        DrmPrimeSinglePlaneSurface::new(descriptor)
+        Ok(descriptor)
     }
 }
 
@@ -111,6 +128,43 @@ impl DrmPrimeSinglePlaneSurface {
             modifier: object.drm_format_modifier,
             offset: layer.offset[0],
             pitch: layer.pitch[0],
+        })
+    }
+}
+
+pub(super) struct DrmPrimeNv12Surface {
+    pub(super) fd: OwnedFd,
+    pub(super) width: u32,
+    pub(super) height: u32,
+    pub(super) modifier: u64,
+    pub(super) y_offset: u32,
+    pub(super) y_pitch: u32,
+    pub(super) uv_offset: u32,
+    pub(super) uv_pitch: u32,
+}
+
+impl DrmPrimeNv12Surface {
+    fn new(descriptor: ffi::VADRMPRIMESurfaceDescriptor) -> Result<Self, VaError> {
+        if descriptor.num_objects != 1 {
+            return Err(VaError::InvalidObjectCount(descriptor.num_objects));
+        }
+        if descriptor.fourcc.to_le_bytes() != *b"NV12"
+            || descriptor.num_layers != 2
+            || descriptor.layers[0].num_planes != 1
+            || descriptor.layers[1].num_planes != 1
+        {
+            return Err(VaError::UnsupportedNv12Layout(descriptor.fourcc));
+        }
+        let object = &descriptor.objects[0];
+        Ok(Self {
+            fd: unsafe { OwnedFd::from_raw_fd(object.fd) },
+            width: descriptor.width,
+            height: descriptor.height,
+            modifier: object.drm_format_modifier,
+            y_offset: descriptor.layers[0].offset[0],
+            y_pitch: descriptor.layers[0].pitch[0],
+            uv_offset: descriptor.layers[1].offset[0],
+            uv_pitch: descriptor.layers[1].pitch[0],
         })
     }
 }

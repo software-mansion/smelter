@@ -302,6 +302,10 @@ impl FrameSurface {
     pub(super) fn timestamp(&self) -> u64 {
         unsafe { self.surface.as_ref().Data.TimeStamp }
     }
+
+    pub(super) fn locked(&self) -> u16 {
+        unsafe { self.surface.as_ref().Data.Locked }
+    }
 }
 
 impl Drop for FrameSurface {

@@ -1,7 +1,4 @@
-use std::{
-    os::fd::{AsRawFd, IntoRawFd, OwnedFd},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use ash::vk;
 
@@ -11,9 +8,6 @@ use super::{interop::VulkanDmaBufDevice, sync_file::SyncFile};
 pub(crate) enum VulkanSemaphoreError {
     #[error("failed to create Vulkan semaphore: {0}")]
     Create(vk::Result),
-
-    #[error("failed to import sync_file as Vulkan semaphore: {0}")]
-    Import(vk::Result),
 
     #[error("failed to export Vulkan semaphore as sync_file: {0}")]
     Export(vk::Result),
@@ -25,33 +19,6 @@ pub(super) struct VulkanSemaphore {
 }
 
 impl VulkanSemaphore {
-    pub(super) fn import_sync_file(
-        vulkan: Arc<VulkanDmaBufDevice>,
-        fd: OwnedFd,
-    ) -> Result<Self, VulkanSemaphoreError> {
-        let semaphore = Self::create(Arc::clone(&vulkan))?;
-        let import_info = vk::ImportSemaphoreFdInfoKHR::default()
-            .semaphore(semaphore.semaphore)
-            .flags(vk::SemaphoreImportFlags::TEMPORARY)
-            .handle_type(vk::ExternalSemaphoreHandleTypeFlags::SYNC_FD)
-            .fd(fd.as_raw_fd());
-
-        match unsafe {
-            vulkan
-                .external_semaphore_fd
-                .import_semaphore_fd(&import_info)
-        } {
-            Ok(()) => {
-                let _ = fd.into_raw_fd();
-                Ok(semaphore)
-            }
-            Err(err) => {
-                drop(semaphore);
-                Err(VulkanSemaphoreError::Import(err))
-            }
-        }
-    }
-
     pub(super) fn exportable(
         vulkan: Arc<VulkanDmaBufDevice>,
     ) -> Result<Self, VulkanSemaphoreError> {
@@ -77,10 +44,6 @@ impl VulkanSemaphore {
 
     pub(super) fn raw(&self) -> vk::Semaphore {
         self.semaphore
-    }
-
-    fn create(vulkan: Arc<VulkanDmaBufDevice>) -> Result<Self, VulkanSemaphoreError> {
-        Self::create_with_info(vulkan, &vk::SemaphoreCreateInfo::default())
     }
 
     fn create_with_info(
