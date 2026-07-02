@@ -326,8 +326,7 @@ mod required_input {
 
     #[test]
     fn offset_pts_after_start_delivered_early() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
@@ -376,8 +375,7 @@ mod required_input {
 
     #[test]
     fn offset_pts_after_start_delivered_on_time() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(58));
         // a required `Pts` input stalls the queue from the first chunk until
@@ -424,8 +422,7 @@ mod required_input {
 
     #[test]
     fn offset_pts_after_start_delivered_late() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(200));
         assert!(queue.next_audio_batch().is_none());
@@ -1151,8 +1148,7 @@ mod optional_input {
 
     #[test]
     fn offset_pts_after_start_delivered_on_time() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(58));
         // empty chunks flow because the optional input never stalls the queue
@@ -1205,8 +1201,7 @@ mod optional_input {
 
     #[test]
     fn offset_pts_after_start_delivered_late() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(78));
         assert_audio_batch_eq(

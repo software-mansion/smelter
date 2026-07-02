@@ -900,8 +900,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_pts_after_start_event_delivered_early() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         queue.expect_events(&[]);
 
@@ -912,8 +911,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(58));
         queue.expect_events(&[]);
@@ -925,8 +923,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(100));
         queue.expect_events(&[]);
@@ -938,8 +935,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_pts_after_start_event_playing() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
@@ -1330,8 +1326,7 @@ mod optional_audio_input {
 
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(58));
         queue.expect_events(&[]);
@@ -1344,8 +1339,7 @@ mod optional_audio_input {
 
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(101));
         // +1ms so the chunk covering 100ms is produced before the batch
@@ -1360,8 +1354,7 @@ mod optional_audio_input {
 
     #[test]
     fn offset_pts_after_start_event_playing() {
-        let (queue, input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         // send mid-chunk so the pop timing is deterministic
         sleep(ms(30));
