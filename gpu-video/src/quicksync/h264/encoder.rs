@@ -198,13 +198,12 @@ impl WgpuTexturesEncoderH264 {
             .map(|_| encoder.create_input_surface(&device))
             .collect::<Result<VecDeque<_>, _>>()
             .map_err(QuickSyncH264EncoderError::Encode)?;
-        let y_plane = input_pool
+        let frame = &input_pool
             .front()
             .expect("encoder surface pool is never empty")
             .imported
-            .frame
-            .y_texture();
-        let rgba_to_nv12 = RgbaToNv12Renderer::new(&device, &queue, y_plane, resolution);
+            .frame;
+        let rgba_to_nv12 = RgbaToNv12Renderer::new(&device, &queue, frame, resolution);
 
         info!(
             width = resolution.width,
@@ -617,12 +616,16 @@ struct RgbaToNv12Renderer {
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     tex_scale: wgpu::Buffer,
-    y_intermediate: wgpu::Texture,
-    uv_intermediate: wgpu::Texture,
+    intermediate: wgpu::Texture,
 }
 
 impl RgbaToNv12Renderer {
-    fn new(device: &wgpu::Device, queue: &wgpu::Queue, plane: &wgpu::Texture, visible: VideoResolution) -> Self {
+    fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        frame: &Nv12DmaBufFrame,
+        visible: VideoResolution,
+    ) -> Self {
         let label = "Intel Quick Sync RGBA to NV12 input render";
         let shader =
             device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_nv12.wgsl"));
@@ -647,7 +650,7 @@ impl RgbaToNv12Renderer {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -693,13 +696,20 @@ impl RgbaToNv12Renderer {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
+        // The planes are quarter-width RGBA8 reinterpretations, so one packed
+        // texel spans four bytes of the plane row. Both plane regions share the
+        // same scale: the UV rows halve together with the visible chroma rows.
+        let plane = frame.texture();
         let scale = [
-            plane.width() as f32 / visible.width as f32,
-            plane.height() as f32 / visible.height as f32,
+            (plane.width() * 4) as f32 / visible.width as f32,
+            frame.y_rows() as f32 / visible.height as f32,
         ];
-        let mut contents = [0u8; 8];
+        let step = [1.0 / visible.width as f32, 1.0 / visible.height as f32];
+        let mut contents = [0u8; 16];
         contents[..4].copy_from_slice(&scale[0].to_ne_bytes());
-        contents[4..].copy_from_slice(&scale[1].to_ne_bytes());
+        contents[4..8].copy_from_slice(&scale[1].to_ne_bytes());
+        contents[8..12].copy_from_slice(&step[0].to_ne_bytes());
+        contents[12..16].copy_from_slice(&step[1].to_ne_bytes());
         let tex_scale = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(label),
             size: contents.len() as u64,
@@ -722,21 +732,16 @@ impl RgbaToNv12Renderer {
                 view_formats: &[],
             })
         };
-        let uv_size = wgpu::Extent3d {
-            width: plane.width() / 2,
-            height: plane.height() / 2,
-            depth_or_array_layers: 1,
-        };
+
         Self {
             label,
             device: device.clone(),
-            y_pipeline: pipeline("fs_main_y", wgpu::TextureFormat::R8Unorm),
-            uv_pipeline: pipeline("fs_main_uv", wgpu::TextureFormat::Rg8Unorm),
+            y_pipeline: pipeline("fs_main_y", wgpu::TextureFormat::Rgba8Unorm),
+            uv_pipeline: pipeline("fs_main_uv", wgpu::TextureFormat::Rgba8Unorm),
             bind_group_layout,
             sampler,
             tex_scale,
-            y_intermediate: intermediate(wgpu::TextureFormat::R8Unorm, plane.size()),
-            uv_intermediate: intermediate(wgpu::TextureFormat::Rg8Unorm, uv_size),
+            intermediate: intermediate(wgpu::TextureFormat::Rgba8Unorm, plane.size()),
         }
     }
 
@@ -768,20 +773,10 @@ impl RgbaToNv12Renderer {
                 },
             ],
         });
-        self.plane_pass(encoder, &self.y_pipeline, &bind_group, &self.y_intermediate);
-        self.plane_pass(encoder, &self.uv_pipeline, &bind_group, &self.uv_intermediate);
-        copy_plane(encoder, &self.y_intermediate, output.y_texture());
-        copy_plane(encoder, &self.uv_intermediate, output.uv_texture());
-    }
-
-    fn plane_pass(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        pipeline: &wgpu::RenderPipeline,
-        bind_group: &wgpu::BindGroup,
-        plane: &wgpu::Texture,
-    ) {
-        let view = plane.create_view(&Default::default());
+        let width = self.intermediate.width() as f32;
+        let y_rows = output.y_rows() as f32;
+        let uv_rows = y_rows / 2.0;
+        let view = self.intermediate.create_view(&Default::default());
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(self.label),
             timestamp_writes: None,
@@ -798,9 +793,15 @@ impl RgbaToNv12Renderer {
             })],
             multiview_mask: None,
         });
-        pass.set_pipeline(pipeline);
-        pass.set_bind_group(0, bind_group, &[]);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_viewport(0.0, 0.0, width, y_rows, 0.0, 1.0);
+        pass.set_pipeline(&self.y_pipeline);
         pass.draw(0..3, 0..1);
+        pass.set_viewport(0.0, y_rows, width, uv_rows, 0.0, 1.0);
+        pass.set_pipeline(&self.uv_pipeline);
+        pass.draw(0..3, 0..1);
+        drop(pass);
+        copy_plane(encoder, &self.intermediate, output.texture());
     }
 }
 
@@ -1000,8 +1001,8 @@ fn coding_option3() -> vpl::mfxExtCodingOption3 {
     option.Header.BufferSz = std::mem::size_of::<vpl::mfxExtCodingOption3>() as u32;
     option.LowDelayHrd = vpl::MFX_CODINGOPTION_ON as u16;
     option.LowDelayBRC = vpl::MFX_CODINGOPTION_ON as u16;
-    option.ScenarioInfo = vpl::MFX_SCENARIO_DISPLAY_REMOTING as u16;
-    option.ContentInfo = vpl::MFX_CONTENT_NON_VIDEO_SCREEN as u16;
+    option.ScenarioInfo = vpl::MFX_SCENARIO_CAMERA_CAPTURE as u16;
+    option.ContentInfo = vpl::MFX_CONTENT_FULL_SCREEN_VIDEO as u16;
     option.NumRefActiveP[0] = 1;
     option
 }
