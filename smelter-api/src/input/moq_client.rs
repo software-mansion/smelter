@@ -13,6 +13,10 @@ pub struct MoqClientInput {
     pub endpoint_url: Arc<str>,
     /// Path of the broadcast to subscribe to on the relay.
     pub broadcast_path: Arc<str>,
+    /// (**default=`false`**) Skips validation of the relay's TLS certificate.
+    /// Only enable this on trusted networks — it leaves the connection vulnerable
+    /// to man-in-the-middle attacks.
+    pub disable_tls_verification: Option<bool>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,

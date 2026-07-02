@@ -42,7 +42,11 @@ impl MoqClientInput {
             should_close: Arc::new(false.into()),
             session: None,
         };
-        let consumer = input.connect(&ctx, &options.endpoint_url)?;
+        let consumer = input.connect(
+            &ctx,
+            &options.endpoint_url,
+            options.disable_tls_verification,
+        )?;
 
         input.spawn_broadcast_handler(ctx, input_ref, consumer, options.broadcast_path);
 
@@ -53,6 +57,7 @@ impl MoqClientInput {
         &mut self,
         ctx: &Arc<PipelineCtx>,
         url: &str,
+        disable_tls_verification: bool,
     ) -> Result<OriginConsumer, MoqClientError> {
         let url = Url::parse(url).map_err(|err| MoqClientError::InvalidUrl(Arc::from(url), err))?;
 
@@ -61,9 +66,7 @@ impl MoqClientInput {
         }
 
         let mut config = ClientConfig::default();
-        // TODO: (@jbrs) TLS certificate verification MUST be handled properly before this is used in
-        // production. Disabling it allows man-in-the-middle attacks.
-        config.tls.disable_verify = Some(true);
+        config.tls.disable_verify = Some(disable_tls_verification);
         let client = config.init().map_err(MoqClientError::ClientInitFailed)?;
 
         let origin = Origin::random().produce();

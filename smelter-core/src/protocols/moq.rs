@@ -17,6 +17,7 @@ pub struct MoqServerInputOptions {
 pub struct MoqClientInputOptions {
     pub endpoint_url: Arc<str>,
     pub broadcast_path: Arc<str>,
+    pub disable_tls_verification: bool,
     pub decoders: MoqInputDecoders,
     pub queue_options: QueueInputOptions,
 }
