@@ -90,6 +90,12 @@ impl BytesDecoder {
 
 #[derive(Debug, thiserror::Error)]
 pub enum VideoDecoderError {
+    #[error("The device does not support decoding")]
+    DecoderUnsupported,
+
+    #[error("Invalid input data for the decoder: {0}.")]
+    InvalidInputData(String),
+
     #[error("H264 parser error: {0}")]
     ParserError(#[from] H264ParserError),
 

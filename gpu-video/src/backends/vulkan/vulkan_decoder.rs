@@ -897,7 +897,7 @@ pub enum VulkanDecoderError {
     #[error("Vulkan error: {0}")]
     VkError(#[from] vk::Result),
 
-    #[error("The device does not support vulkan h264 decoding")]
+    #[error("The device does not support vulkan decoding")]
     VulkanDecoderUnsupported,
 
     #[error(
@@ -925,10 +925,21 @@ pub enum VulkanDecoderError {
 
 impl From<VulkanDecoderError> for VideoDecoderError {
     fn from(err: VulkanDecoderError) -> Self {
-        Self::BackendError(VideoBackendError {
-            message: err.to_string(),
-            source: Box::new(err),
-        })
+        match err {
+            VulkanDecoderError::VulkanDecoderUnsupported => VideoDecoderError::DecoderUnsupported,
+            VulkanDecoderError::InvalidInputData(err_msg) => {
+                VideoDecoderError::InvalidInputData(err_msg)
+            }
+            VulkanDecoderError::VkError(_)
+            | VulkanDecoderError::NoSession
+            | VulkanDecoderError::NonExistentReferenceRequested
+            | VulkanDecoderError::DecodeOperationFailed(_)
+            | VulkanDecoderError::MonochromeChromaFormatUnsupported
+            | VulkanDecoderError::VulkanCommonError(_) => Self::BackendError(VideoBackendError {
+                message: err.to_string(),
+                source: Box::new(err),
+            }),
+        }
     }
 }
 
