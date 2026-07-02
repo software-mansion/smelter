@@ -9,7 +9,10 @@ use super::harness::{
 };
 
 fn frame(id: u32, pts: Duration) -> InputFrame {
-    InputFrame::Frame { id, pts }
+    InputFrame {
+        frame: Some((id, pts)),
+        eos: false,
+    }
 }
 
 mod required_input {

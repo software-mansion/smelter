@@ -12,10 +12,10 @@ use crate::{
     event::EventEmitter,
     queue::{
         QueueContext,
-        audio_input::AudioQueueInput,
+        audio_input::{AudioEvent, AudioQueueInput},
         side_channel::{AudioSideChannel, VideoSideChannel},
         utils::PauseState,
-        video_input::VideoQueueInput,
+        video_input::{FrameEvent, VideoQueueInput},
     },
     types::Ref,
 };
@@ -67,12 +67,65 @@ pub(super) struct InnerQueueInput {
 }
 
 impl InnerQueueInput {
+    /// Replace the current track with the next pending one, but only after
+    /// both tracks delivered everything AND emitted their EOS. Swapping on
+    /// `is_done` alone would drop the EOS of the old track (it is emitted one
+    /// batch after the track drains).
     fn maybe_start_next_track(&mut self) {
-        let video_done = self.video.as_mut().map(|v| v.is_done()).unwrap_or(true);
-        let audio_done = self.audio.as_mut().map(|a| a.is_done()).unwrap_or(true);
-        if video_done && audio_done {
+        let video_finished = self.video.as_mut().map(|v| v.is_finished()).unwrap_or(true);
+        let audio_finished = self.audio.as_mut().map(|a| a.is_finished()).unwrap_or(true);
+        if video_finished && audio_finished {
             self.replace_track()
         }
+    }
+
+    /// Get the video frame for this batch. If the current track finishes with
+    /// this batch and the whole input is finished, switch to the pending track
+    /// immediately so its first frame can be delivered alongside the EOS flag
+    /// (gapless track change, no batch without a frame).
+    fn get_video_frame(&mut self, pts: Duration, queue_start_pts: Duration) -> Option<FrameEvent> {
+        let mut event = self.video.as_mut()?.get_frame(pts, queue_start_pts)?;
+        if event.eos && !self.pending.is_empty() {
+            let audio_finished = self.audio.as_mut().map(|a| a.is_finished()).unwrap_or(true);
+            if audio_finished {
+                self.replace_track();
+                if let Some(video) = self.video.as_mut()
+                    && let Some(next) = video.get_frame(pts, queue_start_pts)
+                {
+                    event.required = event.required || next.required;
+                    event.frame = next.frame;
+                    event.eos = event.eos || next.eos;
+                }
+            }
+        }
+        Some(event)
+    }
+
+    /// Audio variant of [`InnerQueueInput::get_video_frame`]: on a track
+    /// switch the first batches of the pending track are delivered alongside
+    /// the EOS flag.
+    fn pop_audio_samples(
+        &mut self,
+        pts_range: (Duration, Duration),
+        queue_start_pts: Duration,
+    ) -> Option<AudioEvent> {
+        let mut event = self
+            .audio
+            .as_mut()?
+            .pop_samples(pts_range, queue_start_pts);
+        if event.eos && !self.pending.is_empty() {
+            let video_finished = self.video.as_mut().map(|v| v.is_finished()).unwrap_or(true);
+            if video_finished {
+                self.replace_track();
+                if let Some(audio) = self.audio.as_mut() {
+                    let next = audio.pop_samples(pts_range, queue_start_pts);
+                    event.required = event.required || next.required;
+                    event.batches.extend(next.batches);
+                    event.eos = event.eos || next.eos;
+                }
+            }
+        }
+        Some(event)
     }
 
     /// Replace current track with the next pending, do nothing if there is no pending
@@ -316,6 +369,30 @@ impl QueueInput {
 }
 
 impl WeakQueueInput {
+    /// Get the video frame for this batch, switching to a pending track when
+    /// the current one finished.
+    pub(super) fn get_video_frame(
+        &self,
+        pts: Duration,
+        queue_start_pts: Duration,
+    ) -> Option<FrameEvent> {
+        let arc = self.0.upgrade()?;
+        let mut inner = arc.lock().unwrap();
+        inner.get_video_frame(pts, queue_start_pts)
+    }
+
+    /// Pop the audio samples for this chunk, switching to a pending track when
+    /// the current one finished.
+    pub(super) fn pop_audio_samples(
+        &self,
+        pts_range: (Duration, Duration),
+        queue_start_pts: Duration,
+    ) -> Option<AudioEvent> {
+        let arc = self.0.upgrade()?;
+        let mut inner = arc.lock().unwrap();
+        inner.pop_audio_samples(pts_range, queue_start_pts)
+    }
+
     pub(super) fn video<F, R>(&self, f: F) -> Option<R>
     where
         F: FnOnce(&mut VideoQueueInput) -> R,

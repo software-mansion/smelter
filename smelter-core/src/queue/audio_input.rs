@@ -5,7 +5,7 @@ use smelter_render::InputId;
 use tracing::{debug, trace, warn};
 
 use crate::{
-    PipelineEvent, Ref,
+    Ref,
     event::{Event, EventEmitter},
     queue::{
         QueueContext, queue_input::TrackOffset, side_channel::AudioSideChannel,
@@ -17,7 +17,9 @@ use crate::prelude::*;
 
 pub(super) struct AudioEvent {
     pub required: bool,
-    pub event: PipelineEvent<Vec<InputAudioSamples>>,
+    pub batches: Vec<InputAudioSamples>,
+    /// The track ended at this chunk.
+    pub eos: bool,
 }
 
 const MIXER_STRETCH_BUFFER: Duration = Duration::from_millis(80);
@@ -87,6 +89,12 @@ impl AudioQueueInput {
         matches!(self.receiver.state(), ReceiverState::Done)
     }
 
+    /// Track fully finished: all samples were delivered and the EOS was
+    /// emitted. Only then it is safe to replace the track with the next one.
+    pub(super) fn is_finished(&mut self) -> bool {
+        self.is_done() && self.event_eos_guard.emited()
+    }
+
     pub(super) fn required(&self) -> bool {
         self.required
     }
@@ -116,33 +124,33 @@ impl AudioQueueInput {
         if self.paused {
             return AudioEvent {
                 required: false,
-                event: PipelineEvent::Data(vec![]),
+                batches: vec![],
+                eos: false,
             };
         }
 
-        let Some(offset) = self.resolve_offset(pts_range.0, queue_start_pts) else {
-            return AudioEvent {
-                required: self.required,
-                event: PipelineEvent::Data(vec![]),
-            };
+        // The EOS check below is still reachable when the offset was never
+        // resolved (a track that ended without receiving any sample) or before
+        // the `FromStart` offset point.
+        let samples = match self.resolve_offset(pts_range.0, queue_start_pts) {
+            Some(offset) => {
+                if let Some(offset_from_start) = self.offset_from_start
+                    && pts_range.1 < queue_start_pts + offset_from_start
+                {
+                    vec![]
+                } else {
+                    let input_pts = (pts_range.1 + MIXER_STRETCH_BUFFER).saturating_sub(offset);
+                    trace!(queue_pts=?pts_range, ?input_pts, "Try get samples batch");
+
+                    let mut samples = self.receiver.pop_before_pts(input_pts);
+                    for batch in &mut samples {
+                        batch.start_pts += offset;
+                    }
+                    samples
+                }
+            }
+            None => vec![],
         };
-
-        if let Some(offset_from_start) = self.offset_from_start
-            && pts_range.1 < queue_start_pts + offset_from_start
-        {
-            return AudioEvent {
-                required: self.required,
-                event: PipelineEvent::Data(vec![]),
-            };
-        }
-
-        let input_pts = (pts_range.1 + MIXER_STRETCH_BUFFER).saturating_sub(offset);
-        trace!(queue_pts=?pts_range, ?input_pts, "Try get samples batch");
-
-        let mut samples = self.receiver.pop_before_pts(input_pts);
-        for batch in &mut samples {
-            batch.start_pts += offset;
-        }
 
         if !samples.is_empty() {
             self.event_playing_guard.emit();
@@ -152,13 +160,15 @@ impl AudioQueueInput {
             self.event_eos_guard.emit();
             return AudioEvent {
                 required: true,
-                event: PipelineEvent::EOS,
+                batches: samples,
+                eos: true,
             };
         }
 
         AudioEvent {
             required: self.required,
-            event: PipelineEvent::Data(samples),
+            batches: samples,
+            eos: false,
         }
     }
 

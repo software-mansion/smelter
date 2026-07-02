@@ -166,7 +166,16 @@ pub(super) struct QueueVideoOutput {
     // If required this batch can't be dropped even if processing is behind
     pub(super) required: bool,
     pub(super) pts: Duration,
-    pub(super) frames: HashMap<InputId, PipelineEvent<Frame>>,
+    pub(super) frames: HashMap<InputId, QueueVideoFrame>,
+}
+
+/// Single input entry of [`QueueVideoOutput`].
+#[derive(Debug, Clone)]
+pub(super) struct QueueVideoFrame {
+    pub frame: Option<Frame>,
+    /// A track on this input ended at this batch. If `frame` is `Some`, the
+    /// next track started in the same batch (gapless track change).
+    pub eos: bool,
 }
 
 impl From<QueueVideoOutput> for FrameSet<InputId> {
@@ -175,10 +184,7 @@ impl From<QueueVideoOutput> for FrameSet<InputId> {
             frames: value
                 .frames
                 .into_iter()
-                .filter_map(|(key, value)| match value {
-                    PipelineEvent::Data(data) => Some((key, data)),
-                    PipelineEvent::EOS => None,
-                })
+                .filter_map(|(key, value)| Some((key, value.frame?)))
                 .collect(),
             pts: value.pts,
         }
@@ -187,10 +193,19 @@ impl From<QueueVideoOutput> for FrameSet<InputId> {
 
 #[derive(Debug)]
 pub(super) struct QueueAudioOutput {
-    pub samples: HashMap<InputId, PipelineEvent<Vec<InputAudioSamples>>>,
+    pub samples: HashMap<InputId, QueueAudioSamples>,
     pub start_pts: Duration,
     pub end_pts: Duration,
     pub required: bool,
+}
+
+/// Single input entry of [`QueueAudioOutput`].
+#[derive(Debug, Clone)]
+pub(super) struct QueueAudioSamples {
+    pub batches: Vec<InputAudioSamples>,
+    /// A track on this input ended at this chunk. If `batches` is not empty,
+    /// the next track started in the same chunk (gapless track change).
+    pub eos: bool,
 }
 
 impl From<QueueAudioOutput> for InputSamplesSet {
@@ -199,10 +214,7 @@ impl From<QueueAudioOutput> for InputSamplesSet {
             samples: value
                 .samples
                 .into_iter()
-                .filter_map(|(key, value)| match value {
-                    PipelineEvent::Data(data) => Some((key, data)),
-                    PipelineEvent::EOS => None,
-                })
+                .map(|(key, value)| (key, value.batches))
                 .collect(),
             start_pts: value.start_pts,
             end_pts: value.end_pts,

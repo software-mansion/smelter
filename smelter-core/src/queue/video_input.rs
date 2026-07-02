@@ -5,7 +5,7 @@ use smelter_render::{Frame, InputId};
 use tracing::{debug, trace, warn};
 
 use crate::{
-    PipelineEvent, Ref,
+    Ref,
     event::{Event, EventEmitter},
     queue::{
         QueueContext, queue_input::TrackOffset, side_channel::VideoSideChannel,
@@ -16,7 +16,9 @@ use crate::{
 #[derive(Clone)]
 pub(super) struct FrameEvent {
     pub required: bool,
-    pub event: PipelineEvent<Frame>,
+    pub frame: Option<Frame>,
+    /// The track ended at this batch.
+    pub eos: bool,
 }
 
 pub(crate) struct VideoQueueInput {
@@ -86,6 +88,12 @@ impl VideoQueueInput {
         matches!(self.receiver.state(), ReceiverState::Done)
     }
 
+    /// Track fully finished: all frames were delivered and the EOS was
+    /// emitted. Only then it is safe to replace the track with the next one.
+    pub(super) fn is_finished(&mut self) -> bool {
+        self.is_done() && self.event_eos_guard.emited()
+    }
+
     pub(super) fn required(&self) -> bool {
         self.required
     }
@@ -127,7 +135,8 @@ impl VideoQueueInput {
             frame.pts += offset + pts.saturating_sub(paused_pts);
             return Some(FrameEvent {
                 required: self.required,
-                event: PipelineEvent::Data(frame),
+                frame: Some(frame),
+                eos: false,
             });
         }
         None
@@ -144,18 +153,29 @@ impl VideoQueueInput {
             return self.paused_event(pts);
         }
 
-        let offset = self.resolve_offset(pts, queue_start_pts)?;
+        let frame = match self.resolve_offset(pts, queue_start_pts) {
+            Some(offset) => match pts.checked_sub(offset) {
+                Some(input_pts) => {
+                    trace!(queue_pts=?pts, ?input_pts, "Try get frame");
+                    self.receiver.get_for_pts(input_pts).map(|mut frame| {
+                        frame.pts += offset;
+                        frame
+                    })
+                }
+                None => None,
+            },
+            // EOS below is still reachable when the offset was never resolved
+            // (a track that ended without receiving any frame).
+            None => None,
+        };
 
-        let input_pts = pts.checked_sub(offset)?;
-        trace!(queue_pts=?pts, ?input_pts, "Try get frame");
-
-        match self.receiver.get_for_pts(input_pts) {
-            Some(mut frame) => {
+        match frame {
+            Some(frame) => {
                 self.event_playing_guard.emit();
-                frame.pts += offset;
                 Some(FrameEvent {
                     required: self.required,
-                    event: PipelineEvent::Data(frame),
+                    frame: Some(frame),
+                    eos: false,
                 })
             }
             None => {
@@ -163,7 +183,8 @@ impl VideoQueueInput {
                     self.event_eos_guard.emit();
                     Some(FrameEvent {
                         required: true,
-                        event: PipelineEvent::EOS,
+                        frame: None,
+                        eos: true,
                     })
                 } else {
                     None

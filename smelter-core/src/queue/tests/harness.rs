@@ -73,16 +73,14 @@ impl Default for TestQueueOptions {
     }
 }
 
-/// Single frame of a video batch.
+/// Summary of a single input entry in a video batch.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InputFrame {
-    Frame {
-        /// Identifies the source frame: n-th video frame sent on this input.
-        id: u32,
-        /// PTS relative to queue start.
-        pts: Duration,
-    },
-    Eos,
+pub struct InputFrame {
+    /// `(id, pts)`: id identifies the source frame (n-th video frame sent on
+    /// this input), PTS relative to queue start.
+    pub frame: Option<(u32, Duration)>,
+    /// A track on this input ended at this batch.
+    pub eos: bool,
 }
 
 /// Summary of [`QueueVideoOutput`] with PTS relative to queue start.
@@ -93,11 +91,13 @@ pub struct VideoBatch {
     pub frames: HashMap<InputId, InputFrame>,
 }
 
-/// Samples from a single input in an audio batch, PTS ranges relative to queue start.
+/// Summary of a single input entry in an audio batch, PTS ranges relative to
+/// queue start.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InputSamples {
-    Batches(Vec<(Duration, Duration)>),
-    Eos,
+pub struct InputSamples {
+    pub batches: Vec<(Duration, Duration)>,
+    /// A track on this input ended at this chunk.
+    pub eos: bool,
 }
 
 /// Summary of [`QueueAudioOutput`] with PTS relative to queue start.
@@ -146,18 +146,19 @@ pub fn assert_video_batch_eq_with_tolerance(
     expected: &VideoBatch,
     pts_tolerance: Duration,
 ) {
-    let frame_matches =
-        |actual: Option<&InputFrame>, expected: &InputFrame| match (actual, expected) {
-            (Some(InputFrame::Eos), InputFrame::Eos) => true,
-            (
-                Some(InputFrame::Frame { id, pts }),
-                InputFrame::Frame {
-                    id: expected_id,
-                    pts: expected_pts,
-                },
-            ) => id == expected_id && pts.abs_diff(*expected_pts) <= pts_tolerance,
-            _ => false,
+    let frame_matches = |actual: Option<&InputFrame>, expected: &InputFrame| {
+        let Some(actual) = actual else {
+            return false;
         };
+        actual.eos == expected.eos
+            && match (&actual.frame, &expected.frame) {
+                (Some((id, pts)), Some((expected_id, expected_pts))) => {
+                    id == expected_id && pts.abs_diff(*expected_pts) <= pts_tolerance
+                }
+                (None, None) => true,
+                _ => false,
+            }
+    };
     assert!(
         actual.pts == expected.pts
             && actual.required == expected.required
@@ -195,7 +196,7 @@ pub fn assert_empty_audio_batch(actual: &AudioBatch, start_pts: Duration, requir
         && actual
             .samples
             .values()
-            .all(|samples| matches!(samples, InputSamples::Batches(batches) if batches.is_empty()));
+            .all(|samples| samples.batches.is_empty() && !samples.eos);
     assert!(
         actual.start_pts == start_pts
             && actual.end_pts == start_pts + BATCH_DURATION
@@ -206,7 +207,7 @@ pub fn assert_empty_audio_batch(actual: &AudioBatch, start_pts: Duration, requir
 }
 
 /// Like [`assert_audio_batch_eq`], but compares sample batch PTS ranges with
-/// `pts_tolerance`. Chunk PTS ranges, ids and required flags are still
+/// `pts_tolerance`. Chunk PTS ranges, ids, eos and required flags are still
 /// compared exactly; tolerance is only for batch PTS that depend on the real
 /// clock (offsets resolved relative to `sync_point` or initialized on the
 /// first received batch).
@@ -216,21 +217,21 @@ pub fn assert_audio_batch_eq_with_tolerance(
     expected: &AudioBatch,
     pts_tolerance: Duration,
 ) {
-    let samples_match =
-        |actual: Option<&InputSamples>, expected: &InputSamples| match (actual, expected) {
-            (Some(InputSamples::Eos), InputSamples::Eos) => true,
-            (Some(InputSamples::Batches(actual)), InputSamples::Batches(expected)) => {
-                actual.len() == expected.len()
-                    && actual
-                        .iter()
-                        .zip(expected)
-                        .all(|((a_start, a_end), (e_start, e_end))| {
-                            a_start.abs_diff(*e_start) <= pts_tolerance
-                                && a_end.abs_diff(*e_end) <= pts_tolerance
-                        })
-            }
-            _ => false,
+    let samples_match = |actual: Option<&InputSamples>, expected: &InputSamples| {
+        let Some(actual) = actual else {
+            return false;
         };
+        actual.eos == expected.eos
+            && actual.batches.len() == expected.batches.len()
+            && actual
+                .batches
+                .iter()
+                .zip(&expected.batches)
+                .all(|((a_start, a_end), (e_start, e_end))| {
+                    a_start.abs_diff(*e_start) <= pts_tolerance
+                        && a_end.abs_diff(*e_end) <= pts_tolerance
+                })
+    };
     assert!(
         actual.start_pts == expected.start_pts
             && actual.end_pts == expected.end_pts
@@ -383,12 +384,11 @@ impl TestQueue {
                 .frames
                 .into_iter()
                 .map(|(id, event)| {
-                    let event = match event {
-                        PipelineEvent::Data(frame) => InputFrame::Frame {
-                            id: test_frame_id(&frame),
-                            pts: frame.pts.saturating_sub(start_pts),
-                        },
-                        PipelineEvent::EOS => InputFrame::Eos,
+                    let event = InputFrame {
+                        frame: event.frame.map(|frame| {
+                            (test_frame_id(&frame), frame.pts.saturating_sub(start_pts))
+                        }),
+                        eos: event.eos,
                     };
                     (id, event)
                 })
@@ -406,19 +406,18 @@ impl TestQueue {
                 .samples
                 .into_iter()
                 .map(|(id, event)| {
-                    let event = match event {
-                        PipelineEvent::Data(batches) => InputSamples::Batches(
-                            batches
-                                .iter()
-                                .map(|batch| {
-                                    (
-                                        batch.start_pts.saturating_sub(start_pts),
-                                        batch.end_pts().saturating_sub(start_pts),
-                                    )
-                                })
-                                .collect(),
-                        ),
-                        PipelineEvent::EOS => InputSamples::Eos,
+                    let event = InputSamples {
+                        batches: event
+                            .batches
+                            .iter()
+                            .map(|batch| {
+                                (
+                                    batch.start_pts.saturating_sub(start_pts),
+                                    batch.end_pts().saturating_sub(start_pts),
+                                )
+                            })
+                            .collect(),
+                        eos: event.eos,
                     };
                     (id, event)
                 })
