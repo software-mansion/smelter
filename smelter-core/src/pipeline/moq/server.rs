@@ -7,7 +7,7 @@ use tracing::{info, warn};
 
 use crate::pipeline::moq::{
     MoqSession, certificate::load_or_create_self_signed_tls,
-    connection::start_broadcast_handler_task, server_state::MoqServerState,
+    connection::{MoqEndpointKind, start_broadcast_handler_task}, server_state::MoqServerState,
 };
 
 use crate::prelude::*;
@@ -179,6 +179,7 @@ async fn handle_session(
             input.decoders,
             input.should_close.clone(),
             broadcast,
+            MoqEndpointKind::Server,
         ) else {
             return Err(MoqServerError::QueueDropped);
         };

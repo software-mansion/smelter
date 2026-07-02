@@ -66,11 +66,17 @@ pub(crate) fn start_broadcast_handler_task(
     decoders: MoqInputDecoders,
     should_close: Arc<AtomicBool>,
     broadcast: BroadcastConsumer,
+    endpoint_kind: MoqEndpointKind,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let input_ref = input_ref.clone();
     let rt = ctx.tokio_rt.clone();
 
-    let span = span!(Level::INFO, "MoQ input", input_id = input_ref.to_string());
+    let span = span!(
+        Level::INFO,
+        "MoQ input",
+        %endpoint_kind,
+        input_id = input_ref.to_string()
+    );
 
     let handle = rt.spawn(
         async move {
@@ -503,6 +509,21 @@ enum MoqConnectionError {
     InputUnregistered,
 }
 
+pub(super) enum MoqEndpointKind {
+    Server,
+    Client,
+}
+
+impl std::fmt::Display for MoqEndpointKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            MoqEndpointKind::Server => "server",
+            MoqEndpointKind::Client => "client",
+        };
+        f.write_str(s)
+    }
+}
+
 /// Normalizes a raw track timestamp against the first PTS observed across all
 /// tracks of the broadcast, so audio and video share the same zero point.
 fn normalize_pts(first_pts: &Arc<Mutex<Option<Duration>>>, raw_pts: Duration) -> Duration {
@@ -510,6 +531,7 @@ fn normalize_pts(first_pts: &Arc<Mutex<Option<Duration>>>, raw_pts: Duration) ->
     let first = *first_pts.get_or_insert(raw_pts);
     raw_pts.saturating_sub(first)
 }
+
 #[derive(Clone)]
 struct MoqStatsSender {
     input_ref: Ref<InputId>,

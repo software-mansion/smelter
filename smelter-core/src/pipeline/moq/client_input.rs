@@ -5,7 +5,7 @@ use crate::{
     error::InputInitError,
     pipeline::{
         input::Input,
-        moq::{MoqSession, connection::start_broadcast_handler_task},
+        moq::{MoqSession, connection::{MoqEndpointKind, start_broadcast_handler_task}},
     },
     prelude::MoqClientInputOptions,
     queue::{QueueInput, WeakQueueInput},
@@ -113,6 +113,7 @@ impl MoqClientInput {
                 decoders,
                 should_close,
                 broadcast,
+                MoqEndpointKind::Client,
             )
             .is_none()
             {
