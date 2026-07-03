@@ -49,9 +49,6 @@ pub enum MoqServerError {
 
     #[error("Unable to decode URL path: {0}")]
     UrlDecodeFailed(#[from] FromUtf8Error),
-
-    #[error("MoQ handshake failed: {0}")]
-    MoqHandshakeFailed(#[source] anyhow::Error),
 }
 
 impl MoqServerError {

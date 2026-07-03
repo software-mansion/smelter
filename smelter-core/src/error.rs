@@ -330,6 +330,7 @@ const INVALID_MP4_SOURCE: &str = "INVALID_MP4_SOURCE";
 const WHEP_INVALID_SERVER_URL: &str = "WHEP_INVALID_SERVER_URL";
 const WHEP_REQUEST_FAILED: &str = "WHEP_REQUEST_FAILED";
 const WHEP_BAD_STATUS: &str = "WHEP_BAD_STATUS";
+const MOQ_SERVER_NOT_RUNNING: &str = "MOQ_SERVER_NOT_RUNNING";
 
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
@@ -370,6 +371,12 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
             RegisterInputError::InputError(_, InputInitError::Mp4(Mp4InputError::IoError(_))) => {
                 PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError)
             }
+
+            // MoQ Server
+            RegisterInputError::InputError(
+                _,
+                InputInitError::Moq(MoqServerError::ServerNotRunning),
+            ) => PipelineErrorInfo::new(MOQ_SERVER_NOT_RUNNING, ErrorType::UserError),
 
             // FFmpeg (used in HLS input)
             RegisterInputError::InputError(

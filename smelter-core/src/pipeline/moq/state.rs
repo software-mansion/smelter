@@ -5,7 +5,7 @@ use std::{
 
 use sha3::{Digest, Sha3_512};
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::warn;
 
 use crate::{pipeline::moq::server::MoqSession, queue::WeakQueueInput};
 
@@ -79,7 +79,7 @@ impl MoqServerState {
                     .store(true, std::sync::atomic::Ordering::Relaxed);
             }
             None => {
-                error!(?input_ref, "Failed to remove MoQ input, ID not found");
+                warn!(?input_ref, "Failed to remove MoQ input, ID not found");
             }
         }
     }
