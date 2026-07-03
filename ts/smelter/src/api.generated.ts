@@ -90,7 +90,36 @@ export type RegisterInput =
        * Assigns which decoder should be used for media encoded with a specific codec.
        */
       decoder_map?: {
-        [k: string]: MoqVideoDecoderOptions;
+        [k: string]: MoqServerVideoDecoderOptions;
+      } | null;
+      /**
+       * Enable side channel for video and/or audio track.
+       */
+      side_channel?: SideChannel | null;
+    }
+  | {
+      type: "moq_client";
+      /**
+       * URL of the MoQ relay to connect to. Must use the `https://` scheme.
+       */
+      endpoint_url: string;
+      /**
+       * Path of the broadcast to subscribe to on the relay.
+       */
+      broadcast_path: string;
+      /**
+       * (**default=`false`**) Skips validation of the relay's TLS certificate. Only enable this on trusted networks — it leaves the connection vulnerable to man-in-the-middle attacks.
+       */
+      disable_tls_verification?: boolean | null;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Assigns which decoder should be used for media encoded with a specific codec.
+       */
+      decoder_map?: {
+        [k: string]: MoqClientVideoDecoderOptions;
       } | null;
       /**
        * Enable side channel for video and/or audio track.
@@ -301,7 +330,8 @@ export type InputRtpAudioOptions =
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
 export type RtmpVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
-export type MoqVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type MoqServerVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type MoqClientVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type WhepVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
@@ -1468,6 +1498,17 @@ export type InputStatsReport =
       audio: MoqServerInputTrackStatsReport;
     }
   | {
+      type: "moq_client";
+      /**
+       * Stats for the video track.
+       */
+      video: MoqClientInputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: MoqClientInputTrackStatsReport;
+    }
+  | {
       type: "mp4";
       /**
        * Stats for the video track.
@@ -2083,6 +2124,19 @@ export interface RtmpInputTrackStatsReport {
  * Stats report for a track in `MoQ` server input.
  */
 export interface MoqServerInputTrackStatsReport {
+  /**
+   * Bitrate in the 1-second window.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate in the 1-minute window.
+   */
+  bitrate_1_minute: number;
+}
+/**
+ * Stats report for a track in `MoQ` client input.
+ */
+export interface MoqClientInputTrackStatsReport {
   /**
    * Bitrate in the 1-second window.
    */
