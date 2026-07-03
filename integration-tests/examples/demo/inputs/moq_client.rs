@@ -23,6 +23,7 @@ impl MoqClientInput {
         json!({
             "type": "moq_client",
             "endpoint_url": self.endpoint_url,
+            "disable_tls_verification": true,
             "broadcast_path": self.broadcast_path,
             "decoder_map": {
                 "h264": "ffmpeg_h264",
