@@ -111,7 +111,7 @@ impl MoqClientInput {
                     return;
                 };
 
-                if path.as_str() == broadcast_path.as_ref() {
+                if path.as_str().trim_start_matches("/") == broadcast_path.as_ref().trim_start_matches("/") {
                     break broadcast;
                 }
             };
