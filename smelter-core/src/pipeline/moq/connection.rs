@@ -89,7 +89,7 @@ pub(crate) fn start_broadcast_handler_task(
                 handle_broadcast(ctx, input_ref.clone(), queue_input, broadcast_ctx).await;
             if let Err(error) = broadcast_result {
                 warn!(
-                    "broadcast failed: {}",
+                    "Failed to receive broadcast: {}",
                     ErrorStack::new(&error).into_string()
                 );
             }
