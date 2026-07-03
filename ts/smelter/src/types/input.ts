@@ -6,7 +6,7 @@ import type { SideChannel } from './input/common.js';
 import type { InputWhipVideoOptions } from './input/whip.js';
 import type { InputWhepVideoOptions } from './input/whep.js';
 import type { InputRtmpDecoderMap } from './input/rtmp.js';
-import type { InputMoqDecoderMap } from './input/moq.js';
+import type { InputMoqServerDecoderMap, InputMoqClientDecoderMap } from './input/moq.js';
 
 export * from './input/mp4.js';
 export * from './input/hls.js';
@@ -222,7 +222,7 @@ export type RegisterMoqServerInput = {
   /**
    * Assigns which decoder should be used for media encoded with a specific codec.
    */
-  decoderMap?: InputMoqDecoderMap | null;
+  decoderMap?: InputMoqServerDecoderMap | null;
   /**
    * Enable side channel for video and/or audio track.
    */
@@ -251,7 +251,7 @@ export type RegisterMoqClientInput = {
   /**
    * Assigns which decoder should be used for media encoded with a specific codec.
    */
-  decoderMap?: InputMoqDecoderMap | null;
+  decoderMap?: InputMoqClientDecoderMap | null;
   /**
    * Enable side channel for video and/or audio track.
    */
