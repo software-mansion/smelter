@@ -233,7 +233,7 @@ pub(crate) trait CoreVideoDeviceBackend: Send + Sync {
     fn create_transcoder(
         self: Arc<Self>,
         parameters: crate::parameters::TranscoderParameters,
-    ) -> Result<crate::vulkan_transcoder::Transcoder, crate::vulkan_transcoder::VideoTranscoderError>;
+    ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError>;
 
     fn decode_capabilities(&self) -> DecodeCapabilities;
 

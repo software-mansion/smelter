@@ -27,6 +27,8 @@ mod frame_sorter;
 mod global_registry;
 #[cfg(vulkan)]
 mod instance;
+#[cfg(all(vulkan, feature = "transcoder"))]
+mod transcoder;
 #[cfg(all(vulkan, feature = "wgpu"))]
 pub(crate) mod wgpu_helpers;
 
@@ -34,10 +36,6 @@ pub(crate) mod wgpu_helpers;
 mod exports;
 #[cfg(vulkan)]
 pub use exports::*;
-
-// TODO: The module below should be made backend agnostic
-#[cfg(all(vulkan, feature = "transcoder"))]
-mod vulkan_transcoder;
 
 // If vulkan is unsupported and parsers are not exposed
 #[cfg(not(any(vulkan, feature = "expose-parsers")))]

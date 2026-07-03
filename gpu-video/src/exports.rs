@@ -10,7 +10,7 @@ pub mod parameters {
     pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<H264Profile>;
 
     #[cfg(feature = "transcoder")]
-    pub use crate::vulkan_transcoder::{
+    pub use crate::transcoder::{
         AnyEncoderParameters, TranscoderOutputParameters, TranscoderParameters,
     };
 
@@ -138,7 +138,7 @@ pub use crate::encoders::{WgpuTexturesEncoderH264, WgpuTexturesEncoderH265};
 pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 #[cfg(feature = "transcoder")]
-pub use crate::vulkan_transcoder::{Transcoder, VideoTranscoderError};
+pub use crate::transcoder::{VideoTranscoder, VideoTranscoderError};
 
 #[derive(thiserror::Error, Debug)]
 #[error("{message}")]
@@ -209,8 +209,7 @@ impl VideoDevice {
     pub fn create_transcoder(
         &self,
         parameters: crate::parameters::TranscoderParameters,
-    ) -> Result<crate::vulkan_transcoder::Transcoder, crate::vulkan_transcoder::VideoTranscoderError>
-    {
+    ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
         self.inner.clone().create_transcoder(parameters)
     }
 

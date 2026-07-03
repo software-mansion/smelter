@@ -75,9 +75,8 @@ impl CoreVideoDeviceBackend for VulkanDevice {
     fn create_transcoder(
         self: Arc<Self>,
         parameters: crate::parameters::TranscoderParameters,
-    ) -> Result<crate::vulkan_transcoder::Transcoder, crate::vulkan_transcoder::VideoTranscoderError>
-    {
-        crate::vulkan_transcoder::Transcoder::new(self, parameters)
+    ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
+        VulkanDevice::create_transcoder(self, parameters).map_err(Into::into)
     }
 
     fn decode_capabilities(&self) -> DecodeCapabilities {
@@ -298,6 +297,16 @@ impl VulkanDevice {
                 Arc::new(self.encoding_device()?),
                 parameters,
             )?),
+        })
+    }
+
+    #[cfg(feature = "transcoder")]
+    fn create_transcoder(
+        self: Arc<Self>,
+        parameters: crate::parameters::TranscoderParameters,
+    ) -> Result<crate::transcoder::VideoTranscoder, super::VulkanTranscoderError> {
+        Ok(crate::transcoder::VideoTranscoder {
+            transcoder: Box::new(super::VulkanTranscoder::new(self, parameters)?),
         })
     }
 
