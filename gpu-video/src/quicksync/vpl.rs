@@ -36,6 +36,15 @@ impl Component {
         }
     }
 
+    /// The encoder imports its Vulkan-allocated surfaces into oneVPL; the
+    /// decoder exports oneVPL-allocated surfaces to Vulkan.
+    fn surface_sharing_flags(self) -> u32 {
+        match self {
+            Self::Encode => vpl::MFX_SURFACE_FLAG_IMPORT_SHARED,
+            Self::Decode => vpl::MFX_SURFACE_FLAG_EXPORT_SHARED,
+        }
+    }
+
     fn codec_filter(self) -> &'static [u8] {
         match self {
             Self::Encode => {
@@ -121,7 +130,7 @@ impl Session {
             ),
             (
                 b"mfxSurfaceTypesSupported.surftype.surfcomp.SurfaceFlags\0",
-                vpl::MFX_SURFACE_FLAG_EXPORT_SHARED,
+                component.surface_sharing_flags(),
             ),
         ] {
             loader.set_filter_u32(name, value)?;
@@ -172,14 +181,6 @@ impl Session {
         let mut surface = std::ptr::null_mut();
         check_status("MFXMemory_GetSurfaceForVPPOut", unsafe {
             vpl::MFXMemory_GetSurfaceForVPPOut(self.raw(), &mut surface)
-        })?;
-        FrameSurface::new(surface)
-    }
-
-    pub(super) fn get_surface_for_encode(&self) -> Result<FrameSurface, VplError> {
-        let mut surface = std::ptr::null_mut();
-        check_status("MFXMemory_GetSurfaceForEncode", unsafe {
-            vpl::MFXMemory_GetSurfaceForEncode(self.raw(), &mut surface)
         })?;
         FrameSurface::new(surface)
     }
@@ -236,6 +237,51 @@ impl Session {
             )
         })?;
         Ok(syncp)
+    }
+
+    /// Wraps an existing VA surface as an `mfxFrameSurface1` via
+    /// `mfxMemoryInterface::ImportFrameSurface`. Only `IMPORT_SHARED` is
+    /// requested: the encoder's zero-copy contract would silently degrade to a
+    /// hidden per-frame copy under `IMPORT_COPY`, so that mode is an error.
+    pub(super) fn import_va_surface(
+        &self,
+        va_display: DisplayHandle,
+        va_surface: SurfaceId,
+        component: Component,
+    ) -> Result<FrameSurface, VplError> {
+        let mut iface: *mut vpl::mfxMemoryInterface = std::ptr::null_mut();
+        check_status("MFXVideoCORE_GetHandle(MEMORY_INTERFACE)", unsafe {
+            vpl::MFXVideoCORE_GetHandle(
+                self.raw(),
+                vpl::mfxHandleType_MFX_HANDLE_MEMORY_INTERFACE,
+                &mut iface as *mut _ as *mut vpl::mfxHDL,
+            )
+        })?;
+        let iface = non_null(iface, "mfxMemoryInterface")?;
+        let import = required_function(
+            unsafe { iface.as_ref().ImportFrameSurface },
+            "mfxMemoryInterface::ImportFrameSurface",
+        )?;
+
+        let mut vaapi: vpl::mfxSurfaceVAAPI = unsafe { std::mem::zeroed() };
+        vaapi.SurfaceInterface.Header.SurfaceType =
+            vpl::mfxSurfaceType_MFX_SURFACE_TYPE_VAAPI;
+        vaapi.SurfaceInterface.Header.SurfaceFlags = vpl::MFX_SURFACE_FLAG_IMPORT_SHARED;
+        vaapi.SurfaceInterface.Header.StructSize =
+            std::mem::size_of::<vpl::mfxSurfaceVAAPI>() as u32;
+        vaapi.vaDisplay = va_display.as_ptr();
+        vaapi.vaSurfaceID = va_surface;
+
+        let mut imported = std::ptr::null_mut();
+        check_status("mfxMemoryInterface::ImportFrameSurface", unsafe {
+            import(
+                iface.as_ptr(),
+                component.surface_component(),
+                &mut vaapi.SurfaceInterface.Header,
+                &mut imported,
+            )
+        })?;
+        FrameSurface::new(imported)
     }
 
     pub(super) fn export_va_surface(

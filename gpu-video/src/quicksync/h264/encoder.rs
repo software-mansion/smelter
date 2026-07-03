@@ -18,7 +18,7 @@ use crate::{
     parameters::{ColorRange, ColorSpace},
     quicksync::{
         h264::{
-            H264Session, H264SessionError, ImportedNv12Surface, Nv12DmaBufFrame, VplSyncQueue,
+            EncodeInputSurface, H264Session, H264SessionError, Nv12DmaBufFrame, VplSyncQueue,
             init_dmabuf_sync, progressive_frame_info, retry_device_busy, vpl_u16_dimension,
         },
         vpl::{Component, FrameSurface, Session, SyncWait, check_status_allow_warnings},
@@ -181,7 +181,7 @@ impl WgpuTexturesEncoderH264 {
             .collect::<Result<VecDeque<_>, _>>()
             .map_err(QuickSyncH264EncoderError::Encode)?;
         for input in &input_pool {
-            write_coded_padding(&queue, &input.imported.frame, resolution);
+            write_coded_padding(&queue, &input.frame, resolution);
         }
 
         info!(
@@ -275,30 +275,18 @@ impl WgpuTexturesEncoderH264 {
         texture: &wgpu::Texture,
         input: &EncodeInputSurface,
     ) -> Result<(), QuickSyncH264EncoderError> {
-        let mut transition = self
+        let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Intel Quick Sync H264 input transition"),
+                label: Some("Intel Quick Sync H264 input copy"),
             });
-        transition.transition_resources(
-            std::iter::empty(),
-            std::iter::once(wgpu::TextureTransition {
-                texture,
-                selector: None,
-                state: wgpu::TextureUses::COPY_SRC,
-            }),
+        encoder.copy_texture_to_texture(
+            texture.as_image_copy(),
+            input.frame.texture().as_image_copy(),
+            self.resolution.extent_2d(),
         );
-        let copies = record_plane_copies(
-            &self.device,
-            texture,
-            &input.imported.frame,
-            self.resolution,
-        )?;
         self.sync
-            .submit_frame_write(
-                input.imported.frame.sync(),
-                [transition.finish(), copies],
-            )
+            .submit_frame_write(input.frame.sync(), [encoder.finish()])
             .map_err(|err| QuickSyncH264EncoderError::Encode(err.to_string()))?;
         Ok(())
     }
@@ -349,13 +337,15 @@ impl Drop for WgpuTexturesEncoderH264 {
     }
 }
 
+/// `quicksync` is declared last so pooled surfaces held by pending frames are
+/// released before the VA display they were created on.
 struct QuickSyncH264Encoder {
-    quicksync: H264Session,
     parameter_sets: Bytes,
     frame_index: u64,
-    bitstream_buffer_size: u32,
+    layout: H264EncoderLayout,
     pending_bitstreams: VplSyncQueue<Box<OutputBitstream>>,
     pending_frames: HashMap<u64, PendingFrame>,
+    quicksync: H264Session,
 }
 
 impl QuickSyncH264Encoder {
@@ -377,12 +367,12 @@ impl QuickSyncH264Encoder {
             .map_err(QuickSyncH264EncoderError::Encode)?;
 
         Ok(Self {
-            quicksync,
             parameter_sets,
             frame_index: 0,
-            bitstream_buffer_size: layout.bitstream_buffer_size,
+            layout,
             pending_bitstreams: VplSyncQueue::new(usize::from(QUICKSYNC_ENCODER_ASYNC_DEPTH)),
             pending_frames: HashMap::new(),
+            quicksync,
         })
     }
 
@@ -390,21 +380,9 @@ impl QuickSyncH264Encoder {
         &mut self,
         device: &wgpu::Device,
     ) -> Result<EncodeInputSurface, String> {
-        let surface = self
-            .quicksync
-            .session
-            .get_surface_for_encode()
-            .map_err(|err| err.to_string())?;
-        let imported = self
-            .quicksync
-            .import_nv12_surface(
-                device,
-                &surface,
-                wgpu::TextureUsages::COPY_DST,
-                wgpu::TextureUses::COPY_DST,
-            )
-            .map_err(|err| err.to_string())?;
-        Ok(EncodeInputSurface { imported, surface })
+        self.quicksync
+            .allocate_nv12_input(device, self.layout.coded)
+            .map_err(|err| err.to_string())
     }
 
     fn encode(
@@ -458,7 +436,7 @@ impl QuickSyncH264Encoder {
     }
 
     fn submit_bitstream(&mut self, submit: EncodeSubmit<'_>) -> Result<EncodeAsyncStatus, String> {
-        let mut output = Box::new(OutputBitstream::new(self.bitstream_buffer_size));
+        let mut output = Box::new(OutputBitstream::new(self.layout.bitstream_buffer_size));
         let status = encode_frame_async(&self.quicksync.session, submit, &mut output.bitstream)?;
         if let EncodeAsyncStatus::Submitted(syncp) = status {
             self.pending_bitstreams.push(syncp, output);
@@ -491,11 +469,6 @@ impl Drop for QuickSyncH264Encoder {
     fn drop(&mut self) {
         let _ = self.flush();
     }
-}
-
-struct EncodeInputSurface {
-    imported: ImportedNv12Surface,
-    surface: FrameSurface,
 }
 
 struct OutputBitstream {
@@ -598,92 +571,19 @@ fn complete_bitstream(
     })
 }
 
-/// Records the two per-plane image copies from the caller's NV12 texture
-/// into the imported surface planes.
-///
-/// wgpu validates `copy_texture_to_texture` against WebGPU's copy-compatible
-/// rule, which has no notion of per-plane copies, so these are recorded as
-/// raw Vulkan commands: plane 0 of an NV12 image is R8 and plane 1 is RG8,
-/// which Vulkan considers copy-compatible with the matching single-plane
-/// images. The source layout is pinned via `transition_resources` in the
-/// preceding command buffer and the destinations live permanently in
-/// TRANSFER_DST_OPTIMAL (their only wgpu usage is COPY_DST).
-fn record_plane_copies(
-    device: &wgpu::Device,
-    source: &wgpu::Texture,
-    frame: &Nv12DmaBufFrame,
-    visible: VideoResolution,
-) -> Result<wgpu::CommandBuffer, QuickSyncH264EncoderError> {
-    use ash::vk;
-    use wgpu::hal::api::Vulkan as VkApi;
-
-    let raw_copy_error =
-        || QuickSyncH264EncoderError::Encode("plane copies require Vulkan wgpu".into());
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("Intel Quick Sync H264 input plane copies"),
-    });
-    unsafe {
-        let src = source.as_hal::<VkApi>().ok_or_else(raw_copy_error)?.raw_handle();
-        let y = frame
-            .y_texture()
-            .as_hal::<VkApi>()
-            .ok_or_else(raw_copy_error)?
-            .raw_handle();
-        let uv = frame
-            .uv_texture()
-            .as_hal::<VkApi>()
-            .ok_or_else(raw_copy_error)?
-            .raw_handle();
-        let hal_device_guard = device.as_hal::<VkApi>().ok_or_else(raw_copy_error)?;
-        let raw_device = hal_device_guard.raw_device().clone();
-        encoder.as_hal_mut::<VkApi, _, _>(|hal_encoder| {
-            let hal_encoder = hal_encoder.ok_or_else(raw_copy_error)?;
-            let cmd = hal_encoder.raw_handle();
-            let copy = |dst: vk::Image, aspect: vk::ImageAspectFlags, width, height| {
-                let region = vk::ImageCopy::default()
-                    .src_subresource(
-                        vk::ImageSubresourceLayers::default().aspect_mask(aspect).layer_count(1),
-                    )
-                    .dst_subresource(
-                        vk::ImageSubresourceLayers::default()
-                            .aspect_mask(vk::ImageAspectFlags::COLOR)
-                            .layer_count(1),
-                    )
-                    .extent(vk::Extent3D { width, height, depth: 1 });
-                raw_device.cmd_copy_image(
-                    cmd,
-                    src,
-                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                    dst,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    std::slice::from_ref(&region),
-                );
-            };
-            copy(y, vk::ImageAspectFlags::PLANE_0, visible.width, visible.height);
-            copy(uv, vk::ImageAspectFlags::PLANE_1, visible.width / 2, visible.height / 2);
-            Ok::<(), QuickSyncH264EncoderError>(())
-        })?;
-    }
-    Ok(encoder.finish())
-}
-
 /// The coded surface can be larger than the visible frame; per-frame copies
 /// only cover the visible region, so fill the alignment padding once with
 /// neutral gray to keep the encoder's motion search off garbage.
 fn write_coded_padding(queue: &wgpu::Queue, frame: &Nv12DmaBufFrame, visible: VideoResolution) {
-    let regions = [
-        (frame.y_texture(), visible.width, visible.height, [16u8].as_slice(), 1),
-        (
-            frame.uv_texture(),
-            visible.width / 2,
-            visible.height / 2,
-            [128u8, 128].as_slice(),
-            2,
-        ),
+    let texture = frame.texture();
+    let planes = [
+        (wgpu::TextureAspect::Plane0, 1u32, [16u8].as_slice(), 1u32),
+        (wgpu::TextureAspect::Plane1, 2, [128u8, 128].as_slice(), 2),
     ];
-    for (texture, visible_width, visible_height, fill, bytes_per_texel) in regions {
-        let (width, height) = (texture.width(), texture.height());
-        let mut write = |x: u32, y: u32, w: u32, h: u32| {
+    for (aspect, divisor, fill, bytes_per_texel) in planes {
+        let (width, height) = (texture.width() / divisor, texture.height() / divisor);
+        let (visible_width, visible_height) = (visible.width / divisor, visible.height / divisor);
+        let write = |x: u32, y: u32, w: u32, h: u32| {
             if w == 0 || h == 0 {
                 return;
             }
@@ -692,7 +592,7 @@ fn write_coded_padding(queue: &wgpu::Queue, frame: &Nv12DmaBufFrame, visible: Vi
                     texture,
                     mip_level: 0,
                     origin: wgpu::Origin3d { x, y, z: 0 },
-                    aspect: wgpu::TextureAspect::All,
+                    aspect,
                 },
                 &fill.repeat((w * h) as usize),
                 wgpu::TexelCopyBufferLayout {
