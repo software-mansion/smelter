@@ -7,7 +7,7 @@ use crate::{
         input::Input,
         moq::{
             MoqSession,
-            connection::{MoqEndpointKind, start_broadcast_handler_task},
+            connection::{BroadcastCtx, MoqEndpointKind, start_broadcast_handler_task},
         },
     },
     prelude::MoqClientInputOptions,
@@ -116,14 +116,17 @@ impl MoqClientInput {
                 }
             };
 
+            let broadcast_ctx = BroadcastCtx {
+                broadcast,
+                decoders,
+                should_close,
+                endpoint_kind: MoqEndpointKind::Client,
+            };
             if start_broadcast_handler_task(
                 ctx,
                 &input_ref,
                 queue_input,
-                decoders,
-                should_close,
-                broadcast,
-                MoqEndpointKind::Client,
+                broadcast_ctx,
             )
             .is_none()
             {

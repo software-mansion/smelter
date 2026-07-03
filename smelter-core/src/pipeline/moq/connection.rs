@@ -59,18 +59,23 @@ struct TrackCtx {
     stats_sender: MoqStatsSender,
 }
 
+pub(super) struct BroadcastCtx {
+    pub broadcast: BroadcastConsumer,
+    pub decoders: MoqInputDecoders,
+    pub should_close: Arc<AtomicBool>,
+    pub endpoint_kind: MoqEndpointKind,
+}
+
 pub(crate) fn start_broadcast_handler_task(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     queue_input: WeakQueueInput,
-    decoders: MoqInputDecoders,
-    should_close: Arc<AtomicBool>,
-    broadcast: BroadcastConsumer,
-    endpoint_kind: MoqEndpointKind,
+    broadcast_ctx: BroadcastCtx,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let input_ref = input_ref.clone();
     let rt = ctx.tokio_rt.clone();
 
+    let endpoint_kind = broadcast_ctx.endpoint_kind;
     let span = span!(
         Level::INFO,
         "MoQ input",
@@ -80,16 +85,8 @@ pub(crate) fn start_broadcast_handler_task(
 
     let handle = rt.spawn(
         async move {
-            let broadcast_result = handle_broadcast(
-                ctx,
-                input_ref.clone(),
-                decoders,
-                queue_input,
-                broadcast,
-                should_close,
-                endpoint_kind,
-            )
-            .await;
+            let broadcast_result =
+                handle_broadcast(ctx, input_ref.clone(), queue_input, broadcast_ctx).await;
             if let Err(error) = broadcast_result {
                 warn!(
                     "broadcast failed: {}",
@@ -106,26 +103,15 @@ pub(crate) fn start_broadcast_handler_task(
 async fn handle_broadcast(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    decoders: MoqInputDecoders,
     queue_input: WeakQueueInput,
-    broadcast: BroadcastConsumer,
-    should_close: Arc<AtomicBool>,
-    endpoint_kind: MoqEndpointKind,
+    broadcast_ctx: BroadcastCtx,
 ) -> Result<(), MoqConnectionError> {
     info!("MoQ broadcast connection established");
 
-    let (video, audio) = read_catalog(&broadcast).await?;
+    let (video, audio) = read_catalog(&broadcast_ctx.broadcast).await?;
 
-    let mut handler = BroadcastHandler::new(
-        ctx.clone(),
-        input_ref.clone(),
-        broadcast,
-        video,
-        audio,
-        decoders,
-        should_close,
-        endpoint_kind,
-    );
+    let mut handler =
+        BroadcastHandler::new(ctx.clone(), input_ref.clone(), video, audio, broadcast_ctx);
 
     let (video_sender, audio_sender) = {
         let Some(queue_input) = queue_input.upgrade() else {
@@ -163,13 +149,17 @@ impl BroadcastHandler {
     fn new(
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
-        broadcast: BroadcastConsumer,
         video: Option<VideoTrack>,
         audio: Option<AudioTrack>,
-        decoders: MoqInputDecoders,
-        should_close: Arc<AtomicBool>,
-        endpoint_kind: MoqEndpointKind,
+        broadcast_ctx: BroadcastCtx,
     ) -> Self {
+        let BroadcastCtx {
+            broadcast,
+            decoders,
+            should_close,
+            endpoint_kind,
+        } = broadcast_ctx;
+
         // Shared across audio and video so both tracks are normalized against
         // the same first PTS, preserving A/V synchronization. Whichever track
         // produces the first frame sets the common zero point for both.
@@ -514,7 +504,7 @@ enum MoqConnectionError {
     InputUnregistered,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub(super) enum MoqEndpointKind {
     Server,
     Client,

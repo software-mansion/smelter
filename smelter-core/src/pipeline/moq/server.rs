@@ -8,7 +8,7 @@ use tracing::{info, warn};
 use crate::pipeline::moq::{
     MoqSession,
     certificate::load_or_create_self_signed_tls,
-    connection::{MoqEndpointKind, start_broadcast_handler_task},
+    connection::{BroadcastCtx, MoqEndpointKind, start_broadcast_handler_task},
     server_state::MoqServerState,
 };
 
@@ -174,15 +174,15 @@ async fn handle_session(
 
     moq_inputs.get_mut_with(&input_ref, |input| {
         input.ensure_no_active_connection(&input_ref)?;
-        let Some(handle) = start_broadcast_handler_task(
-            ctx,
-            &input_ref,
-            input.queue_input.clone(),
-            input.decoders,
-            input.should_close.clone(),
+        let broadcast_ctx = BroadcastCtx {
             broadcast,
-            MoqEndpointKind::Server,
-        ) else {
+            decoders: input.decoders,
+            should_close: input.should_close.clone(),
+            endpoint_kind: MoqEndpointKind::Server,
+        };
+        let Some(handle) =
+            start_broadcast_handler_task(ctx, &input_ref, input.queue_input.clone(), broadcast_ctx)
+        else {
             return Err(MoqServerError::QueueDropped);
         };
         input.connection_task_handle = Some(handle);

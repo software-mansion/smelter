@@ -13,9 +13,9 @@ use crate::{
     InputProtocolKind,
     stats::{
         input::hls::HlsInputState, input::moq_client::MoqClientInputState,
-        input::moq_server::MoqServerInputState,
-        input::mp4::Mp4InputState, input::rtmp::RtmpInputState, input::rtp::RtpInputState,
-        input::whep::WhepInputState, input::whip::WhipInputState, input_reports::InputStatsReport,
+        input::moq_server::MoqServerInputState, input::mp4::Mp4InputState,
+        input::rtmp::RtmpInputState, input::rtp::RtpInputState, input::whep::WhepInputState,
+        input::whip::WhipInputState, input_reports::InputStatsReport,
     },
 };
 
