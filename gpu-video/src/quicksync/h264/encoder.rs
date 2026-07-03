@@ -383,7 +383,7 @@ impl QuickSyncH264Encoder {
         device: &wgpu::Device,
     ) -> Result<EncodeInputSurface, String> {
         self.quicksync
-            .allocate_nv12_input(device, self.layout.coded)
+            .acquire_nv12_input(device)
             .map_err(|err| err.to_string())
     }
 
