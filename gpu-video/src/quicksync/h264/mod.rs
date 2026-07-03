@@ -190,10 +190,10 @@ impl H264Session {
     }
 
     /// Allocates one encoder input surface: a native Vulkan NV12 dma-buf image
-    /// imported zero-copy into VA and oneVPL. GPU writes must land in a
-    /// Vulkan-allocated image — writes into a foreign imported image run on a
-    /// degraded path on Intel — so the interop direction here is
-    /// Vulkan-allocates, VA/VPL-import, never the reverse.
+    /// imported zero-copy into VA and oneVPL. Allocating on the Vulkan side is
+    /// measured performance-equivalent to the reverse direction (oneVPL
+    /// allocates, Vulkan imports) but keeps each pool slot a single ordinary
+    /// wgpu texture with no GetSurfaceForEncode + export round-trip.
     pub(super) fn allocate_nv12_input(
         &self,
         device: &wgpu::Device,
