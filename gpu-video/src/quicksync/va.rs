@@ -21,8 +21,8 @@ pub(super) enum VaError {
     #[error("DRM PRIME descriptor has invalid object count {0}")]
     InvalidObjectCount(u32),
 
-    #[error("DRM PRIME descriptor must contain exactly one single-plane layer")]
-    UnsupportedSinglePlaneLayout,
+    #[error("DRM PRIME descriptor must contain two single-plane NV12 layers, got fourcc {0:#x}")]
+    UnsupportedNv12Layout(u32),
 }
 
 pub(super) struct VaDisplay {
@@ -54,13 +54,6 @@ impl VaDisplay {
 
     pub(super) fn handle(&self) -> DisplayHandle {
         self.handle
-    }
-
-    pub(super) fn export_single_plane_surface(
-        &self,
-        surface_id: SurfaceId,
-    ) -> Result<DrmPrimeSinglePlaneSurface, VaError> {
-        DrmPrimeSinglePlaneSurface::new(self.export_drm_prime_surface(surface_id)?)
     }
 
     pub(super) fn export_nv12_surface(
@@ -108,38 +101,6 @@ impl Drop for VaDisplay {
     }
 }
 
-pub(super) struct DrmPrimeSinglePlaneSurface {
-    pub(super) fd: OwnedFd,
-    pub(super) fourcc: u32,
-    pub(super) width: u32,
-    pub(super) height: u32,
-    pub(super) modifier: u64,
-    pub(super) offset: u32,
-    pub(super) pitch: u32,
-}
-
-impl DrmPrimeSinglePlaneSurface {
-    fn new(descriptor: ffi::VADRMPRIMESurfaceDescriptor) -> Result<Self, VaError> {
-        if descriptor.num_objects != 1 {
-            return Err(VaError::InvalidObjectCount(descriptor.num_objects));
-        }
-        if descriptor.num_layers != 1 || descriptor.layers[0].num_planes != 1 {
-            return Err(VaError::UnsupportedSinglePlaneLayout);
-        }
-        let object = &descriptor.objects[0];
-        let layer = &descriptor.layers[0];
-        Ok(Self {
-            fd: unsafe { OwnedFd::from_raw_fd(object.fd) },
-            fourcc: descriptor.fourcc,
-            width: descriptor.width,
-            height: descriptor.height,
-            modifier: object.drm_format_modifier,
-            offset: layer.offset[0],
-            pitch: layer.pitch[0],
-        })
-    }
-}
-
 pub(super) struct DrmPrimeNv12Surface {
     pub(super) fd: OwnedFd,
     pub(super) width: u32,
@@ -161,7 +122,7 @@ impl DrmPrimeNv12Surface {
             || descriptor.layers[0].num_planes != 1
             || descriptor.layers[1].num_planes != 1
         {
-            return Err(VaError::UnsupportedSinglePlaneLayout);
+            return Err(VaError::UnsupportedNv12Layout(descriptor.fourcc));
         }
         let object = &descriptor.objects[0];
         Ok(Self {

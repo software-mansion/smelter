@@ -168,74 +168,12 @@ impl Session {
         }
     }
 
-    pub(super) fn get_surface_for_vpp_output(&self) -> Result<FrameSurface, VplError> {
-        let mut surface = std::ptr::null_mut();
-        check_status("MFXMemory_GetSurfaceForVPPOut", unsafe {
-            vpl::MFXMemory_GetSurfaceForVPPOut(self.raw(), &mut surface)
-        })?;
-        FrameSurface::new(surface)
-    }
-
     pub(super) fn get_surface_for_encode(&self) -> Result<FrameSurface, VplError> {
         let mut surface = std::ptr::null_mut();
         check_status("MFXMemory_GetSurfaceForEncode", unsafe {
             vpl::MFXMemory_GetSurfaceForEncode(self.raw(), &mut surface)
         })?;
         FrameSurface::new(surface)
-    }
-
-    pub(super) fn init_vpp_nv12_to_bgr4(
-        &self,
-        coded_width: u16,
-        coded_height: u16,
-        crop_width: u16,
-        crop_height: u16,
-    ) -> Result<(), VplError> {
-        let mut params: vpl::mfxVideoParam = unsafe { std::mem::zeroed() };
-        params.IOPattern = (vpl::MFX_IOPATTERN_IN_VIDEO_MEMORY
-            | vpl::MFX_IOPATTERN_OUT_VIDEO_MEMORY) as u16;
-        unsafe {
-            let vpp = &mut params.__bindgen_anon_1.vpp;
-            fill_vpp_frame_info(
-                &mut vpp.In,
-                vpl::MFX_FOURCC_NV12,
-                vpl::MFX_CHROMAFORMAT_YUV420 as u16,
-                coded_width,
-                coded_height,
-                crop_width,
-                crop_height,
-            );
-            fill_vpp_frame_info(
-                &mut vpp.Out,
-                vpl::MFX_FOURCC_BGR4,
-                0,
-                coded_width,
-                coded_height,
-                crop_width,
-                crop_height,
-            );
-        }
-        check_status_allow_warnings("MFXVideoVPP_Init", unsafe {
-            vpl::MFXVideoVPP_Init(self.raw(), &mut params)
-        })
-    }
-
-    pub(super) fn run_vpp(
-        &self,
-        input: &FrameSurface,
-        output: &FrameSurface,
-    ) -> Result<vpl::mfxSyncPoint, VplError> {
-        let mut syncp = std::ptr::null_mut();
-        check_status_allow_warnings("MFXVideoVPP_RunFrameVPPAsync", unsafe {
-            vpl::MFXVideoVPP_RunFrameVPPAsync(
-                self.raw(),
-                input.raw(),
-                output.raw(),
-                std::ptr::null_mut(),
-                &mut syncp,
-            )
-        })?;
-        Ok(syncp)
     }
 
     pub(super) fn export_va_surface(
@@ -333,29 +271,6 @@ impl Drop for ExportedSurface {
             let interface = &mut self.surface.as_mut().SurfaceInterface;
             let _ = (self.release)(interface);
         }
-    }
-}
-
-fn fill_vpp_frame_info(
-    frame_info: &mut vpl::mfxFrameInfo,
-    fourcc: u32,
-    chroma_format: u16,
-    coded_width: u16,
-    coded_height: u16,
-    crop_width: u16,
-    crop_height: u16,
-) {
-    frame_info.FourCC = fourcc;
-    frame_info.ChromaFormat = chroma_format;
-    frame_info.PicStruct = vpl::MFX_PICSTRUCT_PROGRESSIVE as u16;
-    frame_info.FrameRateExtN = 30;
-    frame_info.FrameRateExtD = 1;
-    unsafe {
-        let dims = &mut frame_info.__bindgen_anon_1.__bindgen_anon_1;
-        dims.Width = coded_width;
-        dims.Height = coded_height;
-        dims.CropW = crop_width;
-        dims.CropH = crop_height;
     }
 }
 
