@@ -1,12 +1,7 @@
 use std::sync::Arc;
 
-use crate::{
-    pipeline::{
-        input::Input,
-        moq::server_state::{MoqServerInputStateOptions, MoqServerState},
-    },
-    queue::QueueInput,
-};
+use crate::pipeline::moq::server::state::{MoqServerInputStateOptions, MoqServerState};
+use crate::{pipeline::input::Input, queue::QueueInput};
 
 use crate::prelude::*;
 

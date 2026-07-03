@@ -9,10 +9,12 @@ use crate::pipeline::moq::{
     MoqSession,
     certificate::load_or_create_self_signed_tls,
     connection::{BroadcastCtx, MoqEndpointKind, start_broadcast_handler_task},
-    server_state::MoqServerState,
+    server::state::MoqServerState,
 };
 
 use crate::prelude::*;
+
+pub(crate) mod state;
 
 pub struct MoqPipelineState {
     pub port: u16,
