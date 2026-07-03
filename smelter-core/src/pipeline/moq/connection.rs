@@ -87,6 +87,7 @@ pub(crate) fn start_broadcast_handler_task(
                 queue_input,
                 broadcast,
                 should_close,
+                endpoint_kind,
             )
             .await;
             if let Err(error) = broadcast_result {
@@ -109,6 +110,7 @@ async fn handle_broadcast(
     queue_input: WeakQueueInput,
     broadcast: BroadcastConsumer,
     should_close: Arc<AtomicBool>,
+    endpoint_kind: MoqEndpointKind,
 ) -> Result<(), MoqConnectionError> {
     info!("MoQ broadcast connection established");
 
@@ -122,6 +124,7 @@ async fn handle_broadcast(
         audio,
         decoders,
         should_close,
+        endpoint_kind,
     );
 
     let (video_sender, audio_sender) = {
@@ -165,13 +168,15 @@ impl BroadcastHandler {
         audio: Option<AudioTrack>,
         decoders: MoqInputDecoders,
         should_close: Arc<AtomicBool>,
+        endpoint_kind: MoqEndpointKind,
     ) -> Self {
         // Shared across audio and video so both tracks are normalized against
         // the same first PTS, preserving A/V synchronization. Whichever track
         // produces the first frame sets the common zero point for both.
         let first_pts = Arc::new(Mutex::new(None));
 
-        let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
+        let stats_sender =
+            MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone(), endpoint_kind);
 
         let track_ctx = TrackCtx {
             ctx,
@@ -509,6 +514,7 @@ enum MoqConnectionError {
     InputUnregistered,
 }
 
+#[derive(Clone)]
 pub(super) enum MoqEndpointKind {
     Server,
     Client,
@@ -536,20 +542,29 @@ fn normalize_pts(first_pts: &Arc<Mutex<Option<Duration>>>, raw_pts: Duration) ->
 struct MoqStatsSender {
     input_ref: Ref<InputId>,
     stats_sender: StatsSender,
+    endpoint_kind: MoqEndpointKind,
 }
 
 impl MoqStatsSender {
-    fn new(input_ref: Ref<InputId>, stats_sender: StatsSender) -> Self {
+    fn new(
+        input_ref: Ref<InputId>,
+        stats_sender: StatsSender,
+        endpoint_kind: MoqEndpointKind,
+    ) -> Self {
         Self {
             input_ref,
             stats_sender,
+            endpoint_kind,
         }
     }
 
     fn bytes_received_event(&self, size: usize, track_kind: StatsTrackKind) {
-        self.stats_sender.send(
-            MoqServerInputTrackStatsEvent::BytesReceived(size)
+        let event = match self.endpoint_kind {
+            MoqEndpointKind::Server => MoqServerInputTrackStatsEvent::BytesReceived(size)
                 .into_event(&self.input_ref, track_kind),
-        );
+            MoqEndpointKind::Client => MoqClientInputTrackStatsEvent::BytesReceived(size)
+                .into_event(&self.input_ref, track_kind),
+        };
+        self.stats_sender.send(event);
     }
 }
