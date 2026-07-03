@@ -73,14 +73,14 @@ impl VideoEncoder for QuickSyncH264Encoder {
             },
             VideoEncoderConfig {
                 resolution: options.resolution,
-                output_format: OutputFrameFormat::RgbaWgpuTexture,
+                output_format: OutputFrameFormat::Nv12WgpuTexture,
                 extradata,
             },
         ))
     }
 
     fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedOutputChunk> {
-        let FrameData::Rgba8UnormWgpuTexture(texture) = frame.data else {
+        let FrameData::Nv12WgpuTexture(texture) = frame.data else {
             error!("Unsupported pixel format {:?}. Dropping frame.", frame.data);
             return Vec::new();
         };

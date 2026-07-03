@@ -38,7 +38,7 @@ pub struct WgpuTexturesEncoderH264 {
     sync: QuickSyncDmaBufSync,
     device: Arc<wgpu::Device>,
     resolution: VideoResolution,
-    rgba_to_nv12: RgbaToNv12Renderer,
+    nv12_pack: Nv12PackRenderer,
 }
 
 pub struct H264EncodedOutputChunk<T> {
@@ -131,15 +131,7 @@ pub enum QuickSyncH264EncoderError {
     #[error("Intel Quick Sync H264 encoder requires TEXTURE_BINDING texture usage, got {0:?}")]
     NoTextureBindingUsage(wgpu::TextureUsages),
 
-    #[error(
-        "Intel Quick Sync H264 encoder color conversion supports only limited-range BT.709, got {color_space:?} {color_range:?}"
-    )]
-    UnsupportedColorFormat {
-        color_space: ColorSpace,
-        color_range: ColorRange,
-    },
-
-    #[error("Intel Quick Sync H264 encoder requires RGBA textures, got {0:?}")]
+    #[error("Intel Quick Sync H264 encoder requires NV12 textures, got {0:?}")]
     UnsupportedInputTexture(wgpu::TextureFormat),
 
     #[error("Intel Quick Sync H264 encoder expected texture size {expected:?}, got {provided:?}")]
@@ -178,15 +170,6 @@ impl WgpuTexturesEncoderH264 {
         config: H264EncoderConfig<'_>,
     ) -> Result<Self, QuickSyncH264EncoderError> {
         let layout = h264_encoder_layout(config.resolution)?;
-        if !matches!(
-            (config.color_space, config.color_range),
-            (ColorSpace::BT709, ColorRange::Limited)
-        ) {
-            return Err(QuickSyncH264EncoderError::UnsupportedColorFormat {
-                color_space: config.color_space,
-                color_range: config.color_range,
-            });
-        }
         info!("Initializing Intel Quick Sync H264 encoder");
         let sync = init_dmabuf_sync(&device, &queue)?;
 
@@ -203,7 +186,7 @@ impl WgpuTexturesEncoderH264 {
             .expect("encoder surface pool is never empty")
             .imported
             .frame;
-        let rgba_to_nv12 = RgbaToNv12Renderer::new(&device, &queue, frame, resolution);
+        let nv12_pack = Nv12PackRenderer::new(&device, &queue, frame, resolution);
 
         info!(
             width = resolution.width,
@@ -220,7 +203,7 @@ impl WgpuTexturesEncoderH264 {
             sync,
             device,
             resolution,
-            rgba_to_nv12,
+            nv12_pack,
         })
     }
 
@@ -278,10 +261,7 @@ impl WgpuTexturesEncoderH264 {
                 texture.usage(),
             ));
         }
-        if !matches!(
-            texture.format(),
-            wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb
-        ) {
+        if texture.format() != wgpu::TextureFormat::NV12 {
             return Err(QuickSyncH264EncoderError::UnsupportedInputTexture(
                 texture.format(),
             ));
@@ -305,7 +285,7 @@ impl WgpuTexturesEncoderH264 {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Intel Quick Sync H264 input convert"),
             });
-        self.rgba_to_nv12
+        self.nv12_pack
             .render(&mut encoder, texture, &input.imported.frame);
         self.sync
             .submit_frame_write(input.imported.frame.sync(), [encoder.finish()])
@@ -608,7 +588,7 @@ fn complete_bitstream(
     })
 }
 
-struct RgbaToNv12Renderer {
+struct Nv12PackRenderer {
     label: &'static str,
     device: wgpu::Device,
     pipeline: wgpu::ComputePipeline,
@@ -616,16 +596,16 @@ struct RgbaToNv12Renderer {
     params: wgpu::Buffer,
 }
 
-impl RgbaToNv12Renderer {
+impl Nv12PackRenderer {
     fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         frame: &Nv12DmaBufFrame,
         visible: VideoResolution,
     ) -> Self {
-        let label = "Intel Quick Sync RGBA to NV12 input convert";
+        let label = "Intel Quick Sync NV12 input pack";
         let shader = device
-            .create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_nv12.wgsl.compute"));
+            .create_shader_module(wgpu::include_wgsl!("../shaders/nv12_pack.wgsl"));
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some(label),
             entries: &[
@@ -642,6 +622,16 @@ impl RgbaToNv12Renderer {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
                         access: wgpu::StorageTextureAccess::WriteOnly,
                         format: wgpu::TextureFormat::Rgba8Unorm,
@@ -650,7 +640,7 @@ impl RgbaToNv12Renderer {
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
-                    binding: 2,
+                    binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -700,8 +690,12 @@ impl RgbaToNv12Renderer {
         input: &wgpu::Texture,
         output: &Nv12DmaBufFrame,
     ) {
-        let input_view = input.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+        let y_view = input.create_view(&wgpu::TextureViewDescriptor {
+            aspect: wgpu::TextureAspect::Plane0,
+            ..Default::default()
+        });
+        let uv_view = input.create_view(&wgpu::TextureViewDescriptor {
+            aspect: wgpu::TextureAspect::Plane1,
             ..Default::default()
         });
         let output_view = output.texture().create_view(&Default::default());
@@ -711,14 +705,18 @@ impl RgbaToNv12Renderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&input_view),
+                    resource: wgpu::BindingResource::TextureView(&y_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&output_view),
+                    resource: wgpu::BindingResource::TextureView(&uv_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&output_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
                     resource: self.params.as_entire_binding(),
                 },
             ],
