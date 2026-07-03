@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 const MOQ_CLIENT_DEFAULT_URL: &str = "https://localhost:443";
-const MOQ_CLIENT_DEFAULT_BROADCAST_PATH: &str = "test";
+const MOQ_CLIENT_DEFAULT_BROADCAST_PATH: &str = "anon/test";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoqClientInput {
