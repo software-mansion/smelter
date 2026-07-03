@@ -1,5 +1,5 @@
 use std::{
-    alloc::{Layout, alloc_zeroed, dealloc, handle_alloc_error},
+    alloc::{Layout, alloc, dealloc, handle_alloc_error},
     collections::{HashMap, VecDeque},
     num::{NonZeroU16, NonZeroU64},
     ptr::NonNull,
@@ -343,6 +343,7 @@ struct QuickSyncH264Encoder {
     parameter_sets: Bytes,
     frame_index: u64,
     layout: H264EncoderLayout,
+    bitstream_pool: Vec<Box<OutputBitstream>>,
     pending_bitstreams: VplSyncQueue<Box<OutputBitstream>>,
     pending_frames: HashMap<u64, PendingFrame>,
     quicksync: H264Session,
@@ -370,6 +371,7 @@ impl QuickSyncH264Encoder {
             parameter_sets,
             frame_index: 0,
             layout,
+            bitstream_pool: Vec::with_capacity(usize::from(QUICKSYNC_ENCODER_ASYNC_DEPTH) + 1),
             pending_bitstreams: VplSyncQueue::new(usize::from(QUICKSYNC_ENCODER_ASYNC_DEPTH)),
             pending_frames: HashMap::new(),
             quicksync,
@@ -436,32 +438,43 @@ impl QuickSyncH264Encoder {
     }
 
     fn submit_bitstream(&mut self, submit: EncodeSubmit<'_>) -> Result<EncodeAsyncStatus, String> {
-        let mut output = Box::new(OutputBitstream::new(self.layout.bitstream_buffer_size));
+        let mut output = self.bitstream_pool.pop().unwrap_or_else(|| {
+            Box::new(OutputBitstream::new(self.layout.bitstream_buffer_size))
+        });
+        output.reset();
         let status = encode_frame_async(&self.quicksync.session, submit, &mut output.bitstream)?;
         if let EncodeAsyncStatus::Submitted(syncp) = status {
             self.pending_bitstreams.push(syncp, output);
+        } else {
+            self.bitstream_pool.push(output);
         }
         Ok(status)
     }
 
     fn drain_completed(&mut self, wait: SyncWait) -> Result<Vec<EncodeCompletion>, String> {
-        self.pending_bitstreams
-            .drain_completed(&self.quicksync, wait)?
-            .into_iter()
-            .map(|output| {
-                complete_bitstream(output, &self.parameter_sets, &mut self.pending_frames)
-            })
-            .collect()
+        let outputs = self.pending_bitstreams.drain_completed(&self.quicksync, wait)?;
+        self.complete_bitstreams(outputs)
     }
 
     fn drain_all_completed(&mut self) -> Result<Vec<EncodeCompletion>, String> {
-        self.pending_bitstreams
-            .drain_all_completed(&self.quicksync)?
-            .into_iter()
-            .map(|output| {
-                complete_bitstream(output, &self.parameter_sets, &mut self.pending_frames)
-            })
-            .collect()
+        let outputs = self.pending_bitstreams.drain_all_completed(&self.quicksync)?;
+        self.complete_bitstreams(outputs)
+    }
+
+    fn complete_bitstreams(
+        &mut self,
+        outputs: Vec<Box<OutputBitstream>>,
+    ) -> Result<Vec<EncodeCompletion>, String> {
+        let mut completed = Vec::with_capacity(outputs.len());
+        for output in outputs {
+            completed.push(complete_bitstream(
+                &output,
+                &self.parameter_sets,
+                &mut self.pending_frames,
+            )?);
+            self.bitstream_pool.push(output);
+        }
+        Ok(completed)
     }
 }
 
@@ -478,11 +491,19 @@ struct OutputBitstream {
 
 impl OutputBitstream {
     fn new(size: u32) -> Self {
-        let mut buffer = BitstreamBuffer::new(size);
-        let mut bitstream = unsafe { std::mem::zeroed::<vpl::mfxBitstream>() };
-        bitstream.Data = buffer.as_mut_ptr();
-        bitstream.MaxLength = size;
-        Self { bitstream, buffer }
+        let buffer = BitstreamBuffer::new(size);
+        let mut output = Self {
+            bitstream: unsafe { std::mem::zeroed() },
+            buffer,
+        };
+        output.reset();
+        output
+    }
+
+    fn reset(&mut self) {
+        self.bitstream = unsafe { std::mem::zeroed() };
+        self.bitstream.Data = self.buffer.as_mut_ptr();
+        self.bitstream.MaxLength = self.buffer.len as u32;
     }
 }
 
@@ -493,10 +514,14 @@ struct BitstreamBuffer {
 }
 
 impl BitstreamBuffer {
+    // Deliberately NOT zeroed: oneVPL only writes into this buffer and readers
+    // only touch the DataOffset..DataLength range it reports. Zeroing tens of
+    // megabytes per 4K frame costs gigabytes per second of DRAM bandwidth,
+    // which starves the media engine and caps multi-stream encode throughput.
     fn new(len: u32) -> Self {
         let len = len as usize;
         let layout = Layout::from_size_align(len.max(1), 64).expect("valid bitstream layout");
-        let ptr = NonNull::new(unsafe { alloc_zeroed(layout) }).unwrap_or_else(|| {
+        let ptr = NonNull::new(unsafe { alloc(layout) }).unwrap_or_else(|| {
             handle_alloc_error(layout);
         });
         Self { ptr, layout, len }
@@ -552,7 +577,7 @@ enum EncodeAsyncStatus {
 }
 
 fn complete_bitstream(
-    output: Box<OutputBitstream>,
+    output: &OutputBitstream,
     parameter_sets: &Bytes,
     pending_frames: &mut HashMap<u64, PendingFrame>,
 ) -> Result<EncodeCompletion, String> {
