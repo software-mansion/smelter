@@ -65,7 +65,6 @@ pub enum MoqClientError {
     #[error("Invalid MoQ relay URL \"{0}\": {1}")]
     InvalidUrl(Arc<str>, #[source] url::ParseError),
 
-    // TODO: (@jbrs) check if this can be deleted and connect over the pure QUIC with moqt scheme
     #[error("Unsupported MoQ relay URL scheme \"{0}\", only \"https\" is supported.")]
     InvalidScheme(String),
 
