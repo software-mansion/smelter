@@ -410,8 +410,8 @@ impl QuickSyncH264Encoder {
             .import_nv12_surface(
                 device,
                 &surface,
-                wgpu::TextureUsages::COPY_DST,
-                wgpu::TextureUses::COPY_DST,
+                wgpu::TextureUsages::STORAGE_BINDING,
+                wgpu::TextureUses::STORAGE_READ_WRITE,
             )
             .map_err(|err| err.to_string())?;
         Ok(EncodeInputSurface { imported, surface })
@@ -611,12 +611,9 @@ fn complete_bitstream(
 struct RgbaToNv12Renderer {
     label: &'static str,
     device: wgpu::Device,
-    y_pipeline: wgpu::RenderPipeline,
-    uv_pipeline: wgpu::RenderPipeline,
+    pipeline: wgpu::ComputePipeline,
     bind_group_layout: wgpu::BindGroupLayout,
-    sampler: wgpu::Sampler,
-    tex_scale: wgpu::Buffer,
-    intermediate: wgpu::Texture,
+    params: wgpu::Buffer,
 }
 
 impl RgbaToNv12Renderer {
@@ -626,17 +623,17 @@ impl RgbaToNv12Renderer {
         frame: &Nv12DmaBufFrame,
         visible: VideoResolution,
     ) -> Self {
-        let label = "Intel Quick Sync RGBA to NV12 input render";
-        let shader =
-            device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_nv12.wgsl"));
+        let label = "Intel Quick Sync RGBA to NV12 input convert";
+        let shader = device
+            .create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_nv12.wgsl.compute"));
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some(label),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
                         view_dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
                     },
@@ -644,13 +641,17 @@ impl RgbaToNv12Renderer {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -665,83 +666,31 @@ impl RgbaToNv12Renderer {
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
-        let pipeline = |entry_point: &str, format: wgpu::TextureFormat| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&pipeline_layout),
-                cache: None,
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(entry_point),
-                    compilation_options: Default::default(),
-                    targets: &[Some(format.into())],
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                multiview_mask: None,
-                multisample: wgpu::MultisampleState::default(),
-                depth_stencil: None,
-            })
-        };
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some(label),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("cs_main"),
+            compilation_options: Default::default(),
+            cache: None,
         });
-        // The planes are quarter-width RGBA8 reinterpretations, so one packed
-        // texel spans four bytes of the plane row. Both plane regions share the
-        // same scale: the UV rows halve together with the visible chroma rows.
-        let plane = frame.texture();
-        let scale = [
-            (plane.width() * 4) as f32 / visible.width as f32,
-            frame.y_rows() as f32 / visible.height as f32,
-        ];
-        let step = [1.0 / visible.width as f32, 1.0 / visible.height as f32];
         let mut contents = [0u8; 16];
-        contents[..4].copy_from_slice(&scale[0].to_ne_bytes());
-        contents[4..8].copy_from_slice(&scale[1].to_ne_bytes());
-        contents[8..12].copy_from_slice(&step[0].to_ne_bytes());
-        contents[12..16].copy_from_slice(&step[1].to_ne_bytes());
-        let tex_scale = device.create_buffer(&wgpu::BufferDescriptor {
+        contents[..4].copy_from_slice(&frame.y_rows().to_ne_bytes());
+        contents[4..8].copy_from_slice(&visible.width.to_ne_bytes());
+        contents[8..12].copy_from_slice(&visible.height.to_ne_bytes());
+        let params = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(label),
             size: contents.len() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        queue.write_buffer(&tex_scale, 0, &contents);
-        // Rendering straight into the exported DMA-BUF planes loses render-target
-        // compression, which is measurably slower on power-capped iGPUs. Render into
-        // regular textures instead and blit into the surface on the copy engine.
-        let intermediate = |format: wgpu::TextureFormat, size: wgpu::Extent3d| {
-            device.create_texture(&wgpu::TextureDescriptor {
-                label: Some(label),
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-                view_formats: &[],
-            })
-        };
-
+        queue.write_buffer(&params, 0, &contents);
         Self {
             label,
             device: device.clone(),
-            y_pipeline: pipeline("fs_main_y", wgpu::TextureFormat::Rgba8Unorm),
-            uv_pipeline: pipeline("fs_main_uv", wgpu::TextureFormat::Rgba8Unorm),
+            pipeline,
             bind_group_layout,
-            sampler,
-            tex_scale,
-            intermediate: intermediate(wgpu::TextureFormat::Rgba8Unorm, plane.size()),
+            params,
         }
     }
 
@@ -755,6 +704,7 @@ impl RgbaToNv12Renderer {
             format: Some(wgpu::TextureFormat::Rgba8Unorm),
             ..Default::default()
         });
+        let output_view = output.texture().create_view(&Default::default());
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(self.label),
             layout: &self.bind_group_layout,
@@ -765,48 +715,23 @@ impl RgbaToNv12Renderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    resource: wgpu::BindingResource::TextureView(&output_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: self.tex_scale.as_entire_binding(),
+                    resource: self.params.as_entire_binding(),
                 },
             ],
         });
-        let width = self.intermediate.width() as f32;
-        let y_rows = output.y_rows() as f32;
-        let uv_rows = y_rows / 2.0;
-        let view = self.intermediate.create_view(&Default::default());
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(self.label),
             timestamp_writes: None,
-            occlusion_query_set: None,
-            depth_stencil_attachment: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                depth_slice: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::DontCare(unsafe { wgpu::LoadOpDontCare::enabled() }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            multiview_mask: None,
         });
+        pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        pass.set_viewport(0.0, 0.0, width, y_rows, 0.0, 1.0);
-        pass.set_pipeline(&self.y_pipeline);
-        pass.draw(0..3, 0..1);
-        pass.set_viewport(0.0, y_rows, width, uv_rows, 0.0, 1.0);
-        pass.set_pipeline(&self.uv_pipeline);
-        pass.draw(0..3, 0..1);
-        drop(pass);
-        copy_plane(encoder, &self.intermediate, output.texture());
+        let texture = output.texture();
+        pass.dispatch_workgroups(texture.width().div_ceil(8), texture.height().div_ceil(8), 1);
     }
-}
-
-fn copy_plane(encoder: &mut wgpu::CommandEncoder, src: &wgpu::Texture, dst: &wgpu::Texture) {
-    encoder.copy_texture_to_texture(src.as_image_copy(), dst.as_image_copy(), src.size());
 }
 
 struct H264LevelLimit {
