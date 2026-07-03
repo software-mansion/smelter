@@ -194,31 +194,35 @@ impl H264Session {
             .display
             .export_nv12_surface(exported.va_surface_id())?;
         let sync_fd = clone_dma_buf_fd(&dma_buf.fd)?;
+        let uv_fd = clone_dma_buf_fd(&dma_buf.fd)?;
 
-        // Both planes import as one quarter-width RGBA8 texture: the UV plane
-        // sits contiguously below the Y rows, so a single image covers the
-        // whole surface with one render target and one copy per frame.
-        if dma_buf.y_offset != 0
-            || dma_buf.uv_pitch != dma_buf.y_pitch
-            || dma_buf.uv_offset % dma_buf.y_pitch != 0
-        {
-            return Err(H264SessionError::DmaBuf(format!(
-                "NV12 surface planes are not contiguous (y_offset={} uv_offset={} pitches={}/{})",
-                dma_buf.y_offset, dma_buf.uv_offset, dma_buf.y_pitch, dma_buf.uv_pitch
-            )));
-        }
-        let y_rows = dma_buf.uv_offset / dma_buf.y_pitch;
-        let texture = import_dma_buf_texture(
+        let y = import_dma_buf_texture(
             device,
             dma_buf.fd,
             DmaBufTextureLayout {
                 label: LABEL,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                width: dma_buf.width / 4,
-                height: y_rows + y_rows / 2,
+                format: wgpu::TextureFormat::R8Unorm,
+                width: dma_buf.width,
+                height: dma_buf.height,
                 modifier: dma_buf.modifier,
                 pitch: dma_buf.y_pitch,
-                offset: 0,
+                offset: dma_buf.y_offset,
+            },
+            usage,
+            initial_state,
+        )
+        .map_err(H264SessionError::DmaBuf)?;
+        let uv = import_dma_buf_texture(
+            device,
+            uv_fd,
+            DmaBufTextureLayout {
+                label: LABEL,
+                format: wgpu::TextureFormat::Rg8Unorm,
+                width: dma_buf.width / 2,
+                height: dma_buf.height / 2,
+                modifier: dma_buf.modifier,
+                pitch: dma_buf.uv_pitch,
+                offset: dma_buf.uv_offset,
             },
             usage,
             initial_state,
@@ -226,8 +230,8 @@ impl H264Session {
         .map_err(H264SessionError::DmaBuf)?;
         Ok(ImportedNv12Surface {
             frame: Arc::new(Nv12DmaBufFrame {
-                texture,
-                y_rows,
+                y,
+                uv,
                 sync: DmaBufSyncFd::new(sync_fd),
             }),
             _exported: exported,
@@ -264,18 +268,18 @@ pub(super) struct ImportedNv12Surface {
 }
 
 pub(super) struct Nv12DmaBufFrame {
-    texture: wgpu::Texture,
-    y_rows: u32,
+    y: wgpu::Texture,
+    uv: wgpu::Texture,
     sync: DmaBufSyncFd,
 }
 
 impl Nv12DmaBufFrame {
-    pub(super) fn texture(&self) -> &wgpu::Texture {
-        &self.texture
+    pub(super) fn y_texture(&self) -> &wgpu::Texture {
+        &self.y
     }
 
-    pub(super) fn y_rows(&self) -> u32 {
-        self.y_rows
+    pub(super) fn uv_texture(&self) -> &wgpu::Texture {
+        &self.uv
     }
 
     pub(super) fn sync(&self) -> &DmaBufSyncFd {

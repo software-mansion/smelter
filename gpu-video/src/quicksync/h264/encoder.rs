@@ -38,7 +38,6 @@ pub struct WgpuTexturesEncoderH264 {
     sync: QuickSyncDmaBufSync,
     device: Arc<wgpu::Device>,
     resolution: VideoResolution,
-    nv12_pack: Nv12PackRenderer,
 }
 
 pub struct H264EncodedOutputChunk<T> {
@@ -128,8 +127,8 @@ pub enum QuickSyncH264EncoderError {
     #[error("Intel Quick Sync H264 encoder requires input frames to carry PTS")]
     MissingPts,
 
-    #[error("Intel Quick Sync H264 encoder requires TEXTURE_BINDING texture usage, got {0:?}")]
-    NoTextureBindingUsage(wgpu::TextureUsages),
+    #[error("Intel Quick Sync H264 encoder requires COPY_SRC texture usage, got {0:?}")]
+    NoCopySrcTextureUsage(wgpu::TextureUsages),
 
     #[error("Intel Quick Sync H264 encoder requires NV12 textures, got {0:?}")]
     UnsupportedInputTexture(wgpu::TextureFormat),
@@ -181,12 +180,9 @@ impl WgpuTexturesEncoderH264 {
             .map(|_| encoder.create_input_surface(&device))
             .collect::<Result<VecDeque<_>, _>>()
             .map_err(QuickSyncH264EncoderError::Encode)?;
-        let frame = &input_pool
-            .front()
-            .expect("encoder surface pool is never empty")
-            .imported
-            .frame;
-        let nv12_pack = Nv12PackRenderer::new(&device, &queue, frame, resolution);
+        for input in &input_pool {
+            write_coded_padding(&queue, &input.imported.frame, resolution);
+        }
 
         info!(
             width = resolution.width,
@@ -203,7 +199,6 @@ impl WgpuTexturesEncoderH264 {
             sync,
             device,
             resolution,
-            nv12_pack,
         })
     }
 
@@ -256,8 +251,8 @@ impl WgpuTexturesEncoderH264 {
         texture: &wgpu::Texture,
     ) -> Result<(), QuickSyncH264EncoderError> {
         let expected = self.resolution.extent_2d();
-        if !texture.usage().contains(wgpu::TextureUsages::TEXTURE_BINDING) {
-            return Err(QuickSyncH264EncoderError::NoTextureBindingUsage(
+        if !texture.usage().contains(wgpu::TextureUsages::COPY_SRC) {
+            return Err(QuickSyncH264EncoderError::NoCopySrcTextureUsage(
                 texture.usage(),
             ));
         }
@@ -280,15 +275,30 @@ impl WgpuTexturesEncoderH264 {
         texture: &wgpu::Texture,
         input: &EncodeInputSurface,
     ) -> Result<(), QuickSyncH264EncoderError> {
-        let mut encoder = self
+        let mut transition = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Intel Quick Sync H264 input convert"),
+                label: Some("Intel Quick Sync H264 input transition"),
             });
-        self.nv12_pack
-            .render(&mut encoder, texture, &input.imported.frame);
+        transition.transition_resources(
+            std::iter::empty(),
+            std::iter::once(wgpu::TextureTransition {
+                texture,
+                selector: None,
+                state: wgpu::TextureUses::COPY_SRC,
+            }),
+        );
+        let copies = record_plane_copies(
+            &self.device,
+            texture,
+            &input.imported.frame,
+            self.resolution,
+        )?;
         self.sync
-            .submit_frame_write(input.imported.frame.sync(), [encoder.finish()])
+            .submit_frame_write(
+                input.imported.frame.sync(),
+                [transition.finish(), copies],
+            )
             .map_err(|err| QuickSyncH264EncoderError::Encode(err.to_string()))?;
         Ok(())
     }
@@ -390,8 +400,8 @@ impl QuickSyncH264Encoder {
             .import_nv12_surface(
                 device,
                 &surface,
-                wgpu::TextureUsages::STORAGE_BINDING,
-                wgpu::TextureUses::STORAGE_READ_WRITE,
+                wgpu::TextureUsages::COPY_DST,
+                wgpu::TextureUses::COPY_DST,
             )
             .map_err(|err| err.to_string())?;
         Ok(EncodeInputSurface { imported, surface })
@@ -588,147 +598,113 @@ fn complete_bitstream(
     })
 }
 
-struct Nv12PackRenderer {
-    label: &'static str,
-    device: wgpu::Device,
-    pipeline: wgpu::ComputePipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
-    params: wgpu::Buffer,
+/// Records the two per-plane image copies from the caller's NV12 texture
+/// into the imported surface planes.
+///
+/// wgpu validates `copy_texture_to_texture` against WebGPU's copy-compatible
+/// rule, which has no notion of per-plane copies, so these are recorded as
+/// raw Vulkan commands: plane 0 of an NV12 image is R8 and plane 1 is RG8,
+/// which Vulkan considers copy-compatible with the matching single-plane
+/// images. The source layout is pinned via `transition_resources` in the
+/// preceding command buffer and the destinations live permanently in
+/// TRANSFER_DST_OPTIMAL (their only wgpu usage is COPY_DST).
+fn record_plane_copies(
+    device: &wgpu::Device,
+    source: &wgpu::Texture,
+    frame: &Nv12DmaBufFrame,
+    visible: VideoResolution,
+) -> Result<wgpu::CommandBuffer, QuickSyncH264EncoderError> {
+    use ash::vk;
+    use wgpu::hal::api::Vulkan as VkApi;
+
+    let raw_copy_error =
+        || QuickSyncH264EncoderError::Encode("plane copies require Vulkan wgpu".into());
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("Intel Quick Sync H264 input plane copies"),
+    });
+    unsafe {
+        let src = source.as_hal::<VkApi>().ok_or_else(raw_copy_error)?.raw_handle();
+        let y = frame
+            .y_texture()
+            .as_hal::<VkApi>()
+            .ok_or_else(raw_copy_error)?
+            .raw_handle();
+        let uv = frame
+            .uv_texture()
+            .as_hal::<VkApi>()
+            .ok_or_else(raw_copy_error)?
+            .raw_handle();
+        let hal_device_guard = device.as_hal::<VkApi>().ok_or_else(raw_copy_error)?;
+        let raw_device = hal_device_guard.raw_device().clone();
+        encoder.as_hal_mut::<VkApi, _, _>(|hal_encoder| {
+            let hal_encoder = hal_encoder.ok_or_else(raw_copy_error)?;
+            let cmd = hal_encoder.raw_handle();
+            let copy = |dst: vk::Image, aspect: vk::ImageAspectFlags, width, height| {
+                let region = vk::ImageCopy::default()
+                    .src_subresource(
+                        vk::ImageSubresourceLayers::default().aspect_mask(aspect).layer_count(1),
+                    )
+                    .dst_subresource(
+                        vk::ImageSubresourceLayers::default()
+                            .aspect_mask(vk::ImageAspectFlags::COLOR)
+                            .layer_count(1),
+                    )
+                    .extent(vk::Extent3D { width, height, depth: 1 });
+                raw_device.cmd_copy_image(
+                    cmd,
+                    src,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    dst,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    std::slice::from_ref(&region),
+                );
+            };
+            copy(y, vk::ImageAspectFlags::PLANE_0, visible.width, visible.height);
+            copy(uv, vk::ImageAspectFlags::PLANE_1, visible.width / 2, visible.height / 2);
+            Ok::<(), QuickSyncH264EncoderError>(())
+        })?;
+    }
+    Ok(encoder.finish())
 }
 
-impl Nv12PackRenderer {
-    fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        frame: &Nv12DmaBufFrame,
-        visible: VideoResolution,
-    ) -> Self {
-        let label = "Intel Quick Sync NV12 input pack";
-        let shader = device
-            .create_shader_module(wgpu::include_wgsl!("../shaders/nv12_pack.wgsl"));
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some(label),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
+/// The coded surface can be larger than the visible frame; per-frame copies
+/// only cover the visible region, so fill the alignment padding once with
+/// neutral gray to keep the encoder's motion search off garbage.
+fn write_coded_padding(queue: &wgpu::Queue, frame: &Nv12DmaBufFrame, visible: VideoResolution) {
+    let regions = [
+        (frame.y_texture(), visible.width, visible.height, [16u8].as_slice(), 1),
+        (
+            frame.uv_texture(),
+            visible.width / 2,
+            visible.height / 2,
+            [128u8, 128].as_slice(),
+            2,
+        ),
+    ];
+    for (texture, visible_width, visible_height, fill, bytes_per_texel) in regions {
+        let (width, height) = (texture.width(), texture.height());
+        let mut write = |x: u32, y: u32, w: u32, h: u32| {
+            if w == 0 || h == 0 {
+                return;
+            }
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d { x, y, z: 0 },
+                    aspect: wgpu::TextureAspect::All,
                 },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
+                &fill.repeat((w * h) as usize),
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(w * bytes_per_texel),
+                    rows_per_image: None,
                 },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                        format: wgpu::TextureFormat::Rgba8Unorm,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some(label),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some(label),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("cs_main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-        let mut contents = [0u8; 16];
-        contents[..4].copy_from_slice(&frame.y_rows().to_ne_bytes());
-        contents[4..8].copy_from_slice(&visible.width.to_ne_bytes());
-        contents[8..12].copy_from_slice(&visible.height.to_ne_bytes());
-        let params = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(label),
-            size: contents.len() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        queue.write_buffer(&params, 0, &contents);
-        Self {
-            label,
-            device: device.clone(),
-            pipeline,
-            bind_group_layout,
-            params,
-        }
-    }
-
-    fn render(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        input: &wgpu::Texture,
-        output: &Nv12DmaBufFrame,
-    ) {
-        let y_view = input.create_view(&wgpu::TextureViewDescriptor {
-            aspect: wgpu::TextureAspect::Plane0,
-            ..Default::default()
-        });
-        let uv_view = input.create_view(&wgpu::TextureViewDescriptor {
-            aspect: wgpu::TextureAspect::Plane1,
-            ..Default::default()
-        });
-        let output_view = output.texture().create_view(&Default::default());
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(self.label),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&y_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&uv_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&output_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: self.params.as_entire_binding(),
-                },
-            ],
-        });
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some(self.label),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        let texture = output.texture();
-        pass.dispatch_workgroups(texture.width().div_ceil(8), texture.height().div_ceil(8), 1);
+                wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            );
+        };
+        write(visible_width, 0, width.saturating_sub(visible_width), height);
+        write(0, visible_height, visible_width, height.saturating_sub(visible_height));
     }
 }
 
