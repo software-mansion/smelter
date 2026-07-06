@@ -159,6 +159,19 @@ impl<'a> VulkanAdapter<'a> {
                         .queue_flags
                         .intersects(vk::QueueFlags::GRAPHICS)
             })
+            // Prefer a dedicated async-compute queue, but fall back to any
+            // compute-capable queue when the device doesn't expose one. Some
+            // GPUs (notably NVIDIA Maxwell) only advertise COMPUTE on the
+            // combined graphics family, and insisting on a graphics-free
+            // compute queue rejects them even though they otherwise support
+            // video decode.
+            .or_else(|| {
+                queues.iter().enumerate().find(|(_, q)| {
+                    q.queue_family_properties
+                        .queue_flags
+                        .contains(vk::QueueFlags::COMPUTE)
+                })
+            })
             .map(|(i, _)| i)?;
 
         let graphics_transfer_compute_queue_idx = queues
@@ -247,7 +260,14 @@ impl<'a> VulkanAdapter<'a> {
                 },
                 compute: QueueIndex {
                     family_index: compute_queue_idx,
-                    queue_count: queue_counts[compute_queue_idx] as usize,
+                    // When the compute queue falls back to the graphics family
+                    // above, it shares that family with
+                    // `graphics_transfer_compute`. `queue_create_infos()` dedups
+                    // entries by `(family_index, queue_count)`, so a differing
+                    // count would list the same family twice in
+                    // `VkDeviceCreateInfo` — a duplicate that some drivers reject.
+                    // Only compute queue index 0 is ever retrieved, so request one.
+                    queue_count: 1,
                     video_properties: video_properties[compute_queue_idx],
                     query_result_status_properties: query_result_status_properties
                         [compute_queue_idx],
