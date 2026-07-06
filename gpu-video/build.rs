@@ -15,13 +15,25 @@ fn main() {
     }
 }
 
-#[cfg(feature = "transcoder")]
+// cfg vulkan && feature "transcoder"
+#[cfg(all(
+    any(
+        windows,
+        all(
+            unix,
+            not(any(target_os = "macos", target_os = "ios", target_os = "emscripten"))
+        )
+    ),
+    feature = "transcoder"
+))]
 fn build_transcoding_shader() {
     println!("cargo:rerun-if-changed=src/vulkan_transcoder/shader.wgsl");
 
     let mut front = naga::front::wgsl::Frontend::new();
     let parsed = front
-        .parse(include_str!("src/vulkan_transcoder/shader.wgsl"))
+        .parse(include_str!(
+            "src/backends/vulkan/vulkan_transcoder/shader.wgsl"
+        ))
         .unwrap();
     let mut validator = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),

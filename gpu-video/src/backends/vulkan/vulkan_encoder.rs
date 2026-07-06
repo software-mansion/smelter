@@ -309,7 +309,7 @@ impl CommandBufferPoolStorage for EncoderCommandBufferPools {
     }
 }
 
-pub(crate) trait Encoder<'a> {
+pub(crate) trait DynVulkanEncoder<'a>: Send {
     fn encode<'b>(
         &'b mut self,
         image: Arc<Image>,
@@ -337,7 +337,7 @@ pub(crate) type EncoderTracker = Tracker<EncoderTrackerKind>;
 pub(crate) struct EncodeSubmission<'borrow, 'encoder> {
     pub(crate) is_idr: bool,
     pub(crate) wait_value: SemaphoreWaitValue,
-    pub(crate) encoder: &'borrow mut (dyn Encoder<'encoder> + 'encoder),
+    pub(crate) encoder: &'borrow mut (dyn DynVulkanEncoder<'encoder> + 'encoder),
     pub(crate) pts: Option<u64>,
     _image: Arc<Image>,
 }
@@ -1082,7 +1082,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     }
 }
 
-impl<'a, C: EncodeCodec + 'a> Encoder<'a> for VulkanEncoder<'a, C> {
+impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
     fn encode<'b>(
         &'b mut self,
         image: Arc<Image>,

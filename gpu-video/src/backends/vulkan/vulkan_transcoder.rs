@@ -1,76 +1,36 @@
-use std::{num::NonZeroU32, sync::Arc};
+use std::sync::Arc;
 
 use ash::vk;
 
 use crate::{
-    EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoDecoderError,
-    backends::vulkan::vulkan_encoder::{
-        Encoder, FullEncoderParameters, VulkanEncoder, VulkanEncoderError,
-    },
+    EncodedInputChunk, EncodedOutputChunk, H264ParserError, OutputFrame, ReferenceManagementError,
+    VideoBackendError, VideoTranscoderError,
     backends::vulkan::{
-        VulkanCommonError, VulkanDecoder, VulkanDevice,
+        VulkanCommonError, VulkanDecoder, VulkanDecoderError, VulkanDevice,
         codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
         vulkan_decoder::{ImageModifiers, InFlightDecodeResources},
+        vulkan_encoder::{
+            DynVulkanEncoder, FullEncoderParameters, VulkanEncoder, VulkanEncoderError,
+        },
+        vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
         wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
     },
-    device::{EncoderOutputParameters, Rational},
     frame_sorter::{DecodeResult, FrameSorter},
-    parameters::{DecoderUsage, H264Profile, H265Profile, ScalingAlgorithm},
+    parameters::DecoderUsage,
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
         h264::H264Parser,
         reference_manager::ReferenceContext,
     },
-    vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
+    transcoder::{AnyEncoderParameters, TranscoderParameters, VideoTranscoderBackend},
 };
 
 mod pipeline;
-
-#[derive(Debug, thiserror::Error)]
-pub enum VideoTranscoderError {
-    // TODO: use vulkan error
-    #[error(transparent)]
-    Decoder(#[from] VideoDecoderError),
-
-    #[error(transparent)]
-    Encoder(#[from] VulkanEncoderError),
-
-    #[error(transparent)]
-    Common(#[from] VulkanCommonError),
-
-    #[error("Vulkan error: {0}")]
-    Vulkan(#[from] vk::Result),
-
-    #[error("Wrong output number: expected a value between 0 and {expected_max}, found {actual}")]
-    WrongOutputNumber { expected_max: usize, actual: usize },
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum AnyEncoderParameters {
-    H264(EncoderOutputParameters<H264Profile>),
-    H265(EncoderOutputParameters<H265Profile>),
-}
 
 #[derive(Debug, Clone, Copy)]
 enum AnyFullEncoderParameters {
     H264(FullEncoderParameters<H264Codec>),
     H265(FullEncoderParameters<H265Codec>),
-}
-
-/// Configuration for a transcoder
-#[derive(Debug, Clone)]
-pub struct TranscoderParameters {
-    pub input_framerate: Rational,
-    pub output_parameters: Vec<TranscoderOutputParameters>,
-}
-
-/// Configuration for a single transcoder output.
-#[derive(Debug, Clone, Copy)]
-pub struct TranscoderOutputParameters {
-    pub encoder_parameters: AnyEncoderParameters,
-    pub output_width: NonZeroU32,
-    pub output_height: NonZeroU32,
-    pub scaling_algorithm: ScalingAlgorithm,
 }
 
 pub(crate) struct ResizedImages {
@@ -81,23 +41,36 @@ pub(crate) struct ResizedImages {
     _in_flight_resources: InFlightDecodeResources,
 }
 
-pub struct Transcoder {
+pub struct VulkanTranscoder {
     device: Arc<VulkanDevice>,
     decoder: VulkanDecoder<'static>,
     parser: H264Parser,
     reference_ctx: ReferenceContext,
     sorter: FrameSorter<ResizedImages>,
     resizing_pipeline: ResizingPipeline,
-    encoders: Vec<Box<dyn Encoder<'static>>>,
+    encoders: Vec<Box<dyn DynVulkanEncoder<'static>>>,
 }
 
-impl Transcoder {
+impl VideoTranscoderBackend for VulkanTranscoder {
+    fn transcode(
+        &mut self,
+        input: EncodedInputChunk<'_>,
+    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VideoTranscoderError> {
+        VulkanTranscoder::transcode(self, input).map_err(Into::into)
+    }
+
+    fn flush(&mut self) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VideoTranscoderError> {
+        VulkanTranscoder::flush(self).map_err(Into::into)
+    }
+}
+
+impl VulkanTranscoder {
     pub(crate) fn new(
         device: Arc<VulkanDevice>,
         config: TranscoderParameters,
-    ) -> Result<Self, VideoTranscoderError> {
+    ) -> Result<Self, VulkanTranscoderError> {
         let decoder = VulkanDecoder::new(
-            Arc::new(device.decoding_device().map_err(VideoDecoderError::from)?),
+            Arc::new(device.decoding_device()?),
             DecoderUsage::Transcoding,
             ImageModifiers {
                 create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
@@ -105,8 +78,7 @@ impl Transcoder {
                 usage_flags: vk::ImageUsageFlags::STORAGE,
                 additional_queue_index: device.queues.compute.family_index,
             },
-        )
-        .map_err(VideoDecoderError::from)?;
+        )?;
 
         let parser = H264Parser::default();
         let reference_ctx = ReferenceContext::default();
@@ -149,12 +121,12 @@ impl Transcoder {
                 AnyFullEncoderParameters::H264(p) => device
                     .encoding_device()
                     .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
-                    .map(|e| Box::new(e) as Box<dyn Encoder>),
+                    .map(|e| Box::new(e) as Box<dyn DynVulkanEncoder>),
 
                 AnyFullEncoderParameters::H265(p) => device
                     .encoding_device()
                     .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
-                    .map(|e| Box::new(e) as Box<dyn Encoder>),
+                    .map(|e| Box::new(e) as Box<dyn DynVulkanEncoder>),
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -178,7 +150,7 @@ impl Transcoder {
     pub fn transcode(
         &mut self,
         input: EncodedInputChunk<'_>,
-    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VideoTranscoderError> {
+    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VulkanTranscoderError> {
         let instructions = self.parse_input(input)?;
         self.transcode_instructions(instructions)
     }
@@ -187,7 +159,9 @@ impl Transcoder {
     /// are coming, otherwise the output may have the wrong frame order. Returns a [`Vec`] where
     /// each element corresponds to an output frame. Each frame is a [`Vec`] where each element
     /// corresponds to one output.
-    pub fn flush(&mut self) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VideoTranscoderError> {
+    pub fn flush(
+        &mut self,
+    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VulkanTranscoderError> {
         let instructions = self.flush_parser()?;
         let mut output = self.transcode_instructions(instructions)?;
         output.append(&mut self.flush_transcoder()?);
@@ -195,17 +169,16 @@ impl Transcoder {
         Ok(output)
     }
 
-    fn flush_parser(&mut self) -> Result<Vec<DecoderInstruction>, VideoTranscoderError> {
-        let access_units = self.parser.flush().map_err(VideoDecoderError::from)?;
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)
-            .map_err(VideoDecoderError::from)?;
+    fn flush_parser(&mut self) -> Result<Vec<DecoderInstruction>, VulkanTranscoderError> {
+        let access_units = self.parser.flush()?;
+        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
 
         Ok(instructions)
     }
 
     fn flush_transcoder(
         &mut self,
-    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VideoTranscoderError> {
+    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VulkanTranscoderError> {
         let remaining = self.sorter.flush();
 
         let mut output = Vec::new();
@@ -220,14 +193,9 @@ impl Transcoder {
     fn parse_input(
         &mut self,
         input: EncodedInputChunk<'_>,
-    ) -> Result<Vec<DecoderInstruction>, VideoTranscoderError> {
-        let access_units = self
-            .parser
-            .parse(input.data, input.pts)
-            .map_err(VideoDecoderError::from)?;
-
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)
-            .map_err(VideoDecoderError::from)?;
+    ) -> Result<Vec<DecoderInstruction>, VulkanTranscoderError> {
+        let access_units = self.parser.parse(input.data, input.pts)?;
+        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
 
         Ok(instructions)
     }
@@ -235,15 +203,11 @@ impl Transcoder {
     fn transcode_instructions(
         &mut self,
         instructions: Vec<DecoderInstruction>,
-    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VideoTranscoderError> {
+    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VulkanTranscoderError> {
         let mut encoded_frame_sets = Vec::new();
 
         for instruction in instructions {
-            let Some(mut frame) = self
-                .decoder
-                .decode(&instruction)
-                .map_err(VideoDecoderError::from)?
-            else {
+            let Some(mut frame) = self.decoder.decode(&instruction)? else {
                 continue;
             };
 
@@ -280,7 +244,7 @@ impl Transcoder {
     fn encode_resized_images(
         &mut self,
         resized_images: OutputFrame<ResizedImages>,
-    ) -> Result<Vec<EncodedOutputChunk<Vec<u8>>>, VideoTranscoderError> {
+    ) -> Result<Vec<EncodedOutputChunk<Vec<u8>>>, VulkanTranscoderError> {
         let mut submits = Vec::new();
         for (encoder, frame) in self
             .encoders
@@ -329,9 +293,7 @@ impl Transcoder {
             .free_submission(resized_images.data.images);
 
         if let Some(query_pool) = resized_images.data.decode_query_pool {
-            query_pool
-                .check_results_blocking()
-                .map_err(VideoDecoderError::from)?;
+            query_pool.check_results_blocking()?
         }
 
         Ok(results)
@@ -361,4 +323,54 @@ fn make_pipeline_output_configs(
             },
         })
         .collect()
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum VulkanTranscoderError {
+    #[error(transparent)]
+    Decoder(#[from] VulkanDecoderError),
+
+    #[error(transparent)]
+    Encoder(#[from] VulkanEncoderError),
+
+    #[error("Reference management error: {0}")]
+    ReferenceManagementError(#[from] ReferenceManagementError),
+
+    #[error("H264 parser error: {0}")]
+    ParserError(#[from] H264ParserError),
+
+    #[error(transparent)]
+    Common(#[from] VulkanCommonError),
+
+    #[error("Vulkan error: {0}")]
+    Vulkan(#[from] vk::Result),
+
+    #[error("Wrong output number: expected a value between 0 and {expected_max}, found {actual}")]
+    WrongOutputNumber { expected_max: usize, actual: usize },
+}
+
+impl From<VulkanTranscoderError> for VideoTranscoderError {
+    fn from(err: VulkanTranscoderError) -> Self {
+        match err {
+            VulkanTranscoderError::Decoder(err) => VideoTranscoderError::Decoder(err.into()),
+            VulkanTranscoderError::ReferenceManagementError(err) => {
+                VideoTranscoderError::Decoder(err.into())
+            }
+            VulkanTranscoderError::ParserError(err) => VideoTranscoderError::Decoder(err.into()),
+            VulkanTranscoderError::Encoder(err) => VideoTranscoderError::Encoder(err.into()),
+            VulkanTranscoderError::WrongOutputNumber {
+                expected_max,
+                actual,
+            } => VideoTranscoderError::WrongOutputNumber {
+                expected_max,
+                actual,
+            },
+            VulkanTranscoderError::Common(_) | VulkanTranscoderError::Vulkan(_) => {
+                VideoTranscoderError::BackendError(VideoBackendError {
+                    message: err.to_string(),
+                    source: Box::new(err),
+                })
+            }
+        }
+    }
 }
