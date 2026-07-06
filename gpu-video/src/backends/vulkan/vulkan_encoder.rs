@@ -918,7 +918,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
                 .map_err(WgpuTextureEncoderError::from)?
         };
 
-        let mut semaphore_submit_info = self
+        let semaphore_submit_info = self
             .tracker
             .semaphore_tracker
             .next_submit_info(EncoderTrackerWaitState::CopyImageToImage);

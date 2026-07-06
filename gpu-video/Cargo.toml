@@ -35,17 +35,28 @@ memchr = "2.7.4"
 rustc-hash = "2.1.1"
 thiserror = "1.0.59"
 tracing = "0.1.40"
-wgpu = { version = "30.0.0", optional = true }
+wgpu = { path = "/Users/jerzywilczek/Repos/wgpu-metal-both-changes/wgpu", optional = true }
 
 # Platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
 ash = { workspace = true }
 vk-mem = "0.4.0"
 
+[target.'cfg(target_vendor = "apple")'.dependencies]
+objc2-video-toolbox = { version = "0.3.2" }
+objc2-core-media = { version = "0.3.2" }
+objc2-core-foundation = { version = "0.3.2" }
+objc2-core-video = { version = "0.3.2" }
+objc2-metal = { version = "0.3.2" }
+objc2 = { version = "0.6.4" }
+block2 = { version = "0.6.2" }
+
 [dev-dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
 tracing-subscriber = "0.3.20"
-wgpu = { version = "30.0.0", features = ["noop"] }
+wgpu = { path = "/Users/jerzywilczek/Repos/wgpu-metal-both-changes/wgpu", features = [
+    "noop",
+] }
 winit = "0.30"
 bytemuck = { version = "1.19.0", features = ["derive"] }
 pollster = { workspace = true }

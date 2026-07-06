@@ -12,6 +12,7 @@ fn main() {
                 )
             )
         },
+        video_toolbox: { target_vendor = "apple" },
     }
 }
 
