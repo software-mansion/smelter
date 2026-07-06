@@ -19,26 +19,6 @@ pub(crate) use layout_renderer::LayoutRenderer;
 use tracing::error;
 
 pub const DEFAULT_MAX_LAYOUTS_COUNT: usize = 100;
-const DEFAULT_MAX_MASKS_COUNT: usize = 20;
-
-#[derive(Debug, Clone, Copy)]
-struct LayoutLimits {
-    max_layouts_count: usize,
-    max_masks_count: usize,
-}
-
-impl LayoutLimits {
-    fn new(max_layouts_count: usize) -> Self {
-        Self {
-            max_layouts_count,
-            // scale masks limit proportionally, but never below the default
-            max_masks_count: usize::max(
-                DEFAULT_MAX_MASKS_COUNT,
-                max_layouts_count * DEFAULT_MAX_MASKS_COUNT / DEFAULT_MAX_LAYOUTS_COUNT,
-            ),
-        }
-    }
-}
 
 pub(crate) trait LayoutProvider: Send {
     fn layouts(&mut self, pts: Duration, inputs: &[Option<Resolution>]) -> NestedLayout;

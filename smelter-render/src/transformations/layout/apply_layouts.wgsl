@@ -79,6 +79,7 @@ struct LayoutInfo {
 
 // Replaced at runtime based on the configured layouts limit (see shader.rs)
 const MAX_LAYOUTS_COUNT: u32 = 100;
+
 const MAX_MASKS_COUNT: u32 = 20;
 
 @group(0) @binding(0) var texture: texture_2d<f32>;

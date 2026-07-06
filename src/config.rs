@@ -93,7 +93,7 @@ impl FromStr for LoggerFormat {
 }
 
 pub fn read_config() -> Config {
-    try_read_config().expect("Failed to read the config from environment variables.")
+    try_read_config().expect("Failed to read the config from environment variables")
 }
 
 fn try_read_config() -> Result<Config, String> {
@@ -377,15 +377,19 @@ fn try_read_config() -> Result<Config, String> {
     };
 
     let render_max_layouts_count = match env::var("SMELTER_RENDER_MAX_LAYOUTS_COUNT") {
-        Ok(count) => {
-            let count = count
-                .parse::<usize>()
-                .map_err(|_| "SMELTER_RENDER_MAX_LAYOUTS_COUNT has to be a valid number")?;
-            if count == 0 {
-                return Err("SMELTER_RENDER_MAX_LAYOUTS_COUNT has to be greater than 0".to_string());
+        Ok(count) => match count.parse::<usize>() {
+            Ok(0) => {
+                println!("CONFIG ERROR: SMELTER_RENDER_MAX_LAYOUTS_COUNT has to be greater than 0");
+                DEFAULT_MAX_LAYOUTS_COUNT
             }
-            count
-        }
+            Ok(count) => count,
+            Err(err) => {
+                println!(
+                    "CONFIG ERROR: SMELTER_RENDER_MAX_LAYOUTS_COUNT has to be a valid number: {err}"
+                );
+                DEFAULT_MAX_LAYOUTS_COUNT
+            }
+        },
         Err(_) => DEFAULT_MAX_LAYOUTS_COUNT,
     };
 
