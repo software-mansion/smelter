@@ -8,13 +8,11 @@ use rg8_fill_with_color::Rg8FillWithValue;
 use super::{WgpuCtx, format::TextureFormat};
 
 mod add_premultiplied_alpha;
-mod mipmap_generator;
 mod r8_fill_with_color;
 mod reinterpret_input_to_srgb;
 mod remove_premultiplied_alpha;
 mod rg8_fill_with_color;
 
-pub use mipmap_generator::{MipMapGenerator, MippedTexture};
 pub use reinterpret_input_to_srgb::ReinterpretToSrgb;
 
 #[derive(Debug)]
@@ -24,7 +22,6 @@ pub struct TextureUtils {
     pub linear_rgba_remove_premult_alpha: RemovePremultipliedAlphaPipeline,
     pub srgb_rgba_add_premult_alpha: PremultiplyAlphaPipeline,
     pub linear_rgba_add_premult_alpha: PremultiplyAlphaPipeline,
-    pub mipmap_generator: MipMapGenerator,
 }
 
 impl TextureUtils {
@@ -47,7 +44,6 @@ impl TextureUtils {
                 &format.single_texture_layout,
                 wgpu::TextureFormat::Rgba8Unorm,
             ),
-            mipmap_generator: MipMapGenerator::new(device),
         }
     }
 }
