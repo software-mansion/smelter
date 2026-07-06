@@ -22,10 +22,10 @@ use url::Url;
 use crate::prelude::*;
 
 pub struct MoqClientInput {
-    pub queue_input: WeakQueueInput,
-    pub decoders: MoqInputDecoders,
-    pub should_close: Arc<AtomicBool>,
-    pub session: Option<MoqSession>,
+    queue_input: WeakQueueInput,
+    decoders: MoqInputDecoders,
+    should_close: Arc<AtomicBool>,
+    _session: MoqSession,
 }
 
 impl MoqClientInput {
@@ -41,17 +41,18 @@ impl MoqClientInput {
 
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
 
-        let mut input = Self {
-            queue_input: queue_input.downgrade(),
-            decoders: options.decoders,
-            should_close: Arc::new(false.into()),
-            session: None,
-        };
-        let consumer = input.connect(
+        let (session, consumer) = Self::connect(
             &ctx,
             &options.endpoint_url,
             options.disable_tls_verification,
         )?;
+
+        let input = Self {
+            queue_input: queue_input.downgrade(),
+            decoders: options.decoders,
+            should_close: Arc::new(false.into()),
+            _session: session,
+        };
 
         input.spawn_broadcast_handler(ctx, input_ref, consumer, options.broadcast_path);
 
@@ -59,11 +60,10 @@ impl MoqClientInput {
     }
 
     fn connect(
-        &mut self,
         ctx: &Arc<PipelineCtx>,
         url: &str,
         disable_tls_verification: bool,
-    ) -> Result<OriginConsumer, MoqClientError> {
+    ) -> Result<(MoqSession, OriginConsumer), MoqClientError> {
         let url = Url::parse(url).map_err(|err| MoqClientError::InvalidUrl(Arc::from(url), err))?;
 
         if url.scheme() != "https" {
@@ -84,8 +84,7 @@ impl MoqClientInput {
             .map_err(MoqClientError::ConnectFailed)?;
         let session = MoqSession::new(session, ctx.tokio_rt.clone());
         info!(moq_version = ?session.version(), "MoQ client session established");
-        self.session = Some(session);
-        Ok(consumer)
+        Ok((session, consumer))
     }
 
     fn spawn_broadcast_handler(
