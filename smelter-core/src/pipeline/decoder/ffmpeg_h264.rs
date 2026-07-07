@@ -81,6 +81,7 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
                 self.au_splitter.mark_missing_data();
                 return vec![];
             }
+            EncodedInputEvent::Discontinuity => return self.flush(),
             EncodedInputEvent::AuDelimiter => match self.au_splitter.flush() {
                 Ok(chunks) => chunks,
                 Err(err) => {
@@ -111,7 +112,10 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
 
         // Signal end of stream so the decoder drains the frames it holds back for reordering.
         let _ = self.decoder.send_eof();
-        self.read_all_frames()
+        let frames = self.read_all_frames();
+        // Reset decoder state, so it can accept a new stream (e.g. after discontinuity).
+        self.decoder.flush();
+        frames
     }
 }
 

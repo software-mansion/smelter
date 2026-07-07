@@ -19,6 +19,7 @@ mod whep_into;
 mod whip;
 mod whip_into;
 
+mod buffer;
 mod queue_options;
 mod side_channel;
 
@@ -33,4 +34,5 @@ pub use v4l2::*;
 pub use whep::*;
 pub use whip::*;
 
+pub use buffer::*;
 pub use side_channel::*;

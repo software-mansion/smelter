@@ -10,6 +10,8 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             required,
             decoder_map,
             side_channel,
+            ingest_mode,
+            buffer,
         } = value;
 
         let side_channel = side_channel.unwrap_or_default();
@@ -27,12 +29,20 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
         let input_options = core::RtmpServerInputOptions {
             stream_key,
             decoders: core::RtmpServerInputDecoders { h264 },
+            is_live: match ingest_mode.unwrap_or(RtmpIngestMode::Realtime) {
+                RtmpIngestMode::Realtime => true,
+                RtmpIngestMode::File => false,
+            },
             queue_options: core::QueueInputOptions {
                 required: required.unwrap_or(false),
                 video_side_channel: side_channel.video.unwrap_or(false).into(),
                 audio_side_channel: side_channel.audio.unwrap_or(false).into(),
                 side_channel_delay,
             },
+            buffer: buffer
+                .map(TryInto::try_into)
+                .transpose()?
+                .unwrap_or_default(),
         };
 
         Ok(core::RegisterInputOptions::RtmpServer(input_options))

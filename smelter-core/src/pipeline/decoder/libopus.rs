@@ -58,6 +58,13 @@ impl AudioDecoder for OpusDecoder {
                 return Ok(vec![]);
             }
             EncodedInputEvent::AuDelimiter => return Ok(vec![]),
+            EncodedInputEvent::Discontinuity => {
+                self.unhandled_lost_packets = 0;
+                if let Err(err) = self.decoder.reset_state() {
+                    debug!("Failed to reset opus decoder state: {err}");
+                }
+                return Ok(vec![]);
+            }
         };
 
         trace!(?encoded_chunk, "libopus decoder received a chunk.");

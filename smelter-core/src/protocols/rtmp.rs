@@ -4,6 +4,7 @@ use smelter_render::InputId;
 use url::Url;
 
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
+use crate::protocols::LiveInputBufferOptions;
 use crate::queue::QueueInputOptions;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,6 +65,9 @@ pub struct RtmpServerInputOptions {
     pub stream_key: Arc<str>,
     pub decoders: RtmpServerInputDecoders,
     pub queue_options: QueueInputOptions,
+    pub is_live: bool,
+    /// Without `is_live` only the desired buffer is used; `min`/`max` are ignored.
+    pub buffer: LiveInputBufferOptions,
 }
 
 #[derive(Debug, Clone, PartialEq)]

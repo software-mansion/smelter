@@ -75,6 +75,16 @@ export type RegisterInput =
        * Enable side channel for video and/or audio track.
        */
       side_channel?: SideChannel | null;
+      /**
+       * (**default=`"realtime"`**) Defines if stream is real-time.
+       */
+      ingest_mode?: RtmpIngestMode | null;
+      /**
+       * Input buffer configuration.
+       *
+       * Defaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`.
+       */
+      buffer?: InputBuffer | null;
     }
   | {
       type: "moq_server";
@@ -233,6 +243,12 @@ export type RegisterInput =
        * Enable side channel for video and/or audio track.
        */
       side_channel?: SideChannel | null;
+      /**
+       * Input buffer configuration.
+       *
+       * Defaults: `desired_ms=4000`, `min_ms=2000`, `max_ms=8000`.
+       */
+      buffer?: InputBuffer | null;
     }
   | {
       type: "v4l2";
@@ -326,6 +342,11 @@ export type InputRtpAudioOptions =
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
 export type RtmpVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type RtmpIngestMode = "realtime" | "file";
+/**
+ * Buffer a live input keeps between the live edge of the stream and playback. A larger buffer adds latency, but tolerates more delivery jitter and network stalls.
+ */
+export type InputBuffer = number | InputBufferOptions;
 export type MoqServerVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type MoqClientVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
@@ -1755,6 +1776,23 @@ export interface SideChannel {
    * Side channel delay in milliseconds. Frames are buffered for this duration ahead of when the queue consumes them, so the side-channel subscriber receives them early and has roughly this much time to process before the frame is due.
    */
   delay_ms?: number | null;
+}
+/**
+ * Values that are not provided are derived from the provided ones and the protocol defaults.
+ */
+export interface InputBufferOptions {
+  /**
+   * Buffer the input aims to keep, in milliseconds. At the start it should buffer at least that much media before producing first chunk.
+   */
+  desired_ms?: number | null;
+  /**
+   * Lower range of what is considered stable state. If buffer is smaller than this value then media will be slightly "stretched" so the buffer converges on desired value.
+   */
+  min_ms?: number | null;
+  /**
+   * Upper range of what is considered stable state. If buffer is larger than this value then media will be slightly "squashed" so the buffer converges on desired value.
+   */
+  max_ms?: number | null;
 }
 export interface InputWhipVideoOptions {
   decoder_preferences?: WhipVideoDecoderOptions[] | null;

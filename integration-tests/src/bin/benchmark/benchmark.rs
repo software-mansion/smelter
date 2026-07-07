@@ -88,6 +88,6 @@ impl BenchmarkResult {
     }
 
     pub fn text(&self) -> String {
-        format!("id: {:?}\nresult: {:?}\n", &self.id, &self.pass)
+        format!("id: {:?}\nresult: {:?}\n", self.id, self.pass)
     }
 }
