@@ -16,12 +16,16 @@ use crate::prelude::*;
 ///
 /// ## Timestamps
 ///
-/// - On connection:
-///   - A new track is created with `QueueTrackOffset::Pts(effective_last_pts + buffer)`.
-///     The buffer gives time for data to arrive and be decoded before the queue
-///     needs it.
-///   - PTS values are normalized to zero (subtracts first observed PTS, shared across
-///     video and audio).
+/// - On connection (see `LiveSyncController`):
+///   - The stream is probed first: packets are held (newest GOP only) until delivery
+///     is measured to advance at real-time rate or the probe cap expires. This skips
+///     any backlog the server dumps at connect (GOP caches, relays).
+///   - At join, a new track is created with `QueueTrackOffset::Pts(effective_last_pts
+///     + buffer)` and the newest held keyframe becomes track time zero; held packets
+///     are flushed.
+///   - Afterwards the controller keeps the buffer fill at the target: re-anchors on
+///     starvation (publisher pause, network stall), catches up gradually on drift and
+///     skips to a keyframe when too far behind.
 /// - On reconnect:
 ///   - Only one active connection per input is allowed (`ensure_no_active_connection`).
 ///   - Once a previous connection finishes, a new one can connect and creates a fresh
@@ -30,8 +34,8 @@ use crate::prelude::*;
 ///   senders are dropped.
 ///
 /// ### Unsupported scenarios
-/// - Timestamps are synchronized based on the connection end. If first packet is delivered
-///   few seconds after connection the frames will not reach queue on time.
+/// - A timestamp discontinuity within one connection freezes the input until the
+///   publisher reconnects.
 /// - If ahead of time processing is enabled, initial registration will happen on pts already
 ///   processed by the queue, but queue will wait and eventually stream will show up, with
 ///   the portion at the start cut off.

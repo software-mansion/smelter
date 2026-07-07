@@ -54,12 +54,14 @@ pub(crate) struct LiveEdgeSnapshot {
     pub state: LiveEdgeState,
     /// Estimated newest PTS produced by the source, in the same raw
     /// (non-normalized) timestamp domain as the observed PTS.
+    #[allow(dead_code)]
     pub edge: Option<Duration>,
     /// Newest PTS that actually arrived.
     pub last_arrived_pts: Option<Duration>,
     /// Spread between typical worst-case and best-case delivery delay.
     /// Approximates how much buffer the delivery pattern requires (e.g.
     /// roughly segment duration for segmented protocols).
+    #[allow(dead_code)]
     pub jitter: Duration,
     /// How much the best-case delay in the current window exceeds the
     /// long-term best-case. Near zero normally; grows when every recent
@@ -83,6 +85,7 @@ impl LiveEdgeSnapshot {
 
     /// How far behind the live edge is a track that currently plays
     /// `playhead` (in the same raw timestamp domain).
+    #[allow(dead_code)]
     pub fn lag_behind(&self, playhead: Duration) -> Option<Duration> {
         match (self.state, self.edge) {
             (LiveEdgeState::Tracking, Some(edge)) => Some(edge.saturating_sub(playhead)),
@@ -286,6 +289,7 @@ impl LiveEdgeEstimator {
     /// Hard reset of all state. Call on stream discontinuity (a PTS jump
     /// past the discontinuity threshold means the raw timestamp domain
     /// changed and old observations are meaningless).
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         self.sync_point = None;
         self.buckets.clear();
@@ -295,7 +299,7 @@ impl LiveEdgeEstimator {
     }
 }
 
-fn saturating_duration_from_nanos(nanos: i128) -> Duration {
+pub(super) fn saturating_duration_from_nanos(nanos: i128) -> Duration {
     match u64::try_from(nanos) {
         Ok(nanos) => Duration::from_nanos(nanos),
         Err(_) if nanos < 0 => Duration::ZERO,

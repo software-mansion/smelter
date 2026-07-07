@@ -1,8 +1,6 @@
 pub(crate) mod channel;
 pub(crate) mod input_buffer;
-// not wired into any input yet
-#[allow(dead_code)]
-pub(crate) mod live_edge_estimator;
+pub(crate) mod live_sync;
 
 mod audio_buffer;
 mod h264_annexb_to_avcc;
