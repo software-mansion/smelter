@@ -63,6 +63,7 @@ impl RtmpServerInput {
                 stream_key: options.stream_key,
                 queue_input: queue_input.downgrade(),
                 decoders: options.decoders,
+                is_live: options.is_live,
             },
         )?;
 
