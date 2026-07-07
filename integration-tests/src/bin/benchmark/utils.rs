@@ -13,7 +13,7 @@ use std::{
 };
 use tracing::warn;
 
-use smelter_render::{Framerate, RenderingMode, YuvPlanes};
+use smelter_render::{DEFAULT_MAX_LAYOUTS_COUNT, Framerate, RenderingMode, YuvPlanes};
 
 use crate::{args::Resolution, benchmark_pass::RawInputFile};
 
@@ -38,6 +38,7 @@ pub fn benchmark_pipeline_options(
         stream_fallback_timeout: Duration::from_millis(500),
         tokio_rt: None,
         rendering_mode,
+        max_layouts_count: DEFAULT_MAX_LAYOUTS_COUNT,
         whip_whep_server: PipelineWhipWhepServerOptions::Disable,
         webrtc_stun_servers: Vec::new().into(),
         webrtc_udp_port_strategy: None,

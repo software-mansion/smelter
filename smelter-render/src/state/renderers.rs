@@ -18,12 +18,15 @@ pub(crate) struct Renderers {
 }
 
 impl Renderers {
-    pub fn new(wgpu_ctx: Arc<WgpuCtx>) -> Result<Self, InitRendererEngineError> {
+    pub fn new(
+        wgpu_ctx: Arc<WgpuCtx>,
+        max_layouts_count: usize,
+    ) -> Result<Self, InitRendererEngineError> {
         Ok(Self {
             shaders: RendererRegistry::new(RegistryType::Shader),
             web_renderers: RendererRegistry::new(RegistryType::WebRenderer),
             images: RendererRegistry::new(RegistryType::Image),
-            layout: LayoutRenderer::new(&wgpu_ctx)
+            layout: LayoutRenderer::new(&wgpu_ctx, max_layouts_count)
                 .map_err(InitRendererEngineError::LayoutTransformationsInitError)?,
         })
     }

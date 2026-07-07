@@ -15,6 +15,9 @@ use super::{RenderLayout, params::ParamsBindGroups};
 
 const LABEL: Option<&str> = Some("layout node");
 
+const SHADER_SOURCE: &str = include_str!("./apply_layouts.wgsl");
+const MAX_LAYOUTS_WGSL_DECLARATION: &str = "const MAX_LAYOUTS_COUNT: u32 = 100;";
+
 #[derive(Debug)]
 pub struct LayoutShader {
     pipeline: wgpu::RenderPipeline,
@@ -23,13 +26,27 @@ pub struct LayoutShader {
 }
 
 impl LayoutShader {
-    pub fn new(wgpu_ctx: &Arc<WgpuCtx>) -> Result<Self, CreateShaderError> {
+    pub fn new(
+        wgpu_ctx: &Arc<WgpuCtx>,
+        max_layouts_count: usize,
+    ) -> Result<Self, CreateShaderError> {
         let scope = WgpuErrorScope::push(&wgpu_ctx.device);
 
+        assert!(
+            SHADER_SOURCE.contains(MAX_LAYOUTS_WGSL_DECLARATION),
+            "MAX_LAYOUTS_COUNT declaration not found in apply_layouts.wgsl"
+        );
+        let shader_source = SHADER_SOURCE.replace(
+            MAX_LAYOUTS_WGSL_DECLARATION,
+            &format!("const MAX_LAYOUTS_COUNT: u32 = {max_layouts_count};"),
+        );
         let shader_module = wgpu_ctx
             .device
-            .create_shader_module(wgpu::include_wgsl!("./apply_layouts.wgsl"));
-        let result = Self::new_pipeline(wgpu_ctx, shader_module)?;
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("apply_layouts.wgsl"),
+                source: wgpu::ShaderSource::Wgsl(shader_source.into()),
+            });
+        let result = Self::new_pipeline(wgpu_ctx, shader_module, max_layouts_count)?;
 
         scope.pop()?;
 
@@ -39,9 +56,10 @@ impl LayoutShader {
     fn new_pipeline(
         wgpu_ctx: &Arc<WgpuCtx>,
         shader_module: wgpu::ShaderModule,
+        max_layouts_count: usize,
     ) -> Result<Self, CreateShaderError> {
         let sampler = Sampler::new(&wgpu_ctx.device);
-        let params_bind_groups = ParamsBindGroups::new(wgpu_ctx);
+        let params_bind_groups = ParamsBindGroups::new(wgpu_ctx, max_layouts_count);
 
         let pipeline_layout =
             wgpu_ctx
@@ -131,7 +149,7 @@ impl LayoutShader {
             for (index, (texture_bg, layout_info)) in input_texture_bgs
                 .iter()
                 .zip(layout_infos.iter())
-                .take(100)
+                .take(self.params_bind_groups.max_layouts_count)
                 .enumerate()
             {
                 render_pass.set_pipeline(&self.pipeline);

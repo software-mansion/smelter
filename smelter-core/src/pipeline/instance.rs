@@ -561,6 +561,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         device: graphics_context.device.clone(),
         queue: graphics_context.queue.clone(),
         rendering_mode: opts.rendering_mode,
+        max_layouts_count: opts.max_layouts_count,
     })?;
 
     let download_dir = opts

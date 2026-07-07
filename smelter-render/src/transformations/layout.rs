@@ -18,6 +18,8 @@ use self::shader::LayoutShader;
 pub(crate) use layout_renderer::LayoutRenderer;
 use tracing::error;
 
+pub const DEFAULT_MAX_LAYOUTS_COUNT: usize = 100;
+
 pub(crate) trait LayoutProvider: Send {
     fn layouts(&mut self, pts: Duration, inputs: &[Option<Resolution>]) -> NestedLayout;
     fn resolution(&self, pts: Duration) -> Resolution;
