@@ -15,6 +15,7 @@
       - `VulkanDevice` -> `VideoDevice`
       - etc...
   - Removed `vk-validation` and `vk-api-dump` features. Instead you can enable them when creating a `VideoInstance` or `wgpu::Instance`
+- Updated `wgpu` to `30.0.0` ([#2111](https://github.com/software-mansion/smelter/pull/2111) by @noituri)
 
 ### ✨ New features
 - Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)

@@ -58,7 +58,7 @@ webrtc = "0.17.1"
 webrtc-util = "0.17.0"
 opus = "0.3.0"
 rubato = "1.0.0"
-glyphon = { git = "https://github.com/smelter-labs/glyphon", rev = "33b3dfe" }
+glyphon = { git = "https://github.com/smelter-labs/glyphon", rev = "c784922" }
 futures-util = "0.3.30"
 tokio = { version = "1", features = ["full"] }
 schemars = { version = "0.8.22", features = ["preserve_order"] }
@@ -70,7 +70,7 @@ utoipa = { version = "5.4.0", features = [
 ] }
 shared_memory = "0.12.4"
 h264-reader = "0.8.0"
-wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "1503796", default-features = false, features = [
+wgpu = { version = "30.0.0", default-features = false, features = [
     "wgsl",
     "dx12",
     "metal",

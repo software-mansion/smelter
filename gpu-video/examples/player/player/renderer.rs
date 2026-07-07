@@ -79,6 +79,7 @@ impl Renderer {
             alpha_mode: surface_capabilities.alpha_modes[0],
             present_mode: surface_capabilities.present_modes[0],
             desired_maximum_frame_latency: 2,
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
         surface.configure(&device, &surface_configuration);
