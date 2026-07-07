@@ -17,8 +17,11 @@ pub(crate) struct RtmpInputsState(Arc<Mutex<HashMap<Ref<InputId>, RtmpInputState
 #[derive(Debug)]
 pub(crate) struct RtmpInputState {
     pub stream_key: Arc<str>,
-    pub queue_input: WeakQueueInput,
     pub decoders: RtmpServerInputDecoders,
+    pub is_live: bool,
+    pub buffer: LiveInputBufferOptions,
+
+    pub queue_input: WeakQueueInput,
     pub connection_handle: Option<JoinHandle<()>>,
 }
 
@@ -26,14 +29,19 @@ pub(crate) struct RtmpInputStateOptions {
     pub stream_key: Arc<str>,
     pub queue_input: WeakQueueInput,
     pub decoders: RtmpServerInputDecoders,
+    pub is_live: bool,
+    pub buffer: LiveInputBufferOptions,
 }
 
 impl RtmpInputState {
     fn new(options: RtmpInputStateOptions) -> Self {
         Self {
             stream_key: options.stream_key,
-            queue_input: options.queue_input,
             decoders: options.decoders,
+            is_live: options.is_live,
+            buffer: options.buffer,
+
+            queue_input: options.queue_input,
             connection_handle: None,
         }
     }

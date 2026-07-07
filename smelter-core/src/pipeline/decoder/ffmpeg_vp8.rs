@@ -55,8 +55,10 @@ impl VideoDecoderInstance for FfmpegVp8Decoder {
     fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
         trace!(?event, "FFmpeg VP8 decoder received an event.");
 
-        let EncodedInputEvent::Chunk(chunk) = event else {
-            return vec![];
+        let chunk = match event {
+            EncodedInputEvent::Chunk(chunk) => chunk,
+            EncodedInputEvent::Discontinuity => return self.flush(),
+            EncodedInputEvent::LostData | EncodedInputEvent::AuDelimiter => return vec![],
         };
 
         let av_packet = match create_av_packet(chunk, VideoCodec::Vp8, TIME_BASE) {
@@ -78,8 +80,12 @@ impl VideoDecoderInstance for FfmpegVp8Decoder {
     }
 
     fn flush(&mut self) -> Vec<Frame> {
+        // Signal end of stream so the decoder drains the frames it holds back.
+        let _ = self.decoder.send_eof();
+        let frames = self.read_all_frames();
+        // Reset decoder state, so it can accept a new stream (e.g. after discontinuity).
         self.decoder.flush();
-        self.read_all_frames()
+        frames
     }
 }
 

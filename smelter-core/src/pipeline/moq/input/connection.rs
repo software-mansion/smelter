@@ -12,7 +12,7 @@ use tracing::{Instrument, Span, debug, info, trace, warn};
 use crate::{
     pipeline::{
         decoder::{
-            DecoderThreadHandle,
+            DecoderThreadHandle, EncodedInputEvent,
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac::FdkAacDecoder,
@@ -275,7 +275,7 @@ async fn run_video_track(
                 trace!(pts=?chunk.pts, ?raw_pts, "Video chunk received.");
                 decoder_handle
                     .chunk_sender
-                    .send(PipelineEvent::Data(chunk))
+                    .send(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)))
                     .is_err()
             });
         if channel_closed {
@@ -289,7 +289,7 @@ async fn run_video_track(
         let channel_closed = aligner.flush().into_iter().any(|chunk| {
             decoder_handle
                 .chunk_sender
-                .send(PipelineEvent::Data(chunk))
+                .send(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)))
                 .is_err()
         });
         if channel_closed {
@@ -358,7 +358,7 @@ async fn run_audio_track(
                 trace!(pts=?chunk.pts, ?raw_pts, "Audio chunk received.");
                 decoder_handle
                     .chunk_sender
-                    .send(PipelineEvent::Data(chunk))
+                    .send(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)))
                     .is_err()
             });
         if channel_closed {
@@ -372,7 +372,7 @@ async fn run_audio_track(
         let channel_closed = aligner.flush().into_iter().any(|chunk| {
             decoder_handle
                 .chunk_sender
-                .send(PipelineEvent::Data(chunk))
+                .send(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)))
                 .is_err()
         });
         if channel_closed {

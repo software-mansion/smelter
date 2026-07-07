@@ -1,41 +1,41 @@
 use std::{
-    slice,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use bytes::Bytes;
 use ffmpeg_next::{
-    Dictionary, Packet, Stream,
+    Dictionary, Packet, Rational,
     format::{context, input_with_interrupt_and_dictionary},
     media::Type,
 };
-use tracing::{Level, debug, info, span, trace, warn};
+use tracing::{Level, Span, debug, info, span, trace, warn};
 
 use crate::{
     pipeline::{
-        decoder::{
-            DecoderThreadHandle,
-            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
-            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
-            fdk_aac, ffmpeg_h264, vulkan_h264,
-        },
+        decoder::{DecoderThreadHandle, EncodedInputEvent},
+        ffmpeg_utils::ReadExtradataExt,
         input::Input,
-        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread},
+        utils::{
+            channel::TrySendError,
+            input_sync::{
+                InputSync, InputSyncItem, InputSyncTrack, SimpleSync, TimestampAnchor,
+                TrackClosedError, TrackEvent, TrackKind, TrackSink,
+            },
+            live_sync::{BufferingStrategy, FifoBuffer, LiveSync, LiveSyncOptions},
+        },
     },
-    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
+    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
 };
+
+use super::hls_decoder::{spawn_audio_decoder, spawn_video_decoder};
 
 use crate::prelude::*;
 
-/// If we assume that max reasonable segment size is 10 second, then
-/// range for desired buffer should be larger than the segment (18 second)
-const MAX_BUFFER_SIZE: Duration = Duration::from_secs(40);
-const DESIRED_MIN_BUFFER_SIZE: Duration = Duration::from_secs(6);
-const DESIRED_MAX_BUFFER_SIZE: Duration = Duration::from_secs(24);
+type HlsBuffer = FifoBuffer<HlsPacket>;
 
 /// HLS input - reads from an HLS URL via FFmpeg, demuxes H.264/AAC tracks,
 /// decodes, and feeds frames/samples into the queue.
@@ -43,20 +43,23 @@ const DESIRED_MAX_BUFFER_SIZE: Duration = Duration::from_secs(24);
 /// ## Timestamps
 ///
 /// - FFmpeg opens the HLS URL immediately and discovers tracks.
-/// - With offset (`opts.offset = Some(offset)`)
-///   - PTS of first frame should be zero
-///   - Register track with `QueueTrackOffset::FromStart(offset)`
-/// - Without offset (`opts.offset = None`)
-///   - PTS of first frame should be zero
-///   - Register track with `QueueTrackOffset::None`
-/// - On discontinuity (timestamp (per track) changed by 10 seconds)
-///   - Send EOS to current decoder threads
-///   - Create new queue track `QueueTrackOffset::None`
+/// - Whether the playlist is live decides which synchronization is used. FFmpeg
+///   only knows the duration of a playlist that ended (`#EXT-X-ENDLIST`), so a
+///   playlist without a duration is a live one.
+/// - Live playlist (`InputSync::Live`)
+///   - Packet timestamps are passed through as they are; live sync maps them
+///     onto the timeline of the queue sync point and keeps the buffer in range.
+///   - Register track with `QueueTrackOffset::Pts(Duration::ZERO)`
+///   - `offset` is ignored, the live edge decides where the playback starts.
+/// - Non-live playlist (`InputSync::Simple`)
+///   - Timestamps are normalized, so PTS of the first packet is zero.
+///   - Register track with `QueueTrackOffset::FromStart(offset)`, or with
+///     `QueueTrackOffset::None` if the offset is not defined.
+/// - On discontinuity (detected by the sync, only for live playlists)
+///   - Send `EncodedInputEvent::Discontinuity` to the decoder of the track
+///     that broke, so it decodes what it still holds from the old timeline
+///     and then drops the state built from it
 ///   - Ignore packets until `packet.key() == true`
-///   - Start new decoder threads
-/// - For live stream (`input_ctx.duration() <= 0`)
-///   - Estimate buffer size by chunks in channel (input -> decoder). Shift offset
-///     to keep buffer between 500 and 1500.
 ///
 /// ### Unsupported scenarios
 /// - If ahead of time processing is enabled, initial registration will happen on pts already
@@ -72,345 +75,37 @@ impl HlsInput {
         input_ref: Ref<InputId>,
         opts: HlsInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
-        let should_close = Arc::new(AtomicBool::new(false));
+        let HlsInputOptions {
+            url,
+            decoder_options,
+            queue_options,
+            offset,
+            buffer,
+        } = opts;
 
+        let _span = span!(Level::INFO, "HLS input", input_id = input_ref.to_string()).entered();
+        let should_close = Arc::new(AtomicBool::new(false));
         ctx.stats_sender.send(StatsEvent::NewInput {
             input_ref: input_ref.clone(),
             kind: InputProtocolKind::Hls,
         });
 
-        let input_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
-        let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
+        let ffmpeg_ctx = FfmpegInputContext::new(&url, should_close.clone())?;
+        let queue_input = QueueInput::new(&ctx, &input_ref, queue_options);
 
-        if input_ctx.video_stream().is_some()
-            && opts.video_decoders.h264 == Some(VideoDecoderOptions::VulkanH264)
-            && !ctx.graphics_context.has_vulkan_decoder_support()
-        {
-            return Err(InputInitError::DecoderError(
-                DecoderInitError::VulkanContextRequiredForVulkanDecoder,
-            ));
-        }
-
-        let mut demuxer = HlsDemuxerThread::new(
+        let input_ctx = HlsInputContext {
+            ctx,
             input_ref,
-            input_ctx,
-            queue_input.downgrade(),
-            ctx.clone(),
-            opts.video_decoders,
-        );
+            decoder_options,
+        };
 
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: demuxer.has_video,
-            audio: demuxer.has_audio,
-            offset: match opts.offset {
-                Some(offset) => QueueTrackOffset::FromStart(offset),
-                None => QueueTrackOffset::None,
-            },
-        });
-
-        if let Some(sender) = audio_sender {
-            demuxer.start_audio_decoder(sender)?;
-        }
-        if let Some(sender) = video_sender {
-            demuxer.spawn_video_decoder(sender)?;
-        }
-
-        demuxer.spawn();
+        HlsDemuxerThread::new(input_ctx, ffmpeg_ctx, &queue_input, offset, buffer)?.spawn();
 
         Ok((
             Input::Hls(Self { should_close }),
             InputInitInfo::Other,
             queue_input,
         ))
-    }
-}
-
-struct HlsDemuxerThread {
-    input_ctx: FfmpegInputContext,
-    queue_input: WeakQueueInput,
-    ctx: Arc<PipelineCtx>,
-    input_ref: Ref<InputId>,
-    video_decoders: HlsInputVideoDecoders,
-
-    audio: Option<Track>,
-    video: Option<Track>,
-    first_pts: Option<Duration>,
-    has_video: bool,
-    has_audio: bool,
-}
-
-impl HlsDemuxerThread {
-    fn new(
-        input_ref: Ref<InputId>,
-        input_ctx: FfmpegInputContext,
-        queue_input: WeakQueueInput,
-        ctx: Arc<PipelineCtx>,
-        video_decoders: HlsInputVideoDecoders,
-    ) -> Self {
-        let has_video = input_ctx.video_stream().is_some();
-        let has_audio = input_ctx.audio_stream().is_some();
-
-        Self {
-            input_ctx,
-            queue_input,
-            ctx,
-            input_ref,
-            video_decoders,
-            audio: None,
-            video: None,
-            first_pts: None,
-            has_video,
-            has_audio,
-        }
-    }
-
-    fn spawn(mut self) {
-        std::thread::Builder::new()
-            .name(format!("HLS thread for input {}", self.input_ref))
-            .spawn(move || {
-                let _span = span!(
-                    Level::INFO,
-                    "HLS thread",
-                    input_id = self.input_ref.to_string()
-                )
-                .entered();
-                self.run();
-                info!("Playlist finished")
-            })
-            .unwrap();
-    }
-
-    fn start_audio_decoder(
-        &mut self,
-        samples_sender: QueueSender<InputAudioSamples>,
-    ) -> Result<(), InputInitError> {
-        let Some(stream) = self.input_ctx.audio_stream() else {
-            return Ok(());
-        };
-        // not tested it was always null, but audio is in ADTS, so config is not
-        // necessary
-        let asc = read_extra_data(&stream);
-        let stats_sender = HlsInputTrackStatsSender::new(
-            &self.input_ref,
-            &self.ctx.stats_sender,
-            TrackKind::Audio,
-        );
-        let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
-            self.input_ref.clone(),
-            AudioDecoderThreadOptions {
-                ctx: self.ctx.clone(),
-                decoder_options: FdkAacDecoderOptions { asc },
-                samples_sender,
-                input_buffer_size: MAX_BUFFER_SIZE,
-            },
-        )?;
-
-        self.audio = Some(Track {
-            index: stream.index(),
-            handle,
-            time_base: stream.time_base(),
-            last_pts: None,
-            stats_sender,
-        });
-        Ok(())
-    }
-
-    fn spawn_video_decoder(
-        &mut self,
-        frame_sender: QueueSender<Frame>,
-    ) -> Result<(), InputInitError> {
-        let Some(stream) = self.input_ctx.video_stream() else {
-            return Ok(());
-        };
-        let stats_sender = HlsInputTrackStatsSender::new(
-            &self.input_ref,
-            &self.ctx.stats_sender,
-            TrackKind::Video,
-        );
-
-        let extra_data = read_extra_data(&stream);
-        let h264_config = extra_data
-            .map(H264AvcDecoderConfig::parse)
-            .transpose()
-            .unwrap_or_else(|e| match e {
-                H264AvcDecoderConfigError::NotAVCC => None,
-                _ => {
-                    warn!("Could not parse extra data: {e}");
-                    None
-                }
-            });
-
-        let decoder_thread_options = VideoDecoderThreadOptions {
-            ctx: self.ctx.clone(),
-            transformer: h264_config.map(H264AvccToAnnexB::new),
-            frame_sender,
-            input_buffer_size: MAX_BUFFER_SIZE,
-        };
-
-        let vulkan_supported = self.ctx.graphics_context.has_vulkan_decoder_support();
-        let h264_decoder = self.video_decoders.h264.unwrap_or({
-            match vulkan_supported {
-                true => VideoDecoderOptions::VulkanH264,
-                false => VideoDecoderOptions::FfmpegH264,
-            }
-        });
-
-        let handle = match h264_decoder {
-            VideoDecoderOptions::FfmpegH264 => {
-                VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
-                    &self.input_ref,
-                    decoder_thread_options,
-                )?
-            }
-            VideoDecoderOptions::VulkanH264 => {
-                if !vulkan_supported {
-                    return Err(InputInitError::DecoderError(
-                        DecoderInitError::VulkanContextRequiredForVulkanDecoder,
-                    ));
-                }
-                VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
-                    &self.input_ref,
-                    decoder_thread_options,
-                )?
-            }
-            _ => {
-                return Err(InputInitError::InvalidVideoDecoderProvided {
-                    expected: VideoCodec::H264,
-                });
-            }
-        };
-
-        self.video = Some(Track {
-            index: stream.index(),
-            handle,
-            time_base: stream.time_base(),
-            last_pts: None,
-            stats_sender,
-        });
-        Ok(())
-    }
-
-    fn run(&mut self) {
-        loop {
-            let packet = match self.input_ctx.read_packet() {
-                Ok(packet) => packet,
-                Err(ffmpeg_next::Error::Eof | ffmpeg_next::Error::Exit) => break,
-                Err(err) => {
-                    warn!("HLS read error {err:?}");
-                    continue;
-                }
-            };
-
-            let stream_id = packet.stream();
-            let pts = packet.pts().unwrap_or(0);
-            trace!(
-                ?stream_id,
-                pts,
-                key = packet.is_key(),
-                corrupted = packet.is_corrupt()
-            );
-
-            match self.handle_packet(packet) {
-                Ok(_) => {
-                    // to keep buffer in range for live playlists
-                    self.maybe_shift_pts(stream_id);
-                }
-                Err(HandlePacketError::WaitingForKeyframe) => debug!("Waiting for keyframe"),
-                Err(HandlePacketError::UnknownStream) => trace!(stream_id, "Unknown stream"),
-                Err(HandlePacketError::CorruptedPacket) => warn!("Detected corrupted packet"),
-                Err(HandlePacketError::Discontinuity) => {
-                    warn!("Detected discontinuity");
-                    self.restart_tracks();
-                }
-            }
-        }
-
-        self.send_eos();
-    }
-
-    fn maybe_shift_pts(&mut self, stream_id: usize) {
-        if !self.input_ctx.is_live() {
-            return;
-        }
-
-        let Some(first_pts) = &mut self.first_pts else {
-            return;
-        };
-
-        if let Some(track) = self.audio.as_mut().or(self.video.as_mut())
-            && track.index == stream_id
-        {
-            let buffered = track.handle.chunk_sender.buffered_duration();
-            if buffered > DESIRED_MAX_BUFFER_SIZE {
-                *first_pts = first_pts.saturating_add(Duration::from_micros(100))
-            }
-            if buffered < DESIRED_MIN_BUFFER_SIZE {
-                *first_pts = first_pts.saturating_sub(Duration::from_micros(100))
-            }
-        }
-    }
-
-    fn handle_packet(&mut self, packet: Packet) -> Result<(), HandlePacketError> {
-        if let Some(track) = &mut self.video
-            && packet.stream() == track.index
-        {
-            if packet.is_corrupt() {
-                return Err(HandlePacketError::CorruptedPacket);
-            }
-            return track.handle_video_packet(packet, &mut self.first_pts);
-        }
-
-        if let Some(track) = &mut self.audio
-            && packet.stream() == track.index
-        {
-            if packet.is_corrupt() {
-                return Err(HandlePacketError::CorruptedPacket);
-            }
-            return track.handle_audio_packet(packet, &mut self.first_pts);
-        }
-
-        Err(HandlePacketError::UnknownStream)
-    }
-
-    fn send_eos(&mut self) {
-        if let Some(track) = self.audio.take() {
-            if track.handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
-                debug!("Failed to send EOS. Channel closed")
-            }
-            debug!("audio thread flushed");
-        }
-        if let Some(track) = self.video.take() {
-            if track.handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
-                debug!("Failed to send EOS. Channel closed")
-            }
-            debug!("video thread flushed");
-        }
-    }
-
-    fn restart_tracks(&mut self) {
-        // Flush and send EOS to current decoder threads
-        debug!("Replacing processing threads");
-        self.send_eos();
-
-        let Some(queue_input) = self.queue_input.upgrade() else {
-            return;
-        };
-
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: self.has_video,
-            audio: self.has_audio,
-            offset: QueueTrackOffset::None,
-        });
-
-        if let Some(sender) = audio_sender {
-            self.start_audio_decoder(sender).unwrap();
-        }
-        if let Some(sender) = video_sender {
-            self.spawn_video_decoder(sender).unwrap();
-        }
-
-        // Reset timestamp state so new track starts from zero
-        self.first_pts = None;
     }
 }
 
@@ -421,122 +116,425 @@ impl Drop for HlsInput {
     }
 }
 
-struct Track {
+/// What the tracks of one input share: where they belong in the pipeline and
+/// how to decode them.
+pub(super) struct HlsInputContext {
+    pub(super) ctx: Arc<PipelineCtx>,
+    pub(super) input_ref: Ref<InputId>,
+    pub(super) decoder_options: HlsInputDecoders,
+}
+
+struct HlsDemuxerThread {
+    ffmpeg_ctx: FfmpegInputContext,
+    input_sync: InputSync<HlsBuffer>,
+
+    audio: Option<BufferTrackWriter>,
+    video: Option<BufferTrackWriter>,
+}
+
+impl HlsDemuxerThread {
+    fn new(
+        input_ctx: HlsInputContext,
+        ffmpeg_ctx: FfmpegInputContext,
+        queue_input: &QueueInput,
+        offset: Option<Duration>,
+        buffer: LiveInputBufferOptions,
+    ) -> Result<Self, InputInitError> {
+        let is_live = ffmpeg_ctx.is_live();
+        let audio_stream = ffmpeg_ctx.audio_stream();
+        let video_stream = ffmpeg_ctx.video_stream();
+
+        info!(
+            is_live,
+            has_video = video_stream.is_some(),
+            has_audio = audio_stream.is_some(),
+            "HLS playlist opened"
+        );
+        if is_live && offset.is_some() {
+            warn!("Offset is ignored for live playlists, playback starts at the live edge");
+        }
+
+        let (frame_sender, samples_sender) = queue_input.queue_new_track(QueueTrackOptions {
+            video: video_stream.is_some(),
+            audio: audio_stream.is_some(),
+            offset: match is_live {
+                true => QueueTrackOffset::Pts(Duration::ZERO),
+                false => match offset {
+                    Some(offset) => QueueTrackOffset::FromStart(offset),
+                    None => QueueTrackOffset::None,
+                },
+            },
+        });
+
+        let (min, desired, max) = resolve_buffer_options(buffer);
+        let input_sync = match is_live {
+            true => InputSync::Live(LiveSync::new(
+                LiveSyncOptions {
+                    buffering_strategy: BufferingStrategy::WithSpread { min, max, desired },
+                    stabilization_period: Duration::from_millis(1000),
+                    // segments are fetched over HTTP in whole batches, so estimate
+                    // improvements jump more than with a continuous stream
+                    stabilization_tolerance: Duration::from_millis(250),
+                    // content arrives one segment at a time, so the estimate needs
+                    // a few fetches before giving up
+                    max_wait: desired * 2,
+                },
+                input_ctx.ctx.queue_ctx.sync_point,
+            )),
+            false => InputSync::Simple(SimpleSync::new(desired)),
+        };
+        // If we assume that max reasonable segment size is 10 second, then a channel
+        // between the demuxer and a decoder has to fit more than one of them.
+        let decoder_buffer_size = Duration::max(Duration::from_secs(40), max * 2);
+
+        let audio = match (audio_stream, samples_sender) {
+            (Some(stream), Some(sender)) => Some(stream.start_audio_track(
+                &input_ctx,
+                &input_sync,
+                sender,
+                decoder_buffer_size,
+            )?),
+            _ => None,
+        };
+        let video = match (video_stream, frame_sender) {
+            (Some(stream), Some(sender)) => Some(stream.start_video_track(
+                &input_ctx,
+                &input_sync,
+                sender,
+                decoder_buffer_size,
+            )?),
+            _ => None,
+        };
+
+        Ok(Self {
+            ffmpeg_ctx,
+            input_sync,
+            audio,
+            video,
+        })
+    }
+
+    fn spawn(mut self) {
+        let span = Span::current();
+        std::thread::Builder::new()
+            .name("HLS demuxer thread".to_string())
+            .spawn(move || {
+                let _span = span.enter();
+                self.run();
+                info!("Playlist finished")
+            })
+            .unwrap();
+    }
+
+    fn run(&mut self) {
+        loop {
+            let packet = match self.ffmpeg_ctx.read_packet() {
+                Ok(packet) => packet,
+                Err(ffmpeg_next::Error::Eof | ffmpeg_next::Error::Exit) => break,
+                Err(err) => {
+                    warn!("HLS read error {err:?}");
+                    continue;
+                }
+            };
+            let stream_id = packet.stream();
+
+            let Some(track) = self.track(stream_id) else {
+                trace!(stream_id, "Unknown stream");
+                continue;
+            };
+
+            if packet.is_corrupt() {
+                warn!(stream_id, "Dropping corrupted packet");
+                continue;
+            }
+
+            if track.write_packet(packet).is_err() {
+                break;
+            }
+        }
+
+        self.input_sync.flush();
+    }
+
+    fn track(&mut self, stream_id: usize) -> Option<&mut BufferTrackWriter> {
+        [self.video.as_mut(), self.audio.as_mut()]
+            .into_iter()
+            .flatten()
+            .find(|track| track.index == stream_id)
+    }
+}
+
+/// One track of the playlist, as the demuxer described it.
+struct HlsStream {
     index: usize,
-    handle: DecoderThreadHandle,
-    time_base: ffmpeg_next::Rational,
-    last_pts: Option<Duration>,
+    time_base: Rational,
+    extradata: Option<Bytes>,
+}
+
+impl HlsStream {
+    fn start_audio_track(
+        self,
+        input_ctx: &HlsInputContext,
+        input_sync: &InputSync<HlsBuffer>,
+        samples_sender: QueueSender<InputAudioSamples>,
+        decoder_buffer_size: Duration,
+    ) -> Result<BufferTrackWriter, InputInitError> {
+        let stats_sender = HlsInputTrackStatsSender::new(input_ctx, TrackKind::Audio);
+        let decoder_handle = spawn_audio_decoder(
+            input_ctx,
+            self.extradata,
+            samples_sender,
+            decoder_buffer_size,
+        )?;
+        let track_sync = input_sync.add_track(
+            TrackKind::Audio,
+            Box::new(DecoderTrackWriter::new(
+                input_ctx,
+                decoder_handle,
+                MediaKind::Audio(AudioCodec::Aac),
+                stats_sender.clone(),
+                input_sync.is_live(),
+            )),
+        );
+
+        Ok(BufferTrackWriter {
+            index: self.index,
+            time_base: self.time_base,
+            track_sync,
+            stats_sender,
+        })
+    }
+
+    fn start_video_track(
+        self,
+        input_ctx: &HlsInputContext,
+        input_sync: &InputSync<HlsBuffer>,
+        frame_sender: QueueSender<Frame>,
+        decoder_buffer_size: Duration,
+    ) -> Result<BufferTrackWriter, InputInitError> {
+        let stats_sender = HlsInputTrackStatsSender::new(input_ctx, TrackKind::Video);
+        let decoder_handle =
+            spawn_video_decoder(input_ctx, self.extradata, frame_sender, decoder_buffer_size)?;
+        let track_sync = input_sync.add_track(
+            TrackKind::Video,
+            Box::new(DecoderTrackWriter::new(
+                input_ctx,
+                decoder_handle,
+                MediaKind::Video(VideoCodec::H264),
+                stats_sender.clone(),
+                input_sync.is_live(),
+            )),
+        );
+
+        Ok(BufferTrackWriter {
+            index: self.index,
+            time_base: self.time_base,
+            track_sync,
+            stats_sender,
+        })
+    }
+}
+
+struct BufferTrackWriter {
+    index: usize,
+    time_base: Rational,
+    track_sync: InputSyncTrack<HlsBuffer>,
     stats_sender: HlsInputTrackStatsSender,
 }
 
-enum HandlePacketError {
-    Discontinuity,
-    WaitingForKeyframe,
-    CorruptedPacket,
-    UnknownStream,
+impl BufferTrackWriter {
+    /// Fails once the consumer of the track is gone.
+    fn write_packet(&mut self, packet: Packet) -> Result<(), TrackClosedError> {
+        self.stats_sender.send_on_packet_received(&packet);
+
+        trace!(
+            stream_id = self.index,
+            pts = packet.pts(),
+            key = packet.is_key(),
+            "Received packet"
+        );
+        self.track_sync
+            .write_chunk(HlsPacket::new(packet, self.time_base))
+    }
 }
 
-impl Track {
-    fn handle_video_packet(
-        &mut self,
-        packet: Packet,
-        first_pts: &mut Option<Duration>,
-    ) -> Result<(), HandlePacketError> {
-        let (pts, dts) = self.pts_dts_from_packet(&packet, first_pts)?;
-        self.stats_sender.send_on_packet_received(&packet, pts);
-        let chunk = EncodedInputChunk {
-            data: Bytes::copy_from_slice(packet.data().unwrap()),
-            pts,
-            dts,
-            kind: MediaKind::Video(VideoCodec::H264),
-            present: true,
-        };
+/// Demuxed packet of one track, buffered by the sync as it was read.
+/// Timestamps are calculated only when they are needed, so a packet that
+/// never leaves the sync costs nothing to convert.
+struct HlsPacket {
+    packet: Packet,
+    time_base: Rational,
+    /// Mapping onto the output timeline; identity until the track applies its
+    /// own on read.
+    anchor: TimestampAnchor,
+}
 
-        trace!(?chunk, stream_id = self.index, "Sending video chunk");
-        let sender = &self.handle.chunk_sender;
-        if sender.send(PipelineEvent::Data(chunk)).is_err() {
-            debug!("Channel closed");
+impl HlsPacket {
+    fn new(packet: Packet, time_base: Rational) -> Self {
+        Self {
+            packet,
+            time_base,
+            anchor: TimestampAnchor {
+                input_pts: Duration::ZERO,
+                output_pts: Duration::ZERO,
+            },
         }
-
-        Ok(())
     }
 
-    fn handle_audio_packet(
-        &mut self,
-        packet: Packet,
-        first_pts: &mut Option<Duration>,
-    ) -> Result<(), HandlePacketError> {
-        let (pts, dts) = self.pts_dts_from_packet(&packet, first_pts)?;
-        self.stats_sender.send_on_packet_received(&packet, pts);
-        let chunk = EncodedInputChunk {
-            data: Bytes::copy_from_slice(packet.data().unwrap()),
-            pts,
-            dts,
-            kind: MediaKind::Audio(AudioCodec::Aac),
-            present: true,
-        };
-
-        trace!(?chunk, stream_id = self.index, "Sending audio chunk");
-        let sender = &self.handle.chunk_sender;
-        if sender.send(PipelineEvent::Data(chunk)).is_err() {
-            debug!("Channel closed");
-        }
-
-        Ok(())
+    fn is_key(&self) -> bool {
+        self.packet.is_key()
     }
 
-    fn pts_dts_from_packet(
-        &mut self,
-        packet: &Packet,
-        first_pts: &mut Option<Duration>,
-    ) -> Result<(Duration, Option<Duration>), HandlePacketError> {
-        /// (10s) This value was picked arbitrarily but it's quite conservative.
-        const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
-
-        if self.last_pts.is_none() && !packet.is_key() {
-            return Err(HandlePacketError::WaitingForKeyframe);
-        }
-
-        let pts_timestamp = packet.pts().unwrap_or(0);
-        let dts_timestamp = packet.dts();
-
-        let pts = self.timestamp_to_duration(pts_timestamp);
-        let dts = dts_timestamp.map(|dts| self.timestamp_to_duration(dts));
-
-        if let Some(last_pts) = self.last_pts
-            && last_pts.abs_diff(pts) > DISCONTINUITY_THRESHOLD
-        {
-            self.stats_sender
-                .send(HlsInputTrackStatsEvent::DiscontinuityDetected);
-            return Err(HandlePacketError::Discontinuity);
-        }
-        self.last_pts = Some(pts);
-
-        let first_pts = *first_pts.get_or_insert(pts);
-
-        Ok((pts.saturating_sub(first_pts), dts))
-    }
-
-    fn timestamp_to_duration(&self, timestamp: i64) -> Duration {
-        Duration::from_secs_f64(
+    /// Timestamp of this packet on the output timeline.
+    fn timestamp(&self, timestamp: i64) -> Duration {
+        let timestamp = Duration::from_secs_f64(
             f64::max(timestamp as f64, 0.0) * self.time_base.numerator() as f64
                 / self.time_base.denominator() as f64,
-        )
+        );
+        self.anchor.to_output_pts(timestamp)
+    }
+
+    fn into_chunk(self, kind: MediaKind) -> EncodedInputChunk {
+        EncodedInputChunk {
+            data: Bytes::copy_from_slice(self.packet.data().unwrap_or_default()),
+            pts: self.pts(),
+            dts: self.packet.dts().map(|dts| self.timestamp(dts)),
+            kind,
+            present: true,
+        }
     }
 }
 
-fn read_extra_data(stream: &Stream<'_>) -> Option<Bytes> {
-    unsafe {
-        let codecpar = (*stream.as_ptr()).codecpar;
-        let size = (*codecpar).extradata_size;
-        if size > 0 {
-            Some(Bytes::copy_from_slice(slice::from_raw_parts(
-                (*codecpar).extradata,
-                size as usize,
-            )))
-        } else {
-            None
+impl InputSyncItem for HlsPacket {
+    fn pts(&self) -> Duration {
+        self.timestamp(self.packet.pts().unwrap_or(0))
+    }
+
+    fn apply_anchor(&mut self, anchor: TimestampAnchor) {
+        self.anchor = anchor;
+    }
+}
+
+/// Consumer of one HLS track: turns the packets the track releases into
+/// chunks for its decoder thread and reports the buffer measured at that
+/// moment.
+struct DecoderTrackWriter {
+    decoder_handle: DecoderThreadHandle,
+    kind: MediaKind,
+    stats_sender: HlsInputTrackStatsSender,
+    waiting_for_keyframe: bool,
+    pending_discontinuity: bool,
+    closed: bool,
+
+    is_live: bool,
+
+    // Used to calculate stats
+    sync_point: Instant,
+}
+
+impl DecoderTrackWriter {
+    fn new(
+        input: &HlsInputContext,
+        decoder_handle: DecoderThreadHandle,
+        kind: MediaKind,
+        stats_sender: HlsInputTrackStatsSender,
+        is_live: bool,
+    ) -> Self {
+        Self {
+            kind,
+            decoder_handle,
+            stats_sender,
+            sync_point: input.ctx.queue_ctx.sync_point,
+            is_live,
+            waiting_for_keyframe: true,
+            pending_discontinuity: false,
+            closed: false,
         }
+    }
+
+    /// The input timeline broke. The decoder keeps running - it decodes
+    /// everything it still holds from the old timeline first, and drops the
+    /// state built from it when the marker reaches it.
+    fn on_discontinuity(&mut self) {
+        self.stats_sender
+            .send(HlsInputTrackStatsEvent::DiscontinuityDetected);
+        self.pending_discontinuity = true;
+        self.waiting_for_keyframe = true;
+        self.maybe_handle_discontinuity();
+    }
+
+    fn send_chunk(&mut self, packet: HlsPacket) {
+        self.maybe_handle_discontinuity();
+        if self.pending_discontinuity {
+            // drop `packet` because discontinuity still not handled
+            return;
+        }
+
+        if self.waiting_for_keyframe {
+            if !packet.is_key() {
+                debug!("Waiting for keyframe");
+                return;
+            }
+            self.waiting_for_keyframe = false;
+        }
+
+        let chunk = packet.into_chunk(self.kind);
+        self.stats_sender.send_on_chunk_released(
+            self.decoder_handle.chunk_sender.buffered_duration(),
+            // only live timestamps are on the sync point timeline
+            self.is_live
+                .then(|| chunk.pts.saturating_sub(self.sync_point.elapsed())),
+        );
+
+        self.send_to_decoder(EncodedInputEvent::Chunk(chunk));
+    }
+
+    fn maybe_handle_discontinuity(&mut self) {
+        if !self.pending_discontinuity {
+            return;
+        }
+        self.pending_discontinuity = !self.send_to_decoder(EncodedInputEvent::Discontinuity);
+    }
+
+    /// Pushes an event to the decoder thread; `false` when it did not fit
+    /// (live only) or the decoder is gone. A live stream cannot wait for a
+    /// decoder that is not keeping up, a non-live one waits for room.
+    fn send_to_decoder(&mut self, event: EncodedInputEvent) -> bool {
+        let event = PipelineEvent::Data(event);
+        match self.is_live {
+            true => match self.decoder_handle.chunk_sender.try_send(event) {
+                Ok(()) => true,
+                Err(TrySendError::Full(_)) => {
+                    debug!("Dropping chunk; decoder is not keeping up");
+                    self.waiting_for_keyframe = true;
+                    false
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    self.closed = true;
+                    false
+                }
+            },
+            false => match self.decoder_handle.chunk_sender.send(event) {
+                Ok(()) => true,
+                Err(_) => {
+                    self.closed = true;
+                    false
+                }
+            },
+        }
+    }
+}
+
+impl TrackSink<HlsPacket> for DecoderTrackWriter {
+    fn on_event(&mut self, event: TrackEvent<HlsPacket>) {
+        match event {
+            TrackEvent::Chunk(packet) => self.send_chunk(packet),
+            TrackEvent::Discontinuity => self.on_discontinuity(),
+        }
+    }
+
+    fn is_closed(&self) -> bool {
+        self.closed
     }
 }
 
@@ -554,14 +552,25 @@ impl FfmpegInputContext {
         Ok(Self { ctx })
     }
 
-    fn audio_stream(&self) -> Option<Stream<'_>> {
-        self.ctx.streams().best(Type::Audio)
+    fn audio_stream(&self) -> Option<HlsStream> {
+        self.stream(Type::Audio)
     }
 
-    fn video_stream(&self) -> Option<Stream<'_>> {
-        self.ctx.streams().best(Type::Video)
+    fn video_stream(&self) -> Option<HlsStream> {
+        self.stream(Type::Video)
     }
 
+    fn stream(&self, kind: Type) -> Option<HlsStream> {
+        let stream = self.ctx.streams().best(kind)?;
+        Some(HlsStream {
+            index: stream.index(),
+            time_base: stream.time_base(),
+            extradata: stream.read_extradata(),
+        })
+    }
+
+    /// The HLS demuxer only knows the duration of a playlist that ended
+    /// (`#EXT-X-ENDLIST`), so a playlist without one is a live one.
     fn is_live(&self) -> bool {
         self.ctx.duration() <= 0
     }
@@ -573,12 +582,6 @@ impl FfmpegInputContext {
     }
 }
 
-#[derive(Clone, Copy)]
-enum TrackKind {
-    Audio,
-    Video,
-}
-
 #[derive(Clone)]
 struct HlsInputTrackStatsSender {
     input_ref: Ref<InputId>,
@@ -587,23 +590,37 @@ struct HlsInputTrackStatsSender {
 }
 
 impl HlsInputTrackStatsSender {
-    fn new(input_ref: &Ref<InputId>, stats_sender: &StatsSender, track: TrackKind) -> Self {
+    fn new(input: &HlsInputContext, track: TrackKind) -> Self {
         Self {
-            input_ref: input_ref.clone(),
-            stats_sender: stats_sender.clone(),
+            input_ref: input.input_ref.clone(),
+            stats_sender: input.ctx.stats_sender.clone(),
             track,
         }
     }
 
-    fn send_on_packet_received(&self, packet: &Packet, packet_pts: Duration) {
-        let chunk_size = packet.size();
-        let effective_buffer = packet_pts;
-        let events = [
+    fn send_on_packet_received(&self, packet: &Packet) {
+        self.send_all([
             HlsInputTrackStatsEvent::PacketReceived,
-            HlsInputTrackStatsEvent::BytesReceived(chunk_size),
-            HlsInputTrackStatsEvent::InputBufferSize(Duration::ZERO),
-            HlsInputTrackStatsEvent::EffectiveBuffer(effective_buffer),
-        ];
+            HlsInputTrackStatsEvent::BytesReceived(packet.size()),
+        ]);
+    }
+
+    fn send_on_chunk_released(&self, input_buffer: Duration, effective_buffer: Option<Duration>) {
+        self.send_all(
+            [
+                Some(HlsInputTrackStatsEvent::InputBufferSize(input_buffer)),
+                effective_buffer.map(HlsInputTrackStatsEvent::EffectiveBuffer),
+            ]
+            .into_iter()
+            .flatten(),
+        );
+    }
+
+    fn send(&self, event: HlsInputTrackStatsEvent) {
+        self.send_all([event]);
+    }
+
+    fn send_all(&self, events: impl IntoIterator<Item = HlsInputTrackStatsEvent>) {
         let events = events
             .into_iter()
             .map(|e| match self.track {
@@ -613,12 +630,162 @@ impl HlsInputTrackStatsSender {
             .collect::<Vec<_>>();
         self.stats_sender.send(events);
     }
+}
 
-    fn send(&self, event: HlsInputTrackStatsEvent) {
-        let event = match self.track {
-            TrackKind::Video => HlsInputStatsEvent::Video(event),
-            TrackKind::Audio => HlsInputStatsEvent::Audio(event),
-        };
-        self.stats_sender.send(event.into_event(&self.input_ref));
+/// Resolves the buffer options into concrete `(min, desired, max)` values.
+///
+/// Live playlists deliver whole segments at once, so the buffer is measured on
+/// the oldest content of a batch and the spread of the segment sits on top of
+/// it: playback ends up roughly one segment plus `desired` behind the live edge.
+fn resolve_buffer_options(options: LiveInputBufferOptions) -> (Duration, Duration, Duration) {
+    // minimal delta between bounds or above zero
+    const D: Duration = Duration::from_millis(500);
+    const DEFAULT: Duration = Duration::from_secs(4);
+
+    // provided values below the floors are raised instead of rejected
+    let options = LiveInputBufferOptions {
+        min: options.min.map(|min| Duration::max(min, D)),
+        desired: options.desired.map(|desired| Duration::max(desired, D * 2)),
+        max: options.max.map(|max| Duration::max(max, D * 3)),
+    };
+
+    let desired = match options.desired {
+        Some(desired) => desired,
+        None => match (options.min, options.max) {
+            (Some(min), Some(max)) => (min + max) / 2,
+            (Some(min), None) => Duration::max(min + D, DEFAULT),
+            (None, Some(max)) => Duration::min(max.saturating_sub(D), DEFAULT),
+            (None, None) => DEFAULT,
+        },
+    };
+    // the bounds are compared on the oldest content of a batch, so unlike RTMP
+    // no chunk allowance has to be added on top of the default upper limit;
+    let max = Duration::max(options.max.unwrap_or(desired * 2), desired + D);
+    let min = Duration::clamp(options.min.unwrap_or(desired / 2), D, desired - D);
+    (min, desired, max)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const fn ms(ms: u64) -> Duration {
+        Duration::from_millis(ms)
+    }
+
+    fn resolve(
+        min: Option<u64>,
+        desired: Option<u64>,
+        max: Option<u64>,
+    ) -> (Duration, Duration, Duration) {
+        resolve_buffer_options(LiveInputBufferOptions {
+            desired: desired.map(ms),
+            min: min.map(ms),
+            max: max.map(ms),
+        })
+    }
+
+    #[test]
+    fn defaults() {
+        assert_eq!(resolve(None, None, None), (ms(2000), ms(4000), ms(8000)));
+    }
+
+    #[test]
+    fn desired_only() {
+        assert_eq!(
+            resolve(None, Some(6000), None),
+            (ms(3000), ms(6000), ms(12000))
+        );
+        // the smallest desired with a 500ms floor on min
+        assert_eq!(
+            resolve(None, Some(1000), None),
+            (ms(500), ms(1000), ms(2000))
+        );
+    }
+
+    #[test]
+    fn min_only() {
+        // desired follows a larger min
+        assert_eq!(
+            resolve(Some(4000), None, None),
+            (ms(4000), ms(4500), ms(9000))
+        );
+        assert_eq!(
+            resolve(Some(500), None, None),
+            (ms(500), ms(4000), ms(8000))
+        );
+    }
+
+    #[test]
+    fn max_only() {
+        // desired follows a smaller max
+        assert_eq!(
+            resolve(None, None, Some(2000)),
+            (ms(750), ms(1500), ms(2000))
+        );
+        assert_eq!(
+            resolve(None, None, Some(20000)),
+            (ms(2000), ms(4000), ms(20000))
+        );
+    }
+
+    #[test]
+    fn min_and_max() {
+        assert_eq!(
+            resolve(Some(2000), None, Some(4000)),
+            (ms(2000), ms(3000), ms(4000))
+        );
+    }
+
+    #[test]
+    fn all_provided() {
+        assert_eq!(
+            resolve(Some(5000), Some(6000), Some(9000)),
+            (ms(5000), ms(6000), ms(9000))
+        );
+    }
+
+    #[test]
+    fn degenerate_bands() {
+        // min == desired == max keeps only the 500ms guardrail margins
+        assert_eq!(
+            resolve(Some(3000), Some(3000), Some(3000)),
+            (ms(2500), ms(3000), ms(3500))
+        );
+        assert_eq!(
+            resolve(Some(1200), Some(1200), Some(1200)),
+            (ms(700), ms(1200), ms(1700))
+        );
+        // min == max without desired
+        assert_eq!(
+            resolve(Some(4500), None, Some(4500)),
+            (ms(4000), ms(4500), ms(5000))
+        );
+        // band narrower than the 500ms margin
+        assert_eq!(
+            resolve(Some(1000), Some(1200), Some(1400)),
+            (ms(700), ms(1200), ms(1700))
+        );
+    }
+
+    #[test]
+    fn values_below_floors_are_raised() {
+        // min >= D, desired >= 2D, max >= 3D
+        assert_eq!(
+            resolve(Some(0), Some(2), Some(4)),
+            (ms(500), ms(1000), ms(1500))
+        );
+        assert_eq!(
+            resolve(None, Some(600), None),
+            (ms(500), ms(1000), ms(2000))
+        );
+        assert_eq!(
+            resolve(Some(100), Some(4000), None),
+            (ms(500), ms(4000), ms(8000))
+        );
+        assert_eq!(
+            resolve(None, None, Some(1000)),
+            (ms(500), ms(1000), ms(1500))
+        );
     }
 }

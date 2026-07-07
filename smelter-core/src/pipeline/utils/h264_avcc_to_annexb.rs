@@ -7,7 +7,10 @@ use crate::prelude::*;
 
 pub(crate) struct H264AvccToAnnexB {
     config: H264AvcDecoderConfig,
-    sps_pps: Option<Bytes>,
+    sps_pps: Bytes,
+    /// The decoder needs the parameter sets before the first chunk it decodes,
+    /// and again after every discontinuity.
+    send_sps_pps: bool,
 }
 
 impl H264AvccToAnnexB {
@@ -28,7 +31,8 @@ impl H264AvccToAnnexB {
 
         Self {
             config,
-            sps_pps: Some(sps_pps.freeze()),
+            sps_pps: sps_pps.freeze(),
+            send_sps_pps: true,
         }
     }
 }
@@ -38,8 +42,9 @@ impl BytestreamTransformer for H264AvccToAnnexB {
     fn transform(&mut self, chunk_data: bytes::Bytes) -> bytes::Bytes {
         let nalu_length_size = self.config.nalu_length_size;
         let mut data = BytesMut::new();
-        if let Some(sps_pps) = self.sps_pps.take() {
-            data.extend_from_slice(&sps_pps);
+        if self.send_sps_pps {
+            data.extend_from_slice(&self.sps_pps);
+            self.send_sps_pps = false;
         }
 
         let mut reader = chunk_data.reader();
@@ -69,6 +74,10 @@ impl BytestreamTransformer for H264AvccToAnnexB {
         }
 
         data.freeze()
+    }
+
+    fn on_discontinuity(&mut self) {
+        self.send_sps_pps = true;
     }
 }
 

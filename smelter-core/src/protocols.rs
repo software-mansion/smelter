@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 mod channel;
 mod hls;
 mod moq;
@@ -20,6 +22,15 @@ pub use webrtc::*;
 mod decklink;
 #[cfg(feature = "decklink")]
 pub use decklink::*;
+
+/// Buffer a live input keeps between the live edge and playback. Values that
+/// are not set are derived from the provided ones and protocol defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LiveInputBufferOptions {
+    pub desired: Option<Duration>,
+    pub min: Option<Duration>,
+    pub max: Option<Duration>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PortOrRange {

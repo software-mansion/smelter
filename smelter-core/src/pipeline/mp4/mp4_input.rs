@@ -13,7 +13,7 @@ use tracing::{Level, debug, error, span, trace, warn};
 use crate::{
     pipeline::{
         decoder::{
-            DecoderThreadHandle,
+            DecoderThreadHandle, EncodedInputEvent,
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac, ffmpeg_h264, vulkan_h264,
@@ -522,7 +522,7 @@ impl TrackThread {
             trace!(pts=?chunk.pts, "MP4 reader produced a video chunk.");
             let chunk_sender = &decoder_handle.chunk_sender;
             if !Self::try_send(
-                PipelineEvent::Data(chunk),
+                PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)),
                 chunk_sender,
                 &self.shutdown_condition,
             ) {
@@ -547,7 +547,7 @@ impl TrackThread {
             trace!(pts=?chunk.pts, "MP4 reader produced an audio chunk.");
             let chunk_sender = &decoder_handle.chunk_sender;
             if !Self::try_send(
-                PipelineEvent::Data(chunk),
+                PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)),
                 chunk_sender,
                 &self.shutdown_condition,
             ) {
@@ -563,8 +563,8 @@ impl TrackThread {
     }
 
     fn try_send(
-        event: PipelineEvent<EncodedInputChunk>,
-        sender: &Sender<PipelineEvent<EncodedInputChunk>>,
+        event: PipelineEvent<EncodedInputEvent>,
+        sender: &Sender<PipelineEvent<EncodedInputEvent>>,
         shutdown_condition: &ShutdownCondition,
     ) -> bool {
         let mut event_state = Some(event);

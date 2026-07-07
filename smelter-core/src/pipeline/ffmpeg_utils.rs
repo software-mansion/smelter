@@ -1,6 +1,6 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, slice, time::Duration};
 
-use ffmpeg_next::{Dictionary, StreamMut, ffi::AVCodecParameters};
+use ffmpeg_next::{Dictionary, Stream, StreamMut, codec::encoder, ffi::AVCodecParameters};
 use tracing::warn;
 
 use crate::{prelude::*, queue::QueueContext};
@@ -195,5 +195,42 @@ impl StreamMutExt for StreamMut<'_> {
     fn update_codecpar<F: FnOnce(&mut AVCodecParameters)>(&mut self, func: F) {
         let codecpar = unsafe { &mut *(*self.as_mut_ptr()).codecpar };
         func(codecpar);
+    }
+}
+
+/// Reads the codec configuration ffmpeg keeps as `extradata` (e.g. the AVC
+/// decoder configuration record of an H.264 track).
+pub(crate) trait ReadExtradataExt {
+    /// Copies the extradata out; `None` when there is none.
+    fn read_extradata(&self) -> Option<bytes::Bytes>;
+}
+
+impl ReadExtradataExt for Stream<'_> {
+    fn read_extradata(&self) -> Option<bytes::Bytes> {
+        unsafe {
+            let codecpar = &*(*self.as_ptr()).codecpar;
+            copy_extradata(codecpar.extradata, codecpar.extradata_size)
+        }
+    }
+}
+
+impl ReadExtradataExt for encoder::Video {
+    fn read_extradata(&self) -> Option<bytes::Bytes> {
+        unsafe {
+            let encoder = &*self.0.0.0.as_ptr();
+            copy_extradata(encoder.extradata, encoder.extradata_size)
+        }
+    }
+}
+
+/// # Safety
+///
+/// `extradata` has to point at `size` readable bytes.
+unsafe fn copy_extradata(extradata: *const u8, size: i32) -> Option<bytes::Bytes> {
+    match size > 0 {
+        true => Some(bytes::Bytes::copy_from_slice(unsafe {
+            slice::from_raw_parts(extradata, size as usize)
+        })),
+        false => None,
     }
 }

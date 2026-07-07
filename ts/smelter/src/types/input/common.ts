@@ -16,3 +16,27 @@ export type SideChannel = {
    */
   delayMs?: number;
 };
+
+export type InputBufferOptions = {
+  /**
+   * Buffer the input aims to keep, in milliseconds. At the start it should buffer at least
+   * that much media before producing first chunk.
+   */
+  desiredMs?: number | null;
+  /**
+   * Lower range of what is considered stable state. If buffer is smaller than this value
+   * then media will be slightly "stretched" so the buffer converges on desired value.
+   */
+  minMs?: number | null;
+  /**
+   * Upper range of what is considered stable state. If buffer is larger than this value
+   * then media will be slightly "squashed" so the buffer converges on desired value.
+   */
+  maxMs?: number | null;
+};
+
+/**
+ * Buffer a live input keeps between the live edge of the stream and playback. A number
+ * value represents the `desiredMs` option.
+ */
+export type InputBuffer = number | InputBufferOptions;

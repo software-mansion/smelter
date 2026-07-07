@@ -4,11 +4,10 @@ use smelter_render::Frame;
 use tracing::warn;
 
 use crate::{
-    PipelineCtx, PipelineEvent,
+    PipelineCtx,
     error::DecoderInitError,
     pipeline::decoder::{
-        BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, EncodedInputEvent,
-        VideoDecoderStream,
+        BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, VideoDecoderStream,
     },
     queue::QueueSender,
     utils::{InitializableThread, ThreadMetadata, channel::duration_bounded},
@@ -50,14 +49,7 @@ where
         let (chunk_sender, chunk_receiver) = duration_bounded(buffer_size);
 
         let transformed_bytestream =
-            BytestreamTransformStream::new(transformer, chunk_receiver.into_iter()).map(|event| {
-                match event {
-                    PipelineEvent::Data(chunk) => {
-                        PipelineEvent::Data(EncodedInputEvent::Chunk(chunk))
-                    }
-                    PipelineEvent::EOS => PipelineEvent::EOS,
-                }
-            });
+            BytestreamTransformStream::new(transformer, chunk_receiver.into_iter());
 
         let decoder_stream = VideoDecoderStream::<Decoder, _>::new(ctx, transformed_bytestream)?;
 

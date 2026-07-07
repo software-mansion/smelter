@@ -1,3 +1,4 @@
+mod hls_decoder;
 mod hls_input;
 mod hls_output;
 
