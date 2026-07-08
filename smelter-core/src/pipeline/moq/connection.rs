@@ -281,7 +281,7 @@ async fn run_video_track(
 
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
-        trace!(?pts, "MoQ video frame");
+        trace!(?pts, ?raw_pts, "MoQ video frame");
         let payload = frame.payload;
 
         let chunk = EncodedInputChunk {
@@ -344,7 +344,7 @@ async fn run_audio_track(
 
         let raw_pts: Duration = frame.timestamp.into();
         let pts = normalize_pts(&first_pts, raw_pts);
-        trace!(?pts, "MoQ audio frame");
+        trace!(?pts, ?raw_pts, "MoQ audio frame");
         let payload = frame.payload;
 
         let chunk = EncodedInputChunk {
