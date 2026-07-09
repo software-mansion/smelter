@@ -68,16 +68,9 @@ struct EpochOffset {
 
 impl EpochOffset {
     fn new(raw: Duration, elapsed: Duration) -> Self {
-        if raw >= elapsed {
-            Self {
-                magnitude: raw - elapsed,
-                negative: false,
-            }
-        } else {
-            Self {
-                magnitude: elapsed - raw,
-                negative: true,
-            }
+        Self {
+            magnitude: raw.abs_diff(elapsed),
+            negative: raw < elapsed,
         }
     }
 
@@ -209,9 +202,9 @@ impl LiveEdgeEstimator {
         // it plateaus once the burst drains.
         let off = EpochOffset::new(raw, elapsed);
         let prev = self.max_off;
-        let m = prev.map_or(off, |p| p.max(off));
-        self.max_off = Some(m);
-        if prev.is_some_and(|p| m.abs_diff(p) <= PLATEAU_EPSILON) {
+        let max_off = prev.map_or(off, |p| p.max(off));
+        self.max_off = Some(max_off);
+        if prev.is_some_and(|p| max_off.abs_diff(p) <= PLATEAU_EPSILON) {
             self.plateau_frames += 1;
         } else {
             self.plateau_frames = 0;
@@ -220,7 +213,7 @@ impl LiveEdgeEstimator {
 
         let started = *self.started_elapsed.get_or_insert(elapsed);
         if self.plateau_frames >= PLATEAU_FRAMES || elapsed.saturating_sub(started) >= self.warmup {
-            return self.lock_and_flush(m);
+            return self.lock_and_flush(max_off);
         }
         Vec::new()
     }
@@ -259,7 +252,7 @@ impl LiveEdgeEstimator {
             return Vec::new();
         }
         match self.max_off {
-            Some(m) => self.lock_and_flush(m),
+            Some(max_off) => self.lock_and_flush(max_off),
             None => Vec::new(),
         }
     }
