@@ -142,7 +142,7 @@ impl EpochShared {
 }
 
 /// Per-track, loop-local. Estimates the track's PTS epoch at the shared anchor via
-/// the live edge: the running max of `raw − elapsed` (moq-kit's `MediaLiveEdge`),
+/// the live edge: the running max of `raw − elapsed`,
 /// locked once the max plateaus (startup burst drained) or a fallback deadline
 /// fires. Frames are held until lock (~ms of real wall-clock, just the burst
 /// window) so the locked constant applies from the first *emitted* frame and
@@ -150,7 +150,7 @@ impl EpochShared {
 ///
 /// Latency-skew assumption: edge sync aligns each track's newest-available sample
 /// to "now", so materially different per-track transport latency leaves a fixed
-/// residual A/V skew. This is inherent to edge-based sync (moq-kit has it too);
+/// residual A/V skew. This is inherent to edge-based sync;
 /// there is no on-wire capture-time signal to do better without a publisher change.
 struct LiveEdgeEstimator {
     shared: EpochShared,
@@ -232,7 +232,7 @@ impl LiveEdgeEstimator {
         if !self.reconciled {
             match self.shared.reference_off.get() {
                 None => {
-                    let _ = self.shared.reference_off.set(off);
+                    _ = self.shared.reference_off.set(off);
                 }
                 Some(&reference) if off.abs_diff(reference) <= EPOCH_RECONCILE_EPSILON => {
                     off = reference;
