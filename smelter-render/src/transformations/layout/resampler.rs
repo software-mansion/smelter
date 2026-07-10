@@ -18,6 +18,10 @@ const LABEL: Option<&str> = Some("Lanczos3 resampler");
 /// ratios where its softening would show.
 const KERNEL_BUDGET: f32 = 4.0;
 
+/// Unreachable for real resolutions; only keeps degenerate float input from
+/// overflowing the `1 << levels` shifts.
+const MAX_PREDECIMATE_LEVELS: u32 = 16;
+
 /// Separable Lanczos3 resampler: the kernel scales with the ratio, so one pair
 /// of passes covers any up/downscale without mip pyramids. Everything before the
 /// final pass runs in linear Rgba16Float, since a unorm intermediate would clamp
@@ -28,7 +32,7 @@ pub struct ResamplerShader {
     downsample: wgpu::RenderPipeline,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Axis {
     Horizontal = 0,
     Vertical = 1,
@@ -50,7 +54,7 @@ impl AxisMapping {
 
     /// Box halvings to apply before the kernel, leaving a residual <= budget.
     fn predecimate_levels(&self) -> u32 {
-        (self.scale() / KERNEL_BUDGET).log2().ceil().max(0.0) as u32
+        ((self.scale() / KERNEL_BUDGET).log2().ceil().max(0.0) as u32).min(MAX_PREDECIMATE_LEVELS)
     }
 
     fn on_reduced_source(self, levels: u32) -> AxisMapping {
@@ -62,18 +66,81 @@ impl AxisMapping {
         }
     }
 
-    /// Output maps 1:1 onto source, so the layout shader already samples exactly.
-    fn is_identity(&self) -> bool {
-        is_same_px(self.crop_len, self.dst_len as f32)
-            && is_same_px(self.crop_offset, self.crop_offset.round())
+    /// Whole-texel translation at 1:1 scale: applied as `perp_offset` by the
+    /// other axis' pass instead of needing its own.
+    fn as_direct(&self) -> Option<i32> {
+        let direct = is_same_px(self.crop_len, self.dst_len as f32)
+            && is_same_px(self.crop_offset, self.crop_offset.round());
+        direct.then(|| self.crop_offset.round() as i32)
     }
 
-    fn to_immediates(self) -> [u8; 12] {
-        let mut data = [0u8; 12];
-        data[0..4].copy_from_slice(&(self.axis as u32).to_le_bytes());
-        data[4..8].copy_from_slice(&self.scale().to_le_bytes());
-        data[8..12].copy_from_slice(&self.crop_offset.to_le_bytes());
+    /// Resolution after resampling `src` along this axis.
+    fn output_size(&self, src: Resolution) -> Resolution {
+        match self.axis {
+            Axis::Horizontal => Resolution {
+                width: self.dst_len,
+                height: src.height,
+            },
+            Axis::Vertical => Resolution {
+                width: src.width,
+                height: self.dst_len,
+            },
+        }
+    }
+}
+
+/// One kernel pass along `mapping.axis`, translating the other axis by `perp_offset`.
+#[derive(Debug, Clone, Copy)]
+struct KernelPass {
+    mapping: AxisMapping,
+    perp_offset: i32,
+}
+
+impl KernelPass {
+    fn to_immediates(self) -> [u8; 16] {
+        let mut data = [0u8; 16];
+        data[0..4].copy_from_slice(&(self.mapping.axis as u32).to_le_bytes());
+        data[4..8].copy_from_slice(&self.mapping.scale().to_le_bytes());
+        data[8..12].copy_from_slice(&self.mapping.crop_offset.to_le_bytes());
+        data[12..16].copy_from_slice(&self.perp_offset.to_le_bytes());
         data
+    }
+}
+
+/// Kernel passes covering both axes, or `None` when the crop lands on whole
+/// texels and the layout shader can sample the source directly. Every part of
+/// the crop is applied by exactly one pass: an axis either gets its own, or
+/// rides along the other axis' pass as `perp_offset`.
+#[derive(Debug, Clone, Copy)]
+enum Passes {
+    Single(KernelPass),
+    Separable {
+        first: KernelPass,
+        second: KernelPass,
+    },
+}
+
+fn plan_passes(mappings: [AxisMapping; 2]) -> Option<Passes> {
+    let pass = |mapping, perp_offset| KernelPass {
+        mapping,
+        perp_offset,
+    };
+    let [horizontal, vertical] = mappings;
+    match (horizontal.as_direct(), vertical.as_direct()) {
+        (Some(_), Some(_)) => None,
+        (None, Some(perp)) => Some(Passes::Single(pass(horizontal, perp))),
+        (Some(perp), None) => Some(Passes::Single(pass(vertical, perp))),
+        (None, None) => {
+            // Stronger shrink first, to minimize the intermediate size and tap count.
+            let (first, second) = match vertical.scale() > horizontal.scale() {
+                true => (vertical, horizontal),
+                false => (horizontal, vertical),
+            };
+            Some(Passes::Separable {
+                first: pass(first, 0),
+                second: pass(second, 0),
+            })
+        }
     }
 }
 
@@ -140,7 +207,7 @@ impl ResamplerShader {
         let resample = wgpu_ctx
             .device
             .create_shader_module(wgpu::include_wgsl!("resample.wgsl"));
-        let resample_layout = make_layout(12);
+        let resample_layout = make_layout(16);
         let build = |format| {
             common_pipeline::create_render_pipeline(
                 "Lanczos3 resampler",
@@ -150,6 +217,8 @@ impl ResamplerShader {
                 format,
             )
         };
+        let pipeline = build(wgpu_ctx.default_view_format());
+        let pipeline_f16 = build(wgpu::TextureFormat::Rgba16Float);
 
         let downsample_shader = wgpu_ctx
             .device
@@ -164,8 +233,8 @@ impl ResamplerShader {
 
         scope.pop()?;
         Ok(Self {
-            pipeline: build(wgpu_ctx.default_view_format()),
-            pipeline_f16: build(wgpu::TextureFormat::Rgba16Float),
+            pipeline,
+            pipeline_f16,
             downsample,
         })
     }
@@ -215,9 +284,18 @@ impl ResamplerShader {
 
 impl ResampledChild {
     pub(super) fn is_needed(crop: &Crop, dst: Resolution) -> bool {
-        !axis_mappings(crop, dst)
-            .into_iter()
-            .all(|mapping| mapping.is_identity())
+        plan_passes(axis_mappings(crop, dst)).is_some()
+    }
+
+    /// Crop left for the layout shader: the resampler consumes the entire
+    /// original crop and emits the exact `dst`-sized rect.
+    pub(super) fn output_crop(dst: Resolution) -> Crop {
+        Crop {
+            top: 0.0,
+            left: 0.0,
+            width: dst.width as f32,
+            height: dst.height as f32,
+        }
     }
 
     pub(super) fn output_state(&self) -> Option<&NodeTextureState> {
@@ -240,6 +318,7 @@ impl ResampledChild {
         // Box-reduce the ratio above the budget (a 2^k box == k cascaded 2:1
         // halvings, so one pass suffices), then the kernel takes the residual.
         let (src_view, src_res) = if factor == [1, 1] {
+            self.reduced = None;
             (source.view(), source.resolution())
         } else {
             let full = source.resolution();
@@ -260,56 +339,42 @@ impl ResampledChild {
             (view, reduced)
         };
 
-        // Stronger shrink first, to minimize the intermediate size and tap count.
-        let mut passes: Vec<AxisMapping> = mappings
-            .iter()
-            .zip(levels)
-            .map(|(mapping, levels)| mapping.on_reduced_source(levels))
-            .filter(|mapping| !mapping.is_identity())
-            .collect();
-        passes.sort_by(|a, b| b.scale().total_cmp(&a.scale()));
+        let residual = std::array::from_fn(|axis| mappings[axis].on_reduced_source(levels[axis]));
+        let passes = plan_passes(residual)
+            .expect("box reduction leaves a residual scale, axes stay off the direct path");
 
-        match passes.as_slice() {
-            [only] => {
+        // A second axis goes through the f16 intermediate before the last pass.
+        let (view, last) = match passes {
+            Passes::Single(pass) => {
                 self.intermediate = None;
-                let target = self.output.ensure_size(wgpu_ctx, dst).view();
-                let bytes = only.to_immediates();
-                shader.pass(
-                    wgpu_ctx,
-                    &shader.pipeline,
-                    src_view,
-                    &bytes,
-                    target,
-                    encoder,
-                );
+                (src_view, pass)
             }
-            [first, second] => {
-                let size = match first.axis {
-                    Axis::Horizontal => Resolution {
-                        width: first.dst_len,
-                        height: src_res.height,
-                    },
-                    Axis::Vertical => Resolution {
-                        width: src_res.width,
-                        height: first.dst_len,
-                    },
-                };
-                let mid = Intermediate::ensure(&mut self.intermediate, wgpu_ctx, size);
-                let bytes = first.to_immediates();
+            Passes::Separable { first, second } => {
+                let mid = Intermediate::ensure(
+                    &mut self.intermediate,
+                    wgpu_ctx,
+                    first.mapping.output_size(src_res),
+                );
                 shader.pass(
                     wgpu_ctx,
                     &shader.pipeline_f16,
                     src_view,
-                    &bytes,
+                    &first.to_immediates(),
                     mid,
                     encoder,
                 );
-                let target = self.output.ensure_size(wgpu_ctx, dst).view();
-                let bytes = second.to_immediates();
-                shader.pass(wgpu_ctx, &shader.pipeline, mid, &bytes, target, encoder);
+                (mid, second)
             }
-            _ => {}
-        }
+        };
+        let target = self.output.ensure_size(wgpu_ctx, dst).view();
+        shader.pass(
+            wgpu_ctx,
+            &shader.pipeline,
+            view,
+            &last.to_immediates(),
+            target,
+            encoder,
+        );
     }
 }
 
@@ -332,4 +397,72 @@ fn axis_mappings(crop: &Crop, dst: Resolution) -> [AxisMapping; 2] {
 
 fn is_same_px(a: f32, b: f32) -> bool {
     (a - b).abs() < 0.001
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plan(left: f32, top: f32, width: f32, height: f32, dst: (usize, usize)) -> Option<Passes> {
+        let crop = Crop {
+            top,
+            left,
+            width,
+            height,
+        };
+        let dst = Resolution {
+            width: dst.0,
+            height: dst.1,
+        };
+        plan_passes(axis_mappings(&crop, dst))
+    }
+
+    #[test]
+    fn plans_a_pass_for_every_non_direct_axis() {
+        // Both axes on whole texels: the layout shader samples 1:1 directly.
+        assert!(plan(0.0, 0.0, 640.0, 360.0, (640, 360)).is_none());
+        assert!(plan(100.0, 40.0, 640.0, 360.0, (640, 360)).is_none());
+
+        // A 1:1 axis with a whole-texel offset rides the other axis' pass.
+        let Some(Passes::Single(pass)) = plan(100.0, 0.0, 640.0, 360.0, (640, 300)) else {
+            panic!()
+        };
+        assert_eq!((pass.mapping.axis, pass.perp_offset), (Axis::Vertical, 100));
+        let Some(Passes::Single(pass)) = plan(0.0, 42.0, 640.0, 360.0, (320, 360)) else {
+            panic!()
+        };
+        assert_eq!(
+            (pass.mapping.axis, pass.perp_offset),
+            (Axis::Horizontal, 42)
+        );
+
+        // A subpixel offset needs its own kernel pass to interpolate.
+        let fractional = plan(100.5, 0.0, 640.0, 360.0, (640, 300));
+        assert!(matches!(fractional, Some(Passes::Separable { .. })));
+
+        // Stronger shrink first, to minimize the intermediate size.
+        let Some(Passes::Separable { first, second }) = plan(0.0, 0.0, 1920.0, 1080.0, (960, 270))
+        else {
+            panic!()
+        };
+        assert_eq!(
+            (first.mapping.axis, second.mapping.axis),
+            (Axis::Vertical, Axis::Horizontal)
+        );
+    }
+
+    #[test]
+    fn degenerate_scales_do_not_overflow_predecimation() {
+        let mapping = |crop_len| AxisMapping {
+            axis: Axis::Horizontal,
+            crop_offset: 0.0,
+            crop_len,
+            dst_len: 10,
+        };
+        assert_eq!(
+            mapping(f32::INFINITY).predecimate_levels(),
+            MAX_PREDECIMATE_LEVELS
+        );
+        assert_eq!(mapping(f32::NAN).predecimate_levels(), 0);
+    }
 }

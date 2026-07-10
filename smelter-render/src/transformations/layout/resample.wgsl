@@ -17,9 +17,10 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 @group(0) @binding(0) var texture: texture_2d<f32>;
 
 struct Mapping {
-    axis: u32,   // 0 = horizontal, 1 = vertical
-    scale: f32,  // source texels per output texel
-    offset: f32, // crop offset
+    axis: u32,        // 0 = horizontal, 1 = vertical
+    scale: f32,       // source texels per output texel
+    offset: f32,      // crop offset along `axis`
+    perp_offset: i32, // whole-texel crop offset on the other axis, applied 1:1
 }
 
 var<immediate> mapping: Mapping;
@@ -32,6 +33,11 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let pos = vec2<i32>(input.position.xy);
     let out_coord = select(pos.x, pos.y, mapping.axis == 1u);
     let max_src = select(dim.x, dim.y, mapping.axis == 1u) - 1;
+    let perp = clamp(
+        select(pos.y, pos.x, mapping.axis == 1u) + mapping.perp_offset,
+        0,
+        select(dim.y, dim.x, mapping.axis == 1u) - 1,
+    );
 
     // Kernel widens with the ratio to cover the full source footprint.
     let kernel_scale = max(mapping.scale, 1.0);
@@ -64,9 +70,9 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             weight = 3.0 * s1 * s3 / (PI * PI * x * x);
         }
         let src = clamp(i32(first) + t, 0, max_src);
-        var coord = vec2<i32>(src, pos.y);
+        var coord = vec2<i32>(src, perp);
         if mapping.axis == 1u {
-            coord = vec2<i32>(pos.x, src);
+            coord = vec2<i32>(perp, src);
         }
         sum += textureLoad(texture, coord, 0) * weight;
         weight_sum += weight;
