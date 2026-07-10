@@ -6,11 +6,12 @@ use std::{
 
 use crate::prelude::*;
 
-/// Two per-track offsets within this distance are treated as the same PTS epoch,
-/// so the second track adopts the shared reference for exact A/V alignment
-/// (single-epoch publishers such as `moq-cli`). Beyond it, each track keeps its
-/// own offset (the browser cross-epoch case).
-const EPOCH_RECONCILE_EPSILON: Duration = Duration::from_millis(50);
+/// Measured A/V skew (offset between the audio and video PTS epochs) at or below
+/// this is treated as a single-epoch publisher (`moq-cli`-style): both tracks
+/// anchor to the first timestamp received on either track and skip live-edge
+/// estimation. Above it we fall back to per-track live-edge locking (the browser
+/// cross-epoch case).
+const AV_SKEW_MAX: Duration = Duration::from_secs(2);
 /// Fallback lock deadline for streams that trickle in without a startup burst
 /// (publisher just went live, sparse/low-fps tracks).
 const MOQ_EPOCH_MAX_WARMUP: Duration = Duration::from_secs(1);
@@ -51,7 +52,7 @@ impl EpochOffset {
         }
     }
 
-    /// `|self − other|`, for the reconciliation / plateau epsilon checks.
+    /// `|self − other|`, for the skew / plateau epsilon checks.
     fn abs_diff(self, other: Self) -> Duration {
         if self.negative == other.negative {
             self.magnitude.abs_diff(other.magnitude)
@@ -78,20 +79,43 @@ impl PartialOrd for EpochOffset {
     }
 }
 
+/// Which of the two tracks an estimator handles. Used to index the per-track
+/// first-offset slots and to look up the counterpart's first offset for the skew
+/// decision.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum TrackKind {
+    Audio,
+    Video,
+}
+
+impl TrackKind {
+    fn other(self) -> Self {
+        match self {
+            TrackKind::Audio => TrackKind::Video,
+            TrackKind::Video => TrackKind::Audio,
+        }
+    }
+}
+
 /// Shared across both track tasks: the wall-clock anchor (set once on the first
-/// frame from ANY track) and the reconciliation reference (set once by the first
-/// track to lock).
+/// frame from ANY track), the small-skew anchor offset (the offset of that same
+/// first frame, subtracted by both tracks so their relative A/V offset is
+/// preserved), and the per-track first offsets used to measure A/V skew.
 #[derive(Clone)]
 pub(super) struct EpochShared {
     anchor: Arc<OnceLock<Instant>>,
-    reference_off: Arc<OnceLock<EpochOffset>>,
+    anchor_off: Arc<OnceLock<EpochOffset>>,
+    first_off_audio: Arc<OnceLock<EpochOffset>>,
+    first_off_video: Arc<OnceLock<EpochOffset>>,
 }
 
 impl EpochShared {
     pub fn new() -> Self {
         Self {
             anchor: Arc::new(OnceLock::new()),
-            reference_off: Arc::new(OnceLock::new()),
+            anchor_off: Arc::new(OnceLock::new()),
+            first_off_audio: Arc::new(OnceLock::new()),
+            first_off_video: Arc::new(OnceLock::new()),
         }
     }
 
@@ -100,14 +124,58 @@ impl EpochShared {
     pub fn elapsed(&self) -> Duration {
         self.anchor.get_or_init(Instant::now).elapsed()
     }
+
+    fn first_off_slot(&self, kind: TrackKind) -> &OnceLock<EpochOffset> {
+        match kind {
+            TrackKind::Audio => &self.first_off_audio,
+            TrackKind::Video => &self.first_off_video,
+        }
+    }
+
+    /// Record a track's first observed offset (set-once).
+    fn publish_first_off(&self, kind: TrackKind, off: EpochOffset) {
+        _ = self.first_off_slot(kind).set(off);
+    }
+
+    /// A track's first observed offset, if it has produced a frame yet.
+    fn first_off(&self, kind: TrackKind) -> Option<EpochOffset> {
+        self.first_off_slot(kind).get().copied()
+    }
+
+    /// Try to claim the shared small-skew anchor with `off` (set-once, so only the
+    /// genuinely first frame across both tracks wins).
+    fn set_anchor_off(&self, off: EpochOffset) {
+        _ = self.anchor_off.set(off);
+    }
+
+    /// The shared small-skew anchor offset, if the first frame has been seen.
+    fn anchor_off(&self) -> Option<EpochOffset> {
+        self.anchor_off.get().copied()
+    }
 }
 
-/// Per-track, loop-local. Estimates the track's PTS epoch at the shared anchor via
-/// the live edge: the running max of `raw − elapsed`,
-/// locked once the max plateaus (startup burst drained) or a fallback deadline
-/// fires. Frames are held until lock (~ms of real wall-clock, just the burst
-/// window) so the locked constant applies from the first *emitted* frame and
-/// output is monotonic by construction.
+/// Outcome of the first-epoch skew branch, disambiguating "large skew confirmed"
+/// (`LiveEdge`) from "counterpart not seen yet" (`Pending`).
+enum SkewDecision {
+    /// Anchor both tracks to the shared first timestamp (single track or small skew).
+    Anchor(EpochOffset),
+    /// Skew exceeds [`AV_SKEW_MAX`]: lock this track at its own live edge.
+    LiveEdge,
+    /// Counterpart's first frame not observed yet; skew not measurable.
+    Pending,
+}
+
+/// Per-track, loop-local. Normalizes the track's PTS epoch to the shared anchor.
+///
+/// In the common single-epoch case (single track, or A/V skew <= [`AV_SKEW_MAX`])
+/// it locks immediately to the first timestamp received on either track — no
+/// warmup, relative A/V offset preserved by construction. Only when the skew
+/// exceeds [`AV_SKEW_MAX`] (or after a mid-stream discontinuity `reset`) does it
+/// fall back to live-edge estimation: the running max of `raw − elapsed`, locked
+/// once the max plateaus (startup burst drained) or a fallback deadline fires.
+/// Frames are held until lock (~ms of real wall-clock, just the burst window) so
+/// the locked constant applies from the first *emitted* frame and output is
+/// monotonic by construction.
 ///
 /// Latency-skew assumption: edge sync aligns each track's newest-available sample
 /// to "now", so materially different per-track transport latency leaves a fixed
@@ -115,6 +183,12 @@ impl EpochShared {
 /// there is no on-wire capture-time signal to do better without a publisher change.
 pub(super) struct LiveEdgeEstimator {
     shared: EpochShared,
+    /// Which track this estimator handles.
+    kind: TrackKind,
+    /// Whether a counterpart track exists (both audio and video present). When
+    /// false the track is trivially single-epoch and anchors to its own first
+    /// timestamp on the first frame.
+    expect_other: bool,
     /// Shared elapsed at the first observed frame (warmup start); `None` until then.
     started_elapsed: Option<Duration>,
     /// Running max of `raw − elapsed`; equals the live-edge offset.
@@ -124,20 +198,29 @@ pub(super) struct LiveEdgeEstimator {
     /// Frames buffered until lock; each carries its raw PTS in `chunk.pts`.
     held: Vec<EncodedInputChunk>,
     locked_off: Option<EpochOffset>,
-    /// §0 reconciliation runs on the first lock only (`reset()` keeps this `true`).
-    reconciled: bool,
+    /// True until the first lock; the first-timestamp anchor path only applies
+    /// while this holds. `reset()` leaves it `false`, so post-discontinuity
+    /// re-locks always go through live-edge estimation (the anchor is stale after
+    /// an epoch jump).
+    first_epoch: bool,
+    /// Set once the skew is measured to exceed [`AV_SKEW_MAX`]: from then on the
+    /// first epoch locks via live-edge, not the anchor.
+    decided_live_edge: bool,
 }
 
 impl LiveEdgeEstimator {
-    pub fn new(shared: EpochShared) -> Self {
+    pub fn new(shared: EpochShared, kind: TrackKind, expect_other: bool) -> Self {
         Self {
             shared,
+            kind,
+            expect_other,
             started_elapsed: None,
             max_off: None,
             plateau_frames: 0,
             held: Vec::new(),
             locked_off: None,
-            reconciled: false,
+            first_epoch: true,
+            decided_live_edge: false,
         }
     }
 
@@ -162,10 +245,20 @@ impl LiveEdgeEstimator {
             return vec![chunk];
         }
 
-        // Warming up: the running max is the live edge. Frames only ever arrive
-        // late, so `off <= edge` and the max climbs from below with no overshoot;
-        // it plateaus once the burst drains.
         let off = EpochOffset::new(raw, elapsed);
+
+        // First frame of the first epoch: record this track's first offset and try
+        // to claim the shared anchor (OnceLock => only the genuinely first frame
+        // across both tracks wins).
+        if self.first_epoch && self.started_elapsed.is_none() {
+            self.shared.publish_first_off(self.kind, off);
+            self.shared.set_anchor_off(off);
+        }
+
+        // Keep accumulating the running max / plateau counter (still needed for the
+        // >2s and post-reset live-edge paths). Frames only ever arrive late, so
+        // `off <= edge` and the max climbs from below with no overshoot; it
+        // plateaus once the burst drains.
         let prev = self.max_off;
         let max_off = prev.map_or(off, |p| p.max(off));
         self.max_off = Some(max_off);
@@ -177,31 +270,83 @@ impl LiveEdgeEstimator {
         self.held.push(chunk);
 
         let started = *self.started_elapsed.get_or_insert(elapsed);
+
+        // First-epoch small-skew decision: anchor to the shared first timestamp
+        // unless the A/V skew is confirmed to exceed AV_SKEW_MAX.
+        if self.first_epoch && !self.decided_live_edge {
+            return match self.skew_decision() {
+                SkewDecision::Anchor(anchor) => self.lock_and_flush(anchor),
+                SkewDecision::LiveEdge => {
+                    // Large skew confirmed: fall through to the live-edge lock.
+                    self.decided_live_edge = true;
+                    self.maybe_live_edge_lock(max_off, elapsed, started)
+                }
+                SkewDecision::Pending => {
+                    // Counterpart's first frame not seen yet: keep buffering, but
+                    // still honor the warmup deadline as a live-edge fallback.
+                    if elapsed.saturating_sub(started) >= MOQ_EPOCH_MAX_WARMUP {
+                        self.lock_and_flush(max_off)
+                    } else {
+                        Vec::new()
+                    }
+                }
+            };
+        }
+
+        // After the first epoch (large-skew fallback or post-reset): live-edge lock.
+        self.maybe_live_edge_lock(max_off, elapsed, started)
+    }
+
+    /// Decide how to lock during the first epoch: anchor to the shared first
+    /// timestamp when there is no counterpart or the A/V skew is small, fall back
+    /// to live-edge when the skew is large, or defer until the counterpart's first
+    /// frame makes the skew measurable.
+    fn skew_decision(&self) -> SkewDecision {
+        let anchor = self
+            .shared
+            .anchor_off()
+            .expect("anchor offset set on the first frame");
+
+        // Single track: no counterpart => trivially small skew.
+        if !self.expect_other {
+            return SkewDecision::Anchor(anchor);
+        }
+
+        let Some(other_first) = self.shared.first_off(self.kind.other()) else {
+            return SkewDecision::Pending;
+        };
+        let own_first = self
+            .shared
+            .first_off(self.kind)
+            .expect("own first offset published on the first frame");
+
+        if own_first.abs_diff(other_first) <= AV_SKEW_MAX {
+            SkewDecision::Anchor(anchor)
+        } else {
+            SkewDecision::LiveEdge
+        }
+    }
+
+    /// Live-edge lock once the burst plateaus or the warmup deadline fires.
+    fn maybe_live_edge_lock(
+        &mut self,
+        max_off: EpochOffset,
+        elapsed: Duration,
+        started: Duration,
+    ) -> Vec<EncodedInputChunk> {
         if self.plateau_frames >= PLATEAU_FRAMES
             || elapsed.saturating_sub(started) >= MOQ_EPOCH_MAX_WARMUP
         {
-            return self.lock_and_flush(max_off);
+            self.lock_and_flush(max_off)
+        } else {
+            Vec::new()
         }
-        Vec::new()
     }
 
-    /// Lock at the given offset (reconciled on first lock per §0) and return all
-    /// held chunks normalized with it.
-    fn lock_and_flush(&mut self, max_off: EpochOffset) -> Vec<EncodedInputChunk> {
-        let mut off = max_off;
-        if !self.reconciled {
-            match self.shared.reference_off.get() {
-                None => {
-                    _ = self.shared.reference_off.set(off);
-                }
-                Some(&reference) if off.abs_diff(reference) <= EPOCH_RECONCILE_EPSILON => {
-                    off = reference;
-                }
-                Some(_) => {}
-            }
-            self.reconciled = true;
-        }
+    /// Lock at the given offset and return all held chunks normalized with it.
+    fn lock_and_flush(&mut self, off: EpochOffset) -> Vec<EncodedInputChunk> {
         self.locked_off = Some(off);
+        self.first_epoch = false;
         self.held
             .drain(..)
             .map(|mut chunk| {
@@ -233,12 +378,14 @@ impl LiveEdgeEstimator {
     /// Mid-stream epoch discontinuity reset (moq-kit's `reset()`). Clears the lock
     /// and warmup state so the estimator re-warms and re-locks against the same,
     /// never-reset shared anchor, absorbing the input jump. `held` is empty while
-    /// locked, and `reconciled` stays `true` so the re-lock keeps its own offset.
+    /// locked, and `first_epoch` stays `false` so the re-lock goes straight to
+    /// live-edge (the first-timestamp anchor is stale after an epoch jump).
     pub fn reset(&mut self) {
         self.locked_off = None;
         self.max_off = None;
         self.plateau_frames = 0;
         self.started_elapsed = None;
+        self.decided_live_edge = false;
     }
 }
 
@@ -273,8 +420,18 @@ mod tests {
         }
     }
 
+    /// A single-track estimator (no counterpart): anchors to its own first
+    /// timestamp on the first frame.
     fn estimator() -> LiveEdgeEstimator {
-        LiveEdgeEstimator::new(EpochShared::new())
+        LiveEdgeEstimator::new(EpochShared::new(), TrackKind::Video, false)
+    }
+
+    /// A two-track estimator forced onto the live-edge path: its counterpart sits
+    /// ~5s away, so the measured A/V skew exceeds [`AV_SKEW_MAX`].
+    fn live_edge_estimator() -> LiveEdgeEstimator {
+        let shared = EpochShared::new();
+        shared.publish_first_off(TrackKind::Audio, EpochOffset::new(ms(5000), ms(0)));
+        LiveEdgeEstimator::new(shared, TrackKind::Video, true)
     }
 
     /// Feed `(raw, elapsed)` pairs and collect all emitted normalized PTS values.
@@ -320,9 +477,10 @@ mod tests {
 
     #[test]
     fn steady_stream_locks_and_normalizes_to_zero() {
-        // No-burst live start: a large-epoch track streamed at real time locks
-        // within a few frames (well before the warmup deadline) at ~zero output.
-        let mut est = estimator();
+        // No-burst live start on the live-edge path: a large-epoch track streamed
+        // at real time locks within a few frames (well before the warmup deadline)
+        // at ~zero output.
+        let mut est = live_edge_estimator();
         let out = feed(
             &mut est,
             &[
@@ -345,7 +503,7 @@ mod tests {
     fn burst_drain_locks_at_live_edge() {
         // Startup burst (raw races ahead of elapsed) then steady => lock at the
         // max once it plateaus at the live edge (~490ms).
-        let mut est = estimator();
+        let mut est = live_edge_estimator();
         let out = feed(
             &mut est,
             &[
@@ -369,7 +527,7 @@ mod tests {
     #[test]
     fn eos_flush_renders_sub_warmup_clip() {
         // Too few frames to plateau-lock; EOS force-lock-and-flush emits all held.
-        let mut est = estimator();
+        let mut est = live_edge_estimator();
         assert!(est.on_chunk_at(ms(0), chunk(ms(100))).is_empty());
         assert!(est.on_chunk_at(ms(20), chunk(ms(120))).is_empty());
         let flushed: Vec<Duration> = est.flush().into_iter().map(|c| c.pts).collect();
@@ -386,33 +544,68 @@ mod tests {
     }
 
     #[test]
-    fn cross_epoch_alignment_preserves_relative_offset() {
-        // Audio ~0 epoch (first frame at t0); video large epoch, first frame at
-        // t0 + 300ms (startup delay). Against one shared anchor the normalized
-        // streams keep a ~300ms relative offset, not ~0 and not the raw ~100s gap.
+    fn small_skew_both_anchor_to_shared_timestamp() {
+        // Single-epoch publisher (`moq-cli`-style): audio and video share a PTS
+        // epoch, video arriving with a small transport delay. With skew <=
+        // AV_SKEW_MAX both tracks anchor to the first timestamp seen on either
+        // track, so equal raw PTS map to equal normalized output.
         let shared = EpochShared::new();
-        let mut audio = LiveEdgeEstimator::new(shared.clone());
-        let mut video = LiveEdgeEstimator::new(shared);
+        let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
+        let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
 
-        // Audio locks first => sets the reconciliation reference.
-        let a = feed(
-            &mut audio,
-            &[(0, 0), (20, 20), (40, 40), (60, 60), (80, 80)],
-        );
-        // Video arrives 300ms later on a 100s epoch.
-        let v = feed(
-            &mut video,
-            &[
-                (100_000, 300),
-                (100_033, 333),
-                (100_066, 366),
-                (100_099, 399), // lock
-                (100_132, 432),
-            ],
-        );
+        // Audio's first frame sets the shared anchor; it holds (skew not yet
+        // measurable) until video's first frame arrives.
+        assert!(feed(&mut audio, &[(0, 0)]).is_empty());
+        // Video: same epoch, observed 30ms late => skew 30ms, anchors immediately.
+        let v = feed(&mut video, &[(0, 30), (20, 50), (40, 70)]);
+        // Audio's next frame now measures the small skew and anchors too.
+        let a = feed(&mut audio, &[(20, 20), (40, 40)]);
 
         assert_eq!(a[0], ms(0));
-        assert_eq!(v[0], ms(300));
+        assert_eq!(v[0], ms(0));
+        // Same anchor for both => equal raw PTS produce equal output (exact align).
+        assert_eq!(audio.locked_off().unwrap(), video.locked_off().unwrap());
+        assert_eq!(a, v);
+    }
+
+    #[test]
+    fn large_skew_each_locks_own_live_edge() {
+        // Skew beyond AV_SKEW_MAX: neither track adopts the shared anchor; each
+        // locks at its own live edge, so a distant epoch does not falsely collapse.
+        let shared = EpochShared::new();
+        let mut a = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
+        let mut b = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+
+        // Audio epoch 0, video epoch 5s (skew 5s > 2s). First frames establish
+        // both epochs, then steady frames plateau-lock each at its own edge.
+        feed(&mut a, &[(0, 0)]);
+        feed(&mut b, &[(5000, 0)]);
+        feed(&mut a, &[(20, 20), (40, 40), (60, 60)]);
+        let out_b = feed(&mut b, &[(5020, 20), (5040, 40), (5060, 60)]);
+
+        assert_eq!(a.locked_off().unwrap(), EpochOffset::new(ms(0), ms(0)));
+        assert_eq!(b.locked_off().unwrap(), EpochOffset::new(ms(5000), ms(0)));
+        assert_eq!(out_b[0], ms(0)); // 5000 - 5000, no false collapse to raw
+    }
+
+    #[test]
+    fn cross_epoch_alignment_preserves_relative_offset() {
+        // Browser-style cross-epoch publisher: audio ~0 epoch, video ~100s epoch
+        // (skew >> AV_SKEW_MAX) so each track live-edge locks at its own edge.
+        // Video's first frame lands 300ms after audio's, and that ~300ms relative
+        // offset survives against the shared anchor (not collapsed to 0, not the
+        // raw ~100s gap).
+        let shared = EpochShared::new();
+        let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
+        let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+
+        // First frames establish both epochs; video starts 300ms late.
+        feed(&mut audio, &[(0, 0)]);
+        feed(&mut video, &[(100_000, 300)]);
+        let a = feed(&mut audio, &[(20, 20), (40, 40), (60, 60)]);
+        let v = feed(&mut video, &[(100_033, 333), (100_066, 366), (100_099, 399)]);
+
+        assert_eq!(a[0], ms(0));
         let rel = v[0].abs_diff(a[0]);
         assert!(
             rel.abs_diff(ms(300)) <= ms(10),
@@ -421,37 +614,42 @@ mod tests {
     }
 
     #[test]
-    fn reconciliation_same_epoch_adopts_reference() {
-        // Both tracks share an epoch; the second (arriving with a small transport
-        // delay) adopts the reference => exactly aligned output.
-        let shared = EpochShared::new();
-        let mut a = LiveEdgeEstimator::new(shared.clone());
-        let mut b = LiveEdgeEstimator::new(shared);
-
-        feed(&mut a, &[(0, 0), (20, 20), (40, 40), (60, 60)]);
-        let ref_off = a.locked_off().unwrap();
-
-        // B: same epoch, but observed 10ms late each frame (off = -10ms).
-        let out_b = feed(&mut b, &[(0, 10), (20, 30), (40, 50), (60, 70)]);
-        // Within 50ms epsilon => adopts reference exactly.
-        assert_eq!(b.locked_off().unwrap(), ref_off);
-        // Reference is offset 0 => normalized == raw.
-        assert_eq!(out_b[0], ms(0));
+    fn skew_boundary_at_av_skew_max() {
+        // Exactly AV_SKEW_MAX still counts as small skew => anchor. Just beyond it
+        // falls back to the live edge.
+        {
+            let shared = EpochShared::new();
+            let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
+            let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+            feed(&mut audio, &[(0, 0)]);
+            // skew == 2000ms => anchors to the shared anchor (audio's first offset).
+            feed(&mut video, &[(2000, 0)]);
+            assert_eq!(video.locked_off().unwrap(), EpochOffset::new(ms(0), ms(0)));
+        }
+        {
+            let shared = EpochShared::new();
+            let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
+            let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+            feed(&mut audio, &[(0, 0)]);
+            // skew 2001ms > AV_SKEW_MAX => live-edge; steady frames plateau-lock.
+            let v = feed(&mut video, &[(2001, 0), (2021, 20), (2041, 40), (2061, 60)]);
+            assert_eq!(video.locked_off().unwrap(), EpochOffset::new(ms(2001), ms(0)));
+            assert_eq!(v[0], ms(0));
+        }
     }
 
     #[test]
-    fn reconciliation_distant_epoch_keeps_own() {
-        // Second track's epoch is seconds away => keeps its own offset.
-        let shared = EpochShared::new();
-        let mut a = LiveEdgeEstimator::new(shared.clone());
-        let mut b = LiveEdgeEstimator::new(shared);
-
-        feed(&mut a, &[(0, 0), (20, 20), (40, 40), (60, 60)]);
-
-        // B on a 5s epoch.
-        let out_b = feed(&mut b, &[(5000, 0), (5020, 20), (5040, 40), (5060, 60)]);
-        assert_eq!(b.locked_off().unwrap(), EpochOffset::new(ms(5000), ms(0)));
-        assert_eq!(out_b[0], ms(0)); // 5000 - 5000, no false collapse to raw
+    fn single_track_anchors_on_first_frame() {
+        // No counterpart => trivially small skew: lock on the first frame to its
+        // own first timestamp (no warmup), normalizing the first output to ~0.
+        let mut est = estimator();
+        // Large epoch, burst-y arrival; the single track ignores the burst.
+        let out = feed(&mut est, &[(1000, 0), (1100, 5), (1200, 10)]);
+        assert_eq!(est.locked_off().unwrap(), EpochOffset::new(ms(1000), ms(0)));
+        assert_monotonic(&out);
+        // Locked on the very first frame => every fed frame produced output.
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0], ms(0)); // first frame normalized to ~0
     }
 
     #[test]

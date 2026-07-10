@@ -24,7 +24,7 @@ use crate::{
         },
         moq::{
             connection::timestamp_aligner::{
-                EpochShared, LiveEdgeEstimator, is_epoch_discontinuity,
+                EpochShared, LiveEdgeEstimator, TrackKind, is_epoch_discontinuity,
             },
             state::MoqInputState,
         },
@@ -64,6 +64,9 @@ struct TrackCtx {
     broadcast: BroadcastConsumer,
     decoders: MoqServerInputDecoders,
     epoch: EpochShared,
+    /// Whether both an audio and a video track are present, so each estimator can
+    /// wait for its counterpart's first frame to measure A/V skew.
+    expect_other_track: bool,
     should_close: Arc<AtomicBool>,
     stats_sender: MoqStatsSender,
 }
@@ -174,11 +177,18 @@ impl BroadcastHandler {
         decoders: MoqServerInputDecoders,
         should_close: Arc<AtomicBool>,
     ) -> Self {
-        // Shared across audio and video: both tracks measure their live edge
-        // against the same monotonic wall-clock anchor and reconcile via a shared
-        // reference, preserving A/V synchronization even across independent PTS
-        // epochs (e.g. browser publishers).
+        // Shared across audio and video: both tracks normalize their raw PTS
+        // against the same monotonic wall-clock anchor. When the measured A/V skew
+        // is small (single-epoch publishers such as `moq-cli`), both tracks anchor
+        // to the first timestamp received on either track, preserving their
+        // relative offset by construction. Only when the skew exceeds AV_SKEW_MAX
+        // (e.g. browser cross-epoch publishers) does each track fall back to
+        // per-track live-edge estimation.
         let epoch = EpochShared::new();
+
+        // Captured here because `handle_audio_track` runs after `self.video` is
+        // already `take()`n, so `has_video()` is unreliable by then.
+        let expect_other_track = video.is_some() && audio.is_some();
 
         let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
 
@@ -188,6 +198,7 @@ impl BroadcastHandler {
             broadcast,
             decoders,
             epoch,
+            expect_other_track,
             should_close,
             stats_sender,
         };
@@ -266,6 +277,7 @@ async fn run_video_track(
         broadcast,
         decoders,
         epoch,
+        expect_other_track,
         should_close,
         stats_sender,
     } = track_ctx;
@@ -277,7 +289,7 @@ async fn run_video_track(
     // group start timestamp and highest received timestamp.
     let mut consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
 
-    let mut estimator = LiveEdgeEstimator::new(epoch);
+    let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Video, expect_other_track);
     let mut last_raw_pts: Option<Duration> = None;
 
     let mut reached_eos = false;
@@ -356,6 +368,7 @@ async fn run_audio_track(
         broadcast,
         decoders: _,
         epoch,
+        expect_other_track,
         should_close,
         stats_sender,
     } = track_ctx;
@@ -366,7 +379,7 @@ async fn run_audio_track(
     // group start timestamp and highest received timestamp.
     let mut consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
 
-    let mut estimator = LiveEdgeEstimator::new(epoch);
+    let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Audio, expect_other_track);
     let mut last_raw_pts: Option<Duration> = None;
 
     let mut reached_eos = false;
