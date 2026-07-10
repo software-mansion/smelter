@@ -603,7 +603,10 @@ mod tests {
         feed(&mut audio, &[(0, 0)]);
         feed(&mut video, &[(100_000, 300)]);
         let a = feed(&mut audio, &[(20, 20), (40, 40), (60, 60)]);
-        let v = feed(&mut video, &[(100_033, 333), (100_066, 366), (100_099, 399)]);
+        let v = feed(
+            &mut video,
+            &[(100_033, 333), (100_066, 366), (100_099, 399)],
+        );
 
         assert_eq!(a[0], ms(0));
         let rel = v[0].abs_diff(a[0]);
@@ -633,7 +636,10 @@ mod tests {
             feed(&mut audio, &[(0, 0)]);
             // skew 2001ms > AV_SKEW_MAX => live-edge; steady frames plateau-lock.
             let v = feed(&mut video, &[(2001, 0), (2021, 20), (2041, 40), (2061, 60)]);
-            assert_eq!(video.locked_off().unwrap(), EpochOffset::new(ms(2001), ms(0)));
+            assert_eq!(
+                video.locked_off().unwrap(),
+                EpochOffset::new(ms(2001), ms(0))
+            );
             assert_eq!(v[0], ms(0));
         }
     }
