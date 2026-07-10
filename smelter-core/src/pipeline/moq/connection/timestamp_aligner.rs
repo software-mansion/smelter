@@ -274,7 +274,7 @@ impl LiveEdgeEstimator {
         // First-epoch small-skew decision: anchor to the shared first timestamp
         // unless the A/V skew is confirmed to exceed AV_SKEW_MAX.
         if self.first_epoch && !self.decided_live_edge {
-            return match self.skew_decision() {
+            match self.skew_decision() {
                 SkewDecision::Anchor(anchor) => self.lock_and_flush(anchor),
                 SkewDecision::LiveEdge => {
                     // Large skew confirmed: fall through to the live-edge lock.
@@ -290,11 +290,11 @@ impl LiveEdgeEstimator {
                         Vec::new()
                     }
                 }
-            };
+            }
+        } else {
+            // After the first epoch (large-skew fallback or post-reset): live-edge lock.
+            self.maybe_live_edge_lock(max_offset, elapsed, started)
         }
-
-        // After the first epoch (large-skew fallback or post-reset): live-edge lock.
-        self.maybe_live_edge_lock(max_offset, elapsed, started)
     }
 
     /// Decide how to lock during the first epoch: anchor to the shared first
@@ -564,7 +564,10 @@ mod tests {
         assert_eq!(a[0], ms(0));
         assert_eq!(v[0], ms(0));
         // Same anchor for both => equal raw PTS produce equal output (exact align).
-        assert_eq!(audio.locked_offset().unwrap(), video.locked_offset().unwrap());
+        assert_eq!(
+            audio.locked_offset().unwrap(),
+            video.locked_offset().unwrap()
+        );
         assert_eq!(a, v);
     }
 
@@ -584,7 +587,10 @@ mod tests {
         let out_b = feed(&mut b, &[(5020, 20), (5040, 40), (5060, 60)]);
 
         assert_eq!(a.locked_offset().unwrap(), EpochOffset::new(ms(0), ms(0)));
-        assert_eq!(b.locked_offset().unwrap(), EpochOffset::new(ms(5000), ms(0)));
+        assert_eq!(
+            b.locked_offset().unwrap(),
+            EpochOffset::new(ms(5000), ms(0))
+        );
         assert_eq!(out_b[0], ms(0)); // 5000 - 5000, no false collapse to raw
     }
 
@@ -627,7 +633,10 @@ mod tests {
             feed(&mut audio, &[(0, 0)]);
             // skew == 2000ms => anchors to the shared anchor (audio's first offset).
             feed(&mut video, &[(2000, 0)]);
-            assert_eq!(video.locked_offset().unwrap(), EpochOffset::new(ms(0), ms(0)));
+            assert_eq!(
+                video.locked_offset().unwrap(),
+                EpochOffset::new(ms(0), ms(0))
+            );
         }
         {
             let shared = EpochShared::new();
@@ -651,7 +660,10 @@ mod tests {
         let mut est = estimator();
         // Large epoch, burst-y arrival; the single track ignores the burst.
         let out = feed(&mut est, &[(1000, 0), (1100, 5), (1200, 10)]);
-        assert_eq!(est.locked_offset().unwrap(), EpochOffset::new(ms(1000), ms(0)));
+        assert_eq!(
+            est.locked_offset().unwrap(),
+            EpochOffset::new(ms(1000), ms(0))
+        );
         assert_monotonic(&out);
         // Locked on the very first frame => every fed frame produced output.
         assert_eq!(out.len(), 3);
