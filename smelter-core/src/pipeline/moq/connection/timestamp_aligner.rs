@@ -390,8 +390,8 @@ impl LiveEdgeEstimator {
 }
 
 /// Detects a mid-stream epoch discontinuity: a keyframe whose raw PTS jumps more
-/// than [`MOQ_EPOCH_DISCONTINUITY`] from the previous frame (moq-kit's
-/// `discontinuityGapUs`). Non-keyframes and the very first frame never trigger.
+/// than [`MOQ_EPOCH_DISCONTINUITY`] from the previous frame.
+/// Non-keyframes and the very first frame never trigger.
 pub(super) fn is_epoch_discontinuity(
     keyframe: bool,
     raw_pts: Duration,
