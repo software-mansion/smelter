@@ -295,13 +295,13 @@ async fn run_video_track(
     let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Video, expect_other_track);
     let mut last_raw_pts: Option<Duration> = None;
 
-    let mut reached_eos = false;
+    let mut eos_received = false;
     loop {
         if should_close.load(std::sync::atomic::Ordering::Relaxed) {
             break;
         };
         let Some(frame) = consumer.read().await? else {
-            reached_eos = true;
+            eos_received = true;
             break;
         };
         stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Video);
@@ -335,17 +335,17 @@ async fn run_video_track(
             break;
         }
     }
-    if reached_eos {
-        for chunk in estimator.flush() {
-            trace!(pts = ?chunk.pts, "MoQ video frame (EOS flush)");
-            if decoder_handle
+    // Stream ended before the estimator finished warmup → force-lock and drain
+    // the still-held frames so a sub-warmup clip renders.
+    if eos_received && !estimator.is_locked() {
+        let channel_closed = estimator.flush().into_iter().any(|chunk| {
+            decoder_handle
                 .chunk_sender
                 .send(PipelineEvent::Data(chunk))
                 .is_err()
-            {
-                debug!("Failed to send flushed chunk, channel closed.");
-                break;
-            }
+        });
+        if channel_closed {
+            debug!("Failed to send video chunk, channel closed.");
         }
     }
     if decoder_handle
@@ -353,7 +353,7 @@ async fn run_video_track(
         .send(PipelineEvent::EOS)
         .is_err()
     {
-        debug!("Failed to send EOS, channel closed.");
+        debug!("Failed to send video EOS, channel closed.");
     }
 
     Ok(())
@@ -384,13 +384,13 @@ async fn run_audio_track(
     let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Audio, expect_other_track);
     let mut last_raw_pts: Option<Duration> = None;
 
-    let mut reached_eos = false;
+    let mut eos_received = false;
     loop {
         if should_close.load(std::sync::atomic::Ordering::Relaxed) {
             break;
         };
         let Some(frame) = consumer.read().await? else {
-            reached_eos = true;
+            eos_received = true;
             break;
         };
         stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Audio);
@@ -424,17 +424,17 @@ async fn run_audio_track(
             break;
         }
     }
-    if reached_eos {
-        for chunk in estimator.flush() {
-            trace!(pts = ?chunk.pts, "MoQ audio frame (EOS flush)");
-            if decoder_handle
+    // Stream ended before the estimator finished warmup → force-lock and drain
+    // the still-held frames so a sub-warmup clip renders.
+    if eos_received && !estimator.is_locked() {
+        let channel_closed = estimator.flush().into_iter().any(|chunk| {
+            decoder_handle
                 .chunk_sender
                 .send(PipelineEvent::Data(chunk))
                 .is_err()
-            {
-                debug!("Failed to send flushed chunk, channel closed.");
-                break;
-            }
+        });
+        if channel_closed {
+            debug!("Failed to send audio chunk, channel closed.");
         }
     }
     if decoder_handle
@@ -442,7 +442,7 @@ async fn run_audio_track(
         .send(PipelineEvent::EOS)
         .is_err()
     {
-        debug!("Failed to send EOS, channel closed.");
+        debug!("Failed to send audio EOS, channel closed.");
     }
 
     Ok(())

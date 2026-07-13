@@ -356,13 +356,18 @@ impl LiveEdgeEstimator {
             .collect()
     }
 
-    /// Force-lock at the current running max and drain held frames (EOS path).
-    /// Guarantees a sub-warmup clip still renders. Returns empty if already locked
-    /// (held is empty) or if no frame was ever received.
+    /// True once the estimator has locked its epoch offset (warmup finished).
+    /// While false it is still warming up and holding frames not yet emitted.
+    pub fn is_locked(&self) -> bool {
+        self.locked_offset.is_some()
+    }
+
+    /// Force-lock at the current running max and drain the frames held during
+    /// warmup (EOS path), so a sub-warmup clip still renders. Caller must ensure
+    /// the estimator is still warming up (`!is_locked()`); returns empty if no
+    /// frame was ever received.
     pub fn flush(&mut self) -> Vec<EncodedInputChunk> {
-        if self.locked_offset.is_some() {
-            return Vec::new();
-        }
+        debug_assert!(!self.is_locked());
         match self.max_offset {
             Some(max_offset) => self.lock_and_flush(max_offset),
             None => Vec::new(),
@@ -533,8 +538,8 @@ mod tests {
         let flushed: Vec<Duration> = est.flush().into_iter().map(|c| c.pts).collect();
         assert_eq!(flushed, vec![ms(0), ms(20)]); // offset 100 absorbed
         assert_monotonic(&flushed);
-        // Flushing again after lock yields nothing.
-        assert!(est.flush().is_empty());
+        // The flush locked the estimator, so the caller won't flush again.
+        assert!(est.is_locked());
     }
 
     #[test]
