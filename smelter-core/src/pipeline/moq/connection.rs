@@ -296,7 +296,7 @@ async fn run_video_track(
     let mut last_raw_pts: Option<Duration> = None;
 
     let mut reached_eos = false;
-    'read: loop {
+    loop {
         if should_close.load(std::sync::atomic::Ordering::Relaxed) {
             break;
         };
@@ -324,16 +324,15 @@ async fn run_video_track(
             present: true,
         };
 
-        for chunk in estimator.on_chunk(chunk) {
-            trace!(pts = ?chunk.pts, ?raw_pts, "MoQ video frame");
-            if decoder_handle
+        let channel_closed = estimator.on_chunk(chunk).into_iter().any(|chunk| {
+            decoder_handle
                 .chunk_sender
                 .send(PipelineEvent::Data(chunk))
                 .is_err()
-            {
-                debug!("Failed to send chunk, channel closed.");
-                break 'read;
-            }
+        });
+        if channel_closed {
+            debug!("Failed to send video chunk, channel closed.");
+            break;
         }
     }
     if reached_eos {
@@ -386,7 +385,7 @@ async fn run_audio_track(
     let mut last_raw_pts: Option<Duration> = None;
 
     let mut reached_eos = false;
-    'read: loop {
+    loop {
         if should_close.load(std::sync::atomic::Ordering::Relaxed) {
             break;
         };
@@ -414,16 +413,15 @@ async fn run_audio_track(
             present: true,
         };
 
-        for chunk in estimator.on_chunk(chunk) {
-            trace!(pts = ?chunk.pts, ?raw_pts,  "MoQ audio frame");
-            if decoder_handle
+        let channel_closed = estimator.on_chunk(chunk).into_iter().any(|chunk| {
+            decoder_handle
                 .chunk_sender
                 .send(PipelineEvent::Data(chunk))
                 .is_err()
-            {
-                debug!("Failed to send chunk, channel closed.");
-                break 'read;
-            }
+        });
+        if channel_closed {
+            debug!("Failed to send audio chunk, channel closed.");
+            break;
         }
     }
     if reached_eos {
