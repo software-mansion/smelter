@@ -40,7 +40,11 @@ use self::catalog::{MoqCatalogError, read_catalog};
 mod catalog;
 mod timestamp_aligner;
 
-const MOQ_BUFFER: Duration = Duration::from_secs(1);
+/// Buffer added to a new track's PTS offset during queue initialization. This gives frames
+/// time to arrive and be decoded before their scheduled presentation, absorbing network jitter and
+/// decode latency at the cost of a fixed delay. The 2200ms value is set based on Twitch
+/// broadcasting guidelines.
+const MOQ_BUFFER: Duration = Duration::from_millis(2200);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct VideoTrack {
@@ -179,9 +183,8 @@ impl BroadcastHandler {
     ) -> Self {
         // Shared across audio and video: both tracks normalize their raw PTS
         // against the same monotonic wall-clock anchor. When the measured A/V skew
-        // is small (single-epoch publishers such as `moq-cli`), both tracks anchor
-        // to the first timestamp received on either track, preserving their
-        // relative offset by construction. Only when the skew exceeds AV_SKEW_MAX
+        // is small, both tracks anchor to the first timestamp received on either track,
+        // preserving their relative offset by construction. Only when the skew exceeds AV_SKEW_MAX
         // (e.g. browser cross-epoch publishers) does each track fall back to
         // per-track live-edge estimation.
         let epoch = EpochShared::new();
