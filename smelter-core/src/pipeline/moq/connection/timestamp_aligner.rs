@@ -4,6 +4,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use tracing::debug;
+
 use crate::prelude::*;
 
 /// Measured A/V skew (offset between the audio and video PTS epochs) at or below
@@ -21,9 +23,15 @@ const MOQ_EPOCH_MAX_WARMUP: Duration = Duration::from_secs(1);
 const PLATEAU_FRAMES: u32 = 3;
 /// Tolerance for "the running max did not rise" when counting plateau frames.
 const PLATEAU_EPSILON: Duration = Duration::from_millis(5);
-/// A keyframe whose raw PTS jumps by more than this from the previous frame is
-/// treated as a mid-stream epoch discontinuity, resetting the estimator.
-const MOQ_EPOCH_DISCONTINUITY: Duration = Duration::from_millis(500);
+/// Minimum keyframe-to-keyframe raw-PTS forward step to even consider an epoch
+/// change. Below this the step is normal group cadence, not a discontinuity.
+const MOQ_EPOCH_MIN_STEP: Duration = Duration::from_millis(100);
+/// Above a [`MOQ_EPOCH_MIN_STEP`] forward jump, a per-frame offset (`raw −
+/// elapsed`) shift larger than this marks a mid-stream epoch change (raw advanced
+/// faster than wall-clock). Offset shifts within A/V-skew tolerance are normal
+/// cross-track wobble, so this equals [`AV_SKEW_MAX`] — same "how far apart before
+/// it's a different epoch" scale — while staying independently tunable.
+const MOQ_EPOCH_OFFSET_JUMP: Duration = AV_SKEW_MAX;
 
 /// Signed offset `raw_pts − elapsed` (a track's raw PTS at the shared anchor
 /// instant), kept as a [`Duration`] magnitude plus a sign — no raw i64 micros.
@@ -206,6 +214,10 @@ pub(super) struct LiveEdgeEstimator {
     /// Set once the skew is measured to exceed [`AV_SKEW_MAX`]: from then on the
     /// first epoch locks via live-edge, not the anchor.
     decided_live_edge: bool,
+    /// Previous frame's `(raw_pts, offset)`, updated on every frame (locked or
+    /// warming). Baseline for the epoch-discontinuity check. `reset()` does *not*
+    /// clear it: the post-jump frame becomes the next baseline.
+    last: Option<(Duration, EpochOffset)>,
 }
 
 impl LiveEdgeEstimator {
@@ -221,18 +233,45 @@ impl LiveEdgeEstimator {
             locked_offset: None,
             first_epoch: true,
             decided_live_edge: false,
+            last: None,
         }
     }
 
-    /// Feed one chunk (with its raw PTS in `chunk.pts`). Returns the chunks ready
-    /// to emit: empty while warming (chunk held), the full flushed batch at lock,
-    /// or the single normalized chunk once locked.
-    pub fn on_chunk(&mut self, chunk: EncodedInputChunk) -> Vec<EncodedInputChunk> {
+    /// Feed one frame (with its raw PTS in `chunk.pts`). Detects a mid-stream
+    /// epoch discontinuity against the previous frame and resets the estimator
+    /// before normalizing. Returns the chunks ready to emit: empty while warming
+    /// (chunk held), the full flushed batch at lock, or the single normalized
+    /// chunk once locked.
+    pub fn on_frame(&mut self, keyframe: bool, chunk: EncodedInputChunk) -> Vec<EncodedInputChunk> {
         let elapsed = self.shared.elapsed();
+        self.on_frame_at(keyframe, elapsed, chunk)
+    }
+
+    /// Clock-injected core of [`on_frame`], for testing without real sleeps. Reads
+    /// `elapsed` once and feeds it to both the discontinuity check and
+    /// normalization.
+    fn on_frame_at(
+        &mut self,
+        keyframe: bool,
+        elapsed: Duration,
+        chunk: EncodedInputChunk,
+    ) -> Vec<EncodedInputChunk> {
+        let raw = chunk.pts;
+        let offset = EpochOffset::new(raw, elapsed);
+        if is_epoch_discontinuity(keyframe, raw, offset, self.last) {
+            debug!(
+                ?raw,
+                "MoQ epoch discontinuity detected, resetting estimator"
+            );
+            self.reset();
+        }
+        self.last = Some((raw, offset));
         self.on_chunk_at(elapsed, chunk)
     }
 
-    /// Clock-injected core of [`on_chunk`], for testing without real sleeps.
+    /// Clock-injected core of [`on_frame`], normalizing the chunk against the
+    /// current lock (or holding/locking during warmup). Split out for testing
+    /// without real sleeps.
     fn on_chunk_at(
         &mut self,
         elapsed: Duration,
@@ -394,15 +433,38 @@ impl LiveEdgeEstimator {
     }
 }
 
-/// Detects a mid-stream epoch discontinuity: a keyframe whose raw PTS jumps more
-/// than [`MOQ_EPOCH_DISCONTINUITY`] from the previous frame.
-/// Non-keyframes and the very first frame never trigger.
-pub(super) fn is_epoch_discontinuity(
+/// Detects a mid-stream epoch discontinuity by comparing consecutive-frame
+/// offsets (`raw − elapsed`) rather than raw PTS alone, so a same-epoch content
+/// gap (a stalled group dropped, delivered in real time so `Δraw ≈ Δelapsed`)
+/// does not masquerade as a real epoch change (publisher restart / clock switch,
+/// where `raw` jumps while wall-clock does not). Gated on keyframes (group
+/// boundaries) so a real epoch change aligns its reset to a decodable boundary
+/// and mid-GOP noise is filtered. Non-keyframes and the very first frame never
+/// trigger.
+fn is_epoch_discontinuity(
     keyframe: bool,
     raw_pts: Duration,
-    last_raw_pts: Option<Duration>,
+    offset: EpochOffset,
+    last: Option<(Duration, EpochOffset)>, // (last_raw_pts, last_offset)
 ) -> bool {
-    keyframe && last_raw_pts.is_some_and(|last| raw_pts.abs_diff(last) > MOQ_EPOCH_DISCONTINUITY)
+    if !keyframe {
+        return false;
+    }
+    let Some((last_raw_pts, last_offset)) = last else {
+        return false;
+    };
+    // 1. Small forward step → normal group cadence, not an epoch change.
+    if raw_pts >= last_raw_pts && raw_pts - last_raw_pts < MOQ_EPOCH_MIN_STEP {
+        return false;
+    }
+    // 2. Time went backwards → clock reset / new epoch.
+    if raw_pts < last_raw_pts {
+        return true;
+    }
+    // 3. Forward jump ≥ MOQ_EPOCH_MIN_STEP → disambiguate by offset delta: a real
+    //    epoch change steps the offset (raw outran wall-clock), a same-epoch drop
+    //    leaves it ~unchanged.
+    offset.abs_diff(last_offset) > MOQ_EPOCH_OFFSET_JUMP
 }
 
 #[cfg(test)]
@@ -448,6 +510,23 @@ mod tests {
             }
         }
         out
+    }
+
+    /// Feed `(keyframe, raw, elapsed)` triples through `on_frame_at` (which runs
+    /// the epoch-discontinuity check before normalizing), collecting emitted PTS.
+    fn feed_frames(est: &mut LiveEdgeEstimator, frames: &[(bool, u64, u64)]) -> Vec<Duration> {
+        let mut out = Vec::new();
+        for &(keyframe, raw, elapsed) in frames {
+            for c in est.on_frame_at(keyframe, ms(elapsed), chunk(ms(raw))) {
+                out.push(c.pts);
+            }
+        }
+        out
+    }
+
+    /// Shorthand for an `EpochOffset` built from `(raw, elapsed)` in ms.
+    fn off(raw: u64, elapsed: u64) -> EpochOffset {
+        EpochOffset::new(ms(raw), ms(elapsed))
     }
 
     fn assert_monotonic(pts: &[Duration]) {
@@ -676,22 +755,34 @@ mod tests {
     }
 
     #[test]
-    fn discontinuity_resets_and_stays_continuous() {
-        // Lock on epoch A, stream, then a keyframe jump to epoch B resets the
-        // estimator; re-locking against the never-reset anchor keeps output
-        // continuous (tracks wall-clock) instead of jumping.
+    fn reset_on_epoch_jump_relocks_live_edge() {
+        // Lock on epoch A, stream, then a keyframe jump to epoch B (raw jumps 50s
+        // while wall-clock does not => offset steps by ~50s) resets the estimator;
+        // re-locking against the never-reset anchor keeps output continuous
+        // (tracks wall-clock) instead of jumping.
         let mut est = estimator();
-        let mut all = feed(&mut est, &[(1000, 0), (1020, 20), (1040, 40), (1060, 60)]);
-        all.extend(feed(&mut est, &[(1080, 80), (1100, 100)]));
+        let mut all = feed_frames(
+            &mut est,
+            &[
+                (true, 1000, 0),
+                (false, 1020, 20),
+                (false, 1040, 40),
+                (false, 1060, 60),
+                (false, 1080, 80),
+                (false, 1100, 100),
+            ],
+        );
         let before = *all.last().unwrap();
 
-        // Discontinuity detected upstream => reset.
-        assert!(is_epoch_discontinuity(true, ms(50_000), Some(ms(1100))));
-        est.reset();
-
-        let after = feed(
+        // Keyframe epoch jump: offset steps ~50s => reset, then re-lock live-edge.
+        let after = feed_frames(
             &mut est,
-            &[(50_000, 120), (50_020, 140), (50_040, 160), (50_060, 180)],
+            &[
+                (true, 50_000, 120),
+                (false, 50_020, 140),
+                (false, 50_040, 160),
+                (false, 50_060, 180),
+            ],
         );
         all.extend(after.iter().copied());
         assert_monotonic(&all);
@@ -704,14 +795,125 @@ mod tests {
     }
 
     #[test]
+    fn drop_same_epoch_does_not_reset() {
+        // A same-epoch content gap (stalled group dropped) arrives under live
+        // delivery: raw and elapsed both advance ~2s, so the offset is stable and
+        // the estimator keeps its lock instead of collapsing to live-edge.
+        let mut est = estimator();
+        feed_frames(&mut est, &[(true, 1000, 0), (false, 1020, 20)]);
+        let locked = est.locked_offset().unwrap();
+
+        // Drop: raw +2s AND elapsed +2s (delivered in real time) on a keyframe.
+        feed_frames(&mut est, &[(true, 3020, 2020)]);
+        assert_eq!(
+            est.locked_offset().unwrap(),
+            locked,
+            "same-epoch drop must not re-lock"
+        );
+    }
+
+    #[test]
+    fn anchor_lock_survives_same_epoch_drop() {
+        // A small-skew track anchored to the shared timestamp, hit by a same-epoch
+        // drop, keeps its anchor lock (does not downgrade to live-edge).
+        let shared = EpochShared::new();
+        let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
+        let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+
+        // Audio anchors first; video anchors on its small-skew first frame.
+        feed_frames(&mut audio, &[(true, 0, 0)]);
+        feed_frames(
+            &mut video,
+            &[(true, 0, 30), (false, 20, 50), (false, 40, 70)],
+        );
+        let anchor = video.locked_offset().unwrap();
+        assert_eq!(anchor, off(0, 0));
+
+        // Same-epoch drop on video: raw +2s and elapsed +2s => offset stable.
+        feed_frames(&mut video, &[(true, 2040, 2070)]);
+        assert_eq!(
+            video.locked_offset().unwrap(),
+            anchor,
+            "anchor lock must survive a same-epoch drop"
+        );
+    }
+
+    #[test]
+    fn burst_warmup_does_not_false_reset() {
+        // Every burst frame is a keyframe with a >= MOQ_EPOCH_MIN_STEP raw step,
+        // but consecutive-frame offsets climb only ~one interval at a time (well
+        // under MOQ_EPOCH_OFFSET_JUMP), so no frame mid-warmup falsely resets and
+        // the estimator locks at the burst edge exactly as without the check.
+        let mut est = live_edge_estimator();
+        let out = feed_frames(
+            &mut est,
+            &[
+                (true, 0, 0),
+                (true, 100, 2),
+                (true, 200, 4),
+                (true, 300, 6),
+                (true, 400, 8),
+                (true, 500, 10),
+                (true, 520, 30),
+                (true, 540, 50),
+                (true, 560, 70),
+            ],
+        );
+        assert_eq!(est.locked_offset().unwrap(), off(500, 10)); // +490, no reset
+        assert_monotonic(&out);
+        assert_eq!(*out.last().unwrap(), ms(70));
+    }
+
+    #[test]
     fn discontinuity_detection_conditions() {
-        // Non-keyframe never resets, even on a huge jump.
-        assert!(!is_epoch_discontinuity(false, ms(50_000), Some(ms(0))));
+        // Keyframe gate: a non-keyframe never resets, even on a huge raw/offset step.
+        assert!(!is_epoch_discontinuity(
+            false,
+            ms(50_000),
+            off(50_000, 0),
+            Some((ms(0), off(0, 0)))
+        ));
         // First frame (no previous) never resets.
-        assert!(!is_epoch_discontinuity(true, ms(50_000), None));
-        // Small jump under threshold does not reset.
-        assert!(!is_epoch_discontinuity(true, ms(400), Some(ms(0))));
-        // Keyframe + large jump resets.
-        assert!(is_epoch_discontinuity(true, ms(600), Some(ms(0))));
+        assert!(!is_epoch_discontinuity(
+            true,
+            ms(50_000),
+            off(50_000, 0),
+            None
+        ));
+
+        // Branch 1: small forward step (< MOQ_EPOCH_MIN_STEP) short-circuits before
+        // the offset check, even when the offset delta would otherwise look large.
+        assert!(!is_epoch_discontinuity(
+            true,
+            ms(1033),
+            off(1033, 50_000),
+            Some((ms(1000), off(1000, 0)))
+        ));
+
+        // Branch 2: time went backwards => reset, regardless of magnitude/offset.
+        assert!(is_epoch_discontinuity(
+            true,
+            ms(1000),
+            off(1000, 60_000),
+            Some((ms(50_000), off(50_000, 60_000)))
+        ));
+
+        // Branch 3, small offset delta: raw +2s and elapsed +2s (same-epoch drop) =>
+        // stable offset => no reset.
+        assert!(!is_epoch_discontinuity(
+            true,
+            ms(3000),
+            off(3000, 2000),
+            Some((ms(1000), off(1000, 0)))
+        ));
+
+        // Branch 3, large offset delta: raw +50s, elapsed unchanged => offset steps
+        // ~50s => reset.
+        assert!(is_epoch_discontinuity(
+            true,
+            ms(51_000),
+            off(51_000, 0),
+            Some((ms(1000), off(1000, 0)))
+        ));
     }
 }

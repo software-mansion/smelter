@@ -7,7 +7,7 @@ use bytes::Bytes;
 use moq_mux::{catalog::hang::Container, container::Consumer as ContainerConsumer};
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
-use tracing::{Instrument, Level, Span, debug, info, span, trace, warn};
+use tracing::{Instrument, Level, Span, debug, info, span, warn};
 
 use crate::{
     pipeline::{
@@ -23,9 +23,7 @@ use crate::{
             vulkan_h264::VulkanH264Decoder,
         },
         moq::{
-            connection::timestamp_aligner::{
-                EpochShared, LiveEdgeEstimator, TrackKind, is_epoch_discontinuity,
-            },
+            connection::timestamp_aligner::{EpochShared, LiveEdgeEstimator, TrackKind},
             state::MoqInputState,
         },
     },
@@ -293,7 +291,6 @@ async fn run_video_track(
     let mut consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
 
     let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Video, expect_other_track);
-    let mut last_raw_pts: Option<Duration> = None;
 
     let mut eos_received = false;
     loop {
@@ -307,15 +304,6 @@ async fn run_video_track(
         stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Video);
 
         let raw_pts: Duration = frame.timestamp.into();
-        if is_epoch_discontinuity(frame.keyframe, raw_pts, last_raw_pts) {
-            debug!(
-                ?raw_pts,
-                "MoQ video epoch discontinuity detected, resetting estimator"
-            );
-            estimator.reset();
-        }
-        last_raw_pts = Some(raw_pts);
-
         let chunk = EncodedInputChunk {
             data: frame.payload,
             pts: raw_pts,
@@ -324,12 +312,15 @@ async fn run_video_track(
             present: true,
         };
 
-        let channel_closed = estimator.on_chunk(chunk).into_iter().any(|chunk| {
-            decoder_handle
-                .chunk_sender
-                .send(PipelineEvent::Data(chunk))
-                .is_err()
-        });
+        let channel_closed = estimator
+            .on_frame(frame.keyframe, chunk)
+            .into_iter()
+            .any(|chunk| {
+                decoder_handle
+                    .chunk_sender
+                    .send(PipelineEvent::Data(chunk))
+                    .is_err()
+            });
         if channel_closed {
             debug!("Failed to send video chunk, channel closed.");
             break;
@@ -382,7 +373,6 @@ async fn run_audio_track(
     let mut consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
 
     let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Audio, expect_other_track);
-    let mut last_raw_pts: Option<Duration> = None;
 
     let mut eos_received = false;
     loop {
@@ -396,15 +386,6 @@ async fn run_audio_track(
         stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Audio);
 
         let raw_pts: Duration = frame.timestamp.into();
-        if is_epoch_discontinuity(frame.keyframe, raw_pts, last_raw_pts) {
-            debug!(
-                ?raw_pts,
-                "MoQ audio epoch discontinuity detected, resetting estimator"
-            );
-            estimator.reset();
-        }
-        last_raw_pts = Some(raw_pts);
-
         let chunk = EncodedInputChunk {
             data: frame.payload,
             pts: raw_pts,
@@ -413,12 +394,15 @@ async fn run_audio_track(
             present: true,
         };
 
-        let channel_closed = estimator.on_chunk(chunk).into_iter().any(|chunk| {
-            decoder_handle
-                .chunk_sender
-                .send(PipelineEvent::Data(chunk))
-                .is_err()
-        });
+        let channel_closed = estimator
+            .on_frame(frame.keyframe, chunk)
+            .into_iter()
+            .any(|chunk| {
+                decoder_handle
+                    .chunk_sender
+                    .send(PipelineEvent::Data(chunk))
+                    .is_err()
+            });
         if channel_closed {
             debug!("Failed to send audio chunk, channel closed.");
             break;
