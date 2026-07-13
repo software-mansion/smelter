@@ -375,7 +375,7 @@ impl LiveEdgeEstimator {
         self.locked_offset
     }
 
-    /// Mid-stream epoch discontinuity reset (moq-kit's `reset()`). Clears the lock
+    /// Mid-stream epoch discontinuity reset. Clears the lock
     /// and warmup state so the estimator re-warms and re-locks against the same,
     /// never-reset shared anchor, absorbing the input jump. `held` is empty while
     /// locked, and `first_epoch` stays `false` so the re-lock goes straight to
