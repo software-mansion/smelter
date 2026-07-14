@@ -241,7 +241,11 @@ impl LiveEdgeEstimator {
     /// before normalizing. Returns the chunks ready to emit: empty while warming
     /// (chunk held), the full flushed batch at lock, or the single normalized
     /// chunk once locked.
-    pub fn on_frame(&mut self, keyframe: bool, chunk: EncodedInputChunk) -> Vec<EncodedInputChunk> {
+    pub fn on_frame(
+        &mut self,
+        keyframe: bool,
+        mut chunk: EncodedInputChunk,
+    ) -> Vec<EncodedInputChunk> {
         let elapsed = self.shared.elapsed();
         let raw = chunk.pts;
         let offset = EpochOffset::new(raw, elapsed);
@@ -253,24 +257,22 @@ impl LiveEdgeEstimator {
             self.reset();
         }
         self.last = Some((raw, offset));
-        self.on_frame_at(elapsed, chunk)
+
+        match self.locked_offset {
+            Some(offset) => {
+                chunk.pts = offset.normalize(raw);
+                vec![chunk]
+            }
+            None => self.advance_warmup(raw, elapsed, chunk),
+        }
     }
 
-    /// Clock-injected core of [`on_frame`], normalizing the chunk against the
-    /// current lock (or holding/locking during warmup). Split out for testing
-    /// without real sleeps.
-    fn on_frame_at(
+    fn advance_warmup(
         &mut self,
+        raw: Duration,
         elapsed: Duration,
-        mut chunk: EncodedInputChunk,
+        chunk: EncodedInputChunk,
     ) -> Vec<EncodedInputChunk> {
-        let raw = chunk.pts;
-
-        if let Some(offset) = self.locked_offset {
-            chunk.pts = offset.normalize(raw);
-            return vec![chunk];
-        }
-
         let offset = EpochOffset::new(raw, elapsed);
 
         // First frame of the first epoch: record this track's first offset and try
@@ -440,15 +442,15 @@ fn is_epoch_discontinuity(
     let Some((last_raw_pts, last_offset)) = last else {
         return false;
     };
-    // 1. Small forward step → normal group cadence, not an epoch change.
+    // 1. Small forward step -> normal group cadence, not an epoch change.
     if raw_pts >= last_raw_pts && raw_pts - last_raw_pts < MOQ_EPOCH_MIN_STEP {
         return false;
     }
-    // 2. Time went backwards → clock reset / new epoch.
+    // 2. Time went backwards -> clock reset / new epoch.
     if raw_pts < last_raw_pts {
         return true;
     }
-    // 3. Forward jump ≥ MOQ_EPOCH_MIN_STEP → disambiguate by offset delta: a real
+    // 3. Forward jump >= MOQ_EPOCH_MIN_STEP -> disambiguate by offset delta: a real
     //    epoch change steps the offset (raw outran wall-clock), a same-epoch drop
     //    leaves it ~unchanged.
     offset.abs_diff(last_offset) > MOQ_EPOCH_OFFSET_JUMP
@@ -489,10 +491,22 @@ mod tests {
     }
 
     /// Feed `(raw, elapsed)` pairs and collect all emitted normalized PTS values.
+    ///
+    /// Mirrors `on_frame`'s dispatch with a test-controlled `elapsed` (instead of
+    /// the real wall clock): once the estimator has locked, frames take the
+    /// normalize path; while warming they go through `advance_warmup`.
     fn feed(est: &mut LiveEdgeEstimator, frames: &[(u64, u64)]) -> Vec<Duration> {
         let mut out = Vec::new();
         for &(raw, elapsed) in frames {
-            for c in est.on_frame_at(ms(elapsed), chunk(ms(raw))) {
+            let emitted = match est.locked_offset() {
+                Some(offset) => {
+                    let mut c = chunk(ms(raw));
+                    c.pts = offset.normalize(ms(raw));
+                    vec![c]
+                }
+                None => est.advance_warmup(ms(raw), ms(elapsed), chunk(ms(raw))),
+            };
+            for c in emitted {
                 out.push(c.pts);
             }
         }
@@ -587,8 +601,14 @@ mod tests {
     fn eos_flush_renders_sub_warmup_clip() {
         // Too few frames to plateau-lock; EOS force-lock-and-flush emits all held.
         let mut est = live_edge_estimator();
-        assert!(est.on_frame_at(ms(0), chunk(ms(100))).is_empty());
-        assert!(est.on_frame_at(ms(20), chunk(ms(120))).is_empty());
+        assert!(
+            est.advance_warmup(ms(100), ms(0), chunk(ms(100)))
+                .is_empty()
+        );
+        assert!(
+            est.advance_warmup(ms(120), ms(20), chunk(ms(120)))
+                .is_empty()
+        );
         let flushed: Vec<Duration> = est.flush().into_iter().map(|c| c.pts).collect();
         assert_eq!(flushed, vec![ms(0), ms(20)]); // offset 100 absorbed
         assert_monotonic(&flushed);
