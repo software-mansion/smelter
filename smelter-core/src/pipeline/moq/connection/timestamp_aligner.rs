@@ -86,7 +86,7 @@ impl PartialOrd for EpochOffset {
     }
 }
 
-/// Which of the two tracks an estimator handles. Used to index the per-track
+/// Which of the two tracks an aligner handles. Used to index the per-track
 /// first-offset slots and to look up the counterpart's first offset for the skew
 /// decision.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -186,9 +186,9 @@ enum SkewDecision {
 /// to "now", so materially different per-track transport latency leaves a fixed
 /// residual A/V skew. This is inherent to edge-based sync;
 /// there is no on-wire capture-time signal to do better without a publisher change.
-pub(super) struct LiveEdgeEstimator {
+pub(super) struct TimestampAligner {
     shared: EpochShared,
-    /// Which track this estimator handles.
+    /// Which track this aligner handles.
     kind: TrackKind,
     /// Whether this is the only track (no counterpart; audio or video absent).
     /// When true the track is trivially single-epoch and anchors to its own first
@@ -217,7 +217,7 @@ pub(super) struct LiveEdgeEstimator {
     previous: Option<(Duration, EpochOffset)>,
 }
 
-impl LiveEdgeEstimator {
+impl TimestampAligner {
     pub fn new(shared: EpochShared, kind: TrackKind, single_track_stream: bool) -> Self {
         Self {
             shared,
@@ -235,7 +235,7 @@ impl LiveEdgeEstimator {
     }
 
     /// Feed one frame (with its raw PTS in `chunk.pts`). Detects a mid-stream
-    /// epoch discontinuity against the previous frame and resets the estimator
+    /// epoch discontinuity against the previous frame and resets the aligner
     /// before normalizing. Returns the chunks ready to emit: empty while warming
     /// (chunk held), the full flushed batch at lock, or the single normalized
     /// chunk once locked.
@@ -248,10 +248,7 @@ impl LiveEdgeEstimator {
         let raw = chunk.pts;
         let offset = EpochOffset::new(raw, elapsed);
         if is_epoch_discontinuity(keyframe, raw, offset, self.previous) {
-            debug!(
-                ?raw,
-                "MoQ epoch discontinuity detected, resetting estimator."
-            );
+            debug!(?raw, "MoQ epoch discontinuity detected, resetting aligner.");
             self.reset();
         }
         self.previous = Some((raw, offset));
@@ -282,8 +279,8 @@ impl LiveEdgeEstimator {
         }
 
         // Keep accumulating the running max / plateau counter (still needed for the
-        // >2s and post-reset live-edge paths). Frames only ever arrive late, so
-        // `offset <= edge` and the max climbs from below with no overshoot; it
+        // >2s and post-reset live-edge paths). In case of live streaming, frames only ever arrive late,
+        // so `offset <= edge` and the max climbs from below with no overshoot; it
         // plateaus once the burst drains.
         let prev = self.max_offset;
         let max_offset = prev.map_or(offset, |p| p.max(offset));
@@ -382,7 +379,7 @@ impl LiveEdgeEstimator {
             .collect()
     }
 
-    /// True once the estimator has locked its epoch offset (warmup finished).
+    /// True once the aligner has locked its epoch offset (warmup finished).
     /// While false it is still warming up and holding frames not yet emitted.
     pub fn is_locked(&self) -> bool {
         self.locked_offset.is_some()
@@ -390,7 +387,7 @@ impl LiveEdgeEstimator {
 
     /// Force-lock at the current running max and drain the frames held during
     /// warmup (EOS path), so a sub-warmup clip still renders. Caller must ensure
-    /// the estimator is still warming up (`!is_locked()`); returns empty if no
+    /// the aligner is still warming up (`!is_locked()`); returns empty if no
     /// frame was ever received.
     pub fn flush(&mut self) -> Vec<EncodedInputChunk> {
         debug_assert!(!self.is_locked());
@@ -401,7 +398,7 @@ impl LiveEdgeEstimator {
     }
 
     /// Mid-stream epoch discontinuity reset. Clears the lock
-    /// and warmup state so the estimator re-warms and re-locks against the same,
+    /// and warmup state so the aligner re-warms and re-locks against the same,
     /// never-reset shared anchor, absorbing the input jump. `held` is empty while
     /// locked, and `first_epoch` stays `false` so the re-lock goes straight to
     /// live-edge (the first-timestamp anchor is stale after an epoch jump).
@@ -457,7 +454,7 @@ mod tests {
         Duration::from_millis(v)
     }
 
-    /// A dummy video chunk carrying its raw PTS in `pts` (as the estimator expects).
+    /// A dummy video chunk carrying its raw PTS in `pts` (as the aligner expects).
     fn chunk(raw: Duration) -> EncodedInputChunk {
         EncodedInputChunk {
             data: Bytes::new(),
@@ -468,35 +465,35 @@ mod tests {
         }
     }
 
-    /// A single-track estimator (no counterpart): anchors to its own first
+    /// A single-track aligner (no counterpart): anchors to its own first
     /// timestamp on the first frame.
-    fn estimator() -> LiveEdgeEstimator {
-        LiveEdgeEstimator::new(EpochShared::new(), TrackKind::Video, true)
+    fn aligner() -> TimestampAligner {
+        TimestampAligner::new(EpochShared::new(), TrackKind::Video, true)
     }
 
-    /// A two-track estimator forced onto the live-edge path: its counterpart sits
+    /// A two-track aligner forced onto the live-edge path: its counterpart sits
     /// ~5s away, so the measured A/V skew exceeds [`AV_SKEW_MAX`].
-    fn live_edge_estimator() -> LiveEdgeEstimator {
+    fn live_edge_aligner() -> TimestampAligner {
         let shared = EpochShared::new();
         shared.set_first_track_offset(TrackKind::Audio, EpochOffset::new(ms(5000), ms(0)));
-        LiveEdgeEstimator::new(shared, TrackKind::Video, false)
+        TimestampAligner::new(shared, TrackKind::Video, false)
     }
 
     /// Feed `(raw, elapsed)` pairs and collect all emitted normalized PTS values.
     ///
     /// Mirrors `on_frame`'s dispatch with a test-controlled `elapsed` (instead of
-    /// the real wall clock): once the estimator has locked, frames take the
+    /// the real wall clock): once the aligner has locked, frames take the
     /// normalize path; while warming they go through `advance_warmup`.
-    fn feed(est: &mut LiveEdgeEstimator, frames: &[(u64, u64)]) -> Vec<Duration> {
+    fn feed(aligner: &mut TimestampAligner, frames: &[(u64, u64)]) -> Vec<Duration> {
         let mut out = Vec::new();
         for &(raw, elapsed) in frames {
-            let emitted = match est.locked_offset {
+            let emitted = match aligner.locked_offset {
                 Some(offset) => {
                     let mut c = chunk(ms(raw));
                     c.pts = offset.normalize(ms(raw));
                     vec![c]
                 }
-                None => est.advance_warmup(ms(raw), ms(elapsed), chunk(ms(raw))),
+                None => aligner.advance_warmup(ms(raw), ms(elapsed), chunk(ms(raw))),
             };
             for c in emitted {
                 out.push(c.pts);
@@ -545,9 +542,9 @@ mod tests {
         // No-burst live start on the live-edge path: a large-epoch track streamed
         // at real time locks within a few frames (well before the warmup deadline)
         // at ~zero output.
-        let mut est = live_edge_estimator();
+        let mut aligner = live_edge_aligner();
         let out = feed(
-            &mut est,
+            &mut aligner,
             &[
                 (1000, 0),
                 (1020, 20),
@@ -557,7 +554,7 @@ mod tests {
             ],
         );
         // Locked by the 4th frame (elapsed 60ms << 1s warmup).
-        assert!(est.locked_offset.is_some());
+        assert!(aligner.locked_offset.is_some());
         assert_monotonic(&out);
         // First emitted normalizes to ~0 (offset absorbed the 1000ms epoch).
         assert_eq!(out[0], ms(0));
@@ -568,9 +565,9 @@ mod tests {
     fn burst_drain_locks_at_live_edge() {
         // Startup burst (raw races ahead of elapsed) then steady => lock at the
         // max once it plateaus at the live edge (~490ms).
-        let mut est = live_edge_estimator();
+        let mut aligner = live_edge_aligner();
         let out = feed(
-            &mut est,
+            &mut aligner,
             &[
                 (0, 0),
                 (100, 2),
@@ -583,7 +580,7 @@ mod tests {
                 (560, 70), // plateau 3 => lock
             ],
         );
-        let locked = est.locked_offset.unwrap();
+        let locked = aligner.locked_offset.unwrap();
         assert_eq!(locked, EpochOffset::new(ms(500), ms(10))); // +490
         assert_monotonic(&out);
         assert_eq!(*out.last().unwrap(), ms(70)); // 560 - 490
@@ -592,26 +589,28 @@ mod tests {
     #[test]
     fn eos_flush_renders_sub_warmup_clip() {
         // Too few frames to plateau-lock; EOS force-lock-and-flush emits all held.
-        let mut est = live_edge_estimator();
+        let mut aligner = live_edge_aligner();
         assert!(
-            est.advance_warmup(ms(100), ms(0), chunk(ms(100)))
+            aligner
+                .advance_warmup(ms(100), ms(0), chunk(ms(100)))
                 .is_empty()
         );
         assert!(
-            est.advance_warmup(ms(120), ms(20), chunk(ms(120)))
+            aligner
+                .advance_warmup(ms(120), ms(20), chunk(ms(120)))
                 .is_empty()
         );
-        let flushed: Vec<Duration> = est.flush().into_iter().map(|c| c.pts).collect();
+        let flushed: Vec<Duration> = aligner.flush().into_iter().map(|c| c.pts).collect();
         assert_eq!(flushed, vec![ms(0), ms(20)]); // offset 100 absorbed
         assert_monotonic(&flushed);
-        // The flush locked the estimator, so the caller won't flush again.
-        assert!(est.is_locked());
+        // The flush locked the aligner, so the caller won't flush again.
+        assert!(aligner.is_locked());
     }
 
     #[test]
     fn flush_with_no_frames_is_empty() {
-        let mut est = estimator();
-        assert!(est.flush().is_empty());
+        let mut aligner = aligner();
+        assert!(aligner.flush().is_empty());
     }
 
     #[test]
@@ -621,8 +620,8 @@ mod tests {
         // AV_SKEW_MAX both tracks anchor to the first timestamp seen on either
         // track, so equal raw PTS map to equal normalized output.
         let shared = EpochShared::new();
-        let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
-        let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
+        let mut audio = TimestampAligner::new(shared.clone(), TrackKind::Audio, false);
+        let mut video = TimestampAligner::new(shared, TrackKind::Video, false);
 
         // Audio's first frame sets the shared anchor; it holds (skew not yet
         // measurable) until video's first frame arrives.
@@ -644,8 +643,8 @@ mod tests {
         // Skew beyond AV_SKEW_MAX: neither track adopts the shared anchor; each
         // locks at its own live edge, so a distant epoch does not falsely collapse.
         let shared = EpochShared::new();
-        let mut a = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
-        let mut b = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
+        let mut a = TimestampAligner::new(shared.clone(), TrackKind::Audio, false);
+        let mut b = TimestampAligner::new(shared, TrackKind::Video, false);
 
         // Audio epoch 0, video epoch 5s (skew 5s > 2s). First frames establish
         // both epochs, then steady frames plateau-lock each at its own edge.
@@ -667,8 +666,8 @@ mod tests {
         // offset survives against the shared anchor (not collapsed to 0, not the
         // raw ~100s gap).
         let shared = EpochShared::new();
-        let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
-        let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
+        let mut audio = TimestampAligner::new(shared.clone(), TrackKind::Audio, false);
+        let mut video = TimestampAligner::new(shared, TrackKind::Video, false);
 
         // First frames establish both epochs; video starts 300ms late.
         feed(&mut audio, &[(0, 0)]);
@@ -693,8 +692,8 @@ mod tests {
         // falls back to the live edge.
         {
             let shared = EpochShared::new();
-            let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
-            let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
+            let mut audio = TimestampAligner::new(shared.clone(), TrackKind::Audio, false);
+            let mut video = TimestampAligner::new(shared, TrackKind::Video, false);
             feed(&mut audio, &[(0, 0)]);
             // skew == 2000ms => anchors to the shared anchor (audio's first offset).
             feed(&mut video, &[(2000, 0)]);
@@ -702,8 +701,8 @@ mod tests {
         }
         {
             let shared = EpochShared::new();
-            let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
-            let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
+            let mut audio = TimestampAligner::new(shared.clone(), TrackKind::Audio, false);
+            let mut video = TimestampAligner::new(shared, TrackKind::Video, false);
             feed(&mut audio, &[(0, 0)]);
             // skew 2001ms > AV_SKEW_MAX => live-edge; steady frames plateau-lock.
             let v = feed(&mut video, &[(2001, 0), (2021, 20), (2041, 40), (2061, 60)]);
@@ -719,11 +718,11 @@ mod tests {
     fn single_track_anchors_on_first_frame() {
         // No counterpart => trivially small skew: lock on the first frame to its
         // own first timestamp (no warmup), normalizing the first output to ~0.
-        let mut est = estimator();
+        let mut aligner = aligner();
         // Large epoch, burst-y arrival; the single track ignores the burst.
-        let out = feed(&mut est, &[(1000, 0), (1100, 5), (1200, 10)]);
+        let out = feed(&mut aligner, &[(1000, 0), (1100, 5), (1200, 10)]);
         assert_eq!(
-            est.locked_offset.unwrap(),
+            aligner.locked_offset.unwrap(),
             EpochOffset::new(ms(1000), ms(0))
         );
         assert_monotonic(&out);

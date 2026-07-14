@@ -23,7 +23,7 @@ use crate::{
             vulkan_h264::VulkanH264Decoder,
         },
         moq::{
-            connection::timestamp_aligner::{EpochShared, LiveEdgeEstimator, TrackKind},
+            connection::timestamp_aligner::{EpochShared, TimestampAligner, TrackKind},
             state::MoqInputState,
         },
     },
@@ -290,7 +290,7 @@ async fn run_video_track(
     // group start timestamp and highest received timestamp.
     let mut consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
 
-    let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Video, single_track_stream);
+    let mut aligner = TimestampAligner::new(epoch, TrackKind::Video, single_track_stream);
 
     let mut eos_received = false;
     loop {
@@ -312,7 +312,7 @@ async fn run_video_track(
             present: true,
         };
 
-        let channel_closed = estimator
+        let channel_closed = aligner
             .on_frame(frame.keyframe, chunk)
             .into_iter()
             .any(|chunk| {
@@ -327,10 +327,10 @@ async fn run_video_track(
             break;
         }
     }
-    // Stream ended before the estimator finished warmup → force-lock and drain
+    // Stream ended before the aligner finished warmup -> force-lock and drain
     // the still-held frames so a sub-warmup clip renders.
-    if eos_received && !estimator.is_locked() {
-        let channel_closed = estimator.flush().into_iter().any(|chunk| {
+    if eos_received && !aligner.is_locked() {
+        let channel_closed = aligner.flush().into_iter().any(|chunk| {
             decoder_handle
                 .chunk_sender
                 .send(PipelineEvent::Data(chunk))
@@ -373,7 +373,7 @@ async fn run_audio_track(
     // group start timestamp and highest received timestamp.
     let mut consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
 
-    let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Audio, single_track_stream);
+    let mut aligner = TimestampAligner::new(epoch, TrackKind::Audio, single_track_stream);
 
     let mut eos_received = false;
     loop {
@@ -395,7 +395,7 @@ async fn run_audio_track(
             present: true,
         };
 
-        let channel_closed = estimator
+        let channel_closed = aligner
             .on_frame(frame.keyframe, chunk)
             .into_iter()
             .any(|chunk| {
@@ -410,10 +410,10 @@ async fn run_audio_track(
             break;
         }
     }
-    // Stream ended before the estimator finished warmup → force-lock and drain
+    // Stream ended before the aligner finished warmup -> force-lock and drain
     // the still-held frames so a sub-warmup clip renders.
-    if eos_received && !estimator.is_locked() {
-        let channel_closed = estimator.flush().into_iter().any(|chunk| {
+    if eos_received && !aligner.is_locked() {
+        let channel_closed = aligner.flush().into_iter().any(|chunk| {
             decoder_handle
                 .chunk_sender
                 .send(PipelineEvent::Data(chunk))
