@@ -256,7 +256,7 @@ impl TimestampAligner {
     ) -> Vec<EncodedInputChunk> {
         let offset = EpochOffset::new(raw, elapsed);
 
-        // First frame of the first epoch: record this track's first offset and try
+        // On the first frame of the first epoch: record this track's first offset and try
         // to claim the shared anchor (OnceLock => only the genuinely first frame
         // across both tracks wins).
         if self.first_epoch && self.epoch_start_elapsed.is_none() {
@@ -271,22 +271,19 @@ impl TimestampAligner {
         let prev = self.max_offset;
         let max_offset = prev.map_or(offset, |p| p.max(offset));
         self.max_offset = Some(max_offset);
-        if prev.is_some_and(|p| max_offset.abs_diff(p) <= PLATEAU_EPSILON) {
-            self.plateau_frames += 1;
-        } else {
-            self.plateau_frames = 0;
+        match prev.is_some_and(|p| max_offset.abs_diff(p) <= PLATEAU_EPSILON) {
+            true => self.plateau_frames += 1,
+            false => self.plateau_frames = 0,
         }
         self.held.push(chunk);
 
         let started = *self.epoch_start_elapsed.get_or_insert(elapsed);
 
-        // First-epoch small-skew decision: anchor to the shared first timestamp
-        // unless the A/V skew is confirmed to exceed AV_SKEW_MAX.
+        // Anchor to the shared first timestamp unless the A/V skew is confirmed to exceed AV_SKEW_MAX.
         if self.first_epoch && !self.decided_live_edge {
             match self.skew_decision() {
                 SkewDecision::Anchor(anchor) => self.lock_and_flush(anchor),
                 SkewDecision::LiveEdge => {
-                    // Large skew confirmed: fall through to the live-edge lock.
                     self.decided_live_edge = true;
                     self.maybe_live_edge_lock(max_offset, elapsed, started)
                 }
