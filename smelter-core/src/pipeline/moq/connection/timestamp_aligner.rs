@@ -190,10 +190,10 @@ pub(super) struct LiveEdgeEstimator {
     shared: EpochShared,
     /// Which track this estimator handles.
     kind: TrackKind,
-    /// Whether a counterpart track exists (both audio and video present). When
-    /// false the track is trivially single-epoch and anchors to its own first
+    /// Whether this is the only track (no counterpart; audio or video absent).
+    /// When true the track is trivially single-epoch and anchors to its own first
     /// timestamp on the first frame.
-    expect_other: bool,
+    single_track_stream: bool,
     /// Shared elapsed at the first observed frame (warmup start); `None` until then.
     started_elapsed: Option<Duration>,
     /// Running max of `raw − elapsed`; equals the live-edge offset.
@@ -218,11 +218,11 @@ pub(super) struct LiveEdgeEstimator {
 }
 
 impl LiveEdgeEstimator {
-    pub fn new(shared: EpochShared, kind: TrackKind, expect_other: bool) -> Self {
+    pub fn new(shared: EpochShared, kind: TrackKind, single_track_stream: bool) -> Self {
         Self {
             shared,
             kind,
-            expect_other,
+            single_track_stream,
             started_elapsed: None,
             max_offset: None,
             plateau_frames: 0,
@@ -334,7 +334,7 @@ impl LiveEdgeEstimator {
             .expect("anchor offset set on the first frame");
 
         // Single track: no counterpart => trivially small skew.
-        if !self.expect_other {
+        if self.single_track_stream {
             return SkewDecision::Anchor(anchor);
         }
 
@@ -485,7 +485,7 @@ mod tests {
     fn live_edge_estimator() -> LiveEdgeEstimator {
         let shared = EpochShared::new();
         shared.set_first_track_offset(TrackKind::Audio, EpochOffset::new(ms(5000), ms(0)));
-        LiveEdgeEstimator::new(shared, TrackKind::Video, true)
+        LiveEdgeEstimator::new(shared, TrackKind::Video, false)
     }
 
     /// Feed `(raw, elapsed)` pairs and collect all emitted normalized PTS values.
@@ -627,8 +627,8 @@ mod tests {
         // AV_SKEW_MAX both tracks anchor to the first timestamp seen on either
         // track, so equal raw PTS map to equal normalized output.
         let shared = EpochShared::new();
-        let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
-        let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+        let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
+        let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
 
         // Audio's first frame sets the shared anchor; it holds (skew not yet
         // measurable) until video's first frame arrives.
@@ -653,8 +653,8 @@ mod tests {
         // Skew beyond AV_SKEW_MAX: neither track adopts the shared anchor; each
         // locks at its own live edge, so a distant epoch does not falsely collapse.
         let shared = EpochShared::new();
-        let mut a = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
-        let mut b = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+        let mut a = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
+        let mut b = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
 
         // Audio epoch 0, video epoch 5s (skew 5s > 2s). First frames establish
         // both epochs, then steady frames plateau-lock each at its own edge.
@@ -679,8 +679,8 @@ mod tests {
         // offset survives against the shared anchor (not collapsed to 0, not the
         // raw ~100s gap).
         let shared = EpochShared::new();
-        let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
-        let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+        let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
+        let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
 
         // First frames establish both epochs; video starts 300ms late.
         feed(&mut audio, &[(0, 0)]);
@@ -705,8 +705,8 @@ mod tests {
         // falls back to the live edge.
         {
             let shared = EpochShared::new();
-            let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
-            let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+            let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
+            let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
             feed(&mut audio, &[(0, 0)]);
             // skew == 2000ms => anchors to the shared anchor (audio's first offset).
             feed(&mut video, &[(2000, 0)]);
@@ -717,8 +717,8 @@ mod tests {
         }
         {
             let shared = EpochShared::new();
-            let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, true);
-            let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, true);
+            let mut audio = LiveEdgeEstimator::new(shared.clone(), TrackKind::Audio, false);
+            let mut video = LiveEdgeEstimator::new(shared, TrackKind::Video, false);
             feed(&mut audio, &[(0, 0)]);
             // skew 2001ms > AV_SKEW_MAX => live-edge; steady frames plateau-lock.
             let v = feed(&mut video, &[(2001, 0), (2021, 20), (2041, 40), (2061, 60)]);

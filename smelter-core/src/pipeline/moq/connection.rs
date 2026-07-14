@@ -66,9 +66,9 @@ struct TrackCtx {
     broadcast: BroadcastConsumer,
     decoders: MoqServerInputDecoders,
     epoch: EpochShared,
-    /// Whether both an audio and a video track are present, so each estimator can
-    /// wait for its counterpart's first frame to measure A/V skew.
-    expect_other_track: bool,
+    /// Whether only one of audio/video is present, so the estimator has no
+    /// counterpart to wait for when measuring A/V skew.
+    single_track_stream: bool,
     should_close: Arc<AtomicBool>,
     stats_sender: MoqStatsSender,
 }
@@ -189,7 +189,7 @@ impl BroadcastHandler {
 
         // Captured here because `handle_audio_track` runs after `self.video` is
         // already `take()`n, so `has_video()` is unreliable by then.
-        let expect_other_track = video.is_some() && audio.is_some();
+        let single_track_stream = video.is_none() || audio.is_none();
 
         let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
 
@@ -199,7 +199,7 @@ impl BroadcastHandler {
             broadcast,
             decoders,
             epoch,
-            expect_other_track,
+            single_track_stream,
             should_close,
             stats_sender,
         };
@@ -278,7 +278,7 @@ async fn run_video_track(
         broadcast,
         decoders,
         epoch,
-        expect_other_track,
+        single_track_stream,
         should_close,
         stats_sender,
     } = track_ctx;
@@ -290,7 +290,7 @@ async fn run_video_track(
     // group start timestamp and highest received timestamp.
     let mut consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
 
-    let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Video, expect_other_track);
+    let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Video, single_track_stream);
 
     let mut eos_received = false;
     loop {
@@ -362,7 +362,7 @@ async fn run_audio_track(
         broadcast,
         decoders: _,
         epoch,
-        expect_other_track,
+        single_track_stream,
         should_close,
         stats_sender,
     } = track_ctx;
@@ -373,7 +373,7 @@ async fn run_audio_track(
     // group start timestamp and highest received timestamp.
     let mut consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
 
-    let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Audio, expect_other_track);
+    let mut estimator = LiveEdgeEstimator::new(epoch, TrackKind::Audio, single_track_stream);
 
     let mut eos_received = false;
     loop {
