@@ -214,7 +214,7 @@ pub(super) struct LiveEdgeEstimator {
     /// Previous frame's `(raw_pts, offset)`, updated on every frame (locked or
     /// warming). Baseline for the epoch-discontinuity check. `reset()` does *not*
     /// clear it: the post-jump frame becomes the next baseline.
-    last: Option<(Duration, EpochOffset)>,
+    previous: Option<(Duration, EpochOffset)>,
 }
 
 impl LiveEdgeEstimator {
@@ -230,7 +230,7 @@ impl LiveEdgeEstimator {
             locked_offset: None,
             first_epoch: true,
             decided_live_edge: false,
-            last: None,
+            previous: None,
         }
     }
 
@@ -247,14 +247,14 @@ impl LiveEdgeEstimator {
         let elapsed = self.shared.elapsed();
         let raw = chunk.pts;
         let offset = EpochOffset::new(raw, elapsed);
-        if is_epoch_discontinuity(keyframe, raw, offset, self.last) {
+        if is_epoch_discontinuity(keyframe, raw, offset, self.previous) {
             debug!(
                 ?raw,
                 "MoQ epoch discontinuity detected, resetting estimator."
             );
             self.reset();
         }
-        self.last = Some((raw, offset));
+        self.previous = Some((raw, offset));
 
         match self.locked_offset {
             Some(offset) => {
@@ -412,7 +412,6 @@ impl LiveEdgeEstimator {
         self.started_elapsed = None;
         self.decided_live_edge = false;
     }
-
 }
 
 /// Detects a mid-stream epoch discontinuity by comparing consecutive-frame
@@ -427,26 +426,26 @@ fn is_epoch_discontinuity(
     keyframe: bool,
     raw_pts: Duration,
     offset: EpochOffset,
-    last: Option<(Duration, EpochOffset)>, // (last_raw_pts, last_offset)
+    previous: Option<(Duration, EpochOffset)>, // (previous_raw_pts, previous_offset)
 ) -> bool {
     if !keyframe {
         return false;
     }
-    let Some((last_raw_pts, last_offset)) = last else {
+    let Some((previous_raw_pts, previous_offset)) = previous else {
         return false;
     };
     // 1. Small forward step -> normal group cadence, not an epoch change.
-    if raw_pts >= last_raw_pts && raw_pts - last_raw_pts < MOQ_EPOCH_MIN_STEP {
+    if raw_pts >= previous_raw_pts && raw_pts - previous_raw_pts < MOQ_EPOCH_MIN_STEP {
         return false;
     }
     // 2. Time went backwards -> clock reset / new epoch.
-    if raw_pts < last_raw_pts {
+    if raw_pts < previous_raw_pts {
         return true;
     }
     // 3. Forward jump >= MOQ_EPOCH_MIN_STEP -> disambiguate by offset delta: a real
     //    epoch change steps the offset (raw outran wall-clock), a same-epoch drop
     //    leaves it ~unchanged.
-    offset.abs_diff(last_offset) > MOQ_EPOCH_OFFSET_JUMP
+    offset.abs_diff(previous_offset) > MOQ_EPOCH_OFFSET_JUMP
 }
 
 #[cfg(test)]
@@ -636,10 +635,7 @@ mod tests {
         assert_eq!(a[0], ms(0));
         assert_eq!(v[0], ms(0));
         // Same anchor for both => equal raw PTS produce equal output (exact align).
-        assert_eq!(
-            audio.locked_offset.unwrap(),
-            video.locked_offset.unwrap()
-        );
+        assert_eq!(audio.locked_offset.unwrap(), video.locked_offset.unwrap());
         assert_eq!(a, v);
     }
 
@@ -659,10 +655,7 @@ mod tests {
         let out_b = feed(&mut b, &[(5020, 20), (5040, 40), (5060, 60)]);
 
         assert_eq!(a.locked_offset.unwrap(), EpochOffset::new(ms(0), ms(0)));
-        assert_eq!(
-            b.locked_offset.unwrap(),
-            EpochOffset::new(ms(5000), ms(0))
-        );
+        assert_eq!(b.locked_offset.unwrap(), EpochOffset::new(ms(5000), ms(0)));
         assert_eq!(out_b[0], ms(0)); // 5000 - 5000, no false collapse to raw
     }
 
@@ -705,10 +698,7 @@ mod tests {
             feed(&mut audio, &[(0, 0)]);
             // skew == 2000ms => anchors to the shared anchor (audio's first offset).
             feed(&mut video, &[(2000, 0)]);
-            assert_eq!(
-                video.locked_offset.unwrap(),
-                EpochOffset::new(ms(0), ms(0))
-            );
+            assert_eq!(video.locked_offset.unwrap(), EpochOffset::new(ms(0), ms(0)));
         }
         {
             let shared = EpochShared::new();
