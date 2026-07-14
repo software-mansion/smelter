@@ -184,8 +184,9 @@ pub(super) struct TimestampAligner {
     shared: EpochShared,
     kind: TrackKind,
     single_track_stream: bool,
-    /// Shared elapsed at the first observed frame (warmup start); `None` until then.
-    started_elapsed: Option<Duration>,
+    /// Time elapsed from the shared anchor at the first observed frame of each epoch;
+    /// `None` until then.
+    epoch_start_elapsed: Option<Duration>,
     /// Running max of `raw − elapsed`; equals the live-edge offset.
     max_offset: Option<EpochOffset>,
     /// Consecutive frames that did not raise the max by more than [`PLATEAU_EPSILON`].
@@ -208,7 +209,7 @@ impl TimestampAligner {
             shared,
             kind,
             single_track_stream,
-            started_elapsed: None,
+            epoch_start_elapsed: None,
             max_offset: None,
             plateau_frames: 0,
             held: Vec::new(),
@@ -258,7 +259,7 @@ impl TimestampAligner {
         // First frame of the first epoch: record this track's first offset and try
         // to claim the shared anchor (OnceLock => only the genuinely first frame
         // across both tracks wins).
-        if self.first_epoch && self.started_elapsed.is_none() {
+        if self.first_epoch && self.epoch_start_elapsed.is_none() {
             self.shared.set_first_track_offset(self.kind, offset);
             self.shared.set_anchor_offset(offset);
         }
@@ -277,7 +278,7 @@ impl TimestampAligner {
         }
         self.held.push(chunk);
 
-        let started = *self.started_elapsed.get_or_insert(elapsed);
+        let started = *self.epoch_start_elapsed.get_or_insert(elapsed);
 
         // First-epoch small-skew decision: anchor to the shared first timestamp
         // unless the A/V skew is confirmed to exceed AV_SKEW_MAX.
@@ -391,7 +392,7 @@ impl TimestampAligner {
         self.locked_offset = None;
         self.max_offset = None;
         self.plateau_frames = 0;
-        self.started_elapsed = None;
+        self.epoch_start_elapsed = None;
         self.decided_live_edge = false;
     }
 }
