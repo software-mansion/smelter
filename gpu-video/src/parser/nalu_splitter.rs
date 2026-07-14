@@ -53,7 +53,7 @@ impl NALUSplitter {
         while let Some(i) = find_start_of_next_nalu(&self.buffer[self.previous_search_end..]) {
             let nalu = self.buffer.split_to(self.previous_search_end + i);
             self.previous_search_end = 0;
-            result.push((nalu.to_vec(), output_pts));
+            result.push((make_prefix_code_4_bytes(nalu), output_pts));
             output_pts = pts;
         }
 
@@ -75,13 +75,28 @@ impl NALUSplitter {
         while let Some(i) = find_start_of_next_nalu(&self.buffer[self.previous_search_end..]) {
             let nalu = self.buffer.split_to(self.previous_search_end + i);
             self.previous_search_end = 0;
-            result.push((nalu.to_vec(), self.pts));
+            result.push((make_prefix_code_4_bytes(nalu), self.pts));
         }
 
-        result.push((self.buffer.to_vec(), self.pts));
+        let last_nalu = std::mem::take(&mut self.buffer);
+        result.push((make_prefix_code_4_bytes(last_nalu), self.pts));
         self.buffer = BytesMut::new();
         self.previous_search_end = 0;
 
         result
     }
+}
+
+fn make_prefix_code_4_bytes(nalu: BytesMut) -> Vec<u8> {
+    if nalu[..4] == [0, 0, 0, 1] {
+        return nalu.to_vec();
+    }
+
+    if nalu[..3] == [0, 0, 1] {
+        let mut result = vec![0];
+        result.extend_from_slice(&nalu);
+        return result;
+    }
+
+    unreachable!()
 }

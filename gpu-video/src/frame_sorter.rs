@@ -5,6 +5,7 @@ use crate::{
     device::{ColorRange, ColorSpace},
 };
 
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct DecodeResultMetadata {
     pub(crate) pts: Option<u64>,
     pub(crate) pic_order_cnt: i32,
@@ -61,13 +62,15 @@ pub(crate) struct FrameSorter<T> {
     frames: BinaryHeap<DecodeResult<T>>,
 }
 
-impl<T> FrameSorter<T> {
-    pub(crate) fn new() -> Self {
+impl<T> Default for FrameSorter<T> {
+    fn default() -> Self {
         Self {
-            frames: BinaryHeap::new(),
+            frames: Default::default(),
         }
     }
+}
 
+impl<T> FrameSorter<T> {
     pub(crate) fn put(&mut self, frame: DecodeResult<T>) -> Vec<OutputFrame<T>> {
         let max_num_reorder_frames = frame.metadata.max_num_reorder_frames as usize;
         let is_idr = frame.metadata.is_idr;

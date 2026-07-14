@@ -6,7 +6,7 @@ use h264_reader::nal::{
         DecRefPicMarking, MemoryManagementControlOperation, ModificationOfPicNums, NumRefIdxActive,
         RefPicListModifications, SliceHeader,
     },
-    sps::SeqParameterSet,
+    sps::{Profile, SeqParameterSet},
 };
 
 use crate::{parameters::MissedFrameHandling, parser::decoder_instructions::DecoderInstruction};
@@ -34,6 +34,9 @@ pub enum ReferenceManagementError {
         "A non-existing short-term reference remains in the active reference picture list after the modification process"
     )]
     NonExistingReferenceInActiveList,
+
+    #[error("Unknown H.264 level_idc: {0}")]
+    UnknownLevelIdc(u8),
 }
 
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -66,6 +69,58 @@ enum MaxLongTermFrameIdx {
     #[default]
     NoLongTermFrameIndices,
     Idx(u64),
+}
+
+/// Table A-1 from the H.264 spec: MaxDpbMbs per level_idc
+fn h264_level_idc_to_max_dpb_mbs(level_idc: u8) -> Result<u64, ReferenceManagementError> {
+    match level_idc {
+        10 => Ok(396),
+        11 => Ok(900),
+        12 => Ok(2_376),
+        13 => Ok(2_376),
+        20 => Ok(2_376),
+        21 => Ok(4_752),
+        22 => Ok(8_100),
+        30 => Ok(8_100),
+        31 => Ok(18_000),
+        32 => Ok(20_480),
+        40 => Ok(32_768),
+        41 => Ok(32_768),
+        42 => Ok(34_816),
+        50 => Ok(110_400),
+        51 => Ok(184_320),
+        52 => Ok(184_320),
+        60 => Ok(696_320),
+        61 => Ok(696_320),
+        62 => Ok(696_320),
+        _ => Err(ReferenceManagementError::UnknownLevelIdc(level_idc)),
+    }
+}
+
+pub(crate) fn calculate_max_num_reorder_frames(
+    sps: &SeqParameterSet,
+) -> Result<u64, ReferenceManagementError> {
+    let fallback = if [44u8, 86, 100, 110, 122, 244].contains(&sps.profile_idc.into())
+        && sps.constraint_flags.flag3()
+    {
+        0
+    } else if let Profile::Baseline = sps.profile() {
+        0
+    } else {
+        h264_level_idc_to_max_dpb_mbs(sps.level_idc)?
+            / ((sps.pic_width_in_mbs_minus1 as u64 + 1)
+                * (sps.pic_height_in_map_units_minus1 as u64 + 1))
+    };
+
+    let max_num_reorder_frames = sps
+        .vui_parameters
+        .as_ref()
+        .and_then(|v| v.bitstream_restrictions.as_ref())
+        .map(|b| b.max_num_reorder_frames as u64)
+        .unwrap_or(fallback)
+        .min(16);
+
+    Ok(max_num_reorder_frames)
 }
 
 impl ReferenceContext {
@@ -671,6 +726,7 @@ impl ReferenceContext {
                 FrameNum: header.frame_num,
             },
             pts,
+            max_num_reorder_frames: calculate_max_num_reorder_frames(sps)?,
         })
     }
 
@@ -1277,20 +1333,24 @@ pub struct DecodeInformation {
     pub(crate) rbsp_bytes: Vec<u8>,
     pub(crate) slice_indices: Vec<usize>,
     #[derivative(Debug = "ignore")]
+    #[cfg_attr(video_toolbox, allow(unused))]
     pub(crate) header: Arc<SliceHeader>,
     pub(crate) sps_id: u8,
     pub(crate) pps_id: u8,
     pub(crate) picture_info: PictureInfo,
     pub(crate) pts: Option<u64>,
+    pub(crate) max_num_reorder_frames: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
 pub(crate) struct ReferencePictureInfo {
+    #[cfg_attr(video_toolbox, allow(unused))]
     pub(crate) id: ReferenceId,
     pub(crate) LongTermPicNum: Option<u64>,
     pub(crate) non_existing: bool,
     pub(crate) FrameNum: u16,
+    #[cfg_attr(video_toolbox, allow(unused))]
     pub(crate) PicOrderCnt: [i32; 2],
 }
 
@@ -1303,8 +1363,11 @@ impl ReferencePictureInfo {
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
 pub(crate) struct PictureInfo {
+    #[cfg_attr(video_toolbox, allow(unused))]
     pub(crate) used_for_long_term_reference: bool,
+    #[cfg_attr(video_toolbox, allow(unused))]
     pub(crate) non_existing: bool,
+    #[cfg_attr(video_toolbox, allow(unused))]
     pub(crate) FrameNum: u16,
     pub(crate) PicOrderCnt_for_decoding: [i32; 2],
     pub(crate) PicOrderCnt_as_reference_pic: [i32; 2],

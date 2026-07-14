@@ -157,9 +157,9 @@ impl<'a> VulkanDecoder<'a> {
                 }
             }
 
-            DecoderInstruction::Sps(sps) => self.process_sps(sps)?,
+            DecoderInstruction::Sps { sps, .. } => self.process_sps(sps)?,
 
-            DecoderInstruction::Pps(pps) => self.process_pps(pps)?,
+            DecoderInstruction::Pps { pps, .. } => self.process_pps(pps)?,
         }
 
         Ok(None)

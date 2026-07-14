@@ -6,37 +6,37 @@ pub mod parser;
 pub(crate) mod parser;
 
 // TODO: The modules below should compile on macos
-#[cfg(all(vulkan, feature = "expose-backends"))]
+#[cfg(all(supported, feature = "expose-backends"))]
 pub mod backends;
-#[cfg(all(vulkan, not(feature = "expose-backends")))]
+#[cfg(all(supported, not(feature = "expose-backends")))]
 pub(crate) mod backends;
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 mod adapter;
-#[cfg(vulkan)]
+#[cfg(supported)]
 pub mod capabilities;
-#[cfg(vulkan)]
+#[cfg(supported)]
 pub(crate) mod decoders;
-#[cfg(vulkan)]
+#[cfg(supported)]
 mod device;
-#[cfg(vulkan)]
+#[cfg(supported)]
 pub(crate) mod encoders;
-#[cfg(vulkan)]
+#[cfg(supported)]
 mod frame_sorter;
-#[cfg(all(vulkan, feature = "wgpu"))]
+#[cfg(all(supported, feature = "wgpu"))]
 mod global_registry;
-#[cfg(vulkan)]
+#[cfg(supported)]
 mod instance;
-#[cfg(all(vulkan, feature = "transcoder"))]
+#[cfg(all(supported, feature = "transcoder"))]
 mod transcoder;
-#[cfg(all(vulkan, feature = "wgpu"))]
+#[cfg(all(supported, feature = "wgpu"))]
 pub(crate) mod wgpu_helpers;
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 mod exports;
-#[cfg(vulkan)]
+#[cfg(supported)]
 pub use exports::*;
 
-// If vulkan is unsupported and parsers are not exposed
-#[cfg(not(any(vulkan, feature = "expose-parsers")))]
+// If supported is unsupported and parsers are not exposed
+#[cfg(not(any(supported, feature = "expose-parsers")))]
 compile_error!("gpu-video can be only compiled on platforms supported by vulkan.");

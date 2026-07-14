@@ -50,6 +50,8 @@ objc2-core-video = { version = "0.3.2" }
 objc2-metal = { version = "0.3.2" }
 objc2 = { version = "0.6.4" }
 block2 = { version = "0.6.2" }
+libc = { version = "0.2.186" }
+pollster = { workspace = true }
 
 [dev-dependencies]
 clap = { version = "4.5.20", features = ["derive"] }

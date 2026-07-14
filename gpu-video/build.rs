@@ -13,6 +13,7 @@ fn main() {
             )
         },
         video_toolbox: { target_vendor = "apple" },
+        supported: { any(vulkan, video_toolbox) }
     }
 }
 
