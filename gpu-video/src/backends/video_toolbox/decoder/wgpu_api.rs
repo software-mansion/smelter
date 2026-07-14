@@ -26,7 +26,10 @@ impl WgpuVideoDecoderBackend for VTDecoder {
 }
 
 impl VTDecoder {
-    pub(crate) fn new(device: Option<&wgpu::Device>) -> Result<Self, VTInitError> {
+    pub(crate) fn new(
+        device: Option<&wgpu::Device>,
+        usage: crate::parameters::DecoderUsage,
+    ) -> Result<Self, VTInitError> {
         let texture_cache = if let Some(device) = device {
             Some(make_texture_cache(device)?)
         } else {
@@ -40,6 +43,7 @@ impl VTDecoder {
             needs_session_update: false,
             texture_cache,
             session_color_range: None,
+            usage,
         })
     }
 

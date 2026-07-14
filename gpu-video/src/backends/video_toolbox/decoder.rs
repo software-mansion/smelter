@@ -21,6 +21,7 @@ use crate::{
     decoders::VideoDecoderBackend,
     device::{ColorRange, ColorSpace},
     frame_sorter::{DecodeResult, DecodeResultMetadata},
+    parameters::DecoderUsage,
     parser::{decoder_instructions::DecoderInstruction, reference_manager::DecodeInformation},
 };
 
@@ -35,6 +36,7 @@ pub(crate) struct VTDecoder {
     #[cfg(feature = "wgpu")]
     texture_cache: Option<wgpu_api::SyncCache>,
     session_color_range: Option<ColorRange>,
+    usage: DecoderUsage,
 }
 
 impl VideoDecoderBackend for VTDecoder {
@@ -49,13 +51,14 @@ impl VideoDecoderBackend for VTDecoder {
 
 impl VTDecoder {
     #[cfg(not(feature = "wgpu"))]
-    pub(crate) fn new() -> Result<Self, VTDecoderError> {
+    pub(crate) fn new(usage: DecoderUsage) -> Result<Self, VTDecoderError> {
         Ok(Self {
             session: None,
             sps: Default::default(),
             pps: Default::default(),
             needs_session_update: false,
             session_color_range: None,
+            usage,
         })
     }
 
@@ -305,6 +308,8 @@ impl VTDecoder {
             })?
         };
 
+        self.configure_session_usage(&session)?;
+
         self.session = Some(Session {
             session,
             format_description,
@@ -313,6 +318,27 @@ impl VTDecoder {
         self.session_color_range = Some(color_range);
 
         Ok(())
+    }
+
+    fn configure_session_usage(
+        &self,
+        session: &vt::VTDecompressionSession,
+    ) -> Result<(), OSStatusError> {
+        match self.usage {
+            // Leave VideoToolbox on its default realtime-playback path.
+            DecoderUsage::Default | DecoderUsage::Streaming => return Ok(()),
+            DecoderUsage::Transcoding | DecoderUsage::Offline => {}
+        }
+
+        unsafe {
+            let realtime = cf::kCFBooleanFalse.unwrap();
+            vt::VTSessionSetProperty(
+                session.as_ref(),
+                vt::kVTDecompressionPropertyKey_RealTime,
+                Some(realtime.as_ref()),
+            )
+            .osstatus()
+        }
     }
 }
 
