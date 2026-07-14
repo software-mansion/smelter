@@ -132,21 +132,19 @@ impl EpochShared {
         self.anchor.get_or_init(Instant::now).elapsed()
     }
 
-    fn first_offset_slot(&self, kind: TrackKind) -> &OnceLock<EpochOffset> {
+    fn first_offset(&self, kind: TrackKind) -> Option<EpochOffset> {
         match kind {
-            TrackKind::Audio => &self.first_offset_audio,
-            TrackKind::Video => &self.first_offset_video,
+            TrackKind::Audio => self.first_offset_audio.get().copied(),
+            TrackKind::Video => self.first_offset_video.get().copied(),
         }
     }
 
     /// Record a track's first observed offset (set-once).
-    fn publish_first_offset(&self, kind: TrackKind, offset: EpochOffset) {
-        _ = self.first_offset_slot(kind).set(offset);
-    }
-
-    /// A track's first observed offset, if it has produced a frame yet.
-    fn first_offset(&self, kind: TrackKind) -> Option<EpochOffset> {
-        self.first_offset_slot(kind).get().copied()
+    fn set_first_track_offset(&self, kind: TrackKind, offset: EpochOffset) {
+        match kind {
+            TrackKind::Audio => _ = self.first_offset_audio.set(offset),
+            TrackKind::Video => _ = self.first_offset_video.set(offset),
+        }
     }
 
     /// Try to claim the shared small-skew anchor with `offset` (set-once, so only the
@@ -279,7 +277,7 @@ impl LiveEdgeEstimator {
         // to claim the shared anchor (OnceLock => only the genuinely first frame
         // across both tracks wins).
         if self.first_epoch && self.started_elapsed.is_none() {
-            self.shared.publish_first_offset(self.kind, offset);
+            self.shared.set_first_track_offset(self.kind, offset);
             self.shared.set_anchor_offset(offset);
         }
 
@@ -486,7 +484,7 @@ mod tests {
     /// ~5s away, so the measured A/V skew exceeds [`AV_SKEW_MAX`].
     fn live_edge_estimator() -> LiveEdgeEstimator {
         let shared = EpochShared::new();
-        shared.publish_first_offset(TrackKind::Audio, EpochOffset::new(ms(5000), ms(0)));
+        shared.set_first_track_offset(TrackKind::Audio, EpochOffset::new(ms(5000), ms(0)));
         LiveEdgeEstimator::new(shared, TrackKind::Video, true)
     }
 
