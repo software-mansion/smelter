@@ -139,6 +139,11 @@ impl EpochShared {
         }
     }
 
+    /// The shared small-skew anchor offset, if the first frame has been seen.
+    fn anchor_offset(&self) -> Option<EpochOffset> {
+        self.anchor_offset.get().copied()
+    }
+
     /// Record a track's first observed offset (set-once).
     fn set_first_track_offset(&self, kind: TrackKind, offset: EpochOffset) {
         match kind {
@@ -151,11 +156,6 @@ impl EpochShared {
     /// genuinely first frame across both tracks wins).
     fn set_anchor_offset(&self, offset: EpochOffset) {
         _ = self.anchor_offset.set(offset);
-    }
-
-    /// The shared small-skew anchor offset, if the first frame has been seen.
-    fn anchor_offset(&self) -> Option<EpochOffset> {
-        self.anchor_offset.get().copied()
     }
 }
 
