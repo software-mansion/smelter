@@ -400,12 +400,6 @@ impl LiveEdgeEstimator {
         }
     }
 
-    /// The offset locked for the current epoch, if any (for diagnostics/tests).
-    #[cfg(test)]
-    fn locked_offset(&self) -> Option<EpochOffset> {
-        self.locked_offset
-    }
-
     /// Mid-stream epoch discontinuity reset. Clears the lock
     /// and warmup state so the estimator re-warms and re-locks against the same,
     /// never-reset shared anchor, absorbing the input jump. `held` is empty while
@@ -418,6 +412,7 @@ impl LiveEdgeEstimator {
         self.started_elapsed = None;
         self.decided_live_edge = false;
     }
+
 }
 
 /// Detects a mid-stream epoch discontinuity by comparing consecutive-frame
@@ -477,7 +472,7 @@ mod tests {
     /// A single-track estimator (no counterpart): anchors to its own first
     /// timestamp on the first frame.
     fn estimator() -> LiveEdgeEstimator {
-        LiveEdgeEstimator::new(EpochShared::new(), TrackKind::Video, false)
+        LiveEdgeEstimator::new(EpochShared::new(), TrackKind::Video, true)
     }
 
     /// A two-track estimator forced onto the live-edge path: its counterpart sits
@@ -496,7 +491,7 @@ mod tests {
     fn feed(est: &mut LiveEdgeEstimator, frames: &[(u64, u64)]) -> Vec<Duration> {
         let mut out = Vec::new();
         for &(raw, elapsed) in frames {
-            let emitted = match est.locked_offset() {
+            let emitted = match est.locked_offset {
                 Some(offset) => {
                     let mut c = chunk(ms(raw));
                     c.pts = offset.normalize(ms(raw));
@@ -563,7 +558,7 @@ mod tests {
             ],
         );
         // Locked by the 4th frame (elapsed 60ms << 1s warmup).
-        assert!(est.locked_offset().is_some());
+        assert!(est.locked_offset.is_some());
         assert_monotonic(&out);
         // First emitted normalizes to ~0 (offset absorbed the 1000ms epoch).
         assert_eq!(out[0], ms(0));
@@ -589,7 +584,7 @@ mod tests {
                 (560, 70), // plateau 3 => lock
             ],
         );
-        let locked = est.locked_offset().unwrap();
+        let locked = est.locked_offset.unwrap();
         assert_eq!(locked, EpochOffset::new(ms(500), ms(10))); // +490
         assert_monotonic(&out);
         assert_eq!(*out.last().unwrap(), ms(70)); // 560 - 490
@@ -642,8 +637,8 @@ mod tests {
         assert_eq!(v[0], ms(0));
         // Same anchor for both => equal raw PTS produce equal output (exact align).
         assert_eq!(
-            audio.locked_offset().unwrap(),
-            video.locked_offset().unwrap()
+            audio.locked_offset.unwrap(),
+            video.locked_offset.unwrap()
         );
         assert_eq!(a, v);
     }
@@ -663,9 +658,9 @@ mod tests {
         feed(&mut a, &[(20, 20), (40, 40), (60, 60)]);
         let out_b = feed(&mut b, &[(5020, 20), (5040, 40), (5060, 60)]);
 
-        assert_eq!(a.locked_offset().unwrap(), EpochOffset::new(ms(0), ms(0)));
+        assert_eq!(a.locked_offset.unwrap(), EpochOffset::new(ms(0), ms(0)));
         assert_eq!(
-            b.locked_offset().unwrap(),
+            b.locked_offset.unwrap(),
             EpochOffset::new(ms(5000), ms(0))
         );
         assert_eq!(out_b[0], ms(0)); // 5000 - 5000, no false collapse to raw
@@ -711,7 +706,7 @@ mod tests {
             // skew == 2000ms => anchors to the shared anchor (audio's first offset).
             feed(&mut video, &[(2000, 0)]);
             assert_eq!(
-                video.locked_offset().unwrap(),
+                video.locked_offset.unwrap(),
                 EpochOffset::new(ms(0), ms(0))
             );
         }
@@ -723,7 +718,7 @@ mod tests {
             // skew 2001ms > AV_SKEW_MAX => live-edge; steady frames plateau-lock.
             let v = feed(&mut video, &[(2001, 0), (2021, 20), (2041, 40), (2061, 60)]);
             assert_eq!(
-                video.locked_offset().unwrap(),
+                video.locked_offset.unwrap(),
                 EpochOffset::new(ms(2001), ms(0))
             );
             assert_eq!(v[0], ms(0));
@@ -738,7 +733,7 @@ mod tests {
         // Large epoch, burst-y arrival; the single track ignores the burst.
         let out = feed(&mut est, &[(1000, 0), (1100, 5), (1200, 10)]);
         assert_eq!(
-            est.locked_offset().unwrap(),
+            est.locked_offset.unwrap(),
             EpochOffset::new(ms(1000), ms(0))
         );
         assert_monotonic(&out);
