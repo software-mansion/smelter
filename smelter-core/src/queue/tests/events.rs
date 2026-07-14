@@ -942,9 +942,9 @@ mod required_audio_input {
         input.send_samples(ms(40), BATCH_DURATION);
         input.send_samples(ms(60), BATCH_DURATION);
 
-        // once the required input is buffered 80ms ahead, the first chunk
-        // pops everything in the stretch window: unlike video, playing fires
-        // right away instead of at the 60ms offset point
+        // the first chunk pops everything below queue PTS 100ms (the batches
+        // at input 0ms and 20ms): unlike video, playing fires right away
+        // instead of at the 60ms offset point
         sleep(ms(1));
         queue.expect_events(&[input.audio_delivered_event(), input.audio_playing_event()]);
     }

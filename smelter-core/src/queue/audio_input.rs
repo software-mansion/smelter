@@ -136,7 +136,7 @@ impl AudioQueueInput {
             };
         }
 
-        let input_pts = pts_range.1.saturating_sub(offset) + MIXER_STRETCH_BUFFER;
+        let input_pts = (pts_range.1 + MIXER_STRETCH_BUFFER).saturating_sub(offset);
         trace!(queue_pts=?pts_range, ?input_pts, "Try get samples batch");
 
         let mut samples = self.receiver.pop_before_pts(input_pts);
@@ -175,7 +175,7 @@ impl AudioQueueInput {
 
         if let Some(offset) = offset {
             // extra buffer offsets additional latency/delay from audio mixer resampler.
-            let input_pts = pts_range.1.saturating_sub(offset) + MIXER_STRETCH_BUFFER;
+            let input_pts = (pts_range.1 + MIXER_STRETCH_BUFFER).saturating_sub(offset);
             trace!(queue_pts=?pts_range, ?input_pts, "Is next sample batch ready for PTS");
             return self.receiver.is_ready_for_pts(input_pts);
         }

@@ -6,8 +6,8 @@
 //!   to the chunk grid: a chunk carries every batch (as sent, PTS shifted by
 //!   the offset) with start PTS lower than the chunk end + 80ms
 //!   (`MIXER_STRETCH_BUFFER`), so batches are delivered up to ~100ms ahead of
-//!   their PTS and everything buffered around the offset point is delivered at
-//!   once. The audio mixer is responsible for placing them on the timeline.
+//!   their PTS. The audio mixer is responsible for placing them on the
+//!   timeline.
 //! - A required input reports ready only when it is buffered up to the chunk
 //!   end + 80ms, so it stalls the queue until ~100ms of input is buffered
 //!   ahead of the chunk being produced. Since a chunk drains the buffer up to
@@ -24,16 +24,19 @@
 //!   required flag, while an empty video batch has no entry and
 //!   `required: false`.
 //!
-//! All batches sent by tests are 20ms long ([`BATCH_DURATION`]), so input
-//! batches line up 1:1 with output chunks and expectations stay readable.
+//! Input batches sent by tests are 15ms long ([`INPUT_BATCH_DURATION`]) while
+//! output chunks are 20ms, the same cadence as the video tests (15ms input
+//! frames, 20ms output batches), so input batches don't line up with the
+//! chunk grid.
 
 use std::{thread::sleep, time::Duration};
 
 use crate::queue::{QueueInputOptions, QueueTrackOffset, QueueTrackOptions};
 
 use super::harness::{
-    AudioBatch, BATCH_DURATION, InputSamples, OFFSET, TestInput, TestQueue, TestQueueOptions,
-    assert_audio_batch_eq, ms, samples,
+    AudioBatch, BATCH_DURATION, INPUT_BATCH_DURATION, InputSamples, OFFSET, TestInput, TestQueue,
+    TestQueueOptions, assert_audio_batch_eq, assert_audio_batch_eq_with_tolerance,
+    assert_empty_audio_batch, ms, samples,
 };
 
 mod required_input {
@@ -83,31 +86,104 @@ mod required_input {
         (queue, input)
     }
 
+    /// The offset is larger than the stretch window, so the batches sent right
+    /// after start are withheld until the first chunk that reaches the offset
+    /// point.
     #[test]
     fn offset_from_start_delivered_early() {
-        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(100)));
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
-        input.send_samples(ms(80), BATCH_DURATION);
-        input.send_samples(ms(100), BATCH_DURATION);
+        // the whole stream is sent right after start (queue PTS 100-220ms)
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        input.send_samples(ms(105), INPUT_BATCH_DURATION);
 
+        // chunks that end before the offset point deliver nothing even though
+        // everything is already buffered
         sleep(ms(1));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(60), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        // [80, 100) is the first chunk that reaches the offset point: it pops
+        // everything within the 80ms stretch window (input PTS below 80ms)
+        sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
+            &chunk(
+                ms(80), // output batch 80ms-100ms
+                vec![
+                    (ms(100), ms(115)),
+                    (ms(115), ms(130)),
+                    (ms(130), ms(145)),
+                    (ms(145), ms(160)),
+                    (ms(160), ms(175)),
+                    (ms(175), ms(190)), // audio is send 80ms ahead of time so this is the last
+                                        // batch in range
+                ],
+            ),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // one batch per chunk, delivered ~100ms ahead of its PTS
+        sleep(ms(20));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(100), vec![(ms(190), ms(205))]),
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
+            &chunk(ms(120), vec![(ms(205), ms(220))]),
         );
+        assert!(queue.next_audio_batch().is_none());
+
+        // out of data: the required input stalls the queue ([140, 160) needs
+        // the input buffered up to input PTS 140ms, only 120ms was sent)
+        sleep(ms(20));
+        assert!(queue.next_audio_batch().is_none());
+    }
+
+    /// Sent early, but within the stretch window, so nothing is withheld:
+    /// verifies that [0, 20) and [20, 40) stay empty with data already
+    /// buffered.
+    #[test]
+    fn offset_from_start_delivered_slightly_early() {
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        input.send_samples(ms(105), INPUT_BATCH_DURATION);
+
+        sleep(ms(1));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
         assert!(queue.next_audio_batch().is_none());
 
         // [40, 60) is the first chunk that is not entirely before the offset
@@ -119,35 +195,34 @@ mod required_input {
             &chunk(
                 ms(40),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
                 ],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
 
-        // steady state: one batch per chunk, delivered 80ms ahead of its PTS
+        // steady state: one batch per chunk, delivered ~100ms ahead of its PTS
         sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(60), vec![(ms(140), ms(160))]),
-            Duration::ZERO,
+            &chunk(ms(60), vec![(ms(150), ms(165))]),
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(80), vec![(ms(160), ms(180))]),
-            Duration::ZERO,
+            &chunk(ms(80), vec![(ms(165), ms(180))]),
         );
         assert!(queue.next_audio_batch().is_none());
 
         // out of data: the required input stalls the queue ([100, 120) needs
-        // the input buffered up to 140ms)
+        // the input buffered up to 140ms, only 120ms was sent)
         sleep(ms(20));
         assert!(queue.next_audio_batch().is_none());
     }
@@ -160,22 +235,16 @@ mod required_input {
 
         // empty chunks are produced while the input has no data; [40, 60) is
         // not one of them because its end PTS already reaches the offset point
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
         sleep(ms(4));
         assert_audio_batch_eq(
@@ -183,23 +252,23 @@ mod required_input {
             &chunk(
                 ms(40),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
                 ],
             ),
-            Duration::ZERO,
         );
-        // [60, 80) needs the input buffered up to 100ms
+        // [60, 80) needs the input buffered up to 100ms, only 90ms was sent
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(80), BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
         sleep(ms(1));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(60), vec![(ms(140), ms(160))]),
-            Duration::ZERO,
+            &chunk(ms(60), vec![(ms(150), ms(165))]),
         );
         assert!(queue.next_audio_batch().is_none());
     }
@@ -211,23 +280,17 @@ mod required_input {
         sleep(ms(200));
         // empty chunks before the offset point, then the queue stalls waiting
         // for the required input
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
-        input.send_samples(ms(80), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
 
         // the queue catches up as far as the buffered data allows; no batch is
         // skipped, they are all delivered even though their PTS is in the past
@@ -237,20 +300,20 @@ mod required_input {
             &chunk(
                 ms(40),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
                 ],
             ),
-            Duration::ZERO,
         );
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(60), vec![(ms(140), ms(160))]),
-            Duration::ZERO,
+            &chunk(ms(60), vec![(ms(150), ms(165))]),
         );
-        // [80, 100) needs the input buffered up to 120ms
+        // [80, 100) needs the input buffered up to 120ms, only 105ms was sent
         assert!(queue.next_audio_batch().is_none());
     }
 
@@ -259,47 +322,42 @@ mod required_input {
         let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
 
         sleep(ms(1));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
         assert!(queue.next_audio_batch().is_none());
 
         // the first batch switches the input from "ready until the offset
         // point" to coverage-based readiness
-        input.send_samples(ms(0), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
 
         // even the empty pre-offset chunks are withheld now: [20, 40) waits
-        // until the input is buffered up to 80ms (in
+        // until the input is buffered up to 60ms (in
         // `offset_from_start_delivered_late` the 20ms chunk is produced)
         sleep(ms(200));
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
         sleep(ms(1));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(40),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
                 ],
             ),
-            Duration::ZERO,
         );
-        // [60, 80) needs the input buffered up to 100ms
+        // [60, 80) needs the input buffered up to 100ms, only 90ms was sent
         assert!(queue.next_audio_batch().is_none());
     }
 
@@ -310,64 +368,150 @@ mod required_input {
     // Unlike `FromStart`, a `Pts` track has its offset resolved from the very
     // beginning: with no data the queue stalls from the first chunk instead of
     // producing empty chunks, and chunks before the offset point are not
-    // filtered, so the first chunk carries everything within the stretch
-    // window. That first chunk also drains the buffer, so the queue
-    // immediately stalls again until data newer than the stretch window
-    // arrives.
+    // filtered: every chunk delivers the batches within its own stretch
+    // window (queue PTS below chunk end + 80ms), so the head of the stream is
+    // metered out from the first chunk instead of being withheld until the
+    // offset point.
     //
     // The video `first_packet_early` variants (the first packet initializes
     // the input early, the rest arrives too late) are not repeated for `Pts`:
     // the offset is fixed at construction, so there is nothing for the first
-    // packet to initialize, and a single batch never satisfies the stretch
-    // buffer readiness — the output is identical to `delivered_late`. See the
-    // `FromStart` and `None` variants where the first packet does change the
-    // behavior.
+    // packet to initialize, and a single batch doesn't satisfy the first
+    // chunk's coverage requirement for these offsets — the output is
+    // identical to `delivered_late`. See the `FromStart` and `None` variants
+    // where the first packet does change the behavior.
     //
 
+    /// The offset point is more than the stretch window ahead of the queue
+    /// start. Unlike `FromStart`, chunks before the offset point still
+    /// deliver: each chunk pops the batches within its own stretch window
+    /// (queue PTS below chunk end + 80ms), so the head of the stream is
+    /// metered out a batch or two per chunk instead of being withheld until
+    /// the offset point. Only [0, 20) is empty: its window ends before the
+    /// track zero.
     #[test]
     fn offset_pts_after_start_delivered_early() {
-        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(103)));
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
 
         sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(
+                ms(20),
+                vec![(ms(103), ms(103 + 15)), (ms(103 + 15), ms(103 + 30))],
+            ),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(40), vec![(ms(103 + 30), ms(103 + 45))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(60), vec![(ms(103 + 45), ms(103 + 60))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // the 20ms chunk grid overtakes the 15ms batch grid: two batches fall
+        // within the [80, 100) window
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(
+                ms(80),
+                vec![(ms(103 + 60), ms(103 + 75)), (ms(103 + 75), ms(103 + 90))],
+            ),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(100), vec![(ms(103 + 90), ms(103 + 105))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // out of data: [120, 140) needs the input buffered up to ~117ms, only
+        // 105ms was sent
+        sleep(ms(20));
+        assert!(queue.next_audio_batch().is_none());
+    }
+
+    /// Sent early, but the offset is within the stretch window: the first
+    /// chunk delivers the whole head of the stream (queue PTS below 100ms),
+    /// later chunks meter out the rest.
+    #[test]
+    fn offset_pts_after_start_delivered_slightly_early() {
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(63)));
+
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+
+        sleep(ms(1));
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(0),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(63), ms(63 + 15)),
+                    (ms(63 + 15), ms(63 + 30)),
+                    (ms(63 + 30), ms(63 + 45)),
                 ],
             ),
             ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
 
-        // [0, 20) drained the whole buffer (everything below input PTS 80ms);
-        // a required input with an empty buffer is not ready, so the queue
-        // stalls even though [20, 40) has nothing left to deliver
         sleep(ms(20));
-        assert!(queue.next_audio_batch().is_none());
-
-        sleep(ms(20));
-        assert!(queue.next_audio_batch().is_none());
-
-        input.send_samples(ms(80), BATCH_DURATION);
-        sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
+            &chunk(ms(20), vec![(ms(63 + 45), ms(63 + 60))]),
+            ms(2),
         );
-        assert_audio_batch_eq(
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![(ms(140), ms(160))]),
+            &chunk(
+                ms(40),
+                vec![(ms(63 + 60), ms(63 + 75)), (ms(63 + 75), ms(63 + 90))],
+            ),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(60), vec![(ms(63 + 90), ms(63 + 105))]),
             ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
@@ -375,90 +519,112 @@ mod required_input {
 
     #[test]
     fn offset_pts_after_start_delivered_on_time() {
-        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(63)));
 
         sleep(ms(58));
         // a required `Pts` input stalls the queue from the first chunk until
         // data arrives (no empty chunks, unlike `FromStart` or `None`)
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
+        // the queue catches up chunk by chunk, each delivering its own
+        // stretch window
         sleep(ms(4));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(0),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(63), ms(63 + 15)),
+                    (ms(63 + 15), ms(63 + 30)),
+                    (ms(63 + 30), ms(63 + 45)),
                 ],
             ),
             ms(2),
         );
-        // [0, 20) drained the whole buffer, the queue stalls until newer data
-        assert!(queue.next_audio_batch().is_none());
-
-        input.send_samples(ms(80), BATCH_DURATION);
-        sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![(ms(140), ms(160))]),
+            &chunk(ms(20), vec![(ms(63 + 45), ms(63 + 60))]),
             ms(2),
         );
-        // [60, 80) stalls again: the buffer was drained below input PTS 100ms
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(
+                ms(40),
+                vec![(ms(63 + 60), ms(63 + 75)), (ms(63 + 75), ms(63 + 90))],
+            ),
+            ms(2),
+        );
+        // [60, 80) needs the input buffered up to ~97ms, only 90ms was sent
+        assert!(queue.next_audio_batch().is_none());
+
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        sleep(ms(1));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(60), vec![(ms(63 + 90), ms(63 + 105))]),
+            ms(2),
+        );
+        // [80, 100) stalls again: it needs the input buffered up to ~117ms
         assert!(queue.next_audio_batch().is_none());
     }
 
     #[test]
     fn offset_pts_after_start_delivered_late() {
-        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(63)));
 
         sleep(ms(200));
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
+        // the queue catches up as far as the buffered data allows, each chunk
+        // delivering its own stretch window
         sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(0),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(63), ms(63 + 15)),
+                    (ms(63 + 15), ms(63 + 30)),
+                    (ms(63 + 30), ms(63 + 45)),
                 ],
             ),
             ms(2),
         );
-        // [0, 20) drained the whole buffer, the queue stalls until newer data
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(20), vec![(ms(63 + 45), ms(63 + 60))]),
+            ms(2),
+        );
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(
+                ms(40),
+                vec![(ms(63 + 60), ms(63 + 75)), (ms(63 + 75), ms(63 + 90))],
+            ),
+            ms(2),
+        );
+        // [60, 80) needs the input buffered up to ~97ms, only 90ms was sent
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(80), BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
         sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![(ms(140), ms(160))]),
+            &chunk(ms(60), vec![(ms(63 + 90), ms(63 + 105))]),
             ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
@@ -474,45 +640,41 @@ mod required_input {
     fn offset_pts_before_start_delivered_early() {
         // track zero is ~40ms before the queue start: like for video, batches
         // that are already in the past get dropped by the pre-start cleanup
-        // (input PTS 0-40ms here; the 40ms one starts right at the queue start
-        // and is dropped too, the cleanup only compares batch start PTS)
+        // (input PTS 0-30ms here, the cleanup compares batch start PTS)
         let (mut queue, input) =
             create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET - ms(40)));
 
-        // ~120ms is the most that can be buffered before start without
-        // blocking (100ms buffer + one batch in the channel)
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
-        input.send_samples(ms(80), BATCH_DURATION);
-        input.send_samples(ms(100), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        input.send_samples(ms(105), INPUT_BATCH_DURATION);
+        input.send_samples(ms(120), INPUT_BATCH_DURATION);
+        input.send_samples(ms(135), INPUT_BATCH_DURATION);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
         queue.start();
 
-        // [0, 20) needs the input buffered up to ~140ms (chunk end + stretch
-        // buffer, shifted by the -40ms offset), so 120ms is not enough
+        // batches 0-30ms were dropped before start, the rest is delivered
+        // with the first chunk ([0, 20) pops everything below queue PTS
+        // 100ms, i.e. input PTS below ~140ms)
         sleep(ms(1));
-        assert!(queue.next_audio_batch().is_none());
-
-        input.send_samples(ms(120), BATCH_DURATION);
-        input.send_samples(ms(140), BATCH_DURATION);
-
-        // batches 0-40ms were dropped before start, the rest is delivered
-        // with the first chunk
-        sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(0),
                 vec![
-                    (ms(20), ms(40)),
-                    (ms(40), ms(60)),
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
+                    (ms(45 - 40), ms(60 - 40)),
+                    (ms(60 - 40), ms(75 - 40)),
+                    (ms(75 - 40), ms(90 - 40)),
+                    (ms(90 - 40), ms(105 - 40)),
+                    (ms(105 - 40), ms(120 - 40)),
+                    (ms(120 - 40), ms(135 - 40)),
+                    (ms(135 - 40), ms(150 - 40)),
                 ],
             ),
             ms(2),
@@ -524,39 +686,42 @@ mod required_input {
     fn offset_pts_before_start_delivered_late() {
         let (mut queue, input) = create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET));
 
-        sleep(ms(50) + OFFSET);
+        sleep(ms(53) + OFFSET);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
-        input.send_samples(ms(80), BATCH_DURATION);
-        input.send_samples(ms(100), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        input.send_samples(ms(105), INPUT_BATCH_DURATION);
+        input.send_samples(ms(120), INPUT_BATCH_DURATION);
+        input.send_samples(ms(135), INPUT_BATCH_DURATION);
+        input.send_samples(ms(150), INPUT_BATCH_DURATION);
 
+        // sends are asynchronous: give the relay and the pre-start cleanup a
+        // moment to process the batches before the queue starts (the queue
+        // ends up starting ~55ms after the track zero)
+        sleep(ms(2));
         queue.start();
 
-        // [0, 20) needs the input buffered up to ~150ms (the queue started
-        // 50ms after the track zero)
-        sleep(ms(1));
-        assert!(queue.next_audio_batch().is_none());
-
-        input.send_samples(ms(120), BATCH_DURATION);
-        input.send_samples(ms(140), BATCH_DURATION);
-
-        // batches 0-40ms (before the effective start point) were dropped by
+        // batches 0-45ms (before the effective start point) were dropped by
         // the pre-start cleanup, the rest is delivered with the first chunk
         sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(0),
                 vec![
-                    (ms(10), ms(30)),
-                    (ms(30), ms(50)),
-                    (ms(50), ms(70)),
-                    (ms(70), ms(90)),
-                    (ms(90), ms(110)),
+                    (ms(60 - 55), ms(75 - 55)),
+                    (ms(75 - 55), ms(90 - 55)),
+                    (ms(90 - 55), ms(105 - 55)),
+                    (ms(105 - 55), ms(120 - 55)),
+                    (ms(120 - 55), ms(135 - 55)),
+                    (ms(135 - 55), ms(150 - 55)),
+                    (ms(150 - 55), ms(165 - 55)),
                 ],
             ),
             ms(2),
@@ -578,48 +743,39 @@ mod required_input {
 
         sleep(ms(58));
         // input reports ready with no data: empty chunks until a batch arrives
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), true);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
         // the offset locks to the chunk that first observed a batch ([60, 80)),
         // but the chunk still needs the input buffered up to 100ms
         sleep(ms(4));
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(80), BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
         sleep(ms(1));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(60),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
-                    (ms(140), ms(160)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
+                    (ms(150), ms(165)),
                 ],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
     }
@@ -629,32 +785,22 @@ mod required_input {
         let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
         sleep(ms(58));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), true);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(5), BATCH_DURATION);
-        input.send_samples(ms(25), BATCH_DURATION);
-        input.send_samples(ms(45), BATCH_DURATION);
-        input.send_samples(ms(65), BATCH_DURATION);
+        input.send_samples(ms(5), INPUT_BATCH_DURATION);
+        input.send_samples(ms(20), INPUT_BATCH_DURATION);
+        input.send_samples(ms(35), INPUT_BATCH_DURATION);
+        input.send_samples(ms(50), INPUT_BATCH_DURATION);
+        input.send_samples(ms(65), INPUT_BATCH_DURATION);
+        input.send_samples(ms(80), INPUT_BATCH_DURATION);
 
         sleep(ms(4));
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(85), BATCH_DURATION);
+        input.send_samples(ms(95), INPUT_BATCH_DURATION);
         sleep(ms(1));
         // none offset maps input 0ms to the chunk start (queue 60ms), so the
         // first batch (input PTS 5ms) starts at queue 65ms
@@ -663,14 +809,15 @@ mod required_input {
             &chunk(
                 ms(60),
                 vec![
-                    (ms(65), ms(85)),
-                    (ms(85), ms(105)),
-                    (ms(105), ms(125)),
-                    (ms(125), ms(145)),
-                    (ms(145), ms(165)),
+                    (ms(65), ms(80)),
+                    (ms(80), ms(95)),
+                    (ms(95), ms(110)),
+                    (ms(110), ms(125)),
+                    (ms(125), ms(140)),
+                    (ms(140), ms(155)),
+                    (ms(155), ms(170)),
                 ],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
     }
@@ -680,48 +827,40 @@ mod required_input {
         let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
         sleep(ms(58));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), true);
         assert!(queue.next_audio_batch().is_none());
 
-        // hole between input 20ms and 40ms
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
-        input.send_samples(ms(80), BATCH_DURATION);
+        sleep(ms(1));
+        // hole between input 15ms and 30ms
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
 
         // readiness only checks the newest buffered PTS, so the hole doesn't
         // stall the queue and the gap is preserved in the delivered ranges
-        sleep(ms(4));
+        sleep(ms(2));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(60),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
-                    (ms(140), ms(160)),
+                    (ms(60), ms(75)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
+                    (ms(150), ms(165)),
                 ],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
 
-        // [80, 100) needs the input buffered up to 120ms
+        // [80, 100) needs the input buffered up to 120ms, only 105ms was sent
         sleep(ms(20));
         assert!(queue.next_audio_batch().is_none());
     }
@@ -735,30 +874,24 @@ mod required_input {
         let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
         sleep(ms(30));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
         assert!(queue.next_audio_batch().is_none());
 
         // locks the offset to the next unproduced chunk: input 0ms ↔ queue 40ms
-        input.send_samples(ms(0), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
 
-        // required input with only 20ms of coverage: the queue stalls at
+        // required input with only 15ms of coverage: the queue stalls at
         // [40, 60) instead of producing empty chunks
         sleep(ms(200));
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
-        input.send_samples(ms(80), BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
 
         // everything is delivered with the mapping anchored by the early
         // batch, even though those PTS are long in the past
@@ -768,16 +901,17 @@ mod required_input {
             &chunk(
                 ms(40),
                 vec![
-                    (ms(40), ms(60)),
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(40), ms(55)),
+                    (ms(55), ms(70)),
+                    (ms(70), ms(85)),
+                    (ms(85), ms(100)),
+                    (ms(100), ms(115)),
+                    (ms(115), ms(130)),
+                    (ms(130), ms(145)),
                 ],
             ),
-            Duration::ZERO,
         );
-        // [60, 80) needs the input buffered up to 120ms
+        // [60, 80) needs the input buffered up to 120ms, only 105ms was sent
         assert!(queue.next_audio_batch().is_none());
     }
 
@@ -788,36 +922,38 @@ mod required_input {
         // desync regular clock from queue clock
         sleep(OFFSET);
 
-        // batches arrive 30ms before the queue starts; the offset locks at the
+        // batches arrive 25ms before the queue starts; the offset locks at the
         // pre-start cleanup tick (~send time), and pre-start cleanup drops
-        // batches whose start PTS is already in the past (0ms and 20ms here)
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        // batches whose start PTS is already in the past (0ms and 15ms here)
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        input.send_samples(ms(105), INPUT_BATCH_DURATION);
+        input.send_samples(ms(120), INPUT_BATCH_DURATION);
+        input.send_samples(ms(135), INPUT_BATCH_DURATION);
 
-        sleep(ms(30));
+        sleep(ms(25));
         queue.start();
 
-        // [0, 20) needs the input buffered up to ~130ms
+        // [0, 20) pops everything below queue PTS 100ms (input PTS below
+        // ~125ms)
         sleep(ms(1));
-        assert!(queue.next_audio_batch().is_none());
-
-        input.send_samples(ms(80), BATCH_DURATION);
-        input.send_samples(ms(100), BATCH_DURATION);
-        input.send_samples(ms(120), BATCH_DURATION);
-
-        sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(0),
                 vec![
-                    (ms(10), ms(30)),
-                    (ms(30), ms(50)),
-                    (ms(50), ms(70)),
-                    (ms(70), ms(90)),
-                    (ms(90), ms(110)),
+                    (ms(30 - 25), ms(45 - 25)),
+                    (ms(45 - 25), ms(60 - 25)),
+                    (ms(60 - 25), ms(75 - 25)),
+                    (ms(75 - 25), ms(90 - 25)),
+                    (ms(90 - 25), ms(105 - 25)),
+                    (ms(105 - 25), ms(120 - 25)),
+                    (ms(120 - 25), ms(135 - 25)),
                 ],
             ),
             ms(2),
@@ -871,31 +1007,106 @@ mod optional_input {
         (queue, input)
     }
 
+    /// The offset is larger than the stretch window, so the batches sent right
+    /// after start are withheld until the first chunk that reaches the offset
+    /// point.
     #[test]
     fn offset_from_start_delivered_early() {
-        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(100)));
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
-        input.send_samples(ms(80), BATCH_DURATION);
-        input.send_samples(ms(100), BATCH_DURATION);
+        // the whole stream is sent right after start (queue PTS 100-220ms)
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        input.send_samples(ms(105), INPUT_BATCH_DURATION);
 
+        // chunks that end before the offset point deliver nothing even though
+        // everything is already buffered
         sleep(ms(1));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(60), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        // [80, 100) is the first chunk that reaches the offset point: it pops
+        // everything within the 80ms stretch window (input PTS below 80ms)
+        sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
+            &chunk(
+                ms(80),
+                vec![
+                    (ms(100), ms(115)),
+                    (ms(115), ms(130)),
+                    (ms(130), ms(145)),
+                    (ms(145), ms(160)),
+                    (ms(160), ms(175)),
+                    (ms(175), ms(190)),
+                ],
+            ),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // one batch per chunk, delivered ~100ms ahead of its PTS
+        sleep(ms(20));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(100), vec![(ms(190), ms(205))]),
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
+            &chunk(ms(120), vec![(ms(205), ms(220))]),
         );
+        assert!(queue.next_audio_batch().is_none());
+
+        // out of data: empty chunks keep flowing
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(140), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(160), false);
+    }
+
+    /// Sent early, but within the stretch window, so nothing is withheld:
+    /// verifies that [0, 20) and [20, 40) stay empty with data already
+    /// buffered.
+    #[test]
+    fn offset_from_start_delivered_slightly_early() {
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        input.send_samples(ms(105), INPUT_BATCH_DURATION);
+
+        sleep(ms(1));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
@@ -904,29 +1115,28 @@ mod optional_input {
             &chunk(
                 ms(40),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
                 ],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(60), vec![(ms(140), ms(160))]),
-            Duration::ZERO,
+            &chunk(ms(60), vec![(ms(150), ms(165))]),
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(80), vec![(ms(160), ms(180))]),
-            Duration::ZERO,
+            &chunk(ms(80), vec![(ms(165), ms(180))]),
         );
         assert!(queue.next_audio_batch().is_none());
 
@@ -934,19 +1144,11 @@ mod optional_input {
         // frame, audio never repeats a batch)
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(100), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(100), false);
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(120), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(120), false);
     }
 
     #[test]
@@ -957,27 +1159,17 @@ mod optional_input {
 
         // an optional input never stalls the queue, so [40, 60) is produced
         // (empty) even though a required input would hold it back
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
         // no coverage requirement for optional inputs: everything within the
         // stretch window is delivered as soon as [60, 80) is due
@@ -987,30 +1179,86 @@ mod optional_input {
             &chunk(
                 ms(60),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
                 ],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(80), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(80), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(80), BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
         sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(100), vec![(ms(140), ms(160))]),
-            Duration::ZERO,
+            &chunk(ms(100), vec![(ms(150), ms(165))]),
+        );
+        assert!(queue.next_audio_batch().is_none());
+    }
+
+    #[test]
+    fn offset_from_start_delivered_on_time_with_some_batches_behind_mixer_buffer() {
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+
+        sleep(ms(58)); // a bit before
+
+        // an optional input never stalls the queue, so [40, 60) is produced
+        // (empty) even though a required input would hold it back
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+
+        // no coverage requirement for optional inputs: everything within the
+        // stretch window is delivered as soon as [60, 80) is due
+        sleep(ms(4));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(
+                ms(60),
+                vec![
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                ],
+            ),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+
+        sleep(ms(20));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(
+                ms(80),
+                vec![
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
+                ],
+            ),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        sleep(ms(20));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(100), vec![(ms(150), ms(165))]),
         );
         assert!(queue.next_audio_batch().is_none());
     }
@@ -1020,37 +1268,19 @@ mod optional_input {
         let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
 
         sleep(ms(98));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(60), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(80), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(60), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(80), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
         // late batches are delivered anyway (video would skip late frames)
         sleep(ms(4));
@@ -1059,22 +1289,20 @@ mod optional_input {
             &chunk(
                 ms(100),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)), // this is not full 80ms buffer, in required that batch
+                                        // would hang
                 ],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(120), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(120), false);
         assert!(queue.next_audio_batch().is_none());
     }
 
@@ -1087,33 +1315,130 @@ mod optional_input {
     // just a smaller `delivered_early` scenario.
     //
 
+    /// The offset point is more than the stretch window ahead of the queue
+    /// start. Unlike `FromStart`, chunks before the offset point still
+    /// deliver: each chunk pops the batches within its own stretch window
+    /// (queue PTS below chunk end + 80ms), metering the head of the stream
+    /// out a batch or two per chunk. Only [0, 20) is empty: its window ends
+    /// before the track zero.
     #[test]
     fn offset_pts_after_start_delivered_early() {
         // batches are sent before the queue starts: an optional input pops
         // whatever arrived when a chunk becomes due, so sending right after
         // start would race the first chunk
         let (mut queue, input) =
-            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(103)));
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
+        input.send_samples(ms(105), INPUT_BATCH_DURATION);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
         queue.start();
 
         sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(
+                ms(20),
+                vec![(ms(103), ms(103 + 15)), (ms(103 + 15), ms(103 + 30))],
+            ),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(40), vec![(ms(103 + 30), ms(103 + 45))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(60), vec![(ms(103 + 45), ms(103 + 60))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // the 20ms chunk grid overtakes the 15ms batch grid: two batches fall
+        // within the [80, 100) window
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(
+                ms(80),
+                vec![(ms(103 + 60), ms(103 + 75)), (ms(103 + 75), ms(103 + 90))],
+            ),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(100), vec![(ms(103 + 90), ms(103 + 105))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(120), vec![(ms(103 + 105), ms(103 + 120))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // out of data: empty chunks keep flowing
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(140), false);
+        assert!(queue.next_audio_batch().is_none());
+    }
+
+    /// Sent early, but the offset is within the stretch window: the first
+    /// chunk delivers the whole head of the stream (queue PTS below 100ms),
+    /// later chunks meter out the rest.
+    #[test]
+    fn offset_pts_after_start_delivered_slightly_early() {
+        // batches are sent before the queue starts: an optional input pops
+        // whatever arrived when a chunk becomes due, so sending right after
+        // start would race the first chunk
+        let (mut queue, input) =
+            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(63)));
+
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+
+        // desync regular clock from queue clock
+        sleep(OFFSET);
+        queue.start();
+
+        sleep(ms(1));
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(0),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(63), ms(63 + 15)),
+                    (ms(63 + 15), ms(63 + 30)),
+                    (ms(63 + 30), ms(63 + 45)),
                 ],
             ),
             ms(2),
@@ -1121,26 +1446,29 @@ mod optional_input {
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
+            &chunk(ms(20), vec![(ms(63 + 45), ms(63 + 60))]),
+            ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
+            &chunk(
+                ms(40),
+                vec![(ms(63 + 60), ms(63 + 75)), (ms(63 + 75), ms(63 + 90))],
+            ),
+            ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(80), BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
         sleep(ms(20));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(60), vec![(ms(140), ms(160))]),
+            &chunk(ms(60), vec![(ms(63 + 90), ms(63 + 105))]),
             ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
@@ -1152,38 +1480,30 @@ mod optional_input {
 
         sleep(ms(58));
         // empty chunks flow because the optional input never stalls the queue
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
         sleep(ms(4));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(60),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
                 ],
             ),
             ms(2),
@@ -1191,11 +1511,70 @@ mod optional_input {
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(80), false);
+        assert!(queue.next_audio_batch().is_none());
+    }
+
+    /// Like [`offset_pts_after_start_delivered_on_time`], but only the
+    /// batches overlapping the next chunk are sent up front; every other
+    /// batch is sent as late as possible (just before the first chunk
+    /// overlapping its PTS range is produced). Nothing arrives late, so each
+    /// batch is still delivered with the first chunk it overlaps.
+    #[test]
+    fn offset_pts_after_start_delivered_just_in_time() {
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+
+        sleep(ms(58));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        // only the batches overlapping [60, 80): queue PTS 60-90ms
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+
+        sleep(ms(4));
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(80), vec![]),
-            Duration::ZERO,
+            &chunk(ms(60), vec![(ms(60), ms(75)), (ms(75), ms(90))]),
+            ms(2),
         );
+        assert!(queue.next_audio_batch().is_none());
+
+        // queue PTS 90-105ms, first overlaps [80, 100)
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(80), vec![(ms(90), ms(105))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // queue PTS 105-120ms, first overlaps [100, 120)
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(100), vec![(ms(105), ms(120))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // queue PTS 120-150ms, both first overlap [120, 140)
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        sleep(ms(20));
+        assert_audio_batch_eq_with_tolerance(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(120), vec![(ms(120), ms(135)), (ms(135), ms(150))]),
+            ms(2),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(140), false);
         assert!(queue.next_audio_batch().is_none());
     }
 
@@ -1204,45 +1583,33 @@ mod optional_input {
         let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(78));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(60), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(60), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
-        // batches for queue PTS 60..140ms arrive after those chunks were
+        // batches for queue PTS 60..150ms arrive after those chunks were
         // already produced; they are still delivered with the next chunk
         sleep(ms(4));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(80),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
                 ],
             ),
             ms(2),
@@ -1250,26 +1617,24 @@ mod optional_input {
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(100), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(100), false);
         assert!(queue.next_audio_batch().is_none());
     }
 
     #[test]
     fn offset_pts_before_start_delivered_early() {
         // track zero is ~40ms before the queue start: batches that are
-        // already in the past (input PTS 0-40ms) get dropped by the pre-start
+        // already in the past (input PTS 0-30ms) get dropped by the pre-start
         // cleanup, like for video
         let (mut queue, input) =
             create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET - ms(40)));
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1278,19 +1643,18 @@ mod optional_input {
         // no stall for an optional input, [0, 20) delivers what survived the
         // pre-start cleanup
         sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![(ms(20), ms(40))]),
+            &chunk(
+                ms(0),
+                vec![(ms(5), ms(20)), (ms(20), ms(35)), (ms(35), ms(50))],
+            ),
             ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
         assert!(queue.next_audio_batch().is_none());
     }
 
@@ -1301,29 +1665,34 @@ mod optional_input {
         sleep(ms(50) + OFFSET);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
+        // sends are asynchronous: give the relay and the pre-start cleanup a
+        // moment to process the batches before the queue starts (the queue
+        // ends up starting ~52ms after the track zero)
+        sleep(ms(2));
         queue.start();
 
-        // batches 0-40ms (before the effective start point) were dropped by
+        // batches 0-45ms (before the effective start point) were dropped by
         // the pre-start cleanup
         sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![(ms(10), ms(30))]),
+            &chunk(
+                ms(0),
+                vec![(ms(60 - 52), ms(75 - 52)), (ms(75 - 52), ms(90 - 52))],
+            ),
             ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
         assert!(queue.next_audio_batch().is_none());
     }
 
@@ -1337,27 +1706,17 @@ mod optional_input {
         let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
         sleep(ms(58));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
         // the offset locks to the chunk that first observed a batch ([60, 80));
         // unlike a required input there is no stall waiting for more data
@@ -1367,31 +1726,88 @@ mod optional_input {
             &chunk(
                 ms(60),
                 vec![
-                    (ms(60), ms(80)),
-                    (ms(80), ms(100)),
-                    (ms(100), ms(120)),
-                    (ms(120), ms(140)),
+                    (ms(60), ms(75)),
+                    (ms(75), ms(90)),
+                    (ms(90), ms(105)),
+                    (ms(105), ms(120)),
+                    (ms(120), ms(135)),
+                    (ms(135), ms(150)),
                 ],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(80), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(80), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(80), BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
         sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(100), vec![(ms(140), ms(160))]),
-            Duration::ZERO,
+            &chunk(ms(100), vec![(ms(150), ms(165))]),
         );
+        assert!(queue.next_audio_batch().is_none());
+    }
+
+    /// Like [`offset_none_after_start_delivered_on_time`], but only the
+    /// batches overlapping the locking chunk are sent up front; every other
+    /// batch is sent as late as possible (just before the first chunk
+    /// overlapping its PTS range is produced). Nothing arrives late, so each
+    /// batch is still delivered with the first chunk it overlaps. The offset
+    /// locks to [60, 80) on the chunk grid, so expectations are exact.
+    #[test]
+    fn offset_none_after_start_delivered_just_in_time() {
+        let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::None);
+
+        sleep(ms(58));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        // locks the offset to [60, 80); only the batches overlapping it
+        // (queue PTS 60-90ms) are sent
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+
+        sleep(ms(4));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(60), vec![(ms(60), ms(75)), (ms(75), ms(90))]),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // queue PTS 90-105ms, first overlaps [80, 100)
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        sleep(ms(20));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(80), vec![(ms(90), ms(105))]),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // queue PTS 105-120ms, first overlaps [100, 120)
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        sleep(ms(20));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(100), vec![(ms(105), ms(120))]),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // queue PTS 120-150ms, both first overlap [120, 140)
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
+        sleep(ms(20));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &chunk(ms(120), vec![(ms(120), ms(135)), (ms(135), ms(150))]),
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(140), false);
         assert!(queue.next_audio_batch().is_none());
     }
 
@@ -1400,27 +1816,17 @@ mod optional_input {
         let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
         sleep(ms(58));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(5), BATCH_DURATION);
-        input.send_samples(ms(25), BATCH_DURATION);
-        input.send_samples(ms(45), BATCH_DURATION);
-        input.send_samples(ms(65), BATCH_DURATION);
+        input.send_samples(ms(5), INPUT_BATCH_DURATION);
+        input.send_samples(ms(20), INPUT_BATCH_DURATION);
+        input.send_samples(ms(35), INPUT_BATCH_DURATION);
+        input.send_samples(ms(50), INPUT_BATCH_DURATION);
+        input.send_samples(ms(65), INPUT_BATCH_DURATION);
+        input.send_samples(ms(80), INPUT_BATCH_DURATION);
 
         // none offset maps input 0ms to the chunk start (queue 60ms), so the
         // first batch (input PTS 5ms) starts at queue 65ms
@@ -1430,22 +1836,19 @@ mod optional_input {
             &chunk(
                 ms(60),
                 vec![
-                    (ms(65), ms(85)),
-                    (ms(85), ms(105)),
-                    (ms(105), ms(125)),
-                    (ms(125), ms(145)),
+                    (ms(65), ms(80)),
+                    (ms(80), ms(95)),
+                    (ms(95), ms(110)),
+                    (ms(110), ms(125)),
+                    (ms(125), ms(140)),
+                    (ms(140), ms(155)),
                 ],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(80), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(80), false);
         assert!(queue.next_audio_batch().is_none());
     }
 
@@ -1457,61 +1860,43 @@ mod optional_input {
         let (queue, input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
         sleep(ms(30));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![]),
-            Duration::ZERO,
-        );
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
         assert!(queue.next_audio_batch().is_none());
 
         // locks the offset to the next unproduced chunk: input 0ms ↔ queue 40ms
-        input.send_samples(ms(0), BATCH_DURATION);
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
 
         // an optional input doesn't wait for coverage, the early batch is
         // delivered on time
         sleep(ms(12));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![(ms(40), ms(60))]),
-            Duration::ZERO,
+            &chunk(ms(40), vec![(ms(40), ms(55))]),
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(60), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(60), false);
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(80), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(80), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
 
-        // batches for queue PTS 60..120ms are delivered with the [100, 120)
+        // batches for queue PTS 55..100ms are delivered with the [100, 120)
         // chunk, they keep the mapping anchored by the early batch
         sleep(ms(20));
         assert_audio_batch_eq(
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(100),
-                vec![(ms(60), ms(80)), (ms(80), ms(100)), (ms(100), ms(120))],
+                vec![(ms(55), ms(70)), (ms(70), ms(85)), (ms(85), ms(100))],
             ),
-            Duration::ZERO,
         );
         assert!(queue.next_audio_batch().is_none());
     }
@@ -1523,38 +1908,44 @@ mod optional_input {
         // desync regular clock from queue clock
         sleep(OFFSET);
 
-        // batches arrive 30ms before the queue starts; the offset locks at the
+        // batches arrive 25ms before the queue starts; the offset locks at the
         // pre-start cleanup tick (~send time), and pre-start cleanup drops
-        // batches whose start PTS is already in the past (0ms and 20ms here)
-        input.send_samples(ms(0), BATCH_DURATION);
-        input.send_samples(ms(20), BATCH_DURATION);
-        input.send_samples(ms(40), BATCH_DURATION);
-        input.send_samples(ms(60), BATCH_DURATION);
+        // batches whose start PTS is already in the past (0ms and 15ms here)
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.send_samples(ms(30), INPUT_BATCH_DURATION);
+        input.send_samples(ms(45), INPUT_BATCH_DURATION);
+        input.send_samples(ms(60), INPUT_BATCH_DURATION);
+        input.send_samples(ms(75), INPUT_BATCH_DURATION);
 
-        sleep(ms(30));
+        sleep(ms(25));
         queue.start();
 
         sleep(ms(1));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(0), vec![(ms(10), ms(30)), (ms(30), ms(50))]),
+            &chunk(
+                ms(0),
+                vec![
+                    (ms(5), ms(20)),
+                    (ms(20), ms(35)),
+                    (ms(35), ms(50)),
+                    (ms(50), ms(65)),
+                ],
+            ),
             ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
 
         sleep(ms(20));
-        assert_audio_batch_eq(
-            &queue.next_audio_batch().unwrap(),
-            &chunk(ms(20), vec![]),
-            Duration::ZERO,
-        );
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
         assert!(queue.next_audio_batch().is_none());
 
-        input.send_samples(ms(80), BATCH_DURATION);
+        input.send_samples(ms(90), INPUT_BATCH_DURATION);
         sleep(ms(20));
-        assert_audio_batch_eq(
+        assert_audio_batch_eq_with_tolerance(
             &queue.next_audio_batch().unwrap(),
-            &chunk(ms(40), vec![(ms(50), ms(70))]),
+            &chunk(ms(40), vec![(ms(65), ms(80))]),
             ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
