@@ -9,10 +9,9 @@ use tracing::debug;
 use crate::prelude::*;
 
 /// Measured A/V skew (offset between the audio and video PTS epochs) at or below
-/// this is treated as a single-epoch publisher (`moq-cli`-style): both tracks
+/// this is treated as a single-epoch publisher: both tracks
 /// anchor to the first timestamp received on either track and skip live-edge
-/// estimation. Above it we fall back to per-track live-edge locking (the browser
-/// cross-epoch case).
+/// estimation. Above it we fall back to per-track live-edge locking.
 const AV_SKEW_MAX: Duration = Duration::from_secs(2);
 /// Fallback lock deadline for streams that trickle in without a startup burst
 /// (publisher just went live, sparse/low-fps tracks).

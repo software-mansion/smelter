@@ -7,7 +7,7 @@ use bytes::Bytes;
 use moq_mux::{catalog::hang::Container, container::Consumer as ContainerConsumer};
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
-use tracing::{Instrument, Level, Span, debug, info, span, warn};
+use tracing::{Instrument, Level, Span, debug, info, span, trace, warn};
 
 use crate::{
     pipeline::{
@@ -316,6 +316,7 @@ async fn run_video_track(
             .on_frame(frame.keyframe, chunk)
             .into_iter()
             .any(|chunk| {
+                trace!(pts=?chunk.pts, ?raw_pts, "Video chunk received.");
                 decoder_handle
                     .chunk_sender
                     .send(PipelineEvent::Data(chunk))
@@ -398,6 +399,7 @@ async fn run_audio_track(
             .on_frame(frame.keyframe, chunk)
             .into_iter()
             .any(|chunk| {
+                trace!(pts=?chunk.pts, ?raw_pts, "Audio chunk received.");
                 decoder_handle
                     .chunk_sender
                     .send(PipelineEvent::Data(chunk))
