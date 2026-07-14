@@ -189,18 +189,19 @@ pub(super) struct TimestampAligner {
     epoch_start_elapsed: Option<Duration>,
     /// Running max of `raw − elapsed`; equals the live-edge offset.
     max_offset: Option<EpochOffset>,
-    /// Consecutive frames that did not raise the max by more than [`PLATEAU_EPSILON`].
-    plateau_frames: u32,
     /// Frames buffered until lock; each carries its raw PTS in `chunk.pts`.
     held: Vec<EncodedInputChunk>,
     locked_offset: Option<EpochOffset>,
-    /// True until the first lock; `reset()` leaves it `false`.
-    first_epoch: bool,
-    decided_live_edge: bool,
     /// Previous frame's `(raw_pts, offset)`, updated on every frame (locked or
     /// warming). Baseline for the epoch-discontinuity check. `reset()` does *not*
     /// clear it: the post-jump frame becomes the next baseline.
     previous: Option<(Duration, EpochOffset)>,
+
+    /// Consecutive frames that did not raise the max by more than [`PLATEAU_EPSILON`].
+    plateau_frames: u32,
+    /// True until the first lock; `reset()` leaves it `false`.
+    first_epoch: bool,
+    skew_decided: bool,
 }
 
 impl TimestampAligner {
@@ -215,9 +216,24 @@ impl TimestampAligner {
             held: Vec::new(),
             locked_offset: None,
             first_epoch: true,
-            decided_live_edge: false,
+            skew_decided: false,
             previous: None,
         }
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.locked_offset.is_some()
+    }
+
+    /// Clears the lock and warmup state so the aligner re-warms and re-locks
+    /// against the same, never-reset shared anchor.
+    pub fn reset(&mut self) {
+        self.locked_offset = None;
+        self.max_offset = None;
+        self.plateau_frames = 0;
+        self.epoch_start_elapsed = None;
+        self.held = Vec::new();
+        self.first_epoch = false;
     }
 
     /// Feed one frame (with its raw PTS in `chunk.pts`). Detects a mid-stream
@@ -280,33 +296,60 @@ impl TimestampAligner {
         let started = *self.epoch_start_elapsed.get_or_insert(elapsed);
 
         // Anchor to the shared first timestamp unless the A/V skew is confirmed to exceed AV_SKEW_MAX.
-        if self.first_epoch && !self.decided_live_edge {
+        // Decision is made only once on the first frame of the first epoch.
+        if self.first_epoch && !self.skew_decided {
             match self.skew_decision() {
-                SkewDecision::Anchor(anchor) => self.lock_and_flush(anchor),
-                SkewDecision::LiveEdge => {
-                    self.decided_live_edge = true;
-                    self.maybe_live_edge_lock(max_offset, elapsed, started)
+                SkewDecision::Anchor(anchor) => {
+                    self.skew_decided = true;
+                    self.lock_and_flush(anchor)
                 }
-                SkewDecision::Pending => {
-                    // Counterpart's first frame not seen yet: keep buffering, but
-                    // still honor the warmup deadline as a live-edge fallback.
-                    if elapsed.saturating_sub(started) >= MOQ_EPOCH_MAX_WARMUP {
-                        self.lock_and_flush(max_offset)
-                    } else {
-                        Vec::new()
+                SkewDecision::LiveEdge => {
+                    self.skew_decided = true;
+                    match self.live_edge_settled(elapsed, started) {
+                        true => self.lock_and_flush(max_offset),
+                        false => Vec::new(),
                     }
                 }
+                SkewDecision::Pending if self.warmup_deadline_passed(elapsed, started) => {
+                    // Counterpart's first frame not seen yet: keep buffering, but
+                    // still honor the warmup deadline as a live-edge fallback.
+                    self.skew_decided = true;
+                    self.lock_and_flush(max_offset)
+                }
+                _ => Vec::new(),
             }
-        } else {
+        } else if self.live_edge_settled(elapsed, started) {
             // After the first epoch (large-skew fallback or post-reset): live-edge lock.
-            self.maybe_live_edge_lock(max_offset, elapsed, started)
+            self.lock_and_flush(max_offset)
+        } else {
+            Vec::new()
         }
     }
 
-    /// Decide how to lock during the first epoch: anchor to the shared first
-    /// timestamp when there is no counterpart or the A/V skew is small, fall back
-    /// to live-edge when the skew is large, or defer until the counterpart's first
-    /// frame makes the skew measurable.
+    fn lock_and_flush(&mut self, offset: EpochOffset) -> Vec<EncodedInputChunk> {
+        self.locked_offset = Some(offset);
+        self.first_epoch = false;
+        self.held
+            .drain(..)
+            .map(|mut chunk| {
+                chunk.pts = offset.normalize(chunk.pts);
+                chunk
+            })
+            .collect()
+    }
+
+    /// Force-lock at the current running max and drain the frames held during
+    /// warmup (EOS path), so a sub-warmup clip still renders. Caller must ensure
+    /// the aligner is still warming up (`!is_locked()`); returns empty if no
+    /// frame was ever received.
+    pub fn flush(&mut self) -> Vec<EncodedInputChunk> {
+        debug_assert!(!self.is_locked());
+        match self.max_offset {
+            Some(max_offset) => self.lock_and_flush(max_offset),
+            None => Vec::new(),
+        }
+    }
+
     fn skew_decision(&self) -> SkewDecision {
         let anchor = self
             .shared
@@ -333,64 +376,12 @@ impl TimestampAligner {
         }
     }
 
-    /// Live-edge lock once the burst plateaus or the warmup deadline fires.
-    fn maybe_live_edge_lock(
-        &mut self,
-        max_offset: EpochOffset,
-        elapsed: Duration,
-        started: Duration,
-    ) -> Vec<EncodedInputChunk> {
-        if self.plateau_frames >= PLATEAU_FRAMES
-            || elapsed.saturating_sub(started) >= MOQ_EPOCH_MAX_WARMUP
-        {
-            self.lock_and_flush(max_offset)
-        } else {
-            Vec::new()
-        }
+    fn live_edge_settled(&self, elapsed: Duration, started: Duration) -> bool {
+        self.plateau_frames >= PLATEAU_FRAMES || self.warmup_deadline_passed(elapsed, started)
     }
 
-    /// Lock at the given offset and return all held chunks normalized with it.
-    fn lock_and_flush(&mut self, offset: EpochOffset) -> Vec<EncodedInputChunk> {
-        self.locked_offset = Some(offset);
-        self.first_epoch = false;
-        self.held
-            .drain(..)
-            .map(|mut chunk| {
-                chunk.pts = offset.normalize(chunk.pts);
-                chunk
-            })
-            .collect()
-    }
-
-    /// True once the aligner has locked its epoch offset (warmup finished).
-    /// While false it is still warming up and holding frames not yet emitted.
-    pub fn is_locked(&self) -> bool {
-        self.locked_offset.is_some()
-    }
-
-    /// Force-lock at the current running max and drain the frames held during
-    /// warmup (EOS path), so a sub-warmup clip still renders. Caller must ensure
-    /// the aligner is still warming up (`!is_locked()`); returns empty if no
-    /// frame was ever received.
-    pub fn flush(&mut self) -> Vec<EncodedInputChunk> {
-        debug_assert!(!self.is_locked());
-        match self.max_offset {
-            Some(max_offset) => self.lock_and_flush(max_offset),
-            None => Vec::new(),
-        }
-    }
-
-    /// Mid-stream epoch discontinuity reset. Clears the lock
-    /// and warmup state so the aligner re-warms and re-locks against the same,
-    /// never-reset shared anchor, absorbing the input jump. `held` is empty while
-    /// locked, and `first_epoch` stays `false` so the re-lock goes straight to
-    /// live-edge (the first-timestamp anchor is stale after an epoch jump).
-    pub fn reset(&mut self) {
-        self.locked_offset = None;
-        self.max_offset = None;
-        self.plateau_frames = 0;
-        self.epoch_start_elapsed = None;
-        self.decided_live_edge = false;
+    fn warmup_deadline_passed(&self, elapsed: Duration, started: Duration) -> bool {
+        elapsed.saturating_sub(started) > MOQ_EPOCH_MAX_WARMUP
     }
 }
 
