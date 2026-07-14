@@ -187,8 +187,6 @@ impl BroadcastHandler {
         // per-track live-edge estimation.
         let epoch = EpochShared::new();
 
-        // Captured here because `handle_audio_track` runs after `self.video` is
-        // already `take()`n, so `has_video()` is unreliable by then.
         let single_track_stream = video.is_none() || audio.is_none();
 
         let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());

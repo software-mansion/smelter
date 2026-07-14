@@ -51,7 +51,7 @@ impl EpochOffset {
 
     fn normalize(self, raw: Duration) -> Duration {
         if self.negative {
-            raw + self.magnitude
+            raw.saturating_add(self.magnitude)
         } else {
             raw.saturating_sub(self.magnitude)
         }
@@ -61,7 +61,7 @@ impl EpochOffset {
         if self.negative == other.negative {
             self.magnitude.abs_diff(other.magnitude)
         } else {
-            self.magnitude + other.magnitude
+            self.magnitude.saturating_add(other.magnitude)
         }
     }
 }
@@ -232,8 +232,8 @@ impl TimestampAligner {
         self.max_offset = None;
         self.plateau_frames = 0;
         self.epoch_start_elapsed = None;
-        self.held = Vec::new();
         self.first_epoch = false;
+        self.held.clear();
     }
 
     /// Feed one frame (with its raw PTS in `chunk.pts`). Detects a mid-stream
