@@ -33,9 +33,8 @@ const MOQ_EPOCH_MIN_STEP: Duration = Duration::from_millis(100);
 const MOQ_EPOCH_OFFSET_JUMP: Duration = Duration::from_secs(2);
 
 /// Signed offset `raw_pts − elapsed` (a track's raw PTS at the shared anchor
-/// instant), kept as a [`Duration`] magnitude plus a sign — no raw i64 micros.
-/// Negative when a track's near-zero raw PTS is first observed well *after*
-/// another track set the anchor.
+/// instant). Negative when a track's near-zero raw PTS is first observed
+/// well *after* another track set the anchor.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 struct EpochOffset {
     magnitude: Duration,
@@ -50,7 +49,6 @@ impl EpochOffset {
         }
     }
 
-    /// normalized PTS = `raw − self`
     fn normalize(self, raw: Duration) -> Duration {
         if self.negative {
             raw + self.magnitude
@@ -59,7 +57,6 @@ impl EpochOffset {
         }
     }
 
-    /// `|self − other|`, for the skew / plateau epsilon checks.
     fn abs_diff(self, other: Self) -> Duration {
         if self.negative == other.negative {
             self.magnitude.abs_diff(other.magnitude)
@@ -86,9 +83,6 @@ impl PartialOrd for EpochOffset {
     }
 }
 
-/// Which of the two tracks an aligner handles. Used to index the per-track
-/// first-offset slots and to look up the counterpart's first offset for the skew
-/// decision.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum TrackKind {
     Audio,
@@ -188,11 +182,7 @@ enum SkewDecision {
 /// there is no on-wire capture-time signal to do better without a publisher change.
 pub(super) struct TimestampAligner {
     shared: EpochShared,
-    /// Which track this aligner handles.
     kind: TrackKind,
-    /// Whether this is the only track (no counterpart; audio or video absent).
-    /// When true the track is trivially single-epoch and anchors to its own first
-    /// timestamp on the first frame.
     single_track_stream: bool,
     /// Shared elapsed at the first observed frame (warmup start); `None` until then.
     started_elapsed: Option<Duration>,
@@ -203,13 +193,8 @@ pub(super) struct TimestampAligner {
     /// Frames buffered until lock; each carries its raw PTS in `chunk.pts`.
     held: Vec<EncodedInputChunk>,
     locked_offset: Option<EpochOffset>,
-    /// True until the first lock; the first-timestamp anchor path only applies
-    /// while this holds. `reset()` leaves it `false`, so post-discontinuity
-    /// re-locks always go through live-edge estimation (the anchor is stale after
-    /// an epoch jump).
+    /// True until the first lock; `reset()` leaves it `false`.
     first_epoch: bool,
-    /// Set once the skew is measured to exceed [`AV_SKEW_MAX`]: from then on the
-    /// first epoch locks via live-edge, not the anchor.
     decided_live_edge: bool,
     /// Previous frame's `(raw_pts, offset)`, updated on every frame (locked or
     /// warming). Baseline for the epoch-discontinuity check. `reset()` does *not*
@@ -239,7 +224,7 @@ impl TimestampAligner {
     /// before normalizing. Returns the chunks ready to emit: empty while warming
     /// (chunk held), the full flushed batch at lock, or the single normalized
     /// chunk once locked.
-    pub fn on_frame(
+    pub fn on_chunk(
         &mut self,
         keyframe: bool,
         mut chunk: EncodedInputChunk,

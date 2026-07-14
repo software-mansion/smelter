@@ -313,7 +313,7 @@ async fn run_video_track(
         };
 
         let channel_closed = aligner
-            .on_frame(frame.keyframe, chunk)
+            .on_chunk(frame.keyframe, chunk)
             .into_iter()
             .any(|chunk| {
                 trace!(pts=?chunk.pts, ?raw_pts, "Video chunk received.");
@@ -396,7 +396,7 @@ async fn run_audio_track(
         };
 
         let channel_closed = aligner
-            .on_frame(frame.keyframe, chunk)
+            .on_chunk(frame.keyframe, chunk)
             .into_iter()
             .any(|chunk| {
                 trace!(pts=?chunk.pts, ?raw_pts, "Audio chunk received.");
