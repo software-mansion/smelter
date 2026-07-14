@@ -311,6 +311,7 @@ impl TimestampAligner {
                     }
                 }
                 SkewDecision::Pending if self.warmup_deadline_passed(elapsed, started) => {
+                    solve the case with the late track problem
                     // Counterpart's first frame not seen yet: keep buffering, but
                     // still honor the warmup deadline as a live-edge fallback.
                     self.skew_decided = true;
