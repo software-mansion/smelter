@@ -98,16 +98,31 @@ impl TrackKind {
     }
 }
 
+/// The stream-wide sync mode, decided once by whichever track (or event)
+/// resolves it first; the other track follows it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum SyncMode {
+    /// Verified single-epoch: lock immediately at the shared anchor offset.
+    Anchor,
+    /// Per-track live-edge estimation (large skew, deadline with counterpart
+    /// unseen, or epoch discontinuity before the decision).
+    LiveEdge,
+}
+
 /// Shared across both track tasks: the wall-clock anchor (set once on the first
 /// frame from ANY track), the small-skew anchor offset (the offset of that same
 /// first frame, subtracted by both tracks so their relative A/V offset is
-/// preserved), and the per-track first offsets used to measure A/V skew.
+/// preserved), the per-track first offsets used to measure A/V skew, and the
+/// sync mode — decided once by the first track (or discontinuity) to resolve it
+/// and followed by both, so the tracks can never normalize against different
+/// constants.
 #[derive(Clone)]
 pub(super) struct EpochShared {
     anchor: Arc<OnceLock<Instant>>,
     anchor_offset: Arc<OnceLock<EpochOffset>>,
     first_offset_audio: Arc<OnceLock<EpochOffset>>,
     first_offset_video: Arc<OnceLock<EpochOffset>>,
+    mode: Arc<OnceLock<SyncMode>>,
 }
 
 impl EpochShared {
@@ -117,6 +132,7 @@ impl EpochShared {
             anchor_offset: Arc::new(OnceLock::new()),
             first_offset_audio: Arc::new(OnceLock::new()),
             first_offset_video: Arc::new(OnceLock::new()),
+            mode: Arc::new(OnceLock::new()),
         }
     }
 
@@ -151,27 +167,33 @@ impl EpochShared {
     fn set_anchor_offset(&self, offset: EpochOffset) {
         _ = self.anchor_offset.set(offset);
     }
-}
 
-/// Outcome of the first-epoch skew branch, disambiguating "large skew confirmed"
-/// (`LiveEdge`) from "counterpart not seen yet" (`Pending`).
-enum SkewDecision {
-    /// Anchor both tracks to the shared first timestamp (single track or small skew).
-    Anchor(EpochOffset),
-    /// Skew exceeds [`AV_SKEW_MAX`]: lock this track at its own live edge.
-    LiveEdge,
-    /// Counterpart's first frame not observed yet; skew not measurable.
-    Pending,
+    /// Commit `mode` as the stream's sync mode, or adopt the mode already
+    /// decided by the other track / a discontinuity (set-once).
+    fn decide_mode(&self, mode: SyncMode) -> SyncMode {
+        *self.mode.get_or_init(|| mode)
+    }
+
+    /// The decided sync mode, if any track (or a discontinuity) resolved it.
+    fn mode(&self) -> Option<SyncMode> {
+        self.mode.get().copied()
+    }
 }
 
 /// Per-track, loop-local. Normalizes the track's PTS epoch to the shared anchor.
 ///
-/// In the common single-epoch case (single track, or A/V skew <= [`AV_SKEW_MAX`])
-/// it locks immediately to the first timestamp received on either track — no
-/// warmup, relative A/V offset preserved by construction. Only when the skew
-/// exceeds [`AV_SKEW_MAX`] (or after a mid-stream discontinuity `reset`) does it
-/// fall back to live-edge estimation: the running max of `raw − elapsed`, locked
-/// once the max plateaus (startup burst drained) or a fallback deadline fires.
+/// Both tracks share a single [`SyncMode`] decision, so they always normalize
+/// against constants derived the same way. The stream anchors — locking
+/// immediately to the first timestamp received on either track, no warmup,
+/// relative A/V offset preserved by construction — only when a single-epoch
+/// first-frame pair is verified in time: a single-track stream, or both first
+/// frames observed within [`AV_SKEW_MAX`] of each other. Everything else
+/// (skew above [`AV_SKEW_MAX`], the warmup deadline firing before the
+/// counterpart's first frame arrives, or an epoch discontinuity proving the
+/// publisher is not single-epoch) puts the whole stream on per-track live-edge
+/// estimation, as does any epoch after a mid-stream discontinuity `reset`.
+/// Live-edge estimation takes the running max of `raw − elapsed` and locks once
+/// the max plateaus (startup burst drained) or a fallback deadline fires.
 /// Frames are held until lock (~ms of real wall-clock, just the burst window) so
 /// the locked constant applies from the first *emitted* frame and output is
 /// monotonic by construction.
@@ -201,7 +223,6 @@ pub(super) struct TimestampAligner {
     plateau_frames: u32,
     /// True until the first lock; `reset()` leaves it `false`.
     first_epoch: bool,
-    skew_decided: bool,
 }
 
 impl TimestampAligner {
@@ -216,7 +237,6 @@ impl TimestampAligner {
             held: Vec::new(),
             locked_offset: None,
             first_epoch: true,
-            skew_decided: false,
             previous: None,
         }
     }
@@ -251,6 +271,10 @@ impl TimestampAligner {
         let offset = EpochOffset::new(raw, elapsed);
         if is_epoch_discontinuity(keyframe, raw, offset, self.previous) {
             debug!(?raw, "MoQ epoch discontinuity detected, resetting aligner.");
+            // A discontinuity proves the publisher is not single-epoch, so a
+            // counterpart that has not decided yet must never anchor against the
+            // stale first offsets. No-op if the mode is already decided.
+            _ = self.shared.decide_mode(SyncMode::LiveEdge);
             self.reset();
         }
         self.previous = Some((raw, offset));
@@ -295,34 +319,31 @@ impl TimestampAligner {
 
         let started = *self.epoch_start_elapsed.get_or_insert(elapsed);
 
-        // Anchor to the shared first timestamp unless the A/V skew is confirmed to exceed AV_SKEW_MAX.
-        // Decision is made only once on the first frame of the first epoch.
-        if self.first_epoch && !self.skew_decided {
-            match self.skew_decision() {
-                SkewDecision::Anchor(anchor) => {
-                    self.skew_decided = true;
-                    self.lock_and_flush(anchor)
+        // The shared sync mode governs the first epoch only; every later epoch
+        // (post-reset) is per-track live-edge.
+        if self.first_epoch {
+            match self.resolve_mode(elapsed, started) {
+                Some(SyncMode::Anchor) => {
+                    let anchor = self
+                        .shared
+                        .anchor_offset()
+                        .expect("anchor offset set on the first frame");
+                    return self.lock_and_flush(anchor);
                 }
-                SkewDecision::LiveEdge => {
-                    self.skew_decided = true;
-                    match self.live_edge_settled(elapsed, started) {
-                        true => self.lock_and_flush(max_offset),
-                        false => Vec::new(),
-                    }
-                }
-                SkewDecision::Pending if self.warmup_deadline_passed(elapsed, started) => {
-                    // Counterpart's first frame not seen yet: keep buffering, but
-                    // still honor the warmup deadline as a live-edge fallback.
-                    self.skew_decided = true;
-                    self.lock_and_flush(max_offset)
-                }
-                _ => Vec::new(),
+                // Fall through to live-edge estimation below. The deadline path
+                // needs no special case: it decides `LiveEdge`, and
+                // `live_edge_settled` fires on the same frame because the
+                // deadline has passed.
+                Some(SyncMode::LiveEdge) => (),
+                // Mode unresolved: hold the frame until the counterpart's first
+                // frame arrives or the deadline fires.
+                None => return Vec::new(),
             }
-        } else if self.live_edge_settled(elapsed, started) {
-            // After the first epoch (large-skew fallback or post-reset): live-edge lock.
-            self.lock_and_flush(max_offset)
-        } else {
-            Vec::new()
+        }
+
+        match self.live_edge_settled(elapsed, started) {
+            true => self.lock_and_flush(max_offset),
+            false => Vec::new(),
         }
     }
 
@@ -350,30 +371,45 @@ impl TimestampAligner {
         }
     }
 
-    fn skew_decision(&self) -> SkewDecision {
-        let anchor = self
-            .shared
-            .anchor_offset()
-            .expect("anchor offset set on the first frame");
+    /// Resolve the stream's sync mode: follow the shared decision if there is
+    /// one, otherwise measure. `None` means still undecided (counterpart's first
+    /// frame not seen and the deadline has not fired).
+    ///
+    /// The two measuring branches always agree between the tracks — they read the
+    /// same set-once first offsets — so whichever track measures first commits the
+    /// verdict the other would have reached anyway. Only the deadline branch here
+    /// and the discontinuity setter in [`Self::on_chunk`] add information a track
+    /// cannot derive on its own, and those are exactly the cases where a track
+    /// follows a mode it did not measure.
+    fn resolve_mode(&self, elapsed: Duration, started: Duration) -> Option<SyncMode> {
+        if let Some(mode) = self.shared.mode() {
+            return Some(mode);
+        }
 
-        // Single track: no counterpart => trivially small skew.
+        // Single track: no counterpart => trivially single-epoch.
         if self.single_track_stream {
-            return SkewDecision::Anchor(anchor);
+            return Some(self.shared.decide_mode(SyncMode::Anchor));
         }
 
         let Some(other_first) = self.shared.first_offset(self.kind.other()) else {
-            return SkewDecision::Pending;
+            // Counterpart's first frame not seen yet, so the skew is not
+            // measurable. Hold out for it until the warmup deadline, then give up
+            // on verifying a single-epoch pair and put the stream on live-edge.
+            return match self.warmup_deadline_passed(elapsed, started) {
+                true => Some(self.shared.decide_mode(SyncMode::LiveEdge)),
+                false => None,
+            };
         };
         let own_first = self
             .shared
             .first_offset(self.kind)
             .expect("own first offset published on the first frame");
 
-        if own_first.abs_diff(other_first) <= AV_SKEW_MAX {
-            SkewDecision::Anchor(anchor)
-        } else {
-            SkewDecision::LiveEdge
-        }
+        let measured = match own_first.abs_diff(other_first) <= AV_SKEW_MAX {
+            true => SyncMode::Anchor,
+            false => SyncMode::LiveEdge,
+        };
+        Some(self.shared.decide_mode(measured))
     }
 
     fn live_edge_settled(&self, elapsed: Duration, started: Duration) -> bool {
