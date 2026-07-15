@@ -374,22 +374,11 @@ impl TimestampAligner {
         }
     }
 
-    /// Resolve the stream's sync mode: follow the shared decision if there is
-    /// one, otherwise measure. `None` means still undecided (counterpart's first
-    /// frame not seen and the deadline has not fired).
-    ///
-    /// The two measuring branches always agree between the tracks — they read the
-    /// same set-once first offsets — so whichever track measures first commits the
-    /// verdict the other would have reached anyway. Only the deadline branch here
-    /// and the discontinuity setter in [`Self::on_chunk`] add information a track
-    /// cannot derive on its own, and those are exactly the cases where a track
-    /// follows a mode it did not measure.
     fn resolve_mode(&self, elapsed: Duration, started: Duration) -> Option<SyncMode> {
         if let Some(mode) = self.shared.mode() {
             return Some(mode);
         }
 
-        // Single track: no counterpart => trivially single-epoch.
         if self.single_track_stream {
             return Some(self.shared.decide_mode(SyncMode::Anchor));
         }
