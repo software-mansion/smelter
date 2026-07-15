@@ -122,6 +122,9 @@ pub(super) struct EpochShared {
     anchor_offset: Arc<OnceLock<EpochOffset>>,
     first_offset_audio: Arc<OnceLock<EpochOffset>>,
     first_offset_video: Arc<OnceLock<EpochOffset>>,
+
+    /// Used for handling a case where one track arrives late and uses anchor mode when the first
+    /// track already decided live-edge. Relevant only at first epoch, no-op after reset.
     mode: Arc<OnceLock<SyncMode>>,
 }
 
@@ -334,7 +337,7 @@ impl TimestampAligner {
                 // needs no special case: it decides `LiveEdge`, and
                 // `live_edge_settled` fires on the same frame because the
                 // deadline has passed.
-                Some(SyncMode::LiveEdge) => (),
+                Some(SyncMode::LiveEdge) => {}
                 // Mode unresolved: hold the frame until the counterpart's first
                 // frame arrives or the deadline fires.
                 None => return Vec::new(),
