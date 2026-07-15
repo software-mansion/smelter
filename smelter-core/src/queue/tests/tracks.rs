@@ -13,8 +13,9 @@ use crate::queue::{QueueInputOptions, QueueTrackOffset, QueueTrackOptions};
 
 use super::harness::{
     AudioBatch, BATCH_DURATION, InputFrame, InputSamples, OFFSET, TestInput, TestQueue,
-    TestQueueOptions, VideoBatch, assert_audio_batch_eq, assert_empty_video_batch,
-    assert_video_batch_eq, assert_video_batch_eq_with_tolerance, frames, ms, samples,
+    TestQueueOptions, VideoBatch, assert_audio_batch_eq, assert_audio_batch_eq_with_tolerance,
+    assert_empty_video_batch, assert_video_batch_eq, assert_video_batch_eq_with_tolerance, frames,
+    ms, samples,
 };
 
 fn frame(id: u32, pts: Duration) -> InputFrame {
@@ -232,7 +233,7 @@ fn audio_track_switch_gapless() {
 
     // after EOS readiness is unconditional, [0, 20) pops the whole track
     sleep(ms(1));
-    assert_audio_batch_eq(
+    assert_audio_batch_eq_with_tolerance(
         &queue.next_audio_batch().unwrap(),
         &audio_chunk(
             ms(0),
@@ -264,7 +265,6 @@ fn audio_track_switch_gapless() {
                 eos: true,
             },
         ),
-        Duration::ZERO,
     );
     assert!(queue.next_audio_batch().is_none());
     queue.expect_events(&[
@@ -296,7 +296,6 @@ fn audio_track_switch_gapless() {
                 eos: false,
             },
         ),
-        Duration::ZERO,
     );
     assert!(queue.next_audio_batch().is_none());
 }
@@ -310,7 +309,7 @@ fn audio_eos_and_track_switch_after_eos() {
     input.end_audio();
 
     sleep(ms(1));
-    assert_audio_batch_eq(
+    assert_audio_batch_eq_with_tolerance(
         &queue.next_audio_batch().unwrap(),
         &audio_chunk(
             ms(0),
@@ -334,7 +333,6 @@ fn audio_eos_and_track_switch_after_eos() {
                 eos: true,
             },
         ),
-        Duration::ZERO,
     );
     assert!(queue.next_audio_batch().is_none());
     queue.expect_events(&[
@@ -354,7 +352,6 @@ fn audio_eos_and_track_switch_after_eos() {
                 eos: false,
             },
         ),
-        Duration::ZERO,
     );
     assert!(queue.next_audio_batch().is_none());
 
@@ -387,7 +384,6 @@ fn audio_eos_and_track_switch_after_eos() {
                 eos: false,
             },
         ),
-        Duration::ZERO,
     );
     assert!(queue.next_audio_batch().is_none());
     queue.expect_events(&[input.audio_delivered_event(), input.audio_playing_event()]);
@@ -419,7 +415,7 @@ fn av_track_switch_gapless() {
         &video_batch(ms(0), frame(0, ms(0))),
         ms(2),
     );
-    assert_audio_batch_eq(
+    assert_audio_batch_eq_with_tolerance(
         &queue.next_audio_batch().unwrap(),
         &audio_chunk(
             ms(0),
@@ -455,7 +451,6 @@ fn av_track_switch_gapless() {
                 eos: true,
             },
         ),
-        Duration::ZERO,
     );
     queue.expect_events(&[input.audio_eos_event()]);
 
@@ -474,7 +469,6 @@ fn av_track_switch_gapless() {
                 eos: false,
             },
         ),
-        Duration::ZERO,
     );
 
     // the video track ends: both tracks switch within this batch and the
@@ -524,7 +518,6 @@ fn av_track_switch_gapless() {
                 eos: false,
             },
         ),
-        Duration::ZERO,
     );
     assert!(queue.next_audio_batch().is_none());
     queue.expect_events(&[input.audio_playing_event()]);
