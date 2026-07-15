@@ -1227,11 +1227,7 @@ mod optional_input {
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(60),
-                vec![
-                    (ms(60), ms(75)),
-                    (ms(75), ms(90)),
-                    (ms(90), ms(105)),
-                ],
+                vec![(ms(60), ms(75)), (ms(75), ms(90)), (ms(90), ms(105))],
             ),
         );
         assert!(queue.next_audio_batch().is_none());
@@ -1245,11 +1241,7 @@ mod optional_input {
             &queue.next_audio_batch().unwrap(),
             &chunk(
                 ms(80),
-                vec![
-                    (ms(105), ms(120)),
-                    (ms(120), ms(135)),
-                    (ms(135), ms(150)),
-                ],
+                vec![(ms(105), ms(120)), (ms(120), ms(135)), (ms(135), ms(150))],
             ),
         );
         assert!(queue.next_audio_batch().is_none());
