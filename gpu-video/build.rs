@@ -27,7 +27,7 @@ fn main() {
     feature = "transcoder"
 ))]
 fn build_transcoding_shader() {
-    println!("cargo:rerun-if-changed=src/vulkan_transcoder/shader.wgsl");
+    println!("cargo:rerun-if-changed=src/backends/vulkan/vulkan_transcoder/shader.wgsl");
 
     let mut front = naga::front::wgsl::Frontend::new();
     let parsed = front
