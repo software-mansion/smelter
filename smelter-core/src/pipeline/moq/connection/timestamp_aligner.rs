@@ -398,10 +398,11 @@ impl TimestampAligner {
             // Counterpart's first frame not seen yet, so the skew is not
             // measurable. Hold out for it until the warmup deadline, then give up
             // on verifying a single-epoch pair and put the stream on live-edge.
-            return match self.warmup_deadline_passed(elapsed, started) {
+            let decided_mode = match self.warmup_deadline_passed(elapsed, started) {
                 true => Some(self.shared.decide_mode(SyncMode::LiveEdge)),
                 false => None,
             };
+            return decided_mode;
         };
         let own_first = self
             .shared
