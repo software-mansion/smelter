@@ -238,14 +238,15 @@ impl VTDecoder {
             })?
         };
 
-        if !range_changed
-            && let Some(session) = &self.session
-            && unsafe {
+        let can_reuse_session = !range_changed
+            && self.session.as_ref().is_some_and(|session| unsafe {
                 session
                     .session
                     .can_accept_format_description(&format_description)
-            }
-        {
+            });
+
+        if can_reuse_session {
+            self.session.as_mut().unwrap().format_description = format_description;
             self.needs_session_update = false;
             return Ok(());
         }
