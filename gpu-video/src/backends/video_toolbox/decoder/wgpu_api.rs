@@ -84,7 +84,6 @@ impl VTDecoder {
         let uv_width = cv::CVPixelBufferGetWidthOfPlane(buffer, 1);
         let uv_height = cv::CVPixelBufferGetHeightOfPlane(buffer, 1);
 
-        // TODO: this should not happen every frame
         cache.0.flush(0);
         let texture_y = unsafe {
             allocate_retained(|ptr| {
@@ -127,8 +126,7 @@ impl VTDecoder {
 
         unsafe {
             let texture = wgpu::hal::metal::Device::texture_from_raw_planar(
-                mtl_texture_y,
-                mtl_texture_uv,
+                [mtl_texture_y, mtl_texture_uv],
                 wgpu::TextureFormat::NV12,
                 mtl::MTLTextureType::Type2D,
                 1,

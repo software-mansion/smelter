@@ -139,6 +139,14 @@ impl CoreVideoDeviceBackend for VTDevice {
         Err(VideoEncoderError::EncoderUnsupported)
     }
 
+    #[cfg(feature = "transcoder")]
+    fn create_transcoder(
+        self: Arc<Self>,
+        _parameters: crate::parameters::TranscoderParameters,
+    ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
+        Err(crate::transcoder::VideoTranscoderError::TranscoderUnsupported)
+    }
+
     fn decode_capabilities(&self) -> crate::capabilities::DecodeCapabilities {
         caps::query_decode_capabilities()
     }
