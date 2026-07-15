@@ -37,8 +37,7 @@ mod timestamp_aligner;
 
 /// Buffer added to a new track's PTS offset during queue initialization. This gives frames
 /// time to arrive and be decoded before their scheduled presentation, absorbing network jitter and
-/// decode latency at the cost of a fixed delay. The 2200ms value is set based on Twitch
-/// broadcasting guidelines.
+/// decode latency at the cost of a fixed delay.
 const MOQ_BUFFER: Duration = Duration::from_millis(2200);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
