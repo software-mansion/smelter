@@ -27,11 +27,15 @@ pub(crate) enum DecoderInstruction {
 
     Sps {
         sps: SeqParameterSet,
+
+        #[cfg_attr(vulkan, expect(unused))]
         raw_bytes: Box<[u8]>,
     },
 
     Pps {
         pps: PicParameterSet,
+
+        #[cfg_attr(vulkan, expect(unused))]
         raw_bytes: Box<[u8]>,
     },
 }

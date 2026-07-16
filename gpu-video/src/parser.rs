@@ -42,6 +42,7 @@ pub mod h264 {
     }
 
     impl H264Parser {
+        #[cfg_attr(all(vulkan, not(feature = "expose-parsers")), expect(unused))]
         pub fn new_avcc_output() -> Self {
             Self {
                 convert_to_avcc: true,
