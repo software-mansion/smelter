@@ -14,9 +14,6 @@ use crate::prelude::*;
 /// values from. Constrained baseline 3.1 is the safest thing to advertise.
 const DEFAULT_H264_PROFILE: (u8, u8, u8) = (0x42, 0x00, 0x1f);
 
-/// CMAF carries codec configuration in the init segment's sample entry, and we
-/// only know how to build `avc1` and `Opus` entries. VP8/VP9 have no init
-/// segment we can synthesize, so they need Legacy or LOC.
 pub(super) fn validate(
     video: &Option<VideoEncoderOptions>,
     container: MoqOutputContainer,

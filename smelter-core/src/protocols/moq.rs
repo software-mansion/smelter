@@ -44,7 +44,7 @@ pub enum MoqOutputContainer {
     /// published in the catalog. H264-only on the video side.
     #[default]
     Cmaf,
-    /// Low Overhead Container (draft-ietf-moq-loc).
+    /// Low Overhead Container.
     Loc,
 }
 
