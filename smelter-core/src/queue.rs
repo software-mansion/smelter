@@ -212,10 +212,7 @@ impl From<QueueAudioOutput> for InputSamplesSet {
             samples: value
                 .samples
                 .into_iter()
-                .filter_map(|(key, value)| match value.is_eos {
-                    false => Some((key, value.samples)),
-                    true => None,
-                })
+                .map(|(key, value)| (key, value.samples))
                 .collect(),
             start_pts: value.start_pts,
             end_pts: value.end_pts,

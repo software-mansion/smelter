@@ -115,16 +115,24 @@ impl VideoQueueInput {
         };
     }
 
-    pub(super) fn paused_event(&self, pts: Duration) -> Option<QueueVideoFrame> {
-        let offset = self.track_offset.get()?;
+    pub(super) fn paused_event(&self, pts: Duration) -> QueueVideoFrame {
+        let Some(offset) = self.track_offset.get() else {
+            return QueueVideoFrame {
+                frame: None,
+                is_eos: false,
+            };
+        };
         if let (Some(paused_pts), Some(mut frame)) = (self.paused_pts, self.paused_frame.clone()) {
             frame.pts += offset + pts.saturating_sub(paused_pts);
-            return Some(QueueVideoFrame {
+            return QueueVideoFrame {
                 frame: Some(frame),
                 is_eos: false,
-            });
+            };
         }
-        None
+        QueueVideoFrame {
+            frame: None,
+            is_eos: false,
+        }
     }
 
     /// Return frame for PTS and drop all the older frames. This function does not check
@@ -133,37 +141,38 @@ impl VideoQueueInput {
         &mut self,
         pts: Duration,
         queue_start_pts: Duration,
-    ) -> Option<QueueVideoFrame> {
+    ) -> QueueVideoFrame {
         if self.paused_pts.is_some() {
             return self.paused_event(pts);
         }
 
-        let offset = self.resolve_offset(pts, queue_start_pts)?;
+        let Some(offset) = self.resolve_offset(pts, queue_start_pts) else {
+            return QueueVideoFrame {
+                frame: None,
+                is_eos: false,
+            };
+        };
 
-        let input_pts = pts.checked_sub(offset)?;
+        let Some(input_pts) = pts.checked_sub(offset) else {
+            return QueueVideoFrame {
+                frame: None,
+                is_eos: false,
+            };
+        };
         trace!(queue_pts=?pts, ?input_pts, "Try get frame");
 
-        match self.receiver.get_for_pts(input_pts) {
-            Some(mut frame) => {
-                self.event_playing_guard.emit();
-                frame.pts += offset;
-                Some(QueueVideoFrame {
-                    frame: Some(frame),
-                    is_eos: false,
-                })
-            }
-            None => {
-                if self.is_done() && !self.event_eos_guard.emited() {
-                    self.event_eos_guard.emit();
-                    Some(QueueVideoFrame {
-                        frame: None,
-                        is_eos: true,
-                    })
-                } else {
-                    None
-                }
-            }
+        let frame = self.receiver.get_for_pts(input_pts).map(|mut frame| {
+            self.event_playing_guard.emit();
+            frame.pts += offset;
+            frame
+        });
+
+        let is_eos = self.is_done() && !self.event_eos_guard.emited();
+        if is_eos {
+            self.event_eos_guard.emit();
         }
+
+        QueueVideoFrame { frame, is_eos }
     }
 
     pub(super) fn is_ready_for_pts(&mut self, pts: Duration, queue_start_pts: Duration) -> bool {

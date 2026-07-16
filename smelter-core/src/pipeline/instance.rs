@@ -24,6 +24,7 @@ use smelter_render::{
 use crate::{
     audio_mixer::AudioMixer,
     event::{Event, EventEmitter},
+    graphics_context::{GraphicsContext, GraphicsContextOptions},
     pipeline::{
         MoqPipelineState, RtmpPipelineState,
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
@@ -38,10 +39,8 @@ use crate::{
     queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
     stats::StatsMonitor,
 };
-use crate::{
-    graphics_context::{GraphicsContext, GraphicsContextOptions},
-    prelude::*,
-};
+
+use crate::prelude::*;
 
 pub struct Pipeline {
     pub(super) inputs: HashMap<InputId, PipelineInput>,

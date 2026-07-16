@@ -143,18 +143,12 @@ impl AudioQueueInput {
             self.event_playing_guard.emit();
         }
 
-        if samples.is_empty() && self.is_done() && !self.event_eos_guard.emited() {
+        let is_eos = self.is_done() && !self.event_eos_guard.emited();
+        if is_eos {
             self.event_eos_guard.emit();
-            return QueueAudioSamples {
-                samples: vec![],
-                is_eos: true,
-            };
         }
 
-        QueueAudioSamples {
-            samples,
-            is_eos: false,
-        }
+        QueueAudioSamples { samples, is_eos }
     }
 
     pub(super) fn is_ready_for_pts(
