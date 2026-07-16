@@ -144,10 +144,12 @@ jobs:
                   cargo nextest run --workspace --profile ci -E 'not test(/^pipeline_tests::/)'
 
             - name: 🧪 Run pipeline tests
+              if: ${{ !cancelled() }}
               run: |
                   cargo nextest run --workspace --profile ci -E 'test(/^pipeline_tests::/) and not test(/_flaky$/)'
 
             - name: 🧪 Run flaky pipeline tests
+              if: ${{ !cancelled() }}
               run: |
                   cargo nextest run --workspace --profile ci -E 'test(/^pipeline_tests::/) and test(/_flaky$/)'
 
