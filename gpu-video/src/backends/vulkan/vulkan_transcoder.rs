@@ -207,7 +207,7 @@ impl VulkanTranscoder {
         let mut encoded_frame_sets = Vec::new();
 
         for instruction in instructions {
-            let Some(mut frame) = self.decoder.decode(&instruction)? else {
+            let Some(mut frame) = self.decoder.decode(instruction)? else {
                 continue;
             };
 
