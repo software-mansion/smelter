@@ -8,19 +8,12 @@ use crate::{
     Ref,
     event::{Event, EventEmitter},
     queue::{
-        QueueContext, queue_input::TrackOffset, side_channel::AudioSideChannel,
+        QueueAudioSamples, QueueContext, queue_input::TrackOffset, side_channel::AudioSideChannel,
         utils::EmitOnceGuard,
     },
 };
 
 use crate::prelude::*;
-
-pub(super) struct AudioEvent {
-    pub required: bool,
-    pub samples: Vec<InputAudioSamples>,
-    /// Track ended.
-    pub is_eos: bool,
-}
 
 const MIXER_STRETCH_BUFFER: Duration = Duration::from_millis(80);
 
@@ -114,18 +107,16 @@ impl AudioQueueInput {
         &mut self,
         pts_range: (Duration, Duration),
         queue_start_pts: Duration,
-    ) -> AudioEvent {
+    ) -> QueueAudioSamples {
         if self.paused {
-            return AudioEvent {
-                required: false,
+            return QueueAudioSamples {
                 samples: vec![],
                 is_eos: false,
             };
         }
 
         let Some(offset) = self.resolve_offset(pts_range.0, queue_start_pts) else {
-            return AudioEvent {
-                required: self.required,
+            return QueueAudioSamples {
                 samples: vec![],
                 is_eos: false,
             };
@@ -134,8 +125,7 @@ impl AudioQueueInput {
         if let Some(offset_from_start) = self.offset_from_start
             && pts_range.1 < queue_start_pts + offset_from_start
         {
-            return AudioEvent {
-                required: self.required,
+            return QueueAudioSamples {
                 samples: vec![],
                 is_eos: false,
             };
@@ -155,15 +145,13 @@ impl AudioQueueInput {
 
         if samples.is_empty() && self.is_done() && !self.event_eos_guard.emited() {
             self.event_eos_guard.emit();
-            return AudioEvent {
-                required: true,
+            return QueueAudioSamples {
                 samples: vec![],
                 is_eos: true,
             };
         }
 
-        AudioEvent {
-            required: self.required,
+        QueueAudioSamples {
             samples,
             is_eos: false,
         }

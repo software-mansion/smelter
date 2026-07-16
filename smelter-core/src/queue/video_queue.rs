@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::queue::{QueueVideoFrame, QueueVideoOutput};
+use crate::queue::QueueVideoOutput;
 
 use crate::prelude::*;
 
@@ -46,16 +46,11 @@ impl VideoQueue {
             .inputs
             .iter()
             .filter_map(|(input_id, weak)| {
-                let frame_event =
-                    weak.video(|input| input.get_frame(buffer_pts, queue_start_pts))??;
-                required = required || frame_event.required;
-                Some((
-                    input_id.clone(),
-                    QueueVideoFrame {
-                        frame: frame_event.frame,
-                        is_eos: frame_event.is_eos,
-                    },
-                ))
+                weak.video(|input| {
+                    let frame_event = input.get_frame(buffer_pts, queue_start_pts)?;
+                    required = required || input.required() || frame_event.is_eos;
+                    Some((input_id.clone(), frame_event))
+                })?
             })
             .collect();
 

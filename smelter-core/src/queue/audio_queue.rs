@@ -6,7 +6,7 @@ use std::{
 use smelter_render::InputId;
 use tracing::debug;
 
-use crate::queue::{QueueAudioOutput, QueueAudioSamples, WeakQueueInput};
+use crate::queue::{QueueAudioOutput, WeakQueueInput};
 
 pub struct AudioQueue {
     sync_point: Instant,
@@ -42,15 +42,11 @@ impl AudioQueue {
             .inputs
             .iter()
             .filter_map(|(input_id, weak)| {
-                let audio_event = weak.audio(|input| input.pop_samples(range, queue_start_pts))?;
-                required = required || audio_event.required;
-                Some((
-                    input_id.clone(),
-                    QueueAudioSamples {
-                        samples: audio_event.samples,
-                        is_eos: audio_event.is_eos,
-                    },
-                ))
+                weak.audio(|input| {
+                    let samples = input.pop_samples(range, queue_start_pts);
+                    required = required || input.required() || samples.is_eos;
+                    Some((input_id.clone(), samples))
+                })?
             })
             .collect();
 

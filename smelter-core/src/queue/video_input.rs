@@ -8,18 +8,10 @@ use crate::{
     Ref,
     event::{Event, EventEmitter},
     queue::{
-        QueueContext, queue_input::TrackOffset, side_channel::VideoSideChannel,
+        QueueContext, QueueVideoFrame, queue_input::TrackOffset, side_channel::VideoSideChannel,
         utils::EmitOnceGuard,
     },
 };
-
-#[derive(Clone)]
-pub(super) struct FrameEvent {
-    pub required: bool,
-    pub frame: Option<Frame>,
-    /// Track ended.
-    pub is_eos: bool,
-}
 
 pub(crate) struct VideoQueueInput {
     queue_ctx: QueueContext,
@@ -123,12 +115,11 @@ impl VideoQueueInput {
         };
     }
 
-    pub(super) fn paused_event(&self, pts: Duration) -> Option<FrameEvent> {
+    pub(super) fn paused_event(&self, pts: Duration) -> Option<QueueVideoFrame> {
         let offset = self.track_offset.get()?;
         if let (Some(paused_pts), Some(mut frame)) = (self.paused_pts, self.paused_frame.clone()) {
             frame.pts += offset + pts.saturating_sub(paused_pts);
-            return Some(FrameEvent {
-                required: self.required,
+            return Some(QueueVideoFrame {
                 frame: Some(frame),
                 is_eos: false,
             });
@@ -142,7 +133,7 @@ impl VideoQueueInput {
         &mut self,
         pts: Duration,
         queue_start_pts: Duration,
-    ) -> Option<FrameEvent> {
+    ) -> Option<QueueVideoFrame> {
         if self.paused_pts.is_some() {
             return self.paused_event(pts);
         }
@@ -156,8 +147,7 @@ impl VideoQueueInput {
             Some(mut frame) => {
                 self.event_playing_guard.emit();
                 frame.pts += offset;
-                Some(FrameEvent {
-                    required: self.required,
+                Some(QueueVideoFrame {
                     frame: Some(frame),
                     is_eos: false,
                 })
@@ -165,8 +155,7 @@ impl VideoQueueInput {
             None => {
                 if self.is_done() && !self.event_eos_guard.emited() {
                     self.event_eos_guard.emit();
-                    Some(FrameEvent {
-                        required: true,
+                    Some(QueueVideoFrame {
                         frame: None,
                         is_eos: true,
                     })
