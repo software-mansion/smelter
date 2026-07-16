@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     ops::DerefMut,
     sync::{Arc, Mutex, Weak},
     time::Duration,
@@ -21,6 +20,16 @@ use crate::{
 };
 
 use crate::prelude::*;
+
+/// Maximum number of tracks waiting to be started. `QueueInput::queue_new_track`
+/// blocks until there is room.
+const MAX_PENDING_TRACKS: usize = 5;
+
+struct PendingTrack {
+    video: Option<VideoQueueInput>,
+    audio: Option<AudioQueueInput>,
+    track_offset: TrackOffset,
+}
 
 pub(crate) struct QueueSender<T>(crossbeam_channel::Sender<T>);
 
@@ -55,11 +64,8 @@ pub(super) struct InnerQueueInput {
     track_offset: TrackOffset,
     pause_state: PauseState,
 
-    pending: VecDeque<(
-        Option<VideoQueueInput>,
-        Option<AudioQueueInput>,
-        TrackOffset,
-    )>,
+    pending_sender: crossbeam_channel::Sender<PendingTrack>,
+    pending_receiver: crossbeam_channel::Receiver<PendingTrack>,
     required: bool,
     video_side_channel: Option<VideoSideChannel>,
     audio_side_channel: Option<AudioSideChannel>,
@@ -77,15 +83,14 @@ impl InnerQueueInput {
 
     /// Replace current track with the next pending, do nothing if there is no pending
     fn replace_track(&mut self) {
-        let Some((video, audio, track_offset)) = self.pending.pop_front() else {
+        let Ok(pending) = self.pending_receiver.try_recv() else {
             return;
         };
-        let input_id = self.input_ref.to_string();
-        info!(input_id, "Push track to queue");
+        info!(input_id=%self.input_ref, "Push track to queue");
 
-        self.video = video;
-        self.audio = audio;
-        self.track_offset = track_offset;
+        self.video = pending.video;
+        self.audio = pending.audio;
+        self.track_offset = pending.track_offset;
         if self.pause_state.is_paused() {
             let pts = self.queue_ctx.effective_last_pts();
             if let Some(v) = self.video.as_mut() {
@@ -105,16 +110,14 @@ impl InnerQueueInput {
         }
     }
 
-    fn queue_new_track(
-        &mut self,
+    fn new_pending_track(
+        &self,
         opts: QueueTrackOptions,
     ) -> (
+        PendingTrack,
         Option<QueueSender<Frame>>,
         Option<QueueSender<InputAudioSamples>>,
     ) {
-        if !opts.video && !opts.audio {
-            return (None, None);
-        }
         let input_id = self.input_ref.to_string();
         info!(?opts, input_id, "Create new queue track");
         let (track_offset, offset_from_start) = match opts.offset {
@@ -160,9 +163,15 @@ impl InnerQueueInput {
         } else {
             (None, None)
         };
-        self.pending
-            .push_back((video_input, audio_input, track_offset));
-        (video_sender, audio_sender)
+        (
+            PendingTrack {
+                video: video_input,
+                audio: audio_input,
+                track_offset,
+            },
+            video_sender,
+            audio_sender,
+        )
     }
 
     /// Remember the start pts. On resume shift offset by the pts difference:
@@ -265,6 +274,7 @@ impl QueueInput {
         video_side_channel: Option<VideoSideChannel>,
         audio_side_channel: Option<AudioSideChannel>,
     ) -> Self {
+        let (pending_sender, pending_receiver) = crossbeam_channel::bounded(MAX_PENDING_TRACKS);
         Self(Arc::new(Mutex::new(InnerQueueInput {
             queue_ctx,
             event_emitter,
@@ -274,7 +284,8 @@ impl QueueInput {
             audio: None,
             track_offset: TrackOffset::default(),
 
-            pending: VecDeque::new(),
+            pending_sender,
+            pending_receiver,
 
             required: opts.required,
             pause_state: PauseState::new(),
@@ -284,6 +295,8 @@ impl QueueInput {
         })))
     }
 
+    /// Blocks (without holding the inner mutex) if `MAX_PENDING_TRACKS` tracks
+    /// are already pending, until some of them are dequeued.
     pub fn queue_new_track(
         &self,
         opts: QueueTrackOptions,
@@ -291,7 +304,17 @@ impl QueueInput {
         Option<QueueSender<Frame>>,
         Option<QueueSender<InputAudioSamples>>,
     ) {
-        self.0.lock().unwrap().queue_new_track(opts)
+        if !opts.video && !opts.audio {
+            return (None, None);
+        }
+        let guard = self.0.lock().unwrap();
+        let (track, video_sender, audio_sender) = guard.new_pending_track(opts);
+        let pending_sender = guard.pending_sender.clone();
+        drop(guard);
+        // receiver is owned by InnerQueueInput, so send can't fail while
+        // we hold the Arc
+        let _ = pending_sender.send(track);
+        (video_sender, audio_sender)
     }
 
     pub fn abort_old_track(&self) {

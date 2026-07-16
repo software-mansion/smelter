@@ -82,6 +82,8 @@ impl From<&PipelineOptions> for QueueOptions {
 ///   from the input side is preserved.
 /// - Multiple tracks can be queued back-to-back via `queue_new_track`; the next one starts
 ///   once the current one is done. Callers can force an early swap with `abort_old_track`.
+///   At most `MAX_PENDING_TRACKS` tracks can be pending; `queue_new_track` blocks until
+///   there is room.
 ///
 /// - Offset initialization:
 ///   - `Pts(d)`: `track_offset` is set to `d` at construction; it never changes.
