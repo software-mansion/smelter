@@ -129,6 +129,13 @@ impl BroadcastHandler {
         audio: Option<AudioTrack>,
         broadcast_ctx: BroadcastCtx,
     ) -> Self {
+        let BroadcastCtx {
+            broadcast,
+            decoders,
+            should_close,
+            endpoint_kind,
+        } = broadcast_ctx;
+
         // Shared across audio and video: both tracks normalize their raw PTS
         // against the same monotonic wall-clock anchor. When the measured A/V skew
         // is small, both tracks anchor to the first timestamp received on either track,
@@ -138,12 +145,6 @@ impl BroadcastHandler {
         let epoch = EpochShared::new();
 
         let single_track_stream = video.is_none() || audio.is_none();
-        let BroadcastCtx {
-            broadcast,
-            decoders,
-            should_close,
-            endpoint_kind,
-        } = broadcast_ctx;
 
         let stats_sender =
             MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone(), endpoint_kind);
