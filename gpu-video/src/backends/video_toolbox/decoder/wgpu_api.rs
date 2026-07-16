@@ -17,7 +17,7 @@ impl WgpuVideoDecoderBackend for VTDecoder {
     fn decode_to_wgpu_textures(
         &mut self,
         wgpu_device: &wgpu::Device,
-        decoder_instructions: &[crate::parser::decoder_instructions::DecoderInstruction],
+        decoder_instructions: Vec<crate::parser::decoder_instructions::DecoderInstruction>,
     ) -> Result<Vec<crate::frame_sorter::DecodeResult<wgpu::Texture>>, crate::VideoDecoderError>
     {
         let buffers = self.decode_to_cvbuffers(decoder_instructions)?;

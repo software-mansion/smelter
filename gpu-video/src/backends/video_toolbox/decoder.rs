@@ -42,7 +42,7 @@ pub(crate) struct VTDecoder {
 impl VideoDecoderBackend for VTDecoder {
     fn decode_to_bytes(
         &mut self,
-        decoder_instructions: &[DecoderInstruction],
+        decoder_instructions: Vec<DecoderInstruction>,
     ) -> Result<Vec<DecodeResult<RawFrameData>>, crate::VideoDecoderError> {
         let buffers = self.decode_to_cvbuffers(decoder_instructions)?;
         Ok(self.download_outputs(buffers)?)
@@ -80,25 +80,25 @@ impl VTDecoder {
 
     fn decode_to_cvbuffers(
         &mut self,
-        instructions: &[DecoderInstruction],
+        instructions: Vec<DecoderInstruction>,
     ) -> Result<Vec<DecodeResult<cf::CFRetained<cv::CVBuffer>>>, VTDecoderError> {
         let mut results = Vec::new();
 
         for instruction in instructions {
             match instruction {
                 DecoderInstruction::Sps { sps, raw_bytes } => self.process_sps(Sps {
-                    raw: raw_bytes.clone(),
-                    sps: sps.clone(),
+                    raw: raw_bytes,
+                    sps,
                 })?,
                 DecoderInstruction::Pps { pps, raw_bytes } => self.process_pps(Pps {
-                    raw: raw_bytes.clone(),
-                    pps: pps.clone(),
+                    raw: raw_bytes,
+                    pps,
                 })?,
                 DecoderInstruction::Decode { decode_info, .. } => {
-                    results.extend(self.do_decode(decode_info.clone(), false)?)
+                    results.extend(self.do_decode(decode_info, false)?)
                 }
                 DecoderInstruction::Idr { decode_info, .. } => {
-                    results.extend(self.do_decode(decode_info.clone(), true)?)
+                    results.extend(self.do_decode(decode_info, true)?)
                 }
                 DecoderInstruction::Drop { .. } => {}
             }
