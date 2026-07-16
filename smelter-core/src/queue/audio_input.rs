@@ -5,7 +5,7 @@ use smelter_render::InputId;
 use tracing::{debug, trace, warn};
 
 use crate::{
-    PipelineEvent, Ref,
+    Ref,
     event::{Event, EventEmitter},
     queue::{
         QueueContext, queue_input::TrackOffset, side_channel::AudioSideChannel,
@@ -17,7 +17,9 @@ use crate::prelude::*;
 
 pub(super) struct AudioEvent {
     pub required: bool,
-    pub event: PipelineEvent<Vec<InputAudioSamples>>,
+    pub samples: Vec<InputAudioSamples>,
+    /// Track ended.
+    pub is_eos: bool,
 }
 
 const MIXER_STRETCH_BUFFER: Duration = Duration::from_millis(80);
@@ -116,14 +118,16 @@ impl AudioQueueInput {
         if self.paused {
             return AudioEvent {
                 required: false,
-                event: PipelineEvent::Data(vec![]),
+                samples: vec![],
+                is_eos: false,
             };
         }
 
         let Some(offset) = self.resolve_offset(pts_range.0, queue_start_pts) else {
             return AudioEvent {
                 required: self.required,
-                event: PipelineEvent::Data(vec![]),
+                samples: vec![],
+                is_eos: false,
             };
         };
 
@@ -132,7 +136,8 @@ impl AudioQueueInput {
         {
             return AudioEvent {
                 required: self.required,
-                event: PipelineEvent::Data(vec![]),
+                samples: vec![],
+                is_eos: false,
             };
         }
 
@@ -152,13 +157,15 @@ impl AudioQueueInput {
             self.event_eos_guard.emit();
             return AudioEvent {
                 required: true,
-                event: PipelineEvent::EOS,
+                samples: vec![],
+                is_eos: true,
             };
         }
 
         AudioEvent {
             required: self.required,
-            event: PipelineEvent::Data(samples),
+            samples,
+            is_eos: false,
         }
     }
 

@@ -5,7 +5,7 @@ use smelter_render::{Frame, InputId};
 use tracing::{debug, trace, warn};
 
 use crate::{
-    PipelineEvent, Ref,
+    Ref,
     event::{Event, EventEmitter},
     queue::{
         QueueContext, queue_input::TrackOffset, side_channel::VideoSideChannel,
@@ -16,7 +16,9 @@ use crate::{
 #[derive(Clone)]
 pub(super) struct FrameEvent {
     pub required: bool,
-    pub event: PipelineEvent<Frame>,
+    pub frame: Option<Frame>,
+    /// Track ended.
+    pub is_eos: bool,
 }
 
 pub(crate) struct VideoQueueInput {
@@ -127,7 +129,8 @@ impl VideoQueueInput {
             frame.pts += offset + pts.saturating_sub(paused_pts);
             return Some(FrameEvent {
                 required: self.required,
-                event: PipelineEvent::Data(frame),
+                frame: Some(frame),
+                is_eos: false,
             });
         }
         None
@@ -155,7 +158,8 @@ impl VideoQueueInput {
                 frame.pts += offset;
                 Some(FrameEvent {
                     required: self.required,
-                    event: PipelineEvent::Data(frame),
+                    frame: Some(frame),
+                    is_eos: false,
                 })
             }
             None => {
@@ -163,7 +167,8 @@ impl VideoQueueInput {
                     self.event_eos_guard.emit();
                     Some(FrameEvent {
                         required: true,
-                        event: PipelineEvent::EOS,
+                        frame: None,
+                        is_eos: true,
                     })
                 } else {
                     None

@@ -383,12 +383,16 @@ impl TestQueue {
                 .frames
                 .into_iter()
                 .map(|(id, event)| {
-                    let event = match event {
-                        PipelineEvent::Data(frame) => InputFrame::Frame {
+                    let event = match (event.frame, event.is_eos) {
+                        (Some(frame), false) => InputFrame::Frame {
                             id: test_frame_id(&frame),
                             pts: frame.pts.saturating_sub(start_pts),
                         },
-                        PipelineEvent::EOS => InputFrame::Eos,
+                        (None, true) => InputFrame::Eos,
+                        (frame, is_eos) => panic!(
+                            "unexpected batch entry (has_frame: {}, is_eos: {is_eos})",
+                            frame.is_some()
+                        ),
                     };
                     (id, event)
                 })
@@ -406,9 +410,10 @@ impl TestQueue {
                 .samples
                 .into_iter()
                 .map(|(id, event)| {
-                    let event = match event {
-                        PipelineEvent::Data(batches) => InputSamples::Batches(
-                            batches
+                    let event = match event.is_eos {
+                        false => InputSamples::Batches(
+                            event
+                                .samples
                                 .iter()
                                 .map(|batch| {
                                     (
@@ -418,7 +423,10 @@ impl TestQueue {
                                 })
                                 .collect(),
                         ),
-                        PipelineEvent::EOS => InputSamples::Eos,
+                        true => {
+                            assert!(event.samples.is_empty(), "unexpected samples in EOS entry");
+                            InputSamples::Eos
+                        }
                     };
                     (id, event)
                 })
