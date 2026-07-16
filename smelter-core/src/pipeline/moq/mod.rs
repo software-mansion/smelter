@@ -8,7 +8,7 @@ pub use input::{MoqClientInput, MoqServerInput};
 pub(crate) use server::SelfSignedTlsError;
 pub(super) use server::{MoqPipelineState, MoqServer, spawn_moq_server};
 
-pub(crate) struct MoqSession {
+pub(super) struct MoqSession {
     session: Session,
     rt: Arc<tokio::runtime::Runtime>,
 }
