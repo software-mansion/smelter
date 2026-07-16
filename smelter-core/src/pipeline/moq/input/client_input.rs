@@ -65,7 +65,7 @@ impl MoqClientInput {
     ) -> Result<(MoqSession, OriginConsumer), MoqClientError> {
         let url = Url::parse(url).map_err(|err| MoqClientError::InvalidUrl(Arc::from(url), err))?;
 
-        if url.scheme() != "https" {
+        if !matches!(url.scheme(), "https" | "http") {
             return Err(MoqClientError::InvalidScheme(url.scheme().to_string()));
         }
 
