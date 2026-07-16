@@ -13,7 +13,7 @@ use crate::{
 use hang::moq_net::{Origin, OriginConsumer};
 use moq_native::ClientConfig;
 use smelter_render::error::ErrorStack;
-use tracing::{Instrument, Level, info, span, warn};
+use tracing::{Instrument, Level, Span, info, span, warn};
 use url::Url;
 
 use crate::prelude::*;
@@ -29,6 +29,13 @@ impl MoqClientInput {
         input_ref: Ref<InputId>,
         options: MoqClientInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
+        let _span = span!(
+            Level::INFO,
+            "MoQ client input",
+            input_id = input_ref.to_string()
+        )
+        .entered();
+
         ctx.stats_sender.send(StatsEvent::NewInput {
             input_ref: input_ref.clone(),
             kind: InputProtocolKind::MoqClient,
@@ -99,11 +106,6 @@ impl MoqClientInput {
     ) {
         let rt = ctx.tokio_rt.clone();
 
-        let span = span!(
-            Level::INFO,
-            "MoQ client input",
-            input_id = input_ref.to_string()
-        );
         rt.spawn(
             async move {
                 let broadcast = loop {
@@ -135,7 +137,7 @@ impl MoqClientInput {
                     );
                 }
             }
-            .instrument(span)
+            .instrument(Span::current())
         );
     }
 }
