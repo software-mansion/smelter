@@ -8,6 +8,7 @@ import type {
   RegisterWhepClientInput,
   RegisterRtmpServerInput,
   RegisterMoqServerInput,
+  RegisterMoqClientInput,
 } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
 
@@ -23,6 +24,7 @@ export type RegisterInputRequest =
   | RegisterWhepClientInputRequest
   | RegisterRtmpServerInputRequest
   | RegisterMoqServerInputRequest
+  | RegisterMoqClientInputRequest
   | RegisterV4l2InputRequest
   | RegisterDecklinkInputRequest
   | { type: 'camera' }
@@ -37,6 +39,7 @@ export type RegisterWhipServerInputRequest = Extract<Api.RegisterInput, { type: 
 export type RegisterWhepClientInputRequest = Extract<Api.RegisterInput, { type: 'whep_client' }>;
 export type RegisterRtmpServerInputRequest = Extract<Api.RegisterInput, { type: 'rtmp_server' }>;
 export type RegisterMoqServerInputRequest = Extract<Api.RegisterInput, { type: 'moq_server' }>;
+export type RegisterMoqClientInputRequest = Extract<Api.RegisterInput, { type: 'moq_client' }>;
 export type RegisterV4l2InputRequest = Extract<Api.RegisterInput, { type: 'v4l2' }>;
 export type RegisterDecklinkInputRequest = Extract<Api.RegisterInput, { type: 'decklink' }>;
 
@@ -52,6 +55,7 @@ export type RegisterInput =
   | ({ type: 'whep_client' } & RegisterWhepClientInput)
   | ({ type: 'rtmp_server' } & RegisterRtmpServerInput)
   | ({ type: 'moq_server' } & RegisterMoqServerInput)
+  | ({ type: 'moq_client' } & RegisterMoqClientInput)
   | ({ type: 'v4l2' } & RegisterV4l2InputRequest)
   | { type: 'camera' }
   | { type: 'screen_capture' }
@@ -77,6 +81,8 @@ export function intoRegisterInput(input: RegisterInput): RegisterInputRequest {
     return intoRtmpRegisterInput(input);
   } else if (input.type === 'moq_server') {
     return intoMoqRegisterInput(input);
+  } else if (input.type === 'moq_client') {
+    return intoMoqClientRegisterInput(input);
   } else if (input.type === 'v4l2') {
     return intoV4l2RegisterInput(input);
   } else if (input.type === 'camera') {
@@ -173,6 +179,17 @@ function intoMoqRegisterInput(input: Inputs.RegisterMoqServerInput): RegisterInp
   return {
     type: 'moq_server',
     auth_token: input.authToken,
+    required: input.required,
+    decoder_map: input.decoderMap,
+    side_channel: intoSideChannel(input.sideChannel),
+  };
+}
+
+function intoMoqClientRegisterInput(input: Inputs.RegisterMoqClientInput): RegisterInputRequest {
+  return {
+    type: 'moq_client',
+    endpoint_url: input.endpointUrl,
+    broadcast_path: input.broadcastPath,
     required: input.required,
     decoder_map: input.decoderMap,
     side_channel: intoSideChannel(input.sideChannel),
