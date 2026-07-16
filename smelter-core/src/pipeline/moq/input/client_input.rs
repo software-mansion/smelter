@@ -10,7 +10,7 @@ use crate::{
     },
     queue::{QueueInput, WeakQueueInput},
 };
-use hang::moq_net::{Origin, OriginConsumer};
+use hang::moq_net::{BroadcastConsumer, Origin, OriginConsumer};
 use moq_native::ClientConfig;
 use smelter_render::error::ErrorStack;
 use tracing::{Instrument, Level, Span, info, span, warn};
@@ -98,7 +98,7 @@ impl MoqClientInput {
     fn start_broadcast_handler_task(
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
-        mut consumer: OriginConsumer,
+        consumer: OriginConsumer,
         broadcast_path: Arc<str>,
         should_close: Arc<AtomicBool>,
         decoders: MoqInputDecoders,
@@ -108,19 +108,10 @@ impl MoqClientInput {
 
         rt.spawn(
             async move {
-                let broadcast = loop {
-                    if should_close.load(std::sync::atomic::Ordering::Relaxed) {
-                        return;
-                    }
-
-                    let Some((path, Some(broadcast))) = consumer.announced().await else {
-                        warn!(%broadcast_path, "MoQ session closed before announcing required broadcast.");
-                        return;
-                    };
-
-                    if path.as_str().trim_start_matches("/") == broadcast_path.as_ref().trim_start_matches("/") {
-                        break broadcast;
-                    }
+                let Some(broadcast) =
+                    await_broadcast(consumer, broadcast_path, &should_close).await
+                else {
+                    return;
                 };
 
                 let broadcast_ctx = BroadcastCtx {
@@ -129,7 +120,8 @@ impl MoqClientInput {
                     should_close,
                     endpoint_kind: MoqEndpointKind::Client,
                 };
-                let broadcast_result = handle_broadcast(ctx, input_ref, queue_input, broadcast_ctx).await;
+                let broadcast_result =
+                    handle_broadcast(ctx, input_ref, queue_input, broadcast_ctx).await;
                 if let Err(err) = broadcast_result {
                     warn!(
                         "Failed to receive broadcast: {}",
@@ -137,7 +129,7 @@ impl MoqClientInput {
                     );
                 }
             }
-            .instrument(Span::current())
+            .instrument(Span::current()),
         );
     }
 }
@@ -146,5 +138,27 @@ impl Drop for MoqClientInput {
     fn drop(&mut self) {
         self.should_close
             .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+async fn await_broadcast(
+    mut consumer: OriginConsumer,
+    broadcast_path: Arc<str>,
+    should_close: &Arc<AtomicBool>,
+) -> Option<BroadcastConsumer> {
+    loop {
+        if should_close.load(std::sync::atomic::Ordering::Relaxed) {
+            return None;
+        }
+
+        let Some((path, Some(broadcast))) = consumer.announced().await else {
+            warn!(%broadcast_path, "MoQ session closed before announcing required broadcast.");
+            return None;
+        };
+
+        if path.as_str().trim_start_matches("/") == broadcast_path.as_ref().trim_start_matches("/")
+        {
+            return Some(broadcast);
+        }
     }
 }
