@@ -74,7 +74,7 @@ impl VTDecoder {
         buffer: &cv::CVBuffer,
     ) -> Result<wgpu::Texture, VTDecoderError> {
         let Some(cache) = &self.texture_cache else {
-            panic!("decoder asked to output to wgpu texture, but not configured for that initially")
+            return Err(VTDecoderError::NotConfiguredForWgpuOutput);
         };
 
         let width = cv::CVPixelBufferGetWidth(buffer);

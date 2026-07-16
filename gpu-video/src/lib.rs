@@ -37,6 +37,6 @@ mod exports;
 #[cfg(supported)]
 pub use exports::*;
 
-// If supported is unsupported and parsers are not exposed
+// If no backend is available and parsers are not exposed
 #[cfg(not(any(supported, feature = "expose-parsers")))]
 compile_error!("gpu-video can be only compiled on platforms supported by vulkan.");
