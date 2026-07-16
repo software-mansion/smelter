@@ -17,7 +17,7 @@ pub use wgpu_api::*;
 pub(crate) trait VideoDecoderBackend: Send {
     fn decode_to_bytes(
         &mut self,
-        decoder_instructions: &[DecoderInstruction],
+        decoder_instructions: Vec<DecoderInstruction>,
     ) -> Result<Vec<DecodeResult<RawFrameData>>, VideoDecoderError>;
 }
 
@@ -82,7 +82,7 @@ impl BytesDecoder {
         access_units: Vec<AccessUnit>,
     ) -> Result<Vec<OutputFrame<RawFrameData>>, VideoDecoderError> {
         let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
-        let unsorted_frames = self.decoder.decode_to_bytes(&instructions)?;
+        let unsorted_frames = self.decoder.decode_to_bytes(instructions)?;
         let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
         Ok(sorted_frames)
     }

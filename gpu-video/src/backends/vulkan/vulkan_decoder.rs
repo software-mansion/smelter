@@ -36,7 +36,7 @@ pub struct VulkanDecoder<'a> {
 impl VideoDecoderBackend for VulkanDecoder<'_> {
     fn decode_to_bytes(
         &mut self,
-        decoder_instructions: &[DecoderInstruction],
+        decoder_instructions: Vec<DecoderInstruction>,
     ) -> Result<Vec<DecodeResult<RawFrameData>>, VideoDecoderError> {
         VulkanDecoder::decode_to_bytes(self, decoder_instructions).map_err(Into::into)
     }
@@ -47,7 +47,7 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanDecoder<'_> {
     fn decode_to_wgpu_textures(
         &mut self,
         wgpu_device: &wgpu::Device,
-        decoder_instructions: &[DecoderInstruction],
+        decoder_instructions: Vec<DecoderInstruction>,
     ) -> Result<Vec<DecodeResult<wgpu::Texture>>, VideoDecoderError> {
         VulkanDecoder::decode_to_wgpu_textures(self, wgpu_device, decoder_instructions)
             .map_err(Into::into)
@@ -94,7 +94,7 @@ impl VulkanDecoder<'_> {
 impl<'a> VulkanDecoder<'a> {
     pub(crate) fn decode_to_bytes(
         &mut self,
-        decoder_instructions: &[DecoderInstruction],
+        decoder_instructions: Vec<DecoderInstruction>,
     ) -> Result<Vec<DecodeResult<RawFrameData>>, VulkanDecoderError> {
         let mut result = Vec::new();
         for instruction in decoder_instructions {
@@ -110,7 +110,7 @@ impl<'a> VulkanDecoder<'a> {
     pub(crate) fn decode_to_wgpu_textures(
         &mut self,
         wgpu_device: &wgpu::Device,
-        decoder_instructions: &[DecoderInstruction],
+        decoder_instructions: Vec<DecoderInstruction>,
     ) -> Result<Vec<DecodeResult<wgpu::Texture>>, VulkanDecoderError> {
         let mut result = Vec::new();
         for instruction in decoder_instructions {
@@ -124,7 +124,7 @@ impl<'a> VulkanDecoder<'a> {
 
     pub(crate) fn decode<'b>(
         &'b mut self,
-        instruction: &DecoderInstruction,
+        instruction: DecoderInstruction,
     ) -> Result<Option<DecodeSubmission<'b, 'a>>, VulkanDecoderError> {
         match instruction {
             DecoderInstruction::Decode {
@@ -132,7 +132,7 @@ impl<'a> VulkanDecoder<'a> {
                 reference_id,
             } => {
                 return self
-                    .process_reference_frame(decode_info, *reference_id)
+                    .process_reference_frame(&decode_info, reference_id)
                     .map(Option::Some);
             }
 
@@ -141,13 +141,13 @@ impl<'a> VulkanDecoder<'a> {
                 reference_id,
             } => {
                 return self
-                    .process_idr(decode_info, *reference_id)
+                    .process_idr(&decode_info, reference_id)
                     .map(Option::Some);
             }
 
             DecoderInstruction::Drop { reference_ids } => {
                 for reference_id in reference_ids {
-                    match self.reference_id_to_dpb_slot_index.remove(reference_id) {
+                    match self.reference_id_to_dpb_slot_index.remove(&reference_id) {
                         Some(dpb_idx) => self
                             .video_session_resources
                             .as_mut()
@@ -165,14 +165,14 @@ impl<'a> VulkanDecoder<'a> {
         Ok(None)
     }
 
-    fn process_sps(&mut self, sps: &SeqParameterSet) -> Result<(), VulkanDecoderError> {
+    fn process_sps(&mut self, sps: SeqParameterSet) -> Result<(), VulkanDecoderError> {
         match self.video_session_resources.as_mut() {
-            Some(session) => session.process_sps(sps.clone(), self.usage_info)?,
+            Some(session) => session.process_sps(sps, self.usage_info)?,
             None => {
                 self.video_session_resources = Some(VideoSessionResources::new_from_sps(
                     &self.decoding_device,
                     self.tracker.command_buffer_pools.decode.begin_buffer()?,
-                    sps.clone(),
+                    sps,
                     self.usage_info,
                     &mut self.tracker,
                     self.image_modifiers,
@@ -183,11 +183,11 @@ impl<'a> VulkanDecoder<'a> {
         Ok(())
     }
 
-    fn process_pps(&mut self, pps: &PicParameterSet) -> Result<(), VulkanDecoderError> {
+    fn process_pps(&mut self, pps: PicParameterSet) -> Result<(), VulkanDecoderError> {
         self.video_session_resources
             .as_mut()
             .ok_or(VulkanDecoderError::NoSession)?
-            .process_pps(pps.clone())?;
+            .process_pps(pps)?;
 
         Ok(())
     }
