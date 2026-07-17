@@ -156,16 +156,21 @@ pub struct Nalu {
     pub pts: Option<u64>,
 }
 
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
 pub struct Slice {
     pub nal_header: h264_reader::nal::NalHeader,
     pub pps_id: h264_reader::nal::pps::PicParamSetId,
     pub header: Arc<SliceHeader>,
-    #[derivative(Debug = "ignore")]
     pub rbsp_bytes: Vec<u8>,
-    #[derivative(Debug = "ignore")]
     pub sps: h264_reader::nal::sps::SeqParameterSet,
-    #[derivative(Debug = "ignore")]
     pub pps: h264_reader::nal::pps::PicParameterSet,
+}
+
+impl std::fmt::Debug for Slice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Slice")
+            .field("nal_header", &self.nal_header)
+            .field("pps_id", &self.pps_id)
+            .field("header", &self.header)
+            .finish_non_exhaustive()
+    }
 }
