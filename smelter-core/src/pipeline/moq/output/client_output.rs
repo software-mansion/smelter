@@ -3,12 +3,12 @@ use std::sync::Arc;
 use crossbeam_channel::{Receiver, bounded};
 use hang::moq_net::{Broadcast, BroadcastProducer, Origin, OriginProducer, Track};
 use moq_mux::{
-    catalog::hang::Container as WireContainer,
+    catalog::hang::Container,
     container::{Frame, Producer as ContainerProducer, Timestamp},
 };
 use moq_native::ClientConfig;
 use smelter_render::error::ErrorStack;
-use tracing::{debug, error, info, warn};
+use tracing::{Level, Span, debug, error, info, span, warn};
 use url::Url;
 
 use crate::{
@@ -51,8 +51,8 @@ struct BroadcastState {
     _origin: OriginProducer,
     _broadcast: BroadcastProducer,
     catalog: moq_mux::catalog::Producer,
-    video: Option<ContainerProducer<WireContainer>>,
-    audio: Option<ContainerProducer<WireContainer>>,
+    video: Option<ContainerProducer<Container>>,
+    audio: Option<ContainerProducer<Container>>,
 }
 
 impl MoqClientOutput {
@@ -61,6 +61,13 @@ impl MoqClientOutput {
         output_ref: Ref<OutputId>,
         options: MoqClientOutputOptions,
     ) -> Result<Self, OutputInitError> {
+        let _span = span!(
+            Level::INFO,
+            "MoQ client output",
+            output_id = output_ref.to_string()
+        )
+        .entered();
+
         ctx.stats_sender.send(StatsEvent::NewOutput {
             output_ref: output_ref.clone(),
             kind: OutputProtocolKind::MoqClient,
@@ -103,11 +110,11 @@ impl MoqClientOutput {
 
         let state = Self::publish(&ctx, &options, video_track, audio_track)?;
 
+        let span = Span::current();
         std::thread::Builder::new()
             .name(format!("MoQ sender thread for output {output_ref}"))
             .spawn(move || {
-                let _span =
-                    tracing::info_span!("MoQ sender", output_id = output_ref.to_string()).entered();
+                let _span = span.entered();
                 // moq-net spawns tasks (e.g. group cleanup) from the producer calls below.
                 let _guard = ctx.tokio_rt.enter();
 
@@ -130,12 +137,11 @@ impl MoqClientOutput {
     fn publish(
         ctx: &Arc<PipelineCtx>,
         options: &MoqClientOutputOptions,
-        video_track: Option<(hang::catalog::VideoConfig, WireContainer)>,
-        audio_track: Option<(hang::catalog::AudioConfig, WireContainer)>,
+        video_track: Option<(hang::catalog::VideoConfig, Container)>,
+        audio_track: Option<(hang::catalog::AudioConfig, Container)>,
     ) -> Result<BroadcastState, MoqClientError> {
         let (session, origin) = Self::connect(ctx, &options.endpoint_url)?;
 
-        let _guard = ctx.tokio_rt.enter();
         let mut broadcast = Broadcast::new().produce();
         let mut catalog = moq_mux::catalog::Producer::new(&mut broadcast)
             .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
@@ -196,8 +202,8 @@ impl MoqClientOutput {
     fn create_track(
         broadcast: &mut BroadcastProducer,
         name: &str,
-        container: WireContainer,
-    ) -> Result<ContainerProducer<WireContainer>, MoqClientError> {
+        container: Container,
+    ) -> Result<ContainerProducer<Container>, MoqClientError> {
         let track = broadcast
             .create_track(Track::new(name))
             .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
@@ -428,7 +434,7 @@ fn write_error(err: moq_mux::Error) -> OutputMoqClientRuntimeError {
     OutputMoqClientRuntimeError::WriteError(ErrorStack::new(&err).into_string())
 }
 
-fn finish(producer: Option<&mut ContainerProducer<WireContainer>>, kind: &str) {
+fn finish(producer: Option<&mut ContainerProducer<Container>>, kind: &str) {
     if let Some(producer) = producer
         && let Err(err) = producer.finish()
     {
