@@ -5,7 +5,7 @@
 use bytes::Bytes;
 use hang::catalog as hang_catalog;
 use moq_mux::catalog::hang::Container as WireContainer;
-use smelter_render::OutputFrameFormat;
+use smelter_render::{Framerate, OutputFrameFormat};
 
 use super::init_segment;
 use crate::prelude::*;
@@ -33,6 +33,7 @@ pub(super) fn video(
     options: &VideoEncoderOptions,
     resolution: Resolution,
     output_format: OutputFrameFormat,
+    framerate: Framerate,
     extradata: Option<Bytes>,
     container: MoqOutputContainer,
 ) -> Result<(hang_catalog::VideoConfig, WireContainer), MoqClientError> {
@@ -70,7 +71,9 @@ pub(super) fn video(
         }
         (false, _) => match options {
             VideoEncoderOptions::FfmpegVp8(_) => (hang_catalog::VideoCodec::VP8, None),
-            VideoEncoderOptions::FfmpegVp9(_) => (vp9_codec(output_format).into(), None),
+            VideoEncoderOptions::FfmpegVp9(_) => {
+                (vp9_codec(output_format, resolution, framerate).into(), None)
+            }
             VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
                 unreachable!("handled by the h264 arms above")
             }
@@ -148,7 +151,11 @@ fn avcc_profile(avcc: &[u8]) -> Result<(u8, u8, u8), MoqClientError> {
 }
 
 /// it and everything else stays at the 8-bit BT.709-ish defaults.
-fn vp9_codec(output_format: OutputFrameFormat) -> hang_catalog::VP9 {
+fn vp9_codec(
+    output_format: OutputFrameFormat,
+    resolution: Resolution,
+    framerate: Framerate,
+) -> hang_catalog::VP9 {
     // VP9 profile 0 is 4:2:0 8-bit; profile 1 covers the other 8-bit subsamplings.
     // Chroma subsampling values are the ones from the VP9 codec string spec.
     let (profile, chroma_subsampling) = match output_format {
@@ -156,14 +163,49 @@ fn vp9_codec(output_format: OutputFrameFormat) -> hang_catalog::VP9 {
         OutputFrameFormat::PlanarYuv444Bytes => (1, 3),
         _ => (0, 1),
     };
+
     hang_catalog::VP9 {
         profile,
-        level: 31,
+        level: vp9_level(resolution, framerate),
         bit_depth: 8,
         chroma_subsampling,
-        color_primaries: 1,
-        transfer_characteristics: 1,
-        matrix_coefficients: 1,
-        full_range: false,
+        ..Default::default()
     }
+}
+
+/// VP9 level as the decimal number used in the `vp09.` codec string, i.e. 10 for
+/// level 1, 41 for level 4.1. 0 means "unknown", which is what the spec table has
+/// us fall back to for anything past level 6.2.
+fn vp9_level(resolution: Resolution, framerate: Framerate) -> u8 {
+    // (max luma sample rate, max luma picture size, level), ordered by level so
+    // the first row that fits is the lowest level that can carry the stream.
+    const LEVELS: [(u64, u64, u8); 14] = [
+        (829_440, 36_864, 10),
+        (2_764_800, 73_728, 11),
+        (4_608_000, 122_880, 20),
+        (9_216_000, 245_760, 21),
+        (20_736_000, 552_960, 30),
+        (36_864_000, 983_040, 31),
+        (83_558_400, 2_228_224, 40),
+        (160_432_128, 2_228_224, 41),
+        (311_951_360, 8_912_896, 50),
+        (588_251_136, 8_912_896, 51),
+        (1_176_502_272, 8_912_896, 52),
+        (1_176_502_272, 35_651_584, 60),
+        (2_353_004_544, 35_651_584, 61),
+        (4_706_009_088, 35_651_584, 62),
+    ];
+
+    let picture_size = (resolution.width * resolution.height) as u64;
+    if picture_size == 0 || framerate.den == 0 {
+        return 0;
+    }
+    let sample_rate = picture_size * framerate.num as u64 / framerate.den as u64;
+
+    LEVELS
+        .iter()
+        .find(|(max_sample_rate, max_picture_size, _)| {
+            sample_rate <= *max_sample_rate && picture_size <= *max_picture_size
+        })
+        .map_or(0, |(_, _, level)| *level)
 }
