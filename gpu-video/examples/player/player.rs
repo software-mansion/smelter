@@ -79,10 +79,11 @@ impl AppState {
 
         let (tx, rx) = mpsc::sync_channel(FRAMES_BUFFER_LEN);
         let device_clone = device.clone();
+        let queue_clone = queue.clone();
 
         std::thread::spawn(move || {
             let file = std::fs::File::open(&args.filename).expect("open file");
-            decoder::run_decoder(tx, args.framerate, device_clone, file);
+            decoder::run_decoder(tx, args.framerate, device_clone, queue_clone, file);
         });
 
         let renderer = Renderer::new(surface, adapter, device, queue, &window);

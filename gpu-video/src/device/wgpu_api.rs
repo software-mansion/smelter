@@ -31,8 +31,9 @@ pub(crate) trait WgpuVideoDeviceBackend: Send + Sync {
     fn create_wgpu_textures_decoder_h264(
         self: Arc<Self>,
         wgpu_device: wgpu::Device,
+        wgpu_queue: wgpu::Queue,
         parameters: DecoderParameters,
-    ) -> Result<crate::WgpuTexturesDecoder, VideoDecoderError>;
+    ) -> Result<crate::WgpuTexturesDecoderH264, VideoDecoderError>;
 
     fn create_wgpu_textures_encoder_h264(
         self: Arc<Self>,

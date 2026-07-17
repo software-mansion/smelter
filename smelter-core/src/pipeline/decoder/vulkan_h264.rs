@@ -2,8 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use gpu_video::{
     H264DecoderEvent, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
-    WgpuTexturesDecoder,
-    parameters::{DecoderParameters, DecoderUsage, MissedFrameHandling},
+    WgpuTexturesDecoderH264,
+    parameters::{CorruptedStateHandling, DecoderParameters, DecoderUsage},
 };
 use smelter_render::{Frame, FrameData, Resolution};
 use tracing::{debug, info, trace, warn};
@@ -14,7 +14,7 @@ use crate::pipeline::decoder::{
 use crate::prelude::*;
 
 pub struct VulkanH264Decoder {
-    decoder: WgpuTexturesDecoder,
+    decoder: WgpuTexturesDecoderH264,
     keyframe_request_sender: Option<KeyframeRequestSender>,
     drop_frames: bool,
 }
@@ -36,10 +36,14 @@ impl VideoDecoder for VulkanH264Decoder {
             .device
             .video()
             .map_err(|_| DecoderInitError::VulkanContextRequiredForVulkanDecoder)?;
-        let decoder = device.create_wgpu_textures_decoder_h264(DecoderParameters {
-            missed_frame_handling: MissedFrameHandling::Strict,
-            usage_flags: DecoderUsage::Default,
-        })?;
+        let decoder = device.create_wgpu_textures_decoder_h264(
+            &ctx.wgpu_ctx.queue,
+            DecoderParameters {
+                corrupted_state_handling: CorruptedStateHandling::Strict,
+                usage_flags: DecoderUsage::Default,
+                ..Default::default()
+            },
+        )?;
         Ok(Self {
             decoder,
             keyframe_request_sender,
@@ -67,7 +71,7 @@ impl VideoDecoderInstance for VulkanH264Decoder {
         let frames = match self.decoder.process_event(decoder_event) {
             Ok(frames) => frames,
             Err(VideoDecoderError::ReferenceManagementError(
-                ReferenceManagementError::MissingFrame,
+                ReferenceManagementError::CorruptedState,
             )) => {
                 if let Some(s) = self.keyframe_request_sender.as_ref() {
                     s.send()

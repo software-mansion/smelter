@@ -3,7 +3,7 @@ fn main() {
     use std::io::Write;
 
     use gpu_video::{
-        EncodedInputChunk, OutputFrame, VideoInstance,
+        EncodedInputChunk, OutputFrame, RawFrameData, VideoInstance,
         parameters::{
             DecoderParameters, VideoAdapterDescriptor, VideoDeviceDescriptor,
             VideoInstanceDescriptor,
@@ -36,11 +36,22 @@ fn main() {
         .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
-    let mut decoder = video_device
-        .create_bytes_decoder_h264(DecoderParameters::default())
-        .unwrap();
+    let (frame_sender, frame_receiver) = std::sync::mpsc::channel::<OutputFrame<RawFrameData>>();
 
-    let mut output_file = std::fs::File::create("output.nv12").unwrap();
+    let waiter_thread_handle = std::thread::spawn(move || {
+        let mut output_file = std::fs::File::create("output.nv12").unwrap();
+        for frame in frame_receiver.iter() {
+            output_file.write_all(&frame.data.frame).unwrap();
+        }
+    });
+
+    let on_frame = move |output_frame| {
+        frame_sender.send(output_frame).unwrap();
+    };
+
+    let mut decoder = video_device
+        .create_bytes_decoder_h264(DecoderParameters::default(), on_frame)
+        .unwrap();
 
     for chunk in h264_bytestream.chunks(256) {
         let data = EncodedInputChunk {
@@ -48,17 +59,13 @@ fn main() {
             pts: None,
         };
 
-        let frames = decoder.decode(data).unwrap();
-
-        for OutputFrame { data, .. } in frames {
-            output_file.write_all(&data.frame).unwrap();
-        }
+        decoder.decode(data).unwrap();
     }
 
-    let remaining_frames = decoder.flush().unwrap();
-    for OutputFrame { data, .. } in remaining_frames {
-        output_file.write_all(&data.frame).unwrap();
-    }
+    decoder.flush().unwrap();
+    drop(decoder);
+
+    waiter_thread_handle.join().unwrap();
 }
 
 #[cfg(not(vulkan))]

@@ -1,4 +1,7 @@
-use std::{ffi::c_void, sync::Arc};
+use std::{
+    ffi::c_void,
+    sync::{Arc, Mutex, Weak},
+};
 
 use ash::vk::{self, QueryType};
 use tracing::{error, info, trace, warn};
@@ -118,41 +121,72 @@ unsafe extern "system" fn debug_messenger_callback(
 }
 
 pub(crate) struct DecodingQueryPool {
-    pool: QueryPool,
-}
-
-impl std::ops::Deref for DecodingQueryPool {
-    type Target = QueryPool;
-
-    fn deref(&self) -> &Self::Target {
-        &self.pool
-    }
+    pool: Arc<QueryPool>,
+    freelist: Arc<Mutex<Vec<u32>>>,
+    query_count: u32,
 }
 
 impl DecodingQueryPool {
     pub(crate) fn new(
         device: Arc<Device>,
         profile: vk::VideoProfileInfoKHR,
+        query_count: u32,
     ) -> Result<Self, VulkanDecoderError> {
         let pool = QueryPool::new(
             device,
             QueryType::RESULT_STATUS_ONLY_KHR,
-            1,
+            query_count,
             Some(profile),
             None::<vk::VideoProfileInfoKHR>, // ugh.....
         )?;
-        Ok(Self { pool })
+
+        Ok(Self {
+            pool: Arc::new(pool),
+            freelist: Arc::new(Mutex::new((0..query_count).collect())),
+            query_count,
+        })
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn get_result_blocking(
-        &self,
-    ) -> Result<vk::QueryResultStatusKHR, VulkanDecoderError> {
+    pub(crate) fn query_count(&self) -> u32 {
+        self.query_count
+    }
+
+    pub(crate) fn query(&self) -> DecodeResultQuery {
+        let query_index = self.freelist.lock().unwrap().pop().unwrap();
+
+        DecodeResultQuery {
+            pool: self.pool.clone(),
+            query_index,
+            freelist: Arc::downgrade(&self.freelist),
+        }
+    }
+}
+
+pub(crate) struct DecodeResultQuery {
+    pool: Arc<QueryPool>,
+    query_index: u32,
+    freelist: Weak<Mutex<Vec<u32>>>,
+}
+
+impl DecodeResultQuery {
+    pub(crate) fn reset(&self, buffer: vk::CommandBuffer) {
+        self.pool.reset(buffer, self.query_index);
+    }
+
+    pub(crate) fn begin_query(&self, buffer: vk::CommandBuffer) {
+        self.pool.begin_query(buffer, self.query_index);
+    }
+
+    pub(crate) fn end_query(&self, buffer: vk::CommandBuffer) {
+        self.pool.end_query(buffer, self.query_index);
+    }
+
+    fn get_result_blocking(&self) -> Result<vk::QueryResultStatusKHR, VulkanDecoderError> {
         let mut result = vk::QueryResultStatusKHR::NOT_READY;
         unsafe {
             self.pool.device.get_query_pool_results(
                 self.pool.pool,
-                0,
+                self.query_index,
                 std::slice::from_mut(&mut result),
                 vk::QueryResultFlags::WAIT | vk::QueryResultFlags::WITH_STATUS_KHR,
             )?
@@ -168,6 +202,14 @@ impl DecodingQueryPool {
         }
 
         Ok(())
+    }
+}
+
+impl Drop for DecodeResultQuery {
+    fn drop(&mut self) {
+        if let Some(freelist) = self.freelist.upgrade() {
+            freelist.lock().unwrap().push(self.query_index);
+        }
     }
 }
 
@@ -200,28 +242,22 @@ impl QueryPool {
         Ok(Self { pool, device })
     }
 
-    pub(crate) fn reset(&self, buffer: vk::CommandBuffer) {
-        unsafe { self.device.cmd_reset_query_pool(buffer, self.pool, 0, 1) };
-    }
-
-    // if we want to switch to inline queries we can use this, but we need to check how many
-    // implementations support them
-    pub(crate) fn _inline_query(&self) -> vk::VideoInlineQueryInfoKHR<'_> {
-        vk::VideoInlineQueryInfoKHR::default()
-            .query_pool(self.pool)
-            .first_query(0)
-            .query_count(1)
-    }
-
-    pub(crate) fn begin_query(&self, buffer: vk::CommandBuffer) {
+    pub(crate) fn reset(&self, buffer: vk::CommandBuffer, query: u32) {
         unsafe {
             self.device
-                .cmd_begin_query(buffer, self.pool, 0, vk::QueryControlFlags::empty())
+                .cmd_reset_query_pool(buffer, self.pool, query, 1)
+        };
+    }
+
+    pub(crate) fn begin_query(&self, buffer: vk::CommandBuffer, query: u32) {
+        unsafe {
+            self.device
+                .cmd_begin_query(buffer, self.pool, query, vk::QueryControlFlags::empty())
         }
     }
 
-    pub(crate) fn end_query(&self, buffer: vk::CommandBuffer) {
-        unsafe { self.device.cmd_end_query(buffer, self.pool, 0) }
+    pub(crate) fn end_query(&self, buffer: vk::CommandBuffer, query: u32) {
+        unsafe { self.device.cmd_end_query(buffer, self.pool, query) }
     }
 }
 
