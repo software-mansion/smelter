@@ -39,6 +39,7 @@ jobs:
               uses: Swatinem/rust-cache@v2
               with:
                   shared-key: "linux-build"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package libcef
@@ -83,6 +84,7 @@ jobs:
               uses: Swatinem/rust-cache@v2
               with:
                   shared-key: "macos-build"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package libcef
@@ -137,8 +139,9 @@ jobs:
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
               with:
-                  shared-key: "linux-build"
-                  
+                  shared-key: "linux-test"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
+
             - name: 🧪 Run non-pipeline tests
               run: |
                   cargo nextest run --workspace --profile ci -E 'not test(/^pipeline_tests::/)'
