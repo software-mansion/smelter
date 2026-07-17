@@ -86,14 +86,8 @@ pub(crate) struct QueueIndices<'a> {
 
 impl QueueIndices<'_> {
     pub(crate) fn queue_create_infos(&self) -> Vec<QueueCreateInfo> {
-        // Emit exactly ONE VkDeviceQueueCreateInfo per queue family, requesting the
-        // largest queue_count any role wants from it. Several roles can map to the same
-        // family (e.g. the compute queue falling back to the graphics family), and a
-        // family that appears more than once in VkDeviceCreateInfo::pQueueCreateInfos is
-        // illegal — some drivers segfault inside vkCreateDevice. Deduping by the
-        // `(family, count)` tuple was not enough: two roles asking the same family for
-        // different counts produced two entries for that family. Merge by family and
-        // take the max count instead.
+        // One create info per family, with the max queue_count any role wants;
+        // listing a family twice in pQueueCreateInfos is invalid.
         let mut queues_per_family: HashMap<usize, usize> = HashMap::new();
         for (family_idx, queue_count) in [
             self.h264_decode

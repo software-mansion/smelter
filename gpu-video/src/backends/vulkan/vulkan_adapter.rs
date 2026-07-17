@@ -147,6 +147,16 @@ impl<'a> VulkanAdapter<'a> {
             })
             .map(|(i, _)| i)?;
 
+        let graphics_transfer_compute_queue_idx = queues
+            .iter()
+            .enumerate()
+            .find(|(_, q)| {
+                q.queue_family_properties.queue_flags.contains(
+                    vk::QueueFlags::GRAPHICS | vk::QueueFlags::TRANSFER | vk::QueueFlags::COMPUTE,
+                )
+            })
+            .map(|(i, _)| i)?;
+
         let compute_queue_idx = queues
             .iter()
             .enumerate()
@@ -159,28 +169,18 @@ impl<'a> VulkanAdapter<'a> {
                         .queue_flags
                         .intersects(vk::QueueFlags::GRAPHICS)
             })
-            // Prefer a dedicated async-compute queue, but fall back to any
-            // compute-capable queue when the device doesn't expose one. Some
-            // GPUs (notably NVIDIA Maxwell) only advertise COMPUTE on the
-            // combined graphics family, and insisting on a graphics-free
-            // compute queue rejects them even though they otherwise support
-            // video decode.
+            // Fall back to any compute-capable queue when no dedicated one exists
+            // (e.g. NVIDIA Maxwell only exposes COMPUTE on the graphics family).
+            // If the candidate is wgpu's family it must have a second queue for
+            // us, since two threads must not submit to the same VkQueue.
             .or_else(|| {
-                queues.iter().enumerate().find(|(_, q)| {
+                queues.iter().enumerate().find(|(i, q)| {
                     q.queue_family_properties
                         .queue_flags
                         .contains(vk::QueueFlags::COMPUTE)
+                        && (*i != graphics_transfer_compute_queue_idx
+                            || q.queue_family_properties.queue_count >= 2)
                 })
-            })
-            .map(|(i, _)| i)?;
-
-        let graphics_transfer_compute_queue_idx = queues
-            .iter()
-            .enumerate()
-            .find(|(_, q)| {
-                q.queue_family_properties.queue_flags.contains(
-                    vk::QueueFlags::GRAPHICS | vk::QueueFlags::TRANSFER | vk::QueueFlags::COMPUTE,
-                )
             })
             .map(|(i, _)| i)?;
 
@@ -260,19 +260,12 @@ impl<'a> VulkanAdapter<'a> {
                 },
                 compute: QueueIndex {
                     family_index: compute_queue_idx,
-                    // When no dedicated async-compute queue exists, the compute queue
-                    // falls back to the graphics family above — the same family that
-                    // backs `graphics_transfer_compute`, which is handed to wgpu. Vulkan
-                    // requires queue submission to be externally synchronized, and
-                    // gpu-video's compute work and wgpu's graphics work run on separate
-                    // threads, so they must not share one VkQueue. Request a SECOND queue
-                    // from that family here: wgpu takes index 0, gpu-video takes index 1
-                    // (see `vulkan_device.rs`). Capped to what the family actually
-                    // exposes — if it has only one queue, sharing is unavoidable.
+                    // On fallback to wgpu's family, take two queues: index 0 for wgpu,
+                    // index 1 for gpu-video (the fallback guarantees two exist).
                     queue_count: if compute_queue_idx == graphics_transfer_compute_queue_idx {
-                        (queue_counts[graphics_transfer_compute_queue_idx] as usize).min(2)
+                        2
                     } else {
-                        1
+                        queue_counts[compute_queue_idx] as usize
                     },
                     video_properties: video_properties[compute_queue_idx],
                     query_result_status_properties: query_result_status_properties
