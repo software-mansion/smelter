@@ -1,4 +1,4 @@
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn main() {
     use std::io::Write;
 
@@ -21,7 +21,7 @@ fn main() {
     let h264_bytestream = std::fs::read(&args[1]).unwrap_or_else(|_| panic!("read {}", args[1]));
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
+    let adapter = pollster::block_on(instance.enumerate_adapters(Default::default()))
         .into_iter()
         .find(|a| {
             a.video_adapter_info()
@@ -61,14 +61,14 @@ fn main() {
     }
 }
 
-#[cfg(not(vulkan))]
+#[cfg(not(supported))]
 fn main() {
     println!(
-        "This crate doesn't work on your operating system, because it does not support vulkan"
+        "This crate doesn't work on your operating system, because it does not support vulkan or video toolbox"
     );
 }
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn download_wgpu_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,

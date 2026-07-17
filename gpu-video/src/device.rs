@@ -136,6 +136,8 @@ impl From<&h264_reader::nal::sps::SeqParameterSet> for ColorRange {
 }
 
 #[derive(Debug, Clone, Copy)]
+// expect to error out as a reminder to remove this line if we start using it
+#[cfg_attr(video_toolbox, expect(unused))]
 pub(crate) struct CodecColorDescription {
     pub colour_primaries: u8,
     pub transfer_characteristics: u8,
