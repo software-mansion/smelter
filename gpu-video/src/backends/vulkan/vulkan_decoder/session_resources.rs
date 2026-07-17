@@ -66,7 +66,7 @@ impl<'a> VideoSessionResources<'a> {
         decode_buffer: OpenCommandBuffer,
         sps: SeqParameterSet,
         usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
-        tracker: &mut DecoderTracker,
+        tracker: &DecoderTracker,
         image_modifiers: ImageModifiers,
     ) -> Result<Self, VulkanDecoderError> {
         let profile_info = Arc::new(H264DecodeProfileInfo::from_sps_decode(&sps, usage_info)?);
@@ -201,7 +201,7 @@ impl<'a> VideoSessionResources<'a> {
         &mut self,
         decoding_device: &DecodingDevice,
         decode_buffer: OpenCommandBuffer,
-        tracker: &mut DecoderTracker,
+        tracker: &DecoderTracker,
         picture_coded_extent: vk::Extent2D,
     ) -> Result<(), VulkanDecoderError> {
         if let Some(new_params) = self.parameters_scheduled_for_reset.take() {
@@ -225,7 +225,7 @@ impl<'a> VideoSessionResources<'a> {
         params: SessionParams<'a>,
         decoding_device: &DecodingDevice,
         decode_buffer: OpenCommandBuffer,
-        tracker: &mut DecoderTracker,
+        tracker: &DecoderTracker,
     ) -> Result<(), VulkanDecoderError> {
         let max_level_idc = vk_to_h264_level_idc(
             decoding_device
@@ -301,7 +301,7 @@ impl<'a> VideoSessionResources<'a> {
         max_coded_extent: vk::Extent2D,
         max_dpb_slots: u32,
         mut decode_buffer: OpenCommandBuffer,
-        tracker: &mut DecoderTracker,
+        tracker: &DecoderTracker,
         image_modifiers: ImageModifiers,
     ) -> Result<DecodingImages<'a>, VulkanDecoderError> {
         let mut dpb_format = decoding_device.profile_capabilities.dpb_format_properties;

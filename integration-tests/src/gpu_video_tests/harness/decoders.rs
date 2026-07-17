@@ -1,10 +1,13 @@
+use crossbeam_channel::Receiver;
 use ffmpeg_next::{
     codec::{Context as FfmpegContext, Id},
     frame,
     media::Type,
 };
 use gpu_video::{
-    BytesDecoder, EncodedInputChunk, WgpuTexturesDecoder,
+    BytesDecoderH264, EncodedInputChunk, OutputFrame, RawFrameData, VideoDecoderError, VideoDevice,
+    WgpuTexturesDecoderH264,
+    parameters::DecoderParameters,
     parser::h264::{AccessUnit, H264Parser},
 };
 
@@ -13,59 +16,106 @@ use crate::{
     video_decoder::copy_plane_from_av,
 };
 
-impl Decoder for BytesDecoder {
-    fn decoder_name(&self) -> &'static str {
-        "BytesDecoderH264"
+pub(super) struct GvBytesDecoderH264 {
+    decoder: BytesDecoderH264,
+    frame_receiver: Receiver<Result<OutputFrame<RawFrameData>, VideoDecoderError>>,
+}
+
+impl GvBytesDecoderH264 {
+    pub fn new(video_device: &VideoDevice, parameters: DecoderParameters) -> Self {
+        let (frame_sender, frame_receiver) = crossbeam_channel::unbounded();
+        let decoder = video_device
+            .create_bytes_decoder_h264(parameters, move |result| frame_sender.send(result).unwrap())
+            .unwrap();
+
+        Self {
+            decoder,
+            frame_receiver,
+        }
     }
 
-    fn decode_bytes(&mut self, data: &[u8]) -> Vec<Nv12Frame> {
-        let frames = self.decode(EncodedInputChunk { data, pts: None }).unwrap();
-        frames
-            .into_iter()
-            .map(|frame| Nv12Frame {
-                width: frame.data.width as usize,
-                height: frame.data.height as usize,
-                data: frame.data.frame,
-            })
-            .collect()
-    }
-
-    fn flush_frames(&mut self) -> Vec<Nv12Frame> {
-        let frames = self.flush().unwrap();
-        frames
-            .into_iter()
-            .map(|frame| Nv12Frame {
-                width: frame.data.width as usize,
-                height: frame.data.height as usize,
-                data: frame.data.frame,
+    fn drain(&mut self) -> Vec<Nv12Frame> {
+        self.frame_receiver
+            .try_iter()
+            .map(|result| {
+                let frame = result.unwrap();
+                Nv12Frame {
+                    width: frame.data.width as usize,
+                    height: frame.data.height as usize,
+                    data: frame.data.frame,
+                }
             })
             .collect()
     }
 }
 
-impl Decoder for WgpuTexturesDecoder {
+impl Decoder for GvBytesDecoderH264 {
+    fn decoder_name(&self) -> &'static str {
+        "BytesDecoderH264"
+    }
+
+    fn decode_bytes(&mut self, data: &[u8]) -> Vec<Nv12Frame> {
+        self.decoder
+            .decode(EncodedInputChunk { data, pts: None })
+            .unwrap();
+        self.drain()
+    }
+
+    fn flush_frames(&mut self) -> Vec<Nv12Frame> {
+        self.decoder.flush().unwrap();
+        self.drain()
+    }
+}
+
+pub(super) struct GvWgpuTexturesDecoderH264 {
+    decoder: WgpuTexturesDecoderH264,
+    frame_receiver: Receiver<Result<OutputFrame<wgpu::Texture>, VideoDecoderError>>,
+}
+
+impl GvWgpuTexturesDecoderH264 {
+    pub fn new(
+        video_device: &VideoDevice,
+        wgpu_queue: &wgpu::Queue,
+        parameters: DecoderParameters,
+    ) -> Self {
+        let (frame_sender, frame_receiver) = crossbeam_channel::unbounded();
+        let decoder = video_device
+            .create_wgpu_textures_decoder_h264(wgpu_queue, parameters, move |result| {
+                frame_sender.send(result).unwrap()
+            })
+            .unwrap();
+
+        Self {
+            decoder,
+            frame_receiver,
+        }
+    }
+
+    fn drain(&mut self) -> Vec<Nv12Frame> {
+        let (device, queue) = video_device();
+
+        self.frame_receiver
+            .try_iter()
+            .map(|result| download_nv12_texture(device, queue, result.unwrap().data))
+            .collect()
+    }
+}
+
+impl Decoder for GvWgpuTexturesDecoderH264 {
     fn decoder_name(&self) -> &'static str {
         "WgpuTexturesDecoderH264"
     }
 
     fn decode_bytes(&mut self, data: &[u8]) -> Vec<Nv12Frame> {
-        let frames = self.decode(EncodedInputChunk { data, pts: None }).unwrap();
-        let (device, queue) = video_device();
-
-        frames
-            .into_iter()
-            .map(|frame| download_nv12_texture(device, queue, frame.data))
-            .collect()
+        self.decoder
+            .decode(EncodedInputChunk { data, pts: None })
+            .unwrap();
+        self.drain()
     }
 
     fn flush_frames(&mut self) -> Vec<Nv12Frame> {
-        let frames = self.flush().unwrap();
-        let (device, queue) = video_device();
-
-        frames
-            .into_iter()
-            .map(|frame| download_nv12_texture(device, queue, frame.data))
-            .collect()
+        self.decoder.flush().unwrap();
+        self.drain()
     }
 }
 

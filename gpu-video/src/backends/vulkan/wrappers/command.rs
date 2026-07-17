@@ -72,6 +72,7 @@ pub(crate) struct SubmittedCommandBuffer {
     buffer: vk::CommandBuffer,
 }
 
+#[derive(Clone)]
 pub(crate) struct CommandBufferPool(Arc<Mutex<CommandBufferPoolInner>>);
 
 pub(crate) struct CommandBufferPoolInner {
