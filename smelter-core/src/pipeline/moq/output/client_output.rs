@@ -90,6 +90,7 @@ impl MoqClientOutput {
                 options_video,
                 handle.config.resolution,
                 handle.config.output_format,
+                ctx.output_framerate,
                 handle.encoder_context(),
                 options.container,
             )?),
@@ -176,7 +177,9 @@ impl MoqClientOutput {
         // Relay paths are absolute; a leading slash would make it a different path.
         let path = options.broadcast_path.trim_start_matches('/');
         if !origin.publish_broadcast(path, broadcast.consume()) {
-            return Err(MoqClientError::PublishFailed(options.broadcast_path.clone()));
+            return Err(MoqClientError::PublishFailed(
+                options.broadcast_path.clone(),
+            ));
         }
         info!(broadcast_path = path, "Publishing MoQ broadcast.");
 
@@ -263,22 +266,26 @@ impl MoqClientOutput {
                     },
                 )?
             }
-            VideoEncoderOptions::FfmpegVp8(options) => VideoEncoderThread::<FfmpegVp8Encoder>::spawn(
-                output_id.clone(),
-                VideoEncoderThreadOptions {
-                    ctx: ctx.clone(),
-                    encoder_options: options.clone(),
-                    chunks_sender,
-                },
-            )?,
-            VideoEncoderOptions::FfmpegVp9(options) => VideoEncoderThread::<FfmpegVp9Encoder>::spawn(
-                output_id.clone(),
-                VideoEncoderThreadOptions {
-                    ctx: ctx.clone(),
-                    encoder_options: options.clone(),
-                    chunks_sender,
-                },
-            )?,
+            VideoEncoderOptions::FfmpegVp8(options) => {
+                VideoEncoderThread::<FfmpegVp8Encoder>::spawn(
+                    output_id.clone(),
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender,
+                    },
+                )?
+            }
+            VideoEncoderOptions::FfmpegVp9(options) => {
+                VideoEncoderThread::<FfmpegVp9Encoder>::spawn(
+                    output_id.clone(),
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender,
+                    },
+                )?
+            }
         };
         Ok(handle)
     }
