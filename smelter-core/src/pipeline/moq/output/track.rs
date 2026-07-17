@@ -59,10 +59,7 @@ pub(super) fn video(
             (codec.into(), Some(avcc))
         }
         (true, _) => {
-            let (profile, constraints, level) = extradata
-                .as_deref()
-                .and_then(sps_profile)
-                .unwrap_or(DEFAULT_H264_PROFILE);
+            let (profile, constraints, level) = DEFAULT_H264_PROFILE;
             let codec = hang_catalog::H264 {
                 inline: true,
                 profile,
@@ -150,26 +147,6 @@ fn avcc_profile(avcc: &[u8]) -> Result<(u8, u8, u8), MoqClientError> {
     }
 }
 
-/// Pull profile/constraints/level out of the first SPS NAL in an Annex B blob.
-/// The three bytes after the NAL header match avcC bytes 1..4.
-fn sps_profile(extradata: &[u8]) -> Option<(u8, u8, u8)> {
-    for (i, window) in extradata.windows(4).enumerate() {
-        let payload = match window {
-            [0, 0, 1, _] => &extradata[i + 3..],
-            [0, 0, 0, 1] => &extradata[i + 4..],
-            _ => continue,
-        };
-        // NAL type 7 is the SPS.
-        if let [header, profile, constraints, level, ..] = payload
-            && header & 0x1f == 7
-        {
-            return Some((*profile, *constraints, *level));
-        }
-    }
-    None
-}
-
-/// The encoder only tells us the pixel format, so profile and chroma follow from
 /// it and everything else stays at the 8-bit BT.709-ish defaults.
 fn vp9_codec(output_format: OutputFrameFormat) -> hang_catalog::VP9 {
     // VP9 profile 0 is 4:2:0 8-bit; profile 1 covers the other 8-bit subsamplings.
