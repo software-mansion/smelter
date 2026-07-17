@@ -1,14 +1,14 @@
-#[cfg(vulkan)]
+#[cfg(supported)]
 mod player;
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn main() {
     player::run()
 }
 
-#[cfg(not(vulkan))]
+#[cfg(not(supported))]
 fn main() {
     println!(
-        "This crate doesn't work on your operating system, because it does not support vulkan"
+        "This crate doesn't work on your operating system, because it does not support vulkan or video toolbox"
     );
 }

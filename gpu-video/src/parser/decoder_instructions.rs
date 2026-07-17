@@ -10,21 +10,34 @@ use crate::parser::{
 pub(crate) enum DecoderInstruction {
     Decode {
         decode_info: DecodeInformation,
+        #[cfg_attr(video_toolbox, allow(unused))]
         reference_id: ReferenceId,
     },
 
     Idr {
         decode_info: DecodeInformation,
+        #[cfg_attr(video_toolbox, allow(unused))]
         reference_id: ReferenceId,
     },
 
     Drop {
+        #[cfg_attr(video_toolbox, allow(unused))]
         reference_ids: Vec<ReferenceId>,
     },
 
-    Sps(SeqParameterSet),
+    Sps {
+        sps: SeqParameterSet,
 
-    Pps(PicParameterSet),
+        #[cfg_attr(vulkan, expect(unused))]
+        raw_bytes: Box<[u8]>,
+    },
+
+    Pps {
+        pps: PicParameterSet,
+
+        #[cfg_attr(vulkan, expect(unused))]
+        raw_bytes: Box<[u8]>,
+    },
 }
 
 pub(crate) fn compile_to_decoder_instructions(
@@ -36,12 +49,14 @@ pub(crate) fn compile_to_decoder_instructions(
         let mut slices = Vec::new();
         for nalu in nalus {
             match nalu.parsed {
-                ParsedNalu::Sps(seq_parameter_set) => {
-                    instructions.push(DecoderInstruction::Sps(seq_parameter_set))
-                }
-                ParsedNalu::Pps(pic_parameter_set) => {
-                    instructions.push(DecoderInstruction::Pps(pic_parameter_set))
-                }
+                ParsedNalu::Sps(sps) => instructions.push(DecoderInstruction::Sps {
+                    sps,
+                    raw_bytes: nalu.raw_bytes,
+                }),
+                ParsedNalu::Pps(pps) => instructions.push(DecoderInstruction::Pps {
+                    pps,
+                    raw_bytes: nalu.raw_bytes,
+                }),
                 ParsedNalu::Slice(slice) => {
                     slices.push((slice, nalu.pts));
                 }
