@@ -3,17 +3,17 @@ use std::{io::Cursor, sync::Arc};
 use ash::vk;
 
 use crate::{
-    backends::vulkan::vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
     backends::vulkan::{
         VulkanDevice,
         vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
+        vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
+        vulkan_transcoder::VulkanTranscoderError,
         wrappers::{
             CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
             Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
         },
     },
     parameters::ScalingAlgorithm,
-    vulkan_transcoder::VideoTranscoderError,
 };
 
 const MAX_OUTPUTS: u32 = 8;
@@ -58,7 +58,7 @@ pub(crate) struct ResizeSubmission {
 }
 
 impl ResizingImageBundle {
-    fn new(image: Arc<Image>, layer: u32) -> Result<Self, VideoTranscoderError> {
+    fn new(image: Arc<Image>, layer: u32) -> Result<Self, VulkanTranscoderError> {
         let view_y = image.create_plane_view(
             layer,
             vk::ImageAspectFlags::PLANE_0,
@@ -100,7 +100,7 @@ impl ImageHeap {
     fn allocate(
         &mut self,
         trackers: &mut [&mut EncoderTracker],
-    ) -> Result<Box<[ResizingImageBundle]>, VideoTranscoderError> {
+    ) -> Result<Box<[ResizingImageBundle]>, VulkanTranscoderError> {
         if let Some(images) = self.freelist.pop() {
             return Ok(images);
         }
@@ -187,7 +187,7 @@ impl DescriptorHeap {
         self.freelist.push(descriptors);
     }
 
-    fn allocate(&mut self) -> Result<Descriptors, VideoTranscoderError> {
+    fn allocate(&mut self) -> Result<Descriptors, VulkanTranscoderError> {
         if let Some(descriptors) = self.freelist.pop() {
             return Ok(descriptors);
         }
@@ -230,9 +230,9 @@ impl ResizingPipeline {
     pub(crate) fn new(
         device: Arc<VulkanDevice>,
         configs: Vec<OutputConfig>,
-    ) -> Result<Self, VideoTranscoderError> {
+    ) -> Result<Self, VulkanTranscoderError> {
         if configs.is_empty() || configs.len() > MAX_OUTPUTS as usize {
-            return Err(VideoTranscoderError::WrongOutputNumber {
+            return Err(VulkanTranscoderError::WrongOutputNumber {
                 expected_max: MAX_OUTPUTS as usize,
                 actual: configs.len(),
             });
@@ -353,7 +353,7 @@ impl ResizingPipeline {
         &mut self,
         input: &ResizingImageBundle,
         outputs: &[ResizingImageBundle],
-    ) -> Result<Descriptors, VideoTranscoderError> {
+    ) -> Result<Descriptors, VulkanTranscoderError> {
         let image_info_input_y = vk::DescriptorImageInfo::default()
             .image_view(input.view_y.view)
             .image_layout(vk::ImageLayout::GENERAL);
@@ -420,7 +420,7 @@ impl ResizingPipeline {
         input_submission: &mut DecodeSubmission,
         encoder_trackers: &mut [&mut EncoderTracker],
         input_cropped_extent: vk::Extent2D,
-    ) -> Result<ResizeSubmission, VideoTranscoderError> {
+    ) -> Result<ResizeSubmission, VulkanTranscoderError> {
         let input = ResizingImageBundle::new(
             input_submission.decode_result.frame.image.clone(),
             input_submission.decode_result.frame.layer,

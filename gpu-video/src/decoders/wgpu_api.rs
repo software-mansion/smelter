@@ -12,7 +12,7 @@ pub(crate) trait WgpuVideoDecoderBackend: Send {
     fn decode_to_wgpu_textures(
         &mut self,
         wgpu_device: &wgpu::Device,
-        decoder_instructions: &[DecoderInstruction],
+        decoder_instructions: Vec<DecoderInstruction>,
     ) -> Result<Vec<DecodeResult<wgpu::Texture>>, VideoDecoderError>;
 }
 
@@ -79,7 +79,7 @@ impl WgpuTexturesDecoder {
         let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
         let unsorted_frames = self
             .decoder
-            .decode_to_wgpu_textures(&self.wgpu_device, &instructions)?;
+            .decode_to_wgpu_textures(&self.wgpu_device, instructions)?;
         let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
         Ok(sorted_frames)
     }

@@ -13,11 +13,15 @@ pub(crate) mod vulkan_decoder;
 pub(crate) mod vulkan_device;
 pub(crate) mod vulkan_encoder;
 pub(crate) mod vulkan_instance;
+#[cfg(feature = "transcoder")]
+pub(crate) mod vulkan_transcoder;
 pub(crate) mod wrappers;
 
 pub use vulkan_adapter::{VulkanAdapter, VulkanAdapterInfo, VulkanAdapterInitError};
 pub use vulkan_decoder::{VulkanDecoder, VulkanDecoderError};
 pub use vulkan_device::{VulkanDevice, VulkanDeviceInitError};
+#[cfg(feature = "transcoder")]
+pub use vulkan_transcoder::{VulkanTranscoder, VulkanTranscoderError};
 // TODO: expose-backend api
 pub(crate) use vulkan_encoder::{VulkanEncoder, VulkanEncoderError};
 pub use vulkan_instance::{VulkanInstance, VulkanInstanceInitError};

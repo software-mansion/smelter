@@ -77,14 +77,19 @@ struct LayoutInfo {
 }
 
 
+// Replaced at runtime based on the configured layouts limit (see shader.rs)
+const MAX_LAYOUTS_COUNT: u32 = 100;
+
+const MAX_MASKS_COUNT: u32 = 20;
+
 @group(0) @binding(0) var texture: texture_2d<f32>;
 
 @group(1) @binding(0) var<uniform> output_resolution: vec4<f32>;
-@group(1) @binding(1) var<uniform> texture_params: array<TextureParams, 100>;
-@group(1) @binding(2) var<uniform> color_params: array<ColorParams, 100>;
-@group(1) @binding(3) var<uniform> box_shadow_params: array<BoxShadowParams, 100>;
+@group(1) @binding(1) var<uniform> texture_params: array<TextureParams, MAX_LAYOUTS_COUNT>;
+@group(1) @binding(2) var<uniform> color_params: array<ColorParams, MAX_LAYOUTS_COUNT>;
+@group(1) @binding(3) var<uniform> box_shadow_params: array<BoxShadowParams, MAX_LAYOUTS_COUNT>;
 
-@group(2) @binding(0) var<uniform> masks: array<ParentMask, 20>;
+@group(2) @binding(0) var<uniform> masks: array<ParentMask, MAX_MASKS_COUNT>;
 
 @group(3) @binding(0) var sampler_: sampler;
 

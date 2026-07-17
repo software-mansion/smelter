@@ -46,6 +46,7 @@ pub struct RendererOptions {
     pub stream_fallback_timeout: Duration,
     pub load_system_fonts: bool,
     pub rendering_mode: RenderingMode,
+    pub max_layouts_count: usize,
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
 }
@@ -202,7 +203,7 @@ impl InnerRenderer {
                 opts.load_system_fonts,
             )),
             render_graph: RenderGraph::empty(),
-            renderers: Renderers::new(wgpu_ctx)?,
+            renderers: Renderers::new(wgpu_ctx, opts.max_layouts_count)?,
             stream_fallback_timeout: opts.stream_fallback_timeout,
             scene: SceneState::new(),
             chromium_context: opts.chromium_context,

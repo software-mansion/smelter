@@ -1,5 +1,5 @@
 use std::{
-    sync::{Arc, Mutex, atomic::AtomicBool},
+    sync::{Arc, atomic::AtomicBool},
     time::Duration,
 };
 
@@ -22,7 +22,10 @@ use crate::{
             libopus::OpusDecoder,
             vulkan_h264::VulkanH264Decoder,
         },
-        moq::state::MoqInputState,
+        moq::{
+            connection::timestamp_aligner::{EpochShared, TimestampAligner, TrackKind},
+            state::MoqInputState,
+        },
     },
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
     utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread},
@@ -33,8 +36,13 @@ use crate::prelude::*;
 use self::catalog::{MoqCatalogError, read_catalog};
 
 mod catalog;
+mod timestamp_aligner;
 
-const MOQ_BUFFER: Duration = Duration::from_secs(1);
+/// Buffer added to a new track's PTS offset during queue initialization. This gives frames
+/// time to arrive and be decoded before their scheduled presentation, absorbing network jitter and
+/// decode latency at the cost of a fixed delay. The 2200ms value is set based on Twitch
+/// broadcasting guidelines.
+const MOQ_BUFFER: Duration = Duration::from_millis(2200);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
 struct VideoTrack {
@@ -57,7 +65,10 @@ struct TrackCtx {
     input_ref: Ref<InputId>,
     broadcast: BroadcastConsumer,
     decoders: MoqServerInputDecoders,
-    first_pts: Arc<Mutex<Option<Duration>>>,
+    epoch: EpochShared,
+    /// Whether only one of audio/video is present, so the estimator has no
+    /// counterpart to wait for when measuring A/V skew.
+    single_track_stream: bool,
     should_close: Arc<AtomicBool>,
     stats_sender: MoqStatsSender,
 }
@@ -168,10 +179,15 @@ impl BroadcastHandler {
         decoders: MoqServerInputDecoders,
         should_close: Arc<AtomicBool>,
     ) -> Self {
-        // Shared across audio and video so both tracks are normalized against
-        // the same first PTS, preserving A/V synchronization. Whichever track
-        // produces the first frame sets the common zero point for both.
-        let first_pts = Arc::new(Mutex::new(None));
+        // Shared across audio and video: both tracks normalize their raw PTS
+        // against the same monotonic wall-clock anchor. When the measured A/V skew
+        // is small, both tracks anchor to the first timestamp received on either track,
+        // preserving their relative offset by construction. Only when the skew exceeds AV_SKEW_MAX
+        // (e.g. browser cross-epoch publishers) does each track fall back to
+        // per-track live-edge estimation.
+        let epoch = EpochShared::new();
+
+        let single_track_stream = video.is_none() || audio.is_none();
 
         let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
 
@@ -180,7 +196,8 @@ impl BroadcastHandler {
             input_ref,
             broadcast,
             decoders,
-            first_pts,
+            epoch,
+            single_track_stream,
             should_close,
             stats_sender,
         };
@@ -258,7 +275,8 @@ async fn run_video_track(
         input_ref,
         broadcast,
         decoders,
-        first_pts,
+        epoch,
+        single_track_stream,
         should_close,
         stats_sender,
     } = track_ctx;
@@ -270,35 +288,54 @@ async fn run_video_track(
     // group start timestamp and highest received timestamp.
     let mut consumer = ContainerConsumer::new(track, video.container).with_latency(MOQ_BUFFER);
 
+    let mut aligner = TimestampAligner::new(epoch, TrackKind::Video, single_track_stream);
+
+    let mut eos_received = false;
     loop {
         if should_close.load(std::sync::atomic::Ordering::Relaxed) {
             break;
         };
         let Some(frame) = consumer.read().await? else {
+            eos_received = true;
             break;
         };
         stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Video);
 
         let raw_pts: Duration = frame.timestamp.into();
-        let pts = normalize_pts(&first_pts, raw_pts);
-        trace!(?pts, "MoQ video frame");
-        let payload = frame.payload;
-
         let chunk = EncodedInputChunk {
-            data: payload,
-            pts,
+            data: frame.payload,
+            pts: raw_pts,
             dts: None,
             kind: MediaKind::Video(video.codec),
             present: true,
         };
 
-        if decoder_handle
-            .chunk_sender
-            .send(PipelineEvent::Data(chunk))
-            .is_err()
-        {
-            debug!("Failed to send chunk, channel closed.");
+        let channel_closed = aligner
+            .on_chunk(frame.keyframe, chunk)
+            .into_iter()
+            .any(|chunk| {
+                trace!(pts=?chunk.pts, ?raw_pts, "Video chunk received.");
+                decoder_handle
+                    .chunk_sender
+                    .send(PipelineEvent::Data(chunk))
+                    .is_err()
+            });
+        if channel_closed {
+            debug!("Failed to send video chunk, channel closed.");
             break;
+        }
+    }
+    // Stream ended before the aligner finished warmup -> force-lock and drain
+    // the still-held frames so a sub-warmup clip renders.
+    if eos_received && !aligner.is_locked() {
+        let channel_closed = aligner.flush().into_iter().any(|chunk| {
+            decoder_handle
+                .chunk_sender
+                .send(PipelineEvent::Data(chunk))
+                .is_err()
+        });
+        if channel_closed {
+            debug!("Failed to send video chunk, channel closed.");
         }
     }
     if decoder_handle
@@ -306,7 +343,7 @@ async fn run_video_track(
         .send(PipelineEvent::EOS)
         .is_err()
     {
-        debug!("Failed to send EOS, channel closed.");
+        debug!("Failed to send video EOS, channel closed.");
     }
 
     Ok(())
@@ -322,7 +359,8 @@ async fn run_audio_track(
         input_ref,
         broadcast,
         decoders: _,
-        first_pts,
+        epoch,
+        single_track_stream,
         should_close,
         stats_sender,
     } = track_ctx;
@@ -333,35 +371,54 @@ async fn run_audio_track(
     // group start timestamp and highest received timestamp.
     let mut consumer = ContainerConsumer::new(track, audio.container).with_latency(MOQ_BUFFER);
 
+    let mut aligner = TimestampAligner::new(epoch, TrackKind::Audio, single_track_stream);
+
+    let mut eos_received = false;
     loop {
         if should_close.load(std::sync::atomic::Ordering::Relaxed) {
             break;
         };
         let Some(frame) = consumer.read().await? else {
+            eos_received = true;
             break;
         };
         stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Audio);
 
         let raw_pts: Duration = frame.timestamp.into();
-        let pts = normalize_pts(&first_pts, raw_pts);
-        trace!(?pts, "MoQ audio frame");
-        let payload = frame.payload;
-
         let chunk = EncodedInputChunk {
-            data: payload,
-            pts,
+            data: frame.payload,
+            pts: raw_pts,
             dts: None,
             kind: MediaKind::Audio(audio.codec),
             present: true,
         };
 
-        if decoder_handle
-            .chunk_sender
-            .send(PipelineEvent::Data(chunk))
-            .is_err()
-        {
-            debug!("Failed to send chunk, channel closed.");
+        let channel_closed = aligner
+            .on_chunk(frame.keyframe, chunk)
+            .into_iter()
+            .any(|chunk| {
+                trace!(pts=?chunk.pts, ?raw_pts, "Audio chunk received.");
+                decoder_handle
+                    .chunk_sender
+                    .send(PipelineEvent::Data(chunk))
+                    .is_err()
+            });
+        if channel_closed {
+            debug!("Failed to send audio chunk, channel closed.");
             break;
+        }
+    }
+    // Stream ended before the aligner finished warmup -> force-lock and drain
+    // the still-held frames so a sub-warmup clip renders.
+    if eos_received && !aligner.is_locked() {
+        let channel_closed = aligner.flush().into_iter().any(|chunk| {
+            decoder_handle
+                .chunk_sender
+                .send(PipelineEvent::Data(chunk))
+                .is_err()
+        });
+        if channel_closed {
+            debug!("Failed to send audio chunk, channel closed.");
         }
     }
     if decoder_handle
@@ -369,7 +426,7 @@ async fn run_audio_track(
         .send(PipelineEvent::EOS)
         .is_err()
     {
-        debug!("Failed to send EOS, channel closed.");
+        debug!("Failed to send audio EOS, channel closed.");
     }
 
     Ok(())
@@ -511,13 +568,6 @@ enum MoqConnectionError {
     InputUnregistered,
 }
 
-/// Normalizes a raw track timestamp against the first PTS observed across all
-/// tracks of the broadcast, so audio and video share the same zero point.
-fn normalize_pts(first_pts: &Arc<Mutex<Option<Duration>>>, raw_pts: Duration) -> Duration {
-    let mut first_pts = first_pts.lock().unwrap();
-    let first = *first_pts.get_or_insert(raw_pts);
-    raw_pts.saturating_sub(first)
-}
 #[derive(Clone)]
 struct MoqStatsSender {
     input_ref: Ref<InputId>,

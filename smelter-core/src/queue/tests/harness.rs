@@ -41,6 +41,9 @@ pub const OUTPUT_FRAMERATE: Framerate = Framerate { num: 50, den: 1 };
 /// Duration of a single video batch at [`OUTPUT_FRAMERATE`]; equal to the audio
 /// chunk duration, so video and audio batches line up 1:1.
 pub const BATCH_DURATION: Duration = DEFAULT_AUDIO_CHUNK_DURATION;
+/// Duration of input audio batches sent by tests; deliberately not aligned
+/// with the 20ms output chunks (mirrors the 15ms input frames in video tests).
+pub const INPUT_BATCH_DURATION: Duration = Duration::from_millis(15);
 
 pub fn ms(value: u64) -> Duration {
     Duration::from_millis(value)
@@ -177,14 +180,42 @@ pub fn samples<const N: usize>(
         .collect()
 }
 
-/// Audio variant of [`assert_video_batch_eq`]: chunk PTS ranges and required
-/// flags are compared exactly, sample batch PTS ranges with `pts_tolerance`.
+/// Assert that chunks are exactly equal.
 #[track_caller]
-pub fn assert_audio_batch_eq(actual: &AudioBatch, expected: &AudioBatch, pts_tolerance: Duration) {
-    if pts_tolerance.is_zero() {
-        assert_eq!(actual, expected);
-        return;
-    }
+pub fn assert_audio_batch_eq(actual: &AudioBatch, expected: &AudioBatch) {
+    assert_eq!(actual, expected);
+}
+
+/// Assert that the chunk was produced at `start_pts` with no input delivering
+/// anything. Unlike video, an empty audio chunk still contains an entry for
+/// every input and `required` mirrors the inputs' required flags.
+#[track_caller]
+pub fn assert_empty_audio_batch(actual: &AudioBatch, start_pts: Duration, required: bool) {
+    let no_samples = !actual.samples.is_empty()
+        && actual
+            .samples
+            .values()
+            .all(|samples| matches!(samples, InputSamples::Batches(batches) if batches.is_empty()));
+    assert!(
+        actual.start_pts == start_pts
+            && actual.end_pts == start_pts + BATCH_DURATION
+            && actual.required == required
+            && no_samples,
+        "expected an empty chunk at {start_pts:?} (required: {required})\nactual: {actual:#?}",
+    );
+}
+
+/// Like [`assert_audio_batch_eq`], but compares sample batch PTS ranges with
+/// `pts_tolerance`. Chunk PTS ranges, ids and required flags are still
+/// compared exactly; tolerance is only for batch PTS that depend on the real
+/// clock (offsets resolved relative to `sync_point` or initialized on the
+/// first received batch).
+#[track_caller]
+pub fn assert_audio_batch_eq_with_tolerance(
+    actual: &AudioBatch,
+    expected: &AudioBatch,
+    pts_tolerance: Duration,
+) {
     let samples_match =
         |actual: Option<&InputSamples>, expected: &InputSamples| match (actual, expected) {
             (Some(InputSamples::Eos), InputSamples::Eos) => true,
@@ -285,7 +316,7 @@ impl TestQueue {
             input_id,
             queue_input,
             video,
-            audio,
+            audio: audio.map(spawn_audio_relay),
             next_frame_id: 0,
         }
     }
@@ -402,11 +433,27 @@ impl Drop for TestQueue {
     }
 }
 
+/// Relay audio batches from an unbounded channel to the queue's bounded track
+/// channel, so test sends never block on the queue's ~100ms internal buffer.
+/// Dropping the returned sender stops the relay, which closes the track once
+/// every pending batch is forwarded.
+fn spawn_audio_relay(queue_sender: QueueSender<InputAudioSamples>) -> Sender<InputAudioSamples> {
+    let (sender, receiver) = unbounded();
+    thread::spawn(move || {
+        for batch in receiver {
+            if queue_sender.send(batch).is_err() {
+                return;
+            }
+        }
+    });
+    sender
+}
+
 pub struct TestInput {
     pub input_id: InputId,
     pub queue_input: QueueInput,
     video: Option<QueueSender<Frame>>,
-    audio: Option<QueueSender<InputAudioSamples>>,
+    audio: Option<Sender<InputAudioSamples>>,
     next_frame_id: u32,
 }
 
@@ -418,7 +465,7 @@ impl TestInput {
     pub fn new_track(&mut self, track: QueueTrackOptions) {
         let (video, audio) = self.queue_input.queue_new_track(track);
         self.video = video;
-        self.audio = audio;
+        self.audio = audio.map(spawn_audio_relay);
     }
 
     /// Send a single frame and return its id (n-th video frame sent on this input).
@@ -458,7 +505,8 @@ impl TestInput {
         })
     }
 
-    /// Send a batch of silence. Blocks on queue backpressure.
+    /// Send a batch of silence. Never blocks: a relay thread forwards batches
+    /// to the queue as fast as its internal buffer allows.
     pub fn send_samples(&self, start_pts: Duration, duration: Duration) {
         self.audio
             .as_ref()
@@ -474,27 +522,10 @@ impl TestInput {
         }
     }
 
-    /// Close the audio track; the queue emits EOS once buffered samples drain.
+    /// Close the audio track; the relay forwards the remaining batches and
+    /// the queue emits EOS once buffered samples drain.
     pub fn end_audio(&mut self) {
         self.audio.take().expect("audio track not active");
-    }
-
-    /// Send sample batches from a background thread and close the audio track
-    /// afterwards. Use when sends would block the test thread, e.g. before the
-    /// queue starts.
-    pub fn stream_audio_then_eos(
-        &mut self,
-        batch_pts: Vec<Duration>,
-        duration: Duration,
-    ) -> thread::JoinHandle<()> {
-        let sender = self.audio.take().expect("audio track not active");
-        thread::spawn(move || {
-            for pts in batch_pts {
-                if sender.send(test_samples(pts, duration)).is_err() {
-                    return;
-                }
-            }
-        })
     }
 
     pub fn video_delivered_event(&self) -> Event {

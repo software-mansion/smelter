@@ -9,7 +9,7 @@ use std::{
 use rand::Rng;
 use rtmp::TlsConfig;
 use smelter_core::DEFAULT_BUFFER_DURATION;
-use smelter_render::{Framerate, RenderingMode, WgpuFeatures};
+use smelter_render::{DEFAULT_MAX_LAYOUTS_COUNT, Framerate, RenderingMode, WgpuFeatures};
 
 use crate::logger::FfmpegLogLevel;
 
@@ -33,6 +33,7 @@ pub struct Config {
     pub output_framerate: Framerate,
 
     pub rendering_mode: RenderingMode,
+    pub render_max_layouts_count: usize,
     pub wgpu_force_gpu: bool,
     pub wgpu_required_features: WgpuFeatures,
     pub gpu_device_id: Option<u32>,
@@ -92,7 +93,7 @@ impl FromStr for LoggerFormat {
 }
 
 pub fn read_config() -> Config {
-    try_read_config().expect("Failed to read the config from environment variables.")
+    try_read_config().expect("Failed to read the config from environment variables")
 }
 
 fn try_read_config() -> Result<Config, String> {
@@ -375,6 +376,23 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => RenderingMode::GpuOptimized,
     };
 
+    let render_max_layouts_count = match env::var("SMELTER_RENDER_MAX_LAYOUTS_COUNT") {
+        Ok(count) => match count.parse::<usize>() {
+            Ok(0) => {
+                println!("CONFIG ERROR: SMELTER_RENDER_MAX_LAYOUTS_COUNT has to be greater than 0");
+                DEFAULT_MAX_LAYOUTS_COUNT
+            }
+            Ok(count) => count,
+            Err(err) => {
+                println!(
+                    "CONFIG ERROR: SMELTER_RENDER_MAX_LAYOUTS_COUNT has to be a valid number: {err}"
+                );
+                DEFAULT_MAX_LAYOUTS_COUNT
+            }
+        },
+        Err(_) => DEFAULT_MAX_LAYOUTS_COUNT,
+    };
+
     let config = Config {
         instance_id,
         api_port,
@@ -413,6 +431,7 @@ fn try_read_config() -> Result<Config, String> {
         moq_enable,
         moq_tls_config,
         rendering_mode,
+        render_max_layouts_count,
     };
     Ok(config)
 }

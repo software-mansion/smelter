@@ -96,6 +96,7 @@ pub fn new_render_options(
         stream_fallback_timeout: Duration::from_millis(value.stream_fallback_timeout_ms),
         load_system_fonts: true,
         rendering_mode: smelter_render::RenderingMode::WebGl,
+        max_layouts_count: smelter_render::DEFAULT_MAX_LAYOUTS_COUNT,
 
         device,
         queue,
