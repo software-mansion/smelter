@@ -5,6 +5,9 @@ use crate::{
     instance::{VideoInstanceBackend, VideoInstanceDescriptor},
 };
 
+#[cfg(video_toolbox)]
+pub mod video_toolbox;
+
 #[cfg(vulkan)]
 pub mod vulkan;
 
@@ -35,8 +38,10 @@ pub(crate) trait WgpuBackend: CoreBackend {
 }
 
 pub(crate) fn default_backend() -> impl CoreBackend {
+    #[cfg(video_toolbox)]
+    return video_toolbox::VTBackend;
     #[cfg(vulkan)]
-    vulkan::VulkanBackend
+    return vulkan::VulkanBackend;
 }
 
 #[cfg(feature = "wgpu")]
@@ -44,6 +49,8 @@ pub(crate) fn backend_from_wgpu(backend: wgpu::Backend) -> Option<impl WgpuBacke
     match backend {
         #[cfg(vulkan)]
         wgpu::Backend::Vulkan => Some(vulkan::VulkanBackend),
+        #[cfg(video_toolbox)]
+        wgpu::Backend::Metal => Some(video_toolbox::VTBackend),
         _ => None,
     }
 }
