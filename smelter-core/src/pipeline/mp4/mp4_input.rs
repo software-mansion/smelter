@@ -31,8 +31,10 @@ use crate::{
 
 use crate::prelude::*;
 
-/// Channel capacity between input and decoder
-const CHUNK_BUFFER_DURATION: Duration = Duration::from_secs(2);
+/// Max channel capacity between input and decoder
+const MAX_CHUNK_BUFFER_DURATION: Duration = Duration::from_secs(2);
+/// Min channel capacity between input and decoder
+const MIN_CHUNK_BUFFER_DURATION: Duration = Duration::from_millis(200);
 
 /// MP4 input - reads from a local file or downloaded URL, demuxes H.264/AAC tracks,
 /// decodes, and feeds frames/samples into the queue. Supports seek, pause, and resume.
@@ -49,8 +51,9 @@ const CHUNK_BUFFER_DURATION: Duration = Duration::from_secs(2);
 ///   - Register track with `QueueTrackOffset::None`
 ///
 /// ### On loop (`opts.should_loop = true`)
-/// - When the reader reaches end for either video or audio, a new track is created with
-///   `QueueTrackOffset::None` and old tracks are aborted.
+/// - When readers of all tracks reach the end, a new track is created with
+///   `QueueTrackOffset::None`. Restart waits for both video and audio to finish,
+///   so no in-progress track is aborted.
 /// - PTS of first frame starts from zero again (same as initial registration).
 ///
 /// ### Pause / Resume / Seek
@@ -138,12 +141,24 @@ impl Mp4Input {
             },
         });
 
+        // Buffer needs to be smaller than half of the longest track, otherwise
+        // reader threads of short looped files finish too far ahead of playback.
+        let chunk_buffer_duration = match Option::max(video_duration, audio_duration) {
+            Some(duration) => Duration::clamp(
+                duration / 2,
+                MIN_CHUNK_BUFFER_DURATION,
+                MAX_CHUNK_BUFFER_DURATION,
+            ),
+            None => MAX_CHUNK_BUFFER_DURATION,
+        };
+
         let initial_seek = options.seek;
         let (mut reader, events_sender) = TrackManagerThread::new(
             &ctx,
             &input_ref,
             options,
             source_file,
+            chunk_buffer_duration,
             queue_input.downgrade(),
         );
 
@@ -228,6 +243,9 @@ struct TrackManagerThread {
     track_ctx: TrackContext,
     video_thread: Option<(JoinHandle<Track<File>>, ShutdownCondition)>,
     audio_thread: Option<(JoinHandle<Track<File>>, ShutdownCondition)>,
+    video_finished: bool,
+    audio_finished: bool,
+    chunk_buffer_duration: Duration,
     queue_input: WeakQueueInput,
 }
 
@@ -237,6 +255,7 @@ impl TrackManagerThread {
         input_ref: &Ref<InputId>,
         options: Mp4InputOptions,
         source_file: Arc<SourceFile>,
+        chunk_buffer_duration: Duration,
         queue_input: WeakQueueInput,
     ) -> (Self, crossbeam_channel::Sender<StateEvent>) {
         let (events_sender, events_receiver) = unbounded();
@@ -258,6 +277,9 @@ impl TrackManagerThread {
                 track_ctx,
                 video_thread: None,
                 audio_thread: None,
+                video_finished: false,
+                audio_finished: false,
+                chunk_buffer_duration,
                 queue_input,
             },
             events_sender,
@@ -284,24 +306,22 @@ impl TrackManagerThread {
                     self.restart_threads(Some(seek));
                 }
                 StateEvent::ThreadFinished(thread_id) => {
-                    match self.options.should_loop {
-                        false => {
-                            // do not break because user can still
-                            // send seek request
-                        }
-                        true => {
-                            if let Some((video, _)) = &self.video_thread
-                                && video.thread().id() == thread_id
-                            {
-                                self.restart_threads(None);
-                            }
+                    if let Some((video, _)) = &self.video_thread
+                        && video.thread().id() == thread_id
+                    {
+                        self.video_finished = true;
+                    }
+                    if let Some((audio, _)) = &self.audio_thread
+                        && audio.thread().id() == thread_id
+                    {
+                        self.audio_finished = true;
+                    }
 
-                            if let Some((audio, _)) = &self.audio_thread
-                                && audio.thread().id() == thread_id
-                            {
-                                self.restart_threads(None);
-                            }
-                        }
+                    let video_finished = self.video_thread.is_none() || self.video_finished;
+                    let audio_finished = self.audio_thread.is_none() || self.audio_finished;
+                    // when not looping do not break because user can still send seek request
+                    if self.options.should_loop && video_finished && audio_finished {
+                        self.restart_threads(None);
                     }
                 }
                 StateEvent::InputShutdown => {
@@ -313,6 +333,8 @@ impl TrackManagerThread {
     }
 
     fn restart_threads(&mut self, seek: Option<Duration>) {
+        self.video_finished = false;
+        self.audio_finished = false;
         let (video_sender, audio_sender) = {
             let Some(queue_input) = self.queue_input.upgrade() else {
                 return;
@@ -444,7 +466,7 @@ impl TrackManagerThread {
                         ctx: self.ctx.clone(),
                         transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
                         frame_sender,
-                        input_buffer_size: CHUNK_BUFFER_DURATION,
+                        input_buffer_size: self.chunk_buffer_duration,
                     },
                 )?
             }
@@ -460,7 +482,7 @@ impl TrackManagerThread {
                         ctx: self.ctx.clone(),
                         transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
                         frame_sender,
-                        input_buffer_size: CHUNK_BUFFER_DURATION,
+                        input_buffer_size: self.chunk_buffer_duration,
                     },
                 )?
             }
@@ -485,7 +507,7 @@ impl TrackManagerThread {
                         asc: Some(data.clone()),
                     },
                     samples_sender,
-                    input_buffer_size: CHUNK_BUFFER_DURATION,
+                    input_buffer_size: self.chunk_buffer_duration,
                 },
             )?,
             _ => {
