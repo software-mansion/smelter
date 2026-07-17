@@ -206,6 +206,15 @@ impl VulkanDevice {
                 } else {
                     transfer_queue.clone()
                 }
+            } else if queue_indices.compute.family_index
+                == queue_indices.graphics_transfer_compute.family_index
+                && queue_indices.compute.queue_count > 1
+            {
+                // The compute queue fell back to wgpu's graphics family. wgpu takes
+                // index 0 of that family (below), so take the second queue we reserved
+                // (index 1) — gpu-video and wgpu run on separate threads and Vulkan
+                // forbids concurrent submission to the same VkQueue.
+                queue_from_device(device.clone(), &queue_indices.graphics_transfer_compute, 1)
             } else {
                 queue_from_device(device.clone(), &queue_indices.compute, 0)
             };

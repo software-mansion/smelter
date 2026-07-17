@@ -260,14 +260,20 @@ impl<'a> VulkanAdapter<'a> {
                 },
                 compute: QueueIndex {
                     family_index: compute_queue_idx,
-                    // When the compute queue falls back to the graphics family
-                    // above, it shares that family with
-                    // `graphics_transfer_compute`. `queue_create_infos()` dedups
-                    // entries by `(family_index, queue_count)`, so a differing
-                    // count would list the same family twice in
-                    // `VkDeviceCreateInfo` — a duplicate that some drivers reject.
-                    // Only compute queue index 0 is ever retrieved, so request one.
-                    queue_count: 1,
+                    // When no dedicated async-compute queue exists, the compute queue
+                    // falls back to the graphics family above — the same family that
+                    // backs `graphics_transfer_compute`, which is handed to wgpu. Vulkan
+                    // requires queue submission to be externally synchronized, and
+                    // gpu-video's compute work and wgpu's graphics work run on separate
+                    // threads, so they must not share one VkQueue. Request a SECOND queue
+                    // from that family here: wgpu takes index 0, gpu-video takes index 1
+                    // (see `vulkan_device.rs`). Capped to what the family actually
+                    // exposes — if it has only one queue, sharing is unavoidable.
+                    queue_count: if compute_queue_idx == graphics_transfer_compute_queue_idx {
+                        (queue_counts[graphics_transfer_compute_queue_idx] as usize).min(2)
+                    } else {
+                        1
+                    },
                     video_properties: video_properties[compute_queue_idx],
                     query_result_status_properties: query_result_status_properties
                         [compute_queue_idx],
