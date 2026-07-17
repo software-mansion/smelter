@@ -11,8 +11,9 @@ use super::init_segment;
 use crate::prelude::*;
 
 /// H264 fallback when the encoder gives us no parameter sets to read the real
-/// values from. Constrained baseline 3.1 is the safest thing to advertise.
-const DEFAULT_H264_PROFILE: (u8, u8, u8) = (0x42, 0x00, 0x1f);
+/// values from. Constrained baseline 3.0 is the safest thing to advertise.
+/// With this setting stream should never be falsely rejected, however may fail to decode.
+const DEFAULT_H264_PROFILE: (u8, u8, u8) = (0x42, 0xe0, 0x1e);
 
 pub(super) fn validate(
     video: &Option<VideoEncoderOptions>,
