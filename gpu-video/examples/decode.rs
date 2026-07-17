@@ -1,4 +1,4 @@
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn main() {
     use std::io::Write;
 
@@ -61,9 +61,9 @@ fn main() {
     }
 }
 
-#[cfg(not(vulkan))]
+#[cfg(not(supported))]
 fn main() {
     println!(
-        "This crate doesn't work on your operating system, because it does not support vulkan"
+        "This crate doesn't work on your operating system, because it does not support vulkan or videotoolbox"
     );
 }

@@ -96,6 +96,44 @@ jobs:
             - name: 📎 Run clippy (no-default-features)
               run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
+    test_macos:
+        needs: build_macos
+        runs-on: macos-15
+        steps:
+            - name: 🛠 Install system dependencies
+              run: brew install ffmpeg
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.96
+
+            - name: 🔬 Install nextest
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-nextest
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 🧩 Git submodules update
+              run: |
+                  cat > .gitmodules << EOF
+                  [submodule "snapshots"]
+                          path = integration-tests/snapshots
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
+                  EOF
+                  git submodule update --init
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "macos-build"
+
+            - name: 🧪 Run gpu-video tests
+              run: |
+                  cargo nextest run --package integration-tests --profile ci -E 'test(/^gpu_video_tests::/)'
+
     test_linux:
         needs: build_and_lint_linux
         runs-on: gpu-gh-hosted-runner

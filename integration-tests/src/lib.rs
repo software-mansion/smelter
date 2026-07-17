@@ -3,7 +3,7 @@
 mod audio_decoder;
 mod common;
 mod compositor_instance;
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod gpu_video_tests;
 mod texture;
 mod video_decoder;

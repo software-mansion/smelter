@@ -1760,7 +1760,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2336,14 +2336,22 @@ name = "gpu-video"
 version = "0.4.0"
 dependencies = [
  "ash",
+ "block2 0.6.2",
  "bytemuck",
  "bytes",
  "cfg_aliases",
  "clap",
  "derivative",
  "h264-reader",
+ "libc",
  "memchr",
  "naga",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-core-media",
+ "objc2-core-video",
+ "objc2-metal 0.3.2",
+ "objc2-video-toolbox",
  "pollster",
  "rustc-hash 2.1.1",
  "thiserror 1.0.69",
@@ -3262,7 +3270,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -3747,8 +3755,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23bf0a141a9ab6f07dbb492db53245e464bc9db42f407772d9ae03d83a2c1033"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -3773,8 +3780,7 @@ dependencies = [
 [[package]]
 name = "naga-types"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "658200ddc25c6c7b860747516d132d1b284c0fafb7a380233acee9a72fb30e11"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "hashbrown 0.17.1",
  "indexmap 2.12.1",
@@ -4111,6 +4117,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-core-audio"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1eebcea8b0dbff5f7c8504f3107c68fc061a3eb44932051c8cf8a68d969c3b2"
+dependencies = [
+ "dispatch2",
+ "objc2 0.6.4",
+ "objc2-core-audio-types",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-core-audio-types"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a89f2ec274a0cf4a32642b2991e8b351a404d290da87bb6a9a9d8632490bd1c"
+dependencies = [
+ "bitflags 2.11.0",
+ "objc2 0.6.4",
+]
+
+[[package]]
 name = "objc2-core-data"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4139,6 +4167,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807"
 dependencies = [
+ "bitflags 2.11.0",
  "dispatch2",
  "objc2 0.6.4",
  "objc2-core-foundation",
@@ -4167,6 +4196,35 @@ dependencies = [
  "objc2 0.5.2",
  "objc2-contacts",
  "objc2-foundation 0.2.2",
+]
+
+[[package]]
+name = "objc2-core-media"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05ec576860167a15dd9fce7fbee7512beb4e31f532159d3482d1f9c6caedf31d"
+dependencies = [
+ "bitflags 2.11.0",
+ "dispatch2",
+ "objc2 0.6.4",
+ "objc2-core-audio",
+ "objc2-core-audio-types",
+ "objc2-core-foundation",
+ "objc2-core-video",
+]
+
+[[package]]
+name = "objc2-core-video"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d425caf1df73233f29fd8a5c3e5edbc30d2d4307870f802d18f00d83dc5141a6"
+dependencies = [
+ "bitflags 2.11.0",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-io-surface",
+ "objc2-metal 0.3.2",
 ]
 
 [[package]]
@@ -4326,6 +4384,21 @@ dependencies = [
  "objc2 0.5.2",
  "objc2-core-location",
  "objc2-foundation 0.2.2",
+]
+
+[[package]]
+name = "objc2-video-toolbox"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05bf9a3c14831a7d9641b0d81d87dd913ee238a012b2fde27db5a84b56f5df3e"
+dependencies = [
+ "bitflags 2.11.0",
+ "block2 0.6.2",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-core-media",
+ "objc2-core-video",
 ]
 
 [[package]]
@@ -5475,7 +5548,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6671,7 +6744,7 @@ dependencies = [
  "getrandom 0.3.1",
  "once_cell",
  "rustix 0.38.44",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8166,8 +8239,7 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 [[package]]
 name = "wgpu"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d8f4bd44d92da5270f03409dba9f952dab24f128e05d6a554926101d1bf9114"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "arrayvec",
  "bitflags 2.11.0",
@@ -8196,8 +8268,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08763620e76fc980bca7bf84de82568614487a53172dd968d89187282eb87fa2"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -8233,8 +8304,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-apple"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3283b6da70d7fc892de95840215aa36381b5d0cbc479e88ee2b173c7b992b225"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "wgpu-hal",
 ]
@@ -8242,8 +8312,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-emscripten"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85dcf2b2e5c2afb9eda64c570a87a4e570304bf39e52eddbaaf222d655b656ad"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "wgpu-hal",
 ]
@@ -8251,8 +8320,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-wasm"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b6c13228950f36a56023976a6c4ee6714b27fb40e3d52a33f7d3bb6d109c0b1"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "wgpu-hal",
 ]
@@ -8260,8 +8328,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f76bc9c1c186ff3d9054e0d224c93c8c1c79d6653907c5249a5c1ea1a2cb1e43"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "wgpu-hal",
 ]
@@ -8269,8 +8336,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf765132d8d5f50e192e7880464890c13f4e7457aafe8e5466e8174586e9f101"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -8325,8 +8391,7 @@ dependencies = [
 [[package]]
 name = "wgpu-naga-bridge"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9eaac644e5008925c78567d272b9d66ef83da55a53cc17fc7daade7bb6e66e5"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "naga",
  "wgpu-types",
@@ -8335,8 +8400,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "30.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a9c93c2b35edde326df60ffdee4c0f5864eac3011d6768b70d43f028ad93565"
+source = "git+https://github.com/jerzywilczek/wgpu?rev=d144c91af6fd090cd86c0a25e3ac2b359af6f871#d144c91af6fd090cd86c0a25e3ac2b359af6f871"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
@@ -8408,7 +8472,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

@@ -22,7 +22,13 @@ keywords = ["vulkan", "video", "wgpu", "decoding", "encoding"]
 [features]
 expose-parsers = []
 expose-backends = []
-wgpu = ["dep:wgpu"]
+wgpu = [
+    "dep:wgpu",
+    "dep:objc2-metal",
+    "objc2-core-video/CVMetalTexture",
+    "objc2-core-video/CVMetalTextureCache",
+    "objc2-core-video/objc2-metal",
+]
 transcoder = ["dep:naga", "dep:bytemuck"]
 default = ["wgpu"]
 
@@ -42,17 +48,76 @@ wgpu = { version = "30.0.0", optional = true }
 ash = { workspace = true }
 vk-mem = "0.4.0"
 
+[target.'cfg(target_vendor = "apple")'.dependencies]
+objc2-video-toolbox = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "VTBase",
+    "VTErrors",
+    "VTSession",
+    "VTDecompressionSession",
+    "VTDecompressionProperties",
+    "VTCompressionSession",
+    "VTCompressionProperties",
+    "VTVideoEncoderList",
+    "block2",
+    "objc2",
+    "objc2-core-media",
+    "objc2-core-video",
+] }
+objc2-core-media = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "CMBase",
+    "CMBlockBuffer",
+    "CMFormatDescription",
+    "CMSampleBuffer",
+    "CMTime",
+    "objc2",
+] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "CFBase",
+    "CFDictionary",
+    "CFNumber",
+    "CFString",
+    "objc2",
+] }
+objc2-core-video = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "CVBase",
+    "CVBuffer",
+    "CVImageBuffer",
+    "CVPixelBuffer",
+    "CVPixelBufferIOSurface",
+    "CVReturn",
+    "objc2",
+] }
+objc2-metal = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "MTLDevice",
+    "MTLPixelFormat",
+    "MTLTexture",
+], optional = true }
+objc2 = { version = "0.6.4" }
+block2 = { version = "0.6.2" }
+libc = { version = "0.2.186" }
+pollster = { workspace = true }
+
 [dev-dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
 tracing-subscriber = "0.3.20"
-wgpu = { version = "30.0.0", features = ["noop"] }
+wgpu = { version = "30.0.0", features = [
+    "noop",
+] }
 winit = "0.30"
 bytemuck = { version = "1.19.0", features = ["derive"] }
 pollster = { workspace = true }
 
 [build-dependencies]
 cfg_aliases = "0.2.1"
-naga = { version = "30.0.0", features = ["spv-out", "wgsl-in"], optional = true }
+naga = { version = "30.0.0", features = [
+    "spv-out",
+    "wgsl-in",
+], optional = true }
 
 [lints]
 workspace = true

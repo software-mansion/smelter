@@ -82,6 +82,19 @@ pub enum DeviceType {
     Cpu,
 }
 
+#[cfg(feature = "wgpu")]
+impl From<wgpu::DeviceType> for DeviceType {
+    fn from(value: wgpu::DeviceType) -> Self {
+        match value {
+            wgpu::DeviceType::Other => DeviceType::Other,
+            wgpu::DeviceType::IntegratedGpu => DeviceType::IntegratedGpu,
+            wgpu::DeviceType::DiscreteGpu => DeviceType::DiscreteGpu,
+            wgpu::DeviceType::VirtualGpu => DeviceType::VirtualGpu,
+            wgpu::DeviceType::Cpu => DeviceType::Cpu,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct VideoAdapterInfo {
     pub name: String,
