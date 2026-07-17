@@ -51,9 +51,9 @@ const MIN_CHUNK_BUFFER_DURATION: Duration = Duration::from_millis(200);
 ///   - Register track with `QueueTrackOffset::None`
 ///
 /// ### On loop (`opts.should_loop = true`)
-/// - When readers of all tracks reach the end, a new track is created with
-///   `QueueTrackOffset::None`. Restart waits for both video and audio to finish,
-///   so no in-progress track is aborted.
+/// - When the video reader reaches the end (or the audio reader if there is no
+///   video track), a new track is created with `QueueTrackOffset::None` and the
+///   remaining in-progress track is aborted.
 /// - PTS of first frame starts from zero again (same as initial registration).
 ///
 /// ### Pause / Resume / Seek
@@ -243,8 +243,6 @@ struct TrackManagerThread {
     track_ctx: TrackContext,
     video_thread: Option<(JoinHandle<Track<File>>, ShutdownCondition)>,
     audio_thread: Option<(JoinHandle<Track<File>>, ShutdownCondition)>,
-    video_finished: bool,
-    audio_finished: bool,
     chunk_buffer_duration: Duration,
     queue_input: WeakQueueInput,
 }
@@ -277,8 +275,6 @@ impl TrackManagerThread {
                 track_ctx,
                 video_thread: None,
                 audio_thread: None,
-                video_finished: false,
-                audio_finished: false,
                 chunk_buffer_duration,
                 queue_input,
             },
@@ -306,21 +302,13 @@ impl TrackManagerThread {
                     self.restart_threads(Some(seek));
                 }
                 StateEvent::ThreadFinished(thread_id) => {
-                    if let Some((video, _)) = &self.video_thread
-                        && video.thread().id() == thread_id
-                    {
-                        self.video_finished = true;
-                    }
-                    if let Some((audio, _)) = &self.audio_thread
-                        && audio.thread().id() == thread_id
-                    {
-                        self.audio_finished = true;
-                    }
+                    // Loop restart is driven by the video track (audio if no video track).
+                    let primary_thread = self.video_thread.as_ref().or(self.audio_thread.as_ref());
+                    let primary_finished =
+                        primary_thread.is_some_and(|(handle, _)| handle.thread().id() == thread_id);
 
-                    let video_finished = self.video_thread.is_none() || self.video_finished;
-                    let audio_finished = self.audio_thread.is_none() || self.audio_finished;
                     // when not looping do not break because user can still send seek request
-                    if self.options.should_loop && video_finished && audio_finished {
+                    if self.options.should_loop && primary_finished {
                         self.restart_threads(None);
                     }
                 }
@@ -333,8 +321,6 @@ impl TrackManagerThread {
     }
 
     fn restart_threads(&mut self, seek: Option<Duration>) {
-        self.video_finished = false;
-        self.audio_finished = false;
         let (video_sender, audio_sender) = {
             let Some(queue_input) = self.queue_input.upgrade() else {
                 return;
