@@ -1,5 +1,8 @@
 use std::{
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -7,6 +10,7 @@ use std::{
 use tokio::sync::{mpsc, oneshot};
 use tracing::{Instrument, Level, debug, span, trace, warn};
 use url::Url;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
 
 use establish_peer_connection::exchange_sdp_offers;
@@ -107,6 +111,7 @@ struct WhipClientTask {
     output_ref: Ref<OutputId>,
     video_track: Option<WhipClientTrack>,
     audio_track: Option<WhipClientTrack>,
+    should_close: Arc<AtomicBool>,
 
     #[allow(dead_code)]
     pc: PeerConnection,
@@ -126,14 +131,7 @@ impl WhipClientTask {
         let client = WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
         let pc = PeerConnection::new(&ctx, codec_params).await?;
 
-        {
-            let stats_sender = ctx.stats_sender.clone();
-            let output_ref = output_ref.clone();
-            pc.on_connection_state_change(move |state| {
-                stats_sender
-                    .send(WhipOutputStatsEvent::PeerStateChanged(state).into_event(&output_ref));
-            });
-        }
+        let should_close = Self::register_connection_state_handler(&pc, &ctx, &output_ref);
 
         let video_rtc_sender = pc.new_video_track().await?;
         let audio_rtc_sender = pc.new_audio_track().await?;
@@ -181,6 +179,7 @@ impl WhipClientTask {
                 output_ref,
                 video_track,
                 audio_track,
+                should_close,
                 pc,
             },
             WhipOutput {
@@ -190,13 +189,47 @@ impl WhipClientTask {
         ))
     }
 
-    async fn run(self) {
-        let (mut audio_receiver, audio_track) = match self.audio_track {
+    /// Registers a connection state handler on the peer connection. Returns a
+    /// flag that is set when the connection fails or closes.
+    fn register_connection_state_handler(
+        pc: &PeerConnection,
+        ctx: &Arc<PipelineCtx>,
+        output_ref: &Ref<OutputId>,
+    ) -> Arc<AtomicBool> {
+        let should_close = Arc::new(AtomicBool::new(false));
+        let close_flag = should_close.clone();
+        let ctx = ctx.clone();
+        let output_ref = output_ref.clone();
+        pc.on_connection_state_change(move |state| {
+            ctx.stats_sender
+                .send(WhipOutputStatsEvent::PeerStateChanged(state).into_event(&output_ref));
+
+            match state {
+                RTCPeerConnectionState::Disconnected => {
+                    ctx.event_emitter.emit(Event::OutputError {
+                        output_id: output_ref.id().clone(),
+                        severity: ErrorSeverity::Transient,
+                        err: OutputWhipRuntimeError::PeerConnectionDisconnected.into(),
+                    });
+                }
+                RTCPeerConnectionState::Failed | RTCPeerConnectionState::Closed => {
+                    close_flag.store(true, Ordering::Relaxed);
+                }
+                _ => {}
+            }
+        });
+        should_close
+    }
+
+    /// Forward packets from audio/video channels while making sure they
+    /// are interleaved according to their timestamps
+    async fn run(mut self) {
+        let (mut audio_receiver, audio_track) = match self.audio_track.take() {
             Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
             None => (None, None),
         };
 
-        let (mut video_receiver, video_track) = match self.video_track {
+        let (mut video_receiver, video_track) = match self.video_track.take() {
             Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
             None => (None, None),
         };
@@ -250,6 +283,11 @@ impl WhipClientTask {
                     // no audio, but can't read video at this moment
                 }
             };
+
+            if self.should_close.load(Ordering::Relaxed) {
+                debug!("Peer connection disconnected, closing WHIP output.");
+                break;
+            }
 
             match (&next_video_packet, &next_audio_packet) {
                 // try to wait for both audio and video packet to be ready
