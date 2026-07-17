@@ -7,24 +7,22 @@ use ash::vk;
 
 use crate::backends::vulkan::codec::EncodeCodec;
 use crate::backends::vulkan::codec::h264::H264Codec;
-use crate::backends::vulkan::vulkan_decoder::ImageModifiers;
+use crate::backends::vulkan::task_thread::TaskThread;
+use crate::backends::vulkan::vulkan_decoder::decoder_frontends::{BytesOutput, VulkanDecoderH264};
 use crate::backends::vulkan::vulkan_encoder::FullEncoderParameters;
 use crate::backends::vulkan::wrappers::*;
 use crate::backends::vulkan::{
-    VulkanAdapter, VulkanAdapterInfo, VulkanDecoder, VulkanDecoderError, VulkanEncoder,
-    VulkanEncoderError,
+    VulkanAdapter, VulkanAdapterInfo, VulkanDecoderError, VulkanEncoder, VulkanEncoderError,
 };
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
+use crate::decoders::FrameCallback;
 use crate::device::{
     ColorRange, CoreVideoDeviceBackend, DecoderParameters, EncoderOutputParameters,
     EncoderParametersH264, EncoderParametersH265, Rational, VideoDeviceDescriptor,
 };
-use crate::frame_sorter::FrameSorter;
 use crate::parameters::EncoderPreset;
-use crate::parser::h264::H264Parser;
-use crate::parser::reference_manager::ReferenceContext;
 use crate::{
-    BytesDecoder, BytesEncoderH264, BytesEncoderH265, RawFrameData, VideoBackendError,
+    BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, RawFrameData, VideoBackendError,
     VideoDecoderError, VideoDeviceInitError, VideoEncoderError,
 };
 
@@ -47,14 +45,17 @@ pub struct VulkanDevice {
     pub(crate) native_encode_capabilities: Option<NativeEncodeCapabilities>,
     pub(crate) adapter_info: Arc<VulkanAdapterInfo>,
     pub(crate) device: Arc<Device>,
+    pub(crate) task_thread: Arc<TaskThread>,
 }
 
 impl CoreVideoDeviceBackend for VulkanDevice {
     fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: DecoderParameters,
-    ) -> Result<BytesDecoder, VideoDecoderError> {
-        VulkanDevice::create_bytes_decoder_h264(self, parameters).map_err(Into::into)
+        on_frame_callback: FrameCallback<RawFrameData>,
+    ) -> Result<BytesDecoderH264, VideoDecoderError> {
+        VulkanDevice::create_bytes_decoder_h264(self, parameters, on_frame_callback)
+            .map_err(Into::into)
     }
 
     fn create_bytes_encoder_h264(
@@ -233,32 +234,24 @@ impl VulkanDevice {
             native_decode_capabilities: decode_capabilities,
             native_encode_capabilities: encode_capabilities,
             adapter_info: Arc::new(info),
+            task_thread: Arc::new(TaskThread::spawn()),
         }))
     }
 
     pub fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: DecoderParameters,
-    ) -> Result<BytesDecoder, VulkanDecoderError> {
-        let parser = H264Parser::default();
-        let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
-
-        let vulkan_decoder = VulkanDecoder::new(
+        on_frame_callback: FrameCallback<RawFrameData>,
+    ) -> Result<BytesDecoderH264, VulkanDecoderError> {
+        let backend = VulkanDecoderH264::new(
             Arc::new(self.decoding_device()?),
-            parameters.usage_flags,
-            ImageModifiers {
-                additional_queue_index: self.queues.transfer.family_index,
-                create_flags: Default::default(),
-                usage_flags: Default::default(),
-            },
+            parameters,
+            BytesOutput::new(on_frame_callback),
+            self.task_thread.clone(),
         )?;
-        let frame_sorter = FrameSorter::<RawFrameData>::new();
 
-        Ok(BytesDecoder {
-            parser,
-            reference_ctx,
-            decoder: Box::new(vulkan_decoder),
-            frame_sorter,
+        Ok(BytesDecoderH264 {
+            backend: Box::new(backend),
         })
     }
 

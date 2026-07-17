@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::{
     VideoDecoderError, VideoEncoderError,
     backends::{WgpuBackend, backend_from_wgpu},
+    decoders::FrameCallback,
     device::{DecoderParameters, EncoderParametersH264, EncoderParametersH265},
     global_registry::{GlobalRegistry, RegistryError},
 };
@@ -31,8 +32,10 @@ pub(crate) trait WgpuVideoDeviceBackend: Send + Sync {
     fn create_wgpu_textures_decoder_h264(
         self: Arc<Self>,
         wgpu_device: wgpu::Device,
+        wgpu_queue: wgpu::Queue,
         parameters: DecoderParameters,
-    ) -> Result<crate::WgpuTexturesDecoder, VideoDecoderError>;
+        on_frame_callback: FrameCallback<wgpu::Texture>,
+    ) -> Result<crate::WgpuTexturesDecoderH264, VideoDecoderError>;
 
     fn create_wgpu_textures_encoder_h264(
         self: Arc<Self>,

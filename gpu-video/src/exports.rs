@@ -118,7 +118,7 @@ use crate::device::{
 };
 use crate::parameters::{H264Profile, H265Profile, RateControl};
 use crate::parser::h264::AccessUnit;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "wgpu")]
 pub use crate::{
@@ -130,8 +130,8 @@ pub use crate::{
 
 pub use crate::adapter::VideoAdapter;
 #[cfg(feature = "wgpu")]
-pub use crate::decoders::WgpuTexturesDecoder;
-pub use crate::decoders::{BytesDecoder, VideoDecoderError};
+pub use crate::decoders::WgpuTexturesDecoderH264;
+pub use crate::decoders::{BytesDecoderH264, VideoDecoderError};
 pub use crate::encoders::{BytesEncoderH264, BytesEncoderH265, VideoEncoderError};
 #[cfg(feature = "wgpu")]
 pub use crate::encoders::{WgpuTexturesEncoderH264, WgpuTexturesEncoderH265};
@@ -182,25 +182,39 @@ impl std::fmt::Debug for VideoDevice {
 }
 
 impl VideoDevice {
-    pub fn create_bytes_decoder_h264(
+    pub fn create_bytes_decoder_h264<F>(
         &self,
         parameters: DecoderParameters,
-    ) -> Result<BytesDecoder, VideoDecoderError> {
-        self.inner.clone().create_bytes_decoder_h264(parameters)
+        on_frame: F,
+    ) -> Result<BytesDecoderH264, VideoDecoderError>
+    where
+        F: FnMut(Result<OutputFrame<RawFrameData>, VideoDecoderError>) + Send + 'static,
+    {
+        self.inner
+            .clone()
+            .create_bytes_decoder_h264(parameters, Arc::new(Mutex::new(on_frame)))
     }
 
     #[cfg(feature = "wgpu")]
-    pub fn create_wgpu_textures_decoder_h264(
+    pub fn create_wgpu_textures_decoder_h264<F>(
         &self,
+        wgpu_queue: &wgpu::Queue,
         parameters: DecoderParameters,
-    ) -> Result<WgpuTexturesDecoder, VideoDecoderError> {
+        on_frame: F,
+    ) -> Result<WgpuTexturesDecoderH264, VideoDecoderError>
+    where
+        F: FnMut(Result<OutputFrame<wgpu::Texture>, VideoDecoderError>) + Send + 'static,
+    {
         let Some(wgpu_device) = self.wgpu_device.clone() else {
             return Err(VideoDecoderError::VideoDeviceWithoutWgpu);
         };
 
-        self.inner
-            .clone()
-            .create_wgpu_textures_decoder_h264(wgpu_device, parameters)
+        self.inner.clone().create_wgpu_textures_decoder_h264(
+            wgpu_device,
+            wgpu_queue.clone(),
+            parameters,
+            Arc::new(Mutex::new(on_frame)),
+        )
     }
 
     /// Create a single-input multiple-output transcoder.
@@ -428,6 +442,7 @@ pub struct InputFrame<T> {
 }
 
 /// Additional information about the decoded frame.
+#[derive(Clone)]
 pub struct FrameMetadata {
     pub pts: Option<u64>,
     pub color_space: ColorSpace,
