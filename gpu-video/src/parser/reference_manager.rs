@@ -1268,20 +1268,31 @@ impl SliceHeaderExt for SliceHeader {
     }
 }
 
-#[derive(Clone, derivative::Derivative)]
-#[derivative(Debug)]
+#[derive(Clone)]
 pub struct DecodeInformation {
     pub(crate) reference_list_l0: Option<Vec<ReferencePictureInfo>>,
     pub(crate) reference_list_l1: Option<Vec<ReferencePictureInfo>>,
-    #[derivative(Debug = "ignore")]
     pub(crate) rbsp_bytes: Vec<u8>,
     pub(crate) slice_indices: Vec<usize>,
-    #[derivative(Debug = "ignore")]
     pub(crate) header: Arc<SliceHeader>,
     pub(crate) sps_id: u8,
     pub(crate) pps_id: u8,
     pub(crate) picture_info: PictureInfo,
     pub(crate) pts: Option<u64>,
+}
+
+impl std::fmt::Debug for DecodeInformation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DecodeInformation")
+            .field("reference_list_l0", &self.reference_list_l0)
+            .field("reference_list_l1", &self.reference_list_l1)
+            .field("slice_indices", &self.slice_indices)
+            .field("sps_id", &self.sps_id)
+            .field("pps_id", &self.pps_id)
+            .field("picture_info", &self.picture_info)
+            .field("pts", &self.pts)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
