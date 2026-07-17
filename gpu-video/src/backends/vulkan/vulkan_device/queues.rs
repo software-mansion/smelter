@@ -26,7 +26,7 @@ impl Queue {
     pub(crate) fn submit_chain_semaphore<K: TrackerKind>(
         &self,
         buffer: RecordedCommandBuffer,
-        tracker: &mut Tracker<K>,
+        tracker: &Tracker<K>,
         wait_stages: vk::PipelineStageFlags2,
         signal_stages: vk::PipelineStageFlags2,
         new_wait_state: K::WaitState,
@@ -164,7 +164,7 @@ impl VideoQueues {
     pub(crate) fn submit_chain_semaphore<K: TrackerKind>(
         &self,
         buffer: RecordedCommandBuffer,
-        tracker: &mut Tracker<K>,
+        tracker: &Tracker<K>,
         wait_stages: vk::PipelineStageFlags2,
         signal_stages: vk::PipelineStageFlags2,
         new_wait_state: K::WaitState,

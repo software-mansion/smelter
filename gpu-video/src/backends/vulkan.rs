@@ -8,6 +8,7 @@ use crate::{
 use ash::vk;
 
 pub(crate) mod codec;
+pub(crate) mod task_thread;
 pub(crate) mod vulkan_adapter;
 pub(crate) mod vulkan_decoder;
 pub(crate) mod vulkan_device;

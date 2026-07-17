@@ -2,9 +2,11 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
+use crate::decoders::FrameCallback;
 use crate::parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl};
 use crate::{
-    BytesDecoder, BytesEncoderH264, BytesEncoderH265, VideoDecoderError, VideoEncoderError,
+    BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, RawFrameData, VideoDecoderError,
+    VideoEncoderError,
 };
 
 #[cfg(feature = "wgpu")]
@@ -13,7 +15,7 @@ pub(crate) mod wgpu_api;
 pub use wgpu_api::*;
 
 /// Describes a [`VideoDevice`](crate::VideoDevice).
-/// Used by [`VideoAdapter::create_device`]
+/// Used by [`VideoAdapter::create_device`](crate::VideoAdapter)
 #[derive(Default, Clone)]
 pub struct VideoDeviceDescriptor {
     #[cfg(feature = "wgpu")]
@@ -42,9 +44,9 @@ impl From<u32> for Rational {
     }
 }
 
-/// An enum used to specify how the decoder should handle missing frames
+/// An enum used to specify how the decoder should handle corrupted state
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MissedFrameHandling {
+pub enum CorruptedStateHandling {
     /// When missed frames are detected, error on every subsequent frame that depends on them
     /// (i. e. fail on every frame until an IDR frame arrives)
     #[default]
@@ -56,15 +58,31 @@ pub enum MissedFrameHandling {
 }
 
 /// Parameters for decoder creation
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct DecoderParameters {
-    /// See [`MissedFrameHandling`] for description of different handling approaches.
+    /// See [`CorruptedStateHandling`] for description of different handling approaches.
     ///
-    /// **Defaults to [`MissedFrameHandling::Strict`]**
-    pub missed_frame_handling: MissedFrameHandling,
+    /// **Defaults to [`CorruptedStateHandling::Strict`]**
+    pub missed_frame_handling: CorruptedStateHandling,
 
     /// A hint indicating what kind of content the decoder is going to be used for.
     pub usage_flags: crate::parameters::DecoderUsage,
+
+    /// Maximum number of decode submissions that can be in flight. When the limit is reached,
+    /// decoding blocks until the oldest submission finishes.
+    ///
+    /// **Defaults to 3**
+    pub max_in_flight_submissions: NonZeroU32,
+}
+
+impl Default for DecoderParameters {
+    fn default() -> Self {
+        Self {
+            missed_frame_handling: Default::default(),
+            usage_flags: Default::default(),
+            max_in_flight_submissions: NonZeroU32::new(3).unwrap(),
+        }
+    }
 }
 
 /// Things the encoder needs to know about the video
@@ -217,7 +235,8 @@ pub(crate) trait CoreVideoDeviceBackend: Send + Sync {
     fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: DecoderParameters,
-    ) -> Result<BytesDecoder, VideoDecoderError>;
+        on_frame_callback: FrameCallback<RawFrameData>,
+    ) -> Result<BytesDecoderH264, VideoDecoderError>;
 
     fn create_bytes_encoder_h264(
         self: Arc<Self>,

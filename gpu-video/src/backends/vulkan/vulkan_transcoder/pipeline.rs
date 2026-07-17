@@ -417,7 +417,7 @@ impl ResizingPipeline {
 
     pub(crate) fn run(
         &mut self,
-        input_submission: &mut DecodeSubmission,
+        input_submission: &DecodeSubmission,
         encoder_trackers: &mut [&mut EncoderTracker],
         input_cropped_extent: vk::Extent2D,
     ) -> Result<ResizeSubmission, VulkanTranscoderError> {
