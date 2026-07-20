@@ -109,26 +109,17 @@ impl AudioQueueInput {
         queue_start_pts: Duration,
     ) -> QueueAudioSamples {
         if self.paused {
-            return QueueAudioSamples {
-                samples: vec![],
-                is_eos: false,
-            };
+            return QueueAudioSamples::empty();
         }
 
         let Some(offset) = self.resolve_offset(pts_range.0, queue_start_pts) else {
-            return QueueAudioSamples {
-                samples: vec![],
-                is_eos: false,
-            };
+            return QueueAudioSamples::empty();
         };
 
         if let Some(offset_from_start) = self.offset_from_start
             && pts_range.1 < queue_start_pts + offset_from_start
         {
-            return QueueAudioSamples {
-                samples: vec![],
-                is_eos: false,
-            };
+            return QueueAudioSamples::empty();
         }
 
         let input_pts = (pts_range.1 + MIXER_STRETCH_BUFFER).saturating_sub(offset);

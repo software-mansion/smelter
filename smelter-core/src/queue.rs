@@ -178,6 +178,15 @@ pub(super) struct QueueVideoFrame {
     pub is_eos: bool,
 }
 
+impl QueueVideoFrame {
+    pub(super) fn empty() -> Self {
+        Self {
+            frame: None,
+            is_eos: false,
+        }
+    }
+}
+
 impl From<QueueVideoOutput> for FrameSet<InputId> {
     fn from(value: QueueVideoOutput) -> Self {
         Self {
@@ -204,6 +213,15 @@ pub(super) struct QueueAudioSamples {
     pub samples: Vec<InputAudioSamples>,
     /// Track on this input ended.
     pub is_eos: bool,
+}
+
+impl QueueAudioSamples {
+    pub(super) fn empty() -> Self {
+        Self {
+            samples: vec![],
+            is_eos: false,
+        }
+    }
 }
 
 impl From<QueueAudioOutput> for InputSamplesSet {

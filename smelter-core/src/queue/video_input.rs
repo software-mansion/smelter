@@ -117,10 +117,7 @@ impl VideoQueueInput {
 
     pub(super) fn paused_event(&self, pts: Duration) -> QueueVideoFrame {
         let Some(offset) = self.track_offset.get() else {
-            return QueueVideoFrame {
-                frame: None,
-                is_eos: false,
-            };
+            return QueueVideoFrame::empty();
         };
         if let (Some(paused_pts), Some(mut frame)) = (self.paused_pts, self.paused_frame.clone()) {
             frame.pts += offset + pts.saturating_sub(paused_pts);
@@ -129,10 +126,7 @@ impl VideoQueueInput {
                 is_eos: false,
             };
         }
-        QueueVideoFrame {
-            frame: None,
-            is_eos: false,
-        }
+        QueueVideoFrame::empty()
     }
 
     /// Return frame for PTS and drop all the older frames. This function does not check
@@ -147,17 +141,11 @@ impl VideoQueueInput {
         }
 
         let Some(offset) = self.resolve_offset(pts, queue_start_pts) else {
-            return QueueVideoFrame {
-                frame: None,
-                is_eos: false,
-            };
+            return QueueVideoFrame::empty();
         };
 
         let Some(input_pts) = pts.checked_sub(offset) else {
-            return QueueVideoFrame {
-                frame: None,
-                is_eos: false,
-            };
+            return QueueVideoFrame::empty();
         };
         trace!(queue_pts=?pts, ?input_pts, "Try get frame");
 
