@@ -323,8 +323,8 @@ impl ResampledChild {
         } else {
             let full = source.resolution();
             let reduced = Resolution {
-                width: full.width / factor[0] as usize,
-                height: full.height / factor[1] as usize,
+                width: full.width.div_ceil(factor[0] as usize),
+                height: full.height.div_ceil(factor[1] as usize),
             };
             let view = Intermediate::ensure(&mut self.reduced, wgpu_ctx, reduced);
             let bytes = bytemuck::bytes_of(&factor);
