@@ -84,6 +84,7 @@ pub(super) fn opus(sample_rate: u32, channels: AudioChannels) -> Result<Bytes, M
         tkhd: mp4_atom::Tkhd {
             track_id: TRACK_ID,
             enabled: true,
+            volume: mp4_atom::FixedPoint::from(1u8),
             ..Default::default()
         },
         mdia: mdia(sample_rate, b"soun", sample_entry),
@@ -134,6 +135,8 @@ fn encode_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
     let moov = mp4_atom::Moov {
         mvhd: mp4_atom::Mvhd {
             timescale: trak.mdia.mdhd.timescale,
+            rate: mp4_atom::FixedPoint::from(1u16),
+            volume: mp4_atom::FixedPoint::from(1u8),
             ..Default::default()
         },
         mvex: Some(mp4_atom::Mvex {
