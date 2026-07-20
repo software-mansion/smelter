@@ -126,10 +126,15 @@ fn mdia(timescale: u32, handler: &[u8; 4], sample_entry: mp4_atom::Codec) -> mp4
 }
 
 fn encode_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
+    // CMAF §7.3.2: a CMAF header must declare the `cmfc` structural brand;
+    // `iso6` covers the fragmented-file features (styp, default-base-is-moof)
+    // the segments rely on. `cmf2` is deliberately absent — its extra
+    // constraints (v1 trun, no video edit lists) depend on how moq-mux writes
+    // the media segments, which is not verified here.
     let ftyp = mp4_atom::Ftyp {
-        major_brand: b"isom".into(),
-        minor_version: 0x200,
-        compatible_brands: vec![b"isom".into(), b"iso6".into(), b"mp41".into()],
+        major_brand: b"iso6".into(),
+        minor_version: 0,
+        compatible_brands: vec![b"iso6".into(), b"cmfc".into(), b"mp41".into()],
     };
 
     let moov = mp4_atom::Moov {
