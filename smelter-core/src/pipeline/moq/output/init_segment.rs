@@ -66,6 +66,11 @@ pub(super) fn opus(sample_rate: u32, channels: AudioChannels) -> Result<Bytes, M
             sample_size: 16,
             sample_rate: mp4_atom::FixedPoint::from(sample_rate as u16),
         },
+        // TODO: pre_skip should be the encoder lookahead in 48 kHz samples
+        // (~312 for libopus), not 0. The libopus encoder already computes it
+        // (`OPUS_GET_LOOKAHEAD`) and stores it in its OpusHead extradata
+        // (bytes 10..12, LE), but only the encoder options are plumbed through
+        // to here.
         dops: mp4_atom::Dops {
             output_channel_count: channel_count,
             pre_skip: 0,
