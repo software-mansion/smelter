@@ -74,9 +74,9 @@ pub(super) struct InnerQueueInput {
 
 impl InnerQueueInput {
     fn maybe_start_next_track(&mut self) {
-        let video_done = self.video.as_mut().map(|v| v.is_done()).unwrap_or(true);
-        let audio_done = self.audio.as_mut().map(|a| a.is_done()).unwrap_or(true);
-        if video_done && audio_done {
+        let video_eos_sent = self.video.as_ref().map(|v| v.eos_sent()).unwrap_or(true);
+        let audio_eos_sent = self.audio.as_ref().map(|a| a.eos_sent()).unwrap_or(true);
+        if video_eos_sent && audio_eos_sent {
             self.replace_track()
         }
     }

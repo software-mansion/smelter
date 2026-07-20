@@ -78,8 +78,10 @@ impl AudioQueueInput {
         (input, sender)
     }
 
-    pub(super) fn is_done(&mut self) -> bool {
-        matches!(self.receiver.state(), ReceiverState::Done)
+    /// The track ended and its EOS was delivered in a chunk. Only then it is
+    /// safe to replace the track with the next one.
+    pub(super) fn eos_sent(&self) -> bool {
+        self.event_eos_guard.emited()
     }
 
     pub(super) fn required(&self) -> bool {
@@ -148,7 +150,8 @@ impl AudioQueueInput {
 
     /// True on the first call after the track ended; also emits the EOS event.
     fn check_eos(&mut self) -> bool {
-        let is_eos = self.is_done() && !self.event_eos_guard.emited();
+        let is_eos =
+            matches!(self.receiver.state(), ReceiverState::Done) && !self.event_eos_guard.emited();
         if is_eos {
             self.event_eos_guard.emit();
         }
