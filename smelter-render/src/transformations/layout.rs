@@ -2,18 +2,20 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     Resolution,
-    scene::{BorderRadius, BoxShadow, ImageScalingFilter, RGBAColor, Size},
+    scene::{BorderRadius, BoxShadow, RGBAColor, Size},
     state::{RenderCtx, node_texture::NodeTexture},
-    types::RenderingMode,
-    wgpu::utils::MippedTexture,
 };
 
 mod flatten;
 mod layout_renderer;
 mod params;
+mod resampler;
 mod shader;
 
-use self::shader::LayoutShader;
+use self::{
+    resampler::{ResampledChild, ResamplerShader},
+    shader::LayoutShader,
+};
 
 pub(crate) use layout_renderer::LayoutRenderer;
 use tracing::error;
@@ -28,7 +30,8 @@ pub(crate) trait LayoutProvider: Send {
 pub(crate) struct LayoutNode {
     layout_provider: Box<dyn LayoutProvider>,
     shader: Arc<LayoutShader>,
-    mip_cache: HashMap<usize, MippedTexture>,
+    resampler: Option<Arc<ResamplerShader>>,
+    resample_cache: HashMap<usize, ResampledChild>,
 }
 
 /// When rendering we cut this fragment from texture and stretch it on
@@ -87,8 +90,6 @@ enum RenderLayoutContent {
         border_color: RGBAColor,
         border_width: f32,
         crop: Crop,
-        scaling_filter: ImageScalingFilter,
-        mip_level: f32,
     },
     #[allow(dead_code)]
     BoxShadow { color: RGBAColor, blur_radius: f32 },
@@ -154,12 +155,14 @@ pub struct NestedLayout {
 
 impl LayoutNode {
     pub fn new(ctx: &RenderCtx, layout_provider: Box<dyn LayoutProvider>) -> Self {
-        let shader = ctx.renderers.layout.0.clone();
+        let shader = ctx.renderers.layout.shader.clone();
+        let resampler = ctx.renderers.layout.resampler.clone();
 
         Self {
             layout_provider,
             shader,
-            mip_cache: HashMap::new(),
+            resampler,
+            resample_cache: HashMap::new(),
         }
     }
 
@@ -178,47 +181,6 @@ impl LayoutNode {
         let layouts = self.layout_provider.layouts(pts, &input_resolutions);
         let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
 
-        let global_filter = match ctx.wgpu_ctx.mode {
-            RenderingMode::GpuOptimized | RenderingMode::WebGl => ImageScalingFilter::Lanczos3,
-            RenderingMode::CpuOptimized => ImageScalingFilter::Bilinear,
-        };
-
-        // Apply global filter and compute mip levels for Lanczos3 child nodes.
-        // Only apply to sources that actually have texture data
-        let mut mip_levels_needed: HashMap<usize, u32> = HashMap::new();
-        for layout in &mut layouts {
-            let layout_width = layout.width;
-            let layout_height = layout.height;
-            if let RenderLayoutContent::ChildNode {
-                index,
-                crop,
-                scaling_filter,
-                mip_level,
-                ..
-            } = &mut layout.content
-            {
-                let has_texture = sources.get(*index).and_then(|t| t.state()).is_some();
-                if !has_texture {
-                    continue;
-                }
-
-                *scaling_filter = global_filter;
-                let ratio = f32::max(crop.width / layout_width, crop.height / layout_height);
-                if ratio > 1.0 {
-                    let levels_needed = match scaling_filter {
-                        ImageScalingFilter::Lanczos3 => {
-                            *mip_level = ratio.log2().floor();
-                            // Lanczos3 samples from a single integer mip level
-                            *mip_level as u32
-                        }
-                        ImageScalingFilter::Bilinear => continue,
-                    };
-                    let entry = mip_levels_needed.entry(*index).or_insert(0);
-                    *entry = (*entry).max(levels_needed);
-                }
-            }
-        }
-
         let mut encoder =
             ctx.wgpu_ctx
                 .device
@@ -226,37 +188,17 @@ impl LayoutNode {
                     label: Some("layout node"),
                 });
 
-        let format = ctx.wgpu_ctx.default_view_format();
-        // Generate mipped textures for sources that need them
-        let mut mipped_textures: HashMap<usize, MippedTexture> = HashMap::new();
-        for (source_index, max_level) in &mip_levels_needed {
-            if let Some(node_texture) = sources.get(*source_index)
-                && let Some(state) = node_texture.state()
-            {
-                let existing = self.mip_cache.remove(source_index);
-                let mipped = ctx.wgpu_ctx.utils.mipmap_generator.generate(
-                    &mut encoder,
-                    ctx.wgpu_ctx,
-                    state.texture(),
-                    format,
-                    // +1 because max_level is 0-indexed but generate expects a count
-                    *max_level + 1,
-                    existing,
-                );
-                mipped_textures.insert(*source_index, mipped);
-            }
-        }
+        self.resample_scaled_children(ctx, sources, &mut layouts, &mut encoder);
 
         let resolved_views: Vec<&wgpu::TextureView> = layouts
             .iter()
-            .map(|layout| match &layout.content {
-                RenderLayoutContent::ChildNode {
-                    index, mip_level, ..
-                } => {
-                    if *mip_level > 0.0
-                        && let Some(mipped) = mipped_textures.get(index)
+            .enumerate()
+            .map(|(layout_index, layout)| match &layout.content {
+                RenderLayoutContent::ChildNode { index, .. } => {
+                    if let Some(resampled) = self.resample_cache.get(&layout_index)
+                        && let Some(state) = resampled.output_state()
                     {
-                        return &mipped.view;
+                        return state.view();
                     }
 
                     match sources.get(*index) {
@@ -287,8 +229,52 @@ impl LayoutNode {
         );
 
         ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
+    }
 
-        self.mip_cache = mipped_textures;
+    /// Resample scaled child nodes to their exact on-screen size, so the layout
+    /// shader always samples 1:1; each child's crop is consumed whole and
+    /// replaced with `output_crop`. CPU-optimized rendering has no resampler
+    /// and scales bilinearly in the layout shader instead.
+    fn resample_scaled_children(
+        &mut self,
+        ctx: &RenderCtx,
+        sources: &[&NodeTexture],
+        layouts: &mut [RenderLayout],
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
+        let Some(resampler) = &self.resampler else {
+            return;
+        };
+
+        let mut resampled: Vec<usize> = Vec::new();
+        for (layout_index, layout) in layouts.iter_mut().enumerate() {
+            let (width, height) = (layout.width, layout.height);
+            let RenderLayoutContent::ChildNode { index, crop, .. } = &mut layout.content else {
+                continue;
+            };
+            let Some(source) = sources.get(*index).and_then(|t| t.state()) else {
+                continue;
+            };
+            let dst = Resolution {
+                width: (width.round() as usize).max(1),
+                height: (height.round() as usize).max(1),
+            };
+            if !ResampledChild::is_needed(crop, dst) {
+                continue;
+            }
+            self.resample_cache.entry(layout_index).or_default().render(
+                ctx.wgpu_ctx,
+                resampler,
+                source,
+                crop,
+                dst,
+                encoder,
+            );
+            *crop = ResampledChild::output_crop(dst);
+            resampled.push(layout_index);
+        }
+        self.resample_cache
+            .retain(|layout_index, _| resampled.contains(layout_index));
     }
 }
 
