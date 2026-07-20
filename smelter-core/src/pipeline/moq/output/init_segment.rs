@@ -93,6 +93,7 @@ fn mdia(timescale: u32, handler: &[u8; 4], sample_entry: mp4_atom::Codec) -> mp4
     mp4_atom::Mdia {
         mdhd: mp4_atom::Mdhd {
             timescale,
+            language: "und".to_string(),
             ..Default::default()
         },
         hdlr: mp4_atom::Hdlr {
