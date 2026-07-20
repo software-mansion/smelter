@@ -10,9 +10,13 @@ use smelter_render::{Framerate, OutputFrameFormat};
 use super::init_segment;
 use crate::prelude::*;
 
-/// H264 fallback when the encoder gives us no parameter sets to read the real
-/// values from. Constrained baseline 3.0 is the safest thing to advertise.
-/// With this setting stream should never be falsely rejected, however may fail to decode.
+/// H264 placeholder for the annexB (Legacy/LOC) catalog entry. This is written
+/// into the config eagerly, but for that path the catalog publication is
+/// deferred until the first keyframe's inline SPS is parsed and these three
+/// bytes are overwritten with the real profile/constraints/level (see
+/// `client_output.rs`). It only survives as a fallback when SPS parsing fails.
+/// Constrained baseline 3.0 is the safest thing to advertise: with this setting
+/// a stream should never be falsely rejected, however it may fail to decode.
 const DEFAULT_H264_PROFILE: (u8, u8, u8) = (0x42, 0xe0, 0x1e);
 
 pub(super) fn validate(

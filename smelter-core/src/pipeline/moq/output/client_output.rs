@@ -29,6 +29,7 @@ use crate::{
         },
         moq::{MoqSession, output::track},
         output::{Output, OutputAudio, OutputVideo},
+        utils::annexb_h264_profile,
     },
     utils::InitializableThread,
 };
@@ -51,8 +52,19 @@ struct BroadcastState {
     _origin: OriginProducer,
     _broadcast: BroadcastProducer,
     catalog: moq_mux::catalog::Producer,
+    catalog_state: CatalogState,
     video: Option<ContainerProducer<Container>>,
     audio: Option<ContainerProducer<Container>>,
+}
+
+/// Tracks whether the catalog contents have been published yet.
+enum CatalogState {
+    Published,
+    /// H264 annexB: configs held back until the first keyframe's SPS is parsed.
+    Pending {
+        video: hang::catalog::VideoConfig,
+        audio: Option<hang::catalog::AudioConfig>,
+    },
 }
 
 impl MoqClientOutput {
@@ -111,8 +123,17 @@ impl MoqClientOutput {
             _ => None,
         };
 
+        // H264 in the annexB containers (Legacy/LOC) advertises profile/level
+        // inline, but FFmpeg leaves extradata empty so `track::video` can only
+        // fill in `DEFAULT_H264_PROFILE`. Defer publishing the catalog for this
+        // case until the first keyframe's SPS gives us the real values.
+        let defer_catalog = matches!(
+            options.video,
+            Some(VideoEncoderOptions::FfmpegH264(_)) | Some(VideoEncoderOptions::VulkanH264(_))
+        ) && options.container != MoqOutputContainer::Cmaf;
+
         let (session, origin) = Self::connect(&ctx, &options.endpoint_url)?;
-        let state = Self::publish(&options, video_track, audio_track, session, origin)?;
+        let state = Self::publish(&options, video_track, audio_track, session, origin, defer_catalog)?;
 
         let span = Span::current();
         std::thread::Builder::new()
@@ -154,6 +175,7 @@ impl MoqClientOutput {
         audio_track: Option<(hang::catalog::AudioConfig, Container)>,
         session: MoqSession,
         origin: OriginProducer,
+        defer_catalog: bool,
     ) -> Result<BroadcastState, MoqClientError> {
         let mut broadcast = Broadcast::new().produce();
         let mut catalog = moq_mux::catalog::Producer::new(&mut broadcast)
@@ -175,23 +197,25 @@ impl MoqClientOutput {
             None => (None, None),
         };
 
-        // One guard, so both catalog tracks (hang `catalog.json` and MSF
-        // `catalog`) are published once, describing every rendition.
-        {
-            let mut guard = catalog.lock();
-            if let Some(config) = video_config {
-                guard
-                    .video
-                    .insert(VIDEO_TRACK_NAME, config)
-                    .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
+        // For the deferred (H264 annexB) path we hold the configs back and let
+        // the writer thread publish them once it has parsed the real profile
+        // from the first keyframe's SPS. Otherwise publish eagerly here.
+        let catalog_state = if defer_catalog {
+            match video_config {
+                Some(video) => CatalogState::Pending {
+                    video,
+                    audio: audio_config,
+                },
+                // No video config means nothing to defer; publish audio eagerly.
+                None => {
+                    Self::insert_catalog(&mut catalog, None, audio_config)?;
+                    CatalogState::Published
+                }
             }
-            if let Some(config) = audio_config {
-                guard
-                    .audio
-                    .insert(AUDIO_TRACK_NAME, config)
-                    .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
-            }
-        }
+        } else {
+            Self::insert_catalog(&mut catalog, video_config, audio_config)?;
+            CatalogState::Published
+        };
 
         // Relay paths are absolute; a leading slash would make it a different path.
         let path = options.broadcast_path.trim_start_matches('/');
@@ -207,9 +231,34 @@ impl MoqClientOutput {
             _origin: origin,
             _broadcast: broadcast,
             catalog,
+            catalog_state,
             video,
             audio,
         })
+    }
+
+    /// Insert the video/audio configs into the catalog under a single guard, so
+    /// both catalog tracks (hang `catalog.json` and MSF `catalog`) are published
+    /// at once, describing every rendition.
+    fn insert_catalog(
+        catalog: &mut moq_mux::catalog::Producer,
+        video_config: Option<hang::catalog::VideoConfig>,
+        audio_config: Option<hang::catalog::AudioConfig>,
+    ) -> Result<(), MoqClientError> {
+        let mut guard = catalog.lock();
+        if let Some(config) = video_config {
+            guard
+                .video
+                .insert(VIDEO_TRACK_NAME, config)
+                .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
+        }
+        if let Some(config) = audio_config {
+            guard
+                .audio
+                .insert(AUDIO_TRACK_NAME, config)
+                .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
+        }
+        Ok(())
     }
 
     fn create_track(
@@ -374,6 +423,12 @@ fn run_moq_output_thread(
         let need_video = pending_video.is_none() && !video_eos;
         let need_audio = pending_audio.is_none() && !audio_eos;
 
+        // EOS is detected in the receive arms below but handled after the
+        // `match`, so the deferred-catalog publish and `finish` calls stay out
+        // of the `select!` arms.
+        let mut video_ended = false;
+        let mut audio_ended = false;
+
         match (need_video, need_audio) {
             //
             // Receive phase. When `need_*` is true the matching channel is present.
@@ -383,27 +438,21 @@ fn run_moq_output_thread(
                     recv(video_rx.as_ref().unwrap()) -> msg => match msg {
                         Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
                         // Disconnect without an explicit EOS is treated as EOS.
-                        _ => { video_eos = true; finish(state.video.as_mut(), "video"); }
+                        _ => video_ended = true,
                     },
                     recv(audio_rx.as_ref().unwrap()) -> msg => match msg {
                         Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
-                        _ => { audio_eos = true; finish(state.audio.as_mut(), "audio"); }
+                        _ => audio_ended = true,
                     },
                 }
             }
             (true, false) => match video_rx.as_ref().unwrap().recv() {
                 Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
-                _ => {
-                    video_eos = true;
-                    finish(state.video.as_mut(), "video");
-                }
+                _ => video_ended = true,
             },
             (false, true) => match audio_rx.as_ref().unwrap().recv() {
                 Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
-                _ => {
-                    audio_eos = true;
-                    finish(state.audio.as_mut(), "audio");
-                }
+                _ => audio_ended = true,
             },
 
             //
@@ -428,6 +477,20 @@ fn run_moq_output_thread(
                     break;
                 }
             }
+        }
+
+        // On video EOS publish the deferred (H264 annexB) catalog with default
+        // values if it was never published, so a concurrent audio rendition
+        // stays discoverable.
+        if video_ended {
+            video_eos = true;
+            if on_video_eos(ctx, output_ref, &mut state).is_err() {
+                break;
+            }
+        }
+        if audio_ended {
+            audio_eos = true;
+            finish(state.audio.as_mut(), "audio");
         }
     }
 
@@ -460,7 +523,65 @@ fn get_chunk_to_write(
     }
 }
 
-/// Writes one chunk and records its stats. Returns `false` if a critical write
+/// Publish a deferred (H264 annexB) catalog. If `keyframe_data` is provided, the
+/// real profile/constraints/level are parsed from its inline SPS and patched
+/// into the video config; otherwise the `DEFAULT_H264_PROFILE` placeholder is
+/// kept. A no-op when the catalog was already published (or was never deferred).
+fn publish_pending_catalog(
+    state: &mut BroadcastState,
+    keyframe_data: Option<&[u8]>,
+) -> Result<(), OutputMoqClientRuntimeError> {
+    let CatalogState::Pending { mut video, audio } =
+        std::mem::replace(&mut state.catalog_state, CatalogState::Published)
+    else {
+        return Ok(());
+    };
+
+    if let Some(data) = keyframe_data {
+        match annexb_h264_profile(data) {
+            Some((profile, constraints, level)) => {
+                if let hang::catalog::VideoCodec::H264(h264) = &mut video.codec {
+                    h264.profile = profile;
+                    h264.constraints = constraints;
+                    h264.level = level;
+                }
+                debug!(
+                    profile,
+                    constraints, level, "Parsed H264 profile from keyframe SPS for MoQ catalog."
+                );
+            }
+            None => debug!(
+                "No SPS found in first H264 keyframe; publishing MoQ catalog with default profile."
+            ),
+        }
+    }
+
+    MoqClientOutput::insert_catalog(&mut state.catalog, Some(video), audio)
+        .map_err(|err| OutputMoqClientRuntimeError::WriteError(ErrorStack::new(&err).into_string()))
+}
+
+/// Handle video EOS: publish the deferred (H264 annexB) catalog with default
+/// values if it was never published (so a concurrent audio rendition stays
+/// discoverable), then finish the video track. Returns `Err` after emitting a
+/// critical error if publishing the catalog failed.
+fn on_video_eos(
+    ctx: &Arc<PipelineCtx>,
+    output_ref: &Ref<OutputId>,
+    state: &mut BroadcastState,
+) -> Result<(), ()> {
+    if let Err(err) = publish_pending_catalog(state, None) {
+        ctx.event_emitter.emit(Event::OutputError {
+            output_id: output_ref.id().clone(),
+            err: err.into(),
+            severity: ErrorSeverity::Critical,
+        });
+        return Err(());
+    }
+    finish(state.video.as_mut(), "video");
+    Ok(())
+}
+
+/// Writes one chunk and records its stats. Returns `Err` if a critical write
 /// error was emitted and the writer thread must stop.
 fn write_chunk(
     ctx: &Arc<PipelineCtx>,
@@ -470,6 +591,21 @@ fn write_chunk(
     timestamp_offset: &mut Option<std::time::Duration>,
     chunk: EncodedOutputChunk,
 ) -> Result<(), ()> {
+    // Deferred H264 annexB path: publish the catalog from the first video
+    // keyframe's SPS, so it lands before this frame is written.
+    if matches!(chunk.kind, MediaKind::Video(_))
+        && chunk.is_keyframe
+        && matches!(state.catalog_state, CatalogState::Pending { .. })
+        && let Err(err) = publish_pending_catalog(state, Some(&chunk.data))
+    {
+        ctx.event_emitter.emit(Event::OutputError {
+            output_id: output_ref.id().clone(),
+            err: err.into(),
+            severity: ErrorSeverity::Critical,
+        });
+        return Err(());
+    }
+
     let offset = *timestamp_offset.get_or_insert(chunk.pts);
     stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
 

@@ -114,6 +114,18 @@ pub(crate) fn build_avc_decoder_config(data: &[u8]) -> Option<Bytes> {
     Some(buf.freeze())
 }
 
+/// Reads (profile_idc, constraint_flags, level_idc) from the first SPS NAL in
+/// an annexB stream. They are bytes 1-3 of the SPS payload.
+pub(crate) fn annexb_h264_profile(data: &[u8]) -> Option<(u8, u8, u8)> {
+    split_annexb_nalus(data).into_iter().find_map(|nalu| {
+        if nalu.len() >= 4 && nalu[0] & 0x1F == NALU_TYPE_SPS {
+            Some((nalu[1], nalu[2], nalu[3]))
+        } else {
+            None
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,5 +229,27 @@ mod tests {
     fn build_avc_decoder_config_returns_none_without_pps() {
         let data = [0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1E]; // SPS only
         assert!(build_avc_decoder_config(&data).is_none());
+    }
+
+    #[test]
+    fn annexb_h264_profile_reads_first_sps() {
+        let mut data = Vec::new();
+        // SPS: type=7, profile=0x64 (High), constraints=0x00, level=0x2A (4.2)
+        data.extend_from_slice(&[0, 0, 0, 1, 0x67, 0x64, 0x00, 0x2A, 0xDA]);
+        // PPS: type=8
+        data.extend_from_slice(&[0, 0, 0, 1, 0x68, 0xCE, 0x38, 0x80]);
+        // IDR: type=5
+        data.extend_from_slice(&[0, 0, 0, 1, 0x65, 0x88, 0x80]);
+
+        assert_eq!(annexb_h264_profile(&data), Some((0x64, 0x00, 0x2A)));
+    }
+
+    #[test]
+    fn annexb_h264_profile_returns_none_without_sps() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0, 0, 0, 1, 0x68, 0xCE, 0x38, 0x80]); // PPS
+        data.extend_from_slice(&[0, 0, 0, 1, 0x65, 0x88, 0x80]); // IDR
+
+        assert!(annexb_h264_profile(&data).is_none());
     }
 }

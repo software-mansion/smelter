@@ -12,7 +12,7 @@ mod timed_value;
 pub(crate) use audio_buffer::AudioSamplesBuffer;
 pub(crate) use timed_value::TimedValue;
 
-pub(super) use h264_annexb_to_avcc::{annexb_to_avcc, build_avc_decoder_config};
+pub(super) use h264_annexb_to_avcc::{annexb_h264_profile, annexb_to_avcc, build_avc_decoder_config};
 pub(super) use h264_au_splitter::H264AuSplitter;
 pub(super) use h264_avcc_to_annexb::{H264AvcDecoderConfig, H264AvccToAnnexB};
 pub(super) use initializable_thread::{InitializableThread, ThreadMetadata};
