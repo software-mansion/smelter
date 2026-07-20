@@ -171,6 +171,16 @@ pub enum OutputInitError {
 pub enum OutputRuntimeError {
     #[error(transparent)]
     Mp4(#[from] OutputMp4RuntimeError),
+
+    #[error(transparent)]
+    Whip(#[from] OutputWhipRuntimeError),
+}
+
+/// Error that can happen after registration
+#[derive(Debug, thiserror::Error, Clone)]
+pub enum OutputWhipRuntimeError {
+    #[error("Peer connection disconnected.")]
+    PeerConnectionDisconnected,
 }
 
 /// Error that can happen after registration
