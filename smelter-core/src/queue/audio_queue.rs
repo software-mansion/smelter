@@ -42,9 +42,11 @@ impl AudioQueue {
             .inputs
             .iter()
             .filter_map(|(input_id, weak)| {
-                let audio_event = weak.audio(|input| input.pop_samples(range, queue_start_pts))?;
-                required = required || audio_event.required;
-                Some((input_id.clone(), audio_event.event))
+                weak.audio(|input| {
+                    let samples = input.pop_samples(range, queue_start_pts);
+                    required = required || input.required() || samples.is_eos;
+                    Some((input_id.clone(), samples))
+                })?
             })
             .collect();
 

@@ -24,6 +24,7 @@ use smelter_render::{
 use crate::{
     audio_mixer::AudioMixer,
     event::{Event, EventEmitter},
+    graphics_context::{GraphicsContext, GraphicsContextOptions},
     pipeline::{
         MoqPipelineState, RtmpPipelineState,
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
@@ -38,10 +39,8 @@ use crate::{
     queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
     stats::StatsMonitor,
 };
-use crate::{
-    graphics_context::{GraphicsContext, GraphicsContextOptions},
-    prelude::*,
-};
+
+use crate::prelude::*;
 
 pub struct Pipeline {
     pub(super) inputs: HashMap<InputId, PipelineInput>,
@@ -412,12 +411,12 @@ fn run_renderer_thread(
         }
     };
 
-    for mut input_frames in frames_receiver.iter() {
+    for input_frames in frames_receiver.iter() {
         let Some(pipeline) = pipeline.upgrade() else {
             break;
         };
-        for (input_id, event) in input_frames.frames.iter_mut() {
-            if let PipelineEvent::EOS = event {
+        for (input_id, event) in input_frames.frames.iter() {
+            if event.is_eos {
                 let mut guard = pipeline.lock().unwrap();
                 if let Some(input) = guard.inputs.get_mut(input_id) {
                     info!(?input_id, "Received video EOS on input.");
@@ -481,15 +480,15 @@ fn run_audio_mixer_thread(
     };
 
     let _span = span!(Level::INFO, "AudioMixer").entered();
-    for mut samples in audio_receiver.iter() {
+    for samples in audio_receiver.iter() {
         trace!(?samples, "Received samples from queue");
         let Some(pipeline) = pipeline.upgrade() else {
             break;
         };
 
         trace!("Handle potential EOS");
-        for (input_id, event) in samples.samples.iter_mut() {
-            if let PipelineEvent::EOS = event {
+        for (input_id, event) in samples.samples.iter() {
+            if event.is_eos {
                 let mut guard = pipeline.lock().unwrap();
                 if let Some(input) = guard.inputs.get_mut(input_id) {
                     info!(?input_id, "Received audio EOS on input.");

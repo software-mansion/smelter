@@ -5,20 +5,15 @@ use smelter_render::InputId;
 use tracing::{debug, trace, warn};
 
 use crate::{
-    PipelineEvent, Ref,
+    Ref,
     event::{Event, EventEmitter},
     queue::{
-        QueueContext, queue_input::TrackOffset, side_channel::AudioSideChannel,
+        QueueAudioSamples, QueueContext, queue_input::TrackOffset, side_channel::AudioSideChannel,
         utils::EmitOnceGuard,
     },
 };
 
 use crate::prelude::*;
-
-pub(super) struct AudioEvent {
-    pub required: bool,
-    pub event: PipelineEvent<Vec<InputAudioSamples>>,
-}
 
 const MIXER_STRETCH_BUFFER: Duration = Duration::from_millis(80);
 
@@ -83,8 +78,10 @@ impl AudioQueueInput {
         (input, sender)
     }
 
-    pub(super) fn is_done(&mut self) -> bool {
-        matches!(self.receiver.state(), ReceiverState::Done)
+    /// The track ended and its EOS was delivered in a chunk. Only then it is
+    /// safe to replace the track with the next one.
+    pub(super) fn eos_sent(&self) -> bool {
+        self.event_eos_guard.emited()
     }
 
     pub(super) fn required(&self) -> bool {
@@ -112,27 +109,24 @@ impl AudioQueueInput {
         &mut self,
         pts_range: (Duration, Duration),
         queue_start_pts: Duration,
-    ) -> AudioEvent {
+    ) -> QueueAudioSamples {
         if self.paused {
-            return AudioEvent {
-                required: false,
-                event: PipelineEvent::Data(vec![]),
-            };
+            return QueueAudioSamples::empty();
         }
 
         let Some(offset) = self.resolve_offset(pts_range.0, queue_start_pts) else {
-            return AudioEvent {
-                required: self.required,
-                event: PipelineEvent::Data(vec![]),
+            return QueueAudioSamples {
+                samples: vec![],
+                is_eos: self.check_eos(),
             };
         };
 
         if let Some(offset_from_start) = self.offset_from_start
             && pts_range.1 < queue_start_pts + offset_from_start
         {
-            return AudioEvent {
-                required: self.required,
-                event: PipelineEvent::Data(vec![]),
+            return QueueAudioSamples {
+                samples: vec![],
+                is_eos: self.check_eos(),
             };
         }
 
@@ -148,18 +142,20 @@ impl AudioQueueInput {
             self.event_playing_guard.emit();
         }
 
-        if samples.is_empty() && self.is_done() && !self.event_eos_guard.emited() {
-            self.event_eos_guard.emit();
-            return AudioEvent {
-                required: true,
-                event: PipelineEvent::EOS,
-            };
+        QueueAudioSamples {
+            samples,
+            is_eos: self.check_eos(),
         }
+    }
 
-        AudioEvent {
-            required: self.required,
-            event: PipelineEvent::Data(samples),
+    /// True on the first call after the track ended; also emits the EOS event.
+    fn check_eos(&mut self) -> bool {
+        let is_eos =
+            matches!(self.receiver.state(), ReceiverState::Done) && !self.event_eos_guard.emited();
+        if is_eos {
+            self.event_eos_guard.emit();
         }
+        is_eos
     }
 
     pub(super) fn is_ready_for_pts(

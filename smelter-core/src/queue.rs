@@ -168,7 +168,23 @@ pub(super) struct QueueVideoOutput {
     // If required this batch can't be dropped even if processing is behind
     pub(super) required: bool,
     pub(super) pts: Duration,
-    pub(super) frames: HashMap<InputId, PipelineEvent<Frame>>,
+    pub(super) frames: HashMap<InputId, QueueVideoFrame>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct QueueVideoFrame {
+    pub frame: Option<Frame>,
+    /// Track on this input ended.
+    pub is_eos: bool,
+}
+
+impl QueueVideoFrame {
+    pub(super) fn empty() -> Self {
+        Self {
+            frame: None,
+            is_eos: false,
+        }
+    }
 }
 
 impl From<QueueVideoOutput> for FrameSet<InputId> {
@@ -177,10 +193,7 @@ impl From<QueueVideoOutput> for FrameSet<InputId> {
             frames: value
                 .frames
                 .into_iter()
-                .filter_map(|(key, value)| match value {
-                    PipelineEvent::Data(data) => Some((key, data)),
-                    PipelineEvent::EOS => None,
-                })
+                .filter_map(|(key, value)| Some((key, value.frame?)))
                 .collect(),
             pts: value.pts,
         }
@@ -189,10 +202,26 @@ impl From<QueueVideoOutput> for FrameSet<InputId> {
 
 #[derive(Debug)]
 pub(super) struct QueueAudioOutput {
-    pub samples: HashMap<InputId, PipelineEvent<Vec<InputAudioSamples>>>,
+    pub samples: HashMap<InputId, QueueAudioSamples>,
     pub start_pts: Duration,
     pub end_pts: Duration,
     pub required: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct QueueAudioSamples {
+    pub samples: Vec<InputAudioSamples>,
+    /// Track on this input ended.
+    pub is_eos: bool,
+}
+
+impl QueueAudioSamples {
+    pub(super) fn empty() -> Self {
+        Self {
+            samples: vec![],
+            is_eos: false,
+        }
+    }
 }
 
 impl From<QueueAudioOutput> for InputSamplesSet {
@@ -201,10 +230,7 @@ impl From<QueueAudioOutput> for InputSamplesSet {
             samples: value
                 .samples
                 .into_iter()
-                .filter_map(|(key, value)| match value {
-                    PipelineEvent::Data(data) => Some((key, data)),
-                    PipelineEvent::EOS => None,
-                })
+                .map(|(key, value)| (key, value.samples))
                 .collect(),
             start_pts: value.start_pts,
             end_pts: value.end_pts,

@@ -5,19 +5,13 @@ use smelter_render::{Frame, InputId};
 use tracing::{debug, trace, warn};
 
 use crate::{
-    PipelineEvent, Ref,
+    Ref,
     event::{Event, EventEmitter},
     queue::{
-        QueueContext, queue_input::TrackOffset, side_channel::VideoSideChannel,
+        QueueContext, QueueVideoFrame, queue_input::TrackOffset, side_channel::VideoSideChannel,
         utils::EmitOnceGuard,
     },
 };
-
-#[derive(Clone)]
-pub(super) struct FrameEvent {
-    pub required: bool,
-    pub event: PipelineEvent<Frame>,
-}
 
 pub(crate) struct VideoQueueInput {
     queue_ctx: QueueContext,
@@ -82,8 +76,10 @@ impl VideoQueueInput {
         (input, sender)
     }
 
-    pub(super) fn is_done(&mut self) -> bool {
-        matches!(self.receiver.state(), ReceiverState::Done)
+    /// The track ended and its EOS was delivered in a batch. Only then it is
+    /// safe to replace the track with the next one.
+    pub(super) fn eos_sent(&self) -> bool {
+        self.event_eos_guard.emited()
     }
 
     pub(super) fn required(&self) -> bool {
@@ -121,16 +117,18 @@ impl VideoQueueInput {
         };
     }
 
-    pub(super) fn paused_event(&self, pts: Duration) -> Option<FrameEvent> {
-        let offset = self.track_offset.get()?;
+    pub(super) fn paused_event(&self, pts: Duration) -> QueueVideoFrame {
+        let Some(offset) = self.track_offset.get() else {
+            return QueueVideoFrame::empty();
+        };
         if let (Some(paused_pts), Some(mut frame)) = (self.paused_pts, self.paused_frame.clone()) {
             frame.pts += offset + pts.saturating_sub(paused_pts);
-            return Some(FrameEvent {
-                required: self.required,
-                event: PipelineEvent::Data(frame),
-            });
+            return QueueVideoFrame {
+                frame: Some(frame),
+                is_eos: false,
+            };
         }
-        None
+        QueueVideoFrame::empty()
     }
 
     /// Return frame for PTS and drop all the older frames. This function does not check
@@ -139,37 +137,46 @@ impl VideoQueueInput {
         &mut self,
         pts: Duration,
         queue_start_pts: Duration,
-    ) -> Option<FrameEvent> {
+    ) -> QueueVideoFrame {
         if self.paused_pts.is_some() {
             return self.paused_event(pts);
         }
 
-        let offset = self.resolve_offset(pts, queue_start_pts)?;
+        let Some(offset) = self.resolve_offset(pts, queue_start_pts) else {
+            return QueueVideoFrame {
+                frame: None,
+                is_eos: self.check_eos(),
+            };
+        };
 
-        let input_pts = pts.checked_sub(offset)?;
+        let Some(input_pts) = pts.checked_sub(offset) else {
+            return QueueVideoFrame {
+                frame: None,
+                is_eos: self.check_eos(),
+            };
+        };
         trace!(queue_pts=?pts, ?input_pts, "Try get frame");
 
-        match self.receiver.get_for_pts(input_pts) {
-            Some(mut frame) => {
-                self.event_playing_guard.emit();
-                frame.pts += offset;
-                Some(FrameEvent {
-                    required: self.required,
-                    event: PipelineEvent::Data(frame),
-                })
-            }
-            None => {
-                if self.is_done() && !self.event_eos_guard.emited() {
-                    self.event_eos_guard.emit();
-                    Some(FrameEvent {
-                        required: true,
-                        event: PipelineEvent::EOS,
-                    })
-                } else {
-                    None
-                }
-            }
+        let frame = self.receiver.get_for_pts(input_pts).map(|mut frame| {
+            self.event_playing_guard.emit();
+            frame.pts += offset;
+            frame
+        });
+
+        QueueVideoFrame {
+            frame,
+            is_eos: self.check_eos(),
         }
+    }
+
+    /// True on the first call after the track ended; also emits the EOS event.
+    fn check_eos(&mut self) -> bool {
+        let is_eos =
+            matches!(self.receiver.state(), ReceiverState::Done) && !self.event_eos_guard.emited();
+        if is_eos {
+            self.event_eos_guard.emit();
+        }
+        is_eos
     }
 
     pub(super) fn is_ready_for_pts(&mut self, pts: Duration, queue_start_pts: Duration) -> bool {
