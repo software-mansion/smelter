@@ -9,7 +9,7 @@ use super::harness::{
 };
 
 fn frame(id: u32, pts: Duration) -> InputFrame {
-    InputFrame::Frame { id, pts }
+    InputFrame::frame(id, pts)
 }
 
 mod required_input {
@@ -67,15 +67,15 @@ mod required_input {
         input.send_frame(ms(75));
 
         sleep(ms(1));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
@@ -112,6 +112,57 @@ mod required_input {
         // frame 5 is not generated because there was not frame 6 nothing after 75ms
     }
 
+    /// EOS is delivered on the batch that drains the stream, together with
+    /// the last frame.
+    #[test]
+    fn offset_from_start_eos_with_last_frame() {
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+
+        input.send_frame(ms(0));
+        input.send_frame(ms(15));
+        input.end_video();
+
+        sleep(ms(61));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(60), frame(0, ms(60))),
+        );
+        assert!(queue.next_video_batch().is_none());
+
+        // the 80ms batch drains the stream: EOS together with the last frame
+        sleep(ms(20));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(80), InputFrame::frame_eos(1, ms(75))),
+        );
+        assert!(queue.next_video_batch().is_none());
+
+        // after EOS the input delivers nothing
+        sleep(ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(100), true);
+    }
+
+    /// A stream that ends without delivering any frame carries a bare EOS.
+    #[test]
+    fn offset_pts_eos_without_frames() {
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET));
+
+        input.end_video();
+
+        sleep(ms(1));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(0), InputFrame::eos()),
+        );
+        assert!(queue.next_video_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+    }
+
     #[test]
     fn offset_from_start_delivered_on_time() {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
@@ -119,9 +170,9 @@ mod required_input {
         sleep(ms(58)); // a bit before
 
         // no frames will be returned until 60ms passes, just empty batches
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(0));
@@ -154,9 +205,9 @@ mod required_input {
         sleep(ms(200));
         // receiving empty batches before input offset start, but not after offset
         // because at that point we expect required input
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(0));
@@ -192,15 +243,15 @@ mod required_input {
         input.send_frame(ms(30));
 
         sleep(ms(1));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
@@ -235,9 +286,9 @@ mod required_input {
         input.send_frame(ms(30));
 
         sleep(ms(4));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
 
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
@@ -271,9 +322,9 @@ mod required_input {
         input.send_frame(ms(15));
 
         sleep(ms(58));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(30));
@@ -313,9 +364,9 @@ mod required_input {
         input.send_frame(ms(30));
 
         sleep(ms(1));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
             &batch(ms(60), frame(0, ms(60))),
@@ -341,9 +392,9 @@ mod required_input {
         input.send_frame(ms(15));
 
         sleep(ms(200));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
             &batch(ms(60), frame(0, ms(60))),
@@ -452,7 +503,7 @@ mod required_input {
 
         sleep(ms(1));
         // 45ms is newer than 40ms and we always take newer
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(75));
@@ -544,9 +595,9 @@ mod required_input {
 
         sleep(ms(58));
         // input reports ready with no data: empty batches until a frame arrives
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(0));
@@ -580,9 +631,9 @@ mod required_input {
 
         sleep(ms(58));
         // input reports ready with no data: empty batches until a frame arrives
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(5));
@@ -592,7 +643,7 @@ mod required_input {
         sleep(ms(4));
         // none offset will assign input 0ms value to first queue pts that was
         // observed, so input 0ms will mean queue 60ms
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60), true);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
@@ -613,9 +664,9 @@ mod required_input {
 
         sleep(ms(58));
         // empty batches keep flowing until the first frame arrives
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), true);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(0));
@@ -749,15 +800,15 @@ mod optional_input {
         input.send_frame(ms(75));
 
         sleep(ms(1));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
@@ -810,6 +861,43 @@ mod optional_input {
         );
     }
 
+    /// EOS is delivered on the batch that drains the stream, together with
+    /// the last frame; that batch is required even for an optional input.
+    #[test]
+    fn offset_from_start_eos_with_last_frame() {
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+
+        input.send_frame(ms(0));
+        input.send_frame(ms(15));
+        input.end_video();
+
+        sleep(ms(61));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(60), frame(0, ms(60))),
+        );
+        assert!(queue.next_video_batch().is_none());
+
+        // the 80ms batch drains the stream: EOS together with the last frame
+        sleep(ms(20));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &VideoBatch {
+                pts: ms(80),
+                required: true,
+                frames: frames([("input_1", InputFrame::frame_eos(1, ms(75)))]),
+            },
+        );
+        assert!(queue.next_video_batch().is_none());
+
+        // after EOS the input delivers nothing
+        sleep(ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(100), false);
+    }
+
     #[test]
     fn offset_from_start_delivered_on_time() {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
@@ -817,9 +905,9 @@ mod optional_input {
         sleep(ms(58)); // a bit before
 
         // no frames will be returned until 60ms passes, just empty batches
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(0));
@@ -853,11 +941,11 @@ mod optional_input {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
 
         sleep(ms(98));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(80));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(80), false);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(0));
@@ -898,15 +986,15 @@ mod optional_input {
         input.send_frame(ms(30));
 
         sleep(ms(1));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
@@ -932,9 +1020,9 @@ mod optional_input {
             start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(58));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
@@ -974,9 +1062,9 @@ mod optional_input {
         input.send_frame(ms(0));
 
         sleep(ms(58));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(15));
@@ -1014,10 +1102,10 @@ mod optional_input {
             start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
 
         sleep(ms(78));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60), false);
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
@@ -1047,9 +1135,9 @@ mod optional_input {
         input.send_frame(ms(0));
 
         sleep(ms(78));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
             &batch(ms(60), frame(0, ms(60))),
@@ -1159,7 +1247,7 @@ mod optional_input {
 
         sleep(ms(1));
         // 45ms is newer than 40ms and we always take newer
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(75));
@@ -1256,9 +1344,9 @@ mod optional_input {
 
         sleep(ms(58));
         // input reports ready with no data: empty batches until a frame arrives
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(0));
@@ -1295,9 +1383,9 @@ mod optional_input {
 
         sleep(ms(58));
         // input reports ready with no data: empty batches until a frame arrives
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(5));
@@ -1307,7 +1395,7 @@ mod optional_input {
         sleep(ms(4));
         // none offset will assign input 0ms value to first queue pts that was
         // observed, so input 0ms will mean queue 60ms
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60), false);
         assert!(queue.next_video_batch().is_none());
 
         sleep(ms(20));
@@ -1331,9 +1419,9 @@ mod optional_input {
 
         sleep(ms(58));
         // empty batches keep flowing until the first frame arrives
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20));
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), false);
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(40), false);
         assert!(queue.next_video_batch().is_none());
 
         input.send_frame(ms(0));

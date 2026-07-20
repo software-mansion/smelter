@@ -10,7 +10,8 @@ use super::harness::{BATCH_DURATION, OFFSET, TestInput, TestQueue, TestQueueOpti
 //   (before the real-time deadline). A single frame never reaches output, so it
 //   isolates `delivered`.
 // - `playing` fires when the first real frame is pushed to a batch.
-// - `eos` fires on the first batch after the stream drains.
+// - `eos` fires on the batch that drains the stream, together with the last
+//   frame.
 //
 // Variants that only change which frame lands in which batch (first packet
 // early, aligned/unaligned offsets, gaps) are not repeated per offset: they
@@ -120,13 +121,13 @@ mod required_input {
         sleep(ms(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
-        // frames play in the 60ms and 80ms batches
+        // frames play in the 60ms and 80ms batches; the 80ms batch drains the
+        // stream, so EOS is emitted together with the last frame
         sleep(ms(80));
-        queue.expect_events(&[input.video_playing_event()]);
+        queue.expect_events(&[input.video_playing_event(), input.video_eos_event()]);
 
-        // EOS is emitted with the first batch after the stream runs dry (100ms)
         sleep(ms(20));
-        queue.expect_events(&[input.video_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -202,13 +203,13 @@ mod required_input {
         sleep(ms(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
-        // frames play in the 60ms and 80ms batches
+        // frames play in the 60ms and 80ms batches; the 80ms batch drains the
+        // stream, so EOS is emitted together with the last frame
         sleep(ms(80));
-        queue.expect_events(&[input.video_playing_event()]);
+        queue.expect_events(&[input.video_playing_event(), input.video_eos_event()]);
 
-        // EOS is emitted with the first batch after the stream runs dry (100ms)
         sleep(ms(20));
-        queue.expect_events(&[input.video_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -272,7 +273,7 @@ mod required_input {
         sleep(ms(1));
         queue.expect_events(&[input.video_playing_event()]);
 
-        // EOS is emitted with the first batch after the stream runs dry (40ms)
+        // EOS is emitted together with the last frame (20ms batch)
         sleep(ms(40));
         queue.expect_events(&[input.video_eos_event()]);
     }
@@ -330,13 +331,13 @@ mod required_input {
         sleep(ms(4));
         queue.expect_events(&[input.video_playing_event()]);
 
-        // second frame plays in the 80ms batch, no new event
-        sleep(ms(20));
-        queue.expect_events(&[]);
-
-        // EOS is emitted with the first batch after the stream runs dry (100ms)
+        // the second frame plays in the 80ms batch, which drains the stream:
+        // EOS is emitted together with the last frame
         sleep(ms(20));
         queue.expect_events(&[input.video_eos_event()]);
+
+        sleep(ms(20));
+        queue.expect_events(&[]);
     }
 
     //
@@ -395,7 +396,7 @@ mod required_input {
         sleep(ms(1));
         queue.expect_events(&[input.video_playing_event()]);
 
-        // EOS is emitted with the first batch after the stream runs dry (40ms)
+        // EOS is emitted together with the last frame (20ms batch)
         sleep(ms(40));
         queue.expect_events(&[input.video_eos_event()]);
     }
@@ -506,11 +507,12 @@ mod optional_input {
         sleep(ms(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
+        // the 80ms batch drains the stream: EOS together with the last frame
         sleep(ms(80));
-        queue.expect_events(&[input.video_playing_event()]);
+        queue.expect_events(&[input.video_playing_event(), input.video_eos_event()]);
 
         sleep(ms(20));
-        queue.expect_events(&[input.video_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -584,11 +586,12 @@ mod optional_input {
         sleep(ms(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
+        // the 80ms batch drains the stream: EOS together with the last frame
         sleep(ms(80));
-        queue.expect_events(&[input.video_playing_event()]);
+        queue.expect_events(&[input.video_playing_event(), input.video_eos_event()]);
 
         sleep(ms(20));
-        queue.expect_events(&[input.video_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -645,6 +648,7 @@ mod optional_input {
         sleep(ms(1));
         queue.expect_events(&[input.video_playing_event()]);
 
+        // EOS is emitted together with the last frame (20ms batch)
         sleep(ms(40));
         queue.expect_events(&[input.video_eos_event()]);
     }
@@ -697,11 +701,13 @@ mod optional_input {
         sleep(ms(3));
         queue.expect_events(&[input.video_playing_event()]);
 
-        sleep(ms(20));
-        queue.expect_events(&[]);
-
+        // the second frame plays in the 80ms batch, which drains the stream:
+        // EOS is emitted together with the last frame
         sleep(ms(20));
         queue.expect_events(&[input.video_eos_event()]);
+
+        sleep(ms(20));
+        queue.expect_events(&[]);
     }
 
     //
@@ -759,6 +765,7 @@ mod optional_input {
         sleep(ms(1));
         queue.expect_events(&[input.video_playing_event()]);
 
+        // EOS is emitted together with the last frame (20ms batch)
         sleep(ms(40));
         queue.expect_events(&[input.video_eos_event()]);
     }
@@ -884,13 +891,12 @@ mod required_audio_input {
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // after EOS the input is always ready; both batches are popped by the
-        // [40, 60) chunk
+        // [40, 60) chunk, which drains the stream: EOS on the same chunk
         sleep(ms(40));
-        queue.expect_events(&[input.audio_playing_event()]);
+        queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        // EOS is emitted with the first chunk after the stream drains ([60, 80))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -959,13 +965,16 @@ mod required_audio_input {
         input.end_audio();
 
         // after EOS the input is always ready, the first chunk pops both
-        // batches immediately
+        // batches immediately, draining the stream: EOS on the same chunk
         sleep(ms(1));
-        queue.expect_events(&[input.audio_delivered_event(), input.audio_playing_event()]);
+        queue.expect_events(&[
+            input.audio_delivered_event(),
+            input.audio_playing_event(),
+            input.audio_eos_event(),
+        ]);
 
-        // EOS is emitted with the first chunk after the stream drains ([20, 40))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -1032,14 +1041,14 @@ mod required_audio_input {
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // batch 0ms was dropped before start, batch 20ms plays with the first
-        // chunk (after EOS readiness doesn't need the 100ms of coverage)
+        // chunk (after EOS readiness doesn't need the 100ms of coverage),
+        // which drains the stream: EOS on the same chunk
         queue.start();
         sleep(ms(1));
-        queue.expect_events(&[input.audio_playing_event()]);
+        queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        // EOS is emitted with the first chunk after the stream drains ([20, 40))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -1095,13 +1104,13 @@ mod required_audio_input {
         sleep(ms(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
-        // both batches are popped by the [60, 80) chunk
+        // both batches are popped by the [60, 80) chunk, which drains the
+        // stream: EOS on the same chunk
         sleep(ms(4));
-        queue.expect_events(&[input.audio_playing_event()]);
+        queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        // EOS is emitted with the first chunk after the stream drains ([80, 100))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -1165,14 +1174,13 @@ mod required_audio_input {
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // batch 0ms was dropped before start, batch 20ms plays with the first
-        // chunk
+        // chunk, which drains the stream: EOS on the same chunk
         queue.start();
         sleep(ms(1));
-        queue.expect_events(&[input.audio_playing_event()]);
+        queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        // EOS is emitted with the first chunk after the stream drains ([20, 40))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 }
 
@@ -1288,13 +1296,13 @@ mod optional_audio_input {
         sleep(ms(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
-        // both batches are popped by the [40, 60) chunk
+        // both batches are popped by the [40, 60) chunk, which drains the
+        // stream: EOS on the same chunk
         sleep(ms(40));
-        queue.expect_events(&[input.audio_playing_event()]);
+        queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        // EOS is emitted with the first chunk after the stream drains ([60, 80))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -1383,13 +1391,13 @@ mod optional_audio_input {
         sleep(ms(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
-        // both batches are popped by the [40, 60) chunk
+        // both batches are popped by the [40, 60) chunk, which drains the
+        // stream: EOS on the same chunk
         sleep(ms(12));
-        queue.expect_events(&[input.audio_playing_event()]);
+        queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        // EOS is emitted with the first chunk after the stream drains ([60, 80))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -1446,13 +1454,14 @@ mod optional_audio_input {
         sleep(ms(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
+        // the remaining batch plays with the first chunk, which drains the
+        // stream: EOS on the same chunk
         queue.start();
         sleep(ms(1));
-        queue.expect_events(&[input.audio_playing_event()]);
+        queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        // EOS is emitted with the first chunk after the stream drains ([20, 40))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -1503,13 +1512,13 @@ mod optional_audio_input {
         sleep(ms(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
-        // both batches are popped by the [60, 80) chunk
+        // both batches are popped by the [60, 80) chunk, which drains the
+        // stream: EOS on the same chunk
         sleep(ms(4));
-        queue.expect_events(&[input.audio_playing_event()]);
+        queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        // EOS is emitted with the first chunk after the stream drains ([80, 100))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 
     //
@@ -1566,12 +1575,13 @@ mod optional_audio_input {
         sleep(ms(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
+        // the remaining batch plays with the first chunk, which drains the
+        // stream: EOS on the same chunk
         queue.start();
         sleep(ms(1));
-        queue.expect_events(&[input.audio_playing_event()]);
+        queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        // EOS is emitted with the first chunk after the stream drains ([20, 40))
         sleep(ms(20));
-        queue.expect_events(&[input.audio_eos_event()]);
+        queue.expect_events(&[]);
     }
 }

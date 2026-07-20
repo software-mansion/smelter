@@ -73,16 +73,47 @@ impl Default for TestQueueOptions {
     }
 }
 
-/// Single frame of a video batch.
+/// Entry of a single input in a video batch. A batch always contains an entry
+/// for every input; EOS is delivered together with the last frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InputFrame {
-    Frame {
-        /// Identifies the source frame: n-th video frame sent on this input.
-        id: u32,
-        /// PTS relative to queue start.
-        pts: Duration,
-    },
-    Eos,
+pub struct InputFrame {
+    /// `(id, pts)`: id identifies the source frame (n-th video frame sent on
+    /// this input), PTS is relative to queue start.
+    pub frame: Option<(u32, Duration)>,
+    pub is_eos: bool,
+}
+
+impl InputFrame {
+    pub fn frame(id: u32, pts: Duration) -> Self {
+        Self {
+            frame: Some((id, pts)),
+            is_eos: false,
+        }
+    }
+
+    /// The last frame of the track, delivered together with EOS.
+    pub fn frame_eos(id: u32, pts: Duration) -> Self {
+        Self {
+            frame: Some((id, pts)),
+            is_eos: true,
+        }
+    }
+
+    /// Track ended with no frame left to deliver.
+    pub fn eos() -> Self {
+        Self {
+            frame: None,
+            is_eos: true,
+        }
+    }
+
+    /// Input delivered nothing for this batch.
+    pub fn empty() -> Self {
+        Self {
+            frame: None,
+            is_eos: false,
+        }
+    }
 }
 
 /// Summary of [`QueueVideoOutput`] with PTS relative to queue start.
@@ -93,11 +124,30 @@ pub struct VideoBatch {
     pub frames: HashMap<InputId, InputFrame>,
 }
 
-/// Samples from a single input in an audio batch, PTS ranges relative to queue start.
+/// Samples from a single input in an audio batch, PTS ranges relative to queue
+/// start. EOS is delivered together with the final batches.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InputSamples {
-    Batches(Vec<(Duration, Duration)>),
-    Eos,
+pub struct InputSamples {
+    pub batches: Vec<(Duration, Duration)>,
+    pub is_eos: bool,
+}
+
+impl InputSamples {
+    pub fn batches(batches: Vec<(Duration, Duration)>) -> Self {
+        Self {
+            batches,
+            is_eos: false,
+        }
+    }
+
+    /// The final batches of the track (possibly none), delivered together
+    /// with EOS.
+    pub fn batches_eos(batches: Vec<(Duration, Duration)>) -> Self {
+        Self {
+            batches,
+            is_eos: true,
+        }
+    }
 }
 
 /// Summary of [`QueueAudioOutput`] with PTS relative to queue start.
@@ -123,16 +173,19 @@ pub fn assert_video_batch_eq(actual: &VideoBatch, expected: &VideoBatch) {
     assert_eq!(actual, expected);
 }
 
-/// Assert that the batch was produced at `pts` with no input delivering anything.
+/// Assert that the batch was produced at `pts` with no input delivering
+/// anything. A batch still contains an entry for every input and `required`
+/// mirrors the inputs' required flags.
 #[track_caller]
-pub fn assert_empty_video_batch(actual: &VideoBatch, pts: Duration) {
-    assert_eq!(
-        actual,
-        &VideoBatch {
-            pts,
-            required: false,
-            frames: frames([]),
-        }
+pub fn assert_empty_video_batch(actual: &VideoBatch, pts: Duration, required: bool) {
+    let no_frames = !actual.frames.is_empty()
+        && actual
+            .frames
+            .values()
+            .all(|frame| frame == &InputFrame::empty());
+    assert!(
+        actual.pts == pts && actual.required == required && no_frames,
+        "expected an empty batch at {pts:?} (required: {required})\nactual: {actual:#?}",
     );
 }
 
@@ -146,18 +199,19 @@ pub fn assert_video_batch_eq_with_tolerance(
     expected: &VideoBatch,
     pts_tolerance: Duration,
 ) {
-    let frame_matches =
-        |actual: Option<&InputFrame>, expected: &InputFrame| match (actual, expected) {
-            (Some(InputFrame::Eos), InputFrame::Eos) => true,
-            (
-                Some(InputFrame::Frame { id, pts }),
-                InputFrame::Frame {
-                    id: expected_id,
-                    pts: expected_pts,
-                },
-            ) => id == expected_id && pts.abs_diff(*expected_pts) <= pts_tolerance,
-            _ => false,
-        };
+    let frame_matches = |actual: Option<&InputFrame>, expected: &InputFrame| match actual {
+        Some(actual) => {
+            actual.is_eos == expected.is_eos
+                && match (actual.frame, expected.frame) {
+                    (Some((id, pts)), Some((expected_id, expected_pts))) => {
+                        id == expected_id && pts.abs_diff(expected_pts) <= pts_tolerance
+                    }
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+        None => false,
+    };
     assert!(
         actual.pts == expected.pts
             && actual.required == expected.required
@@ -195,7 +249,7 @@ pub fn assert_empty_audio_batch(actual: &AudioBatch, start_pts: Duration, requir
         && actual
             .samples
             .values()
-            .all(|samples| matches!(samples, InputSamples::Batches(batches) if batches.is_empty()));
+            .all(|samples| samples == &InputSamples::batches(vec![]));
     assert!(
         actual.start_pts == start_pts
             && actual.end_pts == start_pts + BATCH_DURATION
@@ -216,21 +270,19 @@ pub fn assert_audio_batch_eq_with_tolerance(
     expected: &AudioBatch,
     pts_tolerance: Duration,
 ) {
-    let samples_match =
-        |actual: Option<&InputSamples>, expected: &InputSamples| match (actual, expected) {
-            (Some(InputSamples::Eos), InputSamples::Eos) => true,
-            (Some(InputSamples::Batches(actual)), InputSamples::Batches(expected)) => {
-                actual.len() == expected.len()
-                    && actual
-                        .iter()
-                        .zip(expected)
-                        .all(|((a_start, a_end), (e_start, e_end))| {
-                            a_start.abs_diff(*e_start) <= pts_tolerance
-                                && a_end.abs_diff(*e_end) <= pts_tolerance
-                        })
-            }
-            _ => false,
-        };
+    let samples_match = |actual: Option<&InputSamples>, expected: &InputSamples| match actual {
+        Some(actual) => {
+            actual.is_eos == expected.is_eos
+                && actual.batches.len() == expected.batches.len()
+                && actual.batches.iter().zip(&expected.batches).all(
+                    |((a_start, a_end), (e_start, e_end))| {
+                        a_start.abs_diff(*e_start) <= pts_tolerance
+                            && a_end.abs_diff(*e_end) <= pts_tolerance
+                    },
+                )
+        }
+        None => false,
+    };
     assert!(
         actual.start_pts == expected.start_pts
             && actual.end_pts == expected.end_pts
@@ -383,18 +435,16 @@ impl TestQueue {
                 .frames
                 .into_iter()
                 .map(|(id, event)| {
-                    let event = match (event.frame, event.is_eos) {
-                        (Some(frame), false) => InputFrame::Frame {
-                            id: test_frame_id(&frame),
-                            pts: frame.pts.saturating_sub(start_pts),
+                    let frame = event
+                        .frame
+                        .map(|frame| (test_frame_id(&frame), frame.pts.saturating_sub(start_pts)));
+                    (
+                        id,
+                        InputFrame {
+                            frame,
+                            is_eos: event.is_eos,
                         },
-                        (None, true) => InputFrame::Eos,
-                        (frame, is_eos) => panic!(
-                            "unexpected batch entry (has_frame: {}, is_eos: {is_eos})",
-                            frame.is_some()
-                        ),
-                    };
-                    (id, event)
+                    )
                 })
                 .collect(),
         }
@@ -410,25 +460,23 @@ impl TestQueue {
                 .samples
                 .into_iter()
                 .map(|(id, event)| {
-                    let event = match event.is_eos {
-                        false => InputSamples::Batches(
-                            event
-                                .samples
-                                .iter()
-                                .map(|batch| {
-                                    (
-                                        batch.start_pts.saturating_sub(start_pts),
-                                        batch.end_pts().saturating_sub(start_pts),
-                                    )
-                                })
-                                .collect(),
-                        ),
-                        true => {
-                            assert!(event.samples.is_empty(), "unexpected samples in EOS entry");
-                            InputSamples::Eos
-                        }
-                    };
-                    (id, event)
+                    let batches = event
+                        .samples
+                        .iter()
+                        .map(|batch| {
+                            (
+                                batch.start_pts.saturating_sub(start_pts),
+                                batch.end_pts().saturating_sub(start_pts),
+                            )
+                        })
+                        .collect();
+                    (
+                        id,
+                        InputSamples {
+                            batches,
+                            is_eos: event.is_eos,
+                        },
+                    )
                 })
                 .collect(),
         }

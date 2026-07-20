@@ -21,8 +21,7 @@
 //!   nothing is dropped).
 //! - A chunk always contains an entry for the input (with an empty batch list
 //!   when the input delivered nothing) and `required` mirrors the input's
-//!   required flag, while an empty video batch has no entry and
-//!   `required: false`.
+//!   required flag; video batches behave the same way.
 //!
 //! Input batches sent by tests are 15ms long ([`INPUT_BATCH_DURATION`]) while
 //! output chunks are 20ms, the same cadence as the video tests (15ms input
@@ -51,7 +50,7 @@ mod required_input {
             start_pts,
             end_pts: start_pts + BATCH_DURATION,
             required: true,
-            samples: samples([("input_1", InputSamples::Batches(batches))]),
+            samples: samples([("input_1", InputSamples::batches(batches))]),
         }
     }
 
@@ -960,6 +959,54 @@ mod required_input {
         );
         assert!(queue.next_audio_batch().is_none());
     }
+
+    /// EOS is delivered on the chunk that pops the final batches, together
+    /// with those batches.
+    #[test]
+    fn offset_from_start_eos_with_last_batches() {
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(100)));
+
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.end_audio();
+
+        sleep(ms(1));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(60), true);
+        assert!(queue.next_audio_batch().is_none());
+
+        // [80, 100) is the first chunk that reaches the offset point; it pops
+        // both batches, draining the stream: EOS on the same chunk
+        sleep(ms(20));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &AudioBatch {
+                start_pts: ms(80),
+                end_pts: ms(100),
+                required: true,
+                samples: samples([(
+                    "input_1",
+                    InputSamples::batches_eos(vec![(ms(100), ms(115)), (ms(115), ms(130))]),
+                )]),
+            },
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // after EOS the input delivers nothing
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(100), true);
+    }
 }
 
 mod optional_input {
@@ -972,7 +1019,7 @@ mod optional_input {
             start_pts,
             end_pts: start_pts + BATCH_DURATION,
             required: false,
-            samples: samples([("input_1", InputSamples::Batches(batches))]),
+            samples: samples([("input_1", InputSamples::batches(batches))]),
         }
     }
 
@@ -1941,5 +1988,53 @@ mod optional_input {
             ms(2),
         );
         assert!(queue.next_audio_batch().is_none());
+    }
+
+    /// EOS is delivered on the chunk that pops the final batches, and that
+    /// chunk is required even for an optional input.
+    #[test]
+    fn offset_from_start_eos_with_last_batches() {
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(100)));
+
+        input.send_samples(ms(0), INPUT_BATCH_DURATION);
+        input.send_samples(ms(15), INPUT_BATCH_DURATION);
+        input.end_audio();
+
+        sleep(ms(1));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(0), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(60), false);
+        assert!(queue.next_audio_batch().is_none());
+
+        // [80, 100) is the first chunk that reaches the offset point; it pops
+        // both batches, draining the stream: EOS on the same chunk
+        sleep(ms(20));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &AudioBatch {
+                start_pts: ms(80),
+                end_pts: ms(100),
+                required: true,
+                samples: samples([(
+                    "input_1",
+                    InputSamples::batches_eos(vec![(ms(100), ms(115)), (ms(115), ms(130))]),
+                )]),
+            },
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        // after EOS the input delivers nothing
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(100), false);
     }
 }
