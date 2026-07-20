@@ -148,9 +148,39 @@ mod required_input {
     /// A stream that ends without delivering any frame carries a bare EOS.
     #[test]
     fn offset_pts_eos_without_frames() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET));
 
+        // the track ends before the queue starts, without a single frame
         input.end_video();
+
+        // desync regular clock from queue clock
+        sleep(OFFSET);
+        queue.start();
+
+        sleep(ms(1));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(0), InputFrame::eos()),
+        );
+        assert!(queue.next_video_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
+    }
+
+    /// EOS is delivered even when the track ends before its offset resolves
+    /// (a `FromStart` offset is only resolved when the first frame arrives).
+    #[test]
+    fn offset_from_start_eos_without_frames() {
+        let (mut queue, mut input) =
+            create_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+
+        // the track ends before the queue starts, without a single frame
+        input.end_video();
+
+        // desync regular clock from queue clock
+        sleep(OFFSET);
+        queue.start();
 
         sleep(ms(1));
         assert_video_batch_eq(

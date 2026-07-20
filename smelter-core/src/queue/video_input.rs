@@ -141,11 +141,17 @@ impl VideoQueueInput {
         }
 
         let Some(offset) = self.resolve_offset(pts, queue_start_pts) else {
-            return QueueVideoFrame::empty();
+            return QueueVideoFrame {
+                frame: None,
+                is_eos: self.check_eos(),
+            };
         };
 
         let Some(input_pts) = pts.checked_sub(offset) else {
-            return QueueVideoFrame::empty();
+            return QueueVideoFrame {
+                frame: None,
+                is_eos: self.check_eos(),
+            };
         };
         trace!(queue_pts=?pts, ?input_pts, "Try get frame");
 
@@ -155,12 +161,19 @@ impl VideoQueueInput {
             frame
         });
 
+        QueueVideoFrame {
+            frame,
+            is_eos: self.check_eos(),
+        }
+    }
+
+    /// True on the first call after the track ended; also emits the EOS event.
+    fn check_eos(&mut self) -> bool {
         let is_eos = self.is_done() && !self.event_eos_guard.emited();
         if is_eos {
             self.event_eos_guard.emit();
         }
-
-        QueueVideoFrame { frame, is_eos }
+        is_eos
     }
 
     pub(super) fn is_ready_for_pts(&mut self, pts: Duration, queue_start_pts: Duration) -> bool {

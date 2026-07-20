@@ -1007,6 +1007,36 @@ mod required_input {
         sleep(ms(20));
         assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(100), true);
     }
+
+    /// EOS is delivered even when the track ends before its offset resolves
+    /// (a `FromStart` offset is only resolved when the first batch arrives).
+    #[test]
+    fn offset_from_start_eos_without_samples() {
+        let (mut queue, mut input) =
+            create_queue_with_audio_input(QueueTrackOffset::FromStart(ms(100)));
+
+        // the track ends before the queue starts, without a single batch
+        input.end_audio();
+
+        // desync regular clock from queue clock
+        sleep(OFFSET);
+        queue.start();
+
+        sleep(ms(1));
+        assert_audio_batch_eq(
+            &queue.next_audio_batch().unwrap(),
+            &AudioBatch {
+                start_pts: ms(0),
+                end_pts: ms(20),
+                required: true,
+                samples: samples([("input_1", InputSamples::batches_eos(vec![]))]),
+            },
+        );
+        assert!(queue.next_audio_batch().is_none());
+
+        sleep(ms(20));
+        assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
+    }
 }
 
 mod optional_input {

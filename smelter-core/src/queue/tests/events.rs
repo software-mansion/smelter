@@ -130,6 +130,27 @@ mod required_input {
         queue.expect_events(&[]);
     }
 
+    #[test]
+    fn offset_from_start_event_eos_without_frames() {
+        let (mut queue, mut input) =
+            create_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+
+        // desync regular clock from queue clock
+        sleep(OFFSET);
+
+        // the track ends before the queue starts, without a single frame; the
+        // pre-start cleanup tick observes the closed track
+        input.end_video();
+        sleep(ms(1));
+        queue.expect_events(&[input.video_delivered_event()]);
+
+        // EOS is emitted with the first batch even though the offset never
+        // resolved and no frame was ever delivered
+        queue.start();
+        sleep(ms(1));
+        queue.expect_events(&[input.video_eos_event()]);
+    }
+
     //
     // Pts offset, resolved after start. The offset is fixed up front, so
     // `delivered` still fires as soon as the first frame is buffered.
@@ -897,6 +918,27 @@ mod required_audio_input {
 
         sleep(ms(20));
         queue.expect_events(&[]);
+    }
+
+    #[test]
+    fn offset_from_start_event_eos_without_samples() {
+        let (mut queue, mut input) =
+            create_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+
+        // desync regular clock from queue clock
+        sleep(OFFSET);
+
+        // the track ends before the queue starts, without a single batch; the
+        // pre-start cleanup tick observes the closed track
+        input.end_audio();
+        sleep(ms(1));
+        queue.expect_events(&[input.audio_delivered_event()]);
+
+        // EOS is emitted with the first chunk even though the offset never
+        // resolved and no samples were ever delivered
+        queue.start();
+        sleep(ms(1));
+        queue.expect_events(&[input.audio_eos_event()]);
     }
 
     //

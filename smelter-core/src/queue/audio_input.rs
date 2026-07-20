@@ -113,13 +113,19 @@ impl AudioQueueInput {
         }
 
         let Some(offset) = self.resolve_offset(pts_range.0, queue_start_pts) else {
-            return QueueAudioSamples::empty();
+            return QueueAudioSamples {
+                samples: vec![],
+                is_eos: self.check_eos(),
+            };
         };
 
         if let Some(offset_from_start) = self.offset_from_start
             && pts_range.1 < queue_start_pts + offset_from_start
         {
-            return QueueAudioSamples::empty();
+            return QueueAudioSamples {
+                samples: vec![],
+                is_eos: self.check_eos(),
+            };
         }
 
         let input_pts = (pts_range.1 + MIXER_STRETCH_BUFFER).saturating_sub(offset);
@@ -134,12 +140,19 @@ impl AudioQueueInput {
             self.event_playing_guard.emit();
         }
 
+        QueueAudioSamples {
+            samples,
+            is_eos: self.check_eos(),
+        }
+    }
+
+    /// True on the first call after the track ended; also emits the EOS event.
+    fn check_eos(&mut self) -> bool {
         let is_eos = self.is_done() && !self.event_eos_guard.emited();
         if is_eos {
             self.event_eos_guard.emit();
         }
-
-        QueueAudioSamples { samples, is_eos }
+        is_eos
     }
 
     pub(super) fn is_ready_for_pts(
