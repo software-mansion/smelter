@@ -119,14 +119,6 @@ pub enum MoqClientError {
     #[error("AAC encoder did not produce an AudioSpecificConfig.")]
     MissingAacEncoderConfig,
 
-    #[error(
-        "AAC bitstream format {format:?} is not compatible with the \"{container}\" container."
-    )]
-    AacFormatContainerMismatch {
-        format: AacBitstreamFormat,
-        container: MoqOutputContainer,
-    },
-
     #[error("Failed to build a CMAF init segment: {0}")]
     InitSegmentError(String),
 
