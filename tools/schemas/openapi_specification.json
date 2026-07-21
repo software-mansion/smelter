@@ -2675,7 +2675,7 @@
               },
               {
                 "$ref": "#/components/schemas/MoqOutputContainer",
-                "description": "(**default=`\"cmaf\"`**) Container used to frame encoded media.\n`cmaf` only supports the H264 video encoders; use `legacy` or `loc` with\n`ffmpeg_vp8` and `ffmpeg_vp9`."
+                "description": "(**default=`\"cmaf\"`**) Container used to frame encoded media."
               }
             ]
           },

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use smelter_render::InputId;
 
-use crate::codecs::{AudioEncoderOptions, VideoCodec, VideoDecoderOptions, VideoEncoderOptions};
+use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 use crate::queue::QueueInputOptions;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,7 +41,7 @@ pub enum MoqOutputContainer {
     /// Microsecond timestamp varint prefix followed by the raw codec payload.
     Legacy,
     /// Fragmented MP4. Each frame is a complete moof+mdat; the init segment is
-    /// published in the catalog. H264-only on the video side.
+    /// published in the catalog.
     #[default]
     Cmaf,
     /// Low Overhead Container.
@@ -119,14 +119,6 @@ pub enum MoqClientError {
 
     #[error("Failed to build a CMAF init segment: {0}")]
     InitSegmentError(String),
-
-    #[error(
-        "Codec {codec:?} is not supported with the \"{container}\" container. Use \"legacy\" or \"loc\" instead."
-    )]
-    UnsupportedCodecContainer {
-        codec: VideoCodec,
-        container: MoqOutputContainer,
-    },
 
     #[error("Unsupported audio sample rate: {0}")]
     UnsupportedSampleRate(u32),

@@ -141,49 +141,34 @@ impl MoqClientVideoEncoderOptions {
                 bitrate,
                 keyframe_interval_ms,
                 ffmpeg_options,
-            } => {
-                validate_vp_container("ffmpeg_vp8", container)?;
-                core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
-                    resolution: resolution.into(),
-                    bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                    keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
-                    raw_options: ffmpeg_options
-                        .clone()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .collect(),
-                })
-            }
+            } => core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
+                resolution: resolution.into(),
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                raw_options: ffmpeg_options
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            }),
             MoqClientVideoEncoderOptions::FfmpegVp9 {
                 bitrate,
                 keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
-            } => {
-                validate_vp_container("ffmpeg_vp9", container)?;
-                core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
-                    resolution: resolution.into(),
-                    bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                    keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
-                    pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
-                    raw_options: ffmpeg_options
-                        .clone()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .collect(),
-                })
-            }
+            } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
+                resolution: resolution.into(),
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+                raw_options: ffmpeg_options
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            }),
         };
         Ok(encoder_options)
-    }
-}
-
-fn validate_vp_container(encoder: &str, container: MoqOutputContainer) -> Result<(), TypeError> {
-    match container {
-        MoqOutputContainer::Cmaf => Err(TypeError::new(format!(
-            "The \"{encoder}\" encoder is not supported with the \"cmaf\" container (the default). Set \"container\" to \"legacy\" or \"loc\"."
-        ))),
-        MoqOutputContainer::Legacy | MoqOutputContainer::Loc => Ok(()),
     }
 }
 

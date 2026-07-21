@@ -17,21 +17,6 @@ use crate::{
 /// With this setting stream should never be falsely rejected, however may fail to decode.
 const DEFAULT_H264_PROFILE: (u8, u8, u8) = (0x42, 0xe0, 0x1e);
 
-pub(super) fn validate(
-    video: &Option<VideoEncoderOptions>,
-    container: MoqOutputContainer,
-) -> Result<(), MoqClientError> {
-    if container != MoqOutputContainer::Cmaf {
-        return Ok(());
-    }
-    let codec = match video {
-        Some(VideoEncoderOptions::FfmpegVp8(_)) => VideoCodec::Vp8,
-        Some(VideoEncoderOptions::FfmpegVp9(_)) => VideoCodec::Vp9,
-        _ => return Ok(()),
-    };
-    Err(MoqClientError::UnsupportedCodecContainer { codec, container })
-}
-
 pub(super) fn build_video_track(
     options: &VideoEncoderOptions,
     resolution: Resolution,
@@ -91,13 +76,18 @@ pub(super) fn build_video_track(
         MoqOutputContainer::Legacy => hang_catalog::Container::Legacy,
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
-            let init = h264_cmaf_init(
-                config
-                    .description
-                    .as_deref()
-                    .ok_or(MoqClientError::MissingH264EncoderConfig)?,
-                resolution,
-            )?;
+            let init = match &config.codec {
+                hang_catalog::VideoCodec::H264(_) => h264_cmaf_init(
+                    config
+                        .description
+                        .as_deref()
+                        .ok_or(MoqClientError::MissingH264EncoderConfig)?,
+                    resolution,
+                )?,
+                hang_catalog::VideoCodec::VP8 => init_segment::vp8(resolution)?,
+                hang_catalog::VideoCodec::VP9(vp9) => init_segment::vp9(vp9, resolution)?,
+                _ => unreachable!("codec is built from the encoder options above"),
+            };
             cmaf_container(init, init_segment::VIDEO_TIMESCALE)
         }
     };

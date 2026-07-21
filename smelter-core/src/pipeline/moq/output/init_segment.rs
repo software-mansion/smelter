@@ -1,8 +1,8 @@
 //! CMAF init segment (ftyp+moov) construction.
 //!
 //! moq-mux keeps its own builders private, so we assemble the equivalent atoms
-//! here. Only the codecs we allow with the CMAF container are covered: H264 on
-//! the video side and Opus or AAC on the audio side.
+//! here. Only the codecs we allow with the CMAF container are covered:
+//! H264/VP8/VP9 on the video side and Opus or AAC on the audio side.
 //!
 //! `fmp4::Wire` only reads `mdhd.timescale`, `tkhd.track_id` and `stsd` back out
 //! of the trak, but the segment is also handed to players verbatim, so it has to
@@ -28,25 +28,78 @@ pub(super) fn h264_cmaf_init(
     let avcc = mp4_atom::Avcc::decode_body(&mut cursor)
         .map_err(|err| MoqClientError::InitSegmentError(format!("invalid avcC record: {err}")))?;
 
-    let width = resolution.width as u16;
-    let height = resolution.height as u16;
     let sample_entry = mp4_atom::Codec::from(mp4_atom::Avc1 {
-        visual: mp4_atom::Visual {
-            data_reference_index: 1,
-            width,
-            height,
-            ..Default::default()
-        },
+        visual: visual(resolution),
         avcc,
         ..Default::default()
     });
 
+    video_init(sample_entry, resolution)
+}
+
+/// VP8 carries no out-of-band configuration, but the VP Codec ISO-BMFF binding
+/// still requires a `vpcC` box. VP8 is always 8-bit 4:2:0, so we emit the same
+/// standard placeholder values as moq-mux's vp08 synthesis.
+pub(super) fn vp8(resolution: Resolution) -> Result<Bytes, MoqClientError> {
+    let sample_entry = mp4_atom::Codec::from(mp4_atom::Vp08 {
+        visual: visual(resolution),
+        vpcc: mp4_atom::VpcC {
+            profile: 0,
+            level: 0,
+            bit_depth: 8,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    video_init(sample_entry, resolution)
+}
+
+/// Synthesizes the `vpcC` box field-for-field from the same VP9 parameters used
+/// to build the catalog `vp09.*` codec string, so the init segment and the codec
+/// string can never diverge.
+pub(super) fn vp9(
+    vp9: &hang::catalog::VP9,
+    resolution: Resolution,
+) -> Result<Bytes, MoqClientError> {
+    let sample_entry = mp4_atom::Codec::from(mp4_atom::Vp09 {
+        visual: visual(resolution),
+        vpcc: mp4_atom::VpcC {
+            profile: vp9.profile,
+            level: vp9.level,
+            bit_depth: vp9.bit_depth,
+            chroma_subsampling: vp9.chroma_subsampling,
+            video_full_range_flag: vp9.full_range,
+            color_primaries: vp9.color_primaries,
+            transfer_characteristics: vp9.transfer_characteristics,
+            matrix_coefficients: vp9.matrix_coefficients,
+            codec_initialization_data: Vec::new(),
+        },
+        ..Default::default()
+    });
+
+    video_init(sample_entry, resolution)
+}
+
+fn visual(resolution: Resolution) -> mp4_atom::Visual {
+    mp4_atom::Visual {
+        data_reference_index: 1,
+        width: resolution.width as u16,
+        height: resolution.height as u16,
+        ..Default::default()
+    }
+}
+
+fn video_init(
+    sample_entry: mp4_atom::Codec,
+    resolution: Resolution,
+) -> Result<Bytes, MoqClientError> {
     let trak = mp4_atom::Trak {
         tkhd: mp4_atom::Tkhd {
             track_id: TRACK_ID,
             enabled: true,
-            width: mp4_atom::FixedPoint::from(width),
-            height: mp4_atom::FixedPoint::from(height),
+            width: mp4_atom::FixedPoint::from(resolution.width as u16),
+            height: mp4_atom::FixedPoint::from(resolution.height as u16),
             ..Default::default()
         },
         mdia: mdia(VIDEO_TIMESCALE, b"vide", sample_entry),
@@ -224,4 +277,72 @@ fn encode_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
         .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
 
     Ok(Bytes::from(buf))
+}
+
+#[cfg(test)]
+mod tests {
+    use mp4_atom::{Codec, Decode};
+
+    use super::*;
+
+    fn resolution() -> Resolution {
+        Resolution {
+            width: 1920,
+            height: 1080,
+        }
+    }
+
+    /// Decodes the `ftyp`+`moov` init segment back into a `Moov` for inspection.
+    fn decode_moov(init: &Bytes) -> mp4_atom::Moov {
+        let mut buf = init.clone();
+        mp4_atom::Ftyp::decode(&mut buf).expect("decode ftyp");
+        mp4_atom::Moov::decode(&mut buf).expect("decode moov")
+    }
+
+    #[test]
+    fn vp9_init_segment() {
+        let config = hang::catalog::VP9 {
+            profile: 0,
+            level: 41,
+            bit_depth: 8,
+            chroma_subsampling: 1,
+            ..Default::default()
+        };
+        let init = vp9(&config, resolution()).unwrap();
+        let moov = decode_moov(&init);
+
+        let trak = &moov.trak[0];
+        assert_eq!(trak.mdia.mdhd.timescale, VIDEO_TIMESCALE);
+        assert_eq!(trak.tkhd.track_id, TRACK_ID);
+
+        let Codec::Vp09(vp09) = &trak.mdia.minf.stbl.stsd.codecs[0] else {
+            panic!("expected a vp09 sample entry");
+        };
+        assert_eq!(vp09.visual.width, 1920);
+        assert_eq!(vp09.visual.height, 1080);
+        assert_eq!(vp09.vpcc.profile, 0);
+        assert_eq!(vp09.vpcc.level, 41);
+        assert_eq!(vp09.vpcc.bit_depth, 8);
+        assert_eq!(vp09.vpcc.chroma_subsampling, 1);
+        assert!(!vp09.vpcc.video_full_range_flag);
+        assert!(vp09.vpcc.codec_initialization_data.is_empty());
+    }
+
+    #[test]
+    fn vp8_init_segment() {
+        let init = vp8(resolution()).unwrap();
+        let moov = decode_moov(&init);
+
+        let trak = &moov.trak[0];
+        assert_eq!(trak.mdia.mdhd.timescale, VIDEO_TIMESCALE);
+        assert_eq!(trak.tkhd.track_id, TRACK_ID);
+
+        let Codec::Vp08(vp08) = &trak.mdia.minf.stbl.stsd.codecs[0] else {
+            panic!("expected a vp08 sample entry");
+        };
+        assert_eq!(vp08.visual.width, 1920);
+        assert_eq!(vp08.visual.height, 1080);
+        assert_eq!(vp08.vpcc.profile, 0);
+        assert_eq!(vp08.vpcc.bit_depth, 8);
+    }
 }

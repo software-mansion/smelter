@@ -24,7 +24,7 @@ use crate::{
                 audio_encoder_thread::{
                     AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
                 },
-                track::{self, build_audio_track, build_video_track},
+                track::{build_audio_track, build_video_track},
                 video_encoder_thread::{
                     VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
                 },
@@ -74,10 +74,6 @@ impl MoqClientOutput {
             output_ref: output_ref.clone(),
             kind: OutputProtocolKind::MoqClient,
         });
-
-        // Reject unsupported codec/container pairs before spawning any encoder.
-        // smelter-api rejects these at registration; this is the last line of defense.
-        track::validate(&options.video, options.container)?;
 
         // A channel per media, so the writer thread can interleave chunks by PTS.
         let (video_encoder_handle, video_receiver) = match options.video.as_ref() {
