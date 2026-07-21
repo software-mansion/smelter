@@ -14,7 +14,8 @@ use crate::{
 };
 use smelter_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, MoqClientInput, MoqServerInput, Mp4Input,
-    Mp4Output, OutputId, RendererId, RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec,
+    MoqClientOutput, Mp4Output, OutputId, RendererId, RtmpInput, RtmpOutput, RtpInput, RtpOutput,
+    ShaderSpec,
     V4l2Input, WebRendererSpec, WhepInput, WhepOutput, WhipInput, WhipOutput,
 };
 
@@ -41,6 +42,7 @@ pub enum RegisterInput {
 pub enum RegisterOutput {
     RtpStream(RtpOutput),
     RtmpClient(RtmpOutput),
+    MoqClient(MoqClientOutput),
     Mp4(Mp4Output),
     WhipClient(WhipOutput),
     WhepServer(WhepOutput),
@@ -162,6 +164,11 @@ pub async fn handle_output(
             RegisterOutput::Hls(hls) => {
                 Pipeline::register_output(&api.pipeline()?, output_id.into(), hls.try_into()?)?
             }
+            RegisterOutput::MoqClient(moq_client) => Pipeline::register_output(
+                &api.pipeline()?,
+                output_id.into(),
+                moq_client.try_into()?,
+            )?,
         };
         match response {
             Some(Port(port)) => Ok(Response::RegisteredPort { port: Some(port) }),

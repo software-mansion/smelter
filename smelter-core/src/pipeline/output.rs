@@ -10,6 +10,7 @@ use tracing::{info, warn};
 use crate::pipeline::{
     hls::HlsOutput,
     input::PipelineInput,
+    moq::MoqClientOutput,
     mp4::Mp4Output,
     rtmp::RtmpClientOutput,
     rtp::RtpOutput,
@@ -70,6 +71,10 @@ pub(super) fn new_external_output(
         }
         ProtocolOutputOptions::Whep(opt) => {
             let output = WhepOutput::new(ctx, output_ref, opt)?;
+            Ok((Box::new(output), None))
+        }
+        ProtocolOutputOptions::MoqClient(opt) => {
+            let output = MoqClientOutput::new(ctx, output_ref, opt)?;
             Ok((Box::new(output), None))
         }
     }

@@ -12,6 +12,7 @@ pub enum OutputStatsReport {
     Mp4(Mp4OutputStatsReport),
     Rtmp(RtmpOutputStatsReport),
     Rtp(RtpOutputStatsReport),
+    MoqClient(MoqClientOutputStatsReport),
 }
 
 /// Stats report for `WHEP` output.
@@ -133,6 +134,26 @@ pub struct RtpOutputStatsReport {
 /// Stats report for a track in the `RTP` output.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct RtpOutputTrackStatsReport {
+    /// Bitrate in the 1-second window.
+    pub bitrate_1_second: u64,
+
+    /// Bitrate in the 1-minute window.
+    pub bitrate_1_minute: u64,
+}
+
+/// Stats report for the `MoQ` client output.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct MoqClientOutputStatsReport {
+    /// Stats for the video track.
+    pub video: MoqClientOutputTrackStatsReport,
+
+    /// Stats for the audio track.
+    pub audio: MoqClientOutputTrackStatsReport,
+}
+
+/// Stats report for a track in the `MoQ` client output.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct MoqClientOutputTrackStatsReport {
     /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
 
