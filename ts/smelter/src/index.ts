@@ -26,6 +26,7 @@ export {
   RegisterWhepClientInput,
   RegisterRtmpServerInput,
   RegisterMoqServerInput,
+  RegisterMoqClientInput,
   RegisterV4l2Input,
 } from './types/input.js';
 export {

@@ -229,6 +229,30 @@ export type RegisterMoqServerInput = {
   sideChannel?: SideChannel;
 };
 
+export type RegisterMoqClientInput = {
+  type: 'moq_client';
+  /**
+   * URL of the MoQ relay to connect to.
+   */
+  endpointUrl: string;
+  /**
+   * Path of the broadcast to subscribe to on the relay.
+   */
+  broadcastPath: string;
+  /**
+   * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+   */
+  required?: boolean | null;
+  /**
+   * Assigns which decoder should be used for media encoded with a specific codec.
+   */
+  decoderMap?: InputMoqDecoderMap | null;
+  /**
+   * Enable side channel for video and/or audio track.
+   */
+  sideChannel?: SideChannel;
+};
+
 export type RegisterV4l2Input = {
   type: 'v4l2';
   /**
