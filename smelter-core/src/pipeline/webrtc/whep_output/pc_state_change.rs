@@ -11,7 +11,9 @@ use webrtc::{
     peer_connection::peer_connection_state::RTCPeerConnectionState,
 };
 
-use crate::pipeline::webrtc::whep_output::{WhepOutputStatsSender, state::WhepOutputsState};
+use crate::pipeline::webrtc::whep_output::{
+    output::WhepOutputStatsSender, state::WhepOutputsState,
+};
 
 use crate::prelude::*;
 

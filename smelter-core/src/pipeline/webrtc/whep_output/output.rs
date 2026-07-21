@@ -27,14 +27,6 @@ use crate::{
 
 use crate::prelude::*;
 
-pub(super) mod init_payloaders;
-pub(crate) mod pc_state_change;
-pub(super) mod peer_connection;
-pub(super) mod state;
-pub(super) mod stream_media_to_peer;
-pub(super) mod track_task_audio;
-pub(super) mod track_task_video;
-
 /// WHEP output - serves media to a remote WHEP client.
 ///
 /// ## Codec negotiation
@@ -223,7 +215,7 @@ impl Output for WhepOutput {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct WhepOutputStatsSender {
+pub(super) struct WhepOutputStatsSender {
     stats_sender: StatsSender,
     output_ref: Ref<OutputId>,
 }
@@ -236,7 +228,7 @@ impl WhepOutputStatsSender {
         }
     }
 
-    fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
+    pub fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
         self.stats_sender.send(
             WhepOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
         );

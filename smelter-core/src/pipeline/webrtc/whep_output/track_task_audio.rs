@@ -3,12 +3,15 @@ use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::broadcast;
 use tracing::warn;
 
-use crate::pipeline::webrtc::whep_output::WhepOutputStatsSender;
-use crate::prelude::*;
 use crate::{
-    pipeline::encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
+    pipeline::{
+        encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
+        webrtc::whep_output::output::WhepOutputStatsSender,
+    },
     utils::{InitializableThread, ThreadMetadata},
 };
+
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhepAudioTrackThreadHandle {
