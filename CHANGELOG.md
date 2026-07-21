@@ -7,7 +7,6 @@
 ### ✨ New features
 
 - Add `SMELTER_RENDER_MAX_LAYOUTS_COUNT` environment variable to configure the maximum number of layouts (default 100) by [@wkozyra95](https://github.com/wkozyra95)
-- Add AAC audio encoder support to MoQ client output by [@JBRS307](https://github.com/JBRS307)
 
 ### 🐛 Bug fixes
 
