@@ -46,7 +46,7 @@
     "@swmansion/smelter-core": "workspace:0.4.0",
     "pino": "^9.5.0",
     "pino-pretty": "^13.0.0",
-    "tar": "^7.5.16",
+    "tar": "^7.5.19",
     "uuid": "^14.0.0",
     "ws": "^8.21.0"
   },
