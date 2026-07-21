@@ -200,9 +200,6 @@ impl MoqClientAudioEncoderOptions {
     ) -> Result<core::AudioEncoderOptions, TypeError> {
         let audio_encoder_options = match self {
             MoqClientAudioEncoderOptions::Aac { sample_rate } => {
-                // CMAF carries the AudioSpecificConfig out-of-band, so the
-                // encoder emits raw access units. Legacy and LOC need the
-                // self-describing ADTS bitstream instead.
                 let bitstream_format = match container {
                     MoqOutputContainer::Cmaf => core::AacBitstreamFormat::RawAu,
                     MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
