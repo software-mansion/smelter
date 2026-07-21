@@ -127,6 +127,7 @@ impl Mp4AudioEncoderOptions {
                 core::AudioEncoderOptions::FdkAac(core::FdkAacEncoderOptions {
                     channels: channels.into(),
                     sample_rate: sample_rate.unwrap_or(44100),
+                    bitstream_format: core::AacBitstreamFormat::RawAu,
                 })
             }
         }
