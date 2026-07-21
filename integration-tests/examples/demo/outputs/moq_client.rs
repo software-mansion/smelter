@@ -163,8 +163,8 @@ impl MoqClientOutputBuilder {
 
     fn prompt_container(self) -> Result<Self> {
         let container_options = MoqContainer::iter().collect();
-        let container_choice =
-            Select::new("Select container (ESC for cmaf):", container_options).prompt_skippable()?;
+        let container_choice = Select::new("Select container (ESC for cmaf):", container_options)
+            .prompt_skippable()?;
         match container_choice {
             Some(container) => Ok(self.with_container(container)),
             None => Ok(self),
