@@ -134,6 +134,14 @@ fn check_hls_err(raw: serde_json::Value, expected_msg: &str) {
 }
 
 #[track_caller]
+fn check_moq(raw: serde_json::Value, expected: CoreOutput) {
+    let output = raw.get("output").unwrap().clone();
+    let api: MoqClientOutput = serde_json::from_value(output).unwrap();
+    let result = CoreOutput::try_from(api).unwrap();
+    assert_eq!(result, expected);
+}
+
+#[track_caller]
 fn check_serde_err<T: serde::de::DeserializeOwned>(raw: serde_json::Value) {
     let output = raw.get("output").unwrap().clone();
     assert!(serde_json::from_value::<T>(output).is_err());
@@ -1964,4 +1972,92 @@ fn err_serde_hls_missing_path() {
             }
         }
     }));
+}
+
+fn moq_aac_request(container: Option<&str>) -> serde_json::Value {
+    let mut output = json!({
+        "endpoint_url": "https://localhost:443",
+        "broadcast_path": "anon/test",
+        "audio": {
+            "encoder": { "type": "aac" },
+            "initial": audio_scene()
+        }
+    });
+    if let Some(container) = container {
+        output
+            .as_object_mut()
+            .unwrap()
+            .insert("container".to_string(), json!(container));
+    }
+    json!({ "output": output })
+}
+
+fn moq_aac_expected(
+    container: smelter_core::protocols::MoqOutputContainer,
+    bitstream_format: smelter_core::codecs::AacBitstreamFormat,
+) -> CoreOutput {
+    CoreOutput {
+        output_options: smelter_core::ProtocolOutputOptions::MoqClient(
+            smelter_core::protocols::MoqClientOutputOptions {
+                endpoint_url: "https://localhost:443".into(),
+                broadcast_path: "anon/test".into(),
+                container,
+                video: None,
+                audio: Some(smelter_core::codecs::AudioEncoderOptions::FdkAac(
+                    smelter_core::codecs::FdkAacEncoderOptions {
+                        channels: smelter_core::AudioChannels::Stereo,
+                        sample_rate: 44100,
+                        bitstream_format,
+                    },
+                )),
+            },
+        ),
+        video: None,
+        audio: Some(default_audio()),
+    }
+}
+
+#[test]
+fn moq_client_aac_cmaf() {
+    check_moq(
+        moq_aac_request(Some("cmaf")),
+        moq_aac_expected(
+            smelter_core::protocols::MoqOutputContainer::Cmaf,
+            smelter_core::codecs::AacBitstreamFormat::RawAu,
+        ),
+    );
+}
+
+#[test]
+fn moq_client_aac_legacy() {
+    check_moq(
+        moq_aac_request(Some("legacy")),
+        moq_aac_expected(
+            smelter_core::protocols::MoqOutputContainer::Legacy,
+            smelter_core::codecs::AacBitstreamFormat::Adts,
+        ),
+    );
+}
+
+#[test]
+fn moq_client_aac_loc() {
+    check_moq(
+        moq_aac_request(Some("loc")),
+        moq_aac_expected(
+            smelter_core::protocols::MoqOutputContainer::Loc,
+            smelter_core::codecs::AacBitstreamFormat::Adts,
+        ),
+    );
+}
+
+#[test]
+fn moq_client_aac_default_container() {
+    // No container specified defaults to CMAF, which requires raw access units.
+    check_moq(
+        moq_aac_request(None),
+        moq_aac_expected(
+            smelter_core::protocols::MoqOutputContainer::Cmaf,
+            smelter_core::codecs::AacBitstreamFormat::RawAu,
+        ),
+    );
 }
