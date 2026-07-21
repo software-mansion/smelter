@@ -77,8 +77,6 @@ impl MoqClientOutput {
         // smelter-api rejects these at registration; this is the last line of defense.
         track::validate(&options.video, options.container)?;
 
-        // Both encoders share one channel so the writer thread sees video and
-        // audio chunks in the order they were produced.
         let (chunks_sender, chunks_receiver) = bounded(1000);
 
         let video = options
@@ -108,7 +106,8 @@ impl MoqClientOutput {
             _ => None,
         };
 
-        let state = Self::publish(&ctx, &options, video_track, audio_track)?;
+        let (session, origin) = Self::connect(&ctx, &options.endpoint_url)?;
+        let state = Self::publish(&options, video_track, audio_track, session, origin)?;
 
         let span = Span::current();
         std::thread::Builder::new()
@@ -116,7 +115,7 @@ impl MoqClientOutput {
             .spawn(move || {
                 let _span = span.entered();
                 // moq-net spawns tasks (e.g. group cleanup) from the producer calls below.
-                let _guard = ctx.tokio_rt.enter();
+                let _rt_guard = ctx.tokio_rt.enter();
 
                 let stats_sender = MoqClientOutputStatsSender {
                     stats_sender: ctx.stats_sender.clone(),
@@ -135,13 +134,12 @@ impl MoqClientOutput {
 
     /// Connect to the relay and announce the broadcast with its catalog.
     fn publish(
-        ctx: &Arc<PipelineCtx>,
         options: &MoqClientOutputOptions,
         video_track: Option<(hang::catalog::VideoConfig, Container)>,
         audio_track: Option<(hang::catalog::AudioConfig, Container)>,
+        session: MoqSession,
+        origin: OriginProducer,
     ) -> Result<BroadcastState, MoqClientError> {
-        let (session, origin) = Self::connect(ctx, &options.endpoint_url)?;
-
         let mut broadcast = Broadcast::new().produce();
         let mut catalog = moq_mux::catalog::Producer::new(&mut broadcast)
             .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
