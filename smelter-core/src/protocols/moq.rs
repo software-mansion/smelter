@@ -3,9 +3,7 @@ use std::sync::Arc;
 
 use smelter_render::InputId;
 
-use crate::codecs::{
-    AacBitstreamFormat, AudioEncoderOptions, VideoCodec, VideoDecoderOptions, VideoEncoderOptions,
-};
+use crate::codecs::{AudioEncoderOptions, VideoCodec, VideoDecoderOptions, VideoEncoderOptions};
 use crate::queue::QueueInputOptions;
 
 #[derive(Debug, Clone, PartialEq)]
