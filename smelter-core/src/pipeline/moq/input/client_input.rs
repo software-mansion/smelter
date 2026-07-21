@@ -109,7 +109,7 @@ impl MoqClientInput {
         rt.spawn(
             async move {
                 let Some(broadcast) =
-                    await_broadcast(consumer, broadcast_path, &should_close).await
+                    wait_for_broadcast(consumer, broadcast_path, &should_close).await
                 else {
                     return;
                 };
@@ -141,7 +141,7 @@ impl Drop for MoqClientInput {
     }
 }
 
-async fn await_broadcast(
+async fn wait_for_broadcast(
     mut consumer: OriginConsumer,
     broadcast_path: Arc<str>,
     should_close: &Arc<AtomicBool>,
@@ -156,8 +156,9 @@ async fn await_broadcast(
             return None;
         };
 
-        if path.as_str().trim_start_matches("/") == broadcast_path.as_ref().trim_start_matches("/")
-        {
+        let expected_path = broadcast_path.as_ref().trim_start_matches("/");
+        let incoming_path = path.as_str().trim_start_matches("/");
+        if incoming_path == expected_path {
             return Some(broadcast);
         }
     }
