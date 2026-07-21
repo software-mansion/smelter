@@ -17,27 +17,8 @@ const DEFAULT_H264_PROFILE: (u8, u8, u8) = (0x42, 0xe0, 0x1e);
 
 pub(super) fn validate(
     video: &Option<VideoEncoderOptions>,
-    audio: &Option<AudioEncoderOptions>,
     container: MoqOutputContainer,
 ) -> Result<(), MoqClientError> {
-    // The FDK encoder's bitstream format is derived from the container by
-    // smelter-api, but a core-side user could pair them incorrectly. CMAF needs
-    // raw access units (config out-of-band); legacy/loc need self-describing ADTS.
-    if let Some(AudioEncoderOptions::FdkAac(aac)) = audio {
-        let ok = match container {
-            MoqOutputContainer::Cmaf => aac.bitstream_format == AacBitstreamFormat::RawAu,
-            MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
-                aac.bitstream_format == AacBitstreamFormat::Adts
-            }
-        };
-        if !ok {
-            return Err(MoqClientError::AacFormatContainerMismatch {
-                format: aac.bitstream_format,
-                container,
-            });
-        }
-    }
-
     if container != MoqOutputContainer::Cmaf {
         return Ok(());
     }
@@ -287,42 +268,4 @@ fn vp9_level(resolution: Resolution, framerate: Framerate) -> u8 {
             sample_rate <= *max_sample_rate && picture_size <= *max_picture_size
         })
         .map_or(0, |(_, _, level)| *level)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn aac_options(bitstream_format: AacBitstreamFormat) -> Option<AudioEncoderOptions> {
-        Some(AudioEncoderOptions::FdkAac(FdkAacEncoderOptions {
-            channels: AudioChannels::Stereo,
-            sample_rate: 44100,
-            bitstream_format,
-        }))
-    }
-
-    #[test]
-    fn validate_accepts_matching_aac_formats() {
-        let raw = aac_options(AacBitstreamFormat::RawAu);
-        assert!(validate(&None, &raw, MoqOutputContainer::Cmaf).is_ok());
-
-        let adts = aac_options(AacBitstreamFormat::Adts);
-        assert!(validate(&None, &adts, MoqOutputContainer::Legacy).is_ok());
-        assert!(validate(&None, &adts, MoqOutputContainer::Loc).is_ok());
-    }
-
-    #[test]
-    fn validate_rejects_mismatched_aac_formats() {
-        let raw = aac_options(AacBitstreamFormat::RawAu);
-        assert!(matches!(
-            validate(&None, &raw, MoqOutputContainer::Legacy),
-            Err(MoqClientError::AacFormatContainerMismatch { .. })
-        ));
-
-        let adts = aac_options(AacBitstreamFormat::Adts);
-        assert!(matches!(
-            validate(&None, &adts, MoqOutputContainer::Cmaf),
-            Err(MoqClientError::AacFormatContainerMismatch { .. })
-        ));
-    }
 }
