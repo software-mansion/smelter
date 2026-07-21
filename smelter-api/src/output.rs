@@ -2,6 +2,8 @@ mod common;
 mod common_into;
 mod hls;
 mod hls_into;
+mod moq_client;
+mod moq_client_into;
 mod mp4;
 mod mp4_into;
 mod rtmp;
@@ -15,6 +17,7 @@ mod whip_into;
 
 pub use common::*;
 pub use hls::*;
+pub use moq_client::*;
 pub use mp4::*;
 pub use rtmp::*;
 pub use rtp::*;
