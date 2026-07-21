@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use smelter_render::InputId;
 
-use crate::codecs::{AudioEncoderOptions, VideoCodec, VideoDecoderOptions, VideoEncoderOptions};
+use crate::codecs::{
+    AacBitstreamFormat, AudioEncoderOptions, VideoCodec, VideoDecoderOptions, VideoEncoderOptions,
+};
 use crate::queue::QueueInputOptions;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,6 +115,17 @@ pub enum MoqClientError {
 
     #[error("H264 encoder did not produce a decoder configuration record.")]
     MissingH264EncoderConfig,
+
+    #[error("AAC encoder did not produce an AudioSpecificConfig.")]
+    MissingAacEncoderConfig,
+
+    #[error(
+        "AAC bitstream format {format:?} is not compatible with the \"{container}\" container."
+    )]
+    AacFormatContainerMismatch {
+        format: AacBitstreamFormat,
+        container: MoqOutputContainer,
+    },
 
     #[error("Failed to build a CMAF init segment: {0}")]
     InitSegmentError(String),

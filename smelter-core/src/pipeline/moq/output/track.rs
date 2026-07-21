@@ -17,8 +17,27 @@ const DEFAULT_H264_PROFILE: (u8, u8, u8) = (0x42, 0xe0, 0x1e);
 
 pub(super) fn validate(
     video: &Option<VideoEncoderOptions>,
+    audio: &Option<AudioEncoderOptions>,
     container: MoqOutputContainer,
 ) -> Result<(), MoqClientError> {
+    // The FDK encoder's bitstream format is derived from the container by
+    // smelter-api, but a core-side user could pair them incorrectly. CMAF needs
+    // raw access units (config out-of-band); legacy/loc need self-describing ADTS.
+    if let Some(AudioEncoderOptions::FdkAac(aac)) = audio {
+        let ok = match container {
+            MoqOutputContainer::Cmaf => aac.bitstream_format == AacBitstreamFormat::RawAu,
+            MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
+                aac.bitstream_format == AacBitstreamFormat::Adts
+            }
+        };
+        if !ok {
+            return Err(MoqClientError::AacFormatContainerMismatch {
+                format: aac.bitstream_format,
+                container,
+            });
+        }
+    }
+
     if container != MoqOutputContainer::Cmaf {
         return Ok(());
     }
@@ -106,13 +125,21 @@ pub(super) fn video(
 }
 
 pub(super) fn audio(
+    options: &AudioEncoderOptions,
+    extradata: Option<Bytes>,
+    container: MoqOutputContainer,
+) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
+    match options {
+        AudioEncoderOptions::Opus(opus) => opus_audio(opus, container),
+        AudioEncoderOptions::FdkAac(aac) => aac_audio(aac, extradata, container),
+    }
+}
+
+fn opus_audio(
     opus: &OpusEncoderOptions,
     container: MoqOutputContainer,
 ) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
-    let channel_count = match opus.channels {
-        AudioChannels::Mono => 1,
-        AudioChannels::Stereo => 2,
-    };
+    let channel_count = channel_count(opus.channels);
     let mut config = hang_catalog::AudioConfig::new(
         hang_catalog::AudioCodec::Opus,
         opus.sample_rate,
@@ -130,6 +157,57 @@ pub(super) fn audio(
     let wire = WireContainer::try_from(&config.container)
         .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
     Ok((config, wire))
+}
+
+fn aac_audio(
+    aac: &FdkAacEncoderOptions,
+    extradata: Option<Bytes>,
+    container: MoqOutputContainer,
+) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
+    let channel_count = channel_count(aac.channels);
+
+    // CMAF carries the AudioSpecificConfig out-of-band (catalog `description` +
+    // `mp4a`/`esds` in the init segment), so the profile is read from the real
+    // ASC. Legacy/LOC use self-describing ADTS: the encoder is always AAC-LC
+    // (profile 2) and no description is published.
+    let (codec, description) = match container {
+        MoqOutputContainer::Cmaf => {
+            let asc = extradata
+                .filter(|data| !data.is_empty())
+                .ok_or(MoqClientError::MissingAacEncoderConfig)?;
+            let profile = AacAudioSpecificConfig::parse_from(&asc)
+                .map_err(|err| {
+                    MoqClientError::InitSegmentError(format!("invalid AudioSpecificConfig: {err}"))
+                })?
+                .profile;
+            (hang_catalog::AAC { profile }, Some(asc))
+        }
+        MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
+            (hang_catalog::AAC { profile: 2 }, None)
+        }
+    };
+
+    let mut config = hang_catalog::AudioConfig::new(codec, aac.sample_rate, channel_count);
+    config.description = description.clone();
+    config.container = match container {
+        MoqOutputContainer::Legacy => hang_catalog::Container::Legacy,
+        MoqOutputContainer::Loc => hang_catalog::Container::Loc,
+        MoqOutputContainer::Cmaf => {
+            let asc = description.ok_or(MoqClientError::MissingAacEncoderConfig)?;
+            cmaf_container(init_segment::aac(&asc)?, aac.sample_rate)
+        }
+    };
+
+    let wire = WireContainer::try_from(&config.container)
+        .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
+    Ok((config, wire))
+}
+
+fn channel_count(channels: AudioChannels) -> u32 {
+    match channels {
+        AudioChannels::Mono => 1,
+        AudioChannels::Stereo => 2,
+    }
 }
 
 // `timescale` and `track_id` duplicate what's already in `init`; hang emits them
@@ -209,4 +287,42 @@ fn vp9_level(resolution: Resolution, framerate: Framerate) -> u8 {
             sample_rate <= *max_sample_rate && picture_size <= *max_picture_size
         })
         .map_or(0, |(_, _, level)| *level)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn aac_options(bitstream_format: AacBitstreamFormat) -> Option<AudioEncoderOptions> {
+        Some(AudioEncoderOptions::FdkAac(FdkAacEncoderOptions {
+            channels: AudioChannels::Stereo,
+            sample_rate: 44100,
+            bitstream_format,
+        }))
+    }
+
+    #[test]
+    fn validate_accepts_matching_aac_formats() {
+        let raw = aac_options(AacBitstreamFormat::RawAu);
+        assert!(validate(&None, &raw, MoqOutputContainer::Cmaf).is_ok());
+
+        let adts = aac_options(AacBitstreamFormat::Adts);
+        assert!(validate(&None, &adts, MoqOutputContainer::Legacy).is_ok());
+        assert!(validate(&None, &adts, MoqOutputContainer::Loc).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_mismatched_aac_formats() {
+        let raw = aac_options(AacBitstreamFormat::RawAu);
+        assert!(matches!(
+            validate(&None, &raw, MoqOutputContainer::Legacy),
+            Err(MoqClientError::AacFormatContainerMismatch { .. })
+        ));
+
+        let adts = aac_options(AacBitstreamFormat::Adts);
+        assert!(matches!(
+            validate(&None, &adts, MoqOutputContainer::Cmaf),
+            Err(MoqClientError::AacFormatContainerMismatch { .. })
+        ));
+    }
 }
