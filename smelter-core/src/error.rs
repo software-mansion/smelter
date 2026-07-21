@@ -59,8 +59,8 @@ pub enum InitPipelineError {
     #[error("Failed to initialize RTMP server.")]
     RtmpServerInitError(#[source] std::io::Error),
 
-    #[error("Failed to initialize MoQ server.")]
-    MoqServerInitError(#[source] anyhow::Error),
+    #[error("Failed to initialize MoQ server: {0}")]
+    MoqServerInitError(String),
 
     #[error("Failed to set up self-signed MoQ TLS certificate.")]
     MoqSelfSignedTlsError(#[from] SelfSignedTlsError),
@@ -257,7 +257,10 @@ pub enum InputInitError {
     Rtmp(#[from] RtmpServerError),
 
     #[error(transparent)]
-    Moq(#[from] MoqServerError),
+    MoqServer(#[from] MoqServerError),
+
+    #[error(transparent)]
+    MoqClient(#[from] MoqClientError),
 
     #[cfg(feature = "decklink")]
     #[error(transparent)]
@@ -341,6 +344,8 @@ const WHEP_INVALID_SERVER_URL: &str = "WHEP_INVALID_SERVER_URL";
 const WHEP_REQUEST_FAILED: &str = "WHEP_REQUEST_FAILED";
 const WHEP_BAD_STATUS: &str = "WHEP_BAD_STATUS";
 const MOQ_SERVER_NOT_RUNNING: &str = "MOQ_SERVER_NOT_RUNNING";
+const MOQ_CLIENT_INVALID_URL: &str = "MOQ_CLIENT_INVALID_URL";
+const MOQ_CLIENT_INVALID_SCHEME: &str = "MOQ_CLIENT_INVALID_SCHEME";
 
 impl From<&RegisterInputError> for PipelineErrorInfo {
     fn from(err: &RegisterInputError) -> Self {
@@ -385,8 +390,18 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
             // MoQ Server
             RegisterInputError::InputError(
                 _,
-                InputInitError::Moq(MoqServerError::ServerNotRunning),
+                InputInitError::MoqServer(MoqServerError::ServerNotRunning),
             ) => PipelineErrorInfo::new(MOQ_SERVER_NOT_RUNNING, ErrorType::UserError),
+
+            // MoQ Client
+            RegisterInputError::InputError(
+                _,
+                InputInitError::MoqClient(MoqClientError::InvalidUrl(_, _)),
+            ) => PipelineErrorInfo::new(MOQ_CLIENT_INVALID_URL, ErrorType::UserError),
+            RegisterInputError::InputError(
+                _,
+                InputInitError::MoqClient(MoqClientError::InvalidScheme(_)),
+            ) => PipelineErrorInfo::new(MOQ_CLIENT_INVALID_SCHEME, ErrorType::UserError),
 
             // FFmpeg (used in HLS input)
             RegisterInputError::InputError(

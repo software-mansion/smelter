@@ -7,7 +7,7 @@ use bytes::Bytes;
 use moq_mux::{catalog::hang::Container, container::Consumer as ContainerConsumer};
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
-use tracing::{Instrument, Level, Span, debug, info, span, trace, warn};
+use tracing::{Instrument, Span, debug, info, trace, warn};
 
 use crate::{
     pipeline::{
@@ -22,10 +22,7 @@ use crate::{
             libopus::OpusDecoder,
             vulkan_h264::VulkanH264Decoder,
         },
-        moq::{
-            connection::timestamp_aligner::{EpochShared, TimestampAligner, TrackKind},
-            state::MoqInputState,
-        },
+        moq::input::connection::timestamp_aligner::{EpochShared, TimestampAligner, TrackKind},
     },
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
     utils::{H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread},
@@ -40,8 +37,7 @@ mod timestamp_aligner;
 
 /// Buffer added to a new track's PTS offset during queue initialization. This gives frames
 /// time to arrive and be decoded before their scheduled presentation, absorbing network jitter and
-/// decode latency at the cost of a fixed delay. The 2200ms value is set based on Twitch
-/// broadcasting guidelines.
+/// decode latency at the cost of a fixed delay.
 const MOQ_BUFFER: Duration = Duration::from_millis(2200);
 const MOQ_MAX_BUFFER: Duration = Duration::from_secs(20);
 
@@ -64,7 +60,7 @@ struct TrackCtx {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
     broadcast: BroadcastConsumer,
-    decoders: MoqServerInputDecoders,
+    decoders: MoqInputDecoders,
     epoch: EpochShared,
     /// Whether only one of audio/video is present, so the estimator has no
     /// counterpart to wait for when measuring A/V skew.
@@ -73,69 +69,25 @@ struct TrackCtx {
     stats_sender: MoqStatsSender,
 }
 
-pub(crate) fn start_broadcast_handler_task(
-    ctx: Arc<PipelineCtx>,
-    input_ref: &Ref<InputId>,
-    input: &MoqInputState,
-    broadcast: BroadcastConsumer,
-) -> Option<tokio::task::JoinHandle<()>> {
-    let queue_input = input.queue_input.clone();
-    let input_ref = input_ref.clone();
-    let decoders = input.decoders;
-    let rt = ctx.tokio_rt.clone();
-    let should_close = input.should_close.clone();
-
-    let span = span!(
-        Level::INFO,
-        "MoQ server input",
-        input_id = input_ref.to_string()
-    );
-
-    let handle = rt.spawn(
-        async move {
-            let broadcast_result = handle_broadcast(
-                ctx,
-                input_ref.clone(),
-                decoders,
-                queue_input,
-                broadcast,
-                should_close,
-            )
-            .await;
-            if let Err(error) = broadcast_result {
-                warn!(
-                    "broadcast failed: {}",
-                    ErrorStack::new(&error).into_string()
-                );
-            }
-        }
-        .instrument(span),
-    );
-
-    Some(handle)
+pub(crate) struct BroadcastCtx {
+    pub broadcast: BroadcastConsumer,
+    pub decoders: MoqInputDecoders,
+    pub should_close: Arc<AtomicBool>,
+    pub endpoint_kind: MoqEndpointKind,
 }
 
-async fn handle_broadcast(
+pub(crate) async fn handle_broadcast(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    decoders: MoqServerInputDecoders,
     queue_input: WeakQueueInput,
-    broadcast: BroadcastConsumer,
-    should_close: Arc<AtomicBool>,
+    broadcast_ctx: BroadcastCtx,
 ) -> Result<(), MoqConnectionError> {
     info!("MoQ broadcast connection established");
 
-    let (video, audio) = read_catalog(&broadcast).await?;
+    let (video, audio) = read_catalog(&broadcast_ctx.broadcast).await?;
 
-    let mut handler = BroadcastHandler::new(
-        ctx.clone(),
-        input_ref.clone(),
-        broadcast,
-        video,
-        audio,
-        decoders,
-        should_close,
-    );
+    let mut handler =
+        BroadcastHandler::new(ctx.clone(), input_ref.clone(), video, audio, broadcast_ctx);
 
     let (video_sender, audio_sender) = {
         let Some(queue_input) = queue_input.upgrade() else {
@@ -173,12 +125,17 @@ impl BroadcastHandler {
     fn new(
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
-        broadcast: BroadcastConsumer,
         video: Option<VideoTrack>,
         audio: Option<AudioTrack>,
-        decoders: MoqServerInputDecoders,
-        should_close: Arc<AtomicBool>,
+        broadcast_ctx: BroadcastCtx,
     ) -> Self {
+        let BroadcastCtx {
+            broadcast,
+            decoders,
+            should_close,
+            endpoint_kind,
+        } = broadcast_ctx;
+
         // Shared across audio and video: both tracks normalize their raw PTS
         // against the same monotonic wall-clock anchor. When the measured A/V skew
         // is small, both tracks anchor to the first timestamp received on either track,
@@ -189,7 +146,8 @@ impl BroadcastHandler {
 
         let single_track_stream = video.is_none() || audio.is_none();
 
-        let stats_sender = MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
+        let stats_sender =
+            MoqStatsSender::new(input_ref.clone(), ctx.stats_sender.clone(), endpoint_kind);
 
         let track_ctx = TrackCtx {
             ctx,
@@ -435,7 +393,7 @@ async fn run_audio_track(
 fn spawn_video_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    decoders: &MoqServerInputDecoders,
+    decoders: &MoqInputDecoders,
     video: &VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
@@ -468,7 +426,7 @@ fn spawn_video_decoder(
 fn spawn_h264_video_decoder(
     ctx: &Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
-    decoders: &MoqServerInputDecoders,
+    decoders: &MoqInputDecoders,
     video: &VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<DecoderThreadHandle, MoqConnectionError> {
@@ -542,7 +500,7 @@ fn spawn_audio_decoder(
 }
 
 #[derive(thiserror::Error, Debug)]
-enum MoqConnectionError {
+pub(crate) enum MoqConnectionError {
     #[error("MoQ track error")]
     TrackError(#[from] MoqError),
 
@@ -569,23 +527,38 @@ enum MoqConnectionError {
 }
 
 #[derive(Clone)]
+pub(crate) enum MoqEndpointKind {
+    Server,
+    Client,
+}
+
+#[derive(Clone)]
 struct MoqStatsSender {
     input_ref: Ref<InputId>,
     stats_sender: StatsSender,
+    endpoint_kind: MoqEndpointKind,
 }
 
 impl MoqStatsSender {
-    fn new(input_ref: Ref<InputId>, stats_sender: StatsSender) -> Self {
+    fn new(
+        input_ref: Ref<InputId>,
+        stats_sender: StatsSender,
+        endpoint_kind: MoqEndpointKind,
+    ) -> Self {
         Self {
             input_ref,
             stats_sender,
+            endpoint_kind,
         }
     }
 
     fn bytes_received_event(&self, size: usize, track_kind: StatsTrackKind) {
-        self.stats_sender.send(
-            MoqServerInputTrackStatsEvent::BytesReceived(size)
+        let event = match self.endpoint_kind {
+            MoqEndpointKind::Server => MoqServerInputTrackStatsEvent::BytesReceived(size)
                 .into_event(&self.input_ref, track_kind),
-        );
+            MoqEndpointKind::Client => MoqClientInputTrackStatsEvent::BytesReceived(size)
+                .into_event(&self.input_ref, track_kind),
+        };
+        self.stats_sender.send(event);
     }
 }

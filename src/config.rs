@@ -55,6 +55,7 @@ pub struct Config {
     pub moq_server_port: u16,
     pub moq_enable: bool,
     pub moq_tls_config: Option<moq_native::ServerTlsConfig>,
+    pub moq_disable_tls_verification: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -355,12 +356,17 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => 4443,
     };
 
-    let moq_tls_config = moq_tls_config();
+    let moq_tls_config = moq_server_tls_config();
 
     let moq_enable_default = moq_tls_config.is_some();
     let moq_enable = match env::var("SMELTER_START_MOQ_SERVER") {
         Ok(enable) => bool_env_from_str(&enable).unwrap_or(moq_enable_default),
         Err(_) => moq_enable_default,
+    };
+
+    let moq_disable_tls_verification = match env::var("SMELTER_MOQ_DISABLE_TLS_VERIFICATION") {
+        Ok(disable) => bool_env_from_str(&disable).unwrap_or(false),
+        Err(_) => false,
     };
 
     let log_file = match env::var("SMELTER_LOG_FILE") {
@@ -430,13 +436,14 @@ fn try_read_config() -> Result<Config, String> {
         moq_server_port,
         moq_enable,
         moq_tls_config,
+        moq_disable_tls_verification,
         rendering_mode,
         render_max_layouts_count,
     };
     Ok(config)
 }
 
-fn moq_tls_config() -> Option<moq_native::ServerTlsConfig> {
+fn moq_server_tls_config() -> Option<moq_native::ServerTlsConfig> {
     let moq_tls_cert_file = env::var("SMELTER_MOQ_TLS_CERT_FILE")
         .ok()
         .map(PathBuf::from);

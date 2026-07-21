@@ -2,17 +2,16 @@ use bytes::{Bytes, BytesMut};
 use hang::catalog::{
     AudioCodec as MoqAudioCodec, Container as CatalogContainer, VideoCodec as MoqVideoCodec,
 };
-use moq_mux::catalog::hang::Container;
-use moq_mux::container::fmp4;
+use moq_mux::{catalog::hang::Container, container::fmp4};
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use tracing::{debug, warn};
 
-use crate::pipeline::moq::connection::{AudioTrack, VideoTrack};
+use crate::pipeline::moq::input::connection::{AudioTrack, VideoTrack};
 
 use crate::prelude::*;
 
 #[derive(thiserror::Error, Debug)]
-pub(super) enum MoqCatalogError {
+pub(crate) enum MoqCatalogError {
     #[error("Failed to subscribe to catalog track")]
     CatalogSubscribeError(#[source] MoqError),
 
