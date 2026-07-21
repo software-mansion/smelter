@@ -98,8 +98,9 @@ pub(super) fn opus(sample_rate: u32, channels: AudioChannels) -> Result<Bytes, M
 }
 
 pub(super) fn aac(asc: &[u8]) -> Result<Bytes, MoqClientError> {
-    let config = AacAudioSpecificConfig::parse_from(asc)
-        .map_err(|err| MoqClientError::InitSegmentError(format!("invalid AudioSpecificConfig: {err}")))?;
+    let config = AacAudioSpecificConfig::parse_from(asc).map_err(|err| {
+        MoqClientError::InitSegmentError(format!("invalid AudioSpecificConfig: {err}"))
+    })?;
     let freq_index = sample_rate_to_freq_index(config.sample_rate).ok_or_else(|| {
         MoqClientError::InitSegmentError(format!(
             "unsupported AAC sample rate {}",
