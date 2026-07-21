@@ -33,8 +33,6 @@ use crate::pipeline::webrtc::{error::WhipWhepServerError, offer_codec_filter::co
 
 use crate::prelude::*;
 
-use super::pc_state_change::ConnectionStateChangeHdlr;
-
 #[derive(Debug)]
 pub(crate) struct PeerConnection {
     pc: Arc<RTCPeerConnection>,
@@ -237,11 +235,17 @@ impl PeerConnection {
         Ok(self.pc.add_ice_candidate(candidate).await?)
     }
 
-    pub fn on_connection_state_change(&self, handler: ConnectionStateChangeHdlr) {
-        let pc = self.pc.clone();
+    pub fn connection_state(&self) -> RTCPeerConnectionState {
+        self.pc.connection_state()
+    }
+
+    pub fn on_connection_state_change(
+        &self,
+        f: impl Fn(RTCPeerConnectionState) + Send + Sync + 'static,
+    ) {
         self.pc
             .on_peer_connection_state_change(Box::new(move |state: RTCPeerConnectionState| {
-                handler.on_state_change(&pc, state);
+                f(state);
                 Box::pin(async {})
             }));
     }
