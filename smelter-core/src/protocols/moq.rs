@@ -105,14 +105,14 @@ pub enum MoqClientError {
     #[error("Failed to connect to MoQ relay: {0}")]
     ConnectFailed(String),
 
-    #[error("MoQ relay refused to publish a broadcast under path \"{0}\".")]
+    #[error("MoQ relay refused a broadcast under path \"{0}\".")]
     PublishFailed(Arc<str>),
 
     #[error("Failed to create a MoQ broadcast: {0}")]
     BroadcastInitFailed(String),
 
     #[error("H264 encoder did not produce a decoder configuration record.")]
-    MissingH264DecoderConfig,
+    MissingH264EncoderConfig,
 
     #[error("Failed to build a CMAF init segment: {0}")]
     InitSegmentError(String),

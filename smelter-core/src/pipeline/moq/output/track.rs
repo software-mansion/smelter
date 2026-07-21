@@ -50,7 +50,7 @@ pub(super) fn video(
         (true, MoqOutputContainer::Cmaf) => {
             let avcc = extradata
                 .clone()
-                .ok_or(MoqClientError::MissingH264DecoderConfig)?;
+                .ok_or(MoqClientError::MissingH264EncoderConfig)?;
             let (profile, constraints, level) = avcc_profile(&avcc)?;
             let codec = hang_catalog::H264 {
                 inline: false,
@@ -93,7 +93,7 @@ pub(super) fn video(
                 config
                     .description
                     .as_deref()
-                    .ok_or(MoqClientError::MissingH264DecoderConfig)?,
+                    .ok_or(MoqClientError::MissingH264EncoderConfig)?,
                 resolution,
             )?;
             cmaf_container(init, init_segment::VIDEO_TIMESCALE)
@@ -147,7 +147,7 @@ fn cmaf_container(init: Bytes, timescale: u32) -> hang_catalog::Container {
 fn avcc_profile(avcc: &[u8]) -> Result<(u8, u8, u8), MoqClientError> {
     match avcc {
         [_version, profile, constraints, level, ..] => Ok((*profile, *constraints, *level)),
-        _ => Err(MoqClientError::MissingH264DecoderConfig),
+        _ => Err(MoqClientError::MissingH264EncoderConfig),
     }
 }
 
