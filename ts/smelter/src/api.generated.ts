@@ -374,6 +374,29 @@ export type RegisterOutput =
       audio?: OutputRtmpClientAudioOptions | null;
     }
   | {
+      type: "moq_client";
+      /**
+       * URL of the MoQ relay to connect to. Must use the `https://` scheme.
+       */
+      endpoint_url: string;
+      /**
+       * Path the broadcast will be published under on the relay.
+       */
+      broadcast_path: string;
+      /**
+       * (**default=`"cmaf"`**) Container used to frame encoded media. `cmaf` only supports the H264 video encoders; use `legacy` or `loc` with `ffmpeg_vp8` and `ffmpeg_vp9`.
+       */
+      container?: MoqOutputContainer | null;
+      /**
+       * Parameters of a video track included in the broadcast.
+       */
+      video?: OutputMoqClientVideoOptions | null;
+      /**
+       * Parameters of an audio track included in the broadcast.
+       */
+      audio?: OutputMoqClientAudioOptions | null;
+    }
+  | {
       type: "mp4";
       /**
        * Path to output MP4 file.
@@ -1113,6 +1136,109 @@ export type RtmpClientAudioEncoderOptions =
        */
       sample_rate?: number | null;
     };
+export type MoqOutputContainer = "legacy" | "cmaf" | "loc";
+export type MoqClientVideoEncoderOptions =
+  | {
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "ffmpeg_vp8";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "ffmpeg_vp9";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+    };
+export type MoqClientAudioEncoderOptions =
+  | {
+      type: "aac";
+      /**
+       * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+       */
+      sample_rate?: number | null;
+    }
+  | {
+      type: "opus";
+      /**
+       * (**default="voip"**) Audio output encoder preset.
+       */
+      preset?: OpusEncoderPreset | null;
+      /**
+       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       */
+      sample_rate?: number | null;
+      /**
+       * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+       */
+      forward_error_correction?: boolean | null;
+      /**
+       * (**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`, then this value should be greater than `0`. Allowed values: [0, 100];
+       */
+      expected_packet_loss?: number | null;
+    };
 export type Mp4VideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
@@ -1592,6 +1718,17 @@ export type OutputStatsReport =
        * Stats for the audio track.
        */
       audio: RtpOutputTrackStatsReport;
+    }
+  | {
+      type: "moq_client";
+      /**
+       * Stats for the video track.
+       */
+      video: MoqClientOutputTrackStatsReport;
+      /**
+       * Stats for the audio track.
+       */
+      audio: MoqClientOutputTrackStatsReport;
     };
 
 export interface InputRtpVideoOptions {
@@ -1752,6 +1889,46 @@ export interface OutputRtmpClientAudioOptions {
    * Audio encoder options.
    */
   encoder: RtmpClientAudioEncoderOptions;
+  /**
+   * Channels configuration.
+   */
+  channels?: AudioChannels | null;
+  /**
+   * Initial audio mixer configuration for output.
+   */
+  initial: AudioScene;
+}
+export interface OutputMoqClientVideoOptions {
+  /**
+   * Output resolution in pixels.
+   */
+  resolution: Resolution;
+  /**
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Video encoder options.
+   */
+  encoder: MoqClientVideoEncoderOptions;
+  /**
+   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   */
+  initial: VideoScene;
+}
+export interface OutputMoqClientAudioOptions {
+  /**
+   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   */
+  mixing_strategy?: AudioMixingStrategy | null;
+  /**
+   * Condition for termination of output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Audio encoder options.
+   */
+  encoder: MoqClientAudioEncoderOptions;
   /**
    * Channels configuration.
    */
@@ -2224,6 +2401,19 @@ export interface RtmpOutputTrackStatsReport {
  * Stats report for a track in the `RTP` output.
  */
 export interface RtpOutputTrackStatsReport {
+  /**
+   * Bitrate in the 1-second window.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate in the 1-minute window.
+   */
+  bitrate_1_minute: number;
+}
+/**
+ * Stats report for a track in the `MoQ` client output.
+ */
+export interface MoqClientOutputTrackStatsReport {
   /**
    * Bitrate in the 1-second window.
    */

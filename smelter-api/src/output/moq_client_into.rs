@@ -47,7 +47,7 @@ impl TryFrom<MoqClientOutput> for core::RegisterOutputOptions {
                 initial,
             }) => {
                 let channels = channels.unwrap_or(AudioChannels::Stereo);
-                let encoder_options = encoder.to_pipeline_options(channels)?;
+                let encoder_options = encoder.to_pipeline_options(channels, container)?;
                 let output_options = core::RegisterOutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
@@ -196,8 +196,25 @@ impl MoqClientAudioEncoderOptions {
     fn to_pipeline_options(
         &self,
         channels: AudioChannels,
+        container: MoqOutputContainer,
     ) -> Result<core::AudioEncoderOptions, TypeError> {
         let audio_encoder_options = match self {
+            MoqClientAudioEncoderOptions::Aac { sample_rate } => {
+                // CMAF carries the AudioSpecificConfig out-of-band, so the
+                // encoder emits raw access units. Legacy and LOC need the
+                // self-describing ADTS bitstream instead.
+                let bitstream_format = match container {
+                    MoqOutputContainer::Cmaf => core::AacBitstreamFormat::RawAu,
+                    MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
+                        core::AacBitstreamFormat::Adts
+                    }
+                };
+                core::AudioEncoderOptions::FdkAac(core::FdkAacEncoderOptions {
+                    channels: channels.into(),
+                    sample_rate: sample_rate.unwrap_or(44100),
+                    bitstream_format,
+                })
+            }
             MoqClientAudioEncoderOptions::Opus {
                 preset,
                 sample_rate,
