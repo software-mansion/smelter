@@ -69,10 +69,14 @@ impl AudioEncoder for FdkAacEncoder {
                 fdk::AACENC_PARAM_AACENC_SAMPLERATE,
                 options.sample_rate,
             ))?;
+            let transmux = match options.bitstream_format {
+                AacBitstreamFormat::RawAu => fdk::TRANSPORT_TYPE_TT_MP4_RAW,
+                AacBitstreamFormat::Adts => fdk::TRANSPORT_TYPE_TT_MP4_ADTS,
+            };
             check(fdk::aacEncoder_SetParam(
                 encoder,
                 fdk::AACENC_PARAM_AACENC_TRANSMUX,
-                0,
+                transmux as u32,
             ))?;
             check(fdk::aacEncoder_SetParam(
                 encoder,
@@ -115,9 +119,10 @@ impl AudioEncoder for FdkAacEncoder {
                 samples_per_frame: info.frameLength,
             },
             AudioEncoderConfig {
-                extradata: Some(Bytes::copy_from_slice(
-                    &info.confBuf[0..(info.confSize as usize)],
-                )),
+                // FDK leaves `confSize == 0` in ADTS mode: the decoder config is
+                // carried inline in each frame, so there's no out-of-band ASC.
+                extradata: (info.confSize > 0)
+                    .then(|| Bytes::copy_from_slice(&info.confBuf[0..(info.confSize as usize)])),
             },
         ))
     }

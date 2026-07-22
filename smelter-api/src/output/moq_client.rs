@@ -123,6 +123,10 @@ pub struct OutputMoqClientAudioOptions {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum MoqClientAudioEncoderOptions {
+    Aac {
+        /// (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+        sample_rate: Option<u32>,
+    },
     Opus {
         /// (**default="voip"**) Audio output encoder preset.
         preset: Option<OpusEncoderPreset>,

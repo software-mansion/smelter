@@ -227,7 +227,14 @@ impl MoqClientOutputBuilder {
 
         match audio_selection {
             Some(MoqClientRegisterOptions::SetAudioStream) => {
-                Ok(self.with_audio(MoqClientOutputAudioOptions::default()))
+                let mut audio = MoqClientOutputAudioOptions::default();
+                let encoder_options = vec![AudioEncoder::Opus, AudioEncoder::Aac];
+                let encoder_choice = Select::new("Select encoder (ESC for opus)", encoder_options)
+                    .prompt_skippable()?;
+                if let Some(encoder) = encoder_choice {
+                    audio.encoder = encoder;
+                }
+                Ok(self.with_audio(audio))
             }
             Some(MoqClientRegisterOptions::Skip) | None => Ok(self),
             _ => unreachable!(),
