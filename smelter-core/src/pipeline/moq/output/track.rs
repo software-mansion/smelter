@@ -7,8 +7,10 @@ use hang::catalog as hang_catalog;
 use moq_mux::catalog::hang::Container as WireContainer;
 use smelter_render::{Framerate, OutputFrameFormat};
 
-use super::init_segment;
-use crate::prelude::*;
+use crate::{
+    pipeline::moq::output::init_segment::{self, aac_cmaf_init, h264_cmaf_init, opus_cmaf_init},
+    prelude::*,
+};
 
 /// H264 fallback when the encoder gives us no parameter sets to read the real
 /// values from. Constrained baseline 3.0 is the safest thing to advertise.
@@ -89,7 +91,7 @@ pub(super) fn video(
         MoqOutputContainer::Legacy => hang_catalog::Container::Legacy,
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
-            let init = init_segment::h264(
+            let init = h264_cmaf_init(
                 config
                     .description
                     .as_deref()
@@ -130,7 +132,7 @@ fn opus_audio(
         MoqOutputContainer::Legacy => hang_catalog::Container::Legacy,
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
-            let init = init_segment::opus(opus.sample_rate, opus.channels)?;
+            let init = opus_cmaf_init(opus.sample_rate, opus.channels)?;
             cmaf_container(init, opus.sample_rate)
         }
     };
@@ -175,7 +177,7 @@ fn aac_audio(
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
             let asc = description.ok_or(MoqClientError::MissingAacEncoderConfig)?;
-            cmaf_container(init_segment::aac(&asc)?, aac.sample_rate)
+            cmaf_container(aac_cmaf_init(&asc)?, aac.sample_rate)
         }
     };
 

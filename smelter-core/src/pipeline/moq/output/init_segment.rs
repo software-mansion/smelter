@@ -20,7 +20,10 @@ pub(super) const VIDEO_TIMESCALE: u32 = 90_000;
 /// Each MoQ track carries exactly one media track, so the id is always the same.
 pub(super) const TRACK_ID: u32 = 1;
 
-pub(super) fn h264(extradata: &[u8], resolution: Resolution) -> Result<Bytes, MoqClientError> {
+pub(super) fn h264_cmaf_init(
+    extradata: &[u8],
+    resolution: Resolution,
+) -> Result<Bytes, MoqClientError> {
     let mut cursor = std::io::Cursor::new(extradata);
     let avcc = mp4_atom::Avcc::decode_body(&mut cursor)
         .map_err(|err| MoqClientError::InitSegmentError(format!("invalid avcC record: {err}")))?;
@@ -53,7 +56,10 @@ pub(super) fn h264(extradata: &[u8], resolution: Resolution) -> Result<Bytes, Mo
     encode_init(trak)
 }
 
-pub(super) fn opus(sample_rate: u32, channels: AudioChannels) -> Result<Bytes, MoqClientError> {
+pub(super) fn opus_cmaf_init(
+    sample_rate: u32,
+    channels: AudioChannels,
+) -> Result<Bytes, MoqClientError> {
     if sample_rate > 48000 {
         return Err(MoqClientError::UnsupportedSampleRate(sample_rate));
     }
@@ -97,7 +103,7 @@ pub(super) fn opus(sample_rate: u32, channels: AudioChannels) -> Result<Bytes, M
     encode_init(trak)
 }
 
-pub(super) fn aac(asc: &[u8]) -> Result<Bytes, MoqClientError> {
+pub(super) fn aac_cmaf_init(asc: &[u8]) -> Result<Bytes, MoqClientError> {
     let config = AacAudioSpecificConfig::parse_from(asc).map_err(|err| {
         MoqClientError::InitSegmentError(format!("invalid AudioSpecificConfig: {err}"))
     })?;
