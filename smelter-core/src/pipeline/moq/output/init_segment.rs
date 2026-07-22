@@ -81,15 +81,6 @@ pub(super) fn vp9_cmaf_init(
     video_init(sample_entry, resolution)
 }
 
-fn visual(resolution: Resolution) -> mp4_atom::Visual {
-    mp4_atom::Visual {
-        data_reference_index: 1,
-        width: resolution.width as u16,
-        height: resolution.height as u16,
-        ..Default::default()
-    }
-}
-
 fn video_init(
     sample_entry: mp4_atom::Codec,
     resolution: Resolution,
@@ -209,37 +200,6 @@ pub(super) fn aac_cmaf_init(asc: &[u8]) -> Result<Bytes, MoqClientError> {
     encode_init(trak)
 }
 
-fn mdia(timescale: u32, handler: &[u8; 4], sample_entry: mp4_atom::Codec) -> mp4_atom::Mdia {
-    let is_video = handler == b"vide";
-    mp4_atom::Mdia {
-        mdhd: mp4_atom::Mdhd {
-            timescale,
-            language: "und".to_string(),
-            ..Default::default()
-        },
-        hdlr: mp4_atom::Hdlr {
-            handler: mp4_atom::FourCC::new(handler),
-            name: String::new(),
-        },
-        minf: mp4_atom::Minf {
-            vmhd: is_video.then(mp4_atom::Vmhd::default),
-            smhd: (!is_video).then(mp4_atom::Smhd::default),
-            dinf: mp4_atom::Dinf {
-                dref: mp4_atom::Dref {
-                    urls: vec![mp4_atom::Url::default()],
-                },
-            },
-            stbl: mp4_atom::Stbl {
-                stsd: mp4_atom::Stsd {
-                    codecs: vec![sample_entry],
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    }
-}
-
 fn encode_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
     // CMAF §7.3.2: a CMAF header must declare the `cmfc` structural brand;
     // `iso6` covers the fragmented-file features (styp, default-base-is-moof)
@@ -277,4 +237,44 @@ fn encode_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
         .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
 
     Ok(Bytes::from(buf))
+}
+
+fn mdia(timescale: u32, handler: &[u8; 4], sample_entry: mp4_atom::Codec) -> mp4_atom::Mdia {
+    let is_video = handler == b"vide";
+    mp4_atom::Mdia {
+        mdhd: mp4_atom::Mdhd {
+            timescale,
+            language: "und".to_string(),
+            ..Default::default()
+        },
+        hdlr: mp4_atom::Hdlr {
+            handler: mp4_atom::FourCC::new(handler),
+            name: String::new(),
+        },
+        minf: mp4_atom::Minf {
+            vmhd: is_video.then(mp4_atom::Vmhd::default),
+            smhd: (!is_video).then(mp4_atom::Smhd::default),
+            dinf: mp4_atom::Dinf {
+                dref: mp4_atom::Dref {
+                    urls: vec![mp4_atom::Url::default()],
+                },
+            },
+            stbl: mp4_atom::Stbl {
+                stsd: mp4_atom::Stsd {
+                    codecs: vec![sample_entry],
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    }
+}
+
+fn visual(resolution: Resolution) -> mp4_atom::Visual {
+    mp4_atom::Visual {
+        data_reference_index: 1,
+        width: resolution.width as u16,
+        height: resolution.height as u16,
+        ..Default::default()
+    }
 }
