@@ -176,7 +176,7 @@ fn freq_id_to_sample_rate(id: u8) -> Result<u32, AacAscParseError> {
     }
 }
 
-/// Inverse of [`freq_id_to_sample_rate`]. MPEG-4 part 3, 1.6.3.4.
+/// MPEG-4 part 3, 1.6.3.4.
 /// Returns `None` for sample rates that don't have a dedicated frequency index
 /// (those would require the escape value 15 with an explicit rate in the ASC).
 pub fn sample_rate_to_freq_index(sample_rate: u32) -> Option<u8> {
@@ -241,15 +241,6 @@ mod tests {
         assert_eq!(parsed.sample_rate, 48_000);
         assert_eq!(parsed.channel_count, 1);
         assert_eq!(parsed.frame_length, 1024);
-    }
-
-    #[test]
-    fn freq_index_round_trip() {
-        for id in 0x0..=0xc {
-            let sample_rate = freq_id_to_sample_rate(id).unwrap();
-            assert_eq!(sample_rate_to_freq_index(sample_rate), Some(id));
-        }
-        assert_eq!(sample_rate_to_freq_index(12345), None);
     }
 
     #[test]

@@ -94,9 +94,6 @@ impl MoqClientVideoEncoderOptions {
         resolution: Resolution,
         container: MoqOutputContainer,
     ) -> Result<core::VideoEncoderOptions, TypeError> {
-        // CMAF describes H264 with an out-of-band `avcC` record in the init
-        // segment, so the encoder has to emit AVCC. Legacy and LOC carry the
-        // parameter sets inline, which means Annex B.
         let bitstream_format = match container {
             MoqOutputContainer::Cmaf => core::H264BitstreamFormat::Avcc,
             MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
@@ -181,8 +178,6 @@ impl MoqClientVideoEncoderOptions {
     }
 }
 
-/// The CMAF init segment we publish can only describe H264 video, so VP8/VP9
-/// have to opt into one of the containers that carries the payload as-is.
 fn validate_vp_container(encoder: &str, container: MoqOutputContainer) -> Result<(), TypeError> {
     match container {
         MoqOutputContainer::Cmaf => Err(TypeError::new(format!(
