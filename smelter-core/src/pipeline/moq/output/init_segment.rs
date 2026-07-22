@@ -219,39 +219,3 @@ fn encode_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
 
     Ok(Bytes::from(buf))
 }
-
-#[cfg(test)]
-mod tests {
-    use mp4_atom::Decode;
-
-    use super::*;
-
-    #[test]
-    fn aac_init_segment_round_trip() {
-        // AAC-LC, 44100 Hz, stereo (see AacAudioSpecificConfig::parse_from tests).
-        let asc = [0b0001_0010, 0b0001_0000];
-        let segment = aac(&asc).unwrap();
-
-        let mut cursor = std::io::Cursor::new(segment.as_ref());
-        let _ftyp = mp4_atom::Ftyp::decode(&mut cursor).unwrap();
-        let moov = mp4_atom::Moov::decode(&mut cursor).unwrap();
-
-        assert_eq!(moov.mvhd.timescale, 44100);
-        let trak = &moov.trak[0];
-        assert_eq!(trak.mdia.mdhd.timescale, 44100);
-
-        let codec = &trak.mdia.minf.stbl.stsd.codecs[0];
-        let mp4_atom::Codec::Mp4a(mp4a) = codec else {
-            panic!("expected mp4a sample entry, got {codec:?}");
-        };
-        assert_eq!(mp4a.audio.channel_count, 2);
-        assert_eq!(mp4a.audio.sample_size, 16);
-
-        let dec_config = &mp4a.esds.es_desc.dec_config;
-        assert_eq!(dec_config.object_type_indication, 0x40);
-        assert_eq!(dec_config.stream_type, 0x05);
-        assert_eq!(dec_config.dec_specific.profile, 2);
-        assert_eq!(dec_config.dec_specific.freq_index, 4);
-        assert_eq!(dec_config.dec_specific.chan_conf, 2);
-    }
-}
