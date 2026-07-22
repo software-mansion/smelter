@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use smelter_render::error::ErrorStack;
-use tokio::sync::broadcast;
-use tracing::{error, info, trace};
+use tokio::sync::broadcast::{self, error::RecvError};
+use tracing::{error, info, trace, warn};
 use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
 
 use crate::pipeline::{rtp::payloader::Payloader, webrtc::error::WhepError};
@@ -39,25 +39,17 @@ impl MediaStreamTask {
 
     async fn run(mut self) {
         loop {
-            let event = match self.sender.resolve_next_event().await {
-                Ok(event) => event,
-                Err(InterleaveResult::Abort) => break,
-                Err(InterleaveResult::Continue) => continue,
+            let Some(chunk) = self.sender.resolve_next_chunk().await else {
+                return;
             };
 
             if self.should_close.load(std::sync::atomic::Ordering::Relaxed) {
                 break;
             }
 
-            match event {
-                EncodedOutputEvent::Data(chunk) => {
-                    if let Err(err) = self.sender.send_chunk_to_peer(chunk).await {
-                        error!("{}", ErrorStack::new(&err).into_string());
-                        break;
-                    }
-                }
-                EncodedOutputEvent::VideoEOS => info!("Received video EOS event on WHEP output"),
-                EncodedOutputEvent::AudioEOS => info!("Received audio EOS event on WHEP output"),
+            if let Err(err) = self.sender.send_chunk_to_peer(chunk).await {
+                error!("{}", ErrorStack::new(&err).into_string());
+                break;
             }
         }
     }
@@ -72,117 +64,76 @@ pub struct MediaStream {
 struct InterleavedPacketSender {
     video_stream: Option<MediaStream>,
     audio_stream: Option<MediaStream>,
-    next_video: Option<EncodedOutputEvent>,
-    next_audio: Option<EncodedOutputEvent>,
-}
-
-#[derive(Debug, PartialEq)]
-enum InterleaveResult {
-    Continue,
-    Abort,
+    next_video: Option<EncodedOutputChunk>,
+    next_audio: Option<EncodedOutputChunk>,
 }
 
 impl InterleavedPacketSender {
-    async fn resolve_next_event(&mut self) -> Result<EncodedOutputEvent, InterleaveResult> {
-        if self.populate_from_channel().await == InterleaveResult::Abort {
-            return Err(InterleaveResult::Abort);
+    async fn resolve_next_chunk(&mut self) -> Option<EncodedOutputChunk> {
+        loop {
+            let needs_video = self.video_stream.is_some() && self.next_video.is_none();
+            let needs_audio = self.audio_stream.is_some() && self.next_audio.is_none();
+
+            match (needs_video, needs_audio) {
+                (true, true) => {
+                    tokio::select! {
+                        result = self.video_stream.as_mut().unwrap().receiver.recv() => {
+                            self.handle_video_read_result(result)
+                        },
+                        result = self.audio_stream.as_mut().unwrap().receiver.recv() => {
+                            self.handle_audio_read_result(result)
+                        },
+                    };
+                }
+                (true, false) => {
+                    let result = self.video_stream.as_mut().unwrap().receiver.recv().await;
+                    self.handle_video_read_result(result);
+                }
+                (false, true) => {
+                    let result = self.audio_stream.as_mut().unwrap().receiver.recv().await;
+                    self.handle_audio_read_result(result);
+                }
+                (false, false) => return self.resolve_from_state(),
+            }
         }
-        self.resolve_from_state()
     }
 
-    // Read data from audio and video channel to populate next_ fields.
-    async fn populate_from_channel(&mut self) -> InterleaveResult {
-        match (
-            &mut self.next_video,
-            &mut self.next_audio,
-            &mut self.video_stream,
-            &mut self.audio_stream,
-        ) {
-            (None, None, Some(video_stream), Some(audio_stream)) => {
-                tokio::select! {
-                    Ok(event) = video_stream.receiver.recv() => {
-                        self.next_video = Some(event)
-                    },
-                    Ok(event) = audio_stream.receiver.recv() => {
-                        self.next_audio = Some(event)
-                    },
-                    else => return InterleaveResult::Abort,
-                };
+    fn handle_video_read_result(&mut self, result: Result<EncodedOutputEvent, RecvError>) {
+        match result {
+            Ok(EncodedOutputEvent::Data(chunk)) => self.next_video = Some(chunk),
+            Ok(EncodedOutputEvent::AudioEOS) => error!("Unexpected AudioEOS on video track"),
+            Err(RecvError::Lagged(count)) => warn!(count, "Video stream on WHEP output lagged"),
+            Err(RecvError::Closed) | Ok(EncodedOutputEvent::VideoEOS) => {
+                info!("Received video EOS event on WHEP output");
+                self.video_stream = None;
             }
-            (_video, None, _video_stream, audio_stream @ Some(_)) => {
-                match audio_stream.as_mut().unwrap().receiver.recv().await {
-                    Ok(event) => {
-                        self.next_audio = Some(event);
-                    }
-                    Err(_) => *audio_stream = None,
-                };
-            }
-            (None, _audio, video_stream @ Some(_), _audio_stream) => {
-                match video_stream.as_mut().unwrap().receiver.recv().await {
-                    Ok(event) => {
-                        self.next_video = Some(event);
-                    }
-                    Err(_) => *video_stream = None,
-                };
-            }
-            (None, None, None, None) => return InterleaveResult::Abort,
-            (Some(_), Some(_), _, _) => {
-                // Both events populated - will process them below
-            }
-            (None, Some(_audio), None, _) => {
-                // no video, but can't read audio at this moment
-            }
-            (Some(_video), None, _, None) => {
-                // no audio, but can't read video at this moment
-            }
-        };
-
-        InterleaveResult::Continue
+        }
     }
 
-    fn resolve_from_state(&mut self) -> Result<EncodedOutputEvent, InterleaveResult> {
-        // Handle EOS for video
-        if let Some(EncodedOutputEvent::VideoEOS) = self.next_video {
-            return self.next_video.take().ok_or(InterleaveResult::Continue);
+    fn handle_audio_read_result(&mut self, result: Result<EncodedOutputEvent, RecvError>) {
+        match result {
+            Ok(EncodedOutputEvent::Data(chunk)) => self.next_audio = Some(chunk),
+            Ok(EncodedOutputEvent::VideoEOS) => error!("Unexpected VideoEOS on audio track"),
+            Err(RecvError::Lagged(count)) => warn!(count, "Audio stream on WHEP output lagged"),
+            Err(RecvError::Closed) | Ok(EncodedOutputEvent::AudioEOS) => {
+                info!("Received audio EOS event on WHEP output");
+                self.audio_stream = None;
+            }
         }
+    }
 
-        // Handle EOS for audio
-        if let Some(EncodedOutputEvent::AudioEOS) = self.next_audio {
-            return self.next_audio.take().ok_or(InterleaveResult::Continue);
-        }
-
-        let video_data = match &self.next_video {
-            Some(EncodedOutputEvent::Data(chunk)) => Some(chunk),
-            _ => None,
-        };
-        let audio_data = match &self.next_audio {
-            Some(EncodedOutputEvent::Data(chunk)) => Some(chunk),
-            _ => None,
-        };
-
-        match (&video_data, &audio_data) {
-            // try to wait for both audio and video events to be ready
+    fn resolve_from_state(&mut self) -> Option<EncodedOutputChunk> {
+        match (&self.next_video, &self.next_audio) {
             (Some(video_chunk), Some(audio_chunk)) => {
                 if audio_chunk.pts > video_chunk.pts {
-                    self.next_video.take().ok_or(InterleaveResult::Continue)
+                    self.next_video.take()
                 } else {
-                    self.next_audio.take().ok_or(InterleaveResult::Continue)
+                    self.next_audio.take()
                 }
             }
-            // read audio if there is no way to get video event
-            (None, Some(_)) if self.video_stream.is_none() => {
-                self.next_audio.take().ok_or(InterleaveResult::Continue)
-            }
-            // read video if there is no way to get audio event
-            (Some(_), None) if self.audio_stream.is_none() => {
-                self.next_video.take().ok_or(InterleaveResult::Continue)
-            }
-            (None, None) => Err(InterleaveResult::Abort),
-            // we can't do anything here, but there are still receivers
-            // that can return something in the next loop.
-            //
-            // I don't think this can ever happen
-            (_, _) => Err(InterleaveResult::Continue),
+            (None, Some(_)) => self.next_audio.take(),
+            (Some(_), None) => self.next_video.take(),
+            (None, None) => None,
         }
     }
 
