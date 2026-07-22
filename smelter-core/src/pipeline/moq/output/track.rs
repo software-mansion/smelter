@@ -32,7 +32,7 @@ pub(super) fn validate(
     Err(MoqClientError::UnsupportedCodecContainer { codec, container })
 }
 
-pub(super) fn video(
+pub(super) fn build_video_track(
     options: &VideoEncoderOptions,
     resolution: Resolution,
     output_format: OutputFrameFormat,
@@ -107,7 +107,7 @@ pub(super) fn video(
     Ok((config, wire))
 }
 
-pub(super) fn audio(
+pub(super) fn build_audio_track(
     options: &AudioEncoderOptions,
     extradata: Option<Bytes>,
     container: MoqOutputContainer,
