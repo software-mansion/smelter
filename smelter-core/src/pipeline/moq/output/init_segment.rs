@@ -40,7 +40,7 @@ pub(super) fn h264_cmaf_init(
 /// VP8 carries no out-of-band configuration, but the VP Codec ISO-BMFF binding
 /// still requires a `vpcC` box. VP8 is always 8-bit 4:2:0, so we emit the same
 /// standard placeholder values as moq-mux's vp08 synthesis.
-pub(super) fn vp8(resolution: Resolution) -> Result<Bytes, MoqClientError> {
+pub(super) fn vp8_cmaf_init(resolution: Resolution) -> Result<Bytes, MoqClientError> {
     let sample_entry = mp4_atom::Codec::from(mp4_atom::Vp08 {
         visual: visual(resolution),
         vpcc: mp4_atom::VpcC {
@@ -58,7 +58,7 @@ pub(super) fn vp8(resolution: Resolution) -> Result<Bytes, MoqClientError> {
 /// Synthesizes the `vpcC` box field-for-field from the same VP9 parameters used
 /// to build the catalog `vp09.*` codec string, so the init segment and the codec
 /// string can never diverge.
-pub(super) fn vp9(
+pub(super) fn vp9_cmaf_init(
     vp9: &hang::catalog::VP9,
     resolution: Resolution,
 ) -> Result<Bytes, MoqClientError> {

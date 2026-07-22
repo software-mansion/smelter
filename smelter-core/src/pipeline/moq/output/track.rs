@@ -8,7 +8,9 @@ use moq_mux::catalog::hang::Container as WireContainer;
 use smelter_render::{Framerate, OutputFrameFormat};
 
 use crate::{
-    pipeline::moq::output::init_segment::{self, aac_cmaf_init, h264_cmaf_init, opus_cmaf_init},
+    pipeline::moq::output::init_segment::{
+        self, aac_cmaf_init, h264_cmaf_init, opus_cmaf_init, vp8_cmaf_init, vp9_cmaf_init,
+    },
     prelude::*,
 };
 
@@ -84,8 +86,8 @@ pub(super) fn build_video_track(
                         .ok_or(MoqClientError::MissingH264EncoderConfig)?,
                     resolution,
                 )?,
-                hang_catalog::VideoCodec::VP8 => init_segment::vp8(resolution)?,
-                hang_catalog::VideoCodec::VP9(vp9) => init_segment::vp9(vp9, resolution)?,
+                hang_catalog::VideoCodec::VP8 => vp8_cmaf_init(resolution)?,
+                hang_catalog::VideoCodec::VP9(vp9) => vp9_cmaf_init(vp9, resolution)?,
                 _ => unreachable!("codec is built from the encoder options above"),
             };
             cmaf_container(init, init_segment::VIDEO_TIMESCALE)
