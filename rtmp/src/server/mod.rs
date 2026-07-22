@@ -8,7 +8,7 @@ mod instance;
 mod listener_thread;
 mod negotiation;
 
-pub use connection::RtmpServerConnection;
+pub use connection::{RtmpRecvTimeoutError, RtmpServerConnection};
 pub use instance::RtmpServer;
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpServerConnection) + Send + 'static>;
