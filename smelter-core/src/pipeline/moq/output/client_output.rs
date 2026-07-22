@@ -24,7 +24,7 @@ use crate::{
                 audio_encoder_thread::{
                     AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
                 },
-                track,
+                track::{self, build_audio_track, build_video_track},
                 video_encoder_thread::{
                     VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
                 },
@@ -98,7 +98,7 @@ impl MoqClientOutput {
         };
 
         let video_track = match (&options.video, &video_encoder_handle) {
-            (Some(video_options), Some(handle)) => Some(track::video(
+            (Some(video_options), Some(handle)) => Some(build_video_track(
                 video_options,
                 handle.config.resolution,
                 handle.config.output_format,
@@ -109,7 +109,7 @@ impl MoqClientOutput {
             _ => None,
         };
         let audio_track = match (&options.audio, &audio_encoder_handle) {
-            (Some(audio_options), Some(handle)) => Some(track::audio(
+            (Some(audio_options), Some(handle)) => Some(build_audio_track(
                 audio_options,
                 handle.encoder_context(),
                 options.container,
