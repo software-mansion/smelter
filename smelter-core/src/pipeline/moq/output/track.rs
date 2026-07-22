@@ -106,13 +106,21 @@ pub(super) fn video(
 }
 
 pub(super) fn audio(
+    options: &AudioEncoderOptions,
+    extradata: Option<Bytes>,
+    container: MoqOutputContainer,
+) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
+    match options {
+        AudioEncoderOptions::Opus(opus) => opus_audio(opus, container),
+        AudioEncoderOptions::FdkAac(aac) => aac_audio(aac, extradata, container),
+    }
+}
+
+fn opus_audio(
     opus: &OpusEncoderOptions,
     container: MoqOutputContainer,
 ) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
-    let channel_count = match opus.channels {
-        AudioChannels::Mono => 1,
-        AudioChannels::Stereo => 2,
-    };
+    let channel_count = channel_count(opus.channels);
     let mut config = hang_catalog::AudioConfig::new(
         hang_catalog::AudioCodec::Opus,
         opus.sample_rate,
@@ -130,6 +138,57 @@ pub(super) fn audio(
     let wire = WireContainer::try_from(&config.container)
         .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
     Ok((config, wire))
+}
+
+fn aac_audio(
+    aac: &FdkAacEncoderOptions,
+    extradata: Option<Bytes>,
+    container: MoqOutputContainer,
+) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
+    let channel_count = channel_count(aac.channels);
+
+    // CMAF carries the AudioSpecificConfig out-of-band (catalog `description` +
+    // `mp4a`/`esds` in the init segment), so the profile is read from the real
+    // ASC. Legacy/LOC use self-describing ADTS: the encoder is always AAC-LC
+    // (profile 2) and no description is published.
+    let (codec, description) = match container {
+        MoqOutputContainer::Cmaf => {
+            let asc = extradata
+                .filter(|data| !data.is_empty())
+                .ok_or(MoqClientError::MissingAacEncoderConfig)?;
+            let profile = AacAudioSpecificConfig::parse_from(&asc)
+                .map_err(|err| {
+                    MoqClientError::InitSegmentError(format!("invalid AudioSpecificConfig: {err}"))
+                })?
+                .profile;
+            (hang_catalog::AAC { profile }, Some(asc))
+        }
+        MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
+            (hang_catalog::AAC { profile: 2 }, None)
+        }
+    };
+
+    let mut config = hang_catalog::AudioConfig::new(codec, aac.sample_rate, channel_count);
+    config.description = description.clone();
+    config.container = match container {
+        MoqOutputContainer::Legacy => hang_catalog::Container::Legacy,
+        MoqOutputContainer::Loc => hang_catalog::Container::Loc,
+        MoqOutputContainer::Cmaf => {
+            let asc = description.ok_or(MoqClientError::MissingAacEncoderConfig)?;
+            cmaf_container(init_segment::aac(&asc)?, aac.sample_rate)
+        }
+    };
+
+    let wire = WireContainer::try_from(&config.container)
+        .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
+    Ok((config, wire))
+}
+
+fn channel_count(channels: AudioChannels) -> u32 {
+    match channels {
+        AudioChannels::Mono => 1,
+        AudioChannels::Stereo => 2,
+    }
 }
 
 // `timescale` and `track_id` duplicate what's already in `init`; hang emits them

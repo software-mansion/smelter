@@ -15,8 +15,9 @@ use crate::{
     event::Event,
     pipeline::{
         encoder::{
-            ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vulkan_h264::VulkanH264Encoder,
+            fdk_aac::FdkAacEncoder, ffmpeg_h264::FfmpegH264Encoder,
+            ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder,
+            vulkan_h264::VulkanH264Encoder,
         },
         moq::{
             MoqSession,
@@ -108,8 +109,12 @@ impl MoqClientOutput {
             )?),
             _ => None,
         };
-        let audio_track = match &options.audio {
-            Some(AudioEncoderOptions::Opus(opus)) => Some(track::audio(opus, options.container)?),
+        let audio_track = match (&options.audio, &audio_encoder_handle) {
+            (Some(audio_options), Some(handle)) => Some(track::audio(
+                audio_options,
+                handle.encoder_context(),
+                options.container,
+            )?),
             _ => None,
         };
 
@@ -313,17 +318,24 @@ impl MoqClientOutput {
         options: &AudioEncoderOptions,
         chunks_sender: Sender<EncodedOutputEvent>,
     ) -> Result<AudioEncoderThreadHandle, OutputInitError> {
-        let AudioEncoderOptions::Opus(options) = options else {
-            return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac));
+        let handle = match options {
+            AudioEncoderOptions::Opus(options) => AudioEncoderThread::<OpusEncoder>::spawn(
+                output_id.clone(),
+                AudioEncoderThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options.clone(),
+                    chunks_sender,
+                },
+            )?,
+            AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
+                output_id.clone(),
+                AudioEncoderThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options.clone(),
+                    chunks_sender,
+                },
+            )?,
         };
-        let handle = AudioEncoderThread::<OpusEncoder>::spawn(
-            output_id.clone(),
-            AudioEncoderThreadOptions {
-                ctx: ctx.clone(),
-                encoder_options: options.clone(),
-                chunks_sender,
-            },
-        )?;
         Ok(handle)
     }
 }

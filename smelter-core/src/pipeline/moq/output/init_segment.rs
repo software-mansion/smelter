@@ -2,7 +2,7 @@
 //!
 //! moq-mux keeps its own builders private, so we assemble the equivalent atoms
 //! here. Only the codecs we allow with the CMAF container are covered: H264 on
-//! the video side and Opus on the audio side.
+//! the video side and Opus or AAC on the audio side.
 //!
 //! `fmp4::Wire` only reads `mdhd.timescale`, `tkhd.track_id` and `stsd` back out
 //! of the trak, but the segment is also handed to players verbatim, so it has to
@@ -91,6 +91,59 @@ pub(super) fn opus(sample_rate: u32, channels: AudioChannels) -> Result<Bytes, M
             ..Default::default()
         },
         mdia: mdia(sample_rate, b"soun", sample_entry),
+        ..Default::default()
+    };
+
+    encode_init(trak)
+}
+
+pub(super) fn aac(asc: &[u8]) -> Result<Bytes, MoqClientError> {
+    let config = AacAudioSpecificConfig::parse_from(asc).map_err(|err| {
+        MoqClientError::InitSegmentError(format!("invalid AudioSpecificConfig: {err}"))
+    })?;
+    let freq_index = sample_rate_to_freq_index(config.sample_rate).ok_or_else(|| {
+        MoqClientError::InitSegmentError(format!(
+            "unsupported AAC sample rate {}",
+            config.sample_rate
+        ))
+    })?;
+
+    let sample_entry = mp4_atom::Codec::from(mp4_atom::Mp4a {
+        audio: mp4_atom::Audio {
+            data_reference_index: 1,
+            channel_count: config.channel_count as u16,
+            sample_size: 16,
+            sample_rate: mp4_atom::FixedPoint::from(config.sample_rate as u16),
+        },
+        esds: mp4_atom::Esds {
+            es_desc: mp4_atom::esds::EsDescriptor {
+                es_id: TRACK_ID as u16,
+                dec_config: mp4_atom::esds::DecoderConfig {
+                    // 0x40 = MPEG-4 Audio, 0x05 = AudioStream (MPEG-4 systems tables).
+                    object_type_indication: 0x40,
+                    stream_type: 0x05,
+                    dec_specific: mp4_atom::esds::DecoderSpecific {
+                        profile: config.profile,
+                        freq_index,
+                        chan_conf: config.channel_count,
+                    },
+                    ..Default::default()
+                },
+                sl_config: mp4_atom::esds::SLConfig::default(),
+            },
+        },
+        btrt: None,
+        taic: None,
+    });
+
+    let trak = mp4_atom::Trak {
+        tkhd: mp4_atom::Tkhd {
+            track_id: TRACK_ID,
+            enabled: true,
+            volume: mp4_atom::FixedPoint::from(1u8),
+            ..Default::default()
+        },
+        mdia: mdia(config.sample_rate, b"soun", sample_entry),
         ..Default::default()
     };
 

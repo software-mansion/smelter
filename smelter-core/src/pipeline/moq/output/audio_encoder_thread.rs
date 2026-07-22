@@ -90,3 +90,9 @@ where
         }
     }
 }
+
+impl AudioEncoderThreadHandle {
+    pub fn encoder_context(&self) -> Option<bytes::Bytes> {
+        self.config.extradata.clone()
+    }
+}

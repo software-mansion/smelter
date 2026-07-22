@@ -114,6 +114,9 @@ pub enum MoqClientError {
     #[error("H264 encoder did not produce a decoder configuration record.")]
     MissingH264EncoderConfig,
 
+    #[error("AAC encoder did not produce an AudioSpecificConfig.")]
+    MissingAacEncoderConfig,
+
     #[error("Failed to build a CMAF init segment: {0}")]
     InitSegmentError(String),
 
