@@ -54,6 +54,9 @@ pub(super) fn h264(extradata: &[u8], resolution: Resolution) -> Result<Bytes, Mo
 }
 
 pub(super) fn opus(sample_rate: u32, channels: AudioChannels) -> Result<Bytes, MoqClientError> {
+    if sample_rate > 48000 {
+        return Err(MoqClientError::UnsupportedSampleRate(sample_rate));
+    }
     let channel_count = match channels {
         AudioChannels::Mono => 1,
         AudioChannels::Stereo => 2,
