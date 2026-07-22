@@ -138,13 +138,14 @@ impl InterleavedPacketSender {
     }
 
     async fn send_chunk_to_peer(&mut self, chunk: EncodedOutputChunk) -> Result<(), WhepError> {
-        let stream = match chunk.kind {
+        let kind = chunk.kind;
+        let stream = match kind {
             MediaKind::Video(_) => self.video_stream.as_mut(),
             MediaKind::Audio(_) => self.audio_stream.as_mut(),
         };
 
         let Some(stream) = stream else {
-            error!(kind=?chunk.kind, "No stream of this kind");
+            error!(?kind, "No stream of this kind");
             return Ok(());
         };
 
@@ -154,7 +155,7 @@ impl InterleavedPacketSender {
                     if let Err(err) = stream.track.write_rtp(&rtp_packet.packet).await {
                         return Err(WhepError::RtpWriteError(err));
                     }
-                    trace!(?rtp_packet, "RTP packet written to track");
+                    trace!(?rtp_packet, ?kind, "RTP packet written to track");
                 }
             }
             Err(err) => {
