@@ -1,6 +1,5 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
-use crossbeam_channel::{Receiver, bounded};
 use hang::moq_net::{Broadcast, BroadcastProducer, Origin, OriginProducer, Track};
 use moq_mux::{
     catalog::hang::Container,
@@ -8,26 +7,29 @@ use moq_mux::{
 };
 use moq_native::ClientConfig;
 use smelter_render::error::ErrorStack;
-use tracing::{Level, Span, debug, error, info, span, trace, warn};
+use tokio::sync::mpsc::{self, Receiver, Sender};
+use tracing::{Instrument, Level, Span, error, info, span, trace, warn};
 use url::Url;
 
 use crate::{
     event::Event,
     pipeline::{
         encoder::{
-            encoder_thread_audio::{
-                AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
-            },
-            encoder_thread_video::{
-                VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
-            },
-            ffmpeg_h264::FfmpegH264Encoder,
-            ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder,
-            libopus::OpusEncoder,
-            vulkan_h264::VulkanH264Encoder,
+            ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
+            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vulkan_h264::VulkanH264Encoder,
         },
-        moq::{MoqSession, output::track},
+        moq::{
+            MoqSession,
+            output::{
+                audio_encoder_thread::{
+                    AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
+                },
+                track,
+                video_encoder_thread::{
+                    VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
+                },
+            },
+        },
         output::{Output, OutputAudio, OutputVideo},
     },
     utils::InitializableThread,
@@ -80,7 +82,7 @@ impl MoqClientOutput {
         // A channel per media, so the writer thread can interleave chunks by PTS.
         let (video_encoder_handle, video_receiver) = match options.video.as_ref() {
             Some(video) => {
-                let (sender, receiver) = bounded(1000);
+                let (sender, receiver) = mpsc::channel(1000);
                 let handle = Self::init_video_encoder(&ctx, &output_ref, video, sender)?;
                 (Some(handle), Some(receiver))
             }
@@ -88,7 +90,7 @@ impl MoqClientOutput {
         };
         let (audio_encoder_handle, audio_receiver) = match options.audio.as_ref() {
             Some(audio) => {
-                let (sender, receiver) = bounded(1000);
+                let (sender, receiver) = mpsc::channel(1000);
                 let handle = Self::init_audio_encoder(&ctx, &output_ref, audio, sender)?;
                 (Some(handle), Some(receiver))
             }
@@ -114,32 +116,28 @@ impl MoqClientOutput {
         let (session, origin) = Self::connect(&ctx, &options.endpoint_url)?;
         let state = Self::publish(&options, video_track, audio_track, session, origin)?;
 
-        let span = Span::current();
-        std::thread::Builder::new()
-            .name(format!("MoQ sender thread for output {output_ref}"))
-            .spawn(move || {
-                let _span = span.entered();
-                // moq-net spawns tasks (e.g. group cleanup) from the producer calls below.
-                let _rt_guard = ctx.tokio_rt.enter();
-
+        let tokio_rt = ctx.tokio_rt.clone();
+        tokio_rt.spawn(
+            async move {
                 let stats_sender = MoqClientOutputStatsSender {
                     stats_sender: ctx.stats_sender.clone(),
                     output_ref: output_ref.clone(),
                 };
-                run_moq_output_thread(
+                run_moq_output_task(
                     &ctx,
                     &output_ref,
                     state,
                     video_receiver,
                     audio_receiver,
                     stats_sender,
-                );
+                )
+                .await;
 
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
-                debug!("Closing MoQ sender thread.");
-            })
-            .unwrap();
+            }
+            .instrument(Span::current()),
+        );
 
         Ok(Self {
             video: video_encoder_handle,
@@ -257,7 +255,7 @@ impl MoqClientOutput {
         ctx: &Arc<PipelineCtx>,
         output_id: &Ref<OutputId>,
         options: &VideoEncoderOptions,
-        chunks_sender: crossbeam_channel::Sender<EncodedOutputEvent>,
+        chunks_sender: Sender<EncodedOutputEvent>,
     ) -> Result<VideoEncoderThreadHandle, OutputInitError> {
         let handle = match options {
             VideoEncoderOptions::FfmpegH264(options) => {
@@ -313,7 +311,7 @@ impl MoqClientOutput {
         ctx: &Arc<PipelineCtx>,
         output_id: &Ref<OutputId>,
         options: &AudioEncoderOptions,
-        chunks_sender: crossbeam_channel::Sender<EncodedOutputEvent>,
+        chunks_sender: Sender<EncodedOutputEvent>,
     ) -> Result<AudioEncoderThreadHandle, OutputInitError> {
         let AudioEncoderOptions::Opus(options) = options else {
             return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac));
@@ -338,11 +336,14 @@ impl Output for MoqClientOutput {
     }
 
     fn video(&self) -> Option<OutputVideo<'_>> {
+        static FAKE_SENDER: OnceLock<crossbeam_channel::Sender<()>> = OnceLock::new();
+        let keyframe_request_sender = FAKE_SENDER.get_or_init(|| crossbeam_channel::bounded(1).0);
+
         self.video.as_ref().map(|video| OutputVideo {
             resolution: video.config.resolution,
             frame_format: video.config.output_format,
             frame_sender: &video.frame_sender,
-            keyframe_request_sender: &video.keyframe_request_sender,
+            keyframe_request_sender,
         })
     }
 
@@ -353,20 +354,20 @@ impl Output for MoqClientOutput {
 
 /// Interleaves encoded chunks from the two encoders and writes them to the
 /// broadcast in PTS order. Mirrors the sync A/V muxing done by the RTMP output.
-fn run_moq_output_thread(
+async fn run_moq_output_task(
     ctx: &Arc<PipelineCtx>,
     output_ref: &Ref<OutputId>,
     mut state: BroadcastState,
-    video_rx: Option<Receiver<EncodedOutputEvent>>,
-    audio_rx: Option<Receiver<EncodedOutputEvent>>,
+    mut video: Option<Receiver<EncodedOutputEvent>>,
+    mut audio: Option<Receiver<EncodedOutputEvent>>,
     stats_sender: MoqClientOutputStatsSender,
 ) {
     let mut timestamp_offset = None;
     let mut pending_video: Option<EncodedOutputChunk> = None;
     let mut pending_audio: Option<EncodedOutputChunk> = None;
     // A missing channel means that media is not produced at all, i.e. already done.
-    let mut video_eos = video_rx.is_none();
-    let mut audio_eos = audio_rx.is_none();
+    let mut video_eos = video.is_none();
+    let mut audio_eos = audio.is_none();
 
     // Each iteration either receives one chunk or writes the pending one with the
     // lower PTS; it never does both.
@@ -375,40 +376,53 @@ fn run_moq_output_thread(
         let need_audio = pending_audio.is_none() && !audio_eos;
 
         match (need_video, need_audio) {
-            //
             // Receive phase. When `need_*` is true the matching channel is present.
-            //
             (true, true) => {
-                crossbeam_channel::select! {
-                    recv(video_rx.as_ref().unwrap()) -> msg => match msg {
-                        Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
-                        // Disconnect without an explicit EOS is treated as EOS.
-                        _ => { video_eos = true; finish(state.video.as_mut(), "video"); }
+                // crossbeam_channel::select! {
+                //     recv(video.as_ref().unwrap()) -> msg => match msg {
+                //         Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
+                //         // Disconnect without an explicit EOS is treated as EOS.
+                //         _ => { video_eos = true; finish(state.video.as_mut(), "video"); }
+                //     },
+                //     recv(audio.as_ref().unwrap()) -> msg => match msg {
+                //         Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
+                //         _ => { audio_eos = true; finish(state.audio.as_mut(), "audio"); }
+                //     },
+                // }
+                tokio::select! {
+                    msg = video.as_mut().unwrap().recv() => match msg {
+                        Some(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
+                        _ => {
+                            video_eos = true;
+                            finish(state.video.as_mut(), "video");
+                        }
                     },
-                    recv(audio_rx.as_ref().unwrap()) -> msg => match msg {
-                        Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
-                        _ => { audio_eos = true; finish(state.audio.as_mut(), "audio"); }
+                    msg = audio.as_mut().unwrap().recv() => match msg {
+                        Some(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
+                        _ => {
+                            audio_eos = true;
+                            finish(state.audio.as_mut(), "audio");
+                        }
                     },
+                    else => break,
                 }
             }
-            (true, false) => match video_rx.as_ref().unwrap().recv() {
-                Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
+            (true, false) => match video.as_mut().unwrap().recv().await {
+                Some(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
                 _ => {
                     video_eos = true;
                     finish(state.video.as_mut(), "video");
                 }
             },
-            (false, true) => match audio_rx.as_ref().unwrap().recv() {
-                Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
+            (false, true) => match audio.as_mut().unwrap().recv().await {
+                Some(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
                 _ => {
                     audio_eos = true;
                     finish(state.audio.as_mut(), "audio");
                 }
             },
 
-            //
             // Write phase. Write the lower-PTS chunk (video first on ties).
-            //
             (false, false) => {
                 let Some(chunk) = get_chunk_to_write(&mut pending_video, &mut pending_audio) else {
                     // both tracks finished
