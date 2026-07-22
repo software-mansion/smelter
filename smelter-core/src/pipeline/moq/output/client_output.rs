@@ -123,19 +123,7 @@ impl MoqClientOutput {
         let tokio_rt = ctx.tokio_rt.clone();
         tokio_rt.spawn(
             async move {
-                let stats_sender = MoqClientOutputStatsSender {
-                    stats_sender: ctx.stats_sender.clone(),
-                    output_ref: output_ref.clone(),
-                };
-                run_moq_output_task(
-                    &ctx,
-                    &output_ref,
-                    state,
-                    video_receiver,
-                    audio_receiver,
-                    stats_sender,
-                )
-                .await;
+                run_moq_output_task(&ctx, &output_ref, state, video_receiver, audio_receiver).await;
 
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
@@ -369,79 +357,29 @@ async fn run_moq_output_task(
     ctx: &Arc<PipelineCtx>,
     output_ref: &Ref<OutputId>,
     mut state: BroadcastState,
-    mut video: Option<Receiver<EncodedOutputEvent>>,
-    mut audio: Option<Receiver<EncodedOutputEvent>>,
-    stats_sender: MoqClientOutputStatsSender,
+    video: Option<Receiver<EncodedOutputEvent>>,
+    audio: Option<Receiver<EncodedOutputEvent>>,
 ) {
     let mut timestamp_offset = None;
-    let mut pending_video: Option<EncodedOutputChunk> = None;
-    let mut pending_audio: Option<EncodedOutputChunk> = None;
-    // A missing channel means that media is not produced at all, i.e. already done.
-    let mut video_eos = video.is_none();
-    let mut audio_eos = audio.is_none();
+    let mut packet_sender = InterleavedPacketSender::new(video, audio);
 
-    // Each iteration either receives one chunk or writes the pending one with the
-    // lower PTS; it never does both.
     loop {
-        let need_video = pending_video.is_none() && !video_eos;
-        let need_audio = pending_audio.is_none() && !audio_eos;
+        let Some(chunk) = packet_sender.resolve_next_chunk(&mut state).await else {
+            break;
+        };
+        ctx.stats_sender.send(
+            MoqClientOutputTrackStatsEvent::BytesSent(chunk.data.len())
+                .into_event(output_ref, chunk.kind.into()),
+        );
 
-        match (need_video, need_audio) {
-            // Receive phase. When `need_*` is true the matching channel is present.
-            (true, true) => {
-                tokio::select! {
-                    msg = video.as_mut().unwrap().recv() => match msg {
-                        Some(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
-                        _ => {
-                            video_eos = true;
-                            finish(state.video.as_mut(), "video");
-                        }
-                    },
-                    msg = audio.as_mut().unwrap().recv() => match msg {
-                        Some(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
-                        _ => {
-                            audio_eos = true;
-                            finish(state.audio.as_mut(), "audio");
-                        }
-                    },
-                    else => break,
-                }
-            }
-            (true, false) => match video.as_mut().unwrap().recv().await {
-                Some(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
-                _ => {
-                    video_eos = true;
-                    finish(state.video.as_mut(), "video");
-                }
-            },
-            (false, true) => match audio.as_mut().unwrap().recv().await {
-                Some(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
-                _ => {
-                    audio_eos = true;
-                    finish(state.audio.as_mut(), "audio");
-                }
-            },
-
-            // Write phase. Write the lower-PTS chunk (video first on ties).
-            (false, false) => {
-                let Some(chunk) = get_chunk_to_write(&mut pending_video, &mut pending_audio) else {
-                    // both tracks finished
-                    break;
-                };
-
-                if write_chunk(
-                    ctx,
-                    output_ref,
-                    &mut state,
-                    &stats_sender,
-                    &mut timestamp_offset,
-                    chunk,
-                )
-                .is_err()
-                {
-                    break;
-                }
-            }
+        let offset = *timestamp_offset.get_or_insert(chunk.pts);
+        if let Err(err) = write(&mut state, chunk, offset) {
+            ctx.event_emitter.emit(Event::OutputError {
+                output_id: output_ref.id().clone(),
+                err: err.into(),
+                severity: ErrorSeverity::Critical,
+            });
+            break;
         }
     }
 
@@ -451,51 +389,117 @@ async fn run_moq_output_task(
             ErrorStack::new(&err).into_string()
         );
     }
+
     // Dropping `state` closes the session, which unannounces the broadcast.
 }
 
-fn get_chunk_to_write(
-    pending_video: &mut Option<EncodedOutputChunk>,
-    pending_audio: &mut Option<EncodedOutputChunk>,
-) -> Option<EncodedOutputChunk> {
-    match (pending_video.take(), pending_audio.take()) {
-        (Some(video), Some(audio)) => {
-            if video.pts <= audio.pts {
-                *pending_audio = Some(audio);
-                Some(video)
-            } else {
-                *pending_video = Some(video);
-                Some(audio)
-            }
-        }
-        (Some(video), None) => Some(video),
-        (None, Some(audio)) => Some(audio),
-        (None, None) => None,
-    }
+struct InterleavedPacketSender {
+    video_receiver: Option<Receiver<EncodedOutputEvent>>,
+    audio_receiver: Option<Receiver<EncodedOutputEvent>>,
+    next_video: Option<EncodedOutputChunk>,
+    next_audio: Option<EncodedOutputChunk>,
 }
 
-/// Writes one chunk and records its stats. Returns `false` if a critical write
-/// error was emitted and the writer thread must stop.
-fn write_chunk(
-    ctx: &Arc<PipelineCtx>,
-    output_ref: &Ref<OutputId>,
-    state: &mut BroadcastState,
-    stats_sender: &MoqClientOutputStatsSender,
-    timestamp_offset: &mut Option<std::time::Duration>,
-    chunk: EncodedOutputChunk,
-) -> Result<(), ()> {
-    let offset = *timestamp_offset.get_or_insert(chunk.pts);
-    stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
-
-    if let Err(err) = write(state, chunk, offset) {
-        ctx.event_emitter.emit(Event::OutputError {
-            output_id: output_ref.id().clone(),
-            err: err.into(),
-            severity: ErrorSeverity::Critical,
-        });
-        return Err(());
+impl InterleavedPacketSender {
+    fn new(
+        video_receiver: Option<Receiver<EncodedOutputEvent>>,
+        audio_receiver: Option<Receiver<EncodedOutputEvent>>,
+    ) -> Self {
+        Self {
+            video_receiver,
+            audio_receiver,
+            next_video: None,
+            next_audio: None,
+        }
     }
-    Ok(())
+
+    async fn resolve_next_chunk(
+        &mut self,
+        state: &mut BroadcastState,
+    ) -> Option<EncodedOutputChunk> {
+        // Each iteration either receives one chunk or writes the pending one with the
+        // lower PTS; it never does both.
+        loop {
+            let need_video = self.video_receiver.is_some() && self.next_video.is_none();
+            let need_audio = self.audio_receiver.is_some() && self.next_audio.is_none();
+
+            match (need_video, need_audio) {
+                // Receive phase. When `need_*` is true the matching channel is present.
+                (true, true) => {
+                    tokio::select! {
+                        event_opt = self.video_receiver.as_mut().unwrap().recv() => self.handle_video_read(event_opt, state.video.as_mut()),
+                        event_opt = self.audio_receiver.as_mut().unwrap().recv() => self.handle_audio_read(event_opt, state.audio.as_mut()),
+                    }
+                }
+                (true, false) => {
+                    let event_opt = self.video_receiver.as_mut().unwrap().recv().await;
+                    self.handle_video_read(event_opt, state.video.as_mut());
+                }
+                (false, true) => {
+                    let event_opt = self.audio_receiver.as_mut().unwrap().recv().await;
+                    self.handle_audio_read(event_opt, state.audio.as_mut());
+                }
+
+                // Write phase. Write the lower-PTS chunk (video first on ties).
+                (false, false) => return self.resolve_from_state(),
+            }
+        }
+    }
+
+    fn handle_video_read(
+        &mut self,
+        event_opt: Option<EncodedOutputEvent>,
+        video_producer: Option<&mut ContainerProducer<Container>>,
+    ) {
+        match event_opt {
+            Some(EncodedOutputEvent::Data(chunk)) => self.next_video = Some(chunk),
+            Some(EncodedOutputEvent::AudioEOS) => error!("Unexpected audio EOS on video track."),
+            Some(EncodedOutputEvent::VideoEOS) | None => {
+                info!("Received video EOS.");
+                self.video_receiver = None;
+                if let Some(producer) = video_producer
+                    && let Err(err) = producer.finish()
+                {
+                    warn!(%err, "Failed to close video producer.");
+                }
+            }
+        }
+    }
+
+    fn handle_audio_read(
+        &mut self,
+        event_opt: Option<EncodedOutputEvent>,
+        audio_producer: Option<&mut ContainerProducer<Container>>,
+    ) {
+        match event_opt {
+            Some(EncodedOutputEvent::Data(chunk)) => self.next_audio = Some(chunk),
+            Some(EncodedOutputEvent::VideoEOS) => error!("Unexpected video EOS on audio track."),
+            Some(EncodedOutputEvent::AudioEOS) | None => {
+                info!("Received audio EOS.");
+                self.audio_receiver = None;
+                if let Some(producer) = audio_producer
+                    && let Err(err) = producer.finish()
+                {
+                    warn!(%err, "Failed to close audio producer.");
+                }
+            }
+        }
+    }
+
+    fn resolve_from_state(&mut self) -> Option<EncodedOutputChunk> {
+        match (&self.next_video, &self.next_audio) {
+            (Some(video_chunk), Some(audio_chunk)) => {
+                if video_chunk.pts < audio_chunk.pts {
+                    self.next_video.take()
+                } else {
+                    self.next_audio.take()
+                }
+            }
+            (Some(_), None) => self.next_video.take(),
+            (None, Some(_)) => self.next_audio.take(),
+            (None, None) => None,
+        }
+    }
 }
 
 fn write(
@@ -545,29 +549,4 @@ fn write(
         }
     }
     Ok(())
-}
-
-fn finish(producer: Option<&mut ContainerProducer<Container>>, kind: &str) {
-    if let Some(producer) = producer
-        && let Err(err) = producer.finish()
-    {
-        warn!(
-            "Failed to close MoQ {kind} track: {}",
-            ErrorStack::new(&err).into_string()
-        );
-    }
-}
-
-struct MoqClientOutputStatsSender {
-    stats_sender: StatsSender,
-    output_ref: Ref<OutputId>,
-}
-
-impl MoqClientOutputStatsSender {
-    fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
-        self.stats_sender.send(
-            MoqClientOutputTrackStatsEvent::BytesSent(size)
-                .into_event(&self.output_ref, track_kind),
-        );
-    }
 }
