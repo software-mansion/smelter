@@ -389,17 +389,6 @@ async fn run_moq_output_task(
         match (need_video, need_audio) {
             // Receive phase. When `need_*` is true the matching channel is present.
             (true, true) => {
-                // crossbeam_channel::select! {
-                //     recv(video.as_ref().unwrap()) -> msg => match msg {
-                //         Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
-                //         // Disconnect without an explicit EOS is treated as EOS.
-                //         _ => { video_eos = true; finish(state.video.as_mut(), "video"); }
-                //     },
-                //     recv(audio.as_ref().unwrap()) -> msg => match msg {
-                //         Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
-                //         _ => { audio_eos = true; finish(state.audio.as_mut(), "audio"); }
-                //     },
-                // }
                 tokio::select! {
                     msg = video.as_mut().unwrap().recv() => match msg {
                         Some(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
