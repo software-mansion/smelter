@@ -48,21 +48,11 @@ use std::{
 
 use tracing::{debug, info};
 
-pub(crate) mod edge_estimator;
+mod edge_estimator;
+mod item;
 
 pub(crate) use edge_estimator::LiveEdgeEstimator;
-
-/// Item that can be buffered and synchronized by [`LiveSyncTrack`].
-pub(crate) trait LiveSyncItem {
-    /// Presentation timestamp in the input time base. Does not have to start
-    /// at zero; [`LiveSyncStart::to_queue_pts`] maps produced timestamps onto
-    /// the queue timeline.
-    fn pts(&self) -> Duration;
-
-    /// Whether decoding of this track can start from this item. Video should
-    /// return true only for keyframes; audio should always return true.
-    fn is_keyframe(&self) -> bool;
-}
+pub(crate) use item::LiveSyncItem;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
@@ -179,14 +169,14 @@ struct StartDecision {
 }
 
 impl LiveSync {
-    pub fn new(options: LiveSyncOptions, reference: Instant) -> Self {
+    pub fn new(options: LiveSyncOptions, sync_point: Instant) -> Self {
         Self {
             shared: Arc::new(Shared {
                 options,
-                sync_point: reference,
+                sync_point,
                 inner: Mutex::new(Inner {
                     tracks: Vec::new(),
-                    estimator: LiveEdgeEstimator::new(reference, options.stabilization_tolerance),
+                    estimator: LiveEdgeEstimator::new(sync_point, options.stabilization_tolerance),
                     filling: false,
                     start: None,
                 }),
