@@ -520,9 +520,7 @@ fn write(
                     payload: chunk.data,
                     keyframe: chunk.is_keyframe,
                 })
-                .map_err(|err| {
-                    OutputMoqClientRuntimeError::WriteError(ErrorStack::new(&err).into_string())
-                })?;
+                .map_err(|err| OutputMoqClientRuntimeError::WriteError(Arc::from(err)))?;
         }
         MediaKind::Audio(_) => {
             let Some(producer) = state.audio.as_mut() else {
@@ -540,12 +538,10 @@ fn write(
                     payload: chunk.data,
                     keyframe: true,
                 })
-                .map_err(|err| {
-                    OutputMoqClientRuntimeError::WriteError(ErrorStack::new(&err).into_string())
-                })?;
-            producer.finish_group().map_err(|err| {
-                OutputMoqClientRuntimeError::WriteError(ErrorStack::new(&err).into_string())
-            })?;
+                .map_err(|err| OutputMoqClientRuntimeError::WriteError(Arc::from(err)))?;
+            producer
+                .finish_group()
+                .map_err(|err| OutputMoqClientRuntimeError::WriteError(Arc::from(err)))?;
         }
     }
     Ok(())
