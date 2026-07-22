@@ -124,6 +124,9 @@ pub enum MoqClientError {
         codec: VideoCodec,
         container: MoqOutputContainer,
     },
+
+    #[error("Unsupported audio sample rate: {0}")]
+    UnsupportedSampleRate(u32),
 }
 
 impl MoqServerError {
