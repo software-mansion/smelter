@@ -121,9 +121,8 @@ impl AudioEncoder for FdkAacEncoder {
             AudioEncoderConfig {
                 // FDK leaves `confSize == 0` in ADTS mode: the decoder config is
                 // carried inline in each frame, so there's no out-of-band ASC.
-                extradata: (info.confSize > 0).then(|| {
-                    Bytes::copy_from_slice(&info.confBuf[0..(info.confSize as usize)])
-                }),
+                extradata: (info.confSize > 0)
+                    .then(|| Bytes::copy_from_slice(&info.confBuf[0..(info.confSize as usize)])),
             },
         ))
     }
