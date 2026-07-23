@@ -93,7 +93,7 @@ impl MoqClientOutput {
             None => (None, None),
         };
 
-        let video_track = match (&options.video, &video_encoder_handle) {
+        let video_track_config = match (&options.video, &video_encoder_handle) {
             (Some(video_options), Some(handle)) => Some(video_catalog_entry(
                 video_options,
                 handle.config.resolution,
@@ -104,7 +104,7 @@ impl MoqClientOutput {
             )?),
             _ => None,
         };
-        let audio_track = match (&options.audio, &audio_encoder_handle) {
+        let audio_track_config = match (&options.audio, &audio_encoder_handle) {
             (Some(audio_options), Some(handle)) => Some(audio_catalog_entry(
                 audio_options,
                 handle.encoder_context(),
@@ -114,7 +114,13 @@ impl MoqClientOutput {
         };
 
         let (session, origin) = Self::connect(&ctx, &options.endpoint_url)?;
-        let state = Self::publish(&options, video_track, audio_track, session, origin)?;
+        let state = Self::publish(
+            &options,
+            video_track_config,
+            audio_track_config,
+            session,
+            origin,
+        )?;
 
         let tokio_rt = ctx.tokio_rt.clone();
         tokio_rt.spawn(
@@ -133,11 +139,39 @@ impl MoqClientOutput {
         })
     }
 
+    fn connect(
+        ctx: &Arc<PipelineCtx>,
+        url: &str,
+    ) -> Result<(MoqSession, OriginProducer), MoqClientError> {
+        let url = Url::parse(url).map_err(|err| MoqClientError::InvalidUrl(Arc::from(url), err))?;
+
+        if !matches!(url.scheme(), "https" | "http") {
+            return Err(MoqClientError::InvalidScheme(url.scheme().to_string()));
+        }
+
+        let mut config = ClientConfig::default();
+        config.tls.disable_verify = Some(ctx.moq_disable_tls_verification);
+        let client = config
+            .init()
+            .map_err(|err| MoqClientError::ClientInitFailed(format!("{err}")))?;
+
+        let origin = Origin::random().produce();
+        let client = client.with_publish(origin.consume());
+
+        let session = ctx
+            .tokio_rt
+            .block_on(client.connect(url))
+            .map_err(|err| MoqClientError::ConnectFailed(format!("{err}")))?;
+        let session = MoqSession::new(session, ctx.tokio_rt.clone());
+        info!(moq_version = ?session.version(), "MoQ client session established");
+        Ok((session, origin))
+    }
+
     /// Connect to the relay and announce the broadcast with its catalog.
     fn publish(
         options: &MoqClientOutputOptions,
-        video_track: Option<(hang::catalog::VideoConfig, Container)>,
-        audio_track: Option<(hang::catalog::AudioConfig, Container)>,
+        video_config: Option<(hang::catalog::VideoConfig, Container)>,
+        audio_config: Option<(hang::catalog::AudioConfig, Container)>,
         session: MoqSession,
         origin: OriginProducer,
     ) -> Result<BroadcastState, MoqClientError> {
@@ -145,7 +179,7 @@ impl MoqClientOutput {
         let mut catalog = moq_mux::catalog::Producer::new(&mut broadcast)
             .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
 
-        let (video_config, video) = match video_track {
+        let (video_config, video) = match video_config {
             Some((config, container)) => {
                 let producer = Self::create_track(&mut broadcast, VIDEO_TRACK_NAME, container)?;
                 (Some(config), Some(producer))
@@ -153,7 +187,7 @@ impl MoqClientOutput {
             None => (None, None),
         };
 
-        let (audio_config, audio) = match audio_track {
+        let (audio_config, audio) = match audio_config {
             Some((config, container)) => {
                 let producer = Self::create_track(&mut broadcast, AUDIO_TRACK_NAME, container)?;
                 (Some(config), Some(producer))
@@ -209,34 +243,6 @@ impl MoqClientOutput {
         // The encoder may hand us deltas before the first keyframe; drop them
         // rather than treating them as a protocol violation.
         Ok(ContainerProducer::new(track, container).with_lenient_start())
-    }
-
-    fn connect(
-        ctx: &Arc<PipelineCtx>,
-        url: &str,
-    ) -> Result<(MoqSession, OriginProducer), MoqClientError> {
-        let url = Url::parse(url).map_err(|err| MoqClientError::InvalidUrl(Arc::from(url), err))?;
-
-        if !matches!(url.scheme(), "https" | "http") {
-            return Err(MoqClientError::InvalidScheme(url.scheme().to_string()));
-        }
-
-        let mut config = ClientConfig::default();
-        config.tls.disable_verify = Some(ctx.moq_disable_tls_verification);
-        let client = config
-            .init()
-            .map_err(|err| MoqClientError::ClientInitFailed(format!("{err}")))?;
-
-        let origin = Origin::random().produce();
-        let client = client.with_publish(origin.consume());
-
-        let session = ctx
-            .tokio_rt
-            .block_on(client.connect(url))
-            .map_err(|err| MoqClientError::ConnectFailed(format!("{err}")))?;
-        let session = MoqSession::new(session, ctx.tokio_rt.clone());
-        info!(moq_version = ?session.version(), "MoQ client session established");
-        Ok((session, origin))
     }
 
     fn init_video_encoder(
@@ -423,17 +429,17 @@ impl InterleavedPacketSender {
                 // Receive phase. When `need_*` is true the matching channel is present.
                 (true, true) => {
                     tokio::select! {
-                        event_opt = self.video_receiver.as_mut().unwrap().recv() => self.handle_video_read(event_opt, state.video.as_mut()),
-                        event_opt = self.audio_receiver.as_mut().unwrap().recv() => self.handle_audio_read(event_opt, state.audio.as_mut()),
+                        event = self.video_receiver.as_mut().unwrap().recv() => self.handle_video_read(event, state.video.as_mut()),
+                        event = self.audio_receiver.as_mut().unwrap().recv() => self.handle_audio_read(event, state.audio.as_mut()),
                     }
                 }
                 (true, false) => {
-                    let event_opt = self.video_receiver.as_mut().unwrap().recv().await;
-                    self.handle_video_read(event_opt, state.video.as_mut());
+                    let event = self.video_receiver.as_mut().unwrap().recv().await;
+                    self.handle_video_read(event, state.video.as_mut());
                 }
                 (false, true) => {
-                    let event_opt = self.audio_receiver.as_mut().unwrap().recv().await;
-                    self.handle_audio_read(event_opt, state.audio.as_mut());
+                    let event = self.audio_receiver.as_mut().unwrap().recv().await;
+                    self.handle_audio_read(event, state.audio.as_mut());
                 }
 
                 // Write phase. Write the lower-PTS chunk (audio first on ties).
@@ -444,10 +450,10 @@ impl InterleavedPacketSender {
 
     fn handle_video_read(
         &mut self,
-        event_opt: Option<EncodedOutputEvent>,
+        event: Option<EncodedOutputEvent>,
         video_producer: Option<&mut ContainerProducer<Container>>,
     ) {
-        match event_opt {
+        match event {
             Some(EncodedOutputEvent::Data(chunk)) => self.next_video = Some(chunk),
             Some(EncodedOutputEvent::AudioEOS) => error!("Unexpected audio EOS on video track."),
             Some(EncodedOutputEvent::VideoEOS) | None => {
@@ -464,10 +470,10 @@ impl InterleavedPacketSender {
 
     fn handle_audio_read(
         &mut self,
-        event_opt: Option<EncodedOutputEvent>,
+        event: Option<EncodedOutputEvent>,
         audio_producer: Option<&mut ContainerProducer<Container>>,
     ) {
-        match event_opt {
+        match event {
             Some(EncodedOutputEvent::Data(chunk)) => self.next_audio = Some(chunk),
             Some(EncodedOutputEvent::VideoEOS) => error!("Unexpected video EOS on audio track."),
             Some(EncodedOutputEvent::AudioEOS) | None => {
