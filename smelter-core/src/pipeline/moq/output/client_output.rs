@@ -1,6 +1,6 @@
 use std::sync::{Arc, OnceLock};
 
-use hang::moq_net::{Broadcast, BroadcastProducer, Origin, OriginProducer, Track};
+use hang::moq_net::{Broadcast, BroadcastProducer, Origin, OriginProducer, TimeOverflow, Track};
 use moq_mux::{
     catalog::hang::Container,
     container::{Frame, Producer as ContainerProducer, Timestamp},
@@ -55,6 +55,15 @@ struct BroadcastState {
     catalog: moq_mux::catalog::Producer,
     video: Option<ContainerProducer<Container>>,
     audio: Option<ContainerProducer<Container>>,
+}
+
+#[derive(thiserror::Error, Debug)]
+enum BroadcastError {
+    #[error("Write to broadcast failed.")]
+    Write(#[from] moq_mux::Error),
+
+    #[error("Invalid timestamp.")]
+    InvalidTimestamp(#[from] TimeOverflow),
 }
 
 impl MoqClientOutput {
@@ -376,11 +385,10 @@ async fn run_moq_output_task(
 
         let offset = *timestamp_offset.get_or_insert(chunk.pts);
         if let Err(err) = write(&mut state, chunk, offset) {
-            ctx.event_emitter.emit(Event::OutputError {
-                output_id: output_ref.id().clone(),
-                err: err.into(),
-                severity: ErrorSeverity::Critical,
-            });
+            warn!(
+                "MoQ broadcast failed: {}",
+                ErrorStack::new(&err).into_string()
+            );
             break;
         }
     }
@@ -508,7 +516,7 @@ fn write(
     state: &mut BroadcastState,
     chunk: EncodedOutputChunk,
     timestamp_offset: std::time::Duration,
-) -> Result<(), OutputMoqClientRuntimeError> {
+) -> Result<(), BroadcastError> {
     let pts = chunk.pts.saturating_sub(timestamp_offset);
 
     match chunk.kind {
@@ -518,15 +526,12 @@ fn write(
                 return Ok(());
             };
             trace!(?pts, "MoQ video frame.");
-            let timestamp = Timestamp::from_micros(pts.as_micros() as u64)
-                .map_err(|err| OutputMoqClientRuntimeError::InvalidTimestamp(format!("{err}")))?;
-            producer
-                .write(Frame {
-                    timestamp,
-                    payload: chunk.data,
-                    keyframe: chunk.is_keyframe,
-                })
-                .map_err(|err| OutputMoqClientRuntimeError::WriteError(Arc::from(err)))?;
+            let timestamp = Timestamp::from_micros(pts.as_micros() as u64)?;
+            producer.write(Frame {
+                timestamp,
+                payload: chunk.data,
+                keyframe: chunk.is_keyframe,
+            })?;
         }
         MediaKind::Audio(_) => {
             let Some(producer) = state.audio.as_mut() else {
@@ -535,18 +540,13 @@ fn write(
             };
             // Audio has no keyframes, so every frame starts a group of its own.
             trace!(?pts, "MoQ audio frame.");
-            let timestamp = Timestamp::from_micros(pts.as_micros() as u64)
-                .map_err(|err| OutputMoqClientRuntimeError::InvalidTimestamp(format!("{err}")))?;
-            producer
-                .write(Frame {
-                    timestamp,
-                    payload: chunk.data,
-                    keyframe: true,
-                })
-                .map_err(|err| OutputMoqClientRuntimeError::WriteError(Arc::from(err)))?;
-            producer
-                .finish_group()
-                .map_err(|err| OutputMoqClientRuntimeError::WriteError(Arc::from(err)))?;
+            let timestamp = Timestamp::from_micros(pts.as_micros() as u64)?;
+            producer.write(Frame {
+                timestamp,
+                payload: chunk.data,
+                keyframe: true,
+            })?;
+            producer.finish_group()?;
         }
     }
     Ok(())

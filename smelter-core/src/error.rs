@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use smelter_render::{
     InputId, OutputId,
     error::{
@@ -191,9 +189,6 @@ pub enum OutputRuntimeError {
 
     #[error(transparent)]
     Whip(#[from] OutputWhipRuntimeError),
-
-    #[error(transparent)]
-    MoqClient(#[from] OutputMoqClientRuntimeError),
 }
 
 /// Error that can happen after registration
@@ -201,15 +196,6 @@ pub enum OutputRuntimeError {
 pub enum OutputWhipRuntimeError {
     #[error("Peer connection disconnected.")]
     PeerConnectionDisconnected,
-}
-
-#[derive(Debug, thiserror::Error, Clone)]
-pub enum OutputMoqClientRuntimeError {
-    #[error("Failed to write a frame to the MoQ broadcast: {0}")]
-    WriteError(Arc<moq_mux::Error>),
-
-    #[error("Frame timestamp is outside of the range supported by MoQ: {0}")]
-    InvalidTimestamp(String),
 }
 
 /// Error that can happen after registration
