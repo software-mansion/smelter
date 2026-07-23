@@ -372,10 +372,10 @@ async fn run_moq_output_task(
     audio: Option<Receiver<EncodedOutputEvent>>,
 ) {
     let mut timestamp_offset = None;
-    let mut packet_sender = InterleavedPacketSender::new(video, audio);
+    let mut packet_resolver = InterleavedPacketResolver::new(video, audio);
 
     loop {
-        let Some(chunk) = packet_sender.resolve_next_chunk(&mut state).await else {
+        let Some(chunk) = packet_resolver.resolve_next_chunk(&mut state).await else {
             break;
         };
         ctx.stats_sender.send(
@@ -403,14 +403,14 @@ async fn run_moq_output_task(
     // Dropping `state` closes the session, which unannounces the broadcast.
 }
 
-struct InterleavedPacketSender {
+struct InterleavedPacketResolver {
     video_receiver: Option<Receiver<EncodedOutputEvent>>,
     audio_receiver: Option<Receiver<EncodedOutputEvent>>,
     next_video: Option<EncodedOutputChunk>,
     next_audio: Option<EncodedOutputChunk>,
 }
 
-impl InterleavedPacketSender {
+impl InterleavedPacketResolver {
     fn new(
         video_receiver: Option<Receiver<EncodedOutputEvent>>,
         audio_receiver: Option<Receiver<EncodedOutputEvent>>,
