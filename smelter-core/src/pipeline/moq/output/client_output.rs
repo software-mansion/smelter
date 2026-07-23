@@ -436,7 +436,7 @@ impl InterleavedPacketSender {
                     self.handle_audio_read(event_opt, state.audio.as_mut());
                 }
 
-                // Write phase. Write the lower-PTS chunk (video first on ties).
+                // Write phase. Write the lower-PTS chunk (audio first on ties).
                 (false, false) => return self.resolve_from_state(),
             }
         }
