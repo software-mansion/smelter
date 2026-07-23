@@ -73,8 +73,6 @@ pub struct EncodeProfileCapabilities {
     pub rate_control: RateControlCapabilities,
     /// Maximum number of back references a P-frame can have
     pub max_references: u32,
-    /// The count of [Vulkan Video encode quality levels](https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#encode-quality-level)
-    pub quality_levels: u32,
 }
 
 /// The device capabilities for decoding
