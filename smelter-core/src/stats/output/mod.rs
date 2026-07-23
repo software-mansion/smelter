@@ -1,8 +1,9 @@
 use crate::{
     MediaKind, OutputProtocolKind,
     stats::{
-        output::hls::HlsOutputState, output::mp4::Mp4OutputState, output::rtmp::RtmpOutputState,
-        output::rtp::RtpOutputState, output::whep::WhepOutputState, output::whip::WhipOutputState,
+        output::hls::HlsOutputState, output::moq_client::MoqClientOutputState,
+        output::mp4::Mp4OutputState, output::rtmp::RtmpOutputState, output::rtp::RtpOutputState,
+        output::whep::WhepOutputState, output::whip::WhipOutputState,
         output_reports::OutputStatsReport,
     },
 };
@@ -10,6 +11,7 @@ use crate::{
 use tracing::error;
 
 pub(super) mod hls;
+pub(super) mod moq_client;
 pub(super) mod mp4;
 pub(super) mod rtmp;
 pub(super) mod rtp;
@@ -17,6 +19,7 @@ pub(super) mod whep;
 pub(super) mod whip;
 
 pub(crate) use hls::{HlsOutputStatsEvent, HlsOutputTrackStatsEvent};
+pub(crate) use moq_client::{MoqClientOutputStatsEvent, MoqClientOutputTrackStatsEvent};
 pub(crate) use mp4::{Mp4OutputStatsEvent, Mp4OutputTrackStatsEvent};
 pub(crate) use rtmp::{RtmpOutputStatsEvent, RtmpOutputTrackStatsEvent};
 pub(crate) use rtp::{RtpOutputStatsEvent, RtpOutputTrackStatsEvent};
@@ -46,6 +49,7 @@ pub(crate) enum OutputStatsEvent {
     Mp4(Mp4OutputStatsEvent),
     Rtmp(RtmpOutputStatsEvent),
     Rtp(RtpOutputStatsEvent),
+    MoqClient(MoqClientOutputStatsEvent),
 }
 
 impl From<&OutputStatsEvent> for OutputProtocolKind {
@@ -57,6 +61,7 @@ impl From<&OutputStatsEvent> for OutputProtocolKind {
             OutputStatsEvent::Mp4(_) => Self::Mp4,
             OutputStatsEvent::Rtmp(_) => Self::Rtmp,
             OutputStatsEvent::Rtp(_) => Self::Rtp,
+            OutputStatsEvent::MoqClient(_) => Self::MoqClient,
         }
     }
 }
@@ -69,6 +74,7 @@ pub enum OutputStatsState {
     Mp4(Mp4OutputState),
     Rtmp(RtmpOutputState),
     Rtp(RtpOutputState),
+    MoqClient(MoqClientOutputState),
 }
 
 impl OutputStatsState {
@@ -80,6 +86,9 @@ impl OutputStatsState {
             OutputProtocolKind::Mp4 => OutputStatsState::Mp4(Mp4OutputState::new()),
             OutputProtocolKind::Rtp => OutputStatsState::Rtp(RtpOutputState::new()),
             OutputProtocolKind::Rtmp => OutputStatsState::Rtmp(RtmpOutputState::new()),
+            OutputProtocolKind::MoqClient => {
+                OutputStatsState::MoqClient(MoqClientOutputState::new())
+            }
             OutputProtocolKind::RawDataChannel => unimplemented!(),
             OutputProtocolKind::EncodedDataChannel => unimplemented!(),
         }
@@ -93,6 +102,7 @@ impl OutputStatsState {
             Self::Mp4(state) => OutputStatsReport::Mp4(state.report()),
             Self::Rtmp(state) => OutputStatsReport::Rtmp(state.report()),
             Self::Rtp(state) => OutputStatsReport::Rtp(state.report()),
+            Self::MoqClient(state) => OutputStatsReport::MoqClient(state.report()),
         }
     }
 
@@ -114,6 +124,9 @@ impl OutputStatsState {
                 state.handle_event(event)
             }
             (OutputStatsState::Rtp(state), OutputStatsEvent::Rtp(event)) => {
+                state.handle_event(event)
+            }
+            (OutputStatsState::MoqClient(state), OutputStatsEvent::MoqClient(event)) => {
                 state.handle_event(event)
             }
             (state, event) => {

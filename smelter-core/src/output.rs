@@ -33,6 +33,7 @@ pub enum ProtocolOutputOptions {
     Hls(HlsOutputOptions),
     Whip(WhipOutputOptions),
     Whep(WhepOutputOptions),
+    MoqClient(MoqClientOutputOptions),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -107,6 +108,7 @@ pub enum OutputProtocolKind {
     Whep,
     Mp4,
     Hls,
+    MoqClient,
     EncodedDataChannel,
     RawDataChannel,
 }

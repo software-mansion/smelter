@@ -1,10 +1,12 @@
 mod input;
+mod output;
 mod server;
 
 use hang::moq_net::Session;
 use std::{ops::Deref, sync::Arc};
 
 pub use input::{MoqClientInput, MoqServerInput};
+pub use output::MoqClientOutput;
 pub(crate) use server::SelfSignedTlsError;
 pub(super) use server::{MoqPipelineState, MoqServer, spawn_moq_server};
 

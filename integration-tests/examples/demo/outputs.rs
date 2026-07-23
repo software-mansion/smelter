@@ -8,12 +8,13 @@ use strum::{Display, EnumIter};
 use crate::{
     inputs::InputHandle,
     outputs::{
-        hls::HlsOutput, mp4::Mp4Output, rtmp::RtmpOutput, rtp::RtpOutput, whep::WhepOutput,
-        whip::WhipOutput,
+        hls::HlsOutput, moq_client::MoqClientOutput, mp4::Mp4Output, rtmp::RtmpOutput,
+        rtp::RtpOutput, whep::WhepOutput, whip::WhipOutput,
     },
 };
 
 pub mod hls;
+pub mod moq_client;
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
@@ -31,6 +32,7 @@ pub enum OutputHandle {
     Whip(WhipOutput),
     Whep(WhepOutput),
     Hls(HlsOutput),
+    MoqClient(MoqClientOutput),
 }
 
 impl OutputHandle {
@@ -42,6 +44,7 @@ impl OutputHandle {
             OutputHandle::Whip(o) => &o.name,
             OutputHandle::Whep(o) => &o.name,
             OutputHandle::Hls(o) => &o.name,
+            OutputHandle::MoqClient(o) => &o.name,
         }
     }
 
@@ -53,6 +56,7 @@ impl OutputHandle {
             OutputHandle::Whip(o) => o.serialize_register(inputs),
             OutputHandle::Whep(o) => o.serialize_register(inputs),
             OutputHandle::Hls(o) => o.serialize_register(inputs),
+            OutputHandle::MoqClient(o) => o.serialize_register(inputs),
         }
     }
     pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
@@ -63,6 +67,7 @@ impl OutputHandle {
             OutputHandle::Whip(o) => o.serialize_update(inputs),
             OutputHandle::Whep(o) => o.serialize_update(inputs),
             OutputHandle::Hls(o) => o.serialize_update(inputs),
+            OutputHandle::MoqClient(o) => o.serialize_update(inputs),
         }
     }
 
@@ -72,6 +77,7 @@ impl OutputHandle {
             OutputHandle::Rtmp(o) => o.on_before_registration(),
             OutputHandle::Whip(o) => o.on_before_registration(),
             OutputHandle::Hls(o) => o.on_before_registration(),
+            OutputHandle::MoqClient(o) => o.on_before_registration(),
             _ => Ok(()),
         }
     }
@@ -111,6 +117,9 @@ pub enum OutputProtocol {
 
     #[strum(to_string = "hls")]
     Hls,
+
+    #[strum(to_string = "moq_client")]
+    MoqClient,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

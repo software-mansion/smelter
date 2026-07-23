@@ -422,6 +422,7 @@ fn default_audio_encoder() -> AudioEncoderOptions {
     AudioEncoderOptions::FdkAac(FdkAacEncoderOptions {
         channels: AudioChannels::Stereo,
         sample_rate: 48_000,
+        bitstream_format: AacBitstreamFormat::Raw,
     })
 }
 
