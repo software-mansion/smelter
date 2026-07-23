@@ -534,7 +534,6 @@ fn write(
                 return Ok(());
             };
             // Audio has no keyframes, so every frame starts a group of its own.
-            // This matches what moq-mux's own audio importers do.
             trace!(?pts, "MoQ audio frame.");
             let timestamp = Timestamp::from_micros(pts.as_micros() as u64)
                 .map_err(|err| OutputMoqClientRuntimeError::InvalidTimestamp(format!("{err}")))?;
