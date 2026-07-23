@@ -101,13 +101,14 @@ pub(super) fn audio_catalog_entry(
     container: MoqOutputContainer,
 ) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
     match options {
-        AudioEncoderOptions::Opus(opus) => opus_audio_catalog_entry(opus, container),
+        AudioEncoderOptions::Opus(opus) => opus_audio_catalog_entry(opus, extradata, container),
         AudioEncoderOptions::FdkAac(aac) => aac_audio_catalog_entry(aac, extradata, container),
     }
 }
 
 fn opus_audio_catalog_entry(
     opus: &OpusEncoderOptions,
+    extradata: Option<Bytes>,
     container: MoqOutputContainer,
 ) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
     let channel_count = channel_count(opus.channels);
@@ -120,7 +121,7 @@ fn opus_audio_catalog_entry(
         MoqOutputContainer::Legacy => hang_catalog::Container::Legacy,
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
-            let init = opus_cmaf_init_segment(opus.sample_rate, opus.channels)?;
+            let init = opus_cmaf_init_segment(opus.sample_rate, extradata, opus.channels)?;
             cmaf_container(init, opus.sample_rate)
         }
     };
