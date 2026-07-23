@@ -94,7 +94,7 @@ impl MoqClientVideoEncoderOptions {
         resolution: Resolution,
         container: MoqOutputContainer,
     ) -> Result<core::VideoEncoderOptions, TypeError> {
-        let bitstream_format = match container {
+        let h264_bitstream_format = match container {
             MoqOutputContainer::Cmaf => core::H264BitstreamFormat::Avcc,
             MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
                 core::H264BitstreamFormat::AnnexB
@@ -119,7 +119,7 @@ impl MoqClientVideoEncoderOptions {
                     .unwrap_or_default()
                     .into_iter()
                     .collect(),
-                bitstream_format,
+                bitstream_format: h264_bitstream_format,
             }),
             MoqClientVideoEncoderOptions::VulkanH264 {
                 bitrate,
@@ -135,7 +135,7 @@ impl MoqClientVideoEncoderOptions {
                     .transpose()?,
                 keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
                 preset: core::VulkanH264EncoderPreset::HighQuality,
-                bitstream_format,
+                bitstream_format: h264_bitstream_format,
             }),
             MoqClientVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
@@ -180,7 +180,7 @@ impl MoqClientAudioEncoderOptions {
     ) -> Result<core::AudioEncoderOptions, TypeError> {
         let audio_encoder_options = match self {
             MoqClientAudioEncoderOptions::Aac { sample_rate } => {
-                let bitstream_format = match container {
+                let aac_bitstream_format = match container {
                     MoqOutputContainer::Cmaf => core::AacBitstreamFormat::Raw,
                     MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
                         core::AacBitstreamFormat::Adts
@@ -189,7 +189,7 @@ impl MoqClientAudioEncoderOptions {
                 core::AudioEncoderOptions::FdkAac(core::FdkAacEncoderOptions {
                     channels: channels.into(),
                     sample_rate: sample_rate.unwrap_or(44100),
-                    bitstream_format,
+                    bitstream_format: aac_bitstream_format,
                 })
             }
             MoqClientAudioEncoderOptions::Opus {
