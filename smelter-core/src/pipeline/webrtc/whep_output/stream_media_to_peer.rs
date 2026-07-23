@@ -1,16 +1,59 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use smelter_render::error::ErrorStack;
-use tokio::sync::broadcast;
-use tracing::{debug, error, info, trace};
+use tokio::sync::broadcast::{self, error::RecvError};
+use tracing::{error, info, trace, warn};
 use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
 
-use crate::{
-    event::Event,
-    pipeline::{rtp::payloader::Payloader, webrtc::error::WhepError},
-};
+use crate::pipeline::{rtp::payloader::Payloader, webrtc::error::WhepError};
 
 use crate::prelude::*;
+
+pub(super) struct MediaStreamTask {
+    sender: InterleavedPacketSender,
+    should_close: Arc<AtomicBool>,
+}
+
+impl MediaStreamTask {
+    pub fn new(
+        video_stream: Option<MediaStream>,
+        audio_stream: Option<MediaStream>,
+        should_close: Arc<AtomicBool>,
+    ) -> Self {
+        let sender = InterleavedPacketSender {
+            video_stream,
+            audio_stream,
+            next_video: None,
+            next_audio: None,
+        };
+        Self {
+            sender,
+            should_close,
+        }
+    }
+
+    pub fn spawn(self) {
+        tokio::spawn(self.run());
+    }
+
+    async fn run(mut self) {
+        loop {
+            let Some(chunk) = self.sender.resolve_next_chunk().await else {
+                return;
+            };
+
+            if self.should_close.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+
+            if let Err(err) = self.sender.send_chunk_to_peer(chunk).await {
+                error!("{}", ErrorStack::new(&err).into_string());
+                break;
+            }
+        }
+    }
+}
 
 pub struct MediaStream {
     pub receiver: broadcast::Receiver<EncodedOutputEvent>,
@@ -18,170 +61,107 @@ pub struct MediaStream {
     pub payloader: Payloader,
 }
 
-pub async fn stream_media_to_peer(
-    ctx: Arc<PipelineCtx>,
-    output_ref: Ref<OutputId>,
-    mut video_stream: Option<MediaStream>,
-    mut audio_stream: Option<MediaStream>,
-) {
-    let mut next_video_event = None;
-    let mut next_audio_event = None;
+struct InterleavedPacketSender {
+    video_stream: Option<MediaStream>,
+    audio_stream: Option<MediaStream>,
+    next_video: Option<EncodedOutputChunk>,
+    next_audio: Option<EncodedOutputChunk>,
+}
 
-    loop {
-        match (
-            &next_video_event,
-            &next_audio_event,
-            &mut video_stream,
-            &mut audio_stream,
-        ) {
-            (None, None, Some(video_stream), Some(audio_stream)) => {
-                tokio::select! {
-                    Ok(event) = video_stream.receiver.recv() => {
-                        next_video_event = Some(event)
-                    },
-                    Ok(event) = audio_stream.receiver.recv() => {
-                        next_audio_event = Some(event)
-                    },
-                    else => break,
-                };
+impl InterleavedPacketSender {
+    async fn resolve_next_chunk(&mut self) -> Option<EncodedOutputChunk> {
+        loop {
+            let needs_video = self.video_stream.is_some() && self.next_video.is_none();
+            let needs_audio = self.audio_stream.is_some() && self.next_audio.is_none();
+
+            match (needs_video, needs_audio) {
+                (true, true) => {
+                    tokio::select! {
+                        result = self.video_stream.as_mut().unwrap().receiver.recv() => {
+                            self.handle_video_read_result(result)
+                        },
+                        result = self.audio_stream.as_mut().unwrap().receiver.recv() => {
+                            self.handle_audio_read_result(result)
+                        },
+                    };
+                }
+                (true, false) => {
+                    let result = self.video_stream.as_mut().unwrap().receiver.recv().await;
+                    self.handle_video_read_result(result);
+                }
+                (false, true) => {
+                    let result = self.audio_stream.as_mut().unwrap().receiver.recv().await;
+                    self.handle_audio_read_result(result);
+                }
+                (false, false) => return self.resolve_from_state(),
             }
-            (_video, None, _video_stream, audio_stream @ Some(_)) => {
-                match audio_stream.as_mut().unwrap().receiver.recv().await {
-                    Ok(event) => {
-                        next_audio_event = Some(event);
-                    }
-                    Err(_) => *audio_stream = None,
-                };
+        }
+    }
+
+    fn handle_video_read_result(&mut self, result: Result<EncodedOutputEvent, RecvError>) {
+        match result {
+            Ok(EncodedOutputEvent::Data(chunk)) => self.next_video = Some(chunk),
+            Ok(EncodedOutputEvent::AudioEOS) => error!("Unexpected AudioEOS on video track"),
+            Err(RecvError::Lagged(count)) => warn!(count, "Video stream on WHEP output lagged"),
+            Err(RecvError::Closed) | Ok(EncodedOutputEvent::VideoEOS) => {
+                info!("Received video EOS event on WHEP output");
+                self.video_stream = None;
             }
-            (None, _, video_stream @ Some(_), _) => {
-                match video_stream.as_mut().unwrap().receiver.recv().await {
-                    Ok(event) => {
-                        next_video_event = Some(event);
-                    }
-                    Err(_) => *video_stream = None,
-                };
+        }
+    }
+
+    fn handle_audio_read_result(&mut self, result: Result<EncodedOutputEvent, RecvError>) {
+        match result {
+            Ok(EncodedOutputEvent::Data(chunk)) => self.next_audio = Some(chunk),
+            Ok(EncodedOutputEvent::VideoEOS) => error!("Unexpected VideoEOS on audio track"),
+            Err(RecvError::Lagged(count)) => warn!(count, "Audio stream on WHEP output lagged"),
+            Err(RecvError::Closed) | Ok(EncodedOutputEvent::AudioEOS) => {
+                info!("Received audio EOS event on WHEP output");
+                self.audio_stream = None;
             }
-            (None, None, None, None) => {
-                break;
+        }
+    }
+
+    fn resolve_from_state(&mut self) -> Option<EncodedOutputChunk> {
+        match (&self.next_video, &self.next_audio) {
+            (Some(video_chunk), Some(audio_chunk)) => {
+                if audio_chunk.pts > video_chunk.pts {
+                    self.next_video.take()
+                } else {
+                    self.next_audio.take()
+                }
             }
-            (Some(_), Some(_), _, _) => {
-                // Both events populated - will process them below
-            }
-            (None, Some(_audio), None, _) => {
-                // no video, but can't read audio at this moment
-            }
-            (Some(_video), None, _, None) => {
-                // no audio, but can't read video at this moment
-            }
+            (None, Some(_)) => self.next_audio.take(),
+            (Some(_), None) => self.next_video.take(),
+            (None, None) => None,
+        }
+    }
+
+    async fn send_chunk_to_peer(&mut self, chunk: EncodedOutputChunk) -> Result<(), WhepError> {
+        let kind = chunk.kind;
+        let stream = match kind {
+            MediaKind::Video(_) => self.video_stream.as_mut(),
+            MediaKind::Audio(_) => self.audio_stream.as_mut(),
         };
 
-        let event = get_output_encoded_event(
-            &video_stream,
-            &audio_stream,
-            &mut next_video_event,
-            &mut next_audio_event,
-        );
-        match event {
-            Ok(EncodedOutputEvent::Data(chunk)) => {
-                let stream = match chunk.kind {
-                    MediaKind::Video(_) => video_stream.as_mut(),
-                    MediaKind::Audio(_) => audio_stream.as_mut(),
-                };
+        let Some(stream) = stream else {
+            error!(?kind, "No stream of this kind");
+            return Ok(());
+        };
 
-                if let Some(stream) = stream {
-                    let result =
-                        send_chunk_to_peer(chunk, &stream.track, &mut stream.payloader).await;
-                    if let Err(err) = result {
-                        error!("{}", ErrorStack::new(&err).into_string());
-                        break;
+        match stream.payloader.payload(chunk) {
+            Ok(rtp_packets) => {
+                for rtp_packet in rtp_packets {
+                    if let Err(err) = stream.track.write_rtp(&rtp_packet.packet).await {
+                        return Err(WhepError::RtpWriteError(err));
                     }
+                    trace!(?rtp_packet, ?kind, "RTP packet written to track");
                 }
             }
-            Ok(EncodedOutputEvent::VideoEOS) => info!("Received video EOS event on WHEP output"),
-            Ok(EncodedOutputEvent::AudioEOS) => info!("Received audio EOS event on WHEP output"),
-            Err(TryGetEventError::Finished) => break,
-            Err(TryGetEventError::Empty) => {}
-        }
-    }
-
-    ctx.event_emitter
-        .emit(Event::OutputDone(output_ref.id().clone()));
-    debug!("Closing WHEP sender thread.");
-}
-
-async fn send_chunk_to_peer(
-    chunk: EncodedOutputChunk,
-    track: &Arc<TrackLocalStaticRTP>,
-    payloader: &mut Payloader,
-) -> Result<(), WhepError> {
-    match payloader.payload(chunk) {
-        Ok(rtp_packets) => {
-            for rtp_packet in rtp_packets {
-                if let Err(err) = track.write_rtp(&rtp_packet.packet).await {
-                    return Err(WhepError::RtpWriteError(err));
-                }
-                trace!(?rtp_packet, "RTP packet written to track");
+            Err(err) => {
+                return Err(WhepError::PayloadingError(err));
             }
         }
-        Err(err) => {
-            return Err(WhepError::PayloadingError(err));
-        }
-    }
-    Ok(())
-}
-
-enum TryGetEventError {
-    Empty,
-    Finished,
-}
-
-fn get_output_encoded_event(
-    video_stream: &Option<MediaStream>,
-    audio_stream: &Option<MediaStream>,
-    next_video_event: &mut Option<EncodedOutputEvent>,
-    next_audio_event: &mut Option<EncodedOutputEvent>,
-) -> Result<EncodedOutputEvent, TryGetEventError> {
-    // Handle EOS for video
-    if let Some(EncodedOutputEvent::VideoEOS) = next_video_event {
-        return next_video_event.take().ok_or(TryGetEventError::Empty);
-    }
-
-    // Handle EOS for audio
-    if let Some(EncodedOutputEvent::AudioEOS) = next_audio_event {
-        return next_audio_event.take().ok_or(TryGetEventError::Empty);
-    }
-
-    let video_data = match next_video_event {
-        Some(EncodedOutputEvent::Data(chunk)) => Some(chunk),
-        _ => None,
-    };
-    let audio_data = match next_audio_event {
-        Some(EncodedOutputEvent::Data(chunk)) => Some(chunk),
-        _ => None,
-    };
-
-    match (&video_data, &audio_data) {
-        // try to wait for both audio and video events to be ready
-        (Some(video_chunk), Some(audio_chunk)) => {
-            if audio_chunk.pts > video_chunk.pts {
-                next_video_event.take().ok_or(TryGetEventError::Empty)
-            } else {
-                next_audio_event.take().ok_or(TryGetEventError::Empty)
-            }
-        }
-        // read audio if there is no way to get video event
-        (None, Some(_)) if video_stream.is_none() => {
-            next_audio_event.take().ok_or(TryGetEventError::Empty)
-        }
-        // read video if there is no way to get audio event
-        (Some(_), None) if audio_stream.is_none() => {
-            next_video_event.take().ok_or(TryGetEventError::Empty)
-        }
-        (None, None) => Err(TryGetEventError::Finished),
-        // we can't do anything here, but there are still receivers
-        // that can return something in the next loop.
-        //
-        // I don't think this can ever happen
-        (_, _) => Err(TryGetEventError::Empty),
+        Ok(())
     }
 }

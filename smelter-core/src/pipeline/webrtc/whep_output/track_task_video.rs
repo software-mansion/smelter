@@ -8,7 +8,7 @@ use tracing::warn;
 use crate::{
     pipeline::{
         encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
-        webrtc::whep_output::WhepOutputStatsSender,
+        webrtc::whep_output::output::WhepOutputStatsSender,
     },
     utils::{InitializableThread, ThreadMetadata},
 };
