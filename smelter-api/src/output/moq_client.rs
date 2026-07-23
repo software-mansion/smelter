@@ -28,7 +28,7 @@ pub enum MoqOutputContainer {
     Legacy,
     /// Fragmented MP4. Each frame is a complete `moof`+`mdat` fragment.
     Cmaf,
-    /// Low Overhead Container.
+    /// Low Overhead Container. (draft-ietf-moq-loc)
     Loc,
 }
 
