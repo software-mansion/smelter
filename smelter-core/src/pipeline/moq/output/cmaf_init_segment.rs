@@ -10,6 +10,7 @@
 
 use bytes::Bytes;
 use mp4_atom::{Atom, Encode};
+use tracing::debug;
 
 use crate::prelude::*;
 
@@ -128,10 +129,14 @@ pub(super) fn opus_cmaf_init_segment(
             if extradata.len() >= 19 && &extradata[..8] == b"OpusHead" {
                 u16::from_le_bytes([extradata[10], extradata[11]])
             } else {
+                debug!("Failed to parse Opus extradata, falling back to a pre-skip of 0 samples.");
                 0
             }
         }
-        None => 0,
+        None => {
+            debug!("No Opus extradata provided, falling back to a pre-skip of 0 samples.");
+            0
+        }
     };
 
     let sample_entry = mp4_atom::Codec::from(mp4_atom::Opus {
