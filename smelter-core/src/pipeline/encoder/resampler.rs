@@ -12,7 +12,9 @@ use crate::{
 pub(crate) struct ResampledForEncoderStream<
     Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>,
 > {
-    resampler: OutputResampler,
+    /// `None` when input and output sample rates are equal: batches pass
+    /// through untouched (bit-exact samples and PTS, no tail loss at EOS).
+    resampler: Option<OutputResampler>,
     source: Source,
     eos_sent: bool,
 }
@@ -24,7 +26,14 @@ impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> ResampledForEnc
         output_sample_rate: u32,
         channels: AudioChannels,
     ) -> Result<Self, rubato::ResamplerConstructionError> {
-        let resampler = OutputResampler::new(input_sample_rate, output_sample_rate, channels)?;
+        let resampler = match input_sample_rate == output_sample_rate {
+            true => None,
+            false => Some(OutputResampler::new(
+                input_sample_rate,
+                output_sample_rate,
+                channels,
+            )?),
+        };
         Ok(Self {
             resampler,
             source,
@@ -40,10 +49,13 @@ impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> Iterator
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(samples)) => {
-                let resampled = self.resampler.resample(samples);
-                Some(resampled.into_iter().map(PipelineEvent::Data).collect())
-            }
+            Some(PipelineEvent::Data(samples)) => match &mut self.resampler {
+                Some(resampler) => {
+                    let resampled = resampler.resample(samples);
+                    Some(resampled.into_iter().map(PipelineEvent::Data).collect())
+                }
+                None => Some(vec![PipelineEvent::Data(samples)]),
+            },
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,
                 false => {
