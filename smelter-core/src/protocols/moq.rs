@@ -36,13 +36,12 @@ pub struct MoqClientOutputOptions {
 }
 
 /// Wire format used to carry encoded frames inside MoQ objects.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoqOutputContainer {
     /// Microsecond timestamp varint prefix followed by the raw codec payload.
     Legacy,
     /// Fragmented MP4. Each frame is a complete moof+mdat; the init segment is
     /// published in the catalog.
-    #[default]
     Cmaf,
     /// Low Overhead Container.
     Loc,

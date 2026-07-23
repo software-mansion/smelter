@@ -24,7 +24,7 @@ use crate::{
                 audio_encoder_thread::{
                     AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
                 },
-                track::{audio_catalog_entry, video_catalog_entry},
+                catalog::{audio_catalog_entry, video_catalog_entry},
                 video_encoder_thread::{
                     VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
                 },
