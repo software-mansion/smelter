@@ -8,7 +8,9 @@ use moq_mux::catalog::hang::Container as WireContainer;
 use smelter_render::{Framerate, OutputFrameFormat};
 
 use crate::{
-    pipeline::moq::output::init_segment::{self, aac_cmaf_init, h264_cmaf_init, opus_cmaf_init},
+    pipeline::moq::output::init_segment::{
+        self, aac_cmaf_init, h264_cmaf_init, opus_cmaf_init, vp8_cmaf_init, vp9_cmaf_init,
+    },
     prelude::*,
 };
 
@@ -16,21 +18,6 @@ use crate::{
 /// values from. Constrained baseline 3.0 is the safest thing to advertise.
 /// With this setting stream should never be falsely rejected, however may fail to decode.
 const DEFAULT_H264_PROFILE: (u8, u8, u8) = (0x42, 0xe0, 0x1e);
-
-pub(super) fn validate(
-    video: &Option<VideoEncoderOptions>,
-    container: MoqOutputContainer,
-) -> Result<(), MoqClientError> {
-    if container != MoqOutputContainer::Cmaf {
-        return Ok(());
-    }
-    let codec = match video {
-        Some(VideoEncoderOptions::FfmpegVp8(_)) => VideoCodec::Vp8,
-        Some(VideoEncoderOptions::FfmpegVp9(_)) => VideoCodec::Vp9,
-        _ => return Ok(()),
-    };
-    Err(MoqClientError::UnsupportedCodecContainer { codec, container })
-}
 
 pub(super) fn build_video_track(
     options: &VideoEncoderOptions,
@@ -40,47 +27,42 @@ pub(super) fn build_video_track(
     extradata: Option<Bytes>,
     container: MoqOutputContainer,
 ) -> Result<(hang_catalog::VideoConfig, WireContainer), MoqClientError> {
-    let is_h264 = matches!(
-        options,
-        VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_)
-    );
     let extradata = extradata.filter(|data| !data.is_empty());
 
     // H264 is the only codec whose catalog entry depends on the container: CMAF
     // needs the out-of-band avcC record, Legacy/LOC keep parameter sets inline.
-    let (codec, description) = match (is_h264, container) {
-        (true, MoqOutputContainer::Cmaf) => {
-            let avcc = extradata
-                .clone()
-                .ok_or(MoqClientError::MissingH264EncoderConfig)?;
-            let (profile, constraints, level) = avcc_profile(&avcc)?;
-            let codec = hang_catalog::H264 {
-                inline: false,
-                profile,
-                constraints,
-                level,
-            };
-            (codec.into(), Some(avcc))
-        }
-        (true, _) => {
-            let (profile, constraints, level) = DEFAULT_H264_PROFILE;
-            let codec = hang_catalog::H264 {
-                inline: true,
-                profile,
-                constraints,
-                level,
-            };
-            (codec.into(), None)
-        }
-        (false, _) => match options {
-            VideoEncoderOptions::FfmpegVp8(_) => (hang_catalog::VideoCodec::VP8, None),
-            VideoEncoderOptions::FfmpegVp9(_) => {
-                (vp9_codec(output_format, resolution, framerate).into(), None)
+    let (codec, description) = match options {
+        VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+            match container {
+                MoqOutputContainer::Cmaf => {
+                    let avcc = extradata
+                        .clone()
+                        .ok_or(MoqClientError::MissingH264EncoderConfig)?;
+                    let (profile, constraints, level) = avcc_profile(&avcc)?;
+                    let codec = hang_catalog::H264 {
+                        inline: false,
+                        profile,
+                        constraints,
+                        level,
+                    };
+                    (codec.into(), Some(avcc))
+                }
+                _ => {
+                    let (profile, constraints, level) = DEFAULT_H264_PROFILE;
+                    let codec = hang_catalog::H264 {
+                        inline: true,
+                        profile,
+                        constraints,
+                        level,
+                    };
+                    (codec.into(), None)
+                }
             }
-            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
-                unreachable!("handled by the h264 arms above")
-            }
-        },
+        }
+        VideoEncoderOptions::FfmpegVp8(_) => (hang_catalog::VideoCodec::VP8, None),
+        VideoEncoderOptions::FfmpegVp9(_) => {
+            (vp9_codec(output_format, resolution, framerate).into(), None)
+        }
     };
 
     let mut config = hang_catalog::VideoConfig::new(codec);
@@ -91,13 +73,18 @@ pub(super) fn build_video_track(
         MoqOutputContainer::Legacy => hang_catalog::Container::Legacy,
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
-            let init = h264_cmaf_init(
-                config
-                    .description
-                    .as_deref()
-                    .ok_or(MoqClientError::MissingH264EncoderConfig)?,
-                resolution,
-            )?;
+            let init = match &config.codec {
+                hang_catalog::VideoCodec::H264(_) => h264_cmaf_init(
+                    config
+                        .description
+                        .as_deref()
+                        .ok_or(MoqClientError::MissingH264EncoderConfig)?,
+                    resolution,
+                )?,
+                hang_catalog::VideoCodec::VP8 => vp8_cmaf_init(resolution)?,
+                hang_catalog::VideoCodec::VP9(vp9) => vp9_cmaf_init(vp9, resolution)?,
+                _ => unreachable!("codec is built from the encoder options above"),
+            };
             cmaf_container(init, init_segment::VIDEO_TIMESCALE)
         }
     };

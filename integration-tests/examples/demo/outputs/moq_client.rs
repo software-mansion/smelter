@@ -188,21 +188,13 @@ impl MoqClientOutputBuilder {
                     video.scene = scene;
                 }
 
-                // `cmaf` only supports H264 encoders, `legacy` and `loc` additionally support VP8/VP9.
-                let encoder_options = match self.container {
-                    MoqContainer::Cmaf => vec![
-                        VideoEncoder::FfmpegH264,
-                        VideoEncoder::FfmpegH264LowLatency,
-                        VideoEncoder::VulkanH264,
-                    ],
-                    MoqContainer::Legacy | MoqContainer::Loc => vec![
-                        VideoEncoder::FfmpegH264,
-                        VideoEncoder::FfmpegH264LowLatency,
-                        VideoEncoder::VulkanH264,
-                        VideoEncoder::FfmpegVp8,
-                        VideoEncoder::FfmpegVp9,
-                    ],
-                };
+                let encoder_options = vec![
+                    VideoEncoder::FfmpegH264,
+                    VideoEncoder::FfmpegH264LowLatency,
+                    VideoEncoder::VulkanH264,
+                    VideoEncoder::FfmpegVp8,
+                    VideoEncoder::FfmpegVp9,
+                ];
 
                 let encoder_choice =
                     Select::new("Select encoder (ESC for ffmpeg_h264)", encoder_options)

@@ -1,8 +1,8 @@
 //! CMAF init segment (ftyp+moov) construction.
 //!
 //! moq-mux keeps its own builders private, so we assemble the equivalent atoms
-//! here. Only the codecs we allow with the CMAF container are covered: H264 on
-//! the video side and Opus or AAC on the audio side.
+//! here. Only the codecs we allow with the CMAF container are covered:
+//! H264/VP8/VP9 on the video side and Opus or AAC on the audio side.
 //!
 //! `fmp4::Wire` only reads `mdhd.timescale`, `tkhd.track_id` and `stsd` back out
 //! of the trak, but the segment is also handed to players verbatim, so it has to
@@ -28,32 +28,85 @@ pub(super) fn h264_cmaf_init(
     let avcc = mp4_atom::Avcc::decode_body(&mut cursor)
         .map_err(|err| MoqClientError::InitSegmentError(format!("invalid avcC record: {err}")))?;
 
-    let width = resolution.width as u16;
-    let height = resolution.height as u16;
     let sample_entry = mp4_atom::Codec::from(mp4_atom::Avc1 {
-        visual: mp4_atom::Visual {
-            data_reference_index: 1,
-            width,
-            height,
-            ..Default::default()
-        },
+        visual: visual(resolution),
         avcc,
         ..Default::default()
     });
 
+    video_cmaf_init(sample_entry, resolution)
+}
+
+/// VP8 carries no out-of-band configuration, but the VP Codec ISO-BMFF binding
+/// still requires a `vpcC` box. VP8 is always 8-bit 4:2:0, so we emit the same
+/// standard placeholder values as moq-mux's vp08 synthesis.
+pub(super) fn vp8_cmaf_init(resolution: Resolution) -> Result<Bytes, MoqClientError> {
+    let sample_entry = mp4_atom::Codec::from(mp4_atom::Vp08 {
+        visual: visual(resolution),
+        vpcc: mp4_atom::VpcC {
+            profile: 0,
+            level: 0,
+            bit_depth: 8,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    video_cmaf_init(sample_entry, resolution)
+}
+
+/// Synthesizes the `vpcC` box field-for-field from the same VP9 parameters used
+/// to build the catalog `vp09.*` codec string, so the init segment and the codec
+/// string can never diverge.
+pub(super) fn vp9_cmaf_init(
+    vp9: &hang::catalog::VP9,
+    resolution: Resolution,
+) -> Result<Bytes, MoqClientError> {
+    let sample_entry = mp4_atom::Codec::from(mp4_atom::Vp09 {
+        visual: visual(resolution),
+        vpcc: mp4_atom::VpcC {
+            profile: vp9.profile,
+            level: vp9.level,
+            bit_depth: vp9.bit_depth,
+            chroma_subsampling: vp9.chroma_subsampling,
+            video_full_range_flag: vp9.full_range,
+            color_primaries: vp9.color_primaries,
+            transfer_characteristics: vp9.transfer_characteristics,
+            matrix_coefficients: vp9.matrix_coefficients,
+            codec_initialization_data: Vec::new(),
+        },
+        ..Default::default()
+    });
+
+    video_cmaf_init(sample_entry, resolution)
+}
+
+fn visual(resolution: Resolution) -> mp4_atom::Visual {
+    mp4_atom::Visual {
+        data_reference_index: 1,
+        width: resolution.width as u16,
+        height: resolution.height as u16,
+        ..Default::default()
+    }
+}
+
+fn video_cmaf_init(
+    sample_entry: mp4_atom::Codec,
+    resolution: Resolution,
+) -> Result<Bytes, MoqClientError> {
     let trak = mp4_atom::Trak {
         tkhd: mp4_atom::Tkhd {
             track_id: TRACK_ID,
             enabled: true,
-            width: mp4_atom::FixedPoint::from(width),
-            height: mp4_atom::FixedPoint::from(height),
+            width: mp4_atom::FixedPoint::from(resolution.width as u16),
+            height: mp4_atom::FixedPoint::from(resolution.height as u16),
             ..Default::default()
         },
         mdia: mdia(VIDEO_TIMESCALE, b"vide", sample_entry),
         ..Default::default()
     };
 
-    encode_init(trak)
+    cmaf_init(trak)
 }
 
 pub(super) fn opus_cmaf_init(
@@ -100,7 +153,7 @@ pub(super) fn opus_cmaf_init(
         ..Default::default()
     };
 
-    encode_init(trak)
+    cmaf_init(trak)
 }
 
 pub(super) fn aac_cmaf_init(asc: &[u8]) -> Result<Bytes, MoqClientError> {
@@ -153,46 +206,12 @@ pub(super) fn aac_cmaf_init(asc: &[u8]) -> Result<Bytes, MoqClientError> {
         ..Default::default()
     };
 
-    encode_init(trak)
+    cmaf_init(trak)
 }
 
-fn mdia(timescale: u32, handler: &[u8; 4], sample_entry: mp4_atom::Codec) -> mp4_atom::Mdia {
-    let is_video = handler == b"vide";
-    mp4_atom::Mdia {
-        mdhd: mp4_atom::Mdhd {
-            timescale,
-            language: "und".to_string(),
-            ..Default::default()
-        },
-        hdlr: mp4_atom::Hdlr {
-            handler: mp4_atom::FourCC::new(handler),
-            name: String::new(),
-        },
-        minf: mp4_atom::Minf {
-            vmhd: is_video.then(mp4_atom::Vmhd::default),
-            smhd: (!is_video).then(mp4_atom::Smhd::default),
-            dinf: mp4_atom::Dinf {
-                dref: mp4_atom::Dref {
-                    urls: vec![mp4_atom::Url::default()],
-                },
-            },
-            stbl: mp4_atom::Stbl {
-                stsd: mp4_atom::Stsd {
-                    codecs: vec![sample_entry],
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    }
-}
-
-fn encode_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
-    // CMAF §7.3.2: a CMAF header must declare the `cmfc` structural brand;
-    // `iso6` covers the fragmented-file features (styp, default-base-is-moof)
-    // the segments rely on. `cmf2` is deliberately absent — its extra
-    // constraints (v1 trun, no video edit lists) depend on how moq-mux writes
-    // the media segments, which is not verified here.
+fn cmaf_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
+    // CMAF §7.3.2 requires the `cmfc` structural brand in a CMAF header,
+    // while `iso6` declares the fragmented-file features used by the segments.
     let ftyp = mp4_atom::Ftyp {
         major_brand: b"iso6".into(),
         minor_version: 0,
@@ -224,4 +243,35 @@ fn encode_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
         .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
 
     Ok(Bytes::from(buf))
+}
+
+fn mdia(timescale: u32, handler: &[u8; 4], sample_entry: mp4_atom::Codec) -> mp4_atom::Mdia {
+    let is_video = handler == b"vide";
+    mp4_atom::Mdia {
+        mdhd: mp4_atom::Mdhd {
+            timescale,
+            language: "und".to_string(),
+            ..Default::default()
+        },
+        hdlr: mp4_atom::Hdlr {
+            handler: mp4_atom::FourCC::new(handler),
+            name: String::new(),
+        },
+        minf: mp4_atom::Minf {
+            vmhd: is_video.then(mp4_atom::Vmhd::default),
+            smhd: (!is_video).then(mp4_atom::Smhd::default),
+            dinf: mp4_atom::Dinf {
+                dref: mp4_atom::Dref {
+                    urls: vec![mp4_atom::Url::default()],
+                },
+            },
+            stbl: mp4_atom::Stbl {
+                stsd: mp4_atom::Stsd {
+                    codecs: vec![sample_entry],
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    }
 }

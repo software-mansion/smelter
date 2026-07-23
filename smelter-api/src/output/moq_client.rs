@@ -14,8 +14,6 @@ pub struct MoqClientOutput {
     /// Path the broadcast will be published under on the relay.
     pub broadcast_path: Arc<str>,
     /// (**default=`"cmaf"`**) Container used to frame encoded media.
-    /// `cmaf` only supports the H264 video encoders; use `legacy` or `loc` with
-    /// `ffmpeg_vp8` and `ffmpeg_vp9`.
     pub container: Option<MoqOutputContainer>,
     /// Parameters of a video track included in the broadcast.
     pub video: Option<OutputMoqClientVideoOptions>,
