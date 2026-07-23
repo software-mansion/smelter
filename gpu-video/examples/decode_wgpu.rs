@@ -3,7 +3,7 @@ fn main() {
     use std::io::Write;
 
     use gpu_video::{
-        EncodedInputChunk, OutputFrame, VideoAdapterExt, VideoDeviceExt,
+        EncodedInputChunk, OutputFrame, VideoAdapterExt, VideoDecoderError, VideoDeviceExt,
         parameters::{DecoderParameters, VideoDeviceDescriptor},
     };
 
@@ -32,13 +32,20 @@ fn main() {
         .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
 
+    let mut output_file = std::fs::File::create("output.nv12").unwrap();
+    let device_clone = device.clone();
+    let queue_clone = queue.clone();
+    let on_frame = move |frame: Result<OutputFrame<wgpu::Texture>, VideoDecoderError>| {
+        let OutputFrame { data, .. } = frame.unwrap();
+        let decoded_frame = download_wgpu_texture(&device_clone, &queue_clone, data);
+        output_file.write_all(&decoded_frame).unwrap();
+    };
+
     let mut decoder = device
         .video()
         .unwrap()
-        .create_wgpu_textures_decoder_h264(DecoderParameters::default())
+        .create_wgpu_textures_decoder_h264(&queue, DecoderParameters::default(), on_frame)
         .unwrap();
-
-    let mut output_file = std::fs::File::create("output.nv12").unwrap();
 
     for chunk in h264_bytestream.chunks(256) {
         let chunk = EncodedInputChunk {
@@ -46,19 +53,10 @@ fn main() {
             pts: None,
         };
 
-        let frames = decoder.decode(chunk).unwrap();
-
-        for OutputFrame { data, .. } in frames {
-            let decoded_frame = download_wgpu_texture(&device, &queue, data);
-            output_file.write_all(&decoded_frame).unwrap();
-        }
+        decoder.decode(chunk).unwrap();
     }
 
-    let remaining_frames = decoder.flush().unwrap();
-    for OutputFrame { data, .. } in remaining_frames {
-        let decoded_frame = download_wgpu_texture(&device, &queue, data);
-        output_file.write_all(&decoded_frame).unwrap();
-    }
+    decoder.flush().unwrap();
 }
 
 #[cfg(not(vulkan))]

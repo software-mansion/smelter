@@ -1,8 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
+use crossbeam_channel::Receiver;
 use gpu_video::{
     H264DecoderEvent, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
-    WgpuTexturesDecoder,
+    WgpuTexturesDecoderH264,
     parameters::{DecoderParameters, DecoderUsage, MissedFrameHandling},
 };
 use smelter_render::{Frame, FrameData, Resolution};
@@ -13,8 +14,11 @@ use crate::pipeline::decoder::{
 };
 use crate::prelude::*;
 
+type DecodeResult = Result<gpu_video::OutputFrame<wgpu::Texture>, VideoDecoderError>;
+
 pub struct VulkanH264Decoder {
-    decoder: WgpuTexturesDecoder,
+    decoder: WgpuTexturesDecoderH264,
+    decode_result_receiver: Receiver<DecodeResult>,
     keyframe_request_sender: Option<KeyframeRequestSender>,
     drop_frames: bool,
 }
@@ -36,12 +40,27 @@ impl VideoDecoder for VulkanH264Decoder {
             .device
             .video()
             .map_err(|_| DecoderInitError::VulkanContextRequiredForVulkanDecoder)?;
-        let decoder = device.create_wgpu_textures_decoder_h264(DecoderParameters {
-            missed_frame_handling: MissedFrameHandling::Strict,
-            usage_flags: DecoderUsage::Default,
-        })?;
+
+        let (decode_result_sender, decode_result_receiver) = crossbeam_channel::unbounded();
+        let on_frame = move |frame_result| {
+            if let Err(err) = decode_result_sender.send(frame_result) {
+                debug!("Failed to send decoded frame via channel: {err}")
+            }
+        };
+
+        let decoder = device.create_wgpu_textures_decoder_h264(
+            &ctx.wgpu_ctx.queue,
+            DecoderParameters {
+                missed_frame_handling: MissedFrameHandling::Strict,
+                usage_flags: DecoderUsage::Default,
+                ..Default::default()
+            },
+            on_frame,
+        )?;
+
         Ok(Self {
             decoder,
+            decode_result_receiver,
             keyframe_request_sender,
             drop_frames: false,
         })
@@ -64,26 +83,43 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             EncodedInputEvent::AuDelimiter => H264DecoderEvent::SignalFrameEnd,
         };
 
-        let frames = match self.decoder.process_event(decoder_event) {
-            Ok(frames) => frames,
-            Err(VideoDecoderError::ReferenceManagementError(
-                ReferenceManagementError::MissingFrame,
-            )) => {
-                if let Some(s) = self.keyframe_request_sender.as_ref() {
-                    s.send()
-                }
-                debug!("Vulkan H264 decoder detected a missing frame.");
-                return Vec::new();
+        let mut request_keyframe = false;
+        let mut handle_decode_err = |err| match err {
+            VideoDecoderError::ReferenceManagementError(ReferenceManagementError::MissingFrame) => {
+                request_keyframe = true;
             }
-            Err(err) => {
+            err => {
                 warn!("Failed to decode frame: {err}");
-                return Vec::new();
             }
         };
 
+        if let Err(err) = self.decoder.process_event(decoder_event) {
+            handle_decode_err(err);
+        }
+
+        let mut frames = Vec::new();
+        for result in self.decode_result_receiver.try_iter() {
+            let frame = match result {
+                Ok(frame) => frame,
+                Err(err) => {
+                    handle_decode_err(err);
+                    continue;
+                }
+            };
+
+            frames.push(from_vk_frame(frame));
+        }
+
+        if request_keyframe {
+            if let Some(s) = self.keyframe_request_sender.as_ref() {
+                s.send()
+            }
+            debug!("Vulkan H264 decoder detected a missing frame.");
+        }
+
         match self.drop_frames {
             true => Vec::new(),
-            false => frames.into_iter().map(from_vk_frame).collect(),
+            false => frames,
         }
     }
 
@@ -91,13 +127,22 @@ impl VideoDecoderInstance for VulkanH264Decoder {
         if self.drop_frames {
             return Vec::new();
         }
-        match self.decoder.flush() {
-            Ok(frames) => frames.into_iter().map(from_vk_frame).collect(),
-            Err(err) => {
-                warn!("Failed to flush the decoder: {err}");
-                Vec::new()
-            }
+
+        if let Err(err) = self.decoder.flush() {
+            warn!("Failed to flush the decoder: {err}");
+            return Vec::new();
         }
+
+        self.decode_result_receiver
+            .try_iter()
+            .filter_map(|result| match result {
+                Ok(frame) => Some(from_vk_frame(frame)),
+                Err(err) => {
+                    warn!("Failed to decode frame: {err}");
+                    None
+                }
+            })
+            .collect()
     }
 }
 

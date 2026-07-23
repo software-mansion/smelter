@@ -62,8 +62,13 @@ async fn decode_video(
         .unwrap();
     let video_device = device.video().unwrap();
 
+    let on_frame = move |decode_result| {
+        // Each frame contains a wgpu::Texture you can sample for drawing.
+    };
     let mut decoder = video_device.create_wgpu_textures_decoder_h264(
-        gpu_video::parameters::DecoderParameters::default()
+        &queue,
+        gpu_video::parameters::DecoderParameters::default(),
+        on_frame,
     ).unwrap();
         
     let mut buffer = vec![0; 4096];
@@ -77,12 +82,6 @@ async fn decode_video(
             data: &buffer[..n],
             pts: None
         }).unwrap();
-
-        for frame in decoded_frames {
-            // Each frame contains a wgpu::Texture you can sample for drawing.
-            // device.wgpu_device() will give you a wgpu::Device and device.wgpu_queue()
-            // a wgpu::Queue. You can use these for interacting with the frames.
-        }
     }
 }
 ```

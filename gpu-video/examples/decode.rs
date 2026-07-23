@@ -3,7 +3,7 @@ fn main() {
     use std::io::Write;
 
     use gpu_video::{
-        EncodedInputChunk, OutputFrame, VideoInstance,
+        EncodedInputChunk, OutputFrame, RawFrameData, VideoDecoderError, VideoInstance,
         parameters::{
             DecoderParameters, VideoAdapterDescriptor, VideoDeviceDescriptor,
             VideoInstanceDescriptor,
@@ -36,11 +36,15 @@ fn main() {
         .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
-    let mut decoder = video_device
-        .create_bytes_decoder_h264(DecoderParameters::default())
-        .unwrap();
-
     let mut output_file = std::fs::File::create("output.nv12").unwrap();
+    let on_frame = move |frame: Result<OutputFrame<RawFrameData>, VideoDecoderError>| {
+        let OutputFrame { data, .. } = frame.unwrap();
+        output_file.write_all(&data.frame).unwrap();
+    };
+
+    let mut decoder = video_device
+        .create_bytes_decoder_h264(DecoderParameters::default(), on_frame)
+        .unwrap();
 
     for chunk in h264_bytestream.chunks(256) {
         let data = EncodedInputChunk {
@@ -48,17 +52,10 @@ fn main() {
             pts: None,
         };
 
-        let frames = decoder.decode(data).unwrap();
-
-        for OutputFrame { data, .. } in frames {
-            output_file.write_all(&data.frame).unwrap();
-        }
+        decoder.decode(data).unwrap();
     }
 
-    let remaining_frames = decoder.flush().unwrap();
-    for OutputFrame { data, .. } in remaining_frames {
-        output_file.write_all(&data.frame).unwrap();
-    }
+    decoder.flush().unwrap();
 }
 
 #[cfg(not(vulkan))]

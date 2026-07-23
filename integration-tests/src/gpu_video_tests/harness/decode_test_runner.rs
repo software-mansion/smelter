@@ -3,27 +3,29 @@ use std::{collections::VecDeque, fs::File, io::Read};
 use gpu_video::{VideoDeviceExt, parameters::DecoderParameters};
 
 use crate::{
-    gpu_video_tests::{Nv12Frame, TestCase, harness::decoders::FfmpegDecoderH264, video_device},
+    gpu_video_tests::{
+        Nv12Frame, TestCase,
+        harness::decoders::{FfmpegDecoderH264, GvBytesDecoderH264, GvWgpuTexturesDecoderH264},
+        video_device,
+    },
     paths::gpu_video_dumps_dir_path,
 };
 
 impl TestCase<DecoderOptions> {
     pub fn run(&self) {
-        let (device, _) = video_device();
+        let (device, queue) = video_device();
         let video_device = device.video().unwrap();
 
         let (reference_decoder, gv_decoders) = match self.options {
             DecoderOptions::H264(params) => (
                 BufferedDecoder::from_decoder(FfmpegDecoderH264::new()),
                 vec![
-                    BufferedDecoder::from_decoder(
-                        video_device.create_bytes_decoder_h264(params).unwrap(),
-                    ),
-                    BufferedDecoder::from_decoder(
-                        video_device
-                            .create_wgpu_textures_decoder_h264(params)
-                            .unwrap(),
-                    ),
+                    BufferedDecoder::from_decoder(GvBytesDecoderH264::new(&video_device, params)),
+                    BufferedDecoder::from_decoder(GvWgpuTexturesDecoderH264::new(
+                        &video_device,
+                        queue,
+                        params,
+                    )),
                 ],
             ),
         };
