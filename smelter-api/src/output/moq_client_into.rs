@@ -15,7 +15,7 @@ impl TryFrom<MoqClientOutput> for core::RegisterOutputOptions {
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(
-                "At least one of \"video\" and \"audio\" fields have to be specified.",
+                "At least one of the \"video\" and \"audio\" fields have to be specified.",
             ));
         }
 
