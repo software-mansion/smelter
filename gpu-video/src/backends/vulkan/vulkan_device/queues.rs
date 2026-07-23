@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -86,7 +86,10 @@ pub(crate) struct QueueIndices<'a> {
 
 impl QueueIndices<'_> {
     pub(crate) fn queue_create_infos(&self) -> Vec<QueueCreateInfo> {
-        [
+        // One create info per family, with the max queue_count any role wants;
+        // listing a family twice in pQueueCreateInfos is invalid.
+        let mut queues_per_family: HashMap<usize, usize> = HashMap::new();
+        for (family_idx, queue_count) in [
             self.h264_decode
                 .as_ref()
                 .map(|q| (q.family_index, q.queue_count)),
@@ -94,8 +97,7 @@ impl QueueIndices<'_> {
                 .as_ref()
                 .map(|q| (q.family_index, q.queue_count)),
             Some((self.transfer.family_index, self.transfer.queue_count)),
-            (self.compute.family_index != self.transfer.family_index)
-                .then_some((self.compute.family_index, self.compute.queue_count)),
+            Some((self.compute.family_index, self.compute.queue_count)),
             Some((
                 self.graphics_transfer_compute.family_index,
                 self.graphics_transfer_compute.queue_count,
@@ -103,10 +105,15 @@ impl QueueIndices<'_> {
         ]
         .into_iter()
         .flatten()
-        .collect::<HashSet<(usize, usize)>>()
-        .into_iter()
-        .map(|(family_idx, queue_count)| QueueCreateInfo::new(family_idx, vec![1.0; queue_count]))
-        .collect()
+        {
+            let slot = queues_per_family.entry(family_idx).or_insert(0);
+            *slot = (*slot).max(queue_count);
+        }
+
+        queues_per_family
+            .into_iter()
+            .map(|(family_idx, queue_count)| QueueCreateInfo::new(family_idx, vec![1.0; queue_count]))
+            .collect()
     }
 }
 
