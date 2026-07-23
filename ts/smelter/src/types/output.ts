@@ -2,6 +2,11 @@ import type * as Api from '../api.js';
 import type { Mp4AudioOptions, Mp4VideoOptions } from './output/mp4.js';
 import type { HlsAudioOptions, HlsVideoOptions } from './output/hls.js';
 import type { RtmpClientAudioOptions, RtmpClientVideoOptions } from './output/rtmp.js';
+import type {
+  MoqClientAudioOptions,
+  MoqClientVideoOptions,
+  MoqOutputContainer,
+} from './output/moq.js';
 import type { RtpAudioOptions, RtpVideoOptions } from './output/rtp.js';
 import type { WhipAudioOptions, WhipVideoOptions } from './output/whip.js';
 import type { WhepAudioOptions, WhepVideoOptions } from './output/whep.js';
@@ -13,6 +18,7 @@ export * from './output/whep.js';
 export * from './output/rtp.js';
 export * from './output/common.js';
 export * from './output/rtmp.js';
+export * from './output/moq.js';
 
 export type RegisterRtpOutput = {
   /**
@@ -124,4 +130,27 @@ export type RegisterRtmpClientOutput = {
    * Audio track configuration.
    */
   audio?: RtmpClientAudioOptions | null;
+};
+
+export type RegisterMoqClientOutput = {
+  /**
+   * URL of the MoQ relay to connect to. Must use the `https://` scheme.
+   */
+  endpointUrl: string;
+  /**
+   * Path the broadcast will be published under on the relay.
+   */
+  broadcastPath: string;
+  /**
+   * (**default=`"cmaf"`**) Container used to frame encoded media.
+   */
+  container?: MoqOutputContainer | null;
+  /**
+   * Video track configuration.
+   */
+  video?: MoqClientVideoOptions | null;
+  /**
+   * Audio track configuration.
+   */
+  audio?: MoqClientAudioOptions | null;
 };
