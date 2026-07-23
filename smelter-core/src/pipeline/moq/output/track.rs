@@ -27,47 +27,42 @@ pub(super) fn build_video_track(
     extradata: Option<Bytes>,
     container: MoqOutputContainer,
 ) -> Result<(hang_catalog::VideoConfig, WireContainer), MoqClientError> {
-    let is_h264 = matches!(
-        options,
-        VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_)
-    );
     let extradata = extradata.filter(|data| !data.is_empty());
 
     // H264 is the only codec whose catalog entry depends on the container: CMAF
     // needs the out-of-band avcC record, Legacy/LOC keep parameter sets inline.
-    let (codec, description) = match (is_h264, container) {
-        (true, MoqOutputContainer::Cmaf) => {
-            let avcc = extradata
-                .clone()
-                .ok_or(MoqClientError::MissingH264EncoderConfig)?;
-            let (profile, constraints, level) = avcc_profile(&avcc)?;
-            let codec = hang_catalog::H264 {
-                inline: false,
-                profile,
-                constraints,
-                level,
-            };
-            (codec.into(), Some(avcc))
-        }
-        (true, _) => {
-            let (profile, constraints, level) = DEFAULT_H264_PROFILE;
-            let codec = hang_catalog::H264 {
-                inline: true,
-                profile,
-                constraints,
-                level,
-            };
-            (codec.into(), None)
-        }
-        (false, _) => match options {
-            VideoEncoderOptions::FfmpegVp8(_) => (hang_catalog::VideoCodec::VP8, None),
-            VideoEncoderOptions::FfmpegVp9(_) => {
-                (vp9_codec(output_format, resolution, framerate).into(), None)
+    let (codec, description) = match options {
+        VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+            match container {
+                MoqOutputContainer::Cmaf => {
+                    let avcc = extradata
+                        .clone()
+                        .ok_or(MoqClientError::MissingH264EncoderConfig)?;
+                    let (profile, constraints, level) = avcc_profile(&avcc)?;
+                    let codec = hang_catalog::H264 {
+                        inline: false,
+                        profile,
+                        constraints,
+                        level,
+                    };
+                    (codec.into(), Some(avcc))
+                }
+                _ => {
+                    let (profile, constraints, level) = DEFAULT_H264_PROFILE;
+                    let codec = hang_catalog::H264 {
+                        inline: true,
+                        profile,
+                        constraints,
+                        level,
+                    };
+                    (codec.into(), None)
+                }
             }
-            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
-                unreachable!("handled by the h264 arms above")
-            }
-        },
+        }
+        VideoEncoderOptions::FfmpegVp8(_) => (hang_catalog::VideoCodec::VP8, None),
+        VideoEncoderOptions::FfmpegVp9(_) => {
+            (vp9_codec(output_format, resolution, framerate).into(), None)
+        }
     };
 
     let mut config = hang_catalog::VideoConfig::new(codec);
