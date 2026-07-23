@@ -113,6 +113,7 @@ fn visual(resolution: Resolution) -> mp4_atom::Visual {
 // ======================AUDIO=======================
 pub(super) fn opus_cmaf_init_segment(
     sample_rate: u32,
+    extradata: Option<Bytes>,
     channels: AudioChannels,
 ) -> Result<Bytes, MoqClientError> {
     if sample_rate > 48000 {
@@ -122,6 +123,16 @@ pub(super) fn opus_cmaf_init_segment(
         AudioChannels::Mono => 1,
         AudioChannels::Stereo => 2,
     };
+    let pre_skip: u16 = match extradata {
+        Some(extradata) => {
+            if extradata.len() >= 19 && &extradata[..8] == b"OpusHead" {
+                u16::from_le_bytes([extradata[10], extradata[11]])
+            } else {
+                0
+            }
+        }
+        None => 0,
+    };
 
     let sample_entry = mp4_atom::Codec::from(mp4_atom::Opus {
         audio: mp4_atom::Audio {
@@ -130,14 +141,9 @@ pub(super) fn opus_cmaf_init_segment(
             sample_size: 16,
             sample_rate: mp4_atom::FixedPoint::from(sample_rate as u16),
         },
-        // TODO: pre_skip should be the encoder lookahead in 48 kHz samples
-        // (~312 for libopus), not 0. The libopus encoder already computes it
-        // (`OPUS_GET_LOOKAHEAD`) and stores it in its OpusHead extradata
-        // (bytes 10..12, LE), but only the encoder options are plumbed through
-        // to here.
         dops: mp4_atom::Dops {
             output_channel_count: channel_count,
-            pre_skip: 0,
+            pre_skip,
             input_sample_rate: sample_rate,
             output_gain: 0,
         },
