@@ -34,7 +34,7 @@ pub(super) fn h264_cmaf_init(
         ..Default::default()
     });
 
-    video_init(sample_entry, resolution)
+    video_cmaf_init(sample_entry, resolution)
 }
 
 /// VP8 carries no out-of-band configuration, but the VP Codec ISO-BMFF binding
@@ -52,7 +52,7 @@ pub(super) fn vp8_cmaf_init(resolution: Resolution) -> Result<Bytes, MoqClientEr
         ..Default::default()
     });
 
-    video_init(sample_entry, resolution)
+    video_cmaf_init(sample_entry, resolution)
 }
 
 /// Synthesizes the `vpcC` box field-for-field from the same VP9 parameters used
@@ -78,10 +78,19 @@ pub(super) fn vp9_cmaf_init(
         ..Default::default()
     });
 
-    video_init(sample_entry, resolution)
+    video_cmaf_init(sample_entry, resolution)
 }
 
-fn video_init(
+fn visual(resolution: Resolution) -> mp4_atom::Visual {
+    mp4_atom::Visual {
+        data_reference_index: 1,
+        width: resolution.width as u16,
+        height: resolution.height as u16,
+        ..Default::default()
+    }
+}
+
+fn video_cmaf_init(
     sample_entry: mp4_atom::Codec,
     resolution: Resolution,
 ) -> Result<Bytes, MoqClientError> {
@@ -97,7 +106,7 @@ fn video_init(
         ..Default::default()
     };
 
-    encode_init(trak)
+    cmaf_init(trak)
 }
 
 pub(super) fn opus_cmaf_init(
@@ -144,7 +153,7 @@ pub(super) fn opus_cmaf_init(
         ..Default::default()
     };
 
-    encode_init(trak)
+    cmaf_init(trak)
 }
 
 pub(super) fn aac_cmaf_init(asc: &[u8]) -> Result<Bytes, MoqClientError> {
@@ -197,15 +206,12 @@ pub(super) fn aac_cmaf_init(asc: &[u8]) -> Result<Bytes, MoqClientError> {
         ..Default::default()
     };
 
-    encode_init(trak)
+    cmaf_init(trak)
 }
 
-fn encode_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
-    // CMAF §7.3.2: a CMAF header must declare the `cmfc` structural brand;
-    // `iso6` covers the fragmented-file features (styp, default-base-is-moof)
-    // the segments rely on. `cmf2` is deliberately absent — its extra
-    // constraints (v1 trun, no video edit lists) depend on how moq-mux writes
-    // the media segments, which is not verified here.
+fn cmaf_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
+    // CMAF §7.3.2 requires the `cmfc` structural brand in a CMAF header,
+    // while `iso6` declares the fragmented-file features used by the segments.
     let ftyp = mp4_atom::Ftyp {
         major_brand: b"iso6".into(),
         minor_version: 0,
@@ -267,14 +273,5 @@ fn mdia(timescale: u32, handler: &[u8; 4], sample_entry: mp4_atom::Codec) -> mp4
             },
             ..Default::default()
         },
-    }
-}
-
-fn visual(resolution: Resolution) -> mp4_atom::Visual {
-    mp4_atom::Visual {
-        data_reference_index: 1,
-        width: resolution.width as u16,
-        height: resolution.height as u16,
-        ..Default::default()
     }
 }
