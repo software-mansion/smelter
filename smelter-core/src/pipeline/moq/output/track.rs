@@ -19,7 +19,7 @@ use crate::{
 /// With this setting stream should never be falsely rejected, however may fail to decode.
 const DEFAULT_H264_PROFILE: (u8, u8, u8) = (0x42, 0xe0, 0x1e);
 
-pub(super) fn build_video_track(
+pub(super) fn video_catalog_entry(
     options: &VideoEncoderOptions,
     resolution: Resolution,
     output_format: OutputFrameFormat,
@@ -94,18 +94,18 @@ pub(super) fn build_video_track(
     Ok((config, wire))
 }
 
-pub(super) fn build_audio_track(
+pub(super) fn audio_catalog_entry(
     options: &AudioEncoderOptions,
     extradata: Option<Bytes>,
     container: MoqOutputContainer,
 ) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
     match options {
-        AudioEncoderOptions::Opus(opus) => opus_audio(opus, container),
-        AudioEncoderOptions::FdkAac(aac) => aac_audio(aac, extradata, container),
+        AudioEncoderOptions::Opus(opus) => opus_audio_catalog_entry(opus, container),
+        AudioEncoderOptions::FdkAac(aac) => aac_audio_catalog_entry(aac, extradata, container),
     }
 }
 
-fn opus_audio(
+fn opus_audio_catalog_entry(
     opus: &OpusEncoderOptions,
     container: MoqOutputContainer,
 ) -> Result<(hang_catalog::AudioConfig, WireContainer), MoqClientError> {
@@ -129,7 +129,7 @@ fn opus_audio(
     Ok((config, wire))
 }
 
-fn aac_audio(
+fn aac_audio_catalog_entry(
     aac: &FdkAacEncoderOptions,
     extradata: Option<Bytes>,
     container: MoqOutputContainer,
