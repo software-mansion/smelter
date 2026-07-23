@@ -7,7 +7,7 @@ use crate::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AacBitstreamFormat {
     /// Raw AAC access units; decoder config carried out-of-band (ASC extradata).
-    RawAu,
+    Raw,
     /// Self-describing ADTS frames.
     Adts,
 }

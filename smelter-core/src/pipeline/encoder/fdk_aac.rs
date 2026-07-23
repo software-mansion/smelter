@@ -70,7 +70,7 @@ impl AudioEncoder for FdkAacEncoder {
                 options.sample_rate,
             ))?;
             let transmux = match options.bitstream_format {
-                AacBitstreamFormat::RawAu => fdk::TRANSPORT_TYPE_TT_MP4_RAW,
+                AacBitstreamFormat::Raw => fdk::TRANSPORT_TYPE_TT_MP4_RAW,
                 AacBitstreamFormat::Adts => fdk::TRANSPORT_TYPE_TT_MP4_ADTS,
             };
             check(fdk::aacEncoder_SetParam(

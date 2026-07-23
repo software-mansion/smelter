@@ -224,7 +224,7 @@ fn rtmp_audio_only() {
                         smelter_core::codecs::FdkAacEncoderOptions {
                             channels: smelter_core::AudioChannels::Stereo,
                             sample_rate: 44100,
-                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::RawAu,
+                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::Raw,
                         },
                     )),
                 },
@@ -294,7 +294,7 @@ fn rtmp_video_and_audio() {
                         smelter_core::codecs::FdkAacEncoderOptions {
                             channels: smelter_core::AudioChannels::Stereo,
                             sample_rate: 44100,
-                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::RawAu,
+                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::Raw,
                         },
                     )),
                 },
@@ -1090,7 +1090,7 @@ fn mp4_audio_only() {
                         smelter_core::codecs::FdkAacEncoderOptions {
                             channels: smelter_core::AudioChannels::Stereo,
                             sample_rate: 48000,
-                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::RawAu,
+                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::Raw,
                         },
                     )),
                     raw_options: vec![],
@@ -1147,7 +1147,7 @@ fn mp4_video_and_audio_with_ffmpeg_options() {
                         smelter_core::codecs::FdkAacEncoderOptions {
                             channels: smelter_core::AudioChannels::Mono,
                             sample_rate: 44100,
-                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::RawAu,
+                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::Raw,
                         },
                     )),
                     raw_options: vec![(Arc::from("movflags"), Arc::from("faststart"))],
@@ -1709,7 +1709,7 @@ fn hls_audio_only() {
                         smelter_core::codecs::FdkAacEncoderOptions {
                             channels: smelter_core::AudioChannels::Stereo,
                             sample_rate: 48000,
-                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::RawAu,
+                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::Raw,
                         },
                     )),
                     raw_options: vec![],
@@ -1762,7 +1762,7 @@ fn hls_video_and_audio_with_playlist_size() {
                         smelter_core::codecs::FdkAacEncoderOptions {
                             channels: smelter_core::AudioChannels::Stereo,
                             sample_rate: 44100,
-                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::RawAu,
+                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::Raw,
                         },
                     )),
                     raw_options: vec![],
@@ -1858,7 +1858,7 @@ fn hls_video_and_audio_with_ffmpeg_options() {
                         smelter_core::codecs::FdkAacEncoderOptions {
                             channels: smelter_core::AudioChannels::Stereo,
                             sample_rate: 44100,
-                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::RawAu,
+                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::Raw,
                         },
                     )),
                     raw_options: vec![(Arc::from("hls_list_size"), Arc::from("5"))],
@@ -2023,7 +2023,7 @@ fn moq_client_aac_cmaf() {
         moq_aac_request(Some("cmaf")),
         moq_aac_expected(
             smelter_core::protocols::MoqOutputContainer::Cmaf,
-            smelter_core::codecs::AacBitstreamFormat::RawAu,
+            smelter_core::codecs::AacBitstreamFormat::Raw,
         ),
     );
 }
@@ -2057,7 +2057,7 @@ fn moq_client_aac_default_container() {
         moq_aac_request(None),
         moq_aac_expected(
             smelter_core::protocols::MoqOutputContainer::Cmaf,
-            smelter_core::codecs::AacBitstreamFormat::RawAu,
+            smelter_core::codecs::AacBitstreamFormat::Raw,
         ),
     );
 }

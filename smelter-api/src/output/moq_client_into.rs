@@ -181,7 +181,7 @@ impl MoqClientAudioEncoderOptions {
         let audio_encoder_options = match self {
             MoqClientAudioEncoderOptions::Aac { sample_rate } => {
                 let bitstream_format = match container {
-                    MoqOutputContainer::Cmaf => core::AacBitstreamFormat::RawAu,
+                    MoqOutputContainer::Cmaf => core::AacBitstreamFormat::Raw,
                     MoqOutputContainer::Legacy | MoqOutputContainer::Loc => {
                         core::AacBitstreamFormat::Adts
                     }
