@@ -1,6 +1,6 @@
 mod audio_encoder_thread;
 mod client_output;
-mod init_segment;
+mod cmaf_init_segment;
 mod track;
 mod video_encoder_thread;
 

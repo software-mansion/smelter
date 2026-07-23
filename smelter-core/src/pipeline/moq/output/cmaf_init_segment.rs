@@ -20,7 +20,7 @@ pub(super) const VIDEO_TIMESCALE: u32 = 90_000;
 /// Each MoQ track carries exactly one media track, so the id is always the same.
 pub(super) const TRACK_ID: u32 = 1;
 
-pub(super) fn h264_cmaf_init(
+pub(super) fn h264_cmaf_init_segment(
     extradata: &[u8],
     resolution: Resolution,
 ) -> Result<Bytes, MoqClientError> {
@@ -34,13 +34,13 @@ pub(super) fn h264_cmaf_init(
         ..Default::default()
     });
 
-    video_cmaf_init(sample_entry, resolution)
+    video_cmaf_init_segment(sample_entry, resolution)
 }
 
 /// VP8 carries no out-of-band configuration, but the VP Codec ISO-BMFF binding
 /// still requires a `vpcC` box. VP8 is always 8-bit 4:2:0, so we emit the same
 /// standard placeholder values as moq-mux's vp08 synthesis.
-pub(super) fn vp8_cmaf_init(resolution: Resolution) -> Result<Bytes, MoqClientError> {
+pub(super) fn vp8_cmaf_init_segment(resolution: Resolution) -> Result<Bytes, MoqClientError> {
     let sample_entry = mp4_atom::Codec::from(mp4_atom::Vp08 {
         visual: visual(resolution),
         vpcc: mp4_atom::VpcC {
@@ -52,13 +52,13 @@ pub(super) fn vp8_cmaf_init(resolution: Resolution) -> Result<Bytes, MoqClientEr
         ..Default::default()
     });
 
-    video_cmaf_init(sample_entry, resolution)
+    video_cmaf_init_segment(sample_entry, resolution)
 }
 
 /// Synthesizes the `vpcC` box field-for-field from the same VP9 parameters used
 /// to build the catalog `vp09.*` codec string, so the init segment and the codec
 /// string can never diverge.
-pub(super) fn vp9_cmaf_init(
+pub(super) fn vp9_cmaf_init_segment(
     vp9: &hang::catalog::VP9,
     resolution: Resolution,
 ) -> Result<Bytes, MoqClientError> {
@@ -78,7 +78,7 @@ pub(super) fn vp9_cmaf_init(
         ..Default::default()
     });
 
-    video_cmaf_init(sample_entry, resolution)
+    video_cmaf_init_segment(sample_entry, resolution)
 }
 
 fn visual(resolution: Resolution) -> mp4_atom::Visual {
@@ -90,7 +90,7 @@ fn visual(resolution: Resolution) -> mp4_atom::Visual {
     }
 }
 
-fn video_cmaf_init(
+fn video_cmaf_init_segment(
     sample_entry: mp4_atom::Codec,
     resolution: Resolution,
 ) -> Result<Bytes, MoqClientError> {
@@ -106,10 +106,10 @@ fn video_cmaf_init(
         ..Default::default()
     };
 
-    cmaf_init(trak)
+    cmaf_init_segment(trak)
 }
 
-pub(super) fn opus_cmaf_init(
+pub(super) fn opus_cmaf_init_segment(
     sample_rate: u32,
     channels: AudioChannels,
 ) -> Result<Bytes, MoqClientError> {
@@ -153,10 +153,10 @@ pub(super) fn opus_cmaf_init(
         ..Default::default()
     };
 
-    cmaf_init(trak)
+    cmaf_init_segment(trak)
 }
 
-pub(super) fn aac_cmaf_init(asc: &[u8]) -> Result<Bytes, MoqClientError> {
+pub(super) fn aac_cmaf_init_segment(asc: &[u8]) -> Result<Bytes, MoqClientError> {
     let config = AacAudioSpecificConfig::parse_from(asc).map_err(|err| {
         MoqClientError::InitSegmentError(format!("invalid AudioSpecificConfig: {err}"))
     })?;
@@ -206,10 +206,10 @@ pub(super) fn aac_cmaf_init(asc: &[u8]) -> Result<Bytes, MoqClientError> {
         ..Default::default()
     };
 
-    cmaf_init(trak)
+    cmaf_init_segment(trak)
 }
 
-fn cmaf_init(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
+fn cmaf_init_segment(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
     // CMAF §7.3.2 requires the `cmfc` structural brand in a CMAF header,
     // while `iso6` declares the fragmented-file features used by the segments.
     let ftyp = mp4_atom::Ftyp {

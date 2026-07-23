@@ -8,8 +8,9 @@ use moq_mux::catalog::hang::Container as WireContainer;
 use smelter_render::{Framerate, OutputFrameFormat};
 
 use crate::{
-    pipeline::moq::output::init_segment::{
-        self, aac_cmaf_init, h264_cmaf_init, opus_cmaf_init, vp8_cmaf_init, vp9_cmaf_init,
+    pipeline::moq::output::cmaf_init_segment::{
+        self, aac_cmaf_init_segment, h264_cmaf_init_segment, opus_cmaf_init_segment,
+        vp8_cmaf_init_segment, vp9_cmaf_init_segment,
     },
     prelude::*,
 };
@@ -74,18 +75,18 @@ pub(super) fn video_catalog_entry(
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
             let init = match &config.codec {
-                hang_catalog::VideoCodec::H264(_) => h264_cmaf_init(
+                hang_catalog::VideoCodec::H264(_) => h264_cmaf_init_segment(
                     config
                         .description
                         .as_deref()
                         .ok_or(MoqClientError::MissingH264EncoderConfig)?,
                     resolution,
                 )?,
-                hang_catalog::VideoCodec::VP8 => vp8_cmaf_init(resolution)?,
-                hang_catalog::VideoCodec::VP9(vp9) => vp9_cmaf_init(vp9, resolution)?,
+                hang_catalog::VideoCodec::VP8 => vp8_cmaf_init_segment(resolution)?,
+                hang_catalog::VideoCodec::VP9(vp9) => vp9_cmaf_init_segment(vp9, resolution)?,
                 _ => unreachable!("codec is built from the encoder options above"),
             };
-            cmaf_container(init, init_segment::VIDEO_TIMESCALE)
+            cmaf_container(init, cmaf_init_segment::VIDEO_TIMESCALE)
         }
     };
 
@@ -119,7 +120,7 @@ fn opus_audio_catalog_entry(
         MoqOutputContainer::Legacy => hang_catalog::Container::Legacy,
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
-            let init = opus_cmaf_init(opus.sample_rate, opus.channels)?;
+            let init = opus_cmaf_init_segment(opus.sample_rate, opus.channels)?;
             cmaf_container(init, opus.sample_rate)
         }
     };
@@ -164,7 +165,7 @@ fn aac_audio_catalog_entry(
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
             let asc = description.ok_or(MoqClientError::MissingAacEncoderConfig)?;
-            cmaf_container(aac_cmaf_init(&asc)?, aac.sample_rate)
+            cmaf_container(aac_cmaf_init_segment(&asc)?, aac.sample_rate)
         }
     };
 
@@ -187,7 +188,7 @@ fn cmaf_container(init: Bytes, timescale: u32) -> hang_catalog::Container {
     hang_catalog::Container::Cmaf {
         init,
         timescale: Some(timescale),
-        track_id: Some(init_segment::TRACK_ID),
+        track_id: Some(cmaf_init_segment::TRACK_ID),
     }
 }
 
