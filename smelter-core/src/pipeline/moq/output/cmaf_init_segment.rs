@@ -20,6 +20,7 @@ pub(super) const VIDEO_TIMESCALE: u32 = 90_000;
 /// Each MoQ track carries exactly one media track, so the id is always the same.
 pub(super) const TRACK_ID: u32 = 1;
 
+// ======================VIDEO=======================
 pub(super) fn h264_cmaf_init_segment(
     extradata: &[u8],
     resolution: Resolution,
@@ -81,15 +82,6 @@ pub(super) fn vp9_cmaf_init_segment(
     video_cmaf_init_segment(sample_entry, resolution)
 }
 
-fn visual(resolution: Resolution) -> mp4_atom::Visual {
-    mp4_atom::Visual {
-        data_reference_index: 1,
-        width: resolution.width as u16,
-        height: resolution.height as u16,
-        ..Default::default()
-    }
-}
-
 fn video_cmaf_init_segment(
     sample_entry: mp4_atom::Codec,
     resolution: Resolution,
@@ -109,6 +101,16 @@ fn video_cmaf_init_segment(
     cmaf_init_segment(trak)
 }
 
+fn visual(resolution: Resolution) -> mp4_atom::Visual {
+    mp4_atom::Visual {
+        data_reference_index: 1,
+        width: resolution.width as u16,
+        height: resolution.height as u16,
+        ..Default::default()
+    }
+}
+
+// ======================AUDIO=======================
 pub(super) fn opus_cmaf_init_segment(
     sample_rate: u32,
     channels: AudioChannels,
@@ -209,6 +211,7 @@ pub(super) fn aac_cmaf_init_segment(asc: &[u8]) -> Result<Bytes, MoqClientError>
     cmaf_init_segment(trak)
 }
 
+// ======================CONTAINER GENERIC=======================
 fn cmaf_init_segment(trak: mp4_atom::Trak) -> Result<Bytes, MoqClientError> {
     // CMAF §7.3.2 requires the `cmfc` structural brand in a CMAF header,
     // while `iso6` declares the fragmented-file features used by the segments.
