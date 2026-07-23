@@ -131,8 +131,7 @@ impl MoqClientOutput {
             origin,
         )?;
 
-        let tokio_rt = ctx.tokio_rt.clone();
-        tokio_rt.spawn(
+        ctx.tokio_rt.clone().spawn(
             async move {
                 run_moq_output_task(&ctx, &output_ref, state, video_receiver, audio_receiver).await;
 
