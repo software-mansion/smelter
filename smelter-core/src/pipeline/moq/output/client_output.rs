@@ -383,7 +383,7 @@ async fn run_moq_output_task(
         );
 
         let offset = *timestamp_offset.get_or_insert(chunk.pts);
-        if let Err(err) = write(&mut state, chunk, offset) {
+        if let Err(err) = send_chunk(&mut state, chunk, offset) {
             warn!(
                 "MoQ broadcast failed: {}",
                 ErrorStack::new(&err).into_string()
@@ -511,7 +511,7 @@ impl InterleavedPacketResolver {
     }
 }
 
-fn write(
+fn send_chunk(
     state: &mut BroadcastState,
     chunk: EncodedOutputChunk,
     timestamp_offset: std::time::Duration,
