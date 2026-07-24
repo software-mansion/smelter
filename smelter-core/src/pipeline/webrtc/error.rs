@@ -58,3 +58,15 @@ pub enum WhepError {
     #[error("Error writing RTP packet: {0}")]
     RtpWriteError(#[from] webrtc::Error),
 }
+
+#[derive(Debug, thiserror::Error)]
+pub enum WhipError {
+    #[error("Unexpected video packet.")]
+    UnexpectedVideoPacket,
+
+    #[error("Unexpected audio packet.")]
+    UnexpectedAudioPacket,
+
+    #[error("Error writing RTP packet: {0}")]
+    RtpWriteError(#[from] webrtc::Error),
+}
