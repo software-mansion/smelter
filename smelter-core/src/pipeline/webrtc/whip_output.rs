@@ -238,7 +238,10 @@ impl WhipClientTask {
 
             match packet_sender.send_packet_to_peer(&packet, kind).await {
                 Ok(_) => trace!(?packet, ?kind, "RTP packet sent."),
-                Err(error @ WhipError::RtpWriteError(_)) => warn!(%error),
+                Err(error @ WhipError::RtpWriteError(_)) => {
+                    warn!(%error);
+                    break;
+                }
                 Err(error @ WhipError::UnexpectedVideoPacket) => error!(%error),
                 Err(error @ WhipError::UnexpectedAudioPacket) => error!(%error),
             }
