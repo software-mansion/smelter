@@ -17,7 +17,7 @@ use establish_peer_connection::exchange_sdp_offers;
 use peer_connection::PeerConnection;
 use replace_track_with_negotiated_codec::replace_tracks_with_negotiated_codec;
 use setup_track::{setup_audio_track, setup_video_track};
-use smelter_render::OutputId;
+use smelter_render::{OutputId, error::ErrorStack};
 use track_task_audio::WhipAudioTrackThreadHandle;
 use track_task_video::WhipVideoTrackThreadHandle;
 
@@ -238,12 +238,10 @@ impl WhipClientTask {
 
             match packet_sender.send_packet_to_peer(&packet, kind).await {
                 Ok(_) => trace!(?packet, ?kind, "RTP packet sent."),
-                Err(error @ WhipError::RtpWriteError(_)) => {
-                    warn!(%error);
+                Err(err) => {
+                    warn!("{}", ErrorStack::new(&err).into_string());
                     break;
                 }
-                Err(error @ WhipError::UnexpectedVideoPacket) => error!(%error),
-                Err(error @ WhipError::UnexpectedAudioPacket) => error!(%error),
             }
         }
 
@@ -370,13 +368,15 @@ impl InterleavedPacketSender {
         match kind {
             PacketKind::Video => {
                 let Some(video_track) = &self.video_track else {
-                    return Err(WhipError::UnexpectedVideoPacket);
+                    error!("Received unexpected video packet.");
+                    return Ok(());
                 };
                 video_track.track.write_rtp(&packet.packet).await?;
             }
             PacketKind::Audio => {
                 let Some(audio_track) = &self.audio_track else {
-                    return Err(WhipError::UnexpectedAudioPacket);
+                    error!("Received unexpected audio packet.");
+                    return Ok(());
                 };
                 audio_track.track.write_rtp(&packet.packet).await?;
             }
