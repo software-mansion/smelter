@@ -5,6 +5,7 @@ import type {
   RegisterHlsOutput,
   RegisterRtmpServerInput,
   RegisterRtmpClientOutput,
+  RegisterMoqClientOutput,
   RegisterRtpInput,
   RegisterRtpOutput,
   RegisterWhepClientInput,
@@ -22,7 +23,8 @@ export type RegisterOutput =
   | ({ type: 'hls' } & RegisterHlsOutput)
   | ({ type: 'whep_server' } & RegisterWhepServerOutput)
   | ({ type: 'whip_client' } & RegisterWhipClientOutput)
-  | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput);
+  | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput)
+  | ({ type: 'moq_client' } & RegisterMoqClientOutput);
 
 export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)

@@ -5,6 +5,7 @@ import type {
   RegisterHlsOutput,
   RegisterRtmpServerInput,
   RegisterRtmpClientOutput,
+  RegisterMoqClientOutput,
   RegisterRtpInput,
   RegisterRtpOutput,
   RegisterWhipServerInput,
@@ -22,7 +23,8 @@ export type RegisterOutput =
   | ({ type: 'hls' } & RegisterHlsOutput)
   | ({ type: 'whip_client' } & RegisterWhipClientOutput)
   | ({ type: 'whep_server' } & RegisterWhepServerOutput)
-  | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput);
+  | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput)
+  | ({ type: 'moq_client' } & RegisterMoqClientOutput);
 
 export type RegisterWhepServerOutputResponse = {
   endpointRoute: string;

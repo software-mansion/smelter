@@ -6,6 +6,7 @@ import type {
   RegisterWhipClientOutput,
   RegisterWhepServerOutput,
   RegisterRtmpClientOutput,
+  RegisterMoqClientOutput,
   _smelterInternals,
 } from '@swmansion/smelter';
 import { inputRefIntoRawId } from './input';
@@ -15,6 +16,7 @@ import { intoRegisterRtpOutput } from './output/rtp';
 import { intoRegisterMp4Output } from './output/mp4';
 import { intoRegisterHlsOutput } from './output/hls';
 import { intoRegisterRtmpClientOutput } from './output/rtmp';
+import { intoRegisterMoqClientOutput } from './output/moq';
 
 /**
  * It represents HTTP request that can be sent to
@@ -71,6 +73,7 @@ export type RegisterOutput =
   | ({ type: 'whip_client' } & RegisterWhipClientOutput)
   | ({ type: 'whep_server' } & RegisterWhepServerOutput)
   | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput)
+  | ({ type: 'moq_client' } & RegisterMoqClientOutput)
   | RegisterWasmSpecificOutput;
 
 export function intoRegisterOutput(
@@ -92,6 +95,8 @@ export function intoRegisterOutput(
     return intoRegisterWhepServerOutput(output, initial);
   } else if (output.type === 'rtmp_client') {
     return intoRegisterRtmpClientOutput(output, initial);
+  } else if (output.type === 'moq_client') {
+    return intoRegisterMoqClientOutput(output, initial);
   } else if (['web-wasm-canvas', 'web-wasm-whip', 'web-wasm-stream'].includes(output.type)) {
     // just pass wasm types as they are, they will not be serialized
     return { ...output, initial };
