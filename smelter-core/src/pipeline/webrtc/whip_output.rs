@@ -8,7 +8,7 @@ use std::{
 };
 
 use tokio::sync::{mpsc, oneshot};
-use tracing::{Instrument, Level, debug, span, trace, warn};
+use tracing::{Instrument, Level, debug, error, info, span, trace, warn};
 use url::Url;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
@@ -17,7 +17,7 @@ use establish_peer_connection::exchange_sdp_offers;
 use peer_connection::PeerConnection;
 use replace_track_with_negotiated_codec::replace_tracks_with_negotiated_codec;
 use setup_track::{setup_audio_track, setup_video_track};
-use smelter_render::OutputId;
+use smelter_render::{OutputId, error::ErrorStack};
 use track_task_audio::WhipAudioTrackThreadHandle;
 use track_task_video::WhipVideoTrackThreadHandle;
 
@@ -27,6 +27,7 @@ use crate::{
         output::{Output, OutputAudio, OutputVideo},
         rtp::RtpPacket,
         webrtc::{
+            error::WhipError,
             http_client::WhipWhepHttpClient,
             whip_output::codec_preferences::{
                 codec_params_from_preferences, resolve_audio_preferences, resolve_video_preferences,
@@ -223,65 +224,11 @@ impl WhipClientTask {
 
     /// Forward packets from audio/video channels while making sure they
     /// are interleaved according to their timestamps
-    async fn run(mut self) {
-        let (mut audio_receiver, audio_track) = match self.audio_track.take() {
-            Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
-            None => (None, None),
-        };
-
-        let (mut video_receiver, video_track) = match self.video_track.take() {
-            Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
-            None => (None, None),
-        };
-        let mut next_video_packet = None;
-        let mut next_audio_packet = None;
-
+    async fn run(self) {
+        let mut packet_sender = InterleavedPacketSender::new(self.video_track, self.audio_track);
         loop {
-            match (
-                &next_video_packet,
-                &next_audio_packet,
-                &mut video_receiver,
-                &mut audio_receiver,
-            ) {
-                (None, None, Some(video_receiver), Some(audio_receiver)) => {
-                    tokio::select! {
-                        Some(packet) = video_receiver.recv() => {
-                            next_video_packet = Some(packet)
-                        },
-                        Some(packet) = audio_receiver.recv() => {
-                            next_audio_packet = Some(packet)
-                        },
-                        else => break,
-                    };
-                }
-                (_video, None, _video_receiver, audio_receiver @ Some(_)) => {
-                    match audio_receiver.as_mut().unwrap().recv().await {
-                        Some(packet) => {
-                            next_audio_packet = Some(packet);
-                        }
-                        None => *audio_receiver = None,
-                    };
-                }
-                (None, _, video_receiver @ Some(_), _) => {
-                    match video_receiver.as_mut().unwrap().recv().await {
-                        Some(packet) => {
-                            next_video_packet = Some(packet);
-                        }
-                        None => *video_receiver = None,
-                    };
-                }
-                (None, None, None, None) => {
-                    break;
-                }
-                (Some(_), Some(_), _, _) => {
-                    warn!("Both packets populated, this should not happen.");
-                }
-                (None, Some(_audio), None, _) => {
-                    // no video, but can't read audio at this moment
-                }
-                (Some(_video), None, _, None) => {
-                    // no audio, but can't read video at this moment
-                }
+            let Some((packet, kind)) = packet_sender.resolve_next_packet().await else {
+                break;
             };
 
             if self.should_close.load(Ordering::Relaxed) {
@@ -289,69 +236,13 @@ impl WhipClientTask {
                 break;
             }
 
-            match (&next_video_packet, &next_audio_packet) {
-                // try to wait for both audio and video packet to be ready
-                (Some(video), Some(audio)) => {
-                    if audio.timestamp > video.timestamp {
-                        if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
-                            match track.write_rtp(&p.packet).await {
-                                Ok(_) => {
-                                    trace!(packet=?p, "Video RTP packet written to track");
-                                }
-                                Err(err) => {
-                                    warn!("RTP write error {}", err);
-                                    break;
-                                }
-                            }
-                        }
-                    } else if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track)
-                    {
-                        match track.write_rtp(&p.packet).await {
-                            Ok(_) => {
-                                trace!(packet=?p, "Audio RTP packet written to track");
-                            }
-                            Err(err) => {
-                                warn!("RTP write error {}", err);
-                                break;
-                            }
-                        }
-                    }
+            match packet_sender.send_packet_to_peer(&packet, kind).await {
+                Ok(_) => trace!(?packet, ?kind, "RTP packet sent."),
+                Err(err) => {
+                    warn!("{}", ErrorStack::new(&err).into_string());
+                    break;
                 }
-                // read audio if there is not way to get video packet
-                (None, Some(_)) if video_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track) {
-                        match track.write_rtp(&p.packet).await {
-                            Ok(_) => {
-                                trace!(packet=?p, "Audio RTP packet written to track");
-                            }
-                            Err(err) => {
-                                warn!("RTP write error {}", err);
-                                break;
-                            }
-                        }
-                    }
-                }
-                // read video if there is not way to get audio packet
-                (Some(_), None) if audio_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
-                        match track.write_rtp(&p.packet).await {
-                            Ok(_) => {
-                                trace!(packet=?p, "Video RTP packet written to track");
-                            }
-                            Err(err) => {
-                                warn!("RTP write error {}", err);
-                                break;
-                            }
-                        }
-                    }
-                }
-                (None, None) => break,
-                // we can't do anything here, but there are still receivers
-                // that can return something in the next loop.
-                //
-                // I don't think this can ever happen
-                (_, _) => (),
-            };
+            }
         }
 
         self.client.delete_session(self.session_url).await;
@@ -380,6 +271,117 @@ impl Output for WhipOutput {
 
     fn kind(&self) -> OutputProtocolKind {
         OutputProtocolKind::Whip
+    }
+}
+
+struct InterleavedPacketSender {
+    video_track: Option<WhipClientTrack>,
+    audio_track: Option<WhipClientTrack>,
+    next_video: Option<RtpPacket>,
+    next_audio: Option<RtpPacket>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PacketKind {
+    Video,
+    Audio,
+}
+
+impl InterleavedPacketSender {
+    fn new(video_track: Option<WhipClientTrack>, audio_track: Option<WhipClientTrack>) -> Self {
+        Self {
+            video_track,
+            audio_track,
+            next_video: None,
+            next_audio: None,
+        }
+    }
+
+    async fn resolve_next_packet(&mut self) -> Option<(RtpPacket, PacketKind)> {
+        loop {
+            let needs_video = self.video_track.is_some() && self.next_video.is_none();
+            let needs_audio = self.audio_track.is_some() && self.next_audio.is_none();
+            match (needs_video, needs_audio) {
+                (true, true) => {
+                    tokio::select! {
+                        packet = self.video_track.as_mut().unwrap().receiver.recv() => {
+                            self.handle_video_read(packet);
+                        },
+                        packet = self.audio_track.as_mut().unwrap().receiver.recv() => {
+                            self.handle_audio_read(packet);
+                        }
+                    }
+                }
+                (true, false) => {
+                    let packet = self.video_track.as_mut().unwrap().receiver.recv().await;
+                    self.handle_video_read(packet);
+                }
+                (false, true) => {
+                    let packet = self.audio_track.as_mut().unwrap().receiver.recv().await;
+                    self.handle_audio_read(packet);
+                }
+                (false, false) => return self.resolve_from_state(),
+            }
+        }
+    }
+
+    fn handle_video_read(&mut self, packet: Option<RtpPacket>) {
+        match packet {
+            Some(packet) => self.next_video = Some(packet),
+            None => {
+                info!("Received video EOS.");
+                self.video_track = None;
+            }
+        }
+    }
+
+    fn handle_audio_read(&mut self, packet: Option<RtpPacket>) {
+        match packet {
+            Some(packet) => self.next_audio = Some(packet),
+            None => {
+                info!("Received audio EOS.");
+                self.audio_track = None;
+            }
+        }
+    }
+
+    fn resolve_from_state(&mut self) -> Option<(RtpPacket, PacketKind)> {
+        match (&self.next_video, &self.next_audio) {
+            (Some(video_packet), Some(audio_packet)) => {
+                if video_packet.timestamp < audio_packet.timestamp {
+                    self.next_video.take().map(|p| (p, PacketKind::Video))
+                } else {
+                    self.next_audio.take().map(|p| (p, PacketKind::Audio))
+                }
+            }
+            (Some(_), None) => self.next_video.take().map(|p| (p, PacketKind::Video)),
+            (None, Some(_)) => self.next_audio.take().map(|p| (p, PacketKind::Audio)),
+            (None, None) => None,
+        }
+    }
+
+    async fn send_packet_to_peer(
+        &mut self,
+        packet: &RtpPacket,
+        kind: PacketKind,
+    ) -> Result<(), WhipError> {
+        match kind {
+            PacketKind::Video => {
+                let Some(video_track) = &self.video_track else {
+                    error!("Received unexpected video packet.");
+                    return Ok(());
+                };
+                video_track.track.write_rtp(&packet.packet).await?;
+            }
+            PacketKind::Audio => {
+                let Some(audio_track) = &self.audio_track else {
+                    error!("Received unexpected audio packet.");
+                    return Ok(());
+                };
+                audio_track.track.write_rtp(&packet.packet).await?;
+            }
+        }
+        Ok(())
     }
 }
 
