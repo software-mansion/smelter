@@ -183,7 +183,7 @@ pub async fn setup_video_track(
         handle.keyframe_request_sender.clone(),
     );
 
-    Ok((handle, WhipClientTrack::new(receiver, track)))
+    Ok((handle, WhipClientTrack { receiver, track }))
 }
 
 pub async fn setup_audio_track(
@@ -263,7 +263,7 @@ pub async fn setup_audio_track(
         ssrc,
     );
 
-    Ok((handle, WhipClientTrack::new(receiver, track)))
+    Ok((handle, WhipClientTrack { receiver, track }))
 }
 
 // Identifiers used in stats HashMap returned by RTCPeerConnection::get_stats()
