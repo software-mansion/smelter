@@ -19,10 +19,14 @@ use crate::{
         webrtc::{
             handle_keyframe_requests::handle_keyframe_requests,
             whip_output::{
-                WhipOutputStatsSender,
+                output::{WhipClientTrack, WhipOutputStatsSender},
                 peer_connection::WeakPeerConnection,
-                track_task_audio::{WhipAudioTrackThread, WhipAudioTrackThreadOptions},
-                track_task_video::{WhipVideoTrackThread, WhipVideoTrackThreadOptions},
+                track_task_audio::{
+                    WhipAudioTrackThread, WhipAudioTrackThreadHandle, WhipAudioTrackThreadOptions,
+                },
+                track_task_video::{
+                    WhipVideoTrackThread, WhipVideoTrackThreadHandle, WhipVideoTrackThreadOptions,
+                },
             },
         },
     },
@@ -30,11 +34,6 @@ use crate::{
 };
 
 use crate::prelude::*;
-
-use super::{
-    WebrtcClientError, WhipClientTrack, track_task_audio::WhipAudioTrackThreadHandle,
-    track_task_video::WhipVideoTrackThreadHandle,
-};
 
 pub trait MatchCodecCapability {
     fn matches(&self, capability: &RTCRtpCodecCapability) -> bool;
@@ -184,7 +183,7 @@ pub async fn setup_video_track(
         handle.keyframe_request_sender.clone(),
     );
 
-    Ok((handle, WhipClientTrack { receiver, track }))
+    Ok((handle, WhipClientTrack::new(receiver, track)))
 }
 
 pub async fn setup_audio_track(
@@ -264,10 +263,10 @@ pub async fn setup_audio_track(
         ssrc,
     );
 
-    Ok((handle, WhipClientTrack { receiver, track }))
+    Ok((handle, WhipClientTrack::new(receiver, track)))
 }
 
-// Identifiers used in stats HashMap returnet by RTCPeerConnection::get_stats()
+// Identifiers used in stats HashMap returned by RTCPeerConnection::get_stats()
 const RTC_OUTBOUND_RTP_AUDIO_STREAM: &str = "RTCOutboundRTPAudioStream_";
 const RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM: &str = "RTCRemoteInboundRTPAudioStream_";
 

@@ -12,7 +12,7 @@ use webrtc::{
 
 use crate::pipeline::webrtc::{
     http_client::{SdpAnswer, WhipWhepHttpClient},
-    whip_output::PeerConnection,
+    whip_output::peer_connection::PeerConnection,
 };
 
 use crate::prelude::*;
