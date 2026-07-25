@@ -68,6 +68,26 @@ impl Decoder {
 
         let instance = unsafe { fdk::aacDecoder_Open(transport, 1) };
 
+        // Run the decoder delay-free: its built-in PCM limiter (15 ms
+        // attack) and error-concealment interpolation (one frame lookahead)
+        // together delay decoded PCM by ~1744 samples at 48 kHz while the
+        // wrapper stamps output with input-chunk PTS — shifting all decoded
+        // audio audibly late. Downstream mixing owns limiting; noise
+        // substitution conceals without lookahead. `CStreamInfo.outputDelay`
+        // reports what remains, and decode() warns if it is ever nonzero.
+        unsafe {
+            let result =
+                fdk::aacDecoder_SetParam(instance, fdk::AACDEC_PARAM_AAC_PCM_LIMITER_ENABLE, 0);
+            if result != fdk::AAC_DECODER_ERROR_AAC_DEC_OK {
+                return Err(FdkAacDecoderError::FdkDecoderError(result));
+            }
+            let result =
+                fdk::aacDecoder_SetParam(instance, fdk::AACDEC_PARAM_AAC_CONCEAL_METHOD, 1);
+            if result != fdk::AAC_DECODER_ERROR_AAC_DEC_OK {
+                return Err(FdkAacDecoderError::FdkDecoderError(result));
+            }
+        }
+
         if let Some(config) = asc {
             let result = unsafe {
                 fdk::aacDecoder_ConfigRaw(
@@ -168,6 +188,16 @@ impl Decoder {
                     0
                 };
 
+                {
+                    use std::sync::atomic::{AtomicBool, Ordering};
+                    static WARNED: AtomicBool = AtomicBool::new(false);
+                    if info.outputDelay != 0 && !WARNED.swap(true, Ordering::Relaxed) {
+                        error!(
+                            output_delay = info.outputDelay,
+                            "AAC decoder delays PCM it does not account for in PTS"
+                        );
+                    }
+                }
                 decoded_samples.push(InputAudioSamples {
                     samples,
                     start_pts: chunk.pts,
