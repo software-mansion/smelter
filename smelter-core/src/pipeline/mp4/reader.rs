@@ -118,7 +118,21 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             sample_count: track.sample_count(),
             timescale: track.timescale(),
             track_id,
-            duration: track.duration(),
+            duration: track.duration()
+                + Duration::from_secs_f64(
+                    missing_final_sample_ticks(
+                        track
+                            .trak
+                            .mdia
+                            .minf
+                            .stbl
+                            .stts
+                            .entries
+                            .iter()
+                            .map(|entry| (entry.sample_count, entry.sample_delta)),
+                    ) as f64
+                        / track.timescale() as f64,
+                ),
             decoder_options: DecoderOptions::H264(h264_config),
             track_start_offset: offset,
             presentation_delay: delay,
@@ -162,6 +176,17 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
     }
 }
 
+fn missing_final_sample_ticks(entries: impl DoubleEndedIterator<Item = (u32, u32)>) -> u64 {
+    let mut entries = entries.rev();
+    let Some((count, 0)) = entries.next() else {
+        return 0;
+    };
+    entries
+        .find_map(|(_, duration)| (duration > 0).then_some(duration as u64))
+        .unwrap_or_default()
+        * count as u64
+}
+
 pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
     reader: mp4::Mp4Reader<Reader>,
     sample_count: u32,
@@ -177,6 +202,21 @@ pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
     /// How much the track presentation should be delayed, derived from the summed `segment_duration`
     /// of all leading empty edits (`media_time == -1`) in the `elst` box.
     presentation_delay: Duration,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::missing_final_sample_ticks;
+
+    #[test]
+    fn zero_duration_final_video_samples_inherit_the_previous_interval() {
+        assert_eq!(
+            missing_final_sample_ticks([(59, 512), (1, 0)].into_iter()),
+            512
+        );
+        assert_eq!(missing_final_sample_ticks([(60, 512)].into_iter()), 0);
+        assert_eq!(missing_final_sample_ticks([(1, 0)].into_iter()), 0);
+    }
 }
 
 impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
