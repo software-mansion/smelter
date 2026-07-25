@@ -23,6 +23,12 @@ pub struct FdkAacEncoder {
     output_buffer: Vec<u8>,
     sample_rate: u32,
     samples_per_frame: u32,
+    /// Codec delay (priming) in samples: the first `codec_delay` output
+    /// samples are encoder-internal padding, and output sample `n` carries
+    /// input sample `n - codec_delay`. Raw AAC has no in-band way to signal
+    /// this (unlike Opus pre-skip), so uncompensated output plays audio
+    /// late by exactly this much relative to its PTS.
+    codec_delay: u64,
 
     // This logic relies on the fact that input samples will always be continuous.
     first_input_pts: Option<Duration>,
@@ -114,6 +120,7 @@ impl AudioEncoder for FdkAacEncoder {
                 input_buffer: Vec::new(),
                 output_buffer: vec![0; info.maxOutBufBytes as usize],
                 sample_rate: options.sample_rate,
+                codec_delay: info.nDelay as u64,
                 first_input_pts: None,
                 encoded_samples: 0,
                 samples_per_frame: info.frameLength,
@@ -225,13 +232,25 @@ impl FdkAacEncoder {
 
             let encoded_bytes = out_args.numOutBytes as usize;
             if encoded_bytes > 0 {
+                // assume that encoder is always producing batches representing full frame
+                let frame_start = self.encoded_samples;
+                self.encoded_samples += self.samples_per_frame as u64;
+
+                // Swallow the codec delay: frames that still contain priming
+                // content are dropped entirely (their tail of real samples —
+                // under one frame, at the very head of the output — goes with
+                // them), and every emitted frame is stamped at the position
+                // of the *content* it carries. Without this, all AAC audio
+                // plays `codec_delay` (1600 samples for AAC-LC — 33 ms, one
+                // full frame at 29.97 fps) late relative to video, since
+                // neither raw AAC nor the muxers signal priming to players.
+                if frame_start < self.codec_delay {
+                    continue;
+                }
                 let pts = self.first_input_pts.unwrap_or_default()
                     + Duration::from_secs_f64(
-                        self.encoded_samples as f64 / self.sample_rate as f64,
+                        (frame_start - self.codec_delay) as f64 / self.sample_rate as f64,
                     );
-
-                // assume that encoder is always producing batches representing full frame
-                self.encoded_samples += self.samples_per_frame as u64;
 
                 output.push(EncodedOutputChunk {
                     data: Bytes::copy_from_slice(
