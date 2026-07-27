@@ -5,7 +5,6 @@ use smelter_render::{Frame, error::ErrorStack};
 use tokio::sync::mpsc;
 use tracing::warn;
 
-use crate::pipeline::webrtc::whip_output::WhipOutputStatsSender;
 use crate::prelude::*;
 use crate::{
     pipeline::{
@@ -14,6 +13,7 @@ use crate::{
             RtpPacket,
             payloader::{PayloaderOptions, PayloaderStream},
         },
+        webrtc::whip_output::output::WhipOutputStatsSender,
     },
     utils::{InitializableThread, ThreadMetadata},
 };

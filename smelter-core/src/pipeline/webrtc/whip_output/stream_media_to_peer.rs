@@ -1,111 +1,44 @@
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    thread,
-    time::{Duration, Instant},
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
-use tokio::sync::{mpsc, oneshot};
-use tracing::{Instrument, Level, debug, error, info, span, trace, warn};
-use url::Url;
-use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
-
-use establish_peer_connection::exchange_sdp_offers;
-use peer_connection::PeerConnection;
-use replace_track_with_negotiated_codec::replace_tracks_with_negotiated_codec;
-use setup_track::{setup_audio_track, setup_video_track};
 use smelter_render::{OutputId, error::ErrorStack};
-use track_task_audio::WhipAudioTrackThreadHandle;
-use track_task_video::WhipVideoTrackThreadHandle;
+use tracing::{debug, error, info, trace, warn};
+use url::Url;
+use webrtc::{
+    peer_connection::peer_connection_state::RTCPeerConnectionState,
+    track::track_local::TrackLocalWriter,
+};
 
 use crate::{
+    PipelineCtx, Ref,
+    error::{ErrorSeverity, OutputWhipRuntimeError},
     event::Event,
     pipeline::{
-        output::{Output, OutputAudio, OutputVideo},
         rtp::RtpPacket,
         webrtc::{
+            WhipOutput,
             error::WhipError,
             http_client::WhipWhepHttpClient,
-            whip_output::codec_preferences::{
-                codec_params_from_preferences, resolve_audio_preferences, resolve_video_preferences,
+            whip_output::{
+                codec_preferences::{
+                    codec_params_from_preferences, resolve_audio_preferences,
+                    resolve_video_preferences,
+                },
+                establish_peer_connection::exchange_sdp_offers,
+                output::WhipClientTrack,
+                peer_connection::PeerConnection,
+                replace_track_with_negotiated_codec::replace_tracks_with_negotiated_codec,
+                setup_track::{setup_audio_track, setup_video_track},
             },
         },
     },
+    prelude::{WebrtcClientError, WhipOutputOptions},
+    stats::WhipOutputStatsEvent,
 };
 
-use crate::prelude::*;
-
-mod codec_preferences;
-mod establish_peer_connection;
-mod peer_connection;
-mod replace_track_with_negotiated_codec;
-mod setup_track;
-mod track_task_audio;
-mod track_task_video;
-
-/// WHIP output - pushes media to a remote WHIP server.
-///
-/// ## Codec negotiation
-///
-/// This side creates the SDP offer from encoder preferences. For H.264 encoders
-/// (FFmpeg and Vulkan), the offer includes constrained baseline 3.1 (for Twitch
-/// compatibility) and constrained baseline, main, and high profiles at level
-/// 5.1. After receiving the answer, we determine which codec was negotiated and
-/// select the matching encoder.
-#[derive(Debug)]
-pub(crate) struct WhipOutput {
-    pub video: Option<WhipVideoTrackThreadHandle>,
-    pub audio: Option<WhipAudioTrackThreadHandle>,
-}
-
-const WHIP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
-
-impl WhipOutput {
-    pub fn new(
-        ctx: Arc<PipelineCtx>,
-        output_ref: Ref<OutputId>,
-        options: WhipOutputOptions,
-    ) -> Result<Self, OutputInitError> {
-        let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
-
-        ctx.stats_sender.send(StatsEvent::NewOutput {
-            output_ref: output_ref.clone(),
-            kind: OutputProtocolKind::Whip,
-        });
-
-        let span = span!(
-            Level::INFO,
-            "WHIP client task",
-            output_id = output_ref.to_string()
-        );
-        let rt = ctx.tokio_rt.clone();
-        rt.spawn(
-            async {
-                let result = WhipClientTask::new(ctx, output_ref, options).await;
-                match result {
-                    Ok((task, handle)) => {
-                        init_confirmation_sender.send(Ok(handle)).unwrap();
-                        task.run().await
-                    }
-                    Err(err) => init_confirmation_sender.send(Err(err)).unwrap(),
-                }
-            }
-            .instrument(span),
-        );
-
-        wait_with_deadline(init_confirmation_receiver, WHIP_INIT_TIMEOUT)
-    }
-}
-
-struct WhipClientTrack {
-    receiver: mpsc::Receiver<RtpPacket>,
-    track: Arc<TrackLocalStaticRTP>,
-}
-
-struct WhipClientTask {
+pub(super) struct WhipClientTask {
     session_url: Url,
     ctx: Arc<PipelineCtx>,
     client: Arc<WhipWhepHttpClient>,
@@ -119,7 +52,7 @@ struct WhipClientTask {
 }
 
 impl WhipClientTask {
-    async fn new(
+    pub async fn new(
         ctx: Arc<PipelineCtx>,
         output_ref: Ref<OutputId>,
         options: WhipOutputOptions,
@@ -224,7 +157,7 @@ impl WhipClientTask {
 
     /// Forward packets from audio/video channels while making sure they
     /// are interleaved according to their timestamps
-    async fn run(self) {
+    pub async fn run(self) {
         let mut packet_sender = InterleavedPacketSender::new(self.video_track, self.audio_track);
         loop {
             let Some((packet, kind)) = packet_sender.resolve_next_packet().await else {
@@ -253,28 +186,7 @@ impl WhipClientTask {
     }
 }
 
-impl Output for WhipOutput {
-    fn audio(&self) -> Option<OutputAudio<'_>> {
-        self.audio.as_ref().map(|audio| OutputAudio {
-            samples_batch_sender: &audio.sample_batch_sender,
-        })
-    }
-
-    fn video(&self) -> Option<OutputVideo<'_>> {
-        self.video.as_ref().map(|video| OutputVideo {
-            resolution: video.config.resolution,
-            frame_format: video.config.output_format,
-            frame_sender: &video.frame_sender,
-            keyframe_request_sender: &video.keyframe_request_sender,
-        })
-    }
-
-    fn kind(&self) -> OutputProtocolKind {
-        OutputProtocolKind::Whip
-    }
-}
-
-struct InterleavedPacketSender {
+pub(super) struct InterleavedPacketSender {
     video_track: Option<WhipClientTrack>,
     audio_track: Option<WhipClientTrack>,
     next_video: Option<RtpPacket>,
@@ -282,13 +194,13 @@ struct InterleavedPacketSender {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum PacketKind {
+pub(super) enum PacketKind {
     Video,
     Audio,
 }
 
 impl InterleavedPacketSender {
-    fn new(video_track: Option<WhipClientTrack>, audio_track: Option<WhipClientTrack>) -> Self {
+    pub fn new(video_track: Option<WhipClientTrack>, audio_track: Option<WhipClientTrack>) -> Self {
         Self {
             video_track,
             audio_track,
@@ -297,7 +209,7 @@ impl InterleavedPacketSender {
         }
     }
 
-    async fn resolve_next_packet(&mut self) -> Option<(RtpPacket, PacketKind)> {
+    pub async fn resolve_next_packet(&mut self) -> Option<(RtpPacket, PacketKind)> {
         loop {
             let needs_video = self.video_track.is_some() && self.next_video.is_none();
             let needs_audio = self.audio_track.is_some() && self.next_audio.is_none();
@@ -360,7 +272,7 @@ impl InterleavedPacketSender {
         }
     }
 
-    async fn send_packet_to_peer(
+    pub async fn send_packet_to_peer(
         &mut self,
         packet: &RtpPacket,
         kind: PacketKind,
@@ -382,50 +294,5 @@ impl InterleavedPacketSender {
             }
         }
         Ok(())
-    }
-}
-
-fn wait_with_deadline<T>(
-    mut result_receiver: oneshot::Receiver<Result<T, WebrtcClientError>>,
-    timeout: Duration,
-) -> Result<T, OutputInitError> {
-    let start_time = Instant::now();
-    while start_time.elapsed() < timeout {
-        thread::sleep(Duration::from_millis(500));
-
-        match result_receiver.try_recv() {
-            Ok(result) => match result {
-                Ok(handle) => return Ok(handle),
-                Err(err) => return Err(OutputInitError::WhipInitError(err.into())),
-            },
-            Err(err) => match err {
-                oneshot::error::TryRecvError::Closed => {
-                    return Err(OutputInitError::UnknownWhipError);
-                }
-                oneshot::error::TryRecvError::Empty => {}
-            },
-        };
-    }
-    result_receiver.close();
-    Err(OutputInitError::WhipInitTimeout)
-}
-
-struct WhipOutputStatsSender {
-    stats_sender: StatsSender,
-    output_ref: Ref<OutputId>,
-}
-
-impl WhipOutputStatsSender {
-    pub fn new(stats_sender: StatsSender, output_ref: Ref<OutputId>) -> Self {
-        Self {
-            stats_sender,
-            output_ref,
-        }
-    }
-
-    fn bytes_sent_event(&self, size: usize, track_kind: StatsTrackKind) {
-        self.stats_sender.send(
-            WhipOutputTrackStatsEvent::BytesSent(size).into_event(&self.output_ref, track_kind),
-        );
     }
 }
