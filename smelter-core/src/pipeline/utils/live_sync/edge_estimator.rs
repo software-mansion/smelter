@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 /// trimming, offset slewing) is up to the caller.
 pub(crate) struct LiveEdgeEstimator {
     /// Instant that pts values are compared against.
-    reference: Instant,
+    sync_point: Instant,
     /// Estimate improvements smaller than this (delivery jitter) do not reset
     /// the stability timer.
     tolerance: Duration,
@@ -64,7 +64,7 @@ impl LiveEdgeEstimate {
 impl LiveEdgeEstimator {
     pub fn new(reference: Instant, tolerance: Duration) -> Self {
         Self {
-            reference,
+            sync_point: reference,
             tolerance,
             observations: None,
         }
@@ -72,7 +72,7 @@ impl LiveEdgeEstimator {
 
     /// Record a chunk with `pts` that arrived at `now`.
     pub fn observe(&mut self, now: Instant, pts: Duration) {
-        let arrival_ns = signed_ns(now.saturating_duration_since(self.reference));
+        let arrival_ns = signed_ns(now.saturating_duration_since(self.sync_point));
         let offset_ns = arrival_ns - signed_ns(pts);
         match &mut self.observations {
             None => {
@@ -106,7 +106,7 @@ impl LiveEdgeEstimator {
     /// `None` until the first observation.
     pub fn estimate(&self, now: Instant) -> Option<LiveEdgeEstimate> {
         let observations = self.observations.as_ref()?;
-        let now_ns = signed_ns(now.saturating_duration_since(self.reference));
+        let now_ns = signed_ns(now.saturating_duration_since(self.sync_point));
         let edge_pts_ns = now_ns - observations.edge_offset_ns;
         Some(LiveEdgeEstimate {
             observing_for: now.saturating_duration_since(observations.first_observation),

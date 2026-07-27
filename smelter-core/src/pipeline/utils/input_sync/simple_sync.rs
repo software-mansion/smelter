@@ -50,8 +50,4 @@ impl<T: InputSyncItem> SimpleSyncTrack<T> {
     pub fn peek_next_pts(&mut self) -> Option<Duration> {
         self.buffer.front().map(|item| item.pts())
     }
-
-    pub fn has_buffered_chunks(&self) -> bool {
-        !self.buffer.is_empty()
-    }
 }

@@ -1,19 +1,19 @@
-use std::{
-    sync::Mutex,
-    time::{Duration, Instant},
+use std::time::{Duration, Instant};
+
+use tracing::info;
+
+use super::{
+    LiveSyncOptions,
+    edge_estimator::{LiveEdgeEstimate, LiveEdgeEstimator},
 };
 
-use tracing::{debug, info};
-
-use super::{LiveSyncOptions, edge_estimator::LiveEdgeEstimator};
-
-/// Correspondence between the input and output timelines chosen when the sync
+/// Correspondence between the input and output timelines chosen when a track
 /// starts producing chunks: content at `input_pts` is presented at
 /// `output_pts`, and every other timestamp keeps its distance to the anchor.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct TimestampAnchor {
-    /// Raw pts of the anchor: the cut point, or the oldest buffered pts when
-    /// nothing was trimmed.
+    /// Raw pts of the anchor: the pts presented right after the start, or the
+    /// oldest buffered pts on flush.
     input_pts: Duration,
     /// Pts relative to the sync point at which content at `input_pts` is
     /// presented.
@@ -22,182 +22,116 @@ pub(super) struct TimestampAnchor {
 
 impl TimestampAnchor {
     /// Maps a raw timestamp (pts or dts) onto the sync point timeline.
-    /// Saturating, but effectively always positive: timestamps below
-    /// `input_pts` (e.g. leading B-frames after a trimmed keyframe) stay
-    /// above zero thanks to `start_margin` included in `output_pts`.
+    /// Timestamps below `input_pts` (initial backlog) map before the start
+    /// point, saturating at zero; such content plays late or is dropped by
+    /// the consumer.
     pub(super) fn to_output_pts(&self, pts: Duration) -> Duration {
         (self.output_pts + pts).saturating_sub(self.input_pts)
     }
 }
 
+/// Cross-track mutable state of an input, kept behind a mutex.
 pub(super) struct SharedState {
-    pub(super) options: LiveSyncOptions,
-    /// Instant that output timestamps are measured from.
-    pub(super) sync_point: Instant,
-    pub(super) detection: Mutex<StartDetection>,
+    /// Estimator observing chunks of all tracks; its edge is defined by the
+    /// freshest track.
+    pub(super) shared_estimator: LiveEdgeEstimator,
+    /// Live edge detection was abandoned (e.g. the stream ended before the
+    /// edge was detected); tracks release everything they buffered.
+    pub(super) flushed: bool,
 }
 
-pub(super) struct StartDetection {
-    pub(super) tracks: Vec<TrackMeta>,
-    pub(super) estimator: LiveEdgeEstimator,
-    /// Buffer was too small when the live edge stabilized; waiting until it
-    /// grows to the desired size.
-    pub(super) filling: bool,
-    pub(super) start: Option<StartDecision>,
-}
-
-#[derive(Default)]
-pub(super) struct TrackMeta {
-    /// Track contains items that are not start points (e.g. video with
-    /// interframes); such tracks can only be cut at a start point.
-    constrained: bool,
-    /// pts of start point items observed while buffering.
-    start_points: Vec<Duration>,
+/// Which live edge estimate a track aligned to when it started.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum EdgeSource {
+    Shared,
+    Track,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct StartDecision {
     pub(super) anchor: TimestampAnchor,
-    /// Trim each track's buffer to start near this pts; `None` keeps
-    /// everything.
-    pub(super) cut_pts: Option<Duration>,
+    pub(super) edge: EdgeSource,
 }
 
-impl StartDetection {
-    pub(super) fn observe(
-        &mut self,
-        track_index: usize,
-        now: Instant,
-        pts: Duration,
-        is_start_point: bool,
-    ) {
-        let track = &mut self.tracks[track_index];
-        match is_start_point {
-            true => track.start_points.push(pts),
-            false => track.constrained = true,
-        }
-        self.estimator.observe(now, pts);
-    }
+/// Start decision for a single track based on its own and the shared live
+/// edge estimates; `None` while the track should keep buffering.
+pub(super) fn decide_start(
+    options: &LiveSyncOptions,
+    sync_point: Instant,
+    now: Instant,
+    track_estimate: Option<LiveEdgeEstimate>,
+    shared_estimate: Option<LiveEdgeEstimate>,
+    flushed: bool,
+) -> Option<StartDecision> {
+    let output_pts = now.saturating_duration_since(sync_point) + options.start_margin;
 
-    pub(super) fn maybe_start(&mut self, shared: &SharedState, now: Instant) {
-        let opts = shared.options;
-        if self.start.is_some() {
-            return;
-        }
-        let Some(estimate) = self.estimator.estimate(now) else {
-            return;
-        };
-
-        let edge_stable = estimate.stable_for >= opts.stabilization_period;
-        let waited_too_long = estimate.observing_for >= opts.max_wait;
-        let held_too_much = estimate.max_pts.saturating_sub(estimate.min_pts) >= opts.max_hold;
-        let forced = waited_too_long || held_too_much;
-        if !edge_stable && !forced {
-            return;
-        }
-
-        // Batched delivery (e.g. HLS segments) needs enough buffer to survive
-        // the gap between batches, regardless of the configured buffer sizes.
-        // The gap approximates the segment size; 3/2 leaves headroom for
-        // delivery jitter.
-        let sustainable_buffer = estimate.max_arrival_gap * 3 / 2;
-        let min_start_buffer = opts.min_start_buffer.max(sustainable_buffer);
-        let desired_buffer = opts.desired_buffer.max(sustainable_buffer);
-        let max_start_buffer = opts.max_start_buffer.max(desired_buffer * 2);
-
-        // steady-state buffer if playback starts now from the oldest chunk
-        let projected_buffer = estimate.projected_buffer();
-
-        if !forced {
-            if projected_buffer < min_start_buffer && !self.filling {
-                debug!(
-                    "Live edge detected with too little buffered, waiting for the buffer to fill up"
-                );
-                self.filling = true;
-            }
-            if self.filling && projected_buffer < desired_buffer {
-                return;
-            }
-        }
-
-        let (cutoff, reason) = if projected_buffer > max_start_buffer {
-            let cutoff = estimate
-                .edge_pts
-                .saturating_sub(desired_buffer)
-                .min(estimate.max_pts);
-            (Some(cutoff), "trimming excess buffer")
-        } else {
-            (None, "buffer within limits")
-        };
-        let reason = match (waited_too_long, held_too_much) {
-            (true, _) => "live edge detection timed out",
-            (_, true) => "buffered content limit reached",
-            _ => reason,
-        };
-        self.start_now(shared, now, cutoff, reason);
-    }
-
-    pub(super) fn start_now(
-        &mut self,
-        shared: &SharedState,
-        now: Instant,
-        cutoff: Option<Duration>,
-        reason: &str,
-    ) {
-        let (cut_pts, anchor_pts) = match cutoff {
-            Some(cutoff) => {
-                // pts at which every track is able to start; a constrained
-                // track with no start point before the cutoff pulls the cut
-                // back to its earliest start point (better a bigger buffer
-                // than undecodable chunks)
-                let cut_pts = self
-                    .tracks
-                    .iter()
-                    .filter(|track| track.constrained)
-                    .filter_map(|track| track_cut(track, cutoff))
-                    .min()
-                    .unwrap_or(cutoff);
-                // constrained tracks retain content from their own start
-                // point at or before the cut
-                let anchor_pts = self
-                    .tracks
-                    .iter()
-                    .filter(|track| track.constrained)
-                    .filter_map(|track| track_cut(track, cut_pts))
-                    .min()
-                    .unwrap_or(cut_pts)
-                    .min(cut_pts);
-                (Some(cut_pts), anchor_pts)
-            }
-            None => {
-                let min_pts = self
-                    .estimator
-                    .estimate(now)
-                    .map(|estimate| estimate.min_pts);
-                (None, min_pts.unwrap_or(Duration::ZERO))
-            }
-        };
+    if flushed {
+        let min_pts = track_estimate
+            .map(|estimate| estimate.min_pts)
+            .unwrap_or(Duration::ZERO);
         let anchor = TimestampAnchor {
-            input_pts: anchor_pts,
-            output_pts: now.saturating_duration_since(shared.sync_point)
-                + shared.options.start_margin,
+            input_pts: min_pts,
+            output_pts,
         };
-        info!(reason, ?cut_pts, ?anchor, "Live sync started");
-        self.start = Some(StartDecision { anchor, cut_pts });
-        for track in &mut self.tracks {
-            track.start_points = Vec::new();
-        }
+        info!(?anchor, "Live sync track started (flush)");
+        return Some(StartDecision {
+            anchor,
+            // the anchor is derived from the track's own data
+            edge: EdgeSource::Track,
+        });
     }
-}
 
-/// Latest start point of the track at or before `at`, falling back to the
-/// track's earliest start point.
-fn track_cut(track: &TrackMeta, at: Duration) -> Option<Duration> {
-    track
-        .start_points
-        .iter()
-        .copied()
-        .filter(|pts| *pts <= at)
-        .max()
-        .or_else(|| track.start_points.iter().copied().min())
+    let track_estimate = track_estimate?;
+    let shared_estimate = shared_estimate?;
+
+    let stable = track_estimate.stable_for >= options.stabilization_period
+        && shared_estimate.stable_for >= options.stabilization_period;
+    let waited_too_long = track_estimate.observing_for >= options.max_wait;
+    let held_too_much =
+        track_estimate.max_pts.saturating_sub(track_estimate.min_pts) >= options.max_hold;
+    if !stable && !waited_too_long && !held_too_much {
+        return None;
+    }
+    let reason = match (stable, waited_too_long) {
+        (true, _) => "live edge stable",
+        (false, true) => "live edge detection timed out",
+        (false, false) => "buffered content limit reached",
+    };
+
+    // The shared estimate is defined by the freshest track; when it lands far
+    // away from the track's own estimate, the track lives in an unrelated
+    // timestamp space and only its own estimate maps its pts onto the wall
+    // clock.
+    let edge_distance = shared_estimate.edge_pts.abs_diff(track_estimate.edge_pts);
+    let (edge_pts, edge) = match edge_distance < options.shared_edge_tolerance {
+        true => (shared_estimate.edge_pts, EdgeSource::Shared),
+        false => (track_estimate.edge_pts, EdgeSource::Track),
+    };
+
+    // Batched delivery (e.g. HLS segments) needs enough buffer to survive the
+    // gap between batches, regardless of the configured buffer size. The gap
+    // approximates the batch size; 3/2 leaves headroom for delivery jitter.
+    let sustainable_buffer = track_estimate.max_arrival_gap * 3 / 2;
+    let target_buffer = options.desired_buffer.max(sustainable_buffer);
+
+    // Content at the chosen edge is presented `start_margin + target_buffer`
+    // after "now"; older backlog maps before the start point and is dropped
+    // downstream. The mapping depends only on the chosen edge, not on the
+    // start moment, so tracks that agree on the shared edge stay in sync
+    // even though each starts on its own.
+    let anchor_pts = edge_pts
+        .saturating_sub(target_buffer)
+        .min(track_estimate.max_pts);
+    let anchor = TimestampAnchor {
+        input_pts: anchor_pts,
+        output_pts,
+    };
+    info!(
+        reason,
+        ?edge,
+        ?edge_distance,
+        ?anchor,
+        "Live sync track started"
+    );
+    Some(StartDecision { anchor, edge })
 }
