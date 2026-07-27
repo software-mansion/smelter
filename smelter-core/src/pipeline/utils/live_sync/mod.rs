@@ -13,13 +13,17 @@
 //!
 //! Live edge detection is implemented by [`LiveEdgeEstimator`] (usable on its
 //! own by inputs with different buffering logic):
-//! - For every chunk it samples `offset = arrival_time - pts`. The smallest
-//!   observed offset corresponds to the freshest content seen so far and is
-//!   used as the live edge estimate.
-//! - When the estimate stops improving for `stabilization_period`, delivery
-//!   reached a real time rate and the estimate is considered final. This works
-//!   for batched delivery too: the end of each batch is the freshest sample,
-//!   so the estimate plateaus between batches regardless of the batch size.
+//! - For every chunk it samples `offset = arrival_time - pts`; the recent
+//!   extremes of the offset bound the live edge (the minimum yields the upper
+//!   bound, extrapolated from the freshest delivery seen; the maximum the
+//!   lower one). The window makes the bounds follow changes of the network
+//!   latency instead of locking to lifetime extremes.
+//! - When the upper bound stops improving for `stabilization_period`,
+//!   delivery reached a real time rate (dropped to or below it) and the
+//!   estimate is considered ready. This works for batched delivery too: the
+//!   silence after a batch is itself the signal, so readiness does not depend
+//!   on the batch size. The cost of trusting a pause this quickly (a stall
+//!   can look like the edge) is covered by the post-start re-anchoring below.
 //!
 //! Every input runs one estimator per track plus a shared one observing the
 //! chunks of all tracks; all of them keep observing for the whole lifetime of
@@ -32,14 +36,29 @@
 //!   timestamp space is unrelated to the other tracks (e.g. a different pts
 //!   baseline), so the shared edge does not map onto its timestamps.
 //!
-//! The start maps the chosen edge to `start_margin + target buffer` after the
-//! start moment; older backlog maps before the start point and plays late or
-//! is dropped by the consumer. The mapping depends only on the chosen edge,
-//! not on when the track started, so tracks that agree on the shared edge end
-//! up mutually in sync even though each starts on its own.
+//! The start never drops delivered content: playback is anchored at the
+//! oldest buffered chunk when more than the target buffer is available, or
+//! scheduled at `edge - target buffer` when the buffer still has to fill up.
+//! Only a start forced by `max_hold` trims down to the target, since that
+//! limit exists to bound latency. The target buffer is `desired_buffer`,
+//! raised for batched delivery to survive the observed gap between batches
+//! (`LiveEdgeEstimator::max_arrival_gap`). Tracks that agree on the shared
+//! edge converge to the same mapping; they can start with different backlog
+//! depths, and the correction below aligns them as the excess drains.
+//!
+//! After the start each track keeps checking how its delivery behaves
+//! relative to the playback position:
+//! - the buffer drifting away from the target (source clock drift, delivery
+//!   falling behind, excess kept at the start) is corrected by slewing the
+//!   anchor in small steps;
+//! - the chosen edge improving after the start (a delivery stall mistaken
+//!   for the live edge) revokes the start with a single forward jump;
+//! - deviations too large to slew and pts discontinuities reset the track
+//!   back to the startup logic, so the live edge gets re-estimated from
+//!   scratch.
 //! The target buffer is `desired_buffer`, raised for batched delivery to
 //! survive the observed gap between batches
-//! (`LiveEdgeEstimate::max_arrival_gap`), so the sync works even when the
+//! (`LiveEdgeEstimator::max_arrival_gap`), so the sync works even when the
 //! batch size (e.g. HLS segment duration) is unknown or unexpected.
 
 use std::{
