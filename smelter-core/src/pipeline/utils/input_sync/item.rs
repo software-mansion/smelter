@@ -11,10 +11,6 @@ pub(crate) trait InputSyncItem {
     /// is read from a track ([`InputSyncItem::map_timestamps`]).
     fn pts(&self) -> Duration;
 
-    /// Whether decoding of this track can start from this item. Video should
-    /// return true only for keyframes; audio should always return true.
-    fn is_keyframe(&self) -> bool;
-
     /// Applies `map` to all timestamps of the item (pts, and dts if present).
     /// Called by the track when the item is read.
     fn map_timestamps(&mut self, map: impl Fn(Duration) -> Duration);
@@ -22,10 +18,6 @@ pub(crate) trait InputSyncItem {
 
 impl InputSyncItem for EncodedInputChunk {
     fn pts(&self) -> Duration {
-        todo!()
-    }
-
-    fn is_keyframe(&self) -> bool {
         todo!()
     }
 

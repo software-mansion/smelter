@@ -78,11 +78,4 @@ impl<T: InputSyncItem> InputSyncTrack<T> {
             InputSyncTrack::Simple(track) => track.peek_next_pts(),
         }
     }
-
-    pub fn has_buffered_chunks(&self) -> bool {
-        match self {
-            InputSyncTrack::Live(track) => track.has_buffered_chunks(),
-            InputSyncTrack::Simple(track) => track.has_buffered_chunks(),
-        }
-    }
 }
