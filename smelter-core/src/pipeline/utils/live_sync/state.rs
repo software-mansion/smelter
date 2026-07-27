@@ -4,7 +4,7 @@ use tracing::info;
 
 use super::{
     LiveSyncOptions,
-    edge_estimator::{LiveEdgeEstimate, LiveEdgeEstimator},
+    edge_estimator::{EdgeBounds, LiveEdgeEstimator},
 };
 
 /// Correspondence between the input and output timelines chosen when a track
@@ -27,6 +27,16 @@ impl TimestampAnchor {
     /// the consumer.
     pub(super) fn to_output_pts(&self, pts: Duration) -> Duration {
         (self.output_pts + pts).saturating_sub(self.input_pts)
+    }
+
+    /// Shifts the mapping so content is presented `delta` earlier.
+    pub(super) fn shift_earlier(&mut self, delta: Duration) {
+        self.input_pts += delta;
+    }
+
+    /// Shifts the mapping so content is presented `delta` later.
+    pub(super) fn shift_later(&mut self, delta: Duration) {
+        self.output_pts += delta;
     }
 }
 
@@ -51,24 +61,27 @@ pub(super) enum EdgeSource {
 pub(super) struct StartDecision {
     pub(super) anchor: TimestampAnchor,
     pub(super) edge: EdgeSource,
+    /// Delivery offset (`elapsed - edge pts`) of the chosen edge at the start;
+    /// reference for detecting that the edge improved after the start (the
+    /// start was based on a false knee, e.g. a stall mistaken for the edge).
+    pub(super) edge_offset: Duration,
 }
 
-/// Start decision for a single track based on its own and the shared live
-/// edge estimates; `None` while the track should keep buffering.
+/// Start decision for a single track based on its own estimator and the
+/// shared edge bounds; `None` while the track should keep buffering.
 pub(super) fn decide_start(
     options: &LiveSyncOptions,
     sync_point: Instant,
     now: Instant,
-    track_estimate: Option<LiveEdgeEstimate>,
-    shared_estimate: Option<LiveEdgeEstimate>,
+    estimator: &LiveEdgeEstimator,
+    shared_bounds: Option<EdgeBounds>,
     flushed: bool,
 ) -> Option<StartDecision> {
-    let output_pts = now.saturating_duration_since(sync_point) + options.start_margin;
+    let elapsed = now.saturating_duration_since(sync_point);
+    let output_pts = elapsed + options.start_margin;
 
     if flushed {
-        let min_pts = track_estimate
-            .map(|estimate| estimate.min_pts)
-            .unwrap_or(Duration::ZERO);
+        let min_pts = estimator.min_pts().unwrap_or(Duration::ZERO);
         let anchor = TimestampAnchor {
             input_pts: min_pts,
             output_pts,
@@ -78,17 +91,19 @@ pub(super) fn decide_start(
             anchor,
             // the anchor is derived from the track's own data
             edge: EdgeSource::Track,
+            edge_offset: elapsed.saturating_sub(min_pts),
         });
     }
 
-    let track_estimate = track_estimate?;
-    let shared_estimate = shared_estimate?;
+    let track_bounds = estimator.edge_bounds(now)?;
+    let shared_bounds = shared_bounds?;
+    let max_pts = estimator.max_pts()?;
+    let min_pts = estimator.min_pts()?;
 
-    let stable = track_estimate.stable_for >= options.stabilization_period
-        && shared_estimate.stable_for >= options.stabilization_period;
-    let waited_too_long = track_estimate.observing_for >= options.max_wait;
-    let held_too_much =
-        track_estimate.max_pts.saturating_sub(track_estimate.min_pts) >= options.max_hold;
+    let stable = track_bounds.stable_for >= options.stabilization_period
+        && shared_bounds.stable_for >= options.stabilization_period;
+    let waited_too_long = estimator.observing_for(now)? >= options.max_wait;
+    let held_too_much = max_pts.saturating_sub(min_pts) >= options.max_hold;
     if !stable && !waited_too_long && !held_too_much {
         return None;
     }
@@ -98,30 +113,32 @@ pub(super) fn decide_start(
         (false, false) => "buffered content limit reached",
     };
 
-    // The shared estimate is defined by the freshest track; when it lands far
-    // away from the track's own estimate, the track lives in an unrelated
-    // timestamp space and only its own estimate maps its pts onto the wall
+    // The shared upper edge is defined by the freshest track; when it lands
+    // far away from the track's own, the track lives in an unrelated
+    // timestamp space and only its own edge maps its pts onto the wall
     // clock.
-    let edge_distance = shared_estimate.edge_pts.abs_diff(track_estimate.edge_pts);
+    let edge_distance = shared_bounds.upper.abs_diff(track_bounds.upper);
     let (edge_pts, edge) = match edge_distance < options.shared_edge_tolerance {
-        true => (shared_estimate.edge_pts, EdgeSource::Shared),
-        false => (track_estimate.edge_pts, EdgeSource::Track),
+        true => (shared_bounds.upper, EdgeSource::Shared),
+        false => (track_bounds.upper, EdgeSource::Track),
     };
 
     // Batched delivery (e.g. HLS segments) needs enough buffer to survive the
     // gap between batches, regardless of the configured buffer size. The gap
     // approximates the batch size; 3/2 leaves headroom for delivery jitter.
-    let sustainable_buffer = track_estimate.max_arrival_gap * 3 / 2;
+    let sustainable_buffer = estimator.max_arrival_gap(now)? * 3 / 2;
     let target_buffer = options.desired_buffer.max(sustainable_buffer);
 
-    // Content at the chosen edge is presented `start_margin + target_buffer`
-    // after "now"; older backlog maps before the start point and is dropped
-    // downstream. The mapping depends only on the chosen edge, not on the
-    // start moment, so tracks that agree on the shared edge stay in sync
-    // even though each starts on its own.
-    let anchor_pts = edge_pts
-        .saturating_sub(target_buffer)
-        .min(track_estimate.max_pts);
+    // Never drop delivered content: anchor at the oldest chunk when more
+    // than the target is buffered (the correction loop slews the excess
+    // latency down once the delivery cadence is known), or at
+    // `edge - target` when the buffer still has to fill up. Starts forced
+    // by the hold limit trim to the target instead, since that limit exists
+    // to bound latency.
+    let anchor_pts = match held_too_much {
+        true => edge_pts.saturating_sub(target_buffer).min(max_pts),
+        false => edge_pts.saturating_sub(target_buffer).min(min_pts),
+    };
     let anchor = TimestampAnchor {
         input_pts: anchor_pts,
         output_pts,
@@ -130,8 +147,86 @@ pub(super) fn decide_start(
         reason,
         ?edge,
         ?edge_distance,
+        upper_edge = ?track_bounds.upper,
+        lower_edge = ?track_bounds.lower,
         ?anchor,
         "Live sync track started"
     );
-    Some(StartDecision { anchor, edge })
+    Some(StartDecision {
+        anchor,
+        edge,
+        edge_offset: elapsed.saturating_sub(edge_pts),
+    })
+}
+
+/// Deviations within this distance from the expected buffer are left alone.
+const CORRECTION_TOLERANCE: Duration = Duration::from_millis(500);
+/// Largest single anchor adjustment; together with the check interval this
+/// bounds the slew rate.
+const MAX_CORRECTION_STEP: Duration = Duration::from_millis(10);
+/// Deviation beyond this is an anomaly (pts discontinuity, long stall) that
+/// slewing would chase for minutes; re-estimate the edge instead. A floor:
+/// raised for batched delivery, whose sawtooth and keep-everything starts
+/// legitimately deviate by multiples of the batch size.
+const RESET_THRESHOLD: Duration = Duration::from_secs(10);
+
+/// Post-start correction of a track's timestamp mapping.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum AnchorCorrection {
+    /// Buffer close enough to the expected size.
+    None,
+    /// Too much buffered; present content this much earlier.
+    Earlier(Duration),
+    /// Too little buffered; present content this much later.
+    Later(Duration),
+    /// Buffer diverged beyond correction; re-run the startup logic.
+    Reset,
+}
+
+/// Checks how the track's delivery behaves relative to the playback position
+/// and decides how to nudge the mapping back towards the desired buffer.
+///
+/// The estimated edge reacts to delivery changes only after its offset
+/// window rotates; the newest delivered content reacts immediately, so it is
+/// compared instead.
+pub(super) fn decide_correction(
+    options: &LiveSyncOptions,
+    sync_point: Instant,
+    now: Instant,
+    estimator: &LiveEdgeEstimator,
+    anchor: &TimestampAnchor,
+) -> AnchorCorrection {
+    let (Some(max_pts), Some(max_arrival_gap)) =
+        (estimator.max_pts(), estimator.max_arrival_gap(now))
+    else {
+        return AnchorCorrection::None;
+    };
+    let elapsed = now.saturating_duration_since(sync_point);
+    // newest delivered content relative to the playback position
+    let delivered_buffer = anchor.to_output_pts(max_pts).saturating_sub(elapsed);
+
+    let sustainable_buffer = max_arrival_gap * 3 / 2;
+    let target_buffer = options.desired_buffer.max(sustainable_buffer);
+    let expected = options.start_margin + target_buffer;
+    // batched delivery makes the buffer saw between refills; the band has to
+    // swallow the whole sawtooth
+    let lower = expected.saturating_sub(sustainable_buffer + CORRECTION_TOLERANCE);
+    let upper = expected + CORRECTION_TOLERANCE;
+    let reset_threshold = RESET_THRESHOLD.max(sustainable_buffer * 2);
+
+    if delivered_buffer > upper {
+        let deviation = delivered_buffer - expected;
+        match deviation > reset_threshold {
+            true => AnchorCorrection::Reset,
+            false => AnchorCorrection::Earlier(Duration::min(deviation / 8, MAX_CORRECTION_STEP)),
+        }
+    } else if delivered_buffer < lower {
+        let deviation = expected - delivered_buffer;
+        match deviation > reset_threshold {
+            true => AnchorCorrection::Reset,
+            false => AnchorCorrection::Later(Duration::min(deviation / 8, MAX_CORRECTION_STEP)),
+        }
+    } else {
+        AnchorCorrection::None
+    }
 }
