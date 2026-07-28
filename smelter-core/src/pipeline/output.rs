@@ -8,6 +8,8 @@ use smelter_render::OutputFrameFormat;
 use tracing::{info, warn};
 
 use crate::pipeline::{
+    MediaRuntime,
+    channel::EncodedDataOutput,
     hls::HlsOutput,
     input::PipelineInput,
     moq::MoqClientOutput,
@@ -24,8 +26,13 @@ pub(crate) struct PipelineOutput {
     pub audio_end_condition: Option<PipelineOutputEndConditionState>,
 }
 
+pub struct OutputHandle {
+    _runtime: MediaRuntime,
+    output: Box<dyn Output>,
+}
+
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct OutputVideo<'a> {
+pub struct OutputVideo<'a> {
     pub resolution: Resolution,
     pub frame_format: OutputFrameFormat,
     pub frame_sender: &'a Sender<PipelineEvent<Frame>>,
@@ -33,7 +40,7 @@ pub(crate) struct OutputVideo<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct OutputAudio<'a> {
+pub struct OutputAudio<'a> {
     pub samples_batch_sender: &'a Sender<PipelineEvent<OutputAudioSamples>>,
 }
 
@@ -41,6 +48,48 @@ pub(crate) trait Output: Send {
     fn audio(&self) -> Option<OutputAudio<'_>>;
     fn video(&self) -> Option<OutputVideo<'_>>;
     fn kind(&self) -> OutputProtocolKind;
+}
+
+impl OutputHandle {
+    fn new(runtime: MediaRuntime, output: Box<dyn Output>) -> OutputHandle {
+        Self {
+            _runtime: runtime,
+            output,
+        }
+    }
+
+    pub fn video(&self) -> Option<OutputVideo<'_>> {
+        self.output.video()
+    }
+
+    pub fn audio(&self) -> Option<OutputAudio<'_>> {
+        self.output.audio()
+    }
+
+    pub fn kind(&self) -> OutputProtocolKind {
+        self.output.kind()
+    }
+}
+
+impl MediaRuntime {
+    pub fn create_output(
+        &self,
+        output_id: OutputId,
+        options: ProtocolOutputOptions,
+    ) -> Result<(OutputHandle, Option<Port>), OutputInitError> {
+        let (output, port) = new_external_output(self.ctx.clone(), Ref::new(&output_id), options)?;
+        Ok((OutputHandle::new(self.clone(), output), port))
+    }
+
+    pub fn create_encoded_output(
+        &self,
+        output_id: OutputId,
+        options: EncodedDataOutputOptions,
+    ) -> Result<(OutputHandle, EncodedDataOutputHandle), OutputInitError> {
+        let (output, encoded) =
+            EncodedDataOutput::new(self.ctx.clone(), Ref::new(&output_id), options)?;
+        Ok((OutputHandle::new(self.clone(), Box::new(output)), encoded))
+    }
 }
 
 pub(super) fn new_external_output(

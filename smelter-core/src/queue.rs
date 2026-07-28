@@ -156,6 +156,15 @@ pub struct QueueContext {
 }
 
 impl QueueContext {
+    pub(crate) fn new(sync_point: Instant, side_channel_socket_dir: Option<Arc<Path>>) -> Self {
+        Self {
+            sync_point,
+            start_pts: Default::default(),
+            last_pts: Default::default(),
+            side_channel_socket_dir,
+        }
+    }
+
     pub(crate) fn effective_last_pts(&self) -> Duration {
         self.last_pts
             .value()
@@ -255,12 +264,7 @@ impl<T: Clone> Clone for PipelineEvent<T> {
 
 impl Queue {
     pub(crate) fn new(opts: QueueOptions) -> Arc<Self> {
-        let queue_ctx = QueueContext {
-            sync_point: Instant::now(),
-            start_pts: Default::default(),
-            last_pts: Default::default(),
-            side_channel_socket_dir: opts.side_channel_socket_dir,
-        };
+        let queue_ctx = QueueContext::new(Instant::now(), opts.side_channel_socket_dir);
         let (queue_start_sender, queue_start_receiver) = bounded(0);
         let (scheduled_event_sender, scheduled_event_receiver) = bounded(0);
         let queue = Arc::new(Queue {

@@ -662,7 +662,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     Ok(pipeline)
 }
 
-fn prepare_side_channel_socket_dir(dir: &Path) -> Result<(), InitPipelineError> {
+pub(super) fn prepare_side_channel_socket_dir(dir: &Path) -> Result<(), InitPipelineError> {
     if !dir.exists() {
         return std::fs::create_dir_all(dir).map_err(|e| {
             InitPipelineError::SideChannelSocketDir(format!(
