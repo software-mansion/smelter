@@ -10,7 +10,7 @@ use tracing::info;
 use crate::{
     event::EventEmitter,
     queue::{
-        QueueContext,
+        QueueAudioSamples, QueueContext, QueueVideoFrame,
         audio_input::AudioQueueInput,
         side_channel::{AudioSideChannel, VideoSideChannel},
         utils::PauseState,
@@ -32,6 +32,13 @@ struct PendingTrack {
 }
 
 pub(crate) struct QueueSender<T>(crossbeam_channel::Sender<T>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum QueueTrackAdvance {
+    Advanced,
+    CurrentTrackNotDrained,
+    WaitingForTrack,
+}
 
 impl<T> QueueSender<T> {
     pub(crate) fn new(sender: crossbeam_channel::Sender<T>) -> Self {
@@ -74,18 +81,30 @@ pub(super) struct InnerQueueInput {
 
 impl InnerQueueInput {
     fn maybe_start_next_track(&mut self) {
-        let video_eos_sent = self.video.as_ref().map(|v| v.eos_sent()).unwrap_or(true);
-        let audio_eos_sent = self.audio.as_ref().map(|a| a.eos_sent()).unwrap_or(true);
-        if video_eos_sent && audio_eos_sent {
-            self.replace_track()
-        }
+        let _ = self.advance_track();
     }
 
-    /// Replace current track with the next pending, do nothing if there is no pending
+    fn advance_track(&mut self) -> QueueTrackAdvance {
+        let video_eos_sent = self.video.as_ref().map(|v| v.eos_sent()).unwrap_or(true);
+        let audio_eos_sent = self.audio.as_ref().map(|a| a.eos_sent()).unwrap_or(true);
+        if !video_eos_sent || !audio_eos_sent {
+            return QueueTrackAdvance::CurrentTrackNotDrained;
+        }
+        let Ok(pending) = self.pending_receiver.try_recv() else {
+            return QueueTrackAdvance::WaitingForTrack;
+        };
+        self.install_track(pending);
+        QueueTrackAdvance::Advanced
+    }
+
     fn replace_track(&mut self) {
         let Ok(pending) = self.pending_receiver.try_recv() else {
             return;
         };
+        self.install_track(pending);
+    }
+
+    fn install_track(&mut self, pending: PendingTrack) {
         info!(input_id=%self.input_ref, "Push track to queue");
 
         self.video = pending.video;
@@ -335,6 +354,28 @@ impl QueueInput {
 
     pub(super) fn maybe_start_next_track(&self) {
         self.0.lock().unwrap().maybe_start_next_track();
+    }
+
+    pub(crate) fn pull_video(&self, pts: Duration) -> Option<QueueVideoFrame> {
+        self.0
+            .lock()
+            .unwrap()
+            .video
+            .as_mut()
+            .map(|video| video.get_frame(pts, Duration::ZERO))
+    }
+
+    pub(crate) fn pull_audio(&self, pts_range: (Duration, Duration)) -> Option<QueueAudioSamples> {
+        self.0
+            .lock()
+            .unwrap()
+            .audio
+            .as_mut()
+            .map(|audio| audio.pop_samples_before(pts_range, Duration::ZERO))
+    }
+
+    pub(crate) fn advance_track(&self) -> QueueTrackAdvance {
+        self.0.lock().unwrap().advance_track()
     }
 }
 
