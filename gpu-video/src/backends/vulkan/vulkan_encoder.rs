@@ -33,8 +33,6 @@ use crate::{
     parameters::RateControl,
 };
 
-const MB: u64 = 1024 * 1024;
-
 #[derive(Debug, thiserror::Error)]
 pub enum VulkanEncoderError {
     #[error("The device does not support Vulkan Video encoding")]
@@ -319,7 +317,7 @@ pub(crate) trait DynVulkanEncoder<'a>: Send {
         force_idr: bool,
         pts: Option<u64>,
     ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VulkanEncoderError>;
-    fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind>;
+    fn tracker(&self) -> Arc<Tracker<EncoderTrackerKind>>;
     fn download_output(
         &mut self,
         is_idr: bool,
@@ -423,7 +421,7 @@ impl<C: EncodeCodec> From<&FullEncoderParameters<C>> for vk::VideoEncodeUsageInf
 }
 
 pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
-    pub(crate) tracker: EncoderTracker,
+    pub(crate) tracker: Arc<EncoderTracker>,
     query_pool: EncodingQueryPool,
     profile: C::Profile,
     pub(crate) profile_info: ProfileInfo<'a>,
@@ -432,6 +430,7 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     idr_period: u32,
     #[allow(dead_code)]
     input_image: Arc<Image>,
+    // TODO: we probably need a pool of output buffers
     output_buffer: Buffer,
     counters: C::EncodingCounters,
     active_reference_slots: VecDeque<(usize, C::ReferenceInfo)>,
@@ -514,8 +513,6 @@ impl<'a> VideoEncoderParametersInfoH265 for VulkanEncoder<'a, H265Codec> {
 }
 
 impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
-    const OUTPUT_BUFFER_LEN: u64 = 4 * MB;
-
     pub(crate) fn new(
         encoding_device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters<C>,
@@ -535,7 +532,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             profile_info.profile_info,
         )?;
 
-        // TODO: this buffer should grow when necessary
+
         let output_buffer = Buffer::new_encode(
             encoding_device.allocator.clone(),
             Self::OUTPUT_BUFFER_LEN,
@@ -964,6 +961,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         Ok(data)
     }
 
+    // TODO: maybe allow passing multiple frames
     pub fn encode_bytes(
         &mut self,
         frame: &InputFrame<RawFrameData>,
@@ -972,9 +970,14 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
         let image = Arc::new(image);
 
-        self.encode(image, force_idr, frame.pts)?
-            .wait_and_download(u64::MAX)
-            .map_err(VideoEncoderError::from)
+        let encode = self.encode(image, force_idr, frame.pts)?;
+        self.task_thread.submit(move || {
+            let result = encode.wait_and_download(u64::MAX);
+        });
+        Ok(())
+
+        // .wait_and_download(u64::MAX)
+        // .map_err(VideoEncoderError::from)
     }
 
     #[cfg(feature = "wgpu")]
@@ -1351,8 +1354,8 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
         })
     }
 
-    fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind> {
-        &mut self.tracker
+    fn tracker(&self) -> Arc<Tracker<EncoderTrackerKind>> {
+        self.tracker.clone()
     }
 }
 

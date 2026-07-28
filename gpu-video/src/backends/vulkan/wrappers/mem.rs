@@ -4,14 +4,12 @@ use ash::vk::{self, Handle};
 use vk_mem::Alloc;
 
 use crate::backends::vulkan::{
-    VulkanCommonError, VulkanDeviceInitError,
-    codec::h264::parameters::H264DecodeProfileInfo,
-    vulkan_decoder::VulkanDecoderError,
-    vulkan_device::EncodingDevice,
-    wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
+    VulkanCommonError, VulkanDeviceInitError, VulkanEncoderError, codec::h264::parameters::H264DecodeProfileInfo, vulkan_decoder::VulkanDecoderError, vulkan_device::EncodingDevice, wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo}
 };
 
 use super::{Device, Instance};
+
+const MB: u64 = 1024 * 1024;
 
 pub(crate) struct Allocator {
     allocator: vk_mem::Allocator,
@@ -85,6 +83,7 @@ impl Drop for MemoryAllocation {
     }
 }
 
+// TODO: deduplicate?
 pub(crate) struct DecodeInputBufferPool<'a> {
     freelist: Arc<Mutex<Vec<DecodeInputBuffer>>>,
     allocator: Arc<Allocator>,
@@ -126,7 +125,7 @@ impl DecodeInputBuffer {
         profile: &H264DecodeProfileInfo,
         pool_freelist: Weak<Mutex<Vec<DecodeInputBuffer>>>,
     ) -> Result<Self, VulkanDecoderError> {
-        const INITIAL_SIZE: u64 = 1024 * 1024; // 1MiB
+        const INITIAL_SIZE: u64 = 1 * MB;
         let buffer = Buffer::new_decode(allocator.clone(), INITIAL_SIZE, profile)?;
 
         Ok(Self {
@@ -160,6 +159,62 @@ impl DecodeInputBuffer {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn release_to_pool(self) {
+        if let Some(pool_freelist) = self.pool_freelist.upgrade() {
+            pool_freelist.lock().unwrap().push(self);
+        }
+    }
+}
+
+pub(crate) struct EncodeOutputBufferPool<'a> {
+    freelist: Arc<Mutex<Vec<EncodeOutputBuffer>>>,
+    allocator: Arc<Allocator>,
+    profile: Arc<ProfileInfo<'a>>,
+}
+
+impl<'a> EncodeOutputBufferPool<'a> {
+    pub(crate) fn new(allocator: Arc<Allocator>, profile: Arc<ProfileInfo<'a>>) -> Self {
+        Self {
+            allocator,
+            freelist: Arc::new(Mutex::new(Vec::new())),
+            profile,
+        }
+    }
+
+    pub(crate) fn buffer(&mut self) -> Result<EncodeOutputBuffer, VulkanEncoderError> {
+        if let Some(buffer) = self.freelist.lock().unwrap().pop() {
+            return Ok(buffer);
+        }
+
+        EncodeOutputBuffer::new(
+            self.allocator.clone(),
+            &self.profile,
+            Arc::downgrade(&self.freelist),
+        )
+    }
+} 
+
+pub(crate) struct EncodeOutputBuffer {
+    pub(crate) buffer: Buffer,
+    pool_freelist: Weak<Mutex<Vec<EncodeOutputBuffer>>>,
+}
+
+impl EncodeOutputBuffer {
+    pub(crate) fn new(
+        allocator: Arc<Allocator>,
+        profile: &ProfileInfo,
+        pool_freelist: Weak<Mutex<Vec<EncodeOutputBuffer>>>,
+    ) -> Result<Self, VulkanEncoderError> {
+        // TODO: this buffer should grow when necessary
+        const INITIAL_SIZE: u64 = 4 * MB;
+        let buffer = Buffer::new_encode(allocator.clone(), INITIAL_SIZE, profile)?;
+
+        Ok(Self {
+            buffer,
+            pool_freelist,
+        })
     }
 
     pub(crate) fn release_to_pool(self) {
