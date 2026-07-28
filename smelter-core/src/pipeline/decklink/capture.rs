@@ -28,8 +28,12 @@ pub(super) struct ChannelCallbackAdapter {
     // dependency
     input: Weak<decklink::Input>,
     sync_point: Instant,
-    audio_offset: Mutex<Option<Duration>>,
-    video_offset: Mutex<Option<Duration>>,
+    /// One clock mapper for both media. Video `stream_time` and audio
+    /// `packet_time` are positions on the card's single stream clock, so a
+    /// shared offset carries the hardware's own A/V alignment into our
+    /// epoch. Per-medium offsets would overwrite that alignment with
+    /// whatever the callback arrival order happened to be.
+    stream_offset: Mutex<Option<Duration>>,
     last_format: Mutex<Format>,
 }
 
@@ -48,10 +52,24 @@ impl ChannelCallbackAdapter {
             span,
             input,
             sync_point: ctx.queue_ctx.sync_point,
-            audio_offset: Mutex::new(None),
-            video_offset: Mutex::new(None),
+            stream_offset: Mutex::new(None),
             last_format: Mutex::new(initial_format),
         }
+    }
+
+    /// Card stream time → elapsed since the sync point. The offset is
+    /// established once, by whichever medium arrives first, and reset on
+    /// format change.
+    ///
+    /// Stamps are capture-domain: they say when the card saw the content,
+    /// not when it should be presented. A consumer that needs media to be
+    /// available before its presentation time owns that lead — it is the
+    /// only side that knows how far ahead it reads.
+    fn map_stream_time(&self, stream_time: Duration) -> Duration {
+        let mut guard = self.stream_offset.lock().unwrap();
+        let offset =
+            *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(stream_time));
+        stream_time + offset
     }
 
     fn handle_video_frame(
@@ -59,12 +77,7 @@ impl ChannelCallbackAdapter {
         video_frame: &mut VideoInputFrame,
         sender: &QueueSender<Frame>,
     ) -> Result<(), decklink::DeckLinkError> {
-        let stream_time = video_frame.stream_time()?;
-        let offset = {
-            let mut guard = self.video_offset.lock().unwrap();
-            *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(stream_time))
-        };
-        let pts = stream_time + offset + Duration::from_millis(40);
+        let pts = self.map_stream_time(video_frame.stream_time()?);
 
         let width = video_frame.width();
         let height = video_frame.height();
@@ -183,12 +196,7 @@ impl ChannelCallbackAdapter {
         audio_packet: &mut AudioInputPacket,
         sender: &QueueSender<InputAudioSamples>,
     ) -> Result<(), decklink::DeckLinkError> {
-        let packet_time = audio_packet.packet_time()?;
-        let offset = {
-            let mut guard = self.audio_offset.lock().unwrap();
-            *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(packet_time))
-        };
-        let pts = packet_time + offset + Duration::from_millis(40);
+        let pts = self.map_stream_time(audio_packet.packet_time()?);
 
         let samples = audio_packet.as_32_bit_stereo()?;
         let samples = InputAudioSamples {
@@ -274,8 +282,7 @@ impl ChannelCallbackAdapter {
         input.start_streams()?;
 
         // it will reset on the next packet
-        *self.video_offset.lock().unwrap() = None;
-        *self.audio_offset.lock().unwrap() = None;
+        *self.stream_offset.lock().unwrap() = None;
 
         Ok(())
     }

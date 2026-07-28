@@ -25,17 +25,22 @@ const AUDIO_SAMPLE_RATE: u32 = 48_000;
 ///
 /// - Register track with `QueueTrackOffset::Pts(Duration::ZERO)` which means
 ///   that PTS should be relative to queue `sync_point`.
-/// - On first video/audio packet, compute offset as `sync_point.elapsed() - stream_time`.
-///   PTS of each subsequent packet is `stream_time + offset + 40ms`.
-/// - The 40ms buffer accounts for delivery latency, value could lower for video, but
-///   but for audio we need at least 40ms.
+/// - On the first packet of either medium, compute offset as
+///   `sync_point.elapsed() - stream_time`. PTS of each subsequent packet is
+///   `stream_time + offset`. Video `stream_time` and audio `packet_time` are
+///   positions on one card clock, so the shared offset preserves the
+///   hardware's own A/V alignment.
+/// - Stamps are capture-domain — when the card saw the content, not when it
+///   should be presented. A consumer that needs media in hand before its
+///   presentation time owns that lead; it is the only side that knows how
+///   far ahead it reads.
 /// - Never block on sending. Frames/samples are dropped if the channel is full.
 ///
 /// ### Format detection
 /// - Initial video mode is provisional (HD720p50). `enable_format_detection` is set,
 ///   so the SDK calls `video_input_format_changed` when the real format is detected.
 /// - On format change, streams are paused, video is re-enabled with the new mode,
-///   streams are flushed and restarted, and video/audio offsets are reset (recomputed
+///   streams are flushed and restarted, and the stream offset is reset (recomputed
 ///   on the next packet).
 ///
 /// ### Unsupported scenarios
