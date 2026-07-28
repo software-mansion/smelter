@@ -305,7 +305,6 @@ impl NativeEncodeProfileCapabilities<H264Codec> {
             max_references: self
                 .codec_encode_capabilities
                 .max_p_picture_l0_reference_count,
-            quality_levels: self.encode_capabilities.max_quality_levels,
         }
     }
 }
@@ -321,7 +320,6 @@ impl NativeEncodeProfileCapabilities<H265Codec> {
             max_references: self
                 .codec_encode_capabilities
                 .max_p_picture_l0_reference_count,
-            quality_levels: self.encode_capabilities.max_quality_levels,
         }
     }
 }
