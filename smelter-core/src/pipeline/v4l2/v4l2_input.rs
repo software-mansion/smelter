@@ -17,6 +17,7 @@ use crate::prelude::*;
 
 use v4l::{
     Format, FourCC,
+    buffer::{Flags, Metadata},
     frameinterval::FrameIntervalEnum,
     io::traits::CaptureStream,
     prelude::*,
@@ -53,9 +54,13 @@ impl TryFrom<FourCC> for V4l2Format {
 ///
 /// - Register track with `QueueTrackOffset::Pts(Duration::ZERO)` which means
 ///   that PTS should be relative to queue `sync_point`.
-/// - PTS of each frame is `sync_point.elapsed() + 20ms` (real-time capture with a
-///   small fixed buffer to account for delivery latency). This effectively syncs
-///   with the queue on every frame.
+/// - PTS is capture-domain: the kernel buffer timestamp, converted into our
+///   epoch by measuring the delivery delay in the kernel's own clock domain
+///   and subtracting it from the receipt stamp. Drivers that don't advertise
+///   `CLOCK_MONOTONIC` timestamps fall back to receipt time.
+/// - Stamps say when the device saw the frame, not when it should be
+///   presented; a consumer that needs frames in hand ahead of presentation
+///   owns that lead.
 /// - Never block on sending.
 ///
 /// ### Unsupported scenarios
@@ -273,6 +278,42 @@ impl V4l2DeviceConfig {
     }
 }
 
+/// A delivery delay past this is not a delay — it is a timestamp from
+/// another clock domain (or a driver that never set one).
+const MAX_PLAUSIBLE_DELIVERY: Duration = Duration::from_millis(500);
+
+/// Capture-domain PTS for one dequeued buffer.
+///
+/// The kernel's buffer timestamp is the honest capture edge, but it lives in
+/// `CLOCK_MONOTONIC` and we cannot read our own `Instant` epoch in that
+/// domain. So instead of anchoring the two clocks against each other, we
+/// measure the delivery delay *within* the kernel's domain and subtract it
+/// from our own receipt stamp: no cross-clock offset to establish, drift, or
+/// reset, and every frame corrects itself.
+fn capture_pts(ctx: &Arc<PipelineCtx>, meta: &Metadata) -> Duration {
+    let receipt = ctx.queue_ctx.sync_point.elapsed();
+    if meta.flags & Flags::TIMESTAMP_MASK != Flags::TIMESTAMP_MONOTONIC {
+        return receipt;
+    }
+    let stamp = Duration::new(meta.timestamp.sec as u64, meta.timestamp.usec as u32 * 1000);
+    match monotonic_now().checked_sub(stamp) {
+        Some(delay) if delay <= MAX_PLAUSIBLE_DELIVERY => receipt.saturating_sub(delay),
+        _ => receipt,
+    }
+}
+
+fn monotonic_now() -> Duration {
+    let mut ts = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `ts` is a live, writable `timespec`; `CLOCK_MONOTONIC` is
+    // always available on Linux, and the call only writes through the
+    // pointer we pass.
+    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
+    Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32)
+}
+
 struct InputState<'a> {
     config: V4l2DeviceConfig,
     ctx: Arc<PipelineCtx>,
@@ -290,13 +331,14 @@ impl InputState<'_> {
                 return;
             }
 
-            let frame = match self.stream.next() {
-                Ok((frame, _)) => frame,
+            let (frame, meta) = match self.stream.next() {
+                Ok(next) => next,
                 Err(err) => {
                     warn!(%err, "Cannot receive frame.");
                     continue;
                 }
             };
+            let pts = capture_pts(&self.ctx, meta);
 
             if skip_first {
                 skip_first = false;
@@ -344,7 +386,7 @@ impl InputState<'_> {
             };
 
             let frame = Frame {
-                pts: self.ctx.queue_ctx.sync_point.elapsed() + Duration::from_millis(20),
+                pts,
                 data,
                 resolution: self.config.resolution,
             };
