@@ -53,9 +53,7 @@ impl TryFrom<FourCC> for V4l2Format {
 ///
 /// - Register track with `QueueTrackOffset::Pts(Duration::ZERO)` which means
 ///   that PTS should be relative to queue `sync_point`.
-/// - PTS of each frame is `sync_point.elapsed() + 20ms` (real-time capture with a
-///   small fixed buffer to account for delivery latency). This effectively syncs
-///   with the queue on every frame.
+/// - PTS of each frame is relative to queue `sync_point` at receipt time.
 /// - Never block on sending.
 ///
 /// ### Unsupported scenarios
@@ -344,7 +342,7 @@ impl InputState<'_> {
             };
 
             let frame = Frame {
-                pts: self.ctx.queue_ctx.sync_point.elapsed() + Duration::from_millis(20),
+                pts: self.ctx.queue_ctx.sync_point.elapsed(),
                 data,
                 resolution: self.config.resolution,
             };
