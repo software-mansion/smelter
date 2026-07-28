@@ -8,6 +8,8 @@ use smelter_render::OutputFrameFormat;
 use tracing::{info, warn};
 
 use crate::pipeline::{
+    MediaRuntime,
+    channel::EncodedDataOutput,
     hls::HlsOutput,
     input::PipelineInput,
     moq::MoqClientOutput,
@@ -22,6 +24,27 @@ pub(crate) struct PipelineOutput {
     pub output: Box<dyn Output>,
     pub video_end_condition: Option<PipelineOutputEndConditionState>,
     pub audio_end_condition: Option<PipelineOutputEndConditionState>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VideoOutputEndpoint {
+    pub resolution: Resolution,
+    pub frame_format: OutputFrameFormat,
+    pub frame_sender: Sender<PipelineEvent<Frame>>,
+    pub keyframe_request_sender: Sender<()>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioOutputEndpoint {
+    pub samples_batch_sender: Sender<PipelineEvent<OutputAudioSamples>>,
+}
+
+pub struct OutputHandle {
+    _runtime: MediaRuntime,
+    output: Box<dyn Output>,
+    video: Option<VideoOutputEndpoint>,
+    audio: Option<AudioOutputEndpoint>,
+    port: Option<Port>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -41,6 +64,67 @@ pub(crate) trait Output: Send {
     fn audio(&self) -> Option<OutputAudio<'_>>;
     fn video(&self) -> Option<OutputVideo<'_>>;
     fn kind(&self) -> OutputProtocolKind;
+}
+
+impl OutputHandle {
+    fn new(runtime: MediaRuntime, output: Box<dyn Output>, port: Option<Port>) -> OutputHandle {
+        let video = output.video().map(|video| VideoOutputEndpoint {
+            resolution: video.resolution,
+            frame_format: video.frame_format,
+            frame_sender: video.frame_sender.clone(),
+            keyframe_request_sender: video.keyframe_request_sender.clone(),
+        });
+        let audio = output.audio().map(|audio| AudioOutputEndpoint {
+            samples_batch_sender: audio.samples_batch_sender.clone(),
+        });
+        Self {
+            _runtime: runtime,
+            output,
+            video,
+            audio,
+            port,
+        }
+    }
+
+    pub fn video(&self) -> Option<&VideoOutputEndpoint> {
+        self.video.as_ref()
+    }
+
+    pub fn audio(&self) -> Option<&AudioOutputEndpoint> {
+        self.audio.as_ref()
+    }
+
+    pub fn port(&self) -> Option<Port> {
+        self.port
+    }
+
+    pub fn kind(&self) -> OutputProtocolKind {
+        self.output.kind()
+    }
+}
+
+impl MediaRuntime {
+    pub fn create_output(
+        &self,
+        output_id: OutputId,
+        options: ProtocolOutputOptions,
+    ) -> Result<OutputHandle, OutputInitError> {
+        let (output, port) = new_external_output(self.ctx.clone(), Ref::new(&output_id), options)?;
+        Ok(OutputHandle::new(self.clone(), output, port))
+    }
+
+    pub fn create_encoded_output(
+        &self,
+        output_id: OutputId,
+        options: EncodedDataOutputOptions,
+    ) -> Result<(OutputHandle, EncodedDataOutputHandle), OutputInitError> {
+        let (output, encoded) =
+            EncodedDataOutput::new(self.ctx.clone(), Ref::new(&output_id), options)?;
+        Ok((
+            OutputHandle::new(self.clone(), Box::new(output), None),
+            encoded,
+        ))
+    }
 }
 
 pub(super) fn new_external_output(
