@@ -28,8 +28,7 @@ pub(super) struct ChannelCallbackAdapter {
     // dependency
     input: Weak<decklink::Input>,
     sync_point: Instant,
-    audio_offset: Mutex<Option<Duration>>,
-    video_offset: Mutex<Option<Duration>>,
+    stream_offset: Mutex<Option<Duration>>,
     last_format: Mutex<Format>,
 }
 
@@ -48,8 +47,7 @@ impl ChannelCallbackAdapter {
             span,
             input,
             sync_point: ctx.queue_ctx.sync_point,
-            audio_offset: Mutex::new(None),
-            video_offset: Mutex::new(None),
+            stream_offset: Mutex::new(None),
             last_format: Mutex::new(initial_format),
         }
     }
@@ -61,10 +59,12 @@ impl ChannelCallbackAdapter {
     ) -> Result<(), decklink::DeckLinkError> {
         let stream_time = video_frame.stream_time()?;
         let offset = {
-            let mut guard = self.video_offset.lock().unwrap();
+            let mut guard = self.stream_offset.lock().unwrap();
             *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(stream_time))
         };
-        let pts = stream_time + offset + Duration::from_millis(40);
+        let presentation_delay =
+            Duration::from_millis(if self.audio_sender.is_some() { 40 } else { 0 });
+        let pts = stream_time + offset + presentation_delay;
 
         let width = video_frame.width();
         let height = video_frame.height();
@@ -185,7 +185,7 @@ impl ChannelCallbackAdapter {
     ) -> Result<(), decklink::DeckLinkError> {
         let packet_time = audio_packet.packet_time()?;
         let offset = {
-            let mut guard = self.audio_offset.lock().unwrap();
+            let mut guard = self.stream_offset.lock().unwrap();
             *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(packet_time))
         };
         let pts = packet_time + offset + Duration::from_millis(40);
@@ -274,8 +274,7 @@ impl ChannelCallbackAdapter {
         input.start_streams()?;
 
         // it will reset on the next packet
-        *self.video_offset.lock().unwrap() = None;
-        *self.audio_offset.lock().unwrap() = None;
+        *self.stream_offset.lock().unwrap() = None;
 
         Ok(())
     }
