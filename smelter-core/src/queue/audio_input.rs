@@ -110,6 +110,23 @@ impl AudioQueueInput {
         pts_range: (Duration, Duration),
         queue_start_pts: Duration,
     ) -> QueueAudioSamples {
+        self.pop_samples_with_lookahead(pts_range, queue_start_pts, MIXER_STRETCH_BUFFER)
+    }
+
+    pub(super) fn pop_samples_before(
+        &mut self,
+        pts_range: (Duration, Duration),
+        queue_start_pts: Duration,
+    ) -> QueueAudioSamples {
+        self.pop_samples_with_lookahead(pts_range, queue_start_pts, Duration::ZERO)
+    }
+
+    fn pop_samples_with_lookahead(
+        &mut self,
+        pts_range: (Duration, Duration),
+        queue_start_pts: Duration,
+        lookahead: Duration,
+    ) -> QueueAudioSamples {
         if self.paused {
             return QueueAudioSamples::empty();
         }
@@ -130,7 +147,7 @@ impl AudioQueueInput {
             };
         }
 
-        let input_pts = (pts_range.1 + MIXER_STRETCH_BUFFER).saturating_sub(offset);
+        let input_pts = (pts_range.1 + lookahead).saturating_sub(offset);
         trace!(queue_pts=?pts_range, ?input_pts, "Try get samples batch");
 
         let mut samples = self.receiver.pop_before_pts(input_pts);

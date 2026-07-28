@@ -5,6 +5,7 @@ use std::{
 
 use crate::{
     pipeline::{
+        MediaRuntime,
         hls::HlsInput,
         moq::{MoqClientInput, MoqServerInput},
         mp4::Mp4Input,
@@ -12,7 +13,7 @@ use crate::{
         rtp::RtpInput,
         webrtc::{WhepInput, WhipInput},
     },
-    queue::QueueInput,
+    queue::{QueueInput, QueueTrackAdvance},
 };
 
 use crate::prelude::*;
@@ -26,6 +27,32 @@ pub struct PipelineInput {
     /// Some(received) - Whether EOS was received from queue on video stream for that input.
     /// None - No video configured for that input.
     pub(super) video_eos_received: Option<bool>,
+}
+
+pub struct InputHandle {
+    _runtime: MediaRuntime,
+    input: Input,
+    info: InputInitInfo,
+    queue_input: QueueInput,
+}
+
+#[derive(Debug, Clone)]
+pub struct VideoDrainResult {
+    pub frame: Option<Frame>,
+    pub end_of_stream: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioDrainResult {
+    pub samples: Vec<InputAudioSamples>,
+    pub end_of_stream: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackAdvance {
+    Advanced,
+    CurrentTrackNotDrained,
+    WaitingForTrack,
 }
 
 pub enum Input {
@@ -91,6 +118,71 @@ impl Input {
             }
             _ => Err(UpdateInputError::PausingNotSupported(self.kind())),
         }
+    }
+}
+
+impl InputHandle {
+    pub fn info(&self) -> &InputInitInfo {
+        &self.info
+    }
+
+    pub fn kind(&self) -> InputProtocolKind {
+        self.input.kind()
+    }
+
+    pub fn seek(&self, position: Duration) -> Result<(), UpdateInputError> {
+        self.input.seek(position)
+    }
+
+    pub fn pause(&self) -> Result<(), UpdateInputError> {
+        self.input.pause()
+    }
+
+    pub fn resume(&self) -> Result<(), UpdateInputError> {
+        self.input.resume()
+    }
+
+    pub fn pull_video(&self, pts: Duration) -> Option<VideoDrainResult> {
+        self.queue_input
+            .pull_video(pts)
+            .map(|result| VideoDrainResult {
+                frame: result.frame,
+                end_of_stream: result.is_eos,
+            })
+    }
+
+    pub fn pull_audio(&self, start_pts: Duration, end_pts: Duration) -> Option<AudioDrainResult> {
+        self.queue_input
+            .pull_audio((start_pts, end_pts))
+            .map(|result| AudioDrainResult {
+                samples: result.samples,
+                end_of_stream: result.is_eos,
+            })
+    }
+
+    pub fn advance_track(&self) -> TrackAdvance {
+        match self.queue_input.advance_track() {
+            QueueTrackAdvance::Advanced => TrackAdvance::Advanced,
+            QueueTrackAdvance::CurrentTrackNotDrained => TrackAdvance::CurrentTrackNotDrained,
+            QueueTrackAdvance::WaitingForTrack => TrackAdvance::WaitingForTrack,
+        }
+    }
+}
+
+impl MediaRuntime {
+    pub fn create_input(
+        &self,
+        input_id: InputId,
+        options: RegisterInputOptions,
+    ) -> Result<InputHandle, InputInitError> {
+        let (input, info, queue_input) =
+            new_external_input(self.ctx.clone(), Ref::new(&input_id), options)?;
+        Ok(InputHandle {
+            _runtime: self.clone(),
+            input,
+            info,
+            queue_input,
+        })
     }
 }
 

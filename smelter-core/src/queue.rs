@@ -29,7 +29,7 @@ use crate::prelude::*;
 
 pub use self::queue_input::QueueInputOptions;
 pub(crate) use self::queue_input::{
-    QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput,
+    QueueInput, QueueSender, QueueTrackAdvance, QueueTrackOffset, QueueTrackOptions, WeakQueueInput,
 };
 
 use self::{
@@ -182,9 +182,9 @@ pub(super) struct QueueVideoOutput {
 
 #[derive(Debug, Clone)]
 pub(super) struct QueueVideoFrame {
-    pub frame: Option<Frame>,
+    pub(crate) frame: Option<Frame>,
     /// Track on this input ended.
-    pub is_eos: bool,
+    pub(crate) is_eos: bool,
 }
 
 impl QueueVideoFrame {
@@ -219,9 +219,9 @@ pub(super) struct QueueAudioOutput {
 
 #[derive(Debug, Clone)]
 pub(super) struct QueueAudioSamples {
-    pub samples: Vec<InputAudioSamples>,
+    pub(crate) samples: Vec<InputAudioSamples>,
     /// Track on this input ended.
-    pub is_eos: bool,
+    pub(crate) is_eos: bool,
 }
 
 impl QueueAudioSamples {

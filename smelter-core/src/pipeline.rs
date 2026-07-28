@@ -46,6 +46,7 @@ mod runtime;
 
 pub(crate) mod utils;
 
+pub use input::{AudioDrainResult, InputHandle, TrackAdvance, VideoDrainResult};
 pub use instance::Pipeline;
 pub(crate) use moq::SelfSignedTlsError;
 pub use output::{OutputAudio, OutputHandle, OutputVideo};
