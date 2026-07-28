@@ -16,6 +16,7 @@ use crate::{
             h264::{H264Codec, encode::H264WriteParametersInfo},
             h265::{H265Codec, encode::H265WriteParametersInfo},
         },
+        task_thread::TaskThread,
         vulkan_device::EncodingDevice,
         wrappers::{
             Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
@@ -437,6 +438,9 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     rate_control: RateControl,
     inline_stream_params: bool,
     encoding_device: Arc<EncodingDevice>,
+    task_thread: Arc<TaskThread>,
+    on_complete:
+        Arc<Mutex<dyn FnMut(Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError>) + Send>>, // TODO: does it need to be Arc/Mutex? Also fix transcoder
 }
 
 impl<'a, C: EncodeCodec + 'a> VideoEncoderBackend for VulkanEncoder<'a, C> {
@@ -444,7 +448,7 @@ impl<'a, C: EncodeCodec + 'a> VideoEncoderBackend for VulkanEncoder<'a, C> {
         &mut self,
         frame: &InputFrame<RawFrameData>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    ) -> Result<(), VideoEncoderError> {
         VulkanEncoder::encode_bytes(self, frame, force_idr)
     }
 }
@@ -929,7 +933,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
                 .submit(
                     &[&command_buffer],
                     &[],
-                    semaphore_submit_info.wgpu_wait_info(),
+                    semaphore_submit_info.wgpu_signal_fence(),
                 )
                 .map_err(WgpuTextureEncoderError::from)?;
         }
@@ -964,13 +968,13 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         &mut self,
         frame: &InputFrame<RawFrameData>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    ) -> Result<(), VideoEncoderError> {
         let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
         let image = Arc::new(image);
 
         self.encode(image, force_idr, frame.pts)?
             .wait_and_download(u64::MAX)
-            .map_err(Into::into)
+            .map_err(VideoEncoderError::from)
     }
 
     #[cfg(feature = "wgpu")]

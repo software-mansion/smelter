@@ -10,7 +10,7 @@ pub(crate) trait VideoEncoderBackend: Send {
         &mut self,
         frame: &InputFrame<RawFrameData>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError>;
+    ) -> Result<(), VideoEncoderError>;
 }
 
 pub(crate) trait VideoEncoderParametersInfoH264 {
@@ -42,6 +42,7 @@ pub struct BytesEncoderH264 {
 }
 
 impl BytesEncoderH264 {
+    // TODO: docs
     /// The result is a chunk of H264 bitstream.
     ///
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
@@ -51,8 +52,14 @@ impl BytesEncoderH264 {
         &mut self,
         frame: &InputFrame<RawFrameData>,
         force_keyframe: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    ) -> Result<(), VideoEncoderError> {
         self.encoder.encode_bytes(frame, force_keyframe)
+    }
+
+    // TODO: implement
+    // TODO: docs
+    pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
+        todo!()
     }
 
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.

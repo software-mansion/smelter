@@ -53,6 +53,12 @@ impl WgpuTexturesEncoderH264 {
             .encode_texture(&self.wgpu_device, &self.wgpu_queue, frame, force_keyframe)
     }
 
+    // TODO: implement
+    // TODO: docs
+    pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
+        todo!()
+    }
+
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
