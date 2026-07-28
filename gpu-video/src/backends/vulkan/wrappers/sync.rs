@@ -87,6 +87,7 @@ impl<S: Copy> Copy for TrackerWait<S> {}
 
 pub(crate) struct Tracker<K: TrackerKind> {
     pub(crate) semaphore_tracker: Arc<SemaphoreTracker<K::WaitState>>,
+    // TODO: arc
     pub(crate) command_buffer_pools: K::CommandBufferPools,
     pub(crate) image_layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
 }

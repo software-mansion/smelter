@@ -19,10 +19,10 @@ use crate::{
         task_thread::TaskThread,
         vulkan_device::EncodingDevice,
         wrappers::{
-            Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
-            ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
-            SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt, VideoQueueExt,
-            VideoSession, VideoSessionParameters,
+            Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer,
+            EncodeOutputBufferPool, Image, ImageLayoutTracker, ImageView, OpenCommandBuffer,
+            ProfileInfo, QueryPool, SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt,
+            VideoQueueExt, VideoSession, VideoSessionParameters,
         },
     },
     device::{ColorRange, ColorSpace, Rational},
@@ -424,14 +424,13 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     pub(crate) tracker: Arc<EncoderTracker>,
     query_pool: EncodingQueryPool,
     profile: C::Profile,
-    pub(crate) profile_info: ProfileInfo<'a>,
+    pub(crate) profile_info: Arc<ProfileInfo<'a>>,
     session_resources: VideoSessionResources<'a>,
     idr_period_counter: u32,
     idr_period: u32,
     #[allow(dead_code)]
     input_image: Arc<Image>,
-    // TODO: we probably need a pool of output buffers
-    output_buffer: Buffer,
+    encode_buffer_pool: EncodeOutputBufferPool<'a>,
     counters: C::EncodingCounters,
     active_reference_slots: VecDeque<(usize, C::ReferenceInfo)>,
     rate_control: RateControl,
@@ -517,7 +516,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         encoding_device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters<C>,
     ) -> Result<Self, VulkanEncoderError> {
-        let profile_info = C::profile_info(&parameters);
+        let profile_info = Arc::new(C::profile_info(&parameters));
 
         let command_buffer_pools = EncoderCommandBufferPools::new(&encoding_device)?;
         let tracker = EncoderTracker::new(
@@ -530,13 +529,6 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             &encoding_device,
             parameters.profile,
             profile_info.profile_info,
-        )?;
-
-
-        let output_buffer = Buffer::new_encode(
-            encoding_device.allocator.clone(),
-            Self::OUTPUT_BUFFER_LEN,
-            &profile_info,
         )?;
 
         let mut buffer = tracker.command_buffer_pools.encode.begin_buffer()?;
@@ -565,6 +557,9 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             tracker.image_layout_tracker.clone(),
         )?;
 
+        let encode_buffer_pool =
+            EncodeOutputBufferPool::new(encoding_device.allocator.clone(), profile_info.clone());
+
         Ok(Self {
             idr_period_counter: 0,
             counters: C::EncodingCounters::default(),
@@ -577,7 +572,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             query_pool,
             session_resources,
             idr_period: parameters.idr_period.get(),
-            output_buffer,
+            encode_buffer_pool,
             rate_control: parameters.rate_control,
             inline_stream_params: parameters.inline_stream_params,
         })
