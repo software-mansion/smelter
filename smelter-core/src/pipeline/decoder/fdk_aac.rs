@@ -1,5 +1,6 @@
 use fdk_aac_sys as fdk;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{error, info};
 
 use crate::pipeline::decoder::{AudioDecoder, EncodedInputEvent};
@@ -168,9 +169,17 @@ impl Decoder {
                     0
                 };
 
+                // The decoder delays output PCM (e.g. PCM limiter and concealment
+                // lookahead) without adjusting timestamps, so shift PTS back by the
+                // reported delay to keep samples in sync with input timestamps.
+                let output_delay = match sample_rate {
+                    0 => Duration::ZERO,
+                    _ => Duration::from_secs_f64(info.outputDelay as f64 / sample_rate as f64),
+                };
+
                 decoded_samples.push(InputAudioSamples {
                     samples,
-                    start_pts: chunk.pts,
+                    start_pts: chunk.pts.saturating_sub(output_delay),
                     sample_rate,
                 })
             }
