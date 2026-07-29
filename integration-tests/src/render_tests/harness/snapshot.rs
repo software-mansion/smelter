@@ -36,22 +36,25 @@ impl Snapshot {
         snapshots_diff(&old_snapshot, &self.data)
     }
 
+    /// Workdir is flat, so the module name is encoded into the
+    /// file name (separated by `__`) — otherwise the audit tool
+    /// can't tell which `<test.module>` a workdir file belongs
+    /// to, and same-named tests in different modules would alias.
+    fn workdir_snapshot_name(&self) -> String {
+        format!(
+            "{}__{}_{:05}_{}.png",
+            self.module,
+            self.test_name,
+            self.pts.as_millis(),
+            super::OUTPUT_ID,
+        )
+    }
+
     pub(super) fn write_as_failed_snapshot(&self) {
         let failed_snapshot_path = render_tests_workdir();
         create_dir_all(&failed_snapshot_path).unwrap();
 
-        // Workdir is flat, so the module name is encoded into the
-        // file name (separated by `__`) — otherwise the audit tool
-        // can't tell which `<test.module>` a workdir file belongs
-        // to, and same-named tests in different modules would alias.
-        let pts_millis = self.pts.as_millis();
-        let snapshot_name = format!(
-            "{}__{}_{:05}_{}.png",
-            self.module,
-            self.test_name,
-            pts_millis,
-            super::OUTPUT_ID,
-        );
+        let snapshot_name = self.workdir_snapshot_name();
 
         let width = self.resolution.width - (self.resolution.width % 2);
         let height = self.resolution.height - (self.resolution.height % 2);
@@ -68,6 +71,22 @@ impl Snapshot {
             self.save_path(),
             failed_snapshot_path.join(format!("expected_{snapshot_name}")),
         );
+    }
+
+    /// Remove workdir files for this snapshot left by a previous
+    /// failed run. Called on a passing run so stale failure artifacts
+    /// don't linger for the audit tooling to pick up.
+    pub(super) fn clear_failed_snapshot(&self) {
+        let failed_snapshot_path = render_tests_workdir();
+        let snapshot_name = self.workdir_snapshot_name();
+        for prefix in ["actual_", "expected_"] {
+            let file = failed_snapshot_path.join(format!("{prefix}{snapshot_name}"));
+            if file.exists()
+                && let Err(e) = fs::remove_file(&file)
+            {
+                println!("Failed to remove stale snapshot {}: {e}", file.display());
+            }
+        }
     }
 }
 
