@@ -329,6 +329,10 @@ impl QueueInput {
         self.0.lock().unwrap().resume();
     }
 
+    pub fn required(&self) -> bool {
+        self.0.lock().unwrap().required
+    }
+
     pub fn downgrade(&self) -> WeakQueueInput {
         WeakQueueInput(Arc::downgrade(&self.0))
     }
