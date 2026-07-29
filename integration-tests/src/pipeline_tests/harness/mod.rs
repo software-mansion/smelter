@@ -21,7 +21,10 @@ use std::{fmt, path::Path};
 use anyhow::Result;
 use bytes::Bytes;
 
-use crate::{dump_format, output_dump_from_disk, save_failed_actual_dump, save_failed_test_dumps};
+use crate::{
+    clear_failed_test_dumps, dump_format, output_dump_from_disk, save_failed_actual_dump,
+    save_failed_test_dumps,
+};
 
 pub mod audio;
 pub mod audio_analysis;
@@ -71,7 +74,8 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
 
 /// Common tail for both compare entry points: on failure, always save
 /// both dumps for the inspector. On success, save the pair too if the
-/// debug env is set.
+/// debug env is set; otherwise remove dumps left by a previous failed
+/// run.
 fn finalize<P: AsRef<Path> + fmt::Debug>(
     result: Result<()>,
     expected: &Bytes,
@@ -82,6 +86,8 @@ fn finalize<P: AsRef<Path> + fmt::Debug>(
         Ok(()) => {
             if save_dumps_env_set() {
                 save_failed_test_dumps(expected, actual, &snapshot_filename);
+            } else {
+                clear_failed_test_dumps(&snapshot_filename);
             }
             Ok(())
         }

@@ -136,6 +136,26 @@ pub fn save_failed_actual_dump<P: AsRef<Path>>(actual_dump: &Bytes, snapshot_fil
     }
 }
 
+/// Remove dumps for this snapshot left in the workdir by a previous
+/// failed run. Called on a passing run so stale failure artifacts
+/// don't linger for the audit tooling to pick up.
+pub fn clear_failed_test_dumps<P: AsRef<Path>>(snapshot_filename: P) {
+    let path = pipeline_tests_workdir();
+    let file_name = snapshot_filename
+        .as_ref()
+        .file_name()
+        .unwrap()
+        .to_string_lossy();
+    for prefix in ["expected_dump_", "actual_dump_"] {
+        let file = path.join(format!("{prefix}{file_name}"));
+        if file.exists()
+            && let Err(e) = fs::remove_file(&file)
+        {
+            tracing::warn!("Failed to remove stale dump {}: {e}", file.display());
+        }
+    }
+}
+
 pub fn unmarshal_packets(data: &Bytes) -> Result<Vec<rtp::packet::Packet>> {
     let mut packets = Vec::new();
     let mut read_bytes = 0;

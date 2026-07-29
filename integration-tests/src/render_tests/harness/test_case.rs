@@ -108,6 +108,8 @@ impl TestRunner {
             self.failed = true;
         } else if save_dumps_env_set() {
             snapshot.write_as_failed_snapshot();
+        } else {
+            snapshot.clear_failed_snapshot();
         }
     }
 
