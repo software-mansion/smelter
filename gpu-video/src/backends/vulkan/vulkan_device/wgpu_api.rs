@@ -156,8 +156,11 @@ impl VulkanDevice {
         let backend = VulkanDecoderH264::new(
             Arc::new(self.decoding_device()?),
             parameters,
-            WgpuTexturesOutput::new(wgpu_device, wgpu_queue),
-            self.task_thread.clone(),
+            WgpuTexturesOutput {
+                wgpu_device,
+                wgpu_queue,
+            },
+            self.waiter_thread.clone(),
         )?;
 
         Ok(WgpuTexturesDecoderH264 {

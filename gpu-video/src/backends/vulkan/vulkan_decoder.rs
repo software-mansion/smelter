@@ -981,6 +981,7 @@ pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
 
 pub(crate) struct DownloadDecodeSubmission<T> {
     pub(crate) frame: T,
+    pub(crate) decode_metadata: DecodeResultMetadata,
     pub(crate) semaphore_wait_value: SemaphoreWaitValue,
     pub(crate) decode_query_pool: Option<Arc<DecodingQueryPool>>,
     pub(crate) _in_flight_resources: InFlightDecodeResources,

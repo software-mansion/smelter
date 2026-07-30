@@ -7,13 +7,13 @@ use ash::vk;
 
 use crate::backends::vulkan::codec::EncodeCodec;
 use crate::backends::vulkan::codec::h264::H264Codec;
-use crate::backends::vulkan::task_thread::TaskThread;
 use crate::backends::vulkan::vulkan_decoder::decoders_h264::{BytesOutput, VulkanDecoderH264};
 use crate::backends::vulkan::vulkan_encoder::FullEncoderParameters;
-use crate::backends::vulkan::wrappers::*;
+use crate::backends::vulkan::waiter_thread::WaiterThreadHandle;
 use crate::backends::vulkan::{
     VulkanAdapter, VulkanAdapterInfo, VulkanDecoderError, VulkanEncoder, VulkanEncoderError,
 };
+use crate::backends::vulkan::{VulkanCommonError, wrappers::*};
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::decoders::FrameCallback;
 use crate::device::{
@@ -45,7 +45,7 @@ pub struct VulkanDevice {
     pub(crate) native_encode_capabilities: Option<NativeEncodeCapabilities>,
     pub(crate) adapter_info: Arc<VulkanAdapterInfo>,
     pub(crate) device: Arc<Device>,
-    pub(crate) task_thread: Arc<TaskThread>,
+    pub(crate) waiter_thread: Arc<WaiterThreadHandle>,
 }
 
 impl CoreVideoDeviceBackend for VulkanDevice {
@@ -225,6 +225,7 @@ impl VulkanDevice {
             physical_device,
             device.clone(),
         )?);
+        let waiter_thread = Arc::new(WaiterThreadHandle::spawn(device.clone())?);
 
         Ok(Arc::new(Self {
             _physical_device: physical_device,
@@ -234,7 +235,7 @@ impl VulkanDevice {
             native_decode_capabilities: decode_capabilities,
             native_encode_capabilities: encode_capabilities,
             adapter_info: Arc::new(info),
-            task_thread: Arc::new(TaskThread::spawn()),
+            waiter_thread,
         }))
     }
 
@@ -246,8 +247,8 @@ impl VulkanDevice {
         let backend = VulkanDecoderH264::new(
             Arc::new(self.decoding_device()?),
             parameters,
-            BytesOutput::new(on_frame_callback),
-            self.task_thread.clone(),
+            BytesOutput { on_frame_callback },
+            self.waiter_thread.clone(),
         )?;
 
         Ok(BytesDecoderH264 {
@@ -510,6 +511,9 @@ pub enum VulkanDeviceInitError {
     #[error("Vulkan error: {0}")]
     VkError(#[from] vk::Result),
 
+    #[error(transparent)]
+    Common(#[from] VulkanCommonError),
+
     #[cfg(feature = "wgpu")]
     #[error(transparent)]
     WgpuError(#[from] crate::WgpuInitError),
@@ -518,10 +522,12 @@ pub enum VulkanDeviceInitError {
 impl From<VulkanDeviceInitError> for VideoDeviceInitError {
     fn from(err: VulkanDeviceInitError) -> Self {
         match err {
-            VulkanDeviceInitError::VkError(_) => Self::BackendError(VideoBackendError {
-                message: err.to_string(),
-                source: Box::new(err),
-            }),
+            VulkanDeviceInitError::VkError(_) | VulkanDeviceInitError::Common(_) => {
+                Self::BackendError(VideoBackendError {
+                    message: err.to_string(),
+                    source: Box::new(err),
+                })
+            }
             #[cfg(feature = "wgpu")]
             VulkanDeviceInitError::WgpuError(_) => Self::BackendError(VideoBackendError {
                 message: err.to_string(),

@@ -283,7 +283,6 @@ pub(crate) enum EncoderTrackerWaitState {
     Encode,
 }
 
-#[derive(Clone)]
 pub(crate) struct EncoderCommandBufferPools {
     transfer: CommandBufferPool,
     encode: CommandBufferPool,

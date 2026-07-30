@@ -10,13 +10,12 @@ use crate::{
     DecoderEvent, OutputFrame, RawFrameData,
     backends::vulkan::{
         VulkanDecoder,
-        task_thread::TaskThread,
         vulkan_decoder::{
-            DecodeSubmission, DecoderTracker, DownloadDecodeSubmission, ImageModifiers,
-            VulkanDecoderError,
+            DecodeSubmission, DownloadDecodeSubmission, ImageModifiers, VulkanDecoderError,
         },
         vulkan_device::DecodingDevice,
-        wrappers::{Buffer, SemaphoreWaitValue},
+        waiter_thread::{SubmissionWaitRequest, WaiterThreadHandle},
+        wrappers::{Buffer, CommandBufferPoolStorage, SemaphoreWaitValue},
     },
     decoders::{FrameCallback, VideoDecoderBackend, VideoDecoderError},
     device::DecoderParameters,
@@ -41,7 +40,7 @@ pub(crate) struct VulkanDecoderH264<O: DecodeOutput> {
     in_flight: VecDeque<SemaphoreWaitValue>,
 
     output: O,
-    task_thread: Arc<TaskThread>,
+    waiter_thread: Arc<WaiterThreadHandle>,
 }
 
 impl VideoDecoderBackend for VulkanDecoderH264<BytesOutput> {
@@ -52,10 +51,12 @@ impl VideoDecoderBackend for VulkanDecoderH264<BytesOutput> {
         let block_until_done = matches!(event, DecoderEvent::Flush);
         let frames = self.process_event(event)?;
 
-        self.submit_to_task_thread(frames);
+        self.submit_to_waiter_thread(frames)?;
 
         if block_until_done {
-            self.task_thread.sync();
+            self.waiter_thread
+                .wait_for_semaphore(self.decoder.tracker.semaphore_tracker.semaphore.clone())
+                .map_err(VulkanDecoderError::from)?;
             self.in_flight.clear();
         }
 
@@ -81,7 +82,7 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanDecoderH264<WgpuTextures
             })
             .collect();
 
-        self.submit_to_task_thread(frames);
+        self.submit_to_waiter_thread(frames)?;
 
         Ok(output_textures)
     }
@@ -92,7 +93,7 @@ impl<O: DecodeOutput> VulkanDecoderH264<O> {
         decoding_device: Arc<DecodingDevice>,
         parameters: DecoderParameters,
         output: O,
-        task_thread: Arc<TaskThread>,
+        waiter_thread: Arc<WaiterThreadHandle>,
     ) -> Result<Self, VulkanDecoderError> {
         let transfer_queue_idx = decoding_device.queues.transfer.family_index;
         let decoder = VulkanDecoder::new(
@@ -113,7 +114,7 @@ impl<O: DecodeOutput> VulkanDecoderH264<O> {
             max_in_flight_submissions: parameters.max_in_flight_submissions.get() as usize,
             in_flight: VecDeque::new(),
             output,
-            task_thread,
+            waiter_thread,
             corrupted_state_signal: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -182,25 +183,33 @@ impl<O: DecodeOutput> VulkanDecoderH264<O> {
         Ok(frames)
     }
 
-    fn submit_to_task_thread(
+    fn submit_to_waiter_thread(
         &self,
         frames: Vec<OutputFrame<DownloadDecodeSubmission<O::DecodedGpuFrame>>>,
-    ) {
-        let output = self.output.clone();
-        let tracker = self.decoder.tracker.clone();
-        let corrupted_state_signal = self.corrupted_state_signal.clone();
+    ) -> Result<(), VulkanDecoderError> {
+        let wait_requests = frames
+            .into_iter()
+            .map(|frame| {
+                let output = self.output.clone();
+                let corrupted_state_signal = self.corrupted_state_signal.clone();
+                let command_buffer_pools = self.decoder.tracker.command_buffer_pools.clone();
+                let wait_for = frame.data.semaphore_wait_value;
 
-        self.task_thread.submit(move || {
-            if let Err(err) = wait_for_all_submissions(&tracker, &frames) {
-                tracing::debug!("Failed to wait for decode submissions: {err}");
-                corrupted_state_signal.store(true, Ordering::Relaxed);
-                return;
-            }
-            if let Err(err) = output.handle_finished_submissions(frames) {
-                tracing::debug!("Frame decoding failed: {err}");
-                corrupted_state_signal.store(true, Ordering::Relaxed);
-            }
-        });
+                SubmissionWaitRequest {
+                    semaphore: self.decoder.tracker.semaphore_tracker.semaphore.clone(),
+                    wait_for,
+                    on_finish: Box::new(move || {
+                        command_buffer_pools.mark_submitted_as_free(wait_for);
+                        if let Err(err) = output.clone().handle_finished_frame(frame) {
+                            tracing::debug!("Frame decoding failed: {err}");
+                            corrupted_state_signal.store(true, Ordering::Relaxed);
+                        }
+                    }),
+                }
+            })
+            .collect();
+
+        Ok(self.waiter_thread.submit(wait_requests)?)
     }
 
     fn throttle_submissions(&mut self) -> Result<(), VulkanDecoderError> {
@@ -219,7 +228,7 @@ impl<O: DecodeOutput> VulkanDecoderH264<O> {
 }
 
 pub(crate) trait DecodeOutput: Clone + Send + 'static {
-    /// Represents frame that's on GPU. Could be a buffer, wgpu::Texture, etc.
+    /// Represents frame that's on GPU (buffer or wgpu::Texture)
     type DecodedGpuFrame: Send + 'static;
 
     fn start_download(
@@ -227,19 +236,19 @@ pub(crate) trait DecodeOutput: Clone + Send + 'static {
         submission: DecodeSubmission<'_, '_>,
     ) -> Result<DownloadDecodeSubmission<Self::DecodedGpuFrame>, VulkanDecoderError>;
 
-    fn handle_finished_submissions(
+    fn handle_finished_frame(
         &self,
-        frames: Vec<OutputFrame<DownloadDecodeSubmission<Self::DecodedGpuFrame>>>,
-    ) -> Result<(), VideoDecoderError>;
+        frame: OutputFrame<DownloadDecodeSubmission<Self::DecodedGpuFrame>>,
+    ) -> Result<(), VulkanDecoderError>;
 }
 
 #[derive(Clone)]
 pub(crate) struct BytesOutput {
-    on_frame_callback: FrameCallback<RawFrameData>,
+    pub(crate) on_frame_callback: FrameCallback<RawFrameData>,
 }
 
 impl DecodeOutput for BytesOutput {
-    type DecodedGpuFrame = DecodeResult<Buffer>;
+    type DecodedGpuFrame = Buffer;
 
     fn start_download(
         &self,
@@ -250,41 +259,48 @@ impl DecodeOutput for BytesOutput {
             .output_to_buffer(&submission.decode_result)?;
 
         Ok(DownloadDecodeSubmission {
-            frame: DecodeResult {
-                frame: buffer,
-                metadata: submission.decode_result.metadata,
-            },
+            frame: buffer,
+            decode_metadata: submission.decode_result.metadata,
             semaphore_wait_value,
             _in_flight_resources: submission.in_flight_resources,
             decode_query_pool: submission.decode_query_pool,
         })
     }
 
-    fn handle_finished_submissions(
+    fn handle_finished_frame(
         &self,
-        frames: Vec<OutputFrame<DownloadDecodeSubmission<Self::DecodedGpuFrame>>>,
-    ) -> Result<(), VideoDecoderError> {
+        frame: OutputFrame<DownloadDecodeSubmission<Self::DecodedGpuFrame>>,
+    ) -> Result<(), VulkanDecoderError> {
+        let OutputFrame { mut data, metadata } = frame;
+
+        let width = data.decode_metadata.cropped_width;
+        let height = data.decode_metadata.cropped_height;
+
+        let frame = unsafe {
+            data.frame
+                .download_data_from_buffer(width as usize * height as usize * 3 / 2)?
+        };
+        data.check_decode_results()?;
+
         let mut on_frame_callback = self.on_frame_callback.lock().unwrap();
-        for frame in frames {
-            let frame = frame.download_bytes_frame()?;
-            (on_frame_callback)(frame)
-        }
+        (on_frame_callback)(OutputFrame {
+            data: RawFrameData {
+                frame,
+                width,
+                height,
+            },
+            metadata,
+        });
 
         Ok(())
-    }
-}
-
-impl BytesOutput {
-    pub(crate) fn new(on_frame_callback: FrameCallback<RawFrameData>) -> Self {
-        Self { on_frame_callback }
     }
 }
 
 #[cfg(feature = "wgpu")]
 #[derive(Clone)]
 pub(crate) struct WgpuTexturesOutput {
-    wgpu_device: wgpu::Device,
-    wgpu_queue: wgpu::Queue,
+    pub(crate) wgpu_device: wgpu::Device,
+    pub(crate) wgpu_queue: wgpu::Queue,
 }
 
 #[cfg(feature = "wgpu")]
@@ -303,69 +319,18 @@ impl DecodeOutput for WgpuTexturesOutput {
 
         Ok(DownloadDecodeSubmission {
             frame,
+            decode_metadata: submission.decode_result.metadata,
             semaphore_wait_value,
             _in_flight_resources: submission.in_flight_resources,
             decode_query_pool: submission.decode_query_pool,
         })
     }
 
-    fn handle_finished_submissions(
+    fn handle_finished_frame(
         &self,
-        frames: Vec<OutputFrame<DownloadDecodeSubmission<Self::DecodedGpuFrame>>>,
-    ) -> Result<(), VideoDecoderError> {
-        for frame in frames {
-            frame.data.check_decode_results()?;
-        }
-
+        frame: OutputFrame<DownloadDecodeSubmission<Self::DecodedGpuFrame>>,
+    ) -> Result<(), VulkanDecoderError> {
+        frame.data.check_decode_results()?;
         Ok(())
-    }
-}
-
-#[cfg(feature = "wgpu")]
-impl WgpuTexturesOutput {
-    pub(crate) fn new(wgpu_device: wgpu::Device, wgpu_queue: wgpu::Queue) -> Self {
-        Self {
-            wgpu_device,
-            wgpu_queue,
-        }
-    }
-}
-
-fn wait_for_all_submissions<T>(
-    tracker: &DecoderTracker,
-    frames: &[OutputFrame<DownloadDecodeSubmission<T>>],
-) -> Result<(), VideoDecoderError> {
-    let Some(max_wait_value) = frames.iter().map(|f| f.data.semaphore_wait_value).max() else {
-        return Ok(());
-    };
-
-    tracker
-        .wait_for(max_wait_value, u64::MAX)
-        .map_err(VulkanDecoderError::from)
-        .map_err(VideoDecoderError::from)
-}
-
-impl OutputFrame<DownloadDecodeSubmission<DecodeResult<Buffer>>> {
-    fn download_bytes_frame(self) -> Result<OutputFrame<RawFrameData>, VulkanDecoderError> {
-        let OutputFrame { mut data, metadata } = self;
-
-        let width = data.frame.metadata.cropped_width;
-        let height = data.frame.metadata.cropped_height;
-
-        let frame = unsafe {
-            data.frame
-                .frame
-                .download_data_from_buffer(width as usize * height as usize * 3 / 2)?
-        };
-        data.check_decode_results()?;
-
-        Ok(OutputFrame {
-            data: RawFrameData {
-                frame,
-                width,
-                height,
-            },
-            metadata,
-        })
     }
 }
