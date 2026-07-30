@@ -67,6 +67,58 @@ pub(super) struct StartDecision {
     pub(super) edge_offset: Duration,
 }
 
+pub(super) fn resolve_should_start(
+    now: Instant,
+    opts: &LiveSyncOptions,
+    track_estimator: &LiveEdgeEstimator,
+    shared_estimator: &LiveEdgeEstimator,
+) -> Option<EdgeSource> {
+    let shared = shared_estimator.estimate(now)?;
+    let track = track_estimator.estimate(now)?;
+    // TODO: consider what should happen if only one tracks is producing packets, and
+    // at some point, other track will start
+
+    let track_stable = track.upper_bound.stable_for > opts.stabilization_period;
+    let shared_stable = shared.upper_bound.stable_for > opts.stabilization_period;
+    let waiting_too_long = shared.delivery.observed_for < opts.max_wait;
+
+    // check if track and shared estimator are desynced. If for some reason track have independent
+    // timescales, fallback to independent edge estimation
+    let upper_diff = Duration::abs_diff(track.upper_bound.pts, shared.upper_bound.pts);
+    let lower_diff = Duration::abs_diff(track.lower_bound.pts, shared.lower_bound.pts);
+    let tracks_desynced =
+        upper_diff > Duration::from_secs(10) || lower_diff > Duration::from_secs(10);
+
+    if track_stable && shared_stable {
+        return match tracks_desynced {
+            true => Some(EdgeSource::Track),
+            false => Some(EdgeSource::Shared),
+        };
+    }
+
+    if !waiting_too_long {
+        return None;
+    }
+
+    return match tracks_desynced {
+        true => Some(EdgeSource::Track),
+        false => Some(EdgeSource::Shared),
+    };
+}
+
+pub(super) fn resolve_edge_anchor(
+    now: Instant,
+    sync_point: Instant,
+    estimator: &LiveEdgeEstimator,
+) -> Option<TimestampAnchor> {
+    let elapsed = now.saturating_duration_since(sync_point);
+    let estimate = estimator.estimate(now)?;
+    Some(TimestampAnchor {
+        input_pts: estimate.upper_bound.pts,
+        output_pts: elapsed,
+    })
+}
+
 /// Start decision for a single track based on its own estimator and the
 /// shared edge bounds; `None` while the track should keep buffering.
 pub(super) fn decide_start(
@@ -190,12 +242,20 @@ pub(super) enum AnchorCorrection {
 /// window rotates; the newest delivered content reacts immediately, so it is
 /// compared instead.
 pub(super) fn decide_correction(
-    options: &LiveSyncOptions,
     sync_point: Instant,
     now: Instant,
+    opts: &LiveSyncOptions,
     estimator: &LiveEdgeEstimator,
     anchor: &TimestampAnchor,
 ) -> AnchorCorrection {
+    let estimation = estimator.estimate(now)?;
+    let last_pts = anchor.to_output_pts(estimation.delivery.last_pts);
+    let elapsed = now.saturating_duration_since(sync_point);
+    let effective_buffer = last_pts.saturating_sub(elapsed);
+
+    // from elapsed + estimator I can resolve min,max anchor
+    // depending how current anchor falls into that range I can shift it
+
     let (Some(max_pts), Some(max_arrival_gap)) =
         (estimator.max_pts(), estimator.max_arrival_gap(now))
     else {
@@ -206,8 +266,8 @@ pub(super) fn decide_correction(
     let delivered_buffer = anchor.to_output_pts(max_pts).saturating_sub(elapsed);
 
     let sustainable_buffer = max_arrival_gap * 3 / 2;
-    let target_buffer = options.desired_buffer.max(sustainable_buffer);
-    let expected = options.start_margin + target_buffer;
+    let target_buffer = opts.desired_buffer.max(sustainable_buffer);
+    let expected = opts.start_margin + target_buffer;
     // batched delivery makes the buffer saw between refills; the band has to
     // swallow the whole sawtooth
     let lower = expected.saturating_sub(sustainable_buffer + CORRECTION_TOLERANCE);
