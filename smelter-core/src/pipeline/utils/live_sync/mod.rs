@@ -79,40 +79,26 @@ use state::SharedState;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
-    /// Steady-state buffer (time between a chunk arriving and the moment it is
-    /// needed for playback) targeted when a track starts.
-    pub desired_buffer: Duration,
+    pub min_buffer: Duration,
+    pub max_buffer: Duration,
     /// How long the live edge estimates have to stay stable before starting.
     pub stabilization_period: Duration,
     /// Estimate improvements smaller than this (delivery jitter) do not reset
     /// the stabilization timer.
     pub stabilization_tolerance: Duration,
-    /// Extra delay added at start; gives decoders time to process the first
-    /// chunks before they are needed for playback.
-    pub start_margin: Duration,
     /// Start with the current estimates if the live edge was not detected
     /// within this much time from the track's first chunk.
     pub max_wait: Duration,
-    /// Start with the current estimates if more than this much content gets
-    /// buffered while waiting for the live edge.
-    pub max_hold: Duration,
-    /// A track aligns to the shared (all tracks) live edge estimate when it
-    /// is within this distance of the track's own estimate; otherwise the
-    /// track's timestamp space is considered unrelated to the other tracks
-    /// and its own estimate is used.
-    pub shared_edge_tolerance: Duration,
 }
 
 impl LiveSyncOptions {
     pub fn with_desired_buffer(desired_buffer: Duration) -> Self {
         Self {
-            desired_buffer,
+            min_buffer: desired_buffer / 3,
+            max_buffer: desired_buffer * 2,
             stabilization_period: Duration::from_secs(2),
             stabilization_tolerance: Duration::from_millis(200),
-            start_margin: Duration::from_millis(500),
             max_wait: desired_buffer + Duration::from_secs(8),
-            max_hold: Duration::from_secs(20).max(desired_buffer * 4),
-            shared_edge_tolerance: Duration::from_secs(10),
         }
     }
 }

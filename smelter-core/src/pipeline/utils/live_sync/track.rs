@@ -10,11 +10,12 @@ use super::{
     LiveSyncOptions,
     edge_estimator::LiveEdgeEstimator,
     state::{
-        AnchorCorrection, EdgeSource, SharedState, TimestampAnchor, decide_correction,
-        decide_start,
+        AnchorCorrection, EdgeSource, SharedState, TimestampAnchor, decide_correction, decide_start,
     },
 };
-use crate::pipeline::utils::input_sync::InputSyncItem;
+use crate::{
+    pipeline::utils::input_sync::InputSyncItem, utils::live_sync::state::resolve_should_start,
+};
 
 /// How often the post-start buffer check runs.
 const CORRECTION_INTERVAL: Duration = Duration::from_millis(250);
@@ -100,8 +101,42 @@ impl<T: InputSyncItem> LiveSyncTrack<T> {
             return;
         }
         let now = Instant::now();
-
         let shared = self.shared.lock().unwrap();
+
+        let estimator = resolve_should_start(
+            now,
+            &self.options,
+            &self.estimator,
+            &shared.shared_estimator,
+        );
+        let Some(estimator) = estimator else {
+            return;
+        };
+        let estimation = match estimator {
+            EdgeSource::Shared => shared.shared_estimator.estimate(now),
+            EdgeSource::Track => self.estimator.estimate(now),
+        };
+        let Some(estimation) = estimation else {
+            return;
+        };
+
+
+        estimation.delivery.
+
+
+        // start when:
+        // - both estimators are stable
+        // - I have enough data to fill MIN buffer
+        //
+        // at the start:
+        // _ current buffer needs to be "estimated" from estimator, otherwise tracks might get out
+        // of sync.
+        // - current calculate anchor for current edge (elapsed + buffer)
+        //   - if current buffer state > (max+min)/2 then move anchor by that value
+        //   - if current buffer state < (max+min)/2 but > min, use that value, do not cut of
+        //   anything
+        //   - if current buffer state < min, do nothing wait for more data
+
         let shared_bounds = shared.shared_estimator.edge_bounds(now);
         let flushed = shared.flushed;
         drop(shared);
@@ -145,8 +180,13 @@ impl<T: InputSyncItem> LiveSyncTrack<T> {
         let Some(anchor) = self.state.anchor() else {
             return;
         };
-        let correction =
-            decide_correction(&self.options, self.sync_point, now, &self.estimator, &anchor);
+        let correction = decide_correction(
+            &self.options,
+            self.sync_point,
+            now,
+            &self.estimator,
+            &anchor,
+        );
         match correction {
             AnchorCorrection::None => (),
             AnchorCorrection::Earlier(delta) => {
@@ -177,7 +217,12 @@ impl<T: InputSyncItem> LiveSyncTrack<T> {
                 (bounds.map(|bounds| bounds.upper), *edge_offset)
             }
             TrackState::StartedWithSharedEstimator { edge_offset, .. } => {
-                let bounds = self.shared.lock().unwrap().shared_estimator.edge_bounds(now);
+                let bounds = self
+                    .shared
+                    .lock()
+                    .unwrap()
+                    .shared_estimator
+                    .edge_bounds(now);
                 (bounds.map(|bounds| bounds.upper), *edge_offset)
             }
         };
