@@ -372,20 +372,22 @@ impl UnwaitedEncodeSubmission {
     //     self.0.mark_waited();
     //     WaitedEncodeSubmission(self.0)
     // }
-    //
-    // pub(crate) fn wait(
-    //     mut self,
-    //     timeout: u64,
-    // ) -> Result<WaitedEncodeSubmission, VulkanEncoderError> {
-    //     self.0.wait(timeout)?;
-    //     Ok(WaitedEncodeSubmission(self.0))
-    // }
+
+    pub(crate) fn wait(
+        self,
+        tracker: &EncoderTracker,
+        timeout: u64,
+    ) -> Result<WaitedEncodeSubmission, VulkanEncoderError> {
+        tracker.wait_for(self.0.wait_value, timeout)?;
+        Ok(WaitedEncodeSubmission(self.0))
+    }
 
     pub(crate) fn wait_and_download(
         self,
+        tracker: &EncoderTracker,
         timeout: u64,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let waited = self.wait(timeout)?;
+        let waited = self.wait(tracker, timeout)?;
         waited.download()
     }
 }
@@ -442,7 +444,9 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     inline_stream_params: bool,
     encoding_device: Arc<EncodingDevice>,
     task_thread: Arc<TaskThread>,
-    on_complete: EncodedFrameCallback, // TODO: does it need to be Arc/Mutex? Also fix transcoder
+    // TODO: does it need to be Arc/Mutex? Also fix transcoder
+    // TODO: rename
+    on_complete: EncodedFrameCallback,
 }
 
 impl<'a, C: EncodeCodec + 'a> VideoEncoderBackend for VulkanEncoder<'a, C> {
@@ -519,6 +523,8 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     pub(crate) fn new(
         encoding_device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters<C>,
+        task_thread: Arc<TaskThread>,
+        on_complete: EncodedFrameCallback,
     ) -> Result<Self, VulkanEncoderError> {
         let profile_info = Arc::new(C::profile_info(&parameters));
 
@@ -579,6 +585,8 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             encode_buffer_pool,
             rate_control: parameters.rate_control,
             inline_stream_params: parameters.inline_stream_params,
+            task_thread,
+            on_complete,
         })
     }
 
@@ -970,8 +978,15 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         let image = Arc::new(image);
 
         let encode = self.encode(image, force_idr, frame.pts)?;
+        let tracker = self.tracker.clone();
+        let callback = self.on_complete.clone();
+
         self.task_thread.submit(move || {
-            let result = encode.wait_and_download(u64::MAX);
+            let result = encode
+                .wait_and_download(&tracker, u64::MAX)
+                .map_err(VideoEncoderError::from);
+            let mut callback = callback.lock().unwrap();
+            (callback)(result);
         });
         Ok(())
 
