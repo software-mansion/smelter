@@ -16,7 +16,7 @@ use crate::{
             vulkan_encoder::{VulkanEncoder, VulkanEncoderError},
         },
     },
-    decoders::FrameCallback,
+    decoders::DecodedFrameCallback,
     device::{
         DecoderParameters, EncoderParametersH264, EncoderParametersH265, VideoDeviceDescriptor,
         WgpuVideoDeviceBackend,
@@ -30,7 +30,7 @@ impl WgpuVideoDeviceBackend for VulkanDevice {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: DecoderParameters,
-        on_frame_callback: FrameCallback<wgpu::Texture>,
+        on_frame_callback: DecodedFrameCallback<wgpu::Texture>,
     ) -> Result<crate::WgpuTexturesDecoderH264, VideoDecoderError> {
         VulkanDevice::create_wgpu_textures_decoder_h264(
             self,
@@ -160,7 +160,7 @@ impl VulkanDevice {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: DecoderParameters,
-        on_frame_callback: FrameCallback<wgpu::Texture>,
+        on_frame_callback: DecodedFrameCallback<wgpu::Texture>,
     ) -> Result<WgpuTexturesDecoderH264, VulkanDecoderError> {
         let backend = VulkanDecoderH264::new(
             Arc::new(self.decoding_device()?),

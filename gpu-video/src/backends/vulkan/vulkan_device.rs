@@ -15,7 +15,7 @@ use crate::backends::vulkan::{
     VulkanAdapter, VulkanAdapterInfo, VulkanDecoderError, VulkanEncoder, VulkanEncoderError,
 };
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
-use crate::decoders::FrameCallback;
+use crate::decoders::DecodedFrameCallback;
 use crate::device::{
     ColorRange, CoreVideoDeviceBackend, DecoderParameters, EncoderOutputParameters,
     EncoderParametersH264, EncoderParametersH265, Rational, VideoDeviceDescriptor,
@@ -52,7 +52,7 @@ impl CoreVideoDeviceBackend for VulkanDevice {
     fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: DecoderParameters,
-        on_frame_callback: FrameCallback<RawFrameData>,
+        on_frame_callback: DecodedFrameCallback<RawFrameData>,
     ) -> Result<BytesDecoderH264, VideoDecoderError> {
         VulkanDevice::create_bytes_decoder_h264(self, parameters, on_frame_callback)
             .map_err(Into::into)
@@ -241,7 +241,7 @@ impl VulkanDevice {
     pub fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: DecoderParameters,
-        on_frame_callback: FrameCallback<RawFrameData>,
+        on_frame_callback: DecodedFrameCallback<RawFrameData>,
     ) -> Result<BytesDecoderH264, VulkanDecoderError> {
         let backend = VulkanDecoderH264::new(
             Arc::new(self.decoding_device()?),

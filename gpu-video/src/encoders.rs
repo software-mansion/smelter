@@ -1,9 +1,14 @@
+use std::sync::{Arc, Mutex};
+
 use crate::{EncodedOutputChunk, InputFrame, RawFrameData, VideoBackendError};
 
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
 #[cfg(feature = "wgpu")]
 pub use wgpu_api::*;
+
+pub(crate) type EncodedFrameCallback =
+    Arc<Mutex<dyn FnMut(Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError>) + Send>>;
 
 pub(crate) trait VideoEncoderBackend: Send {
     fn encode_bytes(

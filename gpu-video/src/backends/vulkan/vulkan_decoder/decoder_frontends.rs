@@ -12,7 +12,7 @@ use crate::{
         vulkan_device::DecodingDevice,
         wrappers::{Buffer, SemaphoreWaitValue},
     },
-    decoders::{FrameCallback, VideoDecoderBackend, VideoDecoderError},
+    decoders::{DecodedFrameCallback, VideoDecoderBackend, VideoDecoderError},
     device::DecoderParameters,
     frame_sorter::{DecodeResult, FrameSorter},
     parser::{
@@ -197,11 +197,11 @@ pub(crate) trait DecodeOutput: Clone + Send + 'static {
 /// Used by BytesDecoder. Decoded frames are sent to the user via callback when the decode submission finishes.
 #[derive(Clone)]
 pub(crate) struct BytesOutput {
-    on_frame_callback: FrameCallback<RawFrameData>,
+    on_frame_callback: DecodedFrameCallback<RawFrameData>,
 }
 
 impl BytesOutput {
-    pub(crate) fn new(on_frame_callback: FrameCallback<RawFrameData>) -> Self {
+    pub(crate) fn new(on_frame_callback: DecodedFrameCallback<RawFrameData>) -> Self {
         Self { on_frame_callback }
     }
 }
@@ -277,7 +277,7 @@ impl DecodeOutput for BytesOutput {
 pub(crate) struct WgpuTexturesOutput {
     wgpu_device: wgpu::Device,
     wgpu_queue: wgpu::Queue,
-    on_frame_callback: FrameCallback<wgpu::Texture>,
+    on_frame_callback: DecodedFrameCallback<wgpu::Texture>,
 }
 
 #[cfg(feature = "wgpu")]
@@ -285,7 +285,7 @@ impl WgpuTexturesOutput {
     pub(crate) fn new(
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
-        on_frame_callback: FrameCallback<wgpu::Texture>,
+        on_frame_callback: DecodedFrameCallback<wgpu::Texture>,
     ) -> Self {
         Self {
             wgpu_device,

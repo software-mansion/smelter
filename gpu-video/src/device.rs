@@ -2,7 +2,7 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::sync::Arc;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
-use crate::decoders::FrameCallback;
+use crate::decoders::DecodedFrameCallback;
 use crate::parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl};
 use crate::{
     BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, RawFrameData, VideoDecoderError,
@@ -235,7 +235,7 @@ pub(crate) trait CoreVideoDeviceBackend: Send + Sync {
     fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: DecoderParameters,
-        on_frame_callback: FrameCallback<RawFrameData>,
+        on_frame_callback: DecodedFrameCallback<RawFrameData>,
     ) -> Result<BytesDecoderH264, VideoDecoderError>;
 
     fn create_bytes_encoder_h264(

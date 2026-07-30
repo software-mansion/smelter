@@ -20,15 +20,15 @@ use crate::{
         vulkan_device::EncodingDevice,
         wrappers::{
             Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer,
-            EncodeOutputBufferPool, Image, ImageLayoutTracker, ImageView, OpenCommandBuffer,
-            ProfileInfo, QueryPool, SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt,
-            VideoQueueExt, VideoSession, VideoSessionParameters,
+            EncodeOutputBuffer, EncodeOutputBufferPool, Image, ImageLayoutTracker, ImageView,
+            OpenCommandBuffer, ProfileInfo, QueryPool, SemaphoreWaitValue, Tracker, TrackerKind,
+            VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters,
         },
     },
     device::{ColorRange, ColorSpace, Rational},
     encoders::{
-        VideoEncoderBackend, VideoEncoderError, VideoEncoderParametersInfoH264,
-        VideoEncoderParametersInfoH265,
+        EncodedFrameCallback, VideoEncoderBackend, VideoEncoderError,
+        VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265,
     },
     parameters::RateControl,
 };
@@ -316,13 +316,8 @@ pub(crate) trait DynVulkanEncoder<'a>: Send {
         image: Arc<Image>,
         force_idr: bool,
         pts: Option<u64>,
-    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VulkanEncoderError>;
-    fn tracker(&self) -> Arc<Tracker<EncoderTrackerKind>>;
-    fn download_output(
-        &mut self,
-        is_idr: bool,
-        pts: Option<u64>,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError>;
+    ) -> Result<UnwaitedEncodeSubmission, VulkanEncoderError>;
+    fn tracker(&self) -> Tracker<EncoderTrackerKind>;
 }
 
 pub(crate) struct EncoderTrackerKind {}
@@ -335,46 +330,56 @@ impl TrackerKind for EncoderTrackerKind {
 
 pub(crate) type EncoderTracker = Tracker<EncoderTrackerKind>;
 
-pub(crate) struct EncodeSubmission<'borrow, 'encoder> {
+pub(crate) struct EncodeSubmission {
     pub(crate) is_idr: bool,
     pub(crate) wait_value: SemaphoreWaitValue,
-    pub(crate) encoder: &'borrow mut (dyn DynVulkanEncoder<'encoder> + 'encoder),
+    pub(crate) query_pool: Arc<EncodingQueryPool>,
+    pub(crate) stream_parameters: Vec<u8>,
+    pub(crate) output_buffer: EncodeOutputBuffer,
+    // pub(crate) encoder: &'borrow mut (dyn DynVulkanEncoder<'encoder> + 'encoder),
     pub(crate) pts: Option<u64>,
     _image: Arc<Image>,
 }
 
-impl<'a, 'b> EncodeSubmission<'a, 'b> {
+impl EncodeSubmission {
     pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        self.encoder.download_output(self.is_idr, self.pts)
+        // TODO: inline download_output here
+        download_output(
+            &self.query_pool,
+            self.stream_parameters,
+            self.output_buffer,
+            self.is_idr,
+            self.pts,
+        )
     }
 
-    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
-    pub(crate) fn mark_waited(&mut self) {
-        self.encoder.tracker().mark_waited(self.wait_value);
-    }
-
-    pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VulkanEncoderError> {
-        self.encoder.tracker().wait_for(self.wait_value, timeout)?;
-        Ok(())
-    }
+    // #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
+    // pub(crate) fn mark_waited(&mut self) {
+    //     self.encoder.tracker().mark_waited(self.wait_value);
+    // }
+    //
+    // pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VulkanEncoderError> {
+    //     self.encoder.tracker().wait_for(self.wait_value, timeout)?;
+    //     Ok(())
+    // }
 }
 
-pub(crate) struct UnwaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
+pub(crate) struct UnwaitedEncodeSubmission(pub(crate) EncodeSubmission);
 
-impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
-    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
-    pub(crate) fn mark_waited(mut self) -> WaitedEncodeSubmission<'a, 'b> {
-        self.0.mark_waited();
-        WaitedEncodeSubmission(self.0)
-    }
-
-    pub(crate) fn wait(
-        mut self,
-        timeout: u64,
-    ) -> Result<WaitedEncodeSubmission<'a, 'b>, VulkanEncoderError> {
-        self.0.wait(timeout)?;
-        Ok(WaitedEncodeSubmission(self.0))
-    }
+impl UnwaitedEncodeSubmission {
+    // #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
+    // pub(crate) fn mark_waited(mut self) -> WaitedEncodeSubmission {
+    //     self.0.mark_waited();
+    //     WaitedEncodeSubmission(self.0)
+    // }
+    //
+    // pub(crate) fn wait(
+    //     mut self,
+    //     timeout: u64,
+    // ) -> Result<WaitedEncodeSubmission, VulkanEncoderError> {
+    //     self.0.wait(timeout)?;
+    //     Ok(WaitedEncodeSubmission(self.0))
+    // }
 
     pub(crate) fn wait_and_download(
         self,
@@ -385,9 +390,9 @@ impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
     }
 }
 
-pub struct WaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
+pub struct WaitedEncodeSubmission(pub(crate) EncodeSubmission);
 
-impl<'a, 'b> WaitedEncodeSubmission<'a, 'b> {
+impl WaitedEncodeSubmission {
     pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.0.download()
     }
@@ -421,7 +426,7 @@ impl<C: EncodeCodec> From<&FullEncoderParameters<C>> for vk::VideoEncodeUsageInf
 }
 
 pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
-    pub(crate) tracker: Arc<EncoderTracker>,
+    pub(crate) tracker: EncoderTracker,
     query_pool: EncodingQueryPool,
     profile: C::Profile,
     pub(crate) profile_info: Arc<ProfileInfo<'a>>,
@@ -437,8 +442,7 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     inline_stream_params: bool,
     encoding_device: Arc<EncodingDevice>,
     task_thread: Arc<TaskThread>,
-    on_complete:
-        Arc<Mutex<dyn FnMut(Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError>) + Send>>, // TODO: does it need to be Arc/Mutex? Also fix transcoder
+    on_complete: EncodedFrameCallback, // TODO: does it need to be Arc/Mutex? Also fix transcoder
 }
 
 impl<'a, C: EncodeCodec + 'a> VideoEncoderBackend for VulkanEncoder<'a, C> {
@@ -1316,42 +1320,49 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
             _image: image,
         }))
     }
-    fn download_output(
-        &mut self,
-        is_idr: bool,
-        pts: Option<u64>,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let feedback = self.query_pool.get_result_blocking()?;
 
-        if feedback.status != vk::QueryResultStatusKHR::COMPLETE {
-            return Err(VulkanEncoderError::EncodeOperationFailed(feedback.status));
-        }
-
-        let mut output = if is_idr && self.inline_stream_params {
-            self.stream_parameters(C::codec_write_parameters_info_all())?
-        } else {
-            Vec::new()
-        };
-
-        let encoded = unsafe {
-            self.output_buffer.download_data_from_buffer_at(
-                feedback.offset as usize,
-                feedback.bytes_written as usize,
-            )?
-        };
-
-        output.extend_from_slice(&encoded);
-
-        Ok(EncodedOutputChunk {
-            data: output,
-            pts,
-            is_keyframe: is_idr,
-        })
-    }
-
-    fn tracker(&self) -> Arc<Tracker<EncoderTrackerKind>> {
+    fn tracker(&self) -> Tracker<EncoderTrackerKind> {
         self.tracker.clone()
     }
+}
+
+// TODO: extract
+fn download_output(
+    query_pool: &EncodingQueryPool,
+    stream_parameters: Vec<u8>,
+    mut output_buffer: EncodeOutputBuffer,
+    is_idr: bool,
+    pts: Option<u64>,
+) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
+    let feedback = query_pool.get_result_blocking()?;
+
+    if feedback.status != vk::QueryResultStatusKHR::COMPLETE {
+        return Err(VulkanEncoderError::EncodeOperationFailed(feedback.status));
+    }
+
+    let mut output = stream_parameters;
+    // let mut output = if is_idr && self.inline_stream_params {
+    //     self.stream_parameters(C::codec_write_parameters_info_all())?
+    // } else {
+    //     Vec::new()
+    // };
+
+    let encoded = unsafe {
+        output_buffer.buffer.download_data_from_buffer_at(
+            feedback.offset as usize,
+            feedback.bytes_written as usize,
+        )?
+    };
+    // TODO: Move to EncodeOutputBuffer::drop? Maybe do the same for DecodeInputBuffer?
+    output_buffer.release_to_pool();
+
+    output.extend_from_slice(&encoded);
+
+    Ok(EncodedOutputChunk {
+        data: output,
+        pts,
+        is_keyframe: is_idr,
+    })
 }
 
 impl RateControl {

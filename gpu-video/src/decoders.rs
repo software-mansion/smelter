@@ -10,7 +10,7 @@ mod wgpu_api;
 #[cfg(feature = "wgpu")]
 pub use wgpu_api::*;
 
-pub(crate) type FrameCallback<T> =
+pub(crate) type DecodedFrameCallback<T> =
     Arc<Mutex<dyn FnMut(Result<OutputFrame<T>, VideoDecoderError>) + Send>>;
 
 pub(crate) trait VideoDecoderBackend: Send {
