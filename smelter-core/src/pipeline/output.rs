@@ -98,11 +98,6 @@ where
         Ref<OutputId>,
     ) -> Result<(Box<dyn Output>, NewOutputResult), OutputInitError>,
 {
-    let (has_video, has_audio) = (video.is_some(), audio.is_some());
-    if !has_video && !has_audio {
-        return Err(RegisterOutputError::NoVideoAndAudio(output_id));
-    }
-
     if pipeline.lock().unwrap().outputs.contains_key(&output_id) {
         return Err(RegisterOutputError::AlreadyRegistered(output_id));
     }
@@ -110,6 +105,10 @@ where
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
     let (output, output_result) = build_output(pipeline_ctx, Ref::new(&output_id))
         .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
+
+    if video.is_none() && audio.is_none() && output.audio().is_none() {
+        return Err(RegisterOutputError::NoVideoAndAudio(output_id));
+    }
 
     let mut guard = pipeline.lock().unwrap();
 

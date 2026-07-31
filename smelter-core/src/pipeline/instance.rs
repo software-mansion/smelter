@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::{Receiver, bounded};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use glyphon::fontdb;
 use rtmp::RtmpServer;
 use tokio::runtime::Runtime;
@@ -193,6 +193,21 @@ impl Pipeline {
                 Ok((Box::new(output), result))
             },
         )
+    }
+
+    pub fn external_audio_sender(
+        pipeline: &Arc<Mutex<Self>>,
+        output_id: &OutputId,
+    ) -> Option<Sender<PipelineEvent<OutputAudioSamples>>> {
+        let guard = pipeline.lock().unwrap();
+        let output = guard.outputs.get(output_id)?;
+        if output.audio_end_condition.is_some() {
+            return None;
+        }
+        output
+            .output
+            .audio()
+            .map(|audio| audio.samples_batch_sender.clone())
     }
 
     pub fn unregister_output(&mut self, output_id: &OutputId) -> Result<(), UnregisterOutputError> {
