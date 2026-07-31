@@ -112,6 +112,7 @@ pub(crate) struct EdgeEstimate {
     ///     a signal because it is set after late packet arrives
     ///   - TODO: If we estimate gap size (equal to chunk size) we could lower this bound without
     ///     new incoming packet (when packet we expect was not yet delivered)
+    #[allow(dead_code)]
     pub lower_bound: PtsBound,
     /// Plain statistics of what was actually delivered; unlike the bounds
     /// they do not extrapolate.
@@ -121,6 +122,7 @@ pub(crate) struct EdgeEstimate {
 /// One side of the live edge estimate.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PtsBound {
+    #[allow(dead_code)]
     pub pts: Duration,
     /// How long the bound has not been pushed outward / relaxed (beyond the
     /// jitter tolerance) by an observed chunk. The bound tightening as old
@@ -139,9 +141,9 @@ pub(crate) struct DeliveryStats {
     /// Largest recent gap between consecutive chunk arrivals (including the
     /// one in progress). Close to zero for continuous delivery; approximates
     /// the segment interval for batched delivery like HLS.
+    #[allow(dead_code)]
     pub max_arrival_gap: Duration,
 }
-
 
 impl LiveEdgeEstimator {
     pub fn new(sync_point: Instant, tolerance: Duration) -> Self {

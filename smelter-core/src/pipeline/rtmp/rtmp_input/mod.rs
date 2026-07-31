@@ -2,6 +2,7 @@ mod input;
 
 pub(super) mod connection;
 pub(super) mod state;
+pub(super) mod sync;
 
 pub use input::RtmpServerInput;
 use rtmp::{RtmpAudioCodec, RtmpVideoCodec};

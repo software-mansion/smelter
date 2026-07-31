@@ -21,16 +21,14 @@ use crate::{
             libopus::OpusDecoder,
             vulkan_h264,
         },
-        rtmp::rtmp_input::state::RtmpInputState,
+        rtmp::rtmp_input::{
+            state::RtmpInputState,
+            sync::{InputSync, InputSyncTrack, LiveSync, LiveSyncOptions, SimpleSync},
+        },
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
     },
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
-    utils::{
-        InitializableThread,
-        channel::Sender,
-        input_sync::{InputSync, InputSyncTrack, SimpleSync},
-        live_sync::{LiveSync, LiveSyncOptions},
-    },
+    utils::{InitializableThread, channel::Sender},
 };
 
 use crate::prelude::*;
@@ -102,7 +100,7 @@ enum TrackState {
     /// This state can be reached only if the first packet for the track is not a config.
     /// It is a separate state from BeforeFirstEvent to log a warning only once.
     ConfigMissing,
-    Ready(DecoderThreadHandle, InputSyncTrack<EncodedInputChunk>),
+    Ready(DecoderThreadHandle, InputSyncTrack),
 }
 
 impl TrackState {
@@ -110,7 +108,7 @@ impl TrackState {
         &mut self,
     ) -> Option<(
         &mut Sender<PipelineEvent<EncodedInputChunk>>,
-        &mut InputSyncTrack<EncodedInputChunk>,
+        &mut InputSyncTrack,
     )> {
         match self {
             TrackState::Ready(handle, sync) => Some((&mut handle.chunk_sender, sync)),
