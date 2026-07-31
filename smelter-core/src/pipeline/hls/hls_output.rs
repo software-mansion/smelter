@@ -20,7 +20,7 @@ use crate::{
             vulkan_h264::VulkanH264Encoder,
         },
         ffmpeg_utils::{FfmpegOptions, StreamMutExt, write_extradata},
-        output::{Output, OutputAudio, OutputVideo},
+        output::{Output, OutputAudio, OutputTimestampOrigin, OutputVideo},
         utils::InitializableThread,
     },
 };
@@ -43,6 +43,7 @@ impl HlsOutput {
         ctx: Arc<PipelineCtx>,
         output_ref: Ref<OutputId>,
         options: HlsOutputOptions,
+        timestamp_origin: OutputTimestampOrigin,
     ) -> Result<Self, OutputInitError> {
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
 
@@ -129,6 +130,7 @@ impl HlsOutput {
                     video_stream,
                     audio_stream,
                     encoded_chunks_receiver,
+                    timestamp_origin,
                     ctx.output_framerate,
                     stats_sender,
                 );
@@ -288,18 +290,17 @@ fn run_ffmpeg_output_thread(
     mut video_stream: Option<StreamState>,
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
+    mut timestamp_origin: OutputTimestampOrigin,
     framerate: Framerate,
     stats_sender: HlsOutputStatsSender,
 ) {
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
     let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
-    let mut timestamp_offset = None;
-
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
                 stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
-                let timestamp_offset = *timestamp_offset.get_or_insert(chunk.pts);
+                let timestamp_offset = timestamp_origin.resolve(chunk.pts);
                 write_chunk(
                     chunk,
                     &mut video_stream,

@@ -20,7 +20,7 @@ use crate::{
             vulkan_h264::VulkanH264Encoder,
         },
         ffmpeg_utils::{FfmpegOptions, StreamMutExt, write_extradata},
-        output::{Output, OutputAudio, OutputVideo},
+        output::{Output, OutputAudio, OutputTimestampOrigin, OutputVideo},
     },
     utils::InitializableThread,
 };
@@ -43,6 +43,7 @@ impl Mp4Output {
         ctx: Arc<PipelineCtx>,
         output_ref: Ref<OutputId>,
         options: Mp4OutputOptions,
+        timestamp_origin: OutputTimestampOrigin,
     ) -> Result<Self, OutputInitError> {
         if options.output_path.exists() {
             let mut old_index = 0;
@@ -141,6 +142,7 @@ impl Mp4Output {
                     video_stream,
                     audio_stream,
                     encoded_chunks_receiver,
+                    timestamp_origin,
                 );
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
@@ -300,9 +302,9 @@ fn run_ffmpeg_output_thread(
     mut video_stream: Option<StreamState>,
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
+    mut timestamp_origin: OutputTimestampOrigin,
 ) {
     let mut eos_state = EosState::new(video_stream.is_some(), audio_stream.is_some());
-    let mut timestamp_offset = None;
 
     let stats_sender = Mp4OutputStatsSender {
         stats_sender: ctx.stats_sender.clone(),
@@ -312,7 +314,7 @@ fn run_ffmpeg_output_thread(
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
-                let timestamp_offset = *timestamp_offset.get_or_insert(chunk.pts);
+                let timestamp_offset = timestamp_origin.resolve(chunk.pts);
                 let stream = match chunk.kind {
                     MediaKind::Video(_) => match &mut video_stream {
                         Some(stream) => stream,
