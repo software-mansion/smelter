@@ -33,29 +33,28 @@
 //!   on the batch size.
 //!
 //! The sync starts once the estimate is stable (`max_wait` bounds the wait as
-//! a safety valve): the newest chunk buffered by the track that triggered the
-//! start is anchored `desired_buffer` behind the playback position, so
-//! playback starts with exactly the desired buffer; any older backlog maps
-//! before the start point and plays late or is dropped by the consumer.
+//! a safety valve) by anchoring the newest delivered content `desired_buffer`
+//! ahead of the playback position, so playback starts with exactly the
+//! desired buffer. Backlog older than that maps before the playback position
+//! and plays late or is dropped by the consumer.
 //!
 //! After the start the buffer (newest delivered content relative to the
-//! playback position) is checked against the `min_buffer..max_buffer` band:
-//! - While the buffer is out of bounds, the shared correction target is
-//!   updated: the mapping that would put the buffer back at `desired_buffer`,
-//!   with a rate scaling with how far past the bound the buffer is (minimal
-//!   just past it, the full rate at twice `max_buffer`, or at an empty buffer
-//!   on the other side).
-//! - Each track converges its own mapping towards the target as its content
-//!   is read; a step is bounded by the rate times the content progress since
-//!   the last step, so content is never stretched or squashed by more than
-//!   the rate (at 4%, 100ms of content plays as 96..104ms). Corrections
-//!   follow content rather than wall time, so tracks cannot desynchronize
-//!   against each other: a track resuming after a stall converges over the
-//!   content it reads, tracing the same rate-bounded path the other tracks
-//!   took, instead of jumping to their accumulated correction.
-//! - A buffer diverged too far past the band would take minutes to slew
-//!   back; the sync resets back to the startup logic instead and the live
-//!   edge gets re-estimated.
+//! playback position) is checked against the `min_buffer..max_buffer` band
+//! and, while it is outside, corrected back to `desired_buffer`:
+//! - The correction is defined once, when it starts: the mapping to converge
+//!   to and the rate to converge at. The rate scales with how far past the
+//!   band the buffer is - minimal right past it, the full
+//!   [`MAX_CORRECTION_RATE`] once the buffer is twice `max_buffer` or empty -
+//!   so content is never stretched or squashed by more than that rate (at 4%,
+//!   100ms of content plays as 96..104ms).
+//! - It is a function of the content timestamp rather than of the wall clock,
+//!   so all tracks map the same pts the same way no matter when they read it,
+//!   and a correction always runs to completion. A track delayed against the
+//!   others applies exactly the correction they applied to the content it
+//!   reads instead of jumping to their current mapping ([`Mapping`]).
+//! - A buffer diverged so far that correcting it would take minutes is an
+//!   anomaly (pts discontinuity, long stall); the sync resets back to the
+//!   startup logic instead and the live edge gets re-estimated.
 
 use std::{
     collections::VecDeque,
@@ -118,8 +117,8 @@ impl InputSyncTrack {
         }
     }
 
-    /// Pts of the next readable chunk; enables interleaved reads across
-    /// tracks.
+    /// Output pts of the next readable chunk; enables interleaved reads
+    /// across tracks.
     pub fn peek_next_pts(&mut self) -> Option<Duration> {
         match self {
             InputSyncTrack::Live(track) => track.peek_next_pts(),
@@ -176,11 +175,11 @@ impl SimpleSyncTrack {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
-    /// Correction kicks in when the buffer drops below this.
+    /// Correction starts when the buffer drops below this.
     pub min_buffer: Duration,
-    /// Buffer size the correction slews back towards.
+    /// Buffer size the sync starts with and corrections converge back to.
     pub desired_buffer: Duration,
-    /// Correction kicks in when the buffer grows beyond this.
+    /// Correction starts when the buffer grows beyond this.
     pub max_buffer: Duration,
     /// How long the live edge estimate has to stay stable before starting.
     pub stabilization_period: Duration,
@@ -205,22 +204,21 @@ impl LiveSyncOptions {
     }
 }
 
-/// How often the post-start buffer check runs.
+/// How often the buffer is checked against the band.
 const CORRECTION_INTERVAL: Duration = Duration::from_millis(250);
-/// Hard cap of the correction speed as a fraction of content time: 100ms of
-/// content is stretched to at most 104ms or squashed to at least 96ms.
+/// Correction rate of a buffer right past the band; slow, but fast enough to
+/// finish a correction that a barely exceeded bound can call for.
+const MIN_CORRECTION_RATE: f64 = 0.01;
+/// Correction rate of a buffer twice `max_buffer` or empty, and the hard cap
+/// of how much content time can be stretched or squashed.
 const MAX_CORRECTION_RATE: f64 = 0.04;
 /// Buffer deviation past the band that is treated as an anomaly (pts
-/// discontinuity, long stall): slewing it back would take minutes, so the
-/// sync resets and the live edge gets re-estimated.
+/// discontinuity, long stall) instead of something to correct.
 const RESET_THRESHOLD: Duration = Duration::from_secs(10);
 
 /// Synchronization of a single live input; create per-track handles with
 /// [`LiveSync::add_track`].
 pub(crate) struct LiveSync {
-    options: LiveSyncOptions,
-    /// Instant that output timestamps are measured from.
-    sync_point: Instant,
     shared: Arc<Mutex<SharedState>>,
 }
 
@@ -229,25 +227,21 @@ impl LiveSync {
         Self {
             shared: Arc::new(Mutex::new(SharedState {
                 estimator: LiveEdgeEstimator::new(sync_point, options.stabilization_tolerance),
+                options,
+                sync_point,
                 flushed: false,
-                target: None,
+                mapping: None,
                 last_check: Instant::now(),
             })),
-            options,
-            sync_point,
         }
     }
 
-    /// Registers a new track. Tracks share the live edge detection and the
-    /// correction target, but each converges its own mapping.
+    /// Registers a new track. All tracks share the live edge detection and
+    /// the mapping, so they stay synchronized with each other.
     pub fn add_track(&self) -> LiveSyncTrack {
         LiveSyncTrack {
-            options: self.options,
-            sync_point: self.sync_point,
             shared: self.shared.clone(),
             buffer: VecDeque::new(),
-            anchor: None,
-            stepped_pts: None,
         }
     }
 
@@ -259,211 +253,237 @@ impl LiveSync {
     }
 }
 
-/// Cross-track mutable state of an input, kept behind a mutex.
-struct SharedState {
-    /// Estimator observing chunks of all tracks; its edge is defined by the
-    /// freshest track.
-    estimator: LiveEdgeEstimator,
-    /// Live edge detection was abandoned (e.g. the stream ended before the
-    /// edge was detected); tracks release everything they buffered.
-    flushed: bool,
-    /// Mapping all tracks converge to; `None` until the sync starts and
-    /// after a reset.
-    target: Option<CorrectionTarget>,
-    /// Last time the post-start buffer check ran.
-    last_check: Instant,
-}
-
-/// Shared correction state: where every track's mapping should end up and
-/// how fast it may move there.
-#[derive(Debug, Clone, Copy)]
-struct CorrectionTarget {
-    anchor: TimestampAnchor,
-    /// Fraction of content time a converging track may stretch or squash;
-    /// zero outside of corrections.
-    rate: f64,
-}
-
 /// Buffers chunks of a single track until the live edge is detected. Cheap to
-/// move to another thread; the estimator feed and the start/correction checks
-/// take a short-lived lock on the input's shared state.
+/// move to another thread; all synchronization state is shared, a track only
+/// owns its buffer.
 pub(crate) struct LiveSyncTrack {
-    options: LiveSyncOptions,
-    /// Instant that output timestamps are measured from.
-    sync_point: Instant,
     shared: Arc<Mutex<SharedState>>,
     buffer: VecDeque<EncodedInputChunk>,
-    /// This track's mapping; converges towards the shared target.
-    anchor: Option<TimestampAnchor>,
-    /// Input pts up to which corrections were already applied.
-    stepped_pts: Option<Duration>,
 }
 
 impl LiveSyncTrack {
     pub fn write_chunk(&mut self, chunk: EncodedInputChunk) {
         let now = Instant::now();
-        let now_pts = now.saturating_duration_since(self.sync_point);
-        let pts = chunk.pts;
-        self.buffer.push_back(chunk);
         let mut shared = self.shared.lock().unwrap();
-        shared.estimator.observe(now, pts);
-        self.update_shared(&mut shared, now, now_pts);
+        shared.estimator.observe(now, chunk.pts);
+        shared.update(now);
+        drop(shared);
+
+        self.buffer.push_back(chunk);
     }
 
     /// Returns buffered chunks in write order with timestamps mapped onto the
     /// output timeline; `None` while the live edge is still being detected or
     /// when there is nothing buffered.
     pub fn try_read_chunk(&mut self) -> Option<EncodedInputChunk> {
-        let target = self.sync_target()?;
-        let anchor = self.converge_anchor(target, self.buffer.front()?.pts);
+        let anchor = self.anchor(self.buffer.front()?.pts)?;
         let mut chunk = self.buffer.pop_front()?;
-        chunk.pts = anchor.to_output_pts(chunk.pts);
-        chunk.dts = chunk.dts.map(|dts| anchor.to_output_pts(dts));
+        chunk.pts = anchor.output_pts_of(chunk.pts);
+        chunk.dts = chunk.dts.map(|dts| anchor.output_pts_of(dts));
         Some(chunk)
     }
 
     /// Output pts of the next readable chunk; `None` while the live edge is
     /// still being detected or when nothing is buffered. Enables interleaved
-    /// reads across tracks. Does not converge the mapping; the returned pts
-    /// can differ from the read one by up to one convergence step.
+    /// reads across tracks.
     pub fn peek_next_pts(&mut self) -> Option<Duration> {
-        let target = self.sync_target()?;
-        let anchor = self.anchor.unwrap_or(target.anchor);
         let pts = self.buffer.front()?.pts;
-        Some(anchor.to_output_pts(pts))
+        Some(self.anchor(pts)?.output_pts_of(pts))
     }
 
-    /// Runs the start/correction checks and returns the current shared
-    /// target; `None` while the sync has not started. Called on reads too, so
-    /// time-based conditions can trigger the start when delivery pauses.
-    fn sync_target(&mut self) -> Option<CorrectionTarget> {
+    /// Mapping of content at `pts`; `None` while the live edge is still being
+    /// detected. Runs the start and correction checks, so they are not tied
+    /// to chunks arriving.
+    fn anchor(&self, pts: Duration) -> Option<TimestampAnchor> {
         let now = Instant::now();
-        let now_pts = now.saturating_duration_since(self.sync_point);
         let mut shared = self.shared.lock().unwrap();
-        self.update_shared(&mut shared, now, now_pts);
-        let target = shared.target;
-        drop(shared);
-        if target.is_none() {
-            // not started yet, or reset; the next target is adopted from
-            // scratch
-            self.anchor = None;
-            self.stepped_pts = None;
+        shared.update(now);
+        Some(shared.mapping?.anchor_at(pts))
+    }
+}
+
+/// State of an input shared by all of its tracks.
+struct SharedState {
+    options: LiveSyncOptions,
+    /// Instant that output timestamps are measured from.
+    sync_point: Instant,
+    /// Estimator observing chunks of all tracks; its edge is defined by the
+    /// freshest track.
+    estimator: LiveEdgeEstimator,
+    /// Live edge detection was abandoned (e.g. the stream ended before the
+    /// edge was detected); tracks release everything they buffered.
+    flushed: bool,
+    /// Mapping every track applies; `None` until the sync starts and after a
+    /// reset.
+    mapping: Option<Mapping>,
+    /// Last time the buffer was checked against the band.
+    last_check: Instant,
+}
+
+impl SharedState {
+    fn update(&mut self, now: Instant) {
+        match self.mapping {
+            None => self.try_start(now),
+            Some(mapping) => self.try_correct(now, mapping),
         }
-        target
     }
 
-    /// Start/correction check on the shared state, run by whichever track
-    /// calls first.
-    fn update_shared(&self, shared: &mut SharedState, now: Instant, now_pts: Duration) {
-        let Some(target) = &mut shared.target else {
-            shared.target = self.decide_start(&shared.estimator, shared.flushed, now, now_pts);
+    /// Starts the sync once the live edge estimate can be trusted.
+    fn try_start(&mut self, now: Instant) {
+        let Some(estimate) = self.estimator.estimate(now) else {
+            return;
+        };
+        let reason = if self.flushed {
+            "stream ended"
+        } else if estimate.upper_bound.stable_for > self.options.stabilization_period {
+            "live edge stable"
+        } else if estimate.delivery.observed_for >= self.options.max_wait {
+            "live edge detection timed out"
+        } else {
             return;
         };
 
-        if now.saturating_duration_since(shared.last_check) < CORRECTION_INTERVAL {
+        let last_pts = estimate.delivery.last_pts;
+        let anchor = self.desired_anchor(now, last_pts);
+        debug!(reason, ?anchor, ?estimate, "Live sync started");
+        self.mapping = Some(Mapping::started(anchor, last_pts));
+    }
+
+    /// Starts a correction when the buffer left the band, unless one is still
+    /// running.
+    fn try_correct(&mut self, now: Instant, mapping: Mapping) {
+        if now.saturating_duration_since(self.last_check) < CORRECTION_INTERVAL {
             return;
         }
-        shared.last_check = now;
+        self.last_check = now;
 
-        let Some(estimate) = shared.estimator.estimate(now) else {
+        let Some(estimate) = self.estimator.estimate(now) else {
             return;
         };
-        // Newest delivered content relative to the playback position,
-        // measured with the actual playback mapping, not the target: while
-        // tracks converge the buffer stays out of bounds and the target is
-        // refreshed, so the rate keeps tracking the real deviation and falls
-        // smoothly as the buffer returns into the band.
+        let now_pts = now.saturating_duration_since(self.sync_point);
+        // newest delivered content relative to the playback position
         let last_pts = estimate.delivery.last_pts;
-        let anchor = self.anchor.unwrap_or(target.anchor);
-        let delivered_buffer = anchor.to_output_pts(last_pts).saturating_sub(now_pts);
+        let buffer = mapping
+            .anchor_at(last_pts)
+            .output_pts_of(last_pts)
+            .saturating_sub(now_pts);
 
-        let (deviation, bound) = if delivered_buffer > self.options.max_buffer {
-            (
-                delivered_buffer - self.options.max_buffer,
-                self.options.max_buffer,
-            )
-        } else if delivered_buffer < self.options.min_buffer {
-            (
-                self.options.min_buffer - delivered_buffer,
-                self.options.min_buffer,
-            )
+        // deviation past the band, and the buffer size at which the full
+        // correction rate is reached (twice `max_buffer`, or an empty buffer)
+        let (deviation, full_rate_at) = if buffer > self.options.max_buffer {
+            (buffer - self.options.max_buffer, self.options.max_buffer)
+        } else if buffer < self.options.min_buffer {
+            (self.options.min_buffer - buffer, self.options.min_buffer)
         } else {
             return;
         };
         if deviation > RESET_THRESHOLD {
-            warn!("Live sync buffer diverged beyond correction, re-estimating the live edge");
-            shared.target = None;
+            warn!(
+                ?buffer,
+                "Live sync buffer diverged beyond correction, re-estimating the live edge"
+            );
+            self.mapping = None;
             return;
         }
-        // rate scales with how far past the bound the buffer is: reaches the
-        // cap at twice max_buffer (or at an empty buffer on the other side)
-        let severity = f64::min(deviation.div_duration_f64(bound), 1.0);
-        *target = CorrectionTarget {
-            anchor: TimestampAnchor::new(last_pts, now_pts + self.options.desired_buffer),
-            rate: MAX_CORRECTION_RATE * severity,
+        if !mapping.current.is_settled_at(last_pts) {
+            return;
+        }
+
+        let severity = f64::min(deviation.div_duration_f64(full_rate_at), 1.0);
+        let correction = Correction {
+            base: mapping.anchor_at(last_pts),
+            target: self.desired_anchor(now, last_pts),
+            start_pts: last_pts,
+            rate: MIN_CORRECTION_RATE + (MAX_CORRECTION_RATE - MIN_CORRECTION_RATE) * severity,
         };
-        debug!(
-            ?delivered_buffer,
-            ?target,
-            "Live sync buffer out of bounds, correcting"
-        );
+        debug!(?buffer, ?correction, "Live sync buffer out of bounds");
+        self.mapping = Some(mapping.correcting(correction));
     }
 
-    /// Initial shared target; `None` while the sync should keep buffering.
-    fn decide_start(
-        &self,
-        estimator: &LiveEdgeEstimator,
-        flushed: bool,
-        now: Instant,
-        now_pts: Duration,
-    ) -> Option<CorrectionTarget> {
-        if flushed {
-            let oldest_pts = self
-                .buffer
-                .front()
-                .map(|chunk| chunk.pts)
-                .unwrap_or(Duration::ZERO);
-            let anchor = TimestampAnchor::new(oldest_pts, now_pts);
-            debug!(?anchor, "Live sync started (flush)");
-            return Some(CorrectionTarget { anchor, rate: 0.0 });
-        }
+    /// Mapping that presents content at `last_pts` `desired_buffer` after the
+    /// playback position, i.e. the one that puts the buffer at exactly the
+    /// desired size.
+    fn desired_anchor(&self, now: Instant, last_pts: Duration) -> TimestampAnchor {
+        let now_pts = now.saturating_duration_since(self.sync_point);
+        TimestampAnchor::new(last_pts, now_pts + self.options.desired_buffer)
+    }
+}
 
-        let estimate = estimator.estimate(now)?;
-        let stable = estimate.upper_bound.stable_for > self.options.stabilization_period;
-        let waited_too_long = estimate.delivery.observed_for >= self.options.max_wait;
-        if !stable && !waited_too_long {
-            return None;
-        }
-        let newest_buffered_pts = self.buffer.back().map(|chunk| chunk.pts)?;
+/// Mapping of the input timeline onto the output one: the correction in
+/// flight, plus the one it replaced.
+///
+/// The mapping is a function of the content timestamp, not of the wall clock,
+/// and starting a correction only ever defines it for content newer than
+/// everything mapped so far. Keeping the replaced correction extends that to
+/// tracks lagging behind the newest delivered content: they map what they
+/// read exactly like the tracks that already passed it, instead of jumping to
+/// the newest mapping. Only a track lagging by more than a whole correction
+/// falls back to the oldest mapping known, off by at most the correction rate
+/// times the lag.
+#[derive(Debug, Clone, Copy)]
+struct Mapping {
+    current: Correction,
+    previous: Option<Correction>,
+}
 
-        // Anchor the newest buffered content `desired_buffer` behind the
-        // playback position, so playback starts with exactly the desired
-        // buffer; older backlog maps before the start point.
-        let anchor = TimestampAnchor::new(
-            newest_buffered_pts.saturating_sub(self.options.desired_buffer),
-            now_pts,
-        );
-        debug!(?estimate, ?anchor, "Live sync started");
-        Some(CorrectionTarget { anchor, rate: 0.0 })
+impl Mapping {
+    fn started(anchor: TimestampAnchor, start_pts: Duration) -> Self {
+        Self {
+            current: Correction::settled(anchor, start_pts),
+            previous: None,
+        }
     }
 
-    /// Moves this track's mapping towards the shared target and returns it.
-    /// A step is bounded by the target rate times the content progress since
-    /// the last step, so corrections are spread over the content being read
-    /// instead of applied at once.
-    fn converge_anchor(&mut self, target: CorrectionTarget, pts: Duration) -> TimestampAnchor {
-        let Some(anchor) = &mut self.anchor else {
-            self.anchor = Some(target.anchor);
-            self.stepped_pts = Some(pts);
-            return target.anchor;
-        };
-
-        let prev = self.stepped_pts.unwrap_or(pts);
-        self.stepped_pts = Some(Duration::max(prev, pts));
-        let progress = pts.saturating_sub(prev);
-        if !progress.is_zero() {
-            anchor.converge_towards(&target.anchor, progress.mul_f64(target.rate));
+    fn correcting(&self, correction: Correction) -> Self {
+        Self {
+            current: correction,
+            previous: Some(self.current),
         }
-        *anchor
+    }
+
+    fn anchor_at(&self, pts: Duration) -> TimestampAnchor {
+        match self.previous {
+            Some(previous) if pts < self.current.start_pts => previous.anchor_at(pts),
+            _ => self.current.anchor_at(pts),
+        }
+    }
+}
+
+/// One correction of the mapping: it moves from `base` towards `target` at
+/// `rate`, as content past `start_pts` is presented.
+#[derive(Debug, Clone, Copy)]
+struct Correction {
+    /// Mapping of content at `start_pts`.
+    base: TimestampAnchor,
+    /// Mapping the correction converges to.
+    target: TimestampAnchor,
+    /// Input pts the correction starts at.
+    start_pts: Duration,
+    /// Fraction of content time the mapping may be stretched or squashed by.
+    rate: f64,
+}
+
+impl Correction {
+    /// A mapping with nothing left to correct.
+    fn settled(anchor: TimestampAnchor, start_pts: Duration) -> Self {
+        Self {
+            base: anchor,
+            target: anchor,
+            start_pts,
+            rate: 0.0,
+        }
+    }
+
+    fn anchor_at(&self, pts: Duration) -> TimestampAnchor {
+        self.base.converged_towards(self.target, self.slack_at(pts))
+    }
+
+    fn is_settled_at(&self, pts: Duration) -> bool {
+        self.base.distance(self.target) <= self.slack_at(pts)
+    }
+
+    /// How far the mapping may have moved by `pts`.
+    fn slack_at(&self, pts: Duration) -> Duration {
+        pts.saturating_sub(self.start_pts).mul_f64(self.rate)
     }
 }
