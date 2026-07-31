@@ -128,6 +128,13 @@ impl WaiterThread {
         }
     }
 
+    // TODO: change it. The waiter shouldn't really care about the display order of the frames.
+    // Maybe it would be better to:
+    // - schedule decode + download
+    // - send it to the waiter thread
+    // - on finish, call callback which puts the result into frame sorter
+    //
+    // This would only work for bytes tho. wgpu::Textures have to be put into frame sorter earlier.
     fn push_wait_semaphores(
         &self,
         semaphores: &mut Vec<vk::Semaphore>,
