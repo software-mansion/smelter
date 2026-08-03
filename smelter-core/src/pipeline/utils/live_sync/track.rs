@@ -4,8 +4,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tracing::warn;
-
 use super::{
     LiveSyncOptions,
     buffer::LiveSyncBuffer,
@@ -16,8 +14,6 @@ use crate::{
     pipeline::utils::input_sync::InputSyncItem, utils::live_sync::state::resolve_should_start,
 };
 
-/// How often the post-start buffer check runs.
-const CORRECTION_INTERVAL: Duration = Duration::from_millis(250);
 /// pts jump (in either direction) treated as a discontinuity of the input
 /// timeline; the old edge estimate does not describe the new timeline.
 const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
@@ -39,7 +35,6 @@ pub(crate) struct LiveSyncTrack<B: LiveSyncBuffer> {
     flush_queue: VecDeque<(B, TimestampAnchor)>,
     flush_state: TrackFlushState,
     state: TrackState,
-    last_correction: Instant,
 }
 
 impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
@@ -58,21 +53,25 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
             flush_queue: VecDeque::new(),
             flush_state,
             state: TrackState::WaitingForStart,
-            last_correction: Instant::now(),
         }
     }
 
     pub fn write_chunk(&mut self, item: B::Item) {
+        if self.flush_state.check_flush() {
+            self.reset();
+        }
+
         let now = Instant::now();
-        self.check_discontinuity(item.pts());
+        self.check_discontinuity(now, item.pts());
+
         {
             // both estimators observe for the whole lifetime of the input
             self.estimator.observe(now, item.pts());
             let mut shared = self.shared.lock().unwrap();
             shared.shared_estimator.observe(now, item.pts());
+            self.buffer.write(item);
         }
 
-        self.buffer.write(item);
         self.maybe_start();
     }
 
@@ -81,60 +80,49 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
     /// or when there is nothing buffered. Chunks buffered before a reset
     /// drain first, mapped with their pre-reset anchor.
     pub fn try_read_chunk(&mut self) -> Option<B::Item> {
-        self.maybe_start();
-        if let Some(item) = self.read_flushed_chunk() {
-            return Some(item);
+        if self.flush_state.check_flush() {
+            self.reset();
         }
+        self.maybe_start();
+
+        // check `self.flash_queue`
+        while let Some((buffer, anchor)) = self.flush_queue.front_mut() {
+            if let Some(mut item) = buffer.read() {
+                item.map_timestamps(|pts| anchor.to_output_pts(pts));
+                return Some(item);
+            }
+            self.flush_queue.pop_front();
+        }
+
+        // check current buffer
         let anchor = self.state.anchor()?;
-        let mut item = self.buffer.try_read()?;
-        item.map_timestamps(|pts| anchor.to_output_pts(pts));
-        Some(item)
+        let mut chunk = self.buffer.try_read()?;
+        chunk.map_timestamps(|pts| anchor.to_output_pts(pts));
+        Some(chunk)
     }
 
     /// Output pts of the next readable chunk; `None` while the live edge is
     /// still being detected or when nothing is buffered. Enables interleaved
     /// reads across tracks.
     pub fn peek_next_pts(&mut self) -> Option<Duration> {
+        if self.flush_state.check_flush() {
+            self.reset();
+        }
+
         self.maybe_start();
-        self.maybe_correct();
-        if let Some(pts) = self.peek_flushed_pts() {
-            return Some(pts);
-        }
-        let anchor = self.state.anchor()?;
-        self.buffer
-            .peek()
-            .map(|item| anchor.to_output_pts(item.pts()))
-    }
 
-    /// Next chunk from the flushed buffers, mapped with the anchor it was
-    /// buffered under. Gaps in flushed buffers can never be filled, so they
-    /// are drained with forced reads; exhausted buffers are dropped.
-    fn read_flushed_chunk(&mut self) -> Option<B::Item> {
-        loop {
-            let (buffer, anchor) = self.flush_queue.front_mut()?;
-            match buffer.read() {
-                Some(mut item) => {
-                    let anchor = *anchor;
-                    item.map_timestamps(|pts| anchor.to_output_pts(pts));
-                    return Some(item);
-                }
-                None => {
-                    self.flush_queue.pop_front();
-                }
-            }
+        // check `self.flash_queue`
+        while let Some((buffer, anchor)) = self.flush_queue.front() {
+            if let Some(item) = buffer.peek() {
+                return Some(anchor.to_output_pts(item.pts()));
+            };
+            self.flush_queue.pop_front();
         }
-    }
 
-    fn peek_flushed_pts(&mut self) -> Option<Duration> {
-        loop {
-            let (buffer, anchor) = self.flush_queue.front()?;
-            match buffer.peek() {
-                Some(item) => return Some(anchor.to_output_pts(item.pts())),
-                None => {
-                    self.flush_queue.pop_front();
-                }
-            }
-        }
+        // check current buffer
+        let anchor = self.state.anchor()?; // TODO: it should return even if no anchor (the same behavior as flush)
+        let chunk = self.buffer.peek()?;
+        Some(anchor.to_output_pts(chunk.pts()))
     }
 
     /// Runs the start decision; called without new chunks too, so time-based
@@ -162,13 +150,6 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
         let Some(estimation) = estimation else {
             return;
         };
-
-        let stable = estimation.upper_bound.stable_for > self.options.stabilization_period;
-        let waited_too_long = estimation.delivery.observed_for > self.options.max_wait;
-
-        if !stable && !waited_too_long {
-            return;
-        }
 
         let now_pts = now.saturating_duration_since(self.sync_point);
         let anchor = TimestampAnchor {
@@ -271,25 +252,35 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
     //        true
     //    }
 
-    /// A pts jump beyond [`DISCONTINUITY_THRESHOLD`] means the old estimate
-    /// does not describe the input timeline anymore; estimation starts over.
-    fn check_discontinuity(&mut self, pts: Duration) {
-        let Some(max_pts) = self.estimator.max_pts() else {
+    fn check_discontinuity(&mut self, now: Instant, pts: Duration) {
+        let Some(estimation) = self.estimator.estimate(now) else {
             return;
         };
-        let forward_jump = pts > max_pts + DISCONTINUITY_THRESHOLD;
-        let backward_jump = pts + DISCONTINUITY_THRESHOLD < max_pts;
+        let delivery = estimation.delivery;
+        // pts expected if the stream kept producing in real time since the
+        // newest received chunk
+        let expected_pts = delivery.last_pts + delivery.since_last_arrival;
+        let forward_jump = pts > expected_pts + DISCONTINUITY_THRESHOLD;
+        let backward_jump = pts + DISCONTINUITY_THRESHOLD < delivery.last_pts;
         if forward_jump || backward_jump {
-            self.reset("pts discontinuity");
+            self.flush_state.flush();
+            self.reset();
         }
     }
 
-    fn reset(&mut self, reason: &str) {
-        warn!(reason, "Live sync track reset, re-estimating the live edge");
-        if let Some(anchor) = self.state.anchor() {
-            self.flush_queue
-                .push_back((std::mem::take(&mut self.buffer), anchor));
-        }
+    fn reset(&mut self) {
+        let anchor = self.state.anchor().or_else(|| {
+            let input_pts = self.buffer.peek()?.pts();
+            Some(TimestampAnchor {
+                input_pts,
+                output_pts: self.sync_point.elapsed(),
+            })
+        });
+        let Some(anchor) = anchor else {
+            return;
+        };
+        self.flush_queue
+            .push_back((std::mem::take(&mut self.buffer), anchor));
         self.estimator =
             LiveEdgeEstimator::new(self.sync_point, self.options.stabilization_tolerance);
         self.state = TrackState::WaitingForStart;
@@ -315,13 +306,6 @@ impl TrackState {
         match self {
             TrackState::WaitingForStart => None,
             TrackState::Started { anchor, .. } => Some(*anchor),
-        }
-    }
-
-    fn anchor_mut(&mut self) -> Option<&mut TimestampAnchor> {
-        match self {
-            TrackState::WaitingForStart => None,
-            TrackState::Started { anchor, .. } => Some(anchor),
         }
     }
 }
