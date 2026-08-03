@@ -140,6 +140,9 @@ pub(crate) struct DeliveryStats {
     /// one in progress). Close to zero for continuous delivery; approximates
     /// the segment interval for batched delivery like HLS.
     pub max_arrival_gap: Duration,
+    /// Time since the newest observed arrival; the arrival gap currently in
+    /// progress.
+    pub since_last_arrival: Duration,
 }
 
 
@@ -211,6 +214,7 @@ impl LiveEdgeEstimator {
                 last_pts: observations.last_pts,
                 observed_for: now.saturating_duration_since(observations.first_observation),
                 max_arrival_gap: max_gap,
+                since_last_arrival: now.saturating_duration_since(observations.last_observation),
             },
         })
     }

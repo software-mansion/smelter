@@ -18,7 +18,7 @@ pub(crate) trait InputSyncItem {
 
 impl InputSyncItem for EncodedInputChunk {
     fn pts(&self) -> Duration {
-        todo!()
+        self.pts
     }
 
     fn map_timestamps(&mut self, map: impl Fn(Duration) -> Duration) {
