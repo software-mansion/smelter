@@ -29,7 +29,7 @@ use crate::{
         InitializableThread,
         channel::Sender,
         input_sync::{InputSync, InputSyncTrack, SimpleSync},
-        live_sync::{LiveSync, LiveSyncOptions},
+        live_sync::{ChunkBuffer, LiveSync, LiveSyncOptions},
     },
 };
 
@@ -102,7 +102,7 @@ enum TrackState {
     /// This state can be reached only if the first packet for the track is not a config.
     /// It is a separate state from BeforeFirstEvent to log a warning only once.
     ConfigMissing,
-    Ready(DecoderThreadHandle, InputSyncTrack<EncodedInputChunk>),
+    Ready(DecoderThreadHandle, InputSyncTrack<ChunkBuffer>),
 }
 
 impl TrackState {
@@ -110,7 +110,7 @@ impl TrackState {
         &mut self,
     ) -> Option<(
         &mut Sender<PipelineEvent<EncodedInputChunk>>,
-        &mut InputSyncTrack<EncodedInputChunk>,
+        &mut InputSyncTrack<ChunkBuffer>,
     )> {
         match self {
             TrackState::Ready(handle, sync) => Some((&mut handle.chunk_sender, sync)),

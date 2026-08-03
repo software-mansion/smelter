@@ -1,11 +1,12 @@
-use std::time::{Duration, Instant};
-
-use tracing::info;
-
-use super::{
-    LiveSyncOptions,
-    edge_estimator::{EdgeBounds, LiveEdgeEstimator},
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::{Duration, Instant},
 };
+
+use super::{LiveSyncOptions, edge_estimator::LiveEdgeEstimator};
 
 /// Correspondence between the input and output timelines chosen when a track
 /// starts producing chunks: content at `input_pts` is presented at
@@ -14,10 +15,10 @@ use super::{
 pub(super) struct TimestampAnchor {
     /// Raw pts of the anchor: the pts presented right after the start, or the
     /// oldest buffered pts on flush.
-    input_pts: Duration,
+    pub input_pts: Duration,
     /// Pts relative to the sync point at which content at `input_pts` is
     /// presented.
-    output_pts: Duration,
+    pub output_pts: Duration,
 }
 
 impl TimestampAnchor {
@@ -45,9 +46,49 @@ pub(super) struct SharedState {
     /// Estimator observing chunks of all tracks; its edge is defined by the
     /// freshest track.
     pub(super) shared_estimator: LiveEdgeEstimator,
-    /// Live edge detection was abandoned (e.g. the stream ended before the
-    /// edge was detected); tracks release everything they buffered.
-    pub(super) flushed: bool,
+}
+
+#[derive(Default)]
+pub(super) struct FlushState {
+    generation: Arc<AtomicU64>,
+}
+
+impl FlushState {
+    pub(super) fn flush(&self) {
+        self.generation.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(super) fn track_state(&self) -> TrackFlushState {
+        TrackFlushState {
+            handled: self.generation.load(Ordering::Relaxed),
+            generation: self.generation.clone(),
+        }
+    }
+}
+
+pub(super) struct TrackFlushState {
+    generation: Arc<AtomicU64>,
+    handled: u64,
+}
+
+impl TrackFlushState {
+    /// Signals a flush that this track's own [`check_flush`](Self::check_flush)
+    /// does not report; concurrent flushes from other tracks stay pending.
+    pub(super) fn flush(&mut self) {
+        let previous = self.generation.fetch_add(1, Ordering::Relaxed);
+        self.handled = previous + 1;
+    }
+
+    /// Returns `true` once per flush; flushes are not queued, multiple
+    /// signals between calls collapse into one.
+    pub(super) fn check_flush(&mut self) -> bool {
+        let current = self.generation.load(Ordering::Relaxed);
+        if current == self.handled {
+            return false;
+        }
+        self.handled = current;
+        true
+    }
 }
 
 /// Which live edge estimate a track aligned to when it started.
@@ -104,111 +145,6 @@ pub(super) fn resolve_should_start(
         true => Some(EdgeSource::Track),
         false => Some(EdgeSource::Shared),
     };
-}
-
-pub(super) fn resolve_edge_anchor(
-    now: Instant,
-    sync_point: Instant,
-    estimator: &LiveEdgeEstimator,
-) -> Option<TimestampAnchor> {
-    let elapsed = now.saturating_duration_since(sync_point);
-    let estimate = estimator.estimate(now)?;
-    Some(TimestampAnchor {
-        input_pts: estimate.upper_bound.pts,
-        output_pts: elapsed,
-    })
-}
-
-/// Start decision for a single track based on its own estimator and the
-/// shared edge bounds; `None` while the track should keep buffering.
-pub(super) fn decide_start(
-    options: &LiveSyncOptions,
-    sync_point: Instant,
-    now: Instant,
-    estimator: &LiveEdgeEstimator,
-    shared_bounds: Option<EdgeBounds>,
-    flushed: bool,
-) -> Option<StartDecision> {
-    let elapsed = now.saturating_duration_since(sync_point);
-    let output_pts = elapsed + options.start_margin;
-
-    if flushed {
-        let min_pts = estimator.min_pts().unwrap_or(Duration::ZERO);
-        let anchor = TimestampAnchor {
-            input_pts: min_pts,
-            output_pts,
-        };
-        info!(?anchor, "Live sync track started (flush)");
-        return Some(StartDecision {
-            anchor,
-            // the anchor is derived from the track's own data
-            edge: EdgeSource::Track,
-            edge_offset: elapsed.saturating_sub(min_pts),
-        });
-    }
-
-    let track_bounds = estimator.edge_bounds(now)?;
-    let shared_bounds = shared_bounds?;
-    let max_pts = estimator.max_pts()?;
-    let min_pts = estimator.min_pts()?;
-
-    let stable = track_bounds.stable_for >= options.stabilization_period
-        && shared_bounds.stable_for >= options.stabilization_period;
-    let waited_too_long = estimator.observing_for(now)? >= options.max_wait;
-    let held_too_much = max_pts.saturating_sub(min_pts) >= options.max_hold;
-    if !stable && !waited_too_long && !held_too_much {
-        return None;
-    }
-    let reason = match (stable, waited_too_long) {
-        (true, _) => "live edge stable",
-        (false, true) => "live edge detection timed out",
-        (false, false) => "buffered content limit reached",
-    };
-
-    // The shared upper edge is defined by the freshest track; when it lands
-    // far away from the track's own, the track lives in an unrelated
-    // timestamp space and only its own edge maps its pts onto the wall
-    // clock.
-    let edge_distance = shared_bounds.upper.abs_diff(track_bounds.upper);
-    let (edge_pts, edge) = match edge_distance < options.shared_edge_tolerance {
-        true => (shared_bounds.upper, EdgeSource::Shared),
-        false => (track_bounds.upper, EdgeSource::Track),
-    };
-
-    // Batched delivery (e.g. HLS segments) needs enough buffer to survive the
-    // gap between batches, regardless of the configured buffer size. The gap
-    // approximates the batch size; 3/2 leaves headroom for delivery jitter.
-    let sustainable_buffer = estimator.max_arrival_gap(now)? * 3 / 2;
-    let target_buffer = options.desired_buffer.max(sustainable_buffer);
-
-    // Never drop delivered content: anchor at the oldest chunk when more
-    // than the target is buffered (the correction loop slews the excess
-    // latency down once the delivery cadence is known), or at
-    // `edge - target` when the buffer still has to fill up. Starts forced
-    // by the hold limit trim to the target instead, since that limit exists
-    // to bound latency.
-    let anchor_pts = match held_too_much {
-        true => edge_pts.saturating_sub(target_buffer).min(max_pts),
-        false => edge_pts.saturating_sub(target_buffer).min(min_pts),
-    };
-    let anchor = TimestampAnchor {
-        input_pts: anchor_pts,
-        output_pts,
-    };
-    info!(
-        reason,
-        ?edge,
-        ?edge_distance,
-        upper_edge = ?track_bounds.upper,
-        lower_edge = ?track_bounds.lower,
-        ?anchor,
-        "Live sync track started"
-    );
-    Some(StartDecision {
-        anchor,
-        edge,
-        edge_offset: elapsed.saturating_sub(edge_pts),
-    })
 }
 
 /// Deviations within this distance from the expected buffer are left alone.
