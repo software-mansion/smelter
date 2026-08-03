@@ -29,7 +29,7 @@ use crate::prelude::*;
 
 pub use self::queue_input::QueueInputOptions;
 pub(crate) use self::queue_input::{
-    QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput,
+    QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, QueueTrackTiming, WeakQueueInput,
 };
 
 use self::{
@@ -103,10 +103,8 @@ impl From<&PipelineOptions> for QueueOptions {
 ///
 /// - Example usage scenarios:
 ///   - MP4 input:
-///     - On seek, create a new track with `queue_new_track`, start new reader threads, then
-///       call `abort_old_track` to switch immediately.
-///     - On loop, create a new track; `abort_old_track` is optional. Skipping it may leak a
-///       few extra frames from the previous iteration depending on buffer size.
+///     - On seek, queue a finite track and call `abort_old_track` to switch to it.
+///     - Loop iterations are finite tracks chained at exact presentation boundaries.
 ///   - RTMP server input:
 ///     - Read `effective_last_pts` (valid before and after start).
 ///     - Register a track with `QueueTrackOffset::Pts(effective_last_pts + RTMP_BUFFER)`

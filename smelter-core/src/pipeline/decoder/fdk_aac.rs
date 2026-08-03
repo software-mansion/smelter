@@ -143,7 +143,7 @@ impl Decoder {
                 let info = unsafe { *fdk::aacDecoder_GetStreamInfo(self.instance) };
                 let raw_frame_size = (info.aacSamplesPerFrame * info.channelConfig) as usize;
 
-                let samples = match info.channelConfig {
+                let mut samples = match info.channelConfig {
                     1 => AudioSamples::Mono(
                         self.decoded_samples_buffer[..raw_frame_size]
                             .iter()
@@ -176,6 +176,20 @@ impl Decoder {
                     0 => Duration::ZERO,
                     _ => Duration::from_secs_f64(info.outputDelay as f64 / sample_rate as f64),
                 };
+                let chunk_sample = ((chunk.pts.as_nanos() * sample_rate as u128 + 500_000_000)
+                    / 1_000_000_000) as usize;
+                let trimmed = (info.outputDelay.max(0) as usize).saturating_sub(chunk_sample);
+                match &mut samples {
+                    AudioSamples::Mono(samples) => {
+                        samples.drain(..trimmed.min(samples.len()));
+                    }
+                    AudioSamples::Stereo(samples) => {
+                        samples.drain(..trimmed.min(samples.len()));
+                    }
+                }
+                if samples.is_empty() {
+                    continue;
+                }
 
                 decoded_samples.push(InputAudioSamples {
                     samples,

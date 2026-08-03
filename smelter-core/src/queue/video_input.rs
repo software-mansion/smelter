@@ -48,8 +48,10 @@ impl VideoQueueInput {
         track_offset: TrackOffset,
         side_channel: Option<VideoSideChannel>,
         side_channel_delay: Duration,
+        duration: Option<Duration>,
     ) -> (Self, Sender<Frame>) {
-        let (receiver, sender) = VideoInputReceiver::new(side_channel_delay, side_channel);
+        let (receiver, sender) =
+            VideoInputReceiver::new(side_channel_delay, side_channel, duration);
         let input = Self {
             queue_ctx: queue_ctx.clone(),
             required,
@@ -254,10 +256,15 @@ pub(crate) struct VideoInputReceiver {
     state: ReceiverState,
     delay: Duration,
     side_channel: Option<VideoSideChannel>,
+    duration: Option<Duration>,
 }
 
 impl VideoInputReceiver {
-    pub fn new(delay: Duration, side_channel: Option<VideoSideChannel>) -> (Self, Sender<Frame>) {
+    pub fn new(
+        delay: Duration,
+        side_channel: Option<VideoSideChannel>,
+        duration: Option<Duration>,
+    ) -> (Self, Sender<Frame>) {
         let (sender, receiver) = bounded(1);
         let track = Self {
             max_size: Duration::from_millis(100),
@@ -267,6 +274,7 @@ impl VideoInputReceiver {
             state: ReceiverState::New,
             delay,
             side_channel,
+            duration,
         };
         (track, sender)
     }
@@ -285,7 +293,7 @@ impl VideoInputReceiver {
             None => return None,
             _ => {}
         }
-        if self.disconnected && self.buffer.len() == 1 {
+        if self.disconnected && self.buffer.len() == 1 && self.duration.is_none() {
             let frame = self.buffer.pop_front();
             self.maybe_transition_to_done();
             frame
@@ -352,6 +360,9 @@ impl VideoInputReceiver {
             match self.receiver.try_recv() {
                 Ok(mut frame) => {
                     trace!(pts=?frame.pts, pending=self.receiver.len(), "Enqueue frame");
+                    if self.duration.is_some_and(|duration| frame.pts >= duration) {
+                        continue;
+                    }
                     frame.pts += self.delay;
                     if let Some(side_channel) = &mut self.side_channel {
                         side_channel.send_frame(&frame);

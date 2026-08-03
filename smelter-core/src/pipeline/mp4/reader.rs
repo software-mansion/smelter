@@ -72,7 +72,8 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             sample_count: track.sample_count(),
             timescale: track.timescale(),
             track_id,
-            duration: track.duration(),
+            duration: Self::presentation_duration(track, self.reader.timescale())
+                .unwrap_or(track.duration()),
             decoder_options: DecoderOptions::Aac(asc),
             track_start_offset,
             presentation_delay,
@@ -118,7 +119,8 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             sample_count: track.sample_count(),
             timescale: track.timescale(),
             track_id,
-            duration: track.duration(),
+            duration: Self::presentation_duration(track, self.reader.timescale())
+                .unwrap_or(track.duration()),
             decoder_options: DecoderOptions::H264(h264_config),
             track_start_offset: offset,
             presentation_delay: delay,
@@ -159,6 +161,16 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
         let presentation_delay =
             Duration::from_secs_f64(delay_ticks as f64 / movie_timescale as f64);
         (track_start_offset, presentation_delay)
+    }
+
+    fn presentation_duration(track: &Mp4Track, movie_timescale: u32) -> Option<Duration> {
+        let duration = track.trak.tkhd.duration;
+        if duration == 0 || duration == u32::MAX as u64 || duration == u64::MAX {
+            return None;
+        }
+        Some(Duration::from_secs_f64(
+            duration as f64 / movie_timescale as f64,
+        ))
     }
 }
 
