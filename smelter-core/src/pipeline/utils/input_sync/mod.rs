@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use super::live_sync::{LiveSync, LiveSyncTrack};
+use super::live_sync::{LiveSync, LiveSyncBuffer, LiveSyncTrack};
 
 mod item;
 mod simple_sync;
@@ -30,7 +30,11 @@ pub(crate) enum InputSync {
 }
 
 impl InputSync {
-    pub fn add_track<T: InputSyncItem>(&self) -> InputSyncTrack<T> {
+    /// Registers a new track; the buffer type decides how the live variant
+    /// buffers chunks (e.g. [`ChunkBuffer`] for in-order delivery).
+    ///
+    /// [`ChunkBuffer`]: super::live_sync::ChunkBuffer
+    pub fn add_track<B: LiveSyncBuffer>(&self) -> InputSyncTrack<B> {
         match self {
             InputSync::Live(sync) => InputSyncTrack::Live(sync.add_track()),
             InputSync::Simple(sync) => InputSyncTrack::Simple(sync.add_track()),
@@ -48,13 +52,13 @@ impl InputSync {
     }
 }
 
-pub(crate) enum InputSyncTrack<T: InputSyncItem> {
-    Live(LiveSyncTrack<T>),
-    Simple(SimpleSyncTrack<T>),
+pub(crate) enum InputSyncTrack<B: LiveSyncBuffer> {
+    Live(LiveSyncTrack<B>),
+    Simple(SimpleSyncTrack<B::Item>),
 }
 
-impl<T: InputSyncItem> InputSyncTrack<T> {
-    pub fn write_chunk(&mut self, item: T) {
+impl<B: LiveSyncBuffer> InputSyncTrack<B> {
+    pub fn write_chunk(&mut self, item: B::Item) {
         match self {
             InputSyncTrack::Live(track) => track.write_chunk(item),
             InputSyncTrack::Simple(track) => track.write_chunk(item),
@@ -63,7 +67,7 @@ impl<T: InputSyncItem> InputSyncTrack<T> {
 
     /// Returns buffered chunks in write order with timestamps mapped onto the
     /// output timeline; `None` when no chunk can be produced right now.
-    pub fn try_read_chunk(&mut self) -> Option<T> {
+    pub fn try_read_chunk(&mut self) -> Option<B::Item> {
         match self {
             InputSyncTrack::Live(track) => track.try_read_chunk(),
             InputSyncTrack::Simple(track) => track.try_read_chunk(),

@@ -66,20 +66,21 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::pipeline::utils::input_sync::InputSyncItem;
-
+mod buffer;
 mod edge_estimator;
 mod state;
 mod track;
 
+pub(crate) use buffer::{ChunkBuffer, LiveSyncBuffer};
 pub(crate) use track::LiveSyncTrack;
 
 use edge_estimator::LiveEdgeEstimator;
-use state::SharedState;
+use state::{FlushState, SharedState};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
     pub min_buffer: Duration,
+    pub desired_buffer: Duration,
     pub max_buffer: Duration,
     /// How long the live edge estimates have to stay stable before starting.
     pub stabilization_period: Duration,
@@ -95,6 +96,7 @@ impl LiveSyncOptions {
     pub fn with_desired_buffer(desired_buffer: Duration) -> Self {
         Self {
             min_buffer: desired_buffer / 3,
+            desired_buffer,
             max_buffer: desired_buffer * 2,
             stabilization_period: Duration::from_secs(2),
             stabilization_tolerance: Duration::from_millis(200),
@@ -110,6 +112,7 @@ pub(crate) struct LiveSync {
     /// Instant that output timestamps are measured from.
     sync_point: Instant,
     shared: Arc<Mutex<SharedState>>,
+    flush_state: FlushState,
 }
 
 impl LiveSync {
@@ -122,21 +125,27 @@ impl LiveSync {
                     sync_point,
                     options.stabilization_tolerance,
                 ),
-                flushed: false,
             })),
+            flush_state: FlushState::default(),
         }
     }
 
-    /// Registers a new track. Tracks share the live edge detection but each
-    /// starts on its own.
-    pub fn add_track<T: InputSyncItem>(&self) -> LiveSyncTrack<T> {
-        LiveSyncTrack::new(self.options, self.sync_point, self.shared.clone())
+    /// Registers a new track; the buffer type decides the buffering policy
+    /// (e.g. [`ChunkBuffer`] for in-order delivery). Tracks share the live
+    /// edge detection but each starts on its own.
+    pub fn add_track<B: LiveSyncBuffer>(&self) -> LiveSyncTrack<B> {
+        LiveSyncTrack::new(
+            self.options,
+            self.sync_point,
+            self.shared.clone(),
+            self.flush_state.track_state(),
+        )
     }
 
-    /// Give up on live edge detection; each track releases everything it
-    /// buffered on its next call (e.g. when the stream ended before the live
-    /// edge was detected).
+    /// Give up on live edge detection; each track observes the flush once and
+    /// releases everything it buffered (e.g. when the stream ended before the
+    /// live edge was detected).
     pub fn flush(&self) {
-        self.shared.lock().unwrap().flushed = true;
+        self.flush_state.flush();
     }
 }
