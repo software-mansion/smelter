@@ -3,7 +3,7 @@ mod server;
 
 use std::{path::Path, sync::Arc};
 
-use crossbeam_channel::TrySendError;
+use crossbeam_channel::{Sender, TrySendError};
 use smelter_render::{Frame, InputId};
 use tracing::{debug, info};
 
@@ -19,7 +19,8 @@ use self::server::{AudioSideChannelServer, VideoSideChannelServer};
 pub struct VideoSideChannel {
     track_offset: TrackOffset,
     start_pts: SharedPts,
-    server: VideoSideChannelServer,
+    sender: Sender<Frame>,
+    _server: Option<VideoSideChannelServer>,
 }
 
 impl VideoSideChannel {
@@ -34,8 +35,18 @@ impl VideoSideChannel {
         Some(Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            server,
+            sender: server.sender.clone(),
+            _server: Some(server),
         })
+    }
+
+    pub(super) fn native(ctx: &Arc<PipelineCtx>, sender: Sender<Frame>) -> Self {
+        Self {
+            track_offset: TrackOffset::default(),
+            start_pts: ctx.queue_ctx.start_pts.clone(),
+            sender,
+            _server: None,
+        }
     }
 
     pub(super) fn with_track_offset(&self, track_offset: &TrackOffset) -> Self {
@@ -53,7 +64,7 @@ impl VideoSideChannel {
         };
         let mut frame = frame.clone();
         frame.pts = (frame.pts + offset).saturating_sub(start_pts);
-        if let Err(TrySendError::Full(_)) = self.server.sender.try_send(frame) {
+        if let Err(TrySendError::Full(_)) = self.sender.try_send(frame) {
             debug!("Video side channel: dropping frame, channel full");
         }
     }
@@ -63,7 +74,8 @@ impl VideoSideChannel {
 pub struct AudioSideChannel {
     track_offset: TrackOffset,
     start_pts: SharedPts,
-    server: AudioSideChannelServer,
+    sender: Sender<InputAudioSamples>,
+    _server: Option<AudioSideChannelServer>,
 }
 
 impl AudioSideChannel {
@@ -78,8 +90,18 @@ impl AudioSideChannel {
         Some(Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            server,
+            sender: server.sender.clone(),
+            _server: Some(server),
         })
+    }
+
+    pub(super) fn native(ctx: &Arc<PipelineCtx>, sender: Sender<InputAudioSamples>) -> Self {
+        Self {
+            track_offset: TrackOffset::default(),
+            start_pts: ctx.queue_ctx.start_pts.clone(),
+            sender,
+            _server: None,
+        }
     }
 
     pub(super) fn with_track_offset(&self, track_offset: &TrackOffset) -> Self {
@@ -97,7 +119,7 @@ impl AudioSideChannel {
         };
         let mut batch = batch.clone();
         batch.start_pts = (batch.start_pts + offset).saturating_sub(start_pts);
-        if let Err(TrySendError::Full(_)) = self.server.sender.try_send(batch) {
+        if let Err(TrySendError::Full(_)) = self.sender.try_send(batch) {
             debug!("Audio side channel: dropping samples, channel full");
         }
     }

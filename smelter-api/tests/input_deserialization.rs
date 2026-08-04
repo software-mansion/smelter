@@ -20,8 +20,8 @@ type CoreInput = smelter_core::RegisterInputOptions;
 fn default_queue() -> QueueInputOptions {
     QueueInputOptions {
         required: false,
-        video_side_channel: false,
-        audio_side_channel: false,
+        video_side_channel: false.into(),
+        audio_side_channel: false.into(),
         side_channel_delay: Duration::ZERO,
     }
 }
@@ -176,8 +176,8 @@ fn rtmp_with_all_options() {
             },
             queue_options: QueueInputOptions {
                 required: true,
-                video_side_channel: true,
-                audio_side_channel: false,
+                video_side_channel: true.into(),
+                audio_side_channel: false.into(),
                 side_channel_delay: Duration::ZERO,
             },
         }),
@@ -327,8 +327,8 @@ fn rtp_video_and_audio() {
             audio: Some(RtpAudioOptions::Opus),
             queue_options: QueueInputOptions {
                 required: true,
-                video_side_channel: true,
-                audio_side_channel: false,
+                video_side_channel: true.into(),
+                audio_side_channel: false.into(),
                 side_channel_delay: Duration::ZERO,
             },
             offset: Some(Duration::from_millis(500)),
@@ -570,8 +570,8 @@ fn mp4_with_all_options() {
             offset: Some(Duration::from_secs(1)),
             queue_options: QueueInputOptions {
                 required: true,
-                video_side_channel: false,
-                audio_side_channel: true,
+                video_side_channel: false.into(),
+                audio_side_channel: true.into(),
                 side_channel_delay: Duration::ZERO,
             },
         }),
@@ -678,8 +678,8 @@ fn whip_with_all_options() {
             jitter_buffer_size: Some(Duration::from_millis(200)),
             queue_options: QueueInputOptions {
                 required: true,
-                video_side_channel: true,
-                audio_side_channel: true,
+                video_side_channel: true.into(),
+                audio_side_channel: true.into(),
                 side_channel_delay: Duration::ZERO,
             },
         }),
@@ -782,8 +782,8 @@ fn whep_with_all_options() {
             jitter_buffer_size: Some(Duration::from_millis(300)),
             queue_options: QueueInputOptions {
                 required: true,
-                video_side_channel: true,
-                audio_side_channel: false,
+                video_side_channel: true.into(),
+                audio_side_channel: false.into(),
                 side_channel_delay: Duration::ZERO,
             },
         }),
@@ -850,8 +850,8 @@ fn hls_with_all_options() {
             },
             queue_options: QueueInputOptions {
                 required: true,
-                video_side_channel: true,
-                audio_side_channel: true,
+                video_side_channel: true.into(),
+                audio_side_channel: true.into(),
                 side_channel_delay: Duration::ZERO,
             },
             offset: Some(Duration::from_millis(500)),
@@ -934,8 +934,8 @@ fn v4l2_with_all_options() {
             framerate: Some(smelter_render::Framerate { num: 30, den: 1 }),
             queue_options: QueueInputOptions {
                 required: true,
-                video_side_channel: true,
-                audio_side_channel: false,
+                video_side_channel: true.into(),
+                audio_side_channel: false.into(),
                 side_channel_delay: Duration::ZERO,
             },
         }),
