@@ -1,10 +1,4 @@
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use super::{LiveSyncOptions, edge_estimator::LiveEdgeEstimator};
 
@@ -46,49 +40,6 @@ pub(super) struct SharedState {
     /// Estimator observing chunks of all tracks; its edge is defined by the
     /// freshest track.
     pub(super) shared_estimator: LiveEdgeEstimator,
-}
-
-#[derive(Default)]
-pub(super) struct FlushState {
-    generation: Arc<AtomicU64>,
-}
-
-impl FlushState {
-    pub(super) fn flush(&self) {
-        self.generation.fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub(super) fn track_state(&self) -> TrackFlushState {
-        TrackFlushState {
-            handled: self.generation.load(Ordering::Relaxed),
-            generation: self.generation.clone(),
-        }
-    }
-}
-
-pub(super) struct TrackFlushState {
-    generation: Arc<AtomicU64>,
-    handled: u64,
-}
-
-impl TrackFlushState {
-    /// Signals a flush that this track's own [`check_flush`](Self::check_flush)
-    /// does not report; concurrent flushes from other tracks stay pending.
-    pub(super) fn flush(&mut self) {
-        let previous = self.generation.fetch_add(1, Ordering::Relaxed);
-        self.handled = previous + 1;
-    }
-
-    /// Returns `true` once per flush; flushes are not queued, multiple
-    /// signals between calls collapse into one.
-    pub(super) fn check_flush(&mut self) -> bool {
-        let current = self.generation.load(Ordering::Relaxed);
-        if current == self.handled {
-            return false;
-        }
-        self.handled = current;
-        true
-    }
 }
 
 /// Which live edge estimate a track aligned to when it started.
