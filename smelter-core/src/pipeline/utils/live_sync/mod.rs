@@ -68,6 +68,7 @@ use std::{
 
 mod buffer;
 mod edge_estimator;
+mod flush;
 mod state;
 mod track;
 
@@ -75,7 +76,8 @@ pub(crate) use buffer::{ChunkBuffer, LiveSyncBuffer};
 pub(crate) use track::LiveSyncTrack;
 
 use edge_estimator::LiveEdgeEstimator;
-use state::{FlushState, SharedState};
+use flush::FlushState;
+use state::SharedState;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {

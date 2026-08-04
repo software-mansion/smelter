@@ -30,8 +30,9 @@ pub(crate) trait LiveSyncBuffer: Default {
     /// or the next item is behind a gap that might still be filled.
     fn try_read(&mut self) -> Option<Self::Item>;
 
-    /// Returns the item [`try_read`](Self::try_read) would produce, without
-    /// removing it.
+    /// Returns the item [`read`](Self::read) would produce, without removing
+    /// it; `None` only when the buffer is empty. Items held back by
+    /// [`try_read`](Self::try_read) are still reported.
     fn peek(&self) -> Option<&Self::Item>;
 }
 

@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -8,7 +7,8 @@ use super::{
     LiveSyncOptions,
     buffer::LiveSyncBuffer,
     edge_estimator::LiveEdgeEstimator,
-    state::{EdgeSource, SharedState, TimestampAnchor, TrackFlushState},
+    flush::{FlushQueue, TrackFlushState},
+    state::{EdgeSource, SharedState, TimestampAnchor},
 };
 use crate::{
     pipeline::utils::input_sync::InputSyncItem, utils::live_sync::state::resolve_should_start,
@@ -17,6 +17,9 @@ use crate::{
 /// pts jump (in either direction) treated as a discontinuity of the input
 /// timeline; the old edge estimate does not describe the new timeline.
 const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
+
+/// Lead over the playback position content needs to still reach the queue.
+const MIN_QUEUE_HEADROOM: Duration = Duration::from_millis(80);
 
 /// Buffers chunks of a single track until the live edge is detected. Cheap to
 /// move to another thread; only feeding the shared estimator and pre-start
@@ -29,10 +32,10 @@ pub(crate) struct LiveSyncTrack<B: LiveSyncBuffer> {
     /// Estimator observing only this track's chunks.
     estimator: LiveEdgeEstimator,
     buffer: B,
-    /// Buffers rotated out by a reset, paired with the anchor they were
-    /// mapped with; drained before `buffer`, oldest first. New data after the
-    /// reset collects in a clean `buffer` while the edge is re-estimated.
-    flush_queue: VecDeque<(B, TimestampAnchor)>,
+    /// Buffers rotated out by a reset; drained before `buffer`. New data
+    /// after the reset collects in a clean `buffer` while the edge is
+    /// re-estimated.
+    flush_queue: FlushQueue<B>,
     flush_state: TrackFlushState,
     state: TrackState,
 }
@@ -50,14 +53,14 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
             sync_point,
             shared,
             buffer: B::default(),
-            flush_queue: VecDeque::new(),
+            flush_queue: FlushQueue::default(),
             flush_state,
             state: TrackState::WaitingForStart,
         }
     }
 
     pub fn write_chunk(&mut self, item: B::Item) {
-        if self.flush_state.check_flush() {
+        if self.flush_state.should_flush() {
             self.reset();
         }
 
@@ -80,18 +83,13 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
     /// or when there is nothing buffered. Chunks buffered before a reset
     /// drain first, mapped with their pre-reset anchor.
     pub fn try_read_chunk(&mut self) -> Option<B::Item> {
-        if self.flush_state.check_flush() {
+        if self.flush_state.should_flush() {
             self.reset();
         }
         self.maybe_start();
 
-        // check `self.flash_queue`
-        while let Some((buffer, anchor)) = self.flush_queue.front_mut() {
-            if let Some(mut item) = buffer.read() {
-                item.map_timestamps(|pts| anchor.to_output_pts(pts));
-                return Some(item);
-            }
-            self.flush_queue.pop_front();
+        if let Some(item) = self.flush_queue.read() {
+            return Some(item);
         }
 
         // check current buffer
@@ -105,18 +103,14 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
     /// still being detected or when nothing is buffered. Enables interleaved
     /// reads across tracks.
     pub fn peek_next_pts(&mut self) -> Option<Duration> {
-        if self.flush_state.check_flush() {
+        if self.flush_state.should_flush() {
             self.reset();
         }
 
         self.maybe_start();
 
-        // check `self.flash_queue`
-        while let Some((buffer, anchor)) = self.flush_queue.front() {
-            if let Some(item) = buffer.peek() {
-                return Some(anchor.to_output_pts(item.pts()));
-            };
-            self.flush_queue.pop_front();
+        if let Some(pts) = self.flush_queue.peek_pts() {
+            return Some(pts);
         }
 
         // check current buffer
@@ -252,6 +246,20 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
     //        true
     //    }
 
+    fn best_effort_anchor(&self, now: Instant) -> Option<TimestampAnchor> {
+        let now_pts = now.saturating_duration_since(self.sync_point);
+        // Continue where the flushed content ends, unless it ends too close
+        // to the playback position to still reach the queue.
+        let output_pts = match self.flush_queue.end_pts() {
+            Some(end_pts) if end_pts > now_pts + MIN_QUEUE_HEADROOM => end_pts,
+            _ => now_pts + self.options.desired_buffer,
+        };
+        Some(TimestampAnchor {
+            input_pts: self.buffer.peek()?.pts(),
+            output_pts,
+        })
+    }
+
     fn check_discontinuity(&mut self, now: Instant, pts: Duration) {
         let Some(estimation) = self.estimator.estimate(now) else {
             return;
@@ -269,21 +277,20 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
     }
 
     fn reset(&mut self) {
-        let anchor = self.state.anchor().or_else(|| {
-            let input_pts = self.buffer.peek()?.pts();
-            Some(TimestampAnchor {
-                input_pts,
-                output_pts: self.sync_point.elapsed(),
-            })
-        });
-        let Some(anchor) = anchor else {
-            return;
-        };
-        self.flush_queue
-            .push_back((std::mem::take(&mut self.buffer), anchor));
+        let now = Instant::now();
+        // the estimator only observed this timeline, so its newest pts covers
+        // everything the flushed buffer can release
+        let last_pts = self.estimator.estimate(now).map(|e| e.delivery.last_pts);
+        let anchor = self.state.anchor().or_else(|| self.best_effort_anchor(now));
+
         self.estimator =
             LiveEdgeEstimator::new(self.sync_point, self.options.stabilization_tolerance);
         self.state = TrackState::WaitingForStart;
+
+        if let Some(anchor) = anchor {
+            let buffer = std::mem::take(&mut self.buffer);
+            self.flush_queue.push(buffer, anchor, last_pts);
+        };
     }
 }
 
