@@ -63,6 +63,7 @@ async fn decode_video(
     let video_device = device.video().unwrap();
 
     let mut decoder = video_device.create_wgpu_textures_decoder_h264(
+        &queue,
         gpu_video::parameters::DecoderParameters::default()
     ).unwrap();
         
@@ -80,8 +81,6 @@ async fn decode_video(
 
         for frame in decoded_frames {
             // Each frame contains a wgpu::Texture you can sample for drawing.
-            // device.wgpu_device() will give you a wgpu::Device and device.wgpu_queue()
-            // a wgpu::Queue. You can use these for interacting with the frames.
         }
     }
 }

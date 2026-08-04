@@ -13,7 +13,7 @@ use crate::{
             DynVulkanEncoder, FullEncoderParameters, VulkanEncoder, VulkanEncoderError,
         },
         vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
-        wrappers::{DecodeInputBuffer, DecodingQueryPool, SemaphoreWaitValue},
+        wrappers::{DecodingQueryPool, SemaphoreWaitValue},
     },
     frame_sorter::{DecodeResult, FrameSorter},
     parameters::DecoderUsage,
@@ -37,7 +37,6 @@ pub(crate) struct ResizedImages {
     images: ResizeSubmission,
     decoder_wait_value: SemaphoreWaitValue,
     decode_query_pool: Option<Arc<DecodingQueryPool>>,
-    input_buffer: DecodeInputBuffer,
     _in_flight_resources: InFlightDecodeResources,
 }
 
@@ -207,7 +206,7 @@ impl VulkanTranscoder {
         let mut encoded_frame_sets = Vec::new();
 
         for instruction in instructions {
-            let Some(mut frame) = self.decoder.decode(instruction)? else {
+            let Some(frame) = self.decoder.decode(instruction)? else {
                 continue;
             };
 
@@ -216,17 +215,20 @@ impl VulkanTranscoder {
                 .iter_mut()
                 .map(|e| e.tracker())
                 .collect::<Vec<_>>();
-            let cropped_extent = frame.decode_result.frame.cropped_extent;
+            let metadata = &frame.decode_result.metadata;
+            let cropped_extent = vk::Extent2D {
+                width: metadata.cropped_width,
+                height: metadata.cropped_height,
+            };
             let output = self
                 .resizing_pipeline
-                .run(&mut frame, &mut trackers, cropped_extent)?;
+                .run(&frame, &mut trackers, cropped_extent)?;
 
             let sorted = self.sorter.put(DecodeResult {
                 frame: ResizedImages {
                     images: output,
                     decoder_wait_value: frame.semaphore_wait_value,
                     decode_query_pool: frame.decode_query_pool,
-                    input_buffer: frame.input_buffer,
                     _in_flight_resources: frame.in_flight_resources,
                 },
                 metadata: frame.decode_result.metadata,
@@ -285,7 +287,6 @@ impl VulkanTranscoder {
         self.decoder
             .tracker
             .mark_waited(resized_images.data.decoder_wait_value);
-        resized_images.data.input_buffer.release_to_pool();
 
         self.resizing_pipeline
             .mark_command_buffers_completed(resized_images.data.decoder_wait_value);

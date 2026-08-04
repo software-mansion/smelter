@@ -1,6 +1,6 @@
 use std::{
     collections::hash_map::Entry,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use ash::vk;
@@ -32,6 +32,11 @@ impl TimelineSemaphore {
         Ok(Self { semaphore, device })
     }
 
+    pub(crate) fn counter_value(&self) -> Result<SemaphoreWaitValue, VulkanCommonError> {
+        let value = unsafe { self.device.get_semaphore_counter_value(self.semaphore)? };
+        Ok(SemaphoreWaitValue(value))
+    }
+
     pub(crate) fn wait(
         &self,
         timeout: u64,
@@ -45,6 +50,16 @@ impl TimelineSemaphore {
 
         Ok(())
     }
+
+    pub(crate) fn signal(&self, value: SemaphoreWaitValue) -> Result<(), VulkanCommonError> {
+        let signal_info = vk::SemaphoreSignalInfo::default()
+            .semaphore(self.semaphore)
+            .value(value.0);
+
+        unsafe { self.device.signal_semaphore(&signal_info)? };
+
+        Ok(())
+    }
 }
 
 impl Drop for TimelineSemaphore {
@@ -53,13 +68,13 @@ impl Drop for TimelineSemaphore {
     }
 }
 
-pub(crate) trait TrackerKind {
-    type WaitState;
-    type CommandBufferPools: CommandBufferPoolStorage;
+pub(crate) trait TrackerKind: Send {
+    type WaitState: Send;
+    type CommandBufferPools: CommandBufferPoolStorage + Send;
 }
 
 pub(crate) trait CommandBufferPoolStorage: Sized {
-    fn mark_submitted_as_free(&mut self, last_waited_for: SemaphoreWaitValue);
+    fn mark_submitted_as_free(&self, last_waited_for: SemaphoreWaitValue);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -82,7 +97,7 @@ impl<S: Clone> Clone for TrackerWait<S> {
 impl<S: Copy> Copy for TrackerWait<S> {}
 
 pub(crate) struct Tracker<K: TrackerKind> {
-    pub(crate) semaphore_tracker: SemaphoreTracker<K::WaitState>,
+    pub(crate) semaphore_tracker: Arc<SemaphoreTracker<K::WaitState>>,
     pub(crate) command_buffer_pools: K::CommandBufferPools,
     pub(crate) image_layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
 }
@@ -99,14 +114,13 @@ impl<K: TrackerKind> Tracker<K> {
         )?;
 
         Ok(Self {
-            semaphore_tracker,
+            semaphore_tracker: Arc::new(semaphore_tracker),
             command_buffer_pools,
             image_layout_tracker: Default::default(),
         })
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn wait_for_all(&mut self, timeout: u64) -> Result<(), VulkanCommonError> {
+    pub(crate) fn wait_for_all(&self, timeout: u64) -> Result<(), VulkanCommonError> {
         let waited_for = self.semaphore_tracker.wait_for_all(timeout)?;
 
         if let Some(waited_for) = waited_for {
@@ -117,7 +131,7 @@ impl<K: TrackerKind> Tracker<K> {
     }
 
     pub(crate) fn wait_for(
-        &mut self,
+        &self,
         value: SemaphoreWaitValue,
         timeout: u64,
     ) -> Result<(), VulkanCommonError> {
@@ -127,14 +141,24 @@ impl<K: TrackerKind> Tracker<K> {
     }
 
     /// Call this to mark that this value was waited for already
-    pub(crate) fn mark_waited(&mut self, value: SemaphoreWaitValue) {
+    pub(crate) fn mark_waited(&self, value: SemaphoreWaitValue) {
         self.command_buffer_pools.mark_submitted_as_free(value);
+    }
+
+    pub(crate) fn last_signaled_value(&self) -> Result<SemaphoreWaitValue, VulkanCommonError> {
+        self.semaphore_tracker.semaphore.counter_value()
+    }
+
+    #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
+    pub(crate) fn raw_semaphore(&self) -> vk::Semaphore {
+        self.semaphore_tracker.semaphore.semaphore
     }
 }
 
 pub(crate) struct SemaphoreSubmitInfo<'a, S> {
-    pub(crate) signal: TrackerWait<S>,
-    tracker: &'a mut SemaphoreTracker<S>,
+    state: MutexGuard<'a, SemaphoreState<S>>,
+    new_state: S,
+    semaphore: vk::Semaphore,
 
     #[cfg(feature = "wgpu")]
     wgpu_fence: wgpu::hal::vulkan::Fence,
@@ -145,17 +169,17 @@ impl<'a, S> SemaphoreSubmitInfo<'a, S> {
         &self,
         stage: vk::PipelineStageFlags2,
     ) -> Option<vk::SemaphoreSubmitInfo<'_>> {
-        self.tracker.wait_for.as_ref().map(|w| {
+        self.state.wait_for.as_ref().map(|w| {
             vk::SemaphoreSubmitInfo::default()
                 .stage_mask(stage)
                 .value(w.value.0)
-                .semaphore(self.tracker.semaphore.semaphore)
+                .semaphore(self.semaphore)
         })
     }
 
     #[cfg(feature = "wgpu")]
     pub(crate) fn wgpu_wait_info(&mut self) -> (&wgpu::hal::vulkan::Fence, u64) {
-        (&self.wgpu_fence, self.signal.value.0)
+        (&self.wgpu_fence, self.state.signal_value.0)
     }
 
     pub(crate) fn signal_info(
@@ -164,72 +188,88 @@ impl<'a, S> SemaphoreSubmitInfo<'a, S> {
     ) -> vk::SemaphoreSubmitInfo<'_> {
         vk::SemaphoreSubmitInfo::default()
             .stage_mask(stage)
-            .value(self.signal.value.0)
-            .semaphore(self.tracker.semaphore.semaphore)
+            .value(self.state.signal_value.0)
+            .semaphore(self.semaphore)
     }
 
     pub(crate) fn signal_value(&self) -> SemaphoreWaitValue {
-        self.signal.value
+        self.state.signal_value
     }
 
-    pub(crate) fn mark_submitted(self) {
-        self.tracker.wait_for = Some(self.signal);
+    pub(crate) fn mark_submitted(mut self) {
+        self.state.mark_submitted(self.new_state)
+    }
+}
+
+struct SemaphoreState<S> {
+    signal_value: SemaphoreWaitValue,
+    wait_for: Option<TrackerWait<S>>,
+    last_waited_for: Option<SemaphoreWaitValue>,
+}
+
+impl<S> SemaphoreState<S> {
+    fn mark_waited(&mut self, value: SemaphoreWaitValue) {
+        if let Some(wait_for) = self.wait_for.as_ref()
+            && wait_for.value == value
+        {
+            self.wait_for = None;
+        }
+
+        match self.last_waited_for {
+            Some(old_value) => self.last_waited_for = Some(old_value.max(value)),
+            None => self.last_waited_for = Some(value),
+        }
+    }
+
+    pub(crate) fn mark_submitted(&mut self, new_state: S) {
+        self.wait_for = Some(TrackerWait {
+            value: self.signal_value,
+            _state: new_state,
+        });
+        self.signal_value = SemaphoreWaitValue(self.signal_value.0 + 1);
     }
 }
 
 pub(crate) struct SemaphoreTracker<S> {
-    pub(crate) semaphore: TimelineSemaphore,
-    next_value: u64,
-    pub(crate) wait_for: Option<TrackerWait<S>>,
-    last_waited_for: Option<SemaphoreWaitValue>,
+    pub(crate) semaphore: Arc<TimelineSemaphore>,
+    state: Mutex<SemaphoreState<S>>,
 }
 
 impl<S> SemaphoreTracker<S> {
     pub(crate) fn new(device: Arc<Device>, label: Option<&str>) -> Result<Self, VulkanCommonError> {
         Ok(Self {
-            next_value: 1,
-            wait_for: None,
-            last_waited_for: None,
-            semaphore: TimelineSemaphore::new(device, 0, label)?,
+            semaphore: Arc::new(TimelineSemaphore::new(device, 0, label)?),
+            state: Mutex::new(SemaphoreState {
+                signal_value: SemaphoreWaitValue(1),
+                wait_for: None,
+                last_waited_for: None,
+            }),
         })
     }
 
-    pub(crate) fn next_sem_value(&mut self) -> SemaphoreWaitValue {
-        let val = self.next_value;
-        self.next_value += 1;
-        SemaphoreWaitValue(val)
-    }
-
-    pub(crate) fn next_submit_info(&mut self, new_state: S) -> SemaphoreSubmitInfo<'_, S> {
-        let signal = TrackerWait {
-            value: self.next_sem_value(),
-            _state: new_state,
-        };
-
+    pub(crate) fn next_submit_info(&self, new_state: S) -> SemaphoreSubmitInfo<'_, S> {
         SemaphoreSubmitInfo {
-            signal,
+            state: self.state.lock().unwrap(),
+            new_state,
             #[cfg(feature = "wgpu")]
             wgpu_fence: wgpu::hal::vulkan::Fence::TimelineSemaphore(self.semaphore.semaphore),
-            tracker: self,
+            semaphore: self.semaphore.semaphore,
         }
     }
 
     /// This is a noop if there's nothing to wait for
-    #[allow(dead_code)]
     pub(crate) fn wait_for_all(
-        &mut self,
+        &self,
         timeout: u64,
     ) -> Result<Option<SemaphoreWaitValue>, VulkanCommonError> {
-        if let Some(wait_for) = self.wait_for.as_ref() {
-            let waited_for = wait_for.value;
+        let wait_for = {
+            let state = self.state.lock().unwrap();
+            state.wait_for.as_ref().map(|w| w.value)
+        };
+
+        if let Some(waited_for) = wait_for {
             self.semaphore.wait(timeout, waited_for)?;
-            self.wait_for = None;
-
-            match self.last_waited_for {
-                Some(old_value) => self.last_waited_for = Some(old_value.max(waited_for)),
-                None => self.last_waited_for = Some(waited_for),
-            }
-
+            self.state.lock().unwrap().mark_waited(waited_for);
             return Ok(Some(waited_for));
         }
 
@@ -237,31 +277,29 @@ impl<S> SemaphoreTracker<S> {
     }
 
     pub(crate) fn wait_for(
-        &mut self,
+        &self,
         value: SemaphoreWaitValue,
         timeout: u64,
     ) -> Result<(), VulkanCommonError> {
-        if let Some(last) = self.last_waited_for.as_ref()
-            && *last >= value
         {
-            return Ok(());
-        }
+            let state = self.state.lock().unwrap();
+            if let Some(last) = state.last_waited_for.as_ref()
+                && *last >= value
+            {
+                return Ok(());
+            }
 
-        let Some(final_wait_for) = self.wait_for.as_mut() else {
-            return Err(VulkanCommonError::SemaphoreWaitOnUnsignaledValue);
-        };
+            let Some(final_wait_for) = state.wait_for.as_ref() else {
+                return Err(VulkanCommonError::SemaphoreWaitOnUnsignaledValue);
+            };
 
-        if final_wait_for.value < value {
-            return Err(VulkanCommonError::SemaphoreWaitOnUnsignaledValue);
+            if final_wait_for.value < value {
+                return Err(VulkanCommonError::SemaphoreWaitOnUnsignaledValue);
+            }
         }
 
         self.semaphore.wait(timeout, value)?;
-
-        if final_wait_for.value == value {
-            self.wait_for = None;
-        }
-
-        self.last_waited_for = Some(value);
+        self.state.lock().unwrap().mark_waited(value);
 
         Ok(())
     }

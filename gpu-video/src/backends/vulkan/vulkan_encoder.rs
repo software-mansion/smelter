@@ -272,6 +272,7 @@ struct EncodeFeedback {
     status: vk::QueryResultStatusKHR,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) enum EncoderTrackerWaitState {
     InitializeEncoder,
     #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
@@ -303,7 +304,7 @@ impl EncoderCommandBufferPools {
 }
 
 impl CommandBufferPoolStorage for EncoderCommandBufferPools {
-    fn mark_submitted_as_free(&mut self, last_waited_for: SemaphoreWaitValue) {
+    fn mark_submitted_as_free(&self, last_waited_for: SemaphoreWaitValue) {
         self.transfer.mark_submitted_as_free(last_waited_for);
         self.encode.mark_submitted_as_free(last_waited_for);
     }
@@ -517,7 +518,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         let profile_info = C::profile_info(&parameters);
 
         let command_buffer_pools = EncoderCommandBufferPools::new(&encoding_device)?;
-        let mut tracker = EncoderTracker::new(
+        let tracker = EncoderTracker::new(
             encoding_device.device.clone(),
             command_buffer_pools,
             Some("encoder"),
@@ -548,7 +549,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
 
         encoding_device.encode_queues.submit_chain_semaphore(
             buffer.end()?,
-            &mut tracker,
+            &tracker,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             EncoderTrackerWaitState::InitializeEncoder,
@@ -793,7 +794,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             .transfer
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
-                &mut self.tracker,
+                &self.tracker,
                 vk::PipelineStageFlags2::COPY,
                 vk::PipelineStageFlags2::COPY,
                 EncoderTrackerWaitState::CopyBufferToImage,
@@ -1289,7 +1290,7 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
 
         let wait_value = self.encoding_device.encode_queues.submit_chain_semaphore(
             cmd_buffer.end()?,
-            &mut self.tracker,
+            &self.tracker,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             EncoderTrackerWaitState::Encode,
