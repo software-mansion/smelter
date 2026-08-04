@@ -4,12 +4,12 @@ use std::{
 };
 
 use crate::{
-    VideoEncoderError,
     adapter::{DeviceType, VideoAdapterBackend, VideoAdapterInfo},
     backends::{
         CoreBackend,
         video_toolbox::{
             decoder::VTDecoder,
+            encoder::{H264Codec, H265Codec, VTEncoder},
             error::{OSStatusError, OSStatusExt},
         },
     },
@@ -20,9 +20,11 @@ use crate::{
 };
 
 use objc2_core_foundation as cf;
+use objc2_core_video as cv;
 
 mod caps;
 mod decoder;
+mod encoder;
 mod error;
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
@@ -127,16 +129,26 @@ impl CoreVideoDeviceBackend for VTDevice {
 
     fn create_bytes_encoder_h264(
         self: Arc<Self>,
-        _parameters: crate::device::EncoderParametersH264,
+        parameters: crate::device::EncoderParametersH264,
     ) -> Result<crate::BytesEncoderH264, crate::VideoEncoderError> {
-        Err(VideoEncoderError::EncoderUnsupported)
+        let encoder =
+            VTEncoder::<H264Codec>::new(parameters.input_parameters, parameters.output_parameters)?;
+
+        Ok(crate::BytesEncoderH264 {
+            encoder: Box::new(encoder),
+        })
     }
 
     fn create_bytes_encoder_h265(
         self: Arc<Self>,
-        _parameters: crate::device::EncoderParametersH265,
+        parameters: crate::device::EncoderParametersH265,
     ) -> Result<crate::BytesEncoderH265, crate::VideoEncoderError> {
-        Err(VideoEncoderError::EncoderUnsupported)
+        let encoder =
+            VTEncoder::<H265Codec>::new(parameters.input_parameters, parameters.output_parameters)?;
+
+        Ok(crate::BytesEncoderH265 {
+            encoder: Box::new(encoder),
+        })
     }
 
     #[cfg(feature = "transcoder")]
@@ -192,6 +204,109 @@ fn allocate_retained<R: objc2_core_foundation::Type, P: OutPtr<R>, F: FnOnce(Non
                 .expect("Apple API returned success but wrote a null pointer"),
         )
     })
+}
+
+pub(crate) trait CVBufferExt {
+    unsafe fn lock(
+        &self,
+        flags: cv::CVPixelBufferLockFlags,
+    ) -> Result<LockedCVBuffer, OSStatusError>;
+}
+
+impl CVBufferExt for cf::CFRetained<cv::CVBuffer> {
+    unsafe fn lock(
+        &self,
+        flags: cv::CVPixelBufferLockFlags,
+    ) -> Result<LockedCVBuffer, OSStatusError> {
+        unsafe {
+            cv::CVPixelBufferLockBaseAddress(self, flags).osstatus()?;
+        }
+
+        Ok(LockedCVBuffer {
+            buffer: self.clone(),
+            flags,
+        })
+    }
+}
+
+pub(crate) struct LockedCVBuffer {
+    buffer: cf::CFRetained<cv::CVBuffer>,
+    flags: cv::CVPixelBufferLockFlags,
+}
+
+impl LockedCVBuffer {
+    pub(crate) fn download_nv12(&self) -> Vec<u8> {
+        let planes = self.nv12_planes();
+        let mut packed = Vec::with_capacity(planes.iter().map(Nv12Plane::packed_byte_size).sum());
+
+        for plane in planes {
+            for line in 0..plane.height {
+                // SAFETY: the buffer stays locked for as long as `self` lives, and a row holds
+                // `packed_row_bytes` initialized bytes inside the plane's allocation.
+                packed.extend_from_slice(unsafe {
+                    std::slice::from_raw_parts(plane.row_ptr(line), plane.packed_row_bytes)
+                });
+            }
+        }
+
+        packed
+    }
+
+    pub(crate) fn upload_nv12(&mut self, packed: &[u8]) {
+        let mut consumed = 0;
+
+        for plane in self.nv12_planes() {
+            for line in 0..plane.height {
+                let Some(row) = packed.get(consumed..consumed + plane.packed_row_bytes) else {
+                    panic!("packed NV12 is smaller than the pixel buffer planes");
+                };
+                // SAFETY: as in `download_nv12`. `packed` is borrowed from caller memory, which
+                // cannot overlap the locked planes.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(row.as_ptr(), plane.row_ptr(line), row.len())
+                };
+                consumed += row.len();
+            }
+        }
+    }
+
+    fn nv12_planes(&self) -> [Nv12Plane; 2] {
+        std::array::from_fn(|plane| Nv12Plane {
+            base: cv::CVPixelBufferGetBaseAddressOfPlane(&self.buffer, plane) as *mut u8,
+            packed_row_bytes: cv::CVPixelBufferGetWidthOfPlane(&self.buffer, plane)
+                * if plane == 0 { 1 } else { 2 },
+            stride: cv::CVPixelBufferGetBytesPerRowOfPlane(&self.buffer, plane),
+            height: cv::CVPixelBufferGetHeightOfPlane(&self.buffer, plane),
+        })
+    }
+}
+
+struct Nv12Plane {
+    base: *mut u8,
+    packed_row_bytes: usize,
+    stride: usize,
+    height: usize,
+}
+
+impl Nv12Plane {
+    fn packed_byte_size(&self) -> usize {
+        self.packed_row_bytes * self.height
+    }
+
+    fn row_ptr(&self, line: usize) -> *mut u8 {
+        self.base.wrapping_add(line * self.stride)
+    }
+}
+
+impl Drop for LockedCVBuffer {
+    fn drop(&mut self) {
+        unsafe {
+            if let Err(e) = cv::CVPixelBufferUnlockBaseAddress(&self.buffer, self.flags).osstatus()
+            {
+                tracing::warn!("error {e} while unlocking a CVBuffer");
+            }
+        }
+    }
 }
 
 fn sysctlbyname_string(name: &str) -> Result<String, std::io::Error> {
