@@ -182,6 +182,7 @@ pub struct EncoderOutputParameters<P> {
     pub rate_control: RateControl,
     /// Max number of references a P-frame can have. This value will be clamped to the max number the
     /// GPU supports. If [`None`], this value will be set to the max value supported by the device.
+    /// The VideoToolbox backend manages reference frames internally and ignores this field.
     pub max_references: Option<NonZeroU32>,
     /// The profile must be supported by the device
     pub profile: P,

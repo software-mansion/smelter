@@ -82,6 +82,7 @@ objc2-core-media = { version = "0.3.2", default-features = false, features = [
 ] }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
+    "CFArray",
     "CFBase",
     "CFDictionary",
     "CFNumber",
@@ -95,12 +96,15 @@ objc2-core-video = { version = "0.3.2", default-features = false, features = [
     "CVImageBuffer",
     "CVPixelBuffer",
     "CVPixelBufferIOSurface",
+    "CVPixelBufferPool",
     "CVReturn",
     "objc2",
 ] }
 objc2-metal = { version = "0.3.2", default-features = false, features = [
     "std",
+    "block2",
     "MTLDevice",
+    "MTLEvent",
     "MTLPixelFormat",
     "MTLTexture",
 ], optional = true }
@@ -114,6 +118,7 @@ clap = { version = "4.5.20", features = ["derive"] }
 tracing-subscriber = "0.3.20"
 wgpu = { version = "30.0.0", default-features = false, features = [
     "std",
+    "metal",
     "parking_lot",
     "vulkan",
     "wgsl",
