@@ -62,6 +62,7 @@ pub(super) struct InnerQueueInput {
     video: Option<VideoQueueInput>,
     audio: Option<AudioQueueInput>,
     track_offset: TrackOffset,
+    queued_track_offset: Option<TrackOffset>,
     pause_state: PauseState,
 
     pending_sender: crossbeam_channel::Sender<PendingTrack>,
@@ -111,7 +112,7 @@ impl InnerQueueInput {
     }
 
     fn new_pending_track(
-        &self,
+        &mut self,
         opts: QueueTrackOptions,
     ) -> (
         PendingTrack,
@@ -124,7 +125,15 @@ impl InnerQueueInput {
             QueueTrackOffset::None => (TrackOffset::default(), None),
             QueueTrackOffset::Pts(duration) => (TrackOffset::new(duration), None),
             QueueTrackOffset::FromStart(duration) => (TrackOffset::default(), Some(duration)),
+            QueueTrackOffset::Continuation(duration) => (
+                self.queued_track_offset
+                    .as_ref()
+                    .expect("continuation requires a preceding track")
+                    .after(duration),
+                None,
+            ),
         };
+        self.queued_track_offset = Some(track_offset.clone());
         let (video_input, video_sender) = if opts.video {
             let side_channel = self
                 .video_side_channel
@@ -216,6 +225,7 @@ pub(crate) enum QueueTrackOffset {
     Pts(Duration),
     /// Offset from start point
     FromStart(Duration),
+    Continuation(Duration),
 }
 
 #[derive(Debug)]
@@ -283,6 +293,7 @@ impl QueueInput {
             video: None,
             audio: None,
             track_offset: TrackOffset::default(),
+            queued_track_offset: None,
 
             pending_sender,
             pending_receiver,
@@ -307,7 +318,7 @@ impl QueueInput {
         if !opts.video && !opts.audio {
             return (None, None);
         }
-        let guard = self.0.lock().unwrap();
+        let mut guard = self.0.lock().unwrap();
         let (track, video_sender, audio_sender) = guard.new_pending_track(opts);
         let pending_sender = guard.pending_sender.clone();
         drop(guard);
@@ -365,19 +376,24 @@ impl WeakQueueInput {
 }
 
 #[derive(Default, Clone)]
-pub(super) struct TrackOffset(Arc<Mutex<Option<Duration>>>);
+pub(super) struct TrackOffset(Arc<Mutex<Option<Duration>>>, Duration);
 
 impl TrackOffset {
     pub fn new(value: Duration) -> Self {
-        Self(Arc::new(Mutex::new(Some(value))))
+        Self(Arc::new(Mutex::new(Some(value))), Duration::ZERO)
+    }
+
+    fn after(&self, duration: Duration) -> Self {
+        Self(self.0.clone(), self.1 + duration)
     }
 
     pub fn get(&self) -> Option<Duration> {
-        *self.0.lock().unwrap()
+        self.0.lock().unwrap().map(|base| base + self.1)
     }
 
     pub fn get_or_init(&self, offset: Duration) -> Duration {
-        *self.0.lock().unwrap().get_or_insert(offset)
+        let mut base = self.0.lock().unwrap();
+        *base.get_or_insert(offset.saturating_sub(self.1)) + self.1
     }
 
     pub fn map_add(&self, duration: Duration) {

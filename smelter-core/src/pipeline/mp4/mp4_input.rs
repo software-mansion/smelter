@@ -117,6 +117,9 @@ impl Mp4Input {
         let video_duration = video_track.as_ref().and_then(|track| track.duration());
         let audio_track = Mp4FileReader::from_path(&source_file.path)?.try_new_aac_track();
         let audio_duration = audio_track.as_ref().and_then(|track| track.duration());
+        let loop_duration = video_duration
+            .or(audio_duration)
+            .filter(|_| options.should_loop);
 
         if video_track.is_none() && audio_track.is_none() {
             return Err(Mp4InputError::NoTrack.into());
@@ -158,6 +161,7 @@ impl Mp4Input {
             &input_ref,
             options,
             source_file,
+            loop_duration,
             chunk_buffer_duration,
             queue_input.downgrade(),
         );
@@ -243,6 +247,7 @@ struct TrackManagerThread {
     track_ctx: TrackContext,
     video_thread: Option<(JoinHandle<Track<File>>, ShutdownCondition)>,
     audio_thread: Option<(JoinHandle<Track<File>>, ShutdownCondition)>,
+    loop_duration: Option<Duration>,
     chunk_buffer_duration: Duration,
     queue_input: WeakQueueInput,
 }
@@ -253,6 +258,7 @@ impl TrackManagerThread {
         input_ref: &Ref<InputId>,
         options: Mp4InputOptions,
         source_file: Arc<SourceFile>,
+        loop_duration: Option<Duration>,
         chunk_buffer_duration: Duration,
         queue_input: WeakQueueInput,
     ) -> (Self, crossbeam_channel::Sender<StateEvent>) {
@@ -275,6 +281,7 @@ impl TrackManagerThread {
                 track_ctx,
                 video_thread: None,
                 audio_thread: None,
+                loop_duration,
                 chunk_buffer_duration,
                 queue_input,
             },
@@ -328,7 +335,10 @@ impl TrackManagerThread {
             queue_input.queue_new_track(QueueTrackOptions {
                 video: self.video_thread.is_some(),
                 audio: self.audio_thread.is_some(),
-                offset: QueueTrackOffset::None,
+                offset: match (self.loop_duration, seek) {
+                    (Some(duration), None) => QueueTrackOffset::Continuation(duration),
+                    _ => QueueTrackOffset::None,
+                },
             })
         };
 
