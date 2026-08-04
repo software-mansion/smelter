@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use crossbeam_channel::Sender;
@@ -22,6 +23,26 @@ pub(crate) struct PipelineOutput {
     pub output: Box<dyn Output>,
     pub video_end_condition: Option<PipelineOutputEndConditionState>,
     pub audio_end_condition: Option<PipelineOutputEndConditionState>,
+    pub start_at: Option<Duration>,
+    pub stop_at: Option<Duration>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum OutputTimestampOrigin {
+    FirstPacket,
+    Explicit(Duration),
+}
+
+impl OutputTimestampOrigin {
+    pub(crate) fn resolve(&mut self, first_packet_pts: Duration) -> Duration {
+        match self {
+            Self::FirstPacket => {
+                *self = Self::Explicit(first_packet_pts);
+                first_packet_pts
+            }
+            Self::Explicit(pts) => *pts,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -47,6 +68,7 @@ pub(super) fn new_external_output(
     ctx: Arc<PipelineCtx>,
     output_ref: Ref<OutputId>,
     options: ProtocolOutputOptions,
+    timestamp_origin: OutputTimestampOrigin,
 ) -> Result<(Box<dyn Output>, Option<Port>), OutputInitError> {
     match options {
         ProtocolOutputOptions::Rtp(opt) => {
@@ -58,11 +80,11 @@ pub(super) fn new_external_output(
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Mp4(opt) => {
-            let output = Mp4Output::new(ctx, output_ref, opt)?;
+            let output = Mp4Output::new(ctx, output_ref, opt, timestamp_origin)?;
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Hls(opt) => {
-            let output = HlsOutput::new(ctx, output_ref, opt)?;
+            let output = HlsOutput::new(ctx, output_ref, opt, timestamp_origin)?;
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Whip(opt) => {
@@ -90,6 +112,7 @@ pub(super) fn register_pipeline_output<BuildFn, NewOutputResult>(
     output_id: OutputId,
     video: Option<RegisterOutputVideoOptions>,
     audio: Option<RegisterOutputAudioOptions>,
+    start_at: Option<Duration>,
     build_output: BuildFn,
 ) -> Result<NewOutputResult, RegisterOutputError>
 where
@@ -125,6 +148,8 @@ where
         video_end_condition: video.as_ref().map(|video| {
             PipelineOutputEndConditionState::new_video(video.end_condition.clone(), &guard.inputs)
         }),
+        start_at,
+        stop_at: None,
     };
 
     if let (Some(video_opts), Some(video_output)) = (video.clone(), output.output.video()) {
@@ -158,6 +183,7 @@ where
 impl Pipeline {
     pub(super) fn all_output_video_senders_iter(
         pipeline: &Arc<Mutex<Pipeline>>,
+        pts: Duration,
     ) -> impl Iterator<Item = (OutputId, OutputSender<Sender<PipelineEvent<Frame>>>)> {
         let outputs: HashMap<_, _> = pipeline
             .lock()
@@ -165,7 +191,11 @@ impl Pipeline {
             .outputs
             .iter_mut()
             .filter_map(|(output_id, output)| {
-                let eos_status = output.video_end_condition.as_mut()?.eos_status();
+                if output.start_at.is_some_and(|start_at| pts < start_at) {
+                    return None;
+                }
+                let should_stop = output.stop_at.is_some_and(|stop_at| pts >= stop_at);
+                let eos_status = output.video_end_condition.as_mut()?.eos_status(should_stop);
                 let sender = output.output.video()?.frame_sender.clone();
                 Some((output_id.clone(), (sender, eos_status)))
             })
@@ -191,6 +221,7 @@ impl Pipeline {
 
     pub(super) fn all_output_audio_senders_iter(
         pipeline: &Arc<Mutex<Pipeline>>,
+        pts: Duration,
     ) -> impl Iterator<
         Item = (
             OutputId,
@@ -203,7 +234,11 @@ impl Pipeline {
             .outputs
             .iter_mut()
             .filter_map(|(output_id, output)| {
-                let eos_status = output.audio_end_condition.as_mut()?.eos_status();
+                if output.start_at.is_some_and(|start_at| pts < start_at) {
+                    return None;
+                }
+                let should_stop = output.stop_at.is_some_and(|stop_at| pts >= stop_at);
+                let eos_status = output.audio_end_condition.as_mut()?.eos_status(should_stop);
                 let sender = output.output.audio()?.samples_batch_sender.clone();
                 Some((output_id.clone(), (sender, eos_status)))
             })
@@ -282,8 +317,12 @@ impl PipelineOutputEndConditionState {
         }
     }
 
-    fn eos_status(&mut self) -> EosStatus {
-        self.on_event(StateChange::NoChanges);
+    fn eos_status(&mut self, should_stop: bool) -> EosStatus {
+        if should_stop {
+            self.did_end = true;
+        } else {
+            self.on_event(StateChange::NoChanges);
+        }
         if self.did_end {
             if !self.did_send_eos {
                 self.did_send_eos = true;

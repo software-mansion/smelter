@@ -30,7 +30,10 @@ use crate::{
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
         input::{PipelineInput, new_external_input, register_pipeline_input},
         moq::{MoqServer, spawn_moq_server},
-        output::{OutputSender, PipelineOutput, new_external_output, register_pipeline_output},
+        output::{
+            OutputSender, OutputTimestampOrigin, PipelineOutput, new_external_output,
+            register_pipeline_output,
+        },
         rtmp::spawn_rtmp_server,
         webrtc::{
             WebrtcSettingEngineCtx, WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle,
@@ -151,12 +154,41 @@ impl Pipeline {
         output_id: OutputId,
         register_options: RegisterOutputOptions,
     ) -> Result<Option<Port>, RegisterOutputError> {
+        Self::register_output_inner(pipeline, output_id, register_options, None)
+    }
+
+    pub fn register_output_at(
+        pipeline: &Arc<Mutex<Self>>,
+        output_id: OutputId,
+        register_options: RegisterOutputOptions,
+        start_at: Duration,
+    ) -> Result<Option<Port>, RegisterOutputError> {
+        Self::register_output_inner(pipeline, output_id, register_options, Some(start_at))
+    }
+
+    fn register_output_inner(
+        pipeline: &Arc<Mutex<Self>>,
+        output_id: OutputId,
+        register_options: RegisterOutputOptions,
+        start_at: Option<Duration>,
+    ) -> Result<Option<Port>, RegisterOutputError> {
+        let timestamp_origin = start_at
+            .map(OutputTimestampOrigin::Explicit)
+            .unwrap_or(OutputTimestampOrigin::FirstPacket);
         register_pipeline_output(
             pipeline,
             output_id,
             register_options.video,
             register_options.audio,
-            |ctx, output_ref| new_external_output(ctx, output_ref, register_options.output_options),
+            start_at,
+            |ctx, output_ref| {
+                new_external_output(
+                    ctx,
+                    output_ref,
+                    register_options.output_options,
+                    timestamp_origin,
+                )
+            },
         )
     }
 
@@ -170,6 +202,7 @@ impl Pipeline {
             output_id,
             register_options.video,
             register_options.audio,
+            None,
             |ctx, output_ref| {
                 let (output, handle) =
                     EncodedDataOutput::new(ctx, output_ref, register_options.output_options)?;
@@ -188,6 +221,7 @@ impl Pipeline {
             output_id,
             register_options.video,
             register_options.audio,
+            None,
             |_ctx, _output_ref| {
                 let (output, result) = RawDataOutput::new(register_options.output_options)?;
                 Ok((Box::new(output), result))
@@ -203,6 +237,19 @@ impl Pipeline {
         self.audio_mixer.unregister_output(output_id);
         self.outputs.remove(output_id);
         self.renderer.unregister_output(output_id);
+        Ok(())
+    }
+
+    pub fn stop_output_at(
+        &mut self,
+        output_id: &OutputId,
+        stop_at: Duration,
+    ) -> Result<(), UnregisterOutputError> {
+        let output = self
+            .outputs
+            .get_mut(output_id)
+            .ok_or_else(|| UnregisterOutputError::NotFound(output_id.clone()))?;
+        output.stop_at = Some(stop_at);
         Ok(())
     }
 
@@ -431,7 +478,7 @@ fn run_renderer_thread(
         }
 
         let output_frame_senders: HashMap<_, _> =
-            Pipeline::all_output_video_senders_iter(&pipeline)
+            Pipeline::all_output_video_senders_iter(&pipeline, input_frames.pts)
                 .filter_map(|(output_id, sender)| match sender {
                     OutputSender::ActiveSender(sender) => Some((output_id, sender)),
                     OutputSender::FinishedSender => {
@@ -454,7 +501,6 @@ fn run_renderer_thread(
 
         for (output_id, frame) in output_frames.frames {
             let Some(frame_sender) = output_frame_senders.get(&output_id) else {
-                warn!(?output_id, "Received new frame from renderer after EOS.");
                 continue;
             };
 
@@ -504,7 +550,7 @@ fn run_audio_mixer_thread(
 
         trace!("Prepare output senders");
         let output_samples_senders: HashMap<_, _> =
-            Pipeline::all_output_audio_senders_iter(&pipeline)
+            Pipeline::all_output_audio_senders_iter(&pipeline, samples.start_pts)
                 .filter_map(|(output_id, sender)| match sender {
                     OutputSender::ActiveSender(sender) => Some((output_id, sender)),
                     OutputSender::FinishedSender => {
@@ -520,7 +566,6 @@ fn run_audio_mixer_thread(
         for (output_id, batch) in mixed_samples.0 {
             trace!(?output_id, ?batch, "Send batch");
             let Some(samples_sender) = output_samples_senders.get(&output_id) else {
-                warn!(?output_id, "Received new mixed samples after EOS.");
                 continue;
             };
 
