@@ -233,15 +233,12 @@ impl FdkAacEncoder {
                 if self.encoded_samples < self.codec_delay {
                     continue;
                 }
-                let first_input_pts = self.first_input_pts.unwrap_or_default();
-                let offset = Duration::from_secs_f64(
-                    frame_start.abs_diff(self.codec_delay) as f64 / self.sample_rate as f64,
-                );
-                let pts = if frame_start >= self.codec_delay {
-                    first_input_pts + offset
-                } else {
-                    first_input_pts.saturating_sub(offset)
-                };
+
+                let first_pts = self.first_input_pts.unwrap_or_default();
+                let offset = Duration::from_secs_f64(frame_start as f64 / self.sample_rate as f64);
+                let codec_delay =
+                    Duration::from_secs_f64(self.codec_delay as f64 / self.sample_rate as f64);
+                let pts = (first_pts + offset).saturating_sub(codec_delay);
 
                 output.push(EncodedOutputChunk {
                     data: Bytes::copy_from_slice(
