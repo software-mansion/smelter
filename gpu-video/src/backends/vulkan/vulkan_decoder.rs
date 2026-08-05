@@ -269,6 +269,14 @@ impl<'a> VulkanDecoder<'a> {
         // begin video coding
         let mut cmd_buffer = self.tracker.command_buffer_pools.decode.begin_buffer()?;
 
+        let masks = MemoryBarrier2Masks {
+            src_stage_mask: vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
+            dst_stage_mask: vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
+            src_access_mask: vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR,
+            dst_access_mask: vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
+                | vk::AccessFlags2::VIDEO_DECODE_READ_KHR,
+        };
+
         video_session_resources
             .decoding_images
             .dpb
@@ -276,11 +284,7 @@ impl<'a> VulkanDecoder<'a> {
             .image_with_view
             .transition_layout(
                 &mut cmd_buffer,
-                vk::PipelineStageFlags2::VIDEO_DECODE_KHR
-                    ..vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
-                vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
-                    ..vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
-                        | vk::AccessFlags2::VIDEO_DECODE_READ_KHR,
+                masks,
                 vk::ImageLayout::VIDEO_DECODE_DPB_KHR,
                 vk::ImageSubresourceRange {
                     base_array_layer: 0,
@@ -294,11 +298,7 @@ impl<'a> VulkanDecoder<'a> {
         if let Some(dst) = &video_session_resources.decoding_images.dst_image {
             dst.image_with_view.transition_layout(
                 &mut cmd_buffer,
-                vk::PipelineStageFlags2::VIDEO_DECODE_KHR
-                    ..vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
-                vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
-                    ..vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
-                        | vk::AccessFlags2::VIDEO_DECODE_READ_KHR,
+                masks,
                 vk::ImageLayout::VIDEO_DECODE_DST_KHR,
                 vk::ImageSubresourceRange {
                     base_array_layer: 0,
@@ -311,12 +311,10 @@ impl<'a> VulkanDecoder<'a> {
         }
 
         let memory_barrier = vk::MemoryBarrier2::default()
-            .src_stage_mask(vk::PipelineStageFlags2::VIDEO_DECODE_KHR)
-            .src_access_mask(vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR)
-            .dst_stage_mask(vk::PipelineStageFlags2::VIDEO_DECODE_KHR)
-            .dst_access_mask(
-                vk::AccessFlags2::VIDEO_DECODE_READ_KHR | vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR,
-            );
+            .src_stage_mask(masks.src_stage_mask)
+            .src_access_mask(masks.src_access_mask)
+            .dst_stage_mask(masks.dst_stage_mask)
+            .dst_access_mask(masks.dst_access_mask);
 
         unsafe {
             self.decoding_device
@@ -586,18 +584,30 @@ impl<'a> VulkanDecoder<'a> {
 
         let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
+        let read_masks = MemoryBarrier2Masks {
+            src_stage_mask: vk::PipelineStageFlags2::NONE,
+            dst_stage_mask: vk::PipelineStageFlags2::COPY,
+            src_access_mask: vk::AccessFlags2::NONE,
+            dst_access_mask: vk::AccessFlags2::TRANSFER_READ,
+        };
+
         decode_output.image.transition_layout_single_layer(
             &mut cmd_buffer,
-            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
-            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
+            read_masks,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
             decode_output.layer,
         )?;
 
+        let write_masks = MemoryBarrier2Masks {
+            src_stage_mask: vk::PipelineStageFlags2::NONE,
+            dst_stage_mask: vk::PipelineStageFlags2::COPY,
+            src_access_mask: vk::AccessFlags2::NONE,
+            dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
+        };
+
         image.transition_layout_single_layer(
             &mut cmd_buffer,
-            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
-            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
+            write_masks,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             0,
         )?;
@@ -812,10 +822,16 @@ impl<'a> VulkanDecoder<'a> {
     ) -> Result<(Buffer, SemaphoreWaitValue), VulkanDecoderError> {
         let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
+        let masks = MemoryBarrier2Masks {
+            src_stage_mask: vk::PipelineStageFlags2::NONE,
+            dst_stage_mask: vk::PipelineStageFlags2::COPY,
+            src_access_mask: vk::AccessFlags2::NONE,
+            dst_access_mask: vk::AccessFlags2::TRANSFER_READ,
+        };
+
         image.transition_layout_single_layer(
             &mut cmd_buffer,
-            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
-            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
+            masks,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
             layer,
         )?;

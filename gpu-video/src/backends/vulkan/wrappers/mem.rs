@@ -337,6 +337,14 @@ impl std::ops::Deref for Buffer {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MemoryBarrier2Masks {
+    pub src_stage_mask: vk::PipelineStageFlags2,
+    pub dst_stage_mask: vk::PipelineStageFlags2,
+    pub src_access_mask: vk::AccessFlags2,
+    pub dst_access_mask: vk::AccessFlags2,
+}
+
 pub(crate) struct Image {
     pub(crate) image: vk::Image,
     allocation: vk_mem::Allocation,
@@ -414,16 +422,15 @@ impl Image {
         &self,
         command_buffer: vk::CommandBuffer,
         layout: &mut [vk::ImageLayout],
-        stages: std::ops::Range<vk::PipelineStageFlags2>,
-        accesses: std::ops::Range<vk::AccessFlags2>,
+        masks: MemoryBarrier2Masks,
         new_layout: vk::ImageLayout,
         subresource_range: vk::ImageSubresourceRange,
     ) -> Result<(), VulkanCommonError> {
         let barrier = vk::ImageMemoryBarrier2::default()
-            .src_stage_mask(stages.start)
-            .dst_stage_mask(stages.end)
-            .src_access_mask(accesses.start)
-            .dst_access_mask(accesses.end)
+            .src_stage_mask(masks.src_stage_mask)
+            .dst_stage_mask(masks.dst_stage_mask)
+            .src_access_mask(masks.src_access_mask)
+            .dst_access_mask(masks.dst_access_mask)
             .new_layout(new_layout)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
@@ -517,36 +524,26 @@ impl Image {
     pub(crate) fn transition_layout(
         &self,
         command_buffer: &mut OpenCommandBuffer,
-        stages: std::ops::Range<vk::PipelineStageFlags2>,
-        accesses: std::ops::Range<vk::AccessFlags2>,
+        masks: MemoryBarrier2Masks,
         new_layout: vk::ImageLayout,
         subresource_range: vk::ImageSubresourceRange,
     ) -> Result<(), VulkanCommonError> {
         let raw_buffer = command_buffer.buffer();
         let layout = command_buffer.image_layout(self.key(), &self.tracker)?;
 
-        self.transition_layout_raw(
-            raw_buffer,
-            layout,
-            stages,
-            accesses,
-            new_layout,
-            subresource_range,
-        )
+        self.transition_layout_raw(raw_buffer, layout, masks, new_layout, subresource_range)
     }
 
     pub(crate) fn transition_layout_single_layer(
         &self,
         command_buffer: &mut OpenCommandBuffer,
-        stages: std::ops::Range<vk::PipelineStageFlags2>,
-        accesses: std::ops::Range<vk::AccessFlags2>,
+        masks: MemoryBarrier2Masks,
         new_layout: vk::ImageLayout,
         base_array_layer: u32,
     ) -> Result<(), VulkanCommonError> {
         self.transition_layout(
             command_buffer,
-            stages,
-            accesses,
+            masks,
             new_layout,
             vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
