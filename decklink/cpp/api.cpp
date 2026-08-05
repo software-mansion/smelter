@@ -157,7 +157,13 @@ HResult input_flush_streams(IDeckLinkInput *input) {
   return static_cast<HResult>(input->FlushStreams());
 }
 
-void input_release(IDeckLinkInput *input) { input->Release(); }
+void input_release(IDeckLinkInput *input) {
+  input->StopStreams();
+  input->DisableVideoInput();
+  input->DisableAudioInput();
+  input->SetCallback(nullptr);
+  input->Release();
+}
 
 //
 // IDeckLinkProfileManager

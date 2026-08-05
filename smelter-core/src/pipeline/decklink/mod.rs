@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tracing::{Level, error, span};
+use tracing::{Level, span};
 
 use crate::pipeline::input::Input;
 use crate::queue::{QueueTrackOffset, QueueTrackOptions};
@@ -111,13 +111,5 @@ impl DeckLink {
             InputInitInfo::Other,
             queue_input,
         ))
-    }
-}
-
-impl Drop for DeckLink {
-    fn drop(&mut self) {
-        if let Err(err) = self.input.stop_streams() {
-            error!("Failed to stop streams: {:?}", err);
-        }
     }
 }
