@@ -7,7 +7,7 @@ use crate::{
         VulkanCommonError,
         codec::Codec,
         vulkan_device::{VulkanDevice, queues::VideoQueues},
-        wrappers::{ImageLayoutTracker, OpenCommandBuffer},
+        wrappers::{ImageLayoutTracker, MemoryBarrier2Masks, OpenCommandBuffer},
     },
     parser::reference_manager::{PictureInfo, ReferencePictureInfo},
 };
@@ -291,19 +291,14 @@ impl ImageWithView {
     pub(crate) fn transition_layout(
         &self,
         command_buffer: &mut OpenCommandBuffer,
-        stages: std::ops::Range<vk::PipelineStageFlags2>,
-        accesses: std::ops::Range<vk::AccessFlags2>,
+        masks: MemoryBarrier2Masks,
         new_layout: vk::ImageLayout,
         subresource_range: vk::ImageSubresourceRange,
     ) -> Result<(), VulkanCommonError> {
         match self {
-            ImageWithView::Single { image, .. } => image.transition_layout(
-                command_buffer,
-                stages,
-                accesses,
-                new_layout,
-                subresource_range,
-            ),
+            ImageWithView::Single { image, .. } => {
+                image.transition_layout(command_buffer, masks, new_layout, subresource_range)
+            }
 
             ImageWithView::Multiple { images, .. } => {
                 let start_layer = subresource_range.base_array_layer as usize;
@@ -317,8 +312,7 @@ impl ImageWithView {
                     let subresource_range = subresource_range.base_array_layer(0).layer_count(1);
                     image.transition_layout(
                         command_buffer,
-                        stages.clone(),
-                        accesses.clone(),
+                        masks,
                         new_layout,
                         subresource_range,
                     )?;
@@ -397,8 +391,12 @@ impl<'a> CodingImageBundle<'a> {
             layer_count: vk::REMAINING_ARRAY_LAYERS,
         };
 
-        let accesses = vk::AccessFlags2::NONE..vk::AccessFlags2::NONE;
-        let stages = vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::NONE;
+        let masks = MemoryBarrier2Masks {
+            src_stage_mask: vk::PipelineStageFlags2::NONE,
+            dst_stage_mask: vk::PipelineStageFlags2::NONE,
+            src_access_mask: vk::AccessFlags2::NONE,
+            dst_access_mask: vk::AccessFlags2::NONE,
+        };
 
         let image_with_view = if use_separate_images {
             let images = (0..array_layer_count)
@@ -443,13 +441,7 @@ impl<'a> CodingImageBundle<'a> {
                 .collect::<Result<Vec<_>, _>>()?;
 
             for image in &images {
-                image.transition_layout(
-                    command_buffer,
-                    stages.clone(),
-                    accesses.clone(),
-                    layout,
-                    subresource_range,
-                )?;
+                image.transition_layout(command_buffer, masks, layout, subresource_range)?;
             }
 
             ImageWithView::Multiple {
@@ -485,13 +477,7 @@ impl<'a> CodingImageBundle<'a> {
                 &image_view_create_info,
             )?;
 
-            image.transition_layout(
-                command_buffer,
-                stages.clone(),
-                accesses.clone(),
-                layout,
-                subresource_range,
-            )?;
+            image.transition_layout(command_buffer, masks, layout, subresource_range)?;
 
             ImageWithView::Single { image, image_view }
         };

@@ -19,9 +19,9 @@ use crate::{
         vulkan_device::EncodingDevice,
         wrappers::{
             Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
-            ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
-            SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt, VideoQueueExt,
-            VideoSession, VideoSessionParameters,
+            ImageLayoutTracker, ImageView, MemoryBarrier2Masks, OpenCommandBuffer, ProfileInfo,
+            QueryPool, SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt,
+            VideoQueueExt, VideoSession, VideoSessionParameters,
         },
     },
     device::{ColorRange, ColorSpace, Rational},
@@ -729,10 +729,16 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
 
         let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
+        let masks = MemoryBarrier2Masks {
+            src_stage_mask: vk::PipelineStageFlags2::NONE,
+            dst_stage_mask: vk::PipelineStageFlags2::COPY,
+            src_access_mask: vk::AccessFlags2::NONE,
+            dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
+        };
+
         image.transition_layout_single_layer(
             &mut cmd_buffer,
-            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
-            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
+            masks,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             0,
         )?;
@@ -1107,10 +1113,16 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
 
         let mut cmd_buffer = self.tracker.command_buffer_pools.encode.begin_buffer()?;
 
+        let masks = MemoryBarrier2Masks {
+            src_stage_mask: vk::PipelineStageFlags2::NONE,
+            dst_stage_mask: vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
+            src_access_mask: vk::AccessFlags2::NONE,
+            dst_access_mask: vk::AccessFlags2::VIDEO_ENCODE_READ_KHR,
+        };
+
         image.transition_layout_single_layer(
             &mut cmd_buffer,
-            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
-            vk::AccessFlags2::NONE..vk::AccessFlags2::VIDEO_ENCODE_READ_KHR,
+            masks,
             vk::ImageLayout::VIDEO_ENCODE_SRC_KHR,
             0,
         )?;
