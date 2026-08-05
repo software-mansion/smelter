@@ -28,16 +28,22 @@ pub(crate) struct LiveSyncTrack<B: LiveSyncBuffer> {
     options: LiveSyncOptions,
     /// Instant that output timestamps are measured from.
     sync_point: Instant,
+
     shared: Arc<Mutex<SharedState>>,
+
+    state: TrackState,
+
     /// Estimator observing only this track's chunks.
     estimator: LiveEdgeEstimator,
+
+    // Current buffer
     buffer: B,
-    /// Buffers rotated out by a reset; drained before `buffer`. New data
-    /// after the reset collects in a clean `buffer` while the edge is
-    /// re-estimated.
+
+    // When we detect discontinuity current state of the buffer still needs
+    // to be returned, but we already need to "observe" the packet that caused
+    // discontinuity
     flush_queue: FlushQueue<B>,
     flush_state: TrackFlushState,
-    state: TrackState,
 }
 
 impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
@@ -157,10 +163,6 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
         };
     }
 
-    //    /// Post-start check of how delivery behaves relative to the playback
-    //    /// position: revokes a start based on a false knee, nudges the anchor
-    //    /// towards the desired buffer, or resets back to the startup logic when
-    //    /// the deviation is beyond correction.
     //    fn maybe_correct(&mut self) {
     //        let now = Instant::now();
     //        if now.saturating_duration_since(self.last_correction) < CORRECTION_INTERVAL {

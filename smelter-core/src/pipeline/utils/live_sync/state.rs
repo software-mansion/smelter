@@ -23,16 +23,6 @@ impl TimestampAnchor {
     pub(super) fn to_output_pts(&self, pts: Duration) -> Duration {
         (self.output_pts + pts).saturating_sub(self.input_pts)
     }
-
-    // /// Shifts the mapping so content is presented `delta` earlier.
-    // pub(super) fn shift_earlier(&mut self, delta: Duration) {
-    //     self.input_pts += delta;
-    // }
-
-    // /// Shifts the mapping so content is presented `delta` later.
-    // pub(super) fn shift_later(&mut self, delta: Duration) {
-    //     self.output_pts += delta;
-    // }
 }
 
 /// Cross-track mutable state of an input, kept behind a mutex.
