@@ -3,16 +3,17 @@ use std::{
     time::{Duration, Instant},
 };
 
+use tracing::debug;
+
 use super::{
     LiveSyncOptions,
+    anchor::{SlewingAnchor, TimestampAnchor},
     buffer::LiveSyncBuffer,
-    edge_estimator::LiveEdgeEstimator,
+    edge_estimator::{EdgeEstimate, LiveEdgeEstimator},
     flush::{FlushQueue, TrackFlushState},
-    state::{EdgeSource, SharedState, TimestampAnchor},
+    state::{EdgeSource, SharedState, resolve_should_start},
 };
-use crate::{
-    pipeline::utils::input_sync::InputSyncItem, utils::live_sync::state::resolve_should_start,
-};
+use crate::pipeline::utils::input_sync::InputSyncItem;
 
 /// pts jump (in either direction) treated as a discontinuity of the input
 /// timeline; the old edge estimate does not describe the new timeline.
@@ -93,15 +94,18 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
             self.reset();
         }
         self.maybe_start();
+        self.maybe_correct();
 
         if let Some(item) = self.flush_queue.read() {
             return Some(item);
         }
 
-        // check current buffer
-        let anchor = self.state.anchor()?;
+        // current buffer is held back until the live edge is found
+        let TrackState::Started { anchor, .. } = &mut self.state else {
+            return None;
+        };
         let mut chunk = self.buffer.try_read()?;
-        chunk.map_timestamps(|pts| anchor.to_output_pts(pts));
+        anchor.map_chunk(&mut chunk);
         Some(chunk)
     }
 
@@ -114,12 +118,14 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
         }
 
         self.maybe_start();
+        self.maybe_correct();
 
         if let Some(pts) = self.flush_queue.peek_pts() {
             return Some(pts);
         }
 
-        // check current buffer
+        // check current buffer; a correction only advances when the chunk is
+        // read, so the pts reported here can be one step off
         let anchor = self.state.anchor()?; // TODO: it should return even if no anchor (the same behavior as flush)
         let chunk = self.buffer.peek()?;
         Some(anchor.to_output_pts(chunk.pts()))
@@ -150,103 +156,90 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
         let Some(estimation) = estimation else {
             return;
         };
+        // target from the track's own delivery; the shared estimator observes
+        // the arrivals of all tracks interleaved, so its gap underestimates
+        // how long this track goes without a refill
+        let Some(own) = self.estimator.estimate(now) else {
+            return;
+        };
 
         let now_pts = now.saturating_duration_since(self.sync_point);
         let anchor = TimestampAnchor {
             input_pts: estimation.upper_bound.pts,
-            output_pts: now_pts + self.options.desired_buffer,
+            output_pts: now_pts + self.target_buffer(&own),
         };
 
         self.state = TrackState::Started {
-            anchor,
+            anchor: SlewingAnchor::new(anchor),
             edge_source: estimator,
         };
     }
 
-    //    fn maybe_correct(&mut self) {
-    //        let now = Instant::now();
-    //        if now.saturating_duration_since(self.last_correction) < CORRECTION_INTERVAL {
-    //            return;
-    //        }
-    //        self.last_correction = now;
-    //        if self.maybe_reanchor(now) {
-    //            return;
-    //        }
-    //        let Some(anchor) = self.state.anchor() else {
-    //            return;
-    //        };
-    //        let correction = decide_correction(
-    //            &self.options,
-    //            self.sync_point,
-    //            now,
-    //            &self.estimator,
-    //            &anchor,
-    //        );
-    //        match correction {
-    //            AnchorCorrection::None => (),
-    //            AnchorCorrection::Earlier(delta) => {
-    //                debug!(?delta, "Live sync buffer too large, presenting earlier");
-    //                if let Some(anchor) = self.state.anchor_mut() {
-    //                    anchor.shift_earlier(delta);
-    //                }
-    //            }
-    //            AnchorCorrection::Later(delta) => {
-    //                debug!(?delta, "Live sync buffer too small, presenting later");
-    //                if let Some(anchor) = self.state.anchor_mut() {
-    //                    anchor.shift_later(delta);
-    //                }
-    //            }
-    //            AnchorCorrection::Reset => self.reset("buffer diverged beyond correction"),
-    //        }
-    //    }
-    //
-    //    /// The chosen edge improving after the start means the start was based on
-    //    /// a false knee (e.g. a mid-flush network stall mistaken for the live
-    //    /// edge). Revoke it with a single forward jump; the slew would chase an
-    //    /// error this size for minutes. Returns `true` when the mapping changed.
-    //    fn maybe_reanchor(&mut self, now: Instant) -> bool {
-    //        let (upper_edge, edge_offset) = match &self.state {
-    //            TrackState::WaitingForStart => return false,
-    //            TrackState::StartedWithTrackEstimator { edge_offset, .. } => {
-    //                let bounds = self.estimator.edge_bounds(now);
-    //                (bounds.map(|bounds| bounds.upper), *edge_offset)
-    //            }
-    //            TrackState::StartedWithSharedEstimator { edge_offset, .. } => {
-    //                let bounds = self
-    //                    .shared
-    //                    .lock()
-    //                    .unwrap()
-    //                    .shared_estimator
-    //                    .edge_bounds(now);
-    //                (bounds.map(|bounds| bounds.upper), *edge_offset)
-    //            }
-    //        };
-    //        let Some(upper_edge) = upper_edge else {
-    //            return false;
-    //        };
-    //        let elapsed = now.saturating_duration_since(self.sync_point);
-    //        let current_offset = elapsed.saturating_sub(upper_edge);
-    //        let improvement = edge_offset.saturating_sub(current_offset);
-    //        if improvement <= self.options.stabilization_tolerance {
-    //            return false;
-    //        }
-    //        info!(?improvement, "Live edge improved after start, re-anchoring");
-    //        match &mut self.state {
-    //            TrackState::WaitingForStart => (),
-    //            TrackState::StartedWithSharedEstimator {
-    //                anchor,
-    //                edge_offset,
-    //            }
-    //            | TrackState::StartedWithTrackEstimator {
-    //                anchor,
-    //                edge_offset,
-    //            } => {
-    //                anchor.shift_earlier(improvement);
-    //                *edge_offset = current_offset;
-    //            }
-    //        }
-    //        true
-    //    }
+    /// Buffer the mapping aims for: `desired_buffer`, raised for batched
+    /// delivery so that it survives the gap between two batches.
+    fn target_buffer(&self, own: &EdgeEstimate) -> Duration {
+        Duration::max(
+            self.options.desired_buffer,
+            own.delivery.max_arrival_gap * 3 / 2,
+        )
+    }
+
+    /// Checks how much content is buffered ahead of the playback position and
+    /// starts a correction when it drifted away from the target.
+    ///
+    /// The correction keeps the anchor it was started with until the mapping
+    /// reaches it, so tracks aligned to the same edge converge to the same
+    /// mapping instead of each following the jitter of its own estimate.
+    fn maybe_correct(&mut self) {
+        if self.state.is_correcting() {
+            return;
+        }
+        let Some(anchor) = self.state.anchor() else {
+            return;
+        };
+        let now = Instant::now();
+        // how much is buffered is measured against this track's own delivery;
+        // the shared estimator reports whichever track is freshest, so a
+        // starving track would look healthy because a sibling keeps delivering
+        let Some(own) = self.estimator.estimate(now) else {
+            return;
+        };
+        let now_pts = now.saturating_duration_since(self.sync_point);
+        let target = self.target_buffer(&own);
+        let buffered = anchor
+            .to_output_pts(own.delivery.last_pts)
+            .saturating_sub(now_pts);
+
+        // the allowed range is expressed around `desired_buffer`, so a target
+        // raised for batched delivery moves its upper limit up as well
+        let max_buffer = self.options.max_buffer + (target - self.options.desired_buffer);
+        if buffered >= self.options.min_buffer && buffered <= max_buffer {
+            return;
+        }
+        let Some(edge) = self.edge_estimate(now) else {
+            return;
+        };
+        debug!(
+            ?buffered,
+            ?target,
+            "Live sync buffer off target, correcting"
+        );
+        self.state.correct_to(TimestampAnchor {
+            input_pts: edge.upper_bound.pts,
+            output_pts: now_pts + target,
+        });
+    }
+
+    /// Estimate of the edge this track aligned to when it started.
+    fn edge_estimate(&self, now: Instant) -> Option<EdgeEstimate> {
+        let TrackState::Started { edge_source, .. } = &self.state else {
+            return None;
+        };
+        match edge_source {
+            EdgeSource::Track => self.estimator.estimate(now),
+            EdgeSource::Shared => self.shared.lock().unwrap().shared_estimator.estimate(now),
+        }
+    }
 
     fn best_effort_anchor(&self, now: Instant) -> Option<TimestampAnchor> {
         let now_pts = now.saturating_duration_since(self.sync_point);
@@ -297,15 +290,12 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
 }
 
 enum TrackState {
-    /// Written chunks are buffered and never returned. On each write
-    /// we are checking if both edge estimators are ready.
-    ///
-    /// If shared and track estimator diverge by more than
-    /// `shared_edge_tolerance` switch to `StartedWithTrackEstimator`,
-    /// otherwise switch to `StartedWithSharedEstimator`.
+    /// Written chunks are buffered and never returned. On each write we are
+    /// checking if both edge estimators are ready.
     WaitingForStart,
     Started {
-        anchor: TimestampAnchor,
+        anchor: SlewingAnchor,
+        /// Edge the anchor was aligned to; corrections keep using it.
         edge_source: EdgeSource,
     },
 }
@@ -314,7 +304,20 @@ impl TrackState {
     fn anchor(&self) -> Option<TimestampAnchor> {
         match self {
             TrackState::WaitingForStart => None,
-            TrackState::Started { anchor, .. } => Some(*anchor),
+            TrackState::Started { anchor, .. } => Some(anchor.current()),
+        }
+    }
+
+    fn is_correcting(&self) -> bool {
+        match self {
+            TrackState::WaitingForStart => false,
+            TrackState::Started { anchor, .. } => anchor.is_correcting(),
+        }
+    }
+
+    fn correct_to(&mut self, destination: TimestampAnchor) {
+        if let TrackState::Started { anchor, .. } = self {
+            anchor.correct_to(destination);
         }
     }
 }

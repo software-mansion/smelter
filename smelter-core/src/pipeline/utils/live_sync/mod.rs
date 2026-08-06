@@ -66,6 +66,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod anchor;
 mod buffer;
 mod edge_estimator;
 mod flush;

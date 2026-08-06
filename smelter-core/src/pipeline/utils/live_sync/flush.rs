@@ -9,7 +9,7 @@ use std::{
 
 use crate::pipeline::utils::input_sync::InputSyncItem;
 
-use super::{buffer::LiveSyncBuffer, state::TimestampAnchor};
+use super::{anchor::TimestampAnchor, buffer::LiveSyncBuffer};
 
 /// Flush signal of an input; every track observes each flush once.
 #[derive(Default)]
