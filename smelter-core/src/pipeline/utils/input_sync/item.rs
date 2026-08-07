@@ -2,18 +2,21 @@ use std::time::Duration;
 
 use crate::prelude::*;
 
+use super::TimestampAnchor;
+
 /// Item that can be buffered and synchronized by an [`InputSyncTrack`].
 ///
 /// [`InputSyncTrack`]: super::InputSyncTrack
 pub(crate) trait InputSyncItem {
     /// Presentation timestamp in the input time base. Does not have to start
     /// at zero; timestamps are mapped onto the output timeline when the item
-    /// is read from a track ([`InputSyncItem::map_timestamps`]).
+    /// is read from a track ([`InputSyncItem::apply_anchor`]).
     fn pts(&self) -> Duration;
 
-    /// Applies `map` to all timestamps of the item (pts, and dts if present).
-    /// Called by the track when the item is read.
-    fn map_timestamps(&mut self, map: impl Fn(Duration) -> Duration);
+    /// Maps all timestamps of the item (pts, and dts if present) onto the
+    /// output timeline `anchor` describes. Called by the track when the item
+    /// is read.
+    fn apply_anchor(&mut self, anchor: TimestampAnchor);
 }
 
 impl InputSyncItem for EncodedInputChunk {
@@ -21,8 +24,8 @@ impl InputSyncItem for EncodedInputChunk {
         self.pts
     }
 
-    fn map_timestamps(&mut self, map: impl Fn(Duration) -> Duration) {
-        self.pts = map(self.pts);
-        self.dts = self.dts.map(map);
+    fn apply_anchor(&mut self, anchor: TimestampAnchor) {
+        self.pts = anchor.to_output_pts(self.pts);
+        self.dts = self.dts.map(|dts| anchor.to_output_pts(dts));
     }
 }

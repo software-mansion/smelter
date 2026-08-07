@@ -29,7 +29,7 @@ use crate::{
         InitializableThread,
         channel::Sender,
         input_sync::{InputSync, InputSyncTrack, SimpleSync},
-        live_sync::{ChunkBuffer, LiveSync, LiveSyncOptions},
+        live_sync::{BufferingStrategy, ChunkBuffer, LiveSync, LiveSyncOptions},
     },
 };
 
@@ -57,7 +57,11 @@ pub(crate) fn start_connection_thread(
     });
     let sync = match is_live {
         true => InputSync::Live(LiveSync::new(
-            LiveSyncOptions::with_desired_buffer(RTMP_BUFFER),
+            LiveSyncOptions::with_desired_buffer(BufferingStrategy::Range {
+                min: Duration::from_secs(1),
+                max: Duration::from_secs(5),
+                desired: RTMP_BUFFER,
+            }),
             ctx.queue_ctx.sync_point,
         )),
         false => InputSync::Simple(SimpleSync::new()),

@@ -7,9 +7,9 @@ use std::{
     time::Duration,
 };
 
-use crate::pipeline::utils::input_sync::InputSyncItem;
+use crate::pipeline::utils::input_sync::{InputSyncItem, TimestampAnchor};
 
-use super::{buffer::LiveSyncBuffer, state::TimestampAnchor};
+use super::buffer::LiveSyncBuffer;
 
 /// Flush signal of an input; every track observes each flush once.
 #[derive(Default)]
@@ -107,7 +107,7 @@ impl<B: LiveSyncBuffer> FlushQueue<B> {
     pub(super) fn read(&mut self) -> Option<B::Item> {
         while let Some((buffer, anchor)) = self.queue.front_mut() {
             if let Some(mut item) = buffer.read() {
-                item.map_timestamps(|pts| anchor.to_output_pts(pts));
+                item.apply_anchor(*anchor);
                 return Some(item);
             }
             self.queue.pop_front();

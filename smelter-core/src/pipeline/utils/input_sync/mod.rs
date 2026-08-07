@@ -10,15 +10,17 @@
 //!   placement on the first received packet.
 //!
 //! Chunks read from a track already have their timestamps mapped onto the
-//! output timeline ([`InputSyncItem::map_timestamps`]).
+//! output timeline ([`InputSyncItem::apply_anchor`]).
 
 use std::time::Duration;
 
 use super::live_sync::{LiveSync, LiveSyncBuffer, LiveSyncTrack};
 
+mod anchor;
 mod item;
 mod simple_sync;
 
+pub(crate) use anchor::TimestampAnchor;
 pub(crate) use item::InputSyncItem;
 pub(crate) use simple_sync::{SimpleSync, SimpleSyncTrack};
 

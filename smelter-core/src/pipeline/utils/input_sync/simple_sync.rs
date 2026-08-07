@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use super::InputSyncItem;
+use super::{InputSyncItem, TimestampAnchor};
 
 /// Synchronization for non-live inputs: normalizes timestamps of all tracks
 /// to start at zero, based on the first chunk written to any track. Chunks
@@ -43,7 +43,10 @@ impl<T: InputSyncItem> SimpleSyncTrack<T> {
     pub fn try_read_chunk(&mut self) -> Option<T> {
         let mut item = self.buffer.pop_front()?;
         let first_pts = self.first_pts.lock().unwrap().unwrap_or(Duration::ZERO);
-        item.map_timestamps(|pts| pts.saturating_sub(first_pts));
+        item.apply_anchor(TimestampAnchor {
+            input_pts: first_pts,
+            output_pts: Duration::ZERO,
+        });
         Some(item)
     }
 

@@ -1,7 +1,107 @@
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
-use crate::pipeline::utils::input_sync::InputSyncItem;
+use crate::{
+    pipeline::utils::input_sync::{InputSyncItem, TimestampAnchor},
+    utils::live_sync::edge_estimator::EdgeEstimate,
+};
+
 use crate::prelude::*;
+
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum BufferingStrategy {
+    Range {
+        min: Duration, // compare to lower bound
+        max: Duration, // compare to upper bound
+        desired: Duration,
+    },
+    WithSpread {
+        min: Duration, // compare to lower bound
+        max: Duration, // compare to lower bound
+        desired: Duration,
+    },
+}
+
+pub(super) enum BufferCheckResult {
+    Ok,
+    TooSmall,
+    TooLarge,
+}
+
+impl BufferingStrategy {
+    pub fn desired_buffer(&self) -> Duration {
+        match *self {
+            BufferingStrategy::Range { desired, .. } => desired,
+            BufferingStrategy::WithSpread { desired, .. } => desired,
+        }
+    }
+
+    pub fn max_shift(
+        &self,
+        current: TimestampAnchor,
+        target: TimestampAnchor,
+        input_step: Duration,
+    ) -> Duration {
+        if current == target {
+            return Duration::ZERO;
+        }
+
+        let desired = self.desired_buffer();
+        let ratio = current.distance_to(target).as_secs_f64() / desired.as_secs_f64();
+
+        if current.presents_later_than(target) {
+            // shrinking buffer
+
+            // min 1% shrink
+            // max 3% increase, but it can only happen if distance is 3x of desired buffer
+            let rate = 0.01 + (0.02 * f64::clamp(ratio / 3.0, 0.0, 1.0));
+            return input_step.mul_f64(rate);
+        } else {
+            // increasing buffer
+
+            // max 4% increase, but it can only happen if distance is desired, so buffer is 0
+            // min 1% increase to avoid to slow convergance
+            let rate = 0.01 + (0.03 * f64::clamp(ratio, 0.0, 1.0));
+
+            return input_step.mul_f64(rate);
+        }
+    }
+
+    pub(super) fn check(
+        &self,
+        estimation: EdgeEstimate,
+        anchor: TimestampAnchor,
+        sync_point: Instant,
+    ) -> BufferCheckResult {
+        let now_pts = sync_point.elapsed();
+        let lower_bound = anchor.to_output_pts(estimation.lower_bound.pts);
+        let upper_bound = anchor.to_output_pts(estimation.upper_bound.pts);
+        match *self {
+            BufferingStrategy::Range { min, max, .. } => {
+                if lower_bound < now_pts + min {
+                    return BufferCheckResult::TooSmall;
+                }
+
+                if upper_bound > now_pts + max {
+                    return BufferCheckResult::TooLarge;
+                }
+
+                return BufferCheckResult::Ok;
+            }
+            BufferingStrategy::WithSpread { min, max, .. } => {
+                if lower_bound < now_pts + min {
+                    return BufferCheckResult::TooSmall;
+                }
+
+                if lower_bound > now_pts + max {
+                    return BufferCheckResult::TooLarge;
+                }
+
+                return BufferCheckResult::Ok;
+            }
+        }
+    }
+}
 
 /// Storage for the chunks a [`LiveSyncTrack`] holds between write and read.
 /// Abstracts the buffering policy: a plain FIFO releases everything in write
@@ -34,6 +134,13 @@ pub(crate) trait LiveSyncBuffer: Default {
     /// it; `None` only when the buffer is empty. Items held back by
     /// [`try_read`](Self::try_read) are still reported.
     fn peek(&self) -> Option<&Self::Item>;
+
+    /// Largest raw pts removed by [`read`](Self::read) or
+    /// [`try_read`](Self::try_read) so far (not the last one, so decode order
+    /// and buffers releasing out of order do not matter); `None` before
+    /// anything was released. Unmapped, like [`peek`](Self::peek), so the
+    /// caller applies its own anchor.
+    fn max_read_pts(&self) -> Option<Duration>;
 }
 
 /// Plain FIFO buffer: items come out in write order and nothing is ever held
@@ -42,6 +149,7 @@ pub(crate) trait LiveSyncBuffer: Default {
 #[derive(Default)]
 pub(crate) struct ChunkBuffer {
     queue: VecDeque<EncodedInputChunk>,
+    max_read_pts: Option<Duration>,
 }
 
 impl LiveSyncBuffer for ChunkBuffer {
@@ -52,14 +160,23 @@ impl LiveSyncBuffer for ChunkBuffer {
     }
 
     fn read(&mut self) -> Option<EncodedInputChunk> {
-        self.queue.pop_front()
+        let item = self.queue.pop_front()?;
+        self.max_read_pts = Some(match self.max_read_pts {
+            Some(previous) => Duration::max(previous, item.pts()),
+            None => item.pts(),
+        });
+        Some(item)
     }
 
     fn try_read(&mut self) -> Option<EncodedInputChunk> {
-        self.queue.pop_front()
+        self.read()
     }
 
     fn peek(&self) -> Option<&EncodedInputChunk> {
         self.queue.front()
+    }
+
+    fn max_read_pts(&self) -> Option<Duration> {
+        self.max_read_pts
     }
 }

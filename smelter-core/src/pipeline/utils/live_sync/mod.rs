@@ -72,7 +72,7 @@ mod flush;
 mod state;
 mod track;
 
-pub(crate) use buffer::{ChunkBuffer, LiveSyncBuffer};
+pub(crate) use buffer::{ChunkBuffer, LiveSyncBuffer, BufferingStrategy};
 pub(crate) use track::LiveSyncTrack;
 
 use edge_estimator::LiveEdgeEstimator;
@@ -81,9 +81,7 @@ use state::SharedState;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
-    pub min_buffer: Duration,
-    pub desired_buffer: Duration,
-    pub max_buffer: Duration,
+    pub buffering_strategy: BufferingStrategy,
     /// How long the live edge estimates have to stay stable before starting.
     pub stabilization_period: Duration,
     /// Estimate improvements smaller than this (delivery jitter) do not reset
@@ -95,14 +93,12 @@ pub(crate) struct LiveSyncOptions {
 }
 
 impl LiveSyncOptions {
-    pub fn with_desired_buffer(desired_buffer: Duration) -> Self {
+    pub fn with_desired_buffer(buffering_strategy: BufferingStrategy) -> Self {
         Self {
-            min_buffer: desired_buffer / 3,
-            desired_buffer,
-            max_buffer: desired_buffer * 2,
+            buffering_strategy,
             stabilization_period: Duration::from_secs(2),
             stabilization_tolerance: Duration::from_millis(200),
-            max_wait: desired_buffer + Duration::from_secs(8),
+            max_wait: buffering_strategy.desired_buffer() + Duration::from_secs(8),
         }
     }
 }
@@ -127,6 +123,7 @@ impl LiveSync {
                     sync_point,
                     options.stabilization_tolerance,
                 ),
+                anchor: None,
             })),
             flush_state: FlushState::default(),
         }
