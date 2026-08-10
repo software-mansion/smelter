@@ -124,16 +124,18 @@ pub struct VideoBatch {
     pub frames: HashMap<InputId, InputFrame>,
 }
 
-/// Samples from a single input in an audio batch, PTS ranges relative to queue
-/// start. EOS is delivered together with the final batches.
+/// Samples from a single input in an audio batch. EOS is delivered together
+/// with the final batches.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InputSamples {
-    pub batches: Vec<(Duration, Duration)>,
+    /// `(id, start_pts, end_pts)`: id identifies the source batch (n-th sample
+    /// batch sent on this input), PTS range is relative to queue start.
+    pub batches: Vec<(u32, Duration, Duration)>,
     pub is_eos: bool,
 }
 
 impl InputSamples {
-    pub fn batches(batches: Vec<(Duration, Duration)>) -> Self {
+    pub fn batches(batches: Vec<(u32, Duration, Duration)>) -> Self {
         Self {
             batches,
             is_eos: false,
@@ -142,7 +144,7 @@ impl InputSamples {
 
     /// The final batches of the track (possibly none), delivered together
     /// with EOS.
-    pub fn batches_eos(batches: Vec<(Duration, Duration)>) -> Self {
+    pub fn batches_eos(batches: Vec<(u32, Duration, Duration)>) -> Self {
         Self {
             batches,
             is_eos: true,
@@ -275,8 +277,9 @@ pub fn assert_audio_batch_eq_with_tolerance(
             actual.is_eos == expected.is_eos
                 && actual.batches.len() == expected.batches.len()
                 && actual.batches.iter().zip(&expected.batches).all(
-                    |((a_start, a_end), (e_start, e_end))| {
-                        a_start.abs_diff(*e_start) <= pts_tolerance
+                    |((id, a_start, a_end), (expected_id, e_start, e_end))| {
+                        id == expected_id
+                            && a_start.abs_diff(*e_start) <= pts_tolerance
                             && a_end.abs_diff(*e_end) <= pts_tolerance
                     },
                 )
@@ -370,6 +373,7 @@ impl TestQueue {
             video,
             audio: audio.map(spawn_audio_relay),
             next_frame_id: 0,
+            next_samples_id: 0,
         }
     }
 
@@ -465,6 +469,7 @@ impl TestQueue {
                         .iter()
                         .map(|batch| {
                             (
+                                test_samples_id(batch),
                                 batch.start_pts.saturating_sub(start_pts),
                                 batch.end_pts().saturating_sub(start_pts),
                             )
@@ -511,6 +516,7 @@ pub struct TestInput {
     video: Option<QueueSender<Frame>>,
     audio: Option<Sender<InputAudioSamples>>,
     next_frame_id: u32,
+    next_samples_id: u32,
 }
 
 impl TestInput {
@@ -561,18 +567,22 @@ impl TestInput {
         })
     }
 
-    /// Send a batch of silence. Never blocks: a relay thread forwards batches
-    /// to the queue as fast as its internal buffer allows.
-    pub fn send_samples(&self, start_pts: Duration, duration: Duration) {
+    /// Send a batch of samples and return its id (n-th sample batch sent on this
+    /// input). Never blocks: a relay thread forwards batches to the queue as
+    /// fast as its internal buffer allows.
+    pub fn send_samples(&mut self, start_pts: Duration, duration: Duration) -> u32 {
+        let id = self.next_samples_id;
+        self.next_samples_id += 1;
         self.audio
             .as_ref()
             .expect("audio track not active")
-            .send(test_samples(start_pts, duration))
+            .send(test_samples(id, start_pts, duration))
             .expect("audio channel closed");
+        id
     }
 
-    /// Send `count` batches of silence starting at `first_pts`, back to back.
-    pub fn send_sample_batches(&self, first_pts: Duration, duration: Duration, count: u32) {
+    /// Send `count` batches starting at `first_pts`, back to back.
+    pub fn send_sample_batches(&mut self, first_pts: Duration, duration: Duration, count: u32) {
         for index in 0..count {
             self.send_samples(first_pts + duration * index, duration);
         }
@@ -637,12 +647,21 @@ fn test_frame_id(frame: &Frame) -> u32 {
     }
 }
 
-pub fn test_samples(start_pts: Duration, duration: Duration) -> InputAudioSamples {
+/// Mono batch with `id` encoded in every sample, so output batches can be
+/// matched back to the batches a test sent.
+pub fn test_samples(id: u32, start_pts: Duration, duration: Duration) -> InputAudioSamples {
     const SAMPLE_RATE: u32 = 48_000;
     let sample_count = (duration.as_secs_f64() * SAMPLE_RATE as f64).round() as usize;
     InputAudioSamples::new(
-        AudioSamples::Mono(vec![0.0; sample_count]),
+        AudioSamples::Mono(vec![id as f64; sample_count]),
         start_pts,
         SAMPLE_RATE,
     )
+}
+
+fn test_samples_id(samples: &InputAudioSamples) -> u32 {
+    match &samples.samples {
+        AudioSamples::Mono(samples) => samples[0] as u32,
+        samples => panic!("expected samples created with test_samples, got {samples:?}"),
+    }
 }
