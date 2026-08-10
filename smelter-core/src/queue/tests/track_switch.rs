@@ -83,11 +83,13 @@ fn next_track_equal_fps_keeps_first_frame() {
     // nothing until 50ms, then audio first so it is the medium that resolves
     // track 1's `None` offset, pinning it to the 60ms slot
     sleep(ms(50));
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 3);
-    sleep(ms(2));
-    for index in 0..4 {
-        input.send_frame(ms(20) * index);
-    }
+    input.send_samples(ms(0), INPUT_BATCH_DURATION);
+    input.send_samples(ms(15), INPUT_BATCH_DURATION);
+    input.send_samples(ms(30), INPUT_BATCH_DURATION);
+    input.send_frame(ms(0));
+    input.send_frame(ms(20));
+    input.send_frame(ms(40));
+    input.send_frame(ms(60));
 
     // next track, queued while track 1 is still draining. Sending both media up
     // front means the queue observes them on the same tick.
@@ -96,8 +98,12 @@ fn next_track_equal_fps_keeps_first_frame() {
         audio: true,
         offset: QueueTrackOffset::None,
     });
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 10);
-    input.stream_video_then_eos((0..12).map(|index| ms(20) * index).collect());
+    for index in 0..10 {
+        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+    }
+    for index in 0..12 {
+        input.send_frame(ms(20) * index);
+    }
 
     sleep(ms(120));
 
@@ -139,19 +145,25 @@ fn next_track_lower_fps_keeps_first_frame() {
     queue.start();
 
     sleep(ms(50));
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 3);
-    sleep(ms(2));
-    for index in 0..4 {
-        input.send_frame(ms(20) * index);
-    }
+    input.send_samples(ms(0), INPUT_BATCH_DURATION);
+    input.send_samples(ms(15), INPUT_BATCH_DURATION);
+    input.send_samples(ms(30), INPUT_BATCH_DURATION);
+    input.send_frame(ms(0));
+    input.send_frame(ms(20));
+    input.send_frame(ms(40));
+    input.send_frame(ms(60));
 
     input.new_track(QueueTrackOptions {
         video: true,
         audio: true,
         offset: QueueTrackOffset::None,
     });
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 10);
-    input.stream_video_then_eos((0..12).map(|index| ms(25) * index).collect());
+    for index in 0..10 {
+        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+    }
+    for index in 0..12 {
+        input.send_frame(ms(25) * index);
+    }
 
     sleep(ms(120));
 
@@ -193,19 +205,25 @@ fn next_track_higher_fps_keeps_first_frame() {
     queue.start();
 
     sleep(ms(50));
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 3);
-    sleep(ms(2));
-    for index in 0..4 {
-        input.send_frame(ms(20) * index);
-    }
+    input.send_samples(ms(0), INPUT_BATCH_DURATION);
+    input.send_samples(ms(15), INPUT_BATCH_DURATION);
+    input.send_samples(ms(30), INPUT_BATCH_DURATION);
+    input.send_frame(ms(0));
+    input.send_frame(ms(20));
+    input.send_frame(ms(40));
+    input.send_frame(ms(60));
 
     input.new_track(QueueTrackOptions {
         video: true,
         audio: true,
         offset: QueueTrackOffset::None,
     });
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 10);
-    input.stream_video_then_eos((0..24).map(|index| ms(10) * index).collect());
+    for index in 0..10 {
+        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+    }
+    for index in 0..24 {
+        input.send_frame(ms(10) * index);
+    }
 
     sleep(ms(120));
 
@@ -250,19 +268,25 @@ fn next_track_audio_starting_later_keeps_first_frame() {
     queue.start();
 
     sleep(ms(50));
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 3);
-    sleep(ms(2));
-    for index in 0..4 {
-        input.send_frame(ms(20) * index);
-    }
+    input.send_samples(ms(0), INPUT_BATCH_DURATION);
+    input.send_samples(ms(15), INPUT_BATCH_DURATION);
+    input.send_samples(ms(30), INPUT_BATCH_DURATION);
+    input.send_frame(ms(0));
+    input.send_frame(ms(20));
+    input.send_frame(ms(40));
+    input.send_frame(ms(60));
 
     input.new_track(QueueTrackOptions {
         video: true,
         audio: true,
         offset: QueueTrackOffset::None,
     });
-    input.send_sample_batches(ms(20), INPUT_BATCH_DURATION, 10);
-    input.stream_video_then_eos((0..12).map(|index| ms(20) * index).collect());
+    for index in 0..10 {
+        input.send_samples(ms(20) + INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+    }
+    for index in 0..12 {
+        input.send_frame(ms(20) * index);
+    }
 
     sleep(ms(120));
 
@@ -307,19 +331,25 @@ fn next_track_video_starting_later_renders_empty_batch() {
     queue.start();
 
     sleep(ms(50));
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 3);
-    sleep(ms(2));
-    for index in 0..4 {
-        input.send_frame(ms(20) * index);
-    }
+    input.send_samples(ms(0), INPUT_BATCH_DURATION);
+    input.send_samples(ms(15), INPUT_BATCH_DURATION);
+    input.send_samples(ms(30), INPUT_BATCH_DURATION);
+    input.send_frame(ms(0));
+    input.send_frame(ms(20));
+    input.send_frame(ms(40));
+    input.send_frame(ms(60));
 
     input.new_track(QueueTrackOptions {
         video: true,
         audio: true,
         offset: QueueTrackOffset::None,
     });
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 10);
-    input.stream_video_then_eos((0..12).map(|index| ms(20) + ms(20) * index).collect());
+    for index in 0..10 {
+        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+    }
+    for index in 0..12 {
+        input.send_frame(ms(20) + ms(20) * index);
+    }
 
     sleep(ms(120));
 
@@ -358,19 +388,25 @@ fn next_track_video_starting_much_later_renders_empty_batches() {
     queue.start();
 
     sleep(ms(50));
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 3);
-    sleep(ms(2));
-    for index in 0..4 {
-        input.send_frame(ms(20) * index);
-    }
+    input.send_samples(ms(0), INPUT_BATCH_DURATION);
+    input.send_samples(ms(15), INPUT_BATCH_DURATION);
+    input.send_samples(ms(30), INPUT_BATCH_DURATION);
+    input.send_frame(ms(0));
+    input.send_frame(ms(20));
+    input.send_frame(ms(40));
+    input.send_frame(ms(60));
 
     input.new_track(QueueTrackOptions {
         video: true,
         audio: true,
         offset: QueueTrackOffset::None,
     });
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 10);
-    input.stream_video_then_eos((0..12).map(|index| ms(40) + ms(20) * index).collect());
+    for index in 0..10 {
+        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+    }
+    for index in 0..12 {
+        input.send_frame(ms(40) + ms(20) * index);
+    }
 
     sleep(ms(140));
 
@@ -416,19 +452,25 @@ fn next_track_after_audio_ends_last_keeps_first_frame() {
 
     sleep(ms(50));
     // 300ms of audio: the buffer only empties on the chunk at 260ms
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 20);
-    sleep(ms(2));
-    for index in 0..4 {
-        input.send_frame(ms(20) * index);
+    for index in 0..20 {
+        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
     }
+    input.send_frame(ms(0));
+    input.send_frame(ms(20));
+    input.send_frame(ms(40));
+    input.send_frame(ms(60));
 
     input.new_track(QueueTrackOptions {
         video: true,
         audio: true,
         offset: QueueTrackOffset::None,
     });
-    input.send_sample_batches(ms(0), INPUT_BATCH_DURATION, 10);
-    input.stream_video_then_eos((0..12).map(|index| ms(20) * index).collect());
+    for index in 0..10 {
+        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+    }
+    for index in 0..12 {
+        input.send_frame(ms(20) * index);
+    }
 
     sleep(ms(260));
 
@@ -453,9 +495,13 @@ fn next_track_after_audio_ends_last_keeps_first_frame() {
     );
 
     // video ended, audio has not: nothing is delivered for 140ms
-    for pts in [140, 160, 180, 200, 220, 240, 260] {
-        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(pts), true);
-    }
+    assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(140), true);
+    assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(160), true);
+    assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(180), true);
+    assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(200), true);
+    assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(220), true);
+    assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(240), true);
+    assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(260), true);
 
     assert_video_batch_eq(
         &queue.next_video_batch().unwrap(),

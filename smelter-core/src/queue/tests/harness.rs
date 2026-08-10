@@ -7,8 +7,8 @@
 //!
 //! Typical test structure:
 //! - `TestQueue::new` + `add_input` (before or after `start`, depending on scenario)
-//! - send frames/samples via `TestInput` (or `stream_video_then_eos` for sends
-//!   that must not block the test thread, e.g. before queue start)
+//! - send frames/samples via `TestInput`; both go through a relay thread, so
+//!   sends never block the test thread
 //! - `start()` the queue
 //! - read output with `next_video_batch`/`next_audio_batch` and compare against
 //!   expected `VideoBatch`/`AudioBatch` values; all PTS in summaries are relative
@@ -370,8 +370,8 @@ impl TestQueue {
         TestInput {
             input_id,
             queue_input,
-            video,
-            audio: audio.map(spawn_audio_relay),
+            video: video.map(spawn_relay),
+            audio: audio.map(spawn_relay),
             next_frame_id: 0,
             next_samples_id: 0,
         }
@@ -494,15 +494,15 @@ impl Drop for TestQueue {
     }
 }
 
-/// Relay audio batches from an unbounded channel to the queue's bounded track
-/// channel, so test sends never block on the queue's ~100ms internal buffer.
-/// Dropping the returned sender stops the relay, which closes the track once
-/// every pending batch is forwarded.
-fn spawn_audio_relay(queue_sender: QueueSender<InputAudioSamples>) -> Sender<InputAudioSamples> {
+/// Relay frames or sample batches from an unbounded channel to the queue's
+/// bounded track channel, so test sends never block on the queue's ~100ms
+/// internal buffer. Dropping the returned sender stops the relay, which closes
+/// the track once everything pending is forwarded.
+fn spawn_relay<T: Send + 'static>(queue_sender: QueueSender<T>) -> Sender<T> {
     let (sender, receiver) = unbounded();
     thread::spawn(move || {
-        for batch in receiver {
-            if queue_sender.send(batch).is_err() {
+        for item in receiver {
+            if queue_sender.send(item).is_err() {
                 return;
             }
         }
@@ -513,7 +513,7 @@ fn spawn_audio_relay(queue_sender: QueueSender<InputAudioSamples>) -> Sender<Inp
 pub struct TestInput {
     pub input_id: InputId,
     pub queue_input: QueueInput,
-    video: Option<QueueSender<Frame>>,
+    video: Option<Sender<Frame>>,
     audio: Option<Sender<InputAudioSamples>>,
     next_frame_id: u32,
     next_samples_id: u32,
@@ -526,13 +526,13 @@ impl TestInput {
     /// tracks.
     pub fn new_track(&mut self, track: QueueTrackOptions) {
         let (video, audio) = self.queue_input.queue_new_track(track);
-        self.video = video;
-        self.audio = audio.map(spawn_audio_relay);
+        self.video = video.map(spawn_relay);
+        self.audio = audio.map(spawn_relay);
     }
 
     /// Send a single frame and return its id (n-th video frame sent on this input).
-    /// Blocks on queue backpressure (the queue buffers ~100ms of input plus one
-    /// frame in the channel).
+    /// Never blocks: a relay thread forwards frames to the queue as fast as its
+    /// internal buffer allows.
     pub fn send_frame(&mut self, pts: Duration) -> u32 {
         let id = self.next_frame_id;
         self.next_frame_id += 1;
@@ -544,27 +544,10 @@ impl TestInput {
         id
     }
 
-    /// Close the video track; the queue emits EOS once buffered frames drain.
+    /// Close the video track; the relay forwards the remaining frames and the
+    /// queue emits EOS once buffered frames drain.
     pub fn end_video(&mut self) {
         self.video.take().expect("video track not active");
-    }
-
-    /// Send frames from a background thread and close the video track afterwards.
-    /// Use when sends would block the test thread, e.g. before the queue starts.
-    pub fn stream_video_then_eos(&mut self, frame_pts: Vec<Duration>) -> thread::JoinHandle<()> {
-        let sender = self.video.take().expect("video track not active");
-        let first_id = self.next_frame_id;
-        self.next_frame_id += frame_pts.len() as u32;
-        thread::spawn(move || {
-            for (index, pts) in frame_pts.into_iter().enumerate() {
-                if sender
-                    .send(test_frame(first_id + index as u32, pts))
-                    .is_err()
-                {
-                    return;
-                }
-            }
-        })
     }
 
     /// Send a batch of samples and return its id (n-th sample batch sent on this
@@ -579,13 +562,6 @@ impl TestInput {
             .send(test_samples(id, start_pts, duration))
             .expect("audio channel closed");
         id
-    }
-
-    /// Send `count` batches starting at `first_pts`, back to back.
-    pub fn send_sample_batches(&mut self, first_pts: Duration, duration: Duration, count: u32) {
-        for index in 0..count {
-            self.send_samples(first_pts + duration * index, duration);
-        }
     }
 
     /// Close the audio track; the relay forwards the remaining batches and
