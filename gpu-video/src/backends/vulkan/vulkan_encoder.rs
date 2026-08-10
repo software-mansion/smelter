@@ -340,6 +340,7 @@ pub(crate) struct EncodeSubmission<'borrow, 'encoder> {
     pub(crate) encoder: &'borrow mut (dyn DynVulkanEncoder<'encoder> + 'encoder),
     pub(crate) pts: Option<u64>,
     _image: Arc<Image>,
+    _view: ImageView,
 }
 
 impl<'a, 'b> EncodeSubmission<'a, 'b> {
@@ -1310,6 +1311,7 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
             wait_value,
             pts,
             _image: image,
+            _view: view,
         }))
     }
     fn download_output(
