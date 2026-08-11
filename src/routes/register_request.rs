@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use glyphon::fontdb::Source;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use smelter_core::{InputInitInfo, Pipeline, protocols::Port};
+use smelter_core::{InputInitInfo, Pipeline, RegisterOutputOptions, protocols::Port};
 use utoipa::ToSchema;
 
 use crate::{
@@ -145,31 +145,17 @@ pub async fn handle_output(
 ) -> Result<Response, ApiError> {
     let api = api.clone();
     tokio::task::spawn_blocking(move || {
-        let response = match request {
-            RegisterOutput::RtpStream(rtp) => {
-                Pipeline::register_output(&api.pipeline()?, output_id.into(), rtp.try_into()?)?
-            }
-            RegisterOutput::Mp4(mp4) => {
-                Pipeline::register_output(&api.pipeline()?, output_id.into(), mp4.try_into()?)?
-            }
-            RegisterOutput::WhipClient(whip) => {
-                Pipeline::register_output(&api.pipeline()?, output_id.into(), whip.try_into()?)?
-            }
-            RegisterOutput::WhepServer(whep) => {
-                Pipeline::register_output(&api.pipeline()?, output_id.into(), whep.try_into()?)?
-            }
-            RegisterOutput::RtmpClient(rtmp) => {
-                Pipeline::register_output(&api.pipeline()?, output_id.into(), rtmp.try_into()?)?
-            }
-            RegisterOutput::Hls(hls) => {
-                Pipeline::register_output(&api.pipeline()?, output_id.into(), hls.try_into()?)?
-            }
-            RegisterOutput::MoqClient(moq_client) => Pipeline::register_output(
-                &api.pipeline()?,
-                output_id.into(),
-                moq_client.try_into()?,
-            )?,
+        let options: RegisterOutputOptions = match request {
+            RegisterOutput::RtpStream(rtp) => rtp.try_into()?,
+            RegisterOutput::Mp4(mp4) => mp4.try_into()?,
+            RegisterOutput::WhipClient(whip) => whip.try_into()?,
+            RegisterOutput::WhepServer(whep) => whep.try_into()?,
+            RegisterOutput::RtmpClient(rtmp) => rtmp.try_into()?,
+            RegisterOutput::Hls(hls) => hls.try_into()?,
+            RegisterOutput::MoqClient(moq_client) => moq_client.try_into()?,
         };
+
+        let response = Pipeline::register_output(&api.pipeline()?, output_id.into(), options)?;
         match response {
             Some(Port(port)) => Ok(Response::RegisteredPort { port: Some(port) }),
             None => Ok(Response::Ok {}),

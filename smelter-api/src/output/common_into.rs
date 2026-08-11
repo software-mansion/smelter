@@ -114,6 +114,17 @@ impl TryFrom<VideoEncoderBitrate> for core::VideoEncoderBitrate {
     }
 }
 
+pub(crate) fn duration_from_start_at(
+    start_at_ms: Option<f64>,
+) -> Result<Option<Duration>, TypeError> {
+    match start_at_ms {
+        Some(time) if time < 0.0 => Err(TypeError::new("Start time cannot be negative.")),
+        // Saturating cast, `Duration::from_secs_f64` would panic on out of range values.
+        Some(time) => Ok(Some(Duration::from_millis(time.round() as u64))),
+        None => Ok(None),
+    }
+}
+
 pub(crate) fn duration_from_keyframe_interval(
     keyframe_interval: &Option<f64>,
 ) -> Result<Duration, TypeError> {

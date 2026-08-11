@@ -1061,6 +1061,7 @@ fn mp4_video_only() {
                     )),
                     audio: None,
                     raw_options: vec![],
+                    start_at: None,
                 },
             ),
             video: Some(default_video()),
@@ -1094,6 +1095,7 @@ fn mp4_audio_only() {
                         },
                     )),
                     raw_options: vec![],
+                    start_at: None,
                 },
             ),
             video: None,
@@ -1151,6 +1153,7 @@ fn mp4_video_and_audio_with_ffmpeg_options() {
                         },
                     )),
                     raw_options: vec![(Arc::from("movflags"), Arc::from("faststart"))],
+                    start_at: None,
                 },
             ),
             video: Some(default_video()),
@@ -1195,10 +1198,46 @@ fn mp4_vulkan_encoder() {
                     )),
                     audio: None,
                     raw_options: vec![],
+                    start_at: None,
                 },
             ),
             video: Some(default_video()),
             audio: None,
+        },
+    );
+}
+
+#[test]
+fn mp4_start_at() {
+    check_mp4(
+        json!({
+            "output": {
+                "path": "/tmp/output.mp4",
+                "start_at_ms": 2500.0,
+                "audio": {
+                    "encoder": { "type": "aac" },
+                    "initial": audio_scene()
+                }
+            }
+        }),
+        CoreOutput {
+            output_options: smelter_core::ProtocolOutputOptions::Mp4(
+                smelter_core::protocols::Mp4OutputOptions {
+                    output_path: Arc::from(Path::new("/tmp/output.mp4")),
+                    video: None,
+                    audio: Some(smelter_core::codecs::AudioEncoderOptions::FdkAac(
+                        smelter_core::codecs::FdkAacEncoderOptions {
+                            channels: smelter_core::AudioChannels::Stereo,
+                            sample_rate: 44100,
+                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::Raw,
+                        },
+                    )),
+                    raw_options: vec![],
+                    start_at: Some(Duration::from_millis(2500)),
+                },
+            ),
+            video: None,
+            audio: Some(default_audio()),
         },
     );
 }
@@ -1212,6 +1251,23 @@ fn err_mp4_no_video_no_audio() {
             }
         }),
         "At least one of \"video\" and \"audio\" fields have to be specified.",
+    );
+}
+
+#[test]
+fn err_mp4_negative_start_at() {
+    check_mp4_err(
+        json!({
+            "output": {
+                "path": "/tmp/output.mp4",
+                "start_at_ms": -1.0,
+                "audio": {
+                    "encoder": { "type": "aac" },
+                    "initial": audio_scene()
+                }
+            }
+        }),
+        "Start time cannot be negative.",
     );
 }
 
@@ -1679,6 +1735,7 @@ fn hls_video_only() {
                     )),
                     audio: None,
                     raw_options: vec![],
+                    start_at: None,
                 },
             ),
             video: Some(default_video()),
@@ -1713,6 +1770,7 @@ fn hls_audio_only() {
                         },
                     )),
                     raw_options: vec![],
+                    start_at: None,
                 },
             ),
             video: None,
@@ -1766,6 +1824,7 @@ fn hls_video_and_audio_with_playlist_size() {
                         },
                     )),
                     raw_options: vec![],
+                    start_at: None,
                 },
             ),
             video: Some(default_video()),
@@ -1806,6 +1865,7 @@ fn hls_vulkan_encoder() {
                     )),
                     audio: None,
                     raw_options: vec![],
+                    start_at: None,
                 },
             ),
             video: Some(default_video()),
@@ -1862,9 +1922,46 @@ fn hls_video_and_audio_with_ffmpeg_options() {
                         },
                     )),
                     raw_options: vec![(Arc::from("hls_list_size"), Arc::from("5"))],
+                    start_at: None,
                 },
             ),
             video: Some(default_video()),
+            audio: Some(default_audio()),
+        },
+    );
+}
+
+#[test]
+fn hls_start_at() {
+    check_hls(
+        json!({
+            "output": {
+                "path": "/tmp/stream.m3u8",
+                "start_at_ms": 0.0,
+                "audio": {
+                    "encoder": { "type": "aac", "sample_rate": 48000 },
+                    "initial": audio_scene()
+                }
+            }
+        }),
+        CoreOutput {
+            output_options: smelter_core::ProtocolOutputOptions::Hls(
+                smelter_core::protocols::HlsOutputOptions {
+                    output_path: Arc::from(Path::new("/tmp/stream.m3u8")),
+                    max_playlist_size: None,
+                    video: None,
+                    audio: Some(smelter_core::codecs::AudioEncoderOptions::FdkAac(
+                        smelter_core::codecs::FdkAacEncoderOptions {
+                            channels: smelter_core::AudioChannels::Stereo,
+                            sample_rate: 48000,
+                            bitstream_format: smelter_core::codecs::AacBitstreamFormat::Raw,
+                        },
+                    )),
+                    raw_options: vec![],
+                    start_at: Some(Duration::ZERO),
+                },
+            ),
+            video: None,
             audio: Some(default_audio()),
         },
     );
@@ -1879,6 +1976,23 @@ fn err_hls_no_video_no_audio() {
             }
         }),
         "At least one of \"video\" and \"audio\" fields have to be specified.",
+    );
+}
+
+#[test]
+fn err_hls_negative_start_at() {
+    check_hls_err(
+        json!({
+            "output": {
+                "path": "/tmp/stream.m3u8",
+                "start_at_ms": -0.5,
+                "audio": {
+                    "encoder": { "type": "aac" },
+                    "initial": audio_scene()
+                }
+            }
+        }),
+        "Start time cannot be negative.",
     );
 }
 

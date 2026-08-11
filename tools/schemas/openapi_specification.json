@@ -1732,6 +1732,14 @@
             "propertyNames": {
               "type": "string"
             }
+          },
+          "start_at_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Time in milliseconds when this output should start producing data. Value `0` represents\ntime of the start request. Output is always created when this request is handled (e.g.\nplaylist is created), only the moment it starts receiving frames/samples is delayed."
           }
         },
         "additionalProperties": false
@@ -3250,6 +3258,14 @@
             "propertyNames": {
               "type": "string"
             }
+          },
+          "start_at_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Time in milliseconds when this output should start producing data. Value `0` represents\ntime of the start request. Output is always created when this request is handled (e.g.\nfile is created), only the moment it starts receiving frames/samples is delayed."
           }
         },
         "additionalProperties": false

@@ -13,6 +13,7 @@ export function intoRegisterHlsOutput(
     video: output.video && initial.video && intoOutputHlsVideoOptions(output.video, initial.video),
     audio: output.audio && initial.audio && intoOutputHlsAudioOptions(output.audio, initial.audio),
     ffmpeg_options: output.ffmpegOptions,
+    start_at_ms: output.startAtMs,
   };
 }
 

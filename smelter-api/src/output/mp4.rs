@@ -18,6 +18,10 @@ pub struct Mp4Output {
     pub audio: Option<OutputMp4AudioOptions>,
     /// Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
     pub ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
+    /// Time in milliseconds when this output should start producing data. Value `0` represents
+    /// time of the start request. Output is always created when this request is handled (e.g.
+    /// file is created), only the moment it starts receiving frames/samples is delayed.
+    pub start_at_ms: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]

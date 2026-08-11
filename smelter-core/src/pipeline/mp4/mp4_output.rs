@@ -19,7 +19,7 @@ use crate::{
             ffmpeg_h264::FfmpegH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
-        ffmpeg_utils::{FfmpegOptions, StreamMutExt, write_extradata},
+        ffmpeg_utils::{FfmpegOptions, StreamMutExt, TimestampOffset, write_extradata},
         output::{Output, OutputAudio, OutputVideo},
     },
     utils::InitializableThread,
@@ -74,6 +74,7 @@ impl Mp4Output {
             kind: OutputProtocolKind::Mp4,
         });
 
+        let start_at = options.start_at;
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
         let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "mp4")
             .map_err(OutputInitError::FfmpegError)?;
@@ -128,6 +129,13 @@ impl Mp4Output {
             None => (None, None),
         };
 
+        let offset = TimestampOffset::new(
+            ctx.queue_ctx.clone(),
+            start_at,
+            video_stream.is_some(),
+            audio_stream.is_some(),
+        );
+
         std::thread::Builder::new()
             .name(format!("MP4 writer thread for output {output_ref}"))
             .spawn(move || {
@@ -141,6 +149,7 @@ impl Mp4Output {
                     video_stream,
                     audio_stream,
                     encoded_chunks_receiver,
+                    offset,
                 );
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
@@ -300,72 +309,79 @@ fn run_ffmpeg_output_thread(
     mut video_stream: Option<StreamState>,
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
+    mut offset: TimestampOffset,
 ) {
     let mut eos_state = EosState::new(video_stream.is_some(), audio_stream.is_some());
-    let mut timestamp_offset = None;
-
     let stats_sender = Mp4OutputStatsSender {
         stats_sender: ctx.stats_sender.clone(),
         output_ref: output_ref.clone(),
     };
 
-    for packet in packets_receiver {
-        match packet {
-            EncodedOutputEvent::Data(chunk) => {
-                let timestamp_offset = *timestamp_offset.get_or_insert(chunk.pts);
-                let stream = match chunk.kind {
-                    MediaKind::Video(_) => match &mut video_stream {
-                        Some(stream) => stream,
-                        None => {
-                            error!("Received unexpected video chunk.");
-                            continue;
-                        }
-                    },
-                    MediaKind::Audio(_) => match &mut audio_stream {
-                        Some(stream) => stream,
-                        None => {
-                            error!("Received unexpected audio chunk.");
-                            continue;
-                        }
-                    },
-                };
-
-                stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
-                if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
-                    let try_write_trailer =
-                        !matches!(err, OutputMp4RuntimeError::NoSpaceLeftOnDevice);
-                    ctx.event_emitter.emit(Event::OutputError {
-                        output_id: output_ref.id().clone(),
-                        err: err.into(),
-                        severity: ErrorSeverity::Critical,
-                    });
-                    match try_write_trailer {
-                        true => eos_state.mark_for_abort(),
-                        false => return,
-                    }
-                }
+    for packet in packets_receiver.into_iter().map(Some).chain([None]) {
+        let chunks = match packet {
+            Some(EncodedOutputEvent::Data(chunk)) => offset.resolve(chunk),
+            Some(EncodedOutputEvent::VideoEOS) => {
+                eos_state.on_video_eos();
+                offset.on_track_eos(MediaKind::Video(VideoCodec::H264))
             }
-            EncodedOutputEvent::VideoEOS => eos_state.on_video_eos(),
-            EncodedOutputEvent::AudioEOS => eos_state.on_audio_eos(),
+            Some(EncodedOutputEvent::AudioEOS) => {
+                eos_state.on_audio_eos();
+                offset.on_track_eos(MediaKind::Audio(AudioCodec::Aac))
+            }
+            None => offset.flush(),
         };
 
-        if eos_state.is_complete() {
-            if let Err(err) = output_ctx.write_trailer() {
-                let err = match err {
-                    ffmpeg::Error::Other {
-                        errno: ffmpeg::error::ENOSPC,
-                    } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
-                    err => OutputMp4RuntimeError::TrailerWriteError(err),
-                };
+        for (timestamp_offset, chunk) in chunks {
+            let stream = match chunk.kind {
+                MediaKind::Video(_) => match &mut video_stream {
+                    Some(stream) => stream,
+                    None => {
+                        error!("Received unexpected video chunk.");
+                        continue;
+                    }
+                },
+                MediaKind::Audio(_) => match &mut audio_stream {
+                    Some(stream) => stream,
+                    None => {
+                        error!("Received unexpected audio chunk.");
+                        continue;
+                    }
+                },
+            };
+
+            stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
+            if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
+                let try_write_trailer = !matches!(err, OutputMp4RuntimeError::NoSpaceLeftOnDevice);
                 ctx.event_emitter.emit(Event::OutputError {
                     output_id: output_ref.id().clone(),
                     err: err.into(),
                     severity: ErrorSeverity::Critical,
                 });
-            };
+                match try_write_trailer {
+                    true => eos_state.mark_for_abort(),
+                    false => return,
+                }
+            }
+        }
+
+        if eos_state.is_complete() {
             break;
         }
     }
+
+    if let Err(err) = output_ctx.write_trailer() {
+        let err = match err {
+            ffmpeg::Error::Other {
+                errno: ffmpeg::error::ENOSPC,
+            } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
+            err => OutputMp4RuntimeError::TrailerWriteError(err),
+        };
+        ctx.event_emitter.emit(Event::OutputError {
+            output_id: output_ref.id().clone(),
+            err: err.into(),
+            severity: ErrorSeverity::Critical,
+        });
+    };
 }
 
 fn write_chunk(
@@ -374,23 +390,16 @@ fn write_chunk(
     output_ctx: &mut ffmpeg::format::context::Output,
     timestamp_offset: Duration,
 ) -> Result<(), OutputMp4RuntimeError> {
-    let pts = chunk.pts.saturating_sub(timestamp_offset);
+    let offset = timestamp_offset.as_nanos() as i128;
+    let pts = (chunk.pts.as_nanos() as i128 - offset) as i64;
     let dts = chunk
         .dts
-        .map(|dts| dts.saturating_sub(timestamp_offset))
+        .map(|dts| (dts.as_nanos() as i128 - offset) as i64)
         .unwrap_or(pts);
 
     let mut packet = ffmpeg::Packet::copy(&chunk.data);
-    packet.set_pts(Some(Rescale::rescale(
-        &(pts.as_nanos() as i64),
-        NS_TIME_BASE,
-        stream.time_base,
-    )));
-    packet.set_dts(Some(Rescale::rescale(
-        &(dts.as_nanos() as i64),
-        NS_TIME_BASE,
-        stream.time_base,
-    )));
+    packet.set_pts(Some(Rescale::rescale(&pts, NS_TIME_BASE, stream.time_base)));
+    packet.set_dts(Some(Rescale::rescale(&dts, NS_TIME_BASE, stream.time_base)));
     packet.set_time_base(stream.time_base);
     packet.set_stream(stream.index);
 

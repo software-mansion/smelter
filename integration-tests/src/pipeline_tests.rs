@@ -1,6 +1,7 @@
 mod audio_only;
 pub mod harness;
 mod offline_processing;
+mod output_start_at;
 mod push_input_before_start;
 mod required_inputs;
 mod schedule_update;
@@ -19,6 +20,7 @@ pub fn pipeline_tests() -> Vec<&'static PipelineTest> {
     [
         audio_only::TESTS,
         offline_processing::TESTS,
+        output_start_at::TESTS,
         push_input_before_start::TESTS,
         required_inputs::TESTS,
         schedule_update::TESTS,

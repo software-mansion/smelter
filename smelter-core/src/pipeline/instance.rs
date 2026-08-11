@@ -30,7 +30,10 @@ use crate::{
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
         input::{PipelineInput, new_external_input, register_pipeline_input},
         moq::{MoqServer, spawn_moq_server},
-        output::{OutputSender, PipelineOutput, new_external_output, register_pipeline_output},
+        output::{
+            OutputSender, OutputState, PipelineOutput, new_external_output,
+            register_pipeline_output,
+        },
         rtmp::spawn_rtmp_server,
         webrtc::{
             WebrtcSettingEngineCtx, WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle,
@@ -136,10 +139,10 @@ impl Pipeline {
         self.renderer.unregister_input(input_id);
         self.audio_mixer.unregister_input(input_id);
         for output in self.outputs.values_mut() {
-            if let Some(ref mut cond) = output.audio_end_condition {
+            if let Some(cond) = output.audio_end_condition_mut() {
                 cond.on_input_unregistered(input_id);
             }
-            if let Some(ref mut cond) = output.video_end_condition {
+            if let Some(cond) = output.video_end_condition_mut() {
                 cond.on_input_unregistered(input_id);
             }
         }
@@ -151,12 +154,20 @@ impl Pipeline {
         output_id: OutputId,
         register_options: RegisterOutputOptions,
     ) -> Result<Option<Port>, RegisterOutputError> {
+        let RegisterOutputOptions {
+            output_options,
+            video,
+            audio,
+        } = register_options;
+        let start_at = output_options.start_at();
+
         register_pipeline_output(
             pipeline,
             output_id,
-            register_options.video,
-            register_options.audio,
-            |ctx, output_ref| new_external_output(ctx, output_ref, register_options.output_options),
+            video,
+            audio,
+            start_at,
+            |ctx, output_ref| new_external_output(ctx, output_ref, output_options),
         )
     }
 
@@ -170,6 +181,7 @@ impl Pipeline {
             output_id,
             register_options.video,
             register_options.audio,
+            None,
             |ctx, output_ref| {
                 let (output, handle) =
                     EncodedDataOutput::new(ctx, output_ref, register_options.output_options)?;
@@ -188,6 +200,7 @@ impl Pipeline {
             output_id,
             register_options.video,
             register_options.audio,
+            None,
             |_ctx, _output_ref| {
                 let (output, result) = RawDataOutput::new(register_options.output_options)?;
                 Ok((Box::new(output), result))
@@ -270,9 +283,7 @@ impl Pipeline {
         let Some(output) = self.outputs.get(output_id) else {
             return Err(UpdateSceneError::OutputNotRegistered(output_id.clone()));
         };
-        if output.audio_end_condition.is_some() != audio.is_some()
-            || output.video_end_condition.is_some() != video.is_some()
-        {
+        if output.has_audio() != audio.is_some() || output.has_video() != video.is_some() {
             return Err(UpdateSceneError::AudioVideoNotMatching(output_id.clone()));
         }
         if video.is_none() && audio.is_none() {
@@ -288,10 +299,10 @@ impl Pipeline {
     ) -> Result<(), UpdateSceneError> {
         let output = self
             .outputs
-            .get(&output_id)
+            .get_mut(&output_id)
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
-        if let Some(cond) = &output.video_end_condition
+        if let Some(cond) = output.video_end_condition()
             && cond.did_output_end()
         {
             // Ignore updates after EOS
@@ -304,6 +315,14 @@ impl Pipeline {
         };
 
         info!(?output_id, "Update scene {:?}", scene_root);
+
+        if let OutputState::NotStarted { video, .. } = &mut output.state {
+            // Output is not connected to the renderer yet, update the scene it will start with.
+            if let Some(video) = video {
+                video.initial = scene_root;
+            }
+            return Ok(());
+        }
 
         self.renderer.update_scene(
             output_id,
@@ -320,10 +339,10 @@ impl Pipeline {
     ) -> Result<(), UpdateSceneError> {
         let output = self
             .outputs
-            .get(output_id)
+            .get_mut(output_id)
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
-        if let Some(cond) = &output.audio_end_condition
+        if let Some(cond) = output.audio_end_condition()
             && cond.did_output_end()
         {
             // Ignore updates after EOS
@@ -332,6 +351,18 @@ impl Pipeline {
         }
 
         info!(?output_id, "Update audio mixer {:?}", audio);
+
+        if let OutputState::NotStarted {
+            audio: audio_opts, ..
+        } = &mut output.state
+        {
+            // Output is not connected to the audio mixer yet, update the config it will start with.
+            if let Some(audio_opts) = audio_opts {
+                audio_opts.initial = audio;
+            }
+            return Ok(());
+        }
+
         self.audio_mixer.update_output(output_id, audio)
     }
 
@@ -363,6 +394,7 @@ impl Pipeline {
     pub fn schedule_event<F: FnOnce(&mut Self) + Send + 'static>(
         pipeline: &Arc<Mutex<Self>>,
         pts: Duration,
+        late_policy: LateEventPolicy,
         callback: F,
     ) {
         let weak = Arc::downgrade(pipeline);
@@ -372,6 +404,7 @@ impl Pipeline {
         let queue = pipeline.lock().unwrap().queue.clone();
         queue.schedule_event(
             pts,
+            late_policy,
             Box::new(move || {
                 let Some(pipeline) = weak.upgrade() else {
                     warn!("Unable to call scheduled callback. Pipeline already dropped.");
@@ -423,7 +456,7 @@ fn run_renderer_thread(
                     input.on_video_eos();
                 }
                 for output in guard.outputs.values_mut() {
-                    if let Some(ref mut cond) = output.video_end_condition {
+                    if let Some(cond) = output.video_end_condition_mut() {
                         cond.on_input_eos(input_id);
                     }
                 }
@@ -495,7 +528,7 @@ fn run_audio_mixer_thread(
                     input.on_audio_eos();
                 }
                 for output in guard.outputs.values_mut() {
-                    if let Some(ref mut cond) = output.audio_end_condition {
+                    if let Some(cond) = output.audio_end_condition_mut() {
                         cond.on_input_eos(input_id);
                     }
                 }

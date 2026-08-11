@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
-use smelter_core::Pipeline;
+use smelter_core::{LateEventPolicy, Pipeline};
 use smelter_render::{RegistryType, error::ErrorStack};
 use tracing::error;
 use utoipa::ToSchema;
@@ -58,15 +58,20 @@ pub async fn handle_input(
     match request.schedule_time_ms {
         Some(schedule_time_ms) => {
             let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
-            Pipeline::schedule_event(&api.pipeline()?, schedule_time, move |pipeline| {
-                if let Err(err) = pipeline.unregister_input(&input_id.into()) {
-                    error!(
-                        "Error while running scheduled input unregister for pts {}ms: {}",
-                        schedule_time.as_millis(),
-                        ErrorStack::new(&err).into_string()
-                    )
-                }
-            });
+            Pipeline::schedule_event(
+                &api.pipeline()?,
+                schedule_time,
+                LateEventPolicy::Default,
+                move |pipeline| {
+                    if let Err(err) = pipeline.unregister_input(&input_id.into()) {
+                        error!(
+                            "Error while running scheduled input unregister for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                },
+            );
         }
         None => {
             api.pipeline()?
@@ -99,15 +104,20 @@ pub async fn handle_output(
     match request.schedule_time_ms {
         Some(schedule_time_ms) => {
             let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
-            Pipeline::schedule_event(&api.pipeline()?, schedule_time, move |pipeline| {
-                if let Err(err) = pipeline.unregister_output(&output_id.into()) {
-                    error!(
-                        "Error while running scheduled output unregister for pts {}ms: {}",
-                        schedule_time.as_millis(),
-                        ErrorStack::new(&err).into_string()
-                    )
-                }
-            });
+            Pipeline::schedule_event(
+                &api.pipeline()?,
+                schedule_time,
+                LateEventPolicy::Default,
+                move |pipeline| {
+                    if let Err(err) = pipeline.unregister_output(&output_id.into()) {
+                        error!(
+                            "Error while running scheduled output unregister for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                },
+            );
         }
         None => {
             api.pipeline()?
@@ -140,17 +150,22 @@ pub async fn handle_shader(
     match request.schedule_time_ms {
         Some(schedule_time_ms) => {
             let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
-            Pipeline::schedule_event(&api.pipeline()?, schedule_time, move |pipeline| {
-                if let Err(err) =
-                    pipeline.unregister_renderer(&shader_id.into(), RegistryType::Shader)
-                {
-                    error!(
-                        "Error while running scheduled shader unregister for pts {}ms: {}",
-                        schedule_time.as_millis(),
-                        ErrorStack::new(&err).into_string()
-                    )
-                }
-            });
+            Pipeline::schedule_event(
+                &api.pipeline()?,
+                schedule_time,
+                LateEventPolicy::Default,
+                move |pipeline| {
+                    if let Err(err) =
+                        pipeline.unregister_renderer(&shader_id.into(), RegistryType::Shader)
+                    {
+                        error!(
+                            "Error while running scheduled shader unregister for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                },
+            );
         }
         None => {
             api.pipeline()?
@@ -183,17 +198,22 @@ pub async fn handle_web_renderer(
     match request.schedule_time_ms {
         Some(schedule_time_ms) => {
             let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
-            Pipeline::schedule_event(&api.pipeline()?, schedule_time, move |pipeline| {
-                if let Err(err) =
-                    pipeline.unregister_renderer(&instance_id.into(), RegistryType::WebRenderer)
-                {
-                    error!(
-                        "Error while running scheduled web renderer unregister for pts {}ms: {}",
-                        schedule_time.as_millis(),
-                        ErrorStack::new(&err).into_string()
-                    )
-                }
-            });
+            Pipeline::schedule_event(
+                &api.pipeline()?,
+                schedule_time,
+                LateEventPolicy::Default,
+                move |pipeline| {
+                    if let Err(err) =
+                        pipeline.unregister_renderer(&instance_id.into(), RegistryType::WebRenderer)
+                    {
+                        error!(
+                            "Error while running scheduled web renderer unregister for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                },
+            );
         }
         None => {
             api.pipeline()?
@@ -226,17 +246,22 @@ pub async fn handle_image(
     match request.schedule_time_ms {
         Some(schedule_time_ms) => {
             let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
-            Pipeline::schedule_event(&api.pipeline()?, schedule_time, move |pipeline| {
-                if let Err(err) =
-                    pipeline.unregister_renderer(&image_id.into(), RegistryType::Image)
-                {
-                    error!(
-                        "Error while running scheduled image unregister for pts {}ms: {}",
-                        schedule_time.as_millis(),
-                        ErrorStack::new(&err).into_string()
-                    )
-                }
-            });
+            Pipeline::schedule_event(
+                &api.pipeline()?,
+                schedule_time,
+                LateEventPolicy::Default,
+                move |pipeline| {
+                    if let Err(err) =
+                        pipeline.unregister_renderer(&image_id.into(), RegistryType::Image)
+                    {
+                        error!(
+                            "Error while running scheduled image unregister for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                },
+            );
         }
         None => {
             api.pipeline()?

@@ -12,6 +12,7 @@ export function intoRegisterMp4Output(
     video: output.video && initial.video && intoOutputMp4VideoOptions(output.video, initial.video),
     audio: output.audio && initial.audio && intoOutputMp4AudioOptions(output.audio, initial.audio),
     ffmpeg_options: output.ffmpegOptions,
+    start_at_ms: output.startAtMs,
   };
 }
 

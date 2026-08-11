@@ -230,7 +230,7 @@ impl FdkAacEncoder {
                 let frame_start = self.encoded_samples;
                 self.encoded_samples += self.samples_per_frame as u64;
 
-                if self.encoded_samples < self.codec_delay {
+                if self.encoded_samples <= self.codec_delay {
                     continue;
                 }
 
