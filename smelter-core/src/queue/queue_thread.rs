@@ -142,19 +142,19 @@ impl QueueThreadAfterStart {
                 .first_key_value()
                 .map(|(pts, _)| *pts + self.queue_start_pts);
 
-            self.audio_processor
-                .queue
-                .audio_queue
-                .lock()
-                .unwrap()
-                .should_push_for_pts_range(audio_pts_range, self.queue_start_pts);
-
             self.video_processor
                 .queue
                 .video_queue
                 .lock()
                 .unwrap()
                 .should_push_next_frameset(video_pts, self.queue_start_pts);
+
+            self.audio_processor
+                .queue
+                .audio_queue
+                .lock()
+                .unwrap()
+                .should_push_for_pts_range(audio_pts_range, self.queue_start_pts);
 
             if let Some(event_pts) = event_pts
                 && event_pts < video_pts

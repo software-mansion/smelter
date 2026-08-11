@@ -1,7 +1,6 @@
 use fdk_aac_sys as fdk;
-use std::sync::Arc;
-use std::time::Duration;
-use tracing::{error, info};
+use std::{sync::Arc, time::Duration};
+use tracing::{error, info, trace};
 
 use crate::pipeline::decoder::{AudioDecoder, EncodedInputEvent};
 
@@ -29,6 +28,7 @@ impl AudioDecoder for FdkAacDecoder {
         &mut self,
         event: EncodedInputEvent,
     ) -> Result<Vec<InputAudioSamples>, DecodingError> {
+        trace!(?event, "FDK AAC decoder received an event.");
         let chunk = match event {
             EncodedInputEvent::Chunk(chunk) => chunk,
             EncodedInputEvent::LostData | EncodedInputEvent::AuDelimiter => return Ok(vec![]),
@@ -177,11 +177,13 @@ impl Decoder {
                     _ => Duration::from_secs_f64(info.outputDelay as f64 / sample_rate as f64),
                 };
 
-                decoded_samples.push(InputAudioSamples {
+                let samples = InputAudioSamples {
                     samples,
                     start_pts: chunk.pts.saturating_sub(output_delay),
                     sample_rate,
-                })
+                };
+                trace!(?samples, "FDK AAC decoder produced a samples.");
+                decoded_samples.push(samples)
             }
         }
         Ok(decoded_samples)
