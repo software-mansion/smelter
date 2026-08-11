@@ -45,7 +45,7 @@
             ]
           );
           devDependencies = with pkgs; [
-            ffmpeg_8-full
+            ffmpeg_9-full
             mold
 
             gst_all_1.gstreamer

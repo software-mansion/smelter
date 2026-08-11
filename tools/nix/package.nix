@@ -1,5 +1,5 @@
 { rustPlatform
-, ffmpeg_8-headless
+, ffmpeg_9-headless
 , openssl
 , pkg-config
 , llvmPackages
@@ -15,7 +15,7 @@
 }:
 let
   buildInputs = [
-    ffmpeg_8-headless
+    ffmpeg_9-headless
     openssl
     libopus
     libGL
