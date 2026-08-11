@@ -7,6 +7,7 @@
 ### ✨ New features
 
 - Add `SMELTER_RENDER_MAX_LAYOUTS_COUNT` environment variable to configure the maximum number of layouts (default 100) by [@wkozyra95](https://github.com/wkozyra95)
+- Support FFmpeg 9 by [@wkozyra95](https://github.com/wkozyra95)
 
 ### 🐛 Bug fixes
 

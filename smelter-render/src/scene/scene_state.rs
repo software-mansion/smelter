@@ -80,7 +80,7 @@ impl SceneState {
         let output_id = output_scene.output_id.clone();
         validate_scene_update(&self.output_scenes, &output_scene)?;
 
-        for (_, output) in self.output_states.iter_mut() {
+        for output in self.output_states.values_mut() {
             recalculate_layout(
                 &mut output.root,
                 Some(output.resolution.into()),

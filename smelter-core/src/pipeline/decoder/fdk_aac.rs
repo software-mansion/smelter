@@ -59,7 +59,7 @@ impl Decoder {
         asc: &Option<bytes::Bytes>,
         first_chunk: &EncodedInputChunk,
     ) -> Result<Self, FdkAacDecoderError> {
-        let transport = if first_chunk.data[..4] == [b'A', b'D', b'I', b'F'] {
+        let transport = if first_chunk.data[..4] == *b"ADIF" {
             fdk::TRANSPORT_TYPE_TT_MP4_ADIF
         } else if first_chunk.data[0] == 0xff && first_chunk.data[1] & 0xf0 == 0xf0 {
             fdk::TRANSPORT_TYPE_TT_MP4_ADTS
