@@ -4,7 +4,7 @@ use std::time::Duration;
 use tracing::{Level, error, span};
 
 use crate::pipeline::input::Input;
-use crate::queue::{QueueTrackOffset, QueueTrackOptions};
+use crate::queue::{InputSideChannel, QueueTrackOffset, QueueTrackOptions};
 use crate::{pipeline::decklink::format::Format, queue::QueueInput};
 
 use crate::prelude::*;
@@ -85,6 +85,9 @@ impl DeckLink {
             .enable_audio(AUDIO_SAMPLE_RATE, decklink::AudioSampleType::Sample32bit, 2)
             .map_err(DeckLinkInputError::DecklinkError)?;
 
+        let side_channel_enabled =
+            opts.queue_options.video_side_channel != InputSideChannel::Disabled;
+
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
@@ -96,6 +99,7 @@ impl DeckLink {
             span,
             video_sender,
             audio_sender,
+            side_channel_enabled,
             Arc::<decklink::Input>::downgrade(&input),
             Format::new(initial_mode, initial_pixel_format),
         );

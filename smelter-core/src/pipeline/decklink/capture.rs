@@ -9,7 +9,7 @@ use decklink::{
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
     VideoInputFrame,
 };
-use smelter_render::{Frame, FrameData, Resolution, error::ErrorStack};
+use smelter_render::{Frame, FrameData, FramePreProcessor, Resolution, error::ErrorStack};
 use tracing::{Span, debug, info, trace, warn};
 
 use crate::pipeline::decklink::format::{BitDepth, Colorspace, Format};
@@ -22,6 +22,8 @@ use super::AUDIO_SAMPLE_RATE;
 pub(super) struct ChannelCallbackAdapter {
     video_sender: Option<QueueSender<Frame>>,
     audio_sender: Option<QueueSender<InputAudioSamples>>,
+    /// Only set when a side channel is enabled (avoids duplicated processing).
+    frame_pre_processor: Option<Mutex<FramePreProcessor>>,
     span: Span,
 
     // I'm not sure, but I suspect that holding Arc here would create a circular
@@ -38,12 +40,16 @@ impl ChannelCallbackAdapter {
         span: Span,
         video_sender: Option<QueueSender<Frame>>,
         audio_sender: Option<QueueSender<InputAudioSamples>>,
+        side_channel_enabled: bool,
         input: Weak<decklink::Input>,
         initial_format: Format,
     ) -> Self {
+        let frame_pre_processor =
+            side_channel_enabled.then(|| Mutex::new(FramePreProcessor::new(ctx.wgpu_ctx.clone())));
         Self {
             video_sender,
             audio_sender,
+            frame_pre_processor,
             span,
             input,
             sync_point: ctx.queue_ctx.sync_point,
@@ -86,6 +92,21 @@ impl ChannelCallbackAdapter {
                 warn!(?pixel_format, "Unsupported pixel format");
                 return Ok(());
             }
+        };
+
+        let frame = match &self.frame_pre_processor {
+            Some(pre_processor) => {
+                let texture = pre_processor
+                    .lock()
+                    .unwrap()
+                    .process_to_texture(frame, None);
+                Frame {
+                    data: FrameData::Rgba8UnormWgpuTexture(texture),
+                    resolution: Resolution { width, height },
+                    pts,
+                }
+            }
+            None => frame,
         };
 
         trace!(?frame, ?pixel_format, "Received frame from decklink");

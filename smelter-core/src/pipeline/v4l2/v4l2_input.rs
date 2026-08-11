@@ -5,12 +5,12 @@ use std::{
 };
 
 use crossbeam_channel::TrySendError;
-use smelter_render::{FrameData, Framerate, InputId, NvPlanes, Resolution};
+use smelter_render::{FrameData, FramePreProcessor, Framerate, InputId, NvPlanes, Resolution};
 use tracing::{Level, debug, error, info, span, trace, warn};
 
 use crate::{
     pipeline::input::Input,
-    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
+    queue::{InputSideChannel, QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
 };
 
 use crate::prelude::*;
@@ -78,6 +78,11 @@ impl V4l2Input {
             MmapStream::with_buffers(&device_config.device, v4l::buffer::Type::VideoCapture, 4)
                 .map_err(V4l2InputError::IoError)?;
 
+        let frame_pre_processor = match &opts.queue_options.video_side_channel {
+            InputSideChannel::Disabled => None,
+            _ => Some(FramePreProcessor::new(ctx.wgpu_ctx.clone())),
+        };
+
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
         let (Some(video_sender), _) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
@@ -97,6 +102,7 @@ impl V4l2Input {
             sender: video_sender,
             should_close: should_close.clone(),
             stream,
+            frame_pre_processor,
         };
 
         std::thread::Builder::new()
@@ -277,6 +283,8 @@ struct InputState<'a> {
     should_close: Arc<AtomicBool>,
     sender: QueueSender<Frame>,
     stream: v4l::io::mmap::Stream<'a>,
+    /// Only set when a side channel is enabled (avoids duplicated processing).
+    frame_pre_processor: Option<FramePreProcessor>,
 }
 
 impl InputState<'_> {
@@ -343,8 +351,19 @@ impl InputState<'_> {
 
             let frame = Frame {
                 pts: self.ctx.queue_ctx.sync_point.elapsed(),
-                data,
                 resolution: self.config.resolution,
+                data,
+            };
+
+            let frame = match &mut self.frame_pre_processor {
+                Some(pre_processor) => Frame {
+                    resolution: frame.resolution,
+                    pts: frame.pts,
+                    data: FrameData::Rgba8UnormWgpuTexture(
+                        pre_processor.process_to_texture(frame, None),
+                    ),
+                },
+                None => frame,
             };
 
             match self.sender.try_send(frame) {
