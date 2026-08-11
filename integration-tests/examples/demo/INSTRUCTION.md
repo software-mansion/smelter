@@ -29,6 +29,10 @@ Path to file that will be used as source of `RTP` stream.
 
 Path to file that will be used as source of `RTMP` stream.
 
+### `V4L2_INPUT_PATH`
+
+Path to the `V4L2` device that will be used as an input, e.g. `/dev/video0`.
+
 ### `WHIP_INPUT_BEARER_TOKEN`
 
 Sets the bearer token to be used when connecting to the `WHIP` server provided by Smelter.

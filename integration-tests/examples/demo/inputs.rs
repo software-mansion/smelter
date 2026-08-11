@@ -6,7 +6,7 @@ use strum::{Display, EnumIter};
 
 use crate::inputs::{
     hls::HlsInput, moq_client::MoqClientInput, moq_server::MoqServerInput, mp4::Mp4Input,
-    rtmp::RtmpInput, rtp::RtpInput, whep::WhepInput, whip::WhipInput,
+    rtmp::RtmpInput, rtp::RtpInput, v4l2::V4l2Input, whep::WhepInput, whip::WhipInput,
 };
 
 pub mod hls;
@@ -15,6 +15,7 @@ pub mod moq_server;
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
+pub mod v4l2;
 pub mod whep;
 pub mod whip;
 
@@ -29,6 +30,7 @@ pub enum InputHandle {
     Whep(WhepInput),
     MoqServer(MoqServerInput),
     MoqClient(MoqClientInput),
+    V4l2(V4l2Input),
 }
 
 impl InputHandle {
@@ -42,6 +44,7 @@ impl InputHandle {
             Self::Whep(i) => &i.name,
             Self::MoqServer(i) => &i.name,
             Self::MoqClient(i) => &i.name,
+            Self::V4l2(i) => &i.name,
         }
     }
 
@@ -55,6 +58,7 @@ impl InputHandle {
             Self::Whep(i) => i.serialize_register(),
             Self::MoqServer(i) => i.serialize_register(),
             Self::MoqClient(i) => i.serialize_register(),
+            Self::V4l2(i) => i.serialize_register(),
         }
     }
 
@@ -71,6 +75,7 @@ impl InputHandle {
     pub fn has_audio(&self) -> bool {
         match self {
             Self::Rtp(i) => i.has_audio(),
+            Self::V4l2(_) => false,
             _ => true,
         }
     }
@@ -125,6 +130,9 @@ pub enum InputProtocol {
 
     #[strum(to_string = "moq_client")]
     MoqClient,
+
+    #[strum(to_string = "v4l2")]
+    V4l2,
 }
 
 #[derive(Debug, EnumIter, Display, PartialEq, Clone, Copy, Serialize, Deserialize)]
