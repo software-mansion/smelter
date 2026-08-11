@@ -13,30 +13,45 @@ use crate::{
 
 use super::SharedPts;
 
-use self::server::{AudioSideChannelServer, VideoSideChannelServer};
+use self::server::SideChannelServer;
+
+/// Where the side channel data is sent to. `UnixSocket` owns the server, so
+/// dropping the side channel shuts it down and removes the socket file.
+#[derive(Clone)]
+enum SideChannelSink<T> {
+    Native(Sender<T>),
+    UnixSocket(SideChannelServer<T>),
+}
+
+impl<T> SideChannelSink<T> {
+    fn sender(&self) -> &Sender<T> {
+        match self {
+            Self::Native(sender) => sender,
+            Self::UnixSocket(server) => server.sender(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct VideoSideChannel {
     track_offset: TrackOffset,
     start_pts: SharedPts,
-    sender: Sender<Frame>,
-    _server: Option<VideoSideChannelServer>,
+    sink: SideChannelSink<Frame>,
 }
 
 impl VideoSideChannel {
-    pub fn new(
+    pub(super) fn unix_socket(
         ctx: &Arc<PipelineCtx>,
         input_ref: &Ref<InputId>,
         socket_dir: &Path,
     ) -> Option<Self> {
         let path = socket_dir.join(format!("video_{}.sock", input_ref.id()));
         info!(?path, "Starting video side channel");
-        let server = VideoSideChannelServer::new(path, input_ref.id(), ctx.wgpu_ctx.clone())?;
+        let server = SideChannelServer::new_video(path, input_ref.id(), ctx.wgpu_ctx.clone())?;
         Some(Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            sender: server.sender.clone(),
-            _server: Some(server),
+            sink: SideChannelSink::UnixSocket(server),
         })
     }
 
@@ -44,8 +59,7 @@ impl VideoSideChannel {
         Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            sender,
-            _server: None,
+            sink: SideChannelSink::Native(sender),
         }
     }
 
@@ -64,7 +78,7 @@ impl VideoSideChannel {
         };
         let mut frame = frame.clone();
         frame.pts = (frame.pts + offset).saturating_sub(start_pts);
-        if let Err(TrySendError::Full(_)) = self.sender.try_send(frame) {
+        if let Err(TrySendError::Full(_)) = self.sink.sender().try_send(frame) {
             debug!("Video side channel: dropping frame, channel full");
         }
     }
@@ -74,24 +88,22 @@ impl VideoSideChannel {
 pub struct AudioSideChannel {
     track_offset: TrackOffset,
     start_pts: SharedPts,
-    sender: Sender<InputAudioSamples>,
-    _server: Option<AudioSideChannelServer>,
+    sink: SideChannelSink<InputAudioSamples>,
 }
 
 impl AudioSideChannel {
-    pub fn new(
+    pub(super) fn unix_socket(
         ctx: &Arc<PipelineCtx>,
         input_ref: &Ref<InputId>,
         socket_dir: &Path,
     ) -> Option<Self> {
         let path = socket_dir.join(format!("audio_{}.sock", input_ref.id()));
         info!(?path, "Starting audio side channel");
-        let server = AudioSideChannelServer::new(path, input_ref.id())?;
+        let server = SideChannelServer::new_audio(path, input_ref.id())?;
         Some(Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            sender: server.sender.clone(),
-            _server: Some(server),
+            sink: SideChannelSink::UnixSocket(server),
         })
     }
 
@@ -99,8 +111,7 @@ impl AudioSideChannel {
         Self {
             track_offset: TrackOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
-            sender,
-            _server: None,
+            sink: SideChannelSink::Native(sender),
         }
     }
 
@@ -119,7 +130,7 @@ impl AudioSideChannel {
         };
         let mut batch = batch.clone();
         batch.start_pts = (batch.start_pts + offset).saturating_sub(start_pts);
-        if let Err(TrySendError::Full(_)) = self.sender.try_send(batch) {
+        if let Err(TrySendError::Full(_)) = self.sink.sender().try_send(batch) {
             debug!("Audio side channel: dropping samples, channel full");
         }
     }
