@@ -107,9 +107,6 @@ impl std::fmt::Display for InputHandle {
 
 #[derive(Debug, EnumIter, Display, Clone, Copy)]
 pub enum InputProtocol {
-    #[strum(to_string = "rtp_stream")]
-    Rtp,
-
     #[strum(to_string = "rtmp_server")]
     Rtmp,
 
@@ -133,6 +130,9 @@ pub enum InputProtocol {
 
     #[strum(to_string = "v4l2")]
     V4l2,
+
+    #[strum(to_string = "rtp_stream")]
+    Rtp,
 }
 
 #[derive(Debug, EnumIter, Display, PartialEq, Clone, Copy, Serialize, Deserialize)]

@@ -100,9 +100,6 @@ impl std::fmt::Display for OutputHandle {
 
 #[derive(Debug, Display, EnumIter, Clone, Copy)]
 pub enum OutputProtocol {
-    #[strum(to_string = "rtp_stream")]
-    Rtp,
-
     #[strum(to_string = "rtmp_client")]
     Rtmp,
 
@@ -120,6 +117,10 @@ pub enum OutputProtocol {
 
     #[strum(to_string = "moq_client")]
     MoqClient,
+
+    #[strum(to_string = "rtp_stream")]
+    Rtp,
+
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
