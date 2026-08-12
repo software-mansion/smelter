@@ -15,6 +15,7 @@ use crate::inputs::moq_client::MoqClientInputBuilder;
 use crate::inputs::moq_server::MoqServerInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::rtmp::RtmpInputBuilder;
+use crate::inputs::v4l2::V4l2InputBuilder;
 use crate::inputs::whep::WhepInputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
 
@@ -163,6 +164,11 @@ impl SmelterState {
                 let moq_client_input = MoqClientInputBuilder::new().prompt()?.build();
                 let register_request = moq_client_input.serialize_register();
                 (InputHandle::MoqClient(moq_client_input), register_request)
+            }
+            InputProtocol::V4l2 => {
+                let v4l2_input = V4l2InputBuilder::new().prompt()?.build();
+                let register_request = v4l2_input.serialize_register();
+                (InputHandle::V4l2(v4l2_input), register_request)
             }
         };
 
