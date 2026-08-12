@@ -120,7 +120,6 @@ pub enum OutputProtocol {
 
     #[strum(to_string = "rtp_stream")]
     Rtp,
-
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
