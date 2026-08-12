@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use crossbeam_channel::{Receiver, Sender, bounded};
 use smelter_render::{Frame, InputId};
 use tracing::info;
 
@@ -237,23 +238,67 @@ impl std::fmt::Debug for WeakQueueInput {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+pub enum InputSideChannel<T> {
+    #[default]
+    Disabled,
+    UnixSocket,
+    Native(Sender<T>),
+}
+
+impl<T> InputSideChannel<T> {
+    pub fn native(capacity: usize) -> (Self, Receiver<T>) {
+        let (sender, receiver) = bounded(capacity);
+        (Self::Native(sender), receiver)
+    }
+}
+
+impl<T> PartialEq for InputSideChannel<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Disabled, Self::Disabled) | (Self::UnixSocket, Self::UnixSocket) => true,
+            (Self::Native(left), Self::Native(right)) => left.same_channel(right),
+            _ => false,
+        }
+    }
+}
+
+impl<T> From<bool> for InputSideChannel<T> {
+    fn from(enabled: bool) -> Self {
+        match enabled {
+            true => Self::UnixSocket,
+            false => Self::Disabled,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct QueueInputOptions {
     pub required: bool,
-    pub audio_side_channel: bool,
-    pub video_side_channel: bool,
+    pub audio_side_channel: InputSideChannel<InputAudioSamples>,
+    pub video_side_channel: InputSideChannel<Frame>,
     pub side_channel_delay: Duration,
 }
 
 impl QueueInput {
     pub fn new(ctx: &Arc<PipelineCtx>, input_ref: &Ref<InputId>, opts: QueueInputOptions) -> Self {
         let socket_dir = ctx.queue_ctx.side_channel_socket_dir.as_deref();
-        let video_side_channel = match (opts.video_side_channel, socket_dir) {
-            (true, Some(dir)) => VideoSideChannel::new(ctx, input_ref, dir),
+        let video_side_channel = match (&opts.video_side_channel, socket_dir) {
+            (InputSideChannel::UnixSocket, Some(dir)) => {
+                VideoSideChannel::unix_socket(ctx, input_ref, dir)
+            }
+            (InputSideChannel::Native(sender), _) => {
+                Some(VideoSideChannel::native(ctx, sender.clone()))
+            }
             _ => None,
         };
-        let audio_side_channel = match (opts.audio_side_channel, socket_dir) {
-            (true, Some(dir)) => AudioSideChannel::new(ctx, input_ref, dir),
+        let audio_side_channel = match (&opts.audio_side_channel, socket_dir) {
+            (InputSideChannel::UnixSocket, Some(dir)) => {
+                AudioSideChannel::unix_socket(ctx, input_ref, dir)
+            }
+            (InputSideChannel::Native(sender), _) => {
+                Some(AudioSideChannel::native(ctx, sender.clone()))
+            }
             _ => None,
         };
         Self::new_inner(

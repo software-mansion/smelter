@@ -58,8 +58,8 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
             offset,
             queue_options: core::QueueInputOptions {
                 required,
-                video_side_channel: side_channel.video.unwrap_or(false),
-                audio_side_channel: side_channel.audio.unwrap_or(false),
+                video_side_channel: side_channel.video.unwrap_or(false).into(),
+                audio_side_channel: side_channel.audio.unwrap_or(false).into(),
                 side_channel_delay,
             },
         }))
