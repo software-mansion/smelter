@@ -162,10 +162,9 @@ impl QueueContext {
             .unwrap_or_else(|| self.sync_point.elapsed())
     }
 
-    /// Translate a timestamp relative to the queue start into the queue PTS space
-    /// (relative to `sync_point`). `None` before the queue is started.
-    pub(crate) fn pts_from_start(&self, offset: Duration) -> Option<Duration> {
-        self.start_pts.value().map(|start_pts| start_pts + offset)
+    // PTS of queue start time
+    pub fn start_pts(&self) -> Option<Duration> {
+        self.start_pts.value()
     }
 }
 

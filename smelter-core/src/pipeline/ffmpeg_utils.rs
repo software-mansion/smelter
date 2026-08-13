@@ -11,7 +11,8 @@ const OFFSET_RESOLUTION_TIMEOUT: Duration = Duration::from_millis(500);
 ///
 /// Offset is resolved in this order:
 /// - `start_at` - output start in pts counted from queue start. Packets are in units relative
-///   to queue sync_point, so offset is `start_at + queue_ctx.start_pts`
+///   to queue sync_point, so offset is `start_at + queue_ctx.start_pts`. Nothing is buffered
+///   in that case, the offset does not depend on the chunks.
 /// - If only one track is present, take offset from first packet
 /// - If both tracks are present, buffer until first packet of each kind is present and select
 ///   the lowest
@@ -88,7 +89,8 @@ impl TimestampOffset {
         buffered.push(chunk);
 
         let still_waiting = *waiting_for_video || *waiting_for_audio;
-        if still_waiting && !timed_out {
+        let start_at_known = self.start_at.is_some() && self.queue_ctx.start_pts().is_some();
+        if still_waiting && !timed_out && !start_at_known {
             return Vec::new();
         }
         self.force_resolve(lowest)
@@ -137,10 +139,10 @@ impl TimestampOffset {
     }
 
     fn force_resolve(&mut self, lowest_pts: Duration) -> Vec<(Duration, EncodedOutputChunk)> {
-        let offset = self
-            .start_at
-            .and_then(|start_at| self.queue_ctx.pts_from_start(start_at))
-            .unwrap_or(lowest_pts);
+        let offset = match (self.start_at, self.queue_ctx.start_pts()) {
+            (Some(start_at), Some(queue_start_pts)) => start_at + queue_start_pts,
+            _ => lowest_pts,
+        };
 
         let buffered = match std::mem::replace(&mut self.state, State::Resolved(offset)) {
             State::Pending { buffered, .. } => buffered,
