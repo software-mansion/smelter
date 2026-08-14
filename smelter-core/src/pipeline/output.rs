@@ -1,11 +1,12 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use crossbeam_channel::Sender;
-use smelter_render::OutputFrameFormat;
-use tracing::{info, warn};
+use smelter_render::{OutputFrameFormat, error::ErrorStack};
+use tracing::{error, info, warn};
 
 use crate::pipeline::{
     hls::HlsOutput,
@@ -20,8 +21,94 @@ use crate::prelude::*;
 
 pub(crate) struct PipelineOutput {
     pub output: Box<dyn Output>,
-    pub video_end_condition: Option<PipelineOutputEndConditionState>,
-    pub audio_end_condition: Option<PipelineOutputEndConditionState>,
+    /// Unique per registration, unlike `OutputId` which can be reused after unregister.
+    pub output_ref: Ref<OutputId>,
+    pub state: OutputState,
+}
+
+pub(crate) enum OutputState {
+    /// Output was registered with `start_at` and did not reach that timestamp yet. It is
+    /// already created (e.g. connection with a server is established), but it is not
+    /// connected to the renderer/audio mixer.
+    NotStarted {
+        video: Option<RegisterOutputVideoOptions>,
+        audio: Option<RegisterOutputAudioOptions>,
+    },
+    /// Output is connected to the renderer/audio mixer and receives frames/samples.
+    Started {
+        video_end_condition: Option<PipelineOutputEndConditionState>,
+        audio_end_condition: Option<PipelineOutputEndConditionState>,
+    },
+}
+
+impl PipelineOutput {
+    /// End conditions are set for exactly those tracks the output was registered with,
+    /// so they double as the "has video"/"has audio" flag after the start.
+    pub(super) fn has_video(&self) -> bool {
+        match &self.state {
+            OutputState::NotStarted { video, .. } => video.is_some(),
+            OutputState::Started {
+                video_end_condition,
+                ..
+            } => video_end_condition.is_some(),
+        }
+    }
+
+    pub(super) fn has_audio(&self) -> bool {
+        match &self.state {
+            OutputState::NotStarted { audio, .. } => audio.is_some(),
+            OutputState::Started {
+                audio_end_condition,
+                ..
+            } => audio_end_condition.is_some(),
+        }
+    }
+
+    /// `None` until the output starts.
+    pub(super) fn video_end_condition(&self) -> Option<&PipelineOutputEndConditionState> {
+        match &self.state {
+            OutputState::NotStarted { .. } => None,
+            OutputState::Started {
+                video_end_condition,
+                ..
+            } => video_end_condition.as_ref(),
+        }
+    }
+
+    pub(super) fn video_end_condition_mut(
+        &mut self,
+    ) -> Option<&mut PipelineOutputEndConditionState> {
+        match &mut self.state {
+            OutputState::NotStarted { .. } => None,
+            OutputState::Started {
+                video_end_condition,
+                ..
+            } => video_end_condition.as_mut(),
+        }
+    }
+
+    /// `None` until the output starts.
+    pub(super) fn audio_end_condition(&self) -> Option<&PipelineOutputEndConditionState> {
+        match &self.state {
+            OutputState::NotStarted { .. } => None,
+            OutputState::Started {
+                audio_end_condition,
+                ..
+            } => audio_end_condition.as_ref(),
+        }
+    }
+
+    pub(super) fn audio_end_condition_mut(
+        &mut self,
+    ) -> Option<&mut PipelineOutputEndConditionState> {
+        match &mut self.state {
+            OutputState::NotStarted { .. } => None,
+            OutputState::Started {
+                audio_end_condition,
+                ..
+            } => audio_end_condition.as_mut(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -85,11 +172,15 @@ pub(super) enum OutputSender<T> {
     FinishedSender,
 }
 
+/// Creates the output. If `start_at` is set, then output is only created, and it is connected
+/// to the renderer/audio mixer after the queue reaches that timestamp. Otherwise, it is
+/// connected immediately.
 pub(super) fn register_pipeline_output<BuildFn, NewOutputResult>(
     pipeline: &Arc<Mutex<Pipeline>>,
     output_id: OutputId,
     video: Option<RegisterOutputVideoOptions>,
     audio: Option<RegisterOutputAudioOptions>,
+    start_at: Option<Duration>,
     build_output: BuildFn,
 ) -> Result<NewOutputResult, RegisterOutputError>
 where
@@ -98,64 +189,128 @@ where
         Ref<OutputId>,
     ) -> Result<(Box<dyn Output>, NewOutputResult), OutputInitError>,
 {
-    let (has_video, has_audio) = (video.is_some(), audio.is_some());
-    if !has_video && !has_audio {
+    if video.is_none() && audio.is_none() {
         return Err(RegisterOutputError::NoVideoAndAudio(output_id));
     }
 
-    if pipeline.lock().unwrap().outputs.contains_key(&output_id) {
-        return Err(RegisterOutputError::AlreadyRegistered(output_id));
-    }
+    let pipeline_ctx = {
+        // Do not hold the pipeline lock for the whole scope, because output creation
+        // can potentially take a relatively long time.
+        let guard = pipeline.lock().unwrap();
+        if guard.outputs.contains_key(&output_id) {
+            return Err(RegisterOutputError::AlreadyRegistered(output_id));
+        }
+        guard.ctx.clone()
+    };
 
-    let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
-    let (output, output_result) = build_output(pipeline_ctx, Ref::new(&output_id))
-        .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
+    let output_ref = Ref::new(&output_id);
+    let (output, output_result) = build_output(pipeline_ctx, output_ref.clone())
+        .map_err(|err| RegisterOutputError::OutputError(output_id.clone(), err))?;
 
     let mut guard = pipeline.lock().unwrap();
-
     if guard.outputs.contains_key(&output_id) {
         return Err(RegisterOutputError::AlreadyRegistered(output_id));
     }
 
-    let output = PipelineOutput {
-        output,
-        audio_end_condition: audio.as_ref().map(|audio| {
-            PipelineOutputEndConditionState::new_audio(audio.end_condition.clone(), &guard.inputs)
-        }),
-        video_end_condition: video.as_ref().map(|video| {
-            PipelineOutputEndConditionState::new_video(video.end_condition.clone(), &guard.inputs)
-        }),
-    };
+    guard.outputs.insert(
+        output_id.clone(),
+        PipelineOutput {
+            output,
+            output_ref: output_ref.clone(),
+            state: OutputState::NotStarted { video, audio },
+        },
+    );
 
-    if let (Some(video_opts), Some(video_output)) = (video.clone(), output.output.video()) {
-        let result = guard.renderer.update_scene(
-            output_id.clone(),
-            video_output.resolution,
-            video_output.frame_format,
-            video_opts.initial,
-        );
-
-        if let Err(err) = result {
-            guard.renderer.unregister_output(&output_id);
-            return Err(RegisterOutputError::SceneError(output_id.clone(), err));
+    let Some(start_at) = start_at else {
+        // Start while still holding the lock, so errors (e.g. invalid scene) are reported
+        // by this call instead of asynchronously.
+        if let Err(err) = guard.start_registered_output(&output_ref) {
+            guard.outputs.remove(&output_id);
+            return Err(err);
         }
+        return Ok(output_result);
     };
 
-    if let Some(audio_opts) = audio.clone() {
-        guard.audio_mixer.register_output(
-            output_id.clone(),
-            audio_opts.initial,
-            audio_opts.mixing_strategy,
-            audio_opts.channels,
-        );
-    }
-
-    guard.outputs.insert(output_id.clone(), output);
+    // Do not hold the pipeline lock across `Pipeline::schedule_event(...)`.
+    drop(guard);
+    Pipeline::schedule_event(
+        pipeline,
+        start_at,
+        LateEventPolicy::AlwaysRun,
+        move |pipeline| {
+            if let Err(err) = pipeline.start_registered_output(&output_ref) {
+                pipeline.outputs.remove(output_ref.id());
+                error!(
+                    "Error while starting output scheduled for pts {}ms: {}",
+                    start_at.as_millis(),
+                    ErrorStack::new(&err).into_string()
+                )
+            }
+        },
+    );
 
     Ok(output_result)
 }
 
 impl Pipeline {
+    /// Connects already created output to the renderer/audio mixer, from that point
+    /// output starts receiving frames/samples.
+    fn start_registered_output(
+        &mut self,
+        output_ref: &Ref<OutputId>,
+    ) -> Result<(), RegisterOutputError> {
+        let inputs = &self.inputs;
+        let output_id = output_ref.id();
+        let Some(output) = self.outputs.get_mut(output_id) else {
+            // output was unregistered before it started
+            return Ok(());
+        };
+        if &output.output_ref != output_ref {
+            // different output with the same id
+            return Ok(());
+        }
+
+        let OutputState::NotStarted { video, audio } = &mut output.state else {
+            warn!(output_id=%output_ref, "Output already started");
+            return Ok(());
+        };
+        let (video, audio) = (video.take(), audio.take());
+
+        output.state = OutputState::Started {
+            video_end_condition: video.as_ref().map(|video| {
+                PipelineOutputEndConditionState::new_video(video.end_condition.clone(), inputs)
+            }),
+            audio_end_condition: audio.as_ref().map(|audio| {
+                PipelineOutputEndConditionState::new_audio(audio.end_condition.clone(), inputs)
+            }),
+        };
+
+        if let (Some(video_opts), Some(video_output)) = (video, output.output.video()) {
+            let result = self.renderer.update_scene(
+                output_id.clone(),
+                video_output.resolution,
+                video_output.frame_format,
+                video_opts.initial,
+            );
+
+            if let Err(err) = result {
+                self.renderer.unregister_output(output_id);
+                return Err(RegisterOutputError::SceneError(output_id.clone(), err));
+            }
+        };
+
+        if let Some(audio_opts) = audio {
+            self.audio_mixer.register_output(
+                output_id.clone(),
+                audio_opts.initial,
+                audio_opts.mixing_strategy,
+                audio_opts.channels,
+            );
+        }
+
+        Ok(())
+    }
+
     pub(super) fn all_output_video_senders_iter(
         pipeline: &Arc<Mutex<Pipeline>>,
     ) -> impl Iterator<Item = (OutputId, OutputSender<Sender<PipelineEvent<Frame>>>)> {
@@ -165,7 +320,7 @@ impl Pipeline {
             .outputs
             .iter_mut()
             .filter_map(|(output_id, output)| {
-                let eos_status = output.video_end_condition.as_mut()?.eos_status();
+                let eos_status = output.video_end_condition_mut()?.eos_status();
                 let sender = output.output.video()?.frame_sender.clone();
                 Some((output_id.clone(), (sender, eos_status)))
             })
@@ -203,7 +358,7 @@ impl Pipeline {
             .outputs
             .iter_mut()
             .filter_map(|(output_id, output)| {
-                let eos_status = output.audio_end_condition.as_mut()?.eos_status();
+                let eos_status = output.audio_end_condition_mut()?.eos_status();
                 let sender = output.output.audio()?.samples_batch_sender.clone();
                 Some((output_id.clone(), (sender, eos_status)))
             })

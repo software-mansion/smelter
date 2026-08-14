@@ -19,7 +19,7 @@ use crate::{
             ffmpeg_h264::FfmpegH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
-        ffmpeg_utils::{FfmpegOptions, StreamMutExt, write_extradata},
+        ffmpeg_utils::{FfmpegOptions, StreamMutExt, TimestampOffset, write_extradata},
         output::{Output, OutputAudio, OutputVideo},
         utils::InitializableThread,
     },
@@ -44,6 +44,7 @@ impl HlsOutput {
         output_ref: Ref<OutputId>,
         options: HlsOutputOptions,
     ) -> Result<Self, OutputInitError> {
+        let start_at = options.start_at;
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
 
         ctx.stats_sender.send(StatsEvent::NewOutput {
@@ -114,6 +115,13 @@ impl HlsOutput {
             None => (None, None),
         };
 
+        let offset = TimestampOffset::new(
+            ctx.queue_ctx.clone(),
+            start_at,
+            video_stream.is_some(),
+            audio_stream.is_some(),
+        );
+
         std::thread::Builder::new()
             .name(format!("HLS writer thread for output {output_ref}"))
             .spawn(move || {
@@ -131,6 +139,7 @@ impl HlsOutput {
                     encoded_chunks_receiver,
                     ctx.output_framerate,
                     stats_sender,
+                    offset,
                 );
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
@@ -290,52 +299,61 @@ fn run_ffmpeg_output_thread(
     packets_receiver: Receiver<EncodedOutputEvent>,
     framerate: Framerate,
     stats_sender: HlsOutputStatsSender,
+    mut offset: TimestampOffset,
 ) {
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
     let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
-    let mut timestamp_offset = None;
 
-    for packet in packets_receiver {
-        match packet {
-            EncodedOutputEvent::Data(chunk) => {
-                stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
-                let timestamp_offset = *timestamp_offset.get_or_insert(chunk.pts);
-                write_chunk(
-                    chunk,
-                    &mut video_stream,
-                    &mut audio_stream,
-                    &mut output_ctx,
-                    framerate.get_interval_duration(),
-                    timestamp_offset,
-                );
+    for packet in packets_receiver.into_iter().map(Some).chain([None]) {
+        let chunks = match packet {
+            Some(EncodedOutputEvent::Data(chunk)) => offset.resolve(chunk),
+            Some(EncodedOutputEvent::VideoEOS) => {
+                match received_video_eos {
+                    Some(false) => received_video_eos = Some(true),
+                    Some(true) => {
+                        error!("Received multiple video EOS events.");
+                    }
+                    None => {
+                        error!("Received video EOS event on non video output.");
+                    }
+                }
+                offset.on_track_eos(MediaKind::Video(VideoCodec::H264))
             }
-            EncodedOutputEvent::VideoEOS => match received_video_eos {
-                Some(false) => received_video_eos = Some(true),
-                Some(true) => {
-                    error!("Received multiple video EOS events.");
+            Some(EncodedOutputEvent::AudioEOS) => {
+                match received_audio_eos {
+                    Some(false) => received_audio_eos = Some(true),
+                    Some(true) => {
+                        error!("Received multiple audio EOS events.");
+                    }
+                    None => {
+                        error!("Received audio EOS event on non audio output.");
+                    }
                 }
-                None => {
-                    error!("Received video EOS event on non video output.");
-                }
-            },
-            EncodedOutputEvent::AudioEOS => match received_audio_eos {
-                Some(false) => received_audio_eos = Some(true),
-                Some(true) => {
-                    error!("Received multiple audio EOS events.");
-                }
-                None => {
-                    error!("Received audio EOS event on non audio output.");
-                }
-            },
+                offset.on_track_eos(MediaKind::Audio(AudioCodec::Aac))
+            }
+            None => offset.flush(),
         };
 
+        for (timestamp_offset, chunk) in chunks {
+            stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
+            write_chunk(
+                chunk,
+                &mut video_stream,
+                &mut audio_stream,
+                &mut output_ctx,
+                framerate.get_interval_duration(),
+                timestamp_offset,
+            );
+        }
+
         if received_video_eos.unwrap_or(true) && received_audio_eos.unwrap_or(true) {
-            if let Err(err) = output_ctx.write_trailer() {
-                error!("Failed to write trailer to m3u8 file: {}.", err);
-            };
             break;
         }
     }
+
+    if let Err(err) = output_ctx.write_trailer() {
+        error!("Failed to write trailer to m3u8 file: {}.", err);
+    };
 }
 
 fn write_chunk(
@@ -367,23 +385,16 @@ fn write_chunk(
         },
     };
 
-    let pts = chunk.pts.saturating_sub(timestamp_offset);
+    let offset = timestamp_offset.as_nanos() as i128;
+    let pts = (chunk.pts.as_nanos() as i128 - offset) as i64;
     let dts = chunk
         .dts
-        .map(|dts| dts.saturating_sub(timestamp_offset))
+        .map(|dts| (dts.as_nanos() as i128 - offset) as i64)
         .unwrap_or(pts);
 
     let mut packet = ffmpeg::Packet::copy(&chunk.data);
-    packet.set_pts(Some(Rescale::rescale(
-        &(pts.as_nanos() as i64),
-        NS_TIME_BASE,
-        stream.time_base,
-    )));
-    packet.set_dts(Some(Rescale::rescale(
-        &(dts.as_nanos() as i64),
-        NS_TIME_BASE,
-        stream.time_base,
-    )));
+    packet.set_pts(Some(Rescale::rescale(&pts, NS_TIME_BASE, stream.time_base)));
+    packet.set_dts(Some(Rescale::rescale(&dts, NS_TIME_BASE, stream.time_base)));
     packet.set_duration(Rescale::rescale(
         &(frame_duration.as_nanos() as i64),
         NS_TIME_BASE,

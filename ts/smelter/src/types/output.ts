@@ -56,6 +56,12 @@ export type RegisterMp4Output = {
    * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
    */
   ffmpegOptions?: Record<string, string>;
+  /**
+   * Time in milliseconds when this output should start producing data. Value `0` represents
+   * time of the start request. Output is always created when this request is handled
+   * (e.g. file is created), only the moment it starts receiving frames/samples is delayed.
+   */
+  startAtMs?: number | null;
 };
 
 export type RegisterHlsOutput = {
@@ -81,6 +87,12 @@ export type RegisterHlsOutput = {
    * Note: keys here may override defaults, including `hls_list_size` derived from `maxPlaylistSize`.
    */
   ffmpegOptions?: Record<string, string>;
+  /**
+   * Time in milliseconds when this output should start producing data. Value `0` represents
+   * time of the start request. Output is always created when this request is handled
+   * (e.g. playlist is created), only the moment it starts receiving frames/samples is delayed.
+   */
+  startAtMs?: number | null;
 };
 
 export type RegisterWhipClientOutput = {

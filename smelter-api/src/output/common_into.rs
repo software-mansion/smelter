@@ -114,17 +114,40 @@ impl TryFrom<VideoEncoderBitrate> for core::VideoEncoderBitrate {
     }
 }
 
+/// Overflow guard for duration options in the API, `Duration::from_secs_f64` panics on values
+/// that do not fit.
+const MAX_DURATION_MS: f64 = 365.0 * 24.0 * 60.0 * 60.0 * 1000.0;
+
+/// Milliseconds from a request into a `Duration`, keeping the sub-millisecond part.
+fn duration_from_millis_f64(millis: f64) -> Duration {
+    if millis.is_nan() {
+        return Duration::ZERO;
+    }
+    Duration::from_secs_f64(millis.clamp(0.0, MAX_DURATION_MS) / 1000.0)
+}
+
+pub(crate) fn duration_from_start_at(
+    start_at_ms: Option<f64>,
+) -> Result<Option<Duration>, TypeError> {
+    match start_at_ms {
+        Some(time) if time < 0.0 || time.is_nan() => {
+            Err(TypeError::new("Start time cannot be negative."))
+        }
+        Some(time) => Ok(Some(duration_from_millis_f64(time))),
+        None => Ok(None),
+    }
+}
+
 pub(crate) fn duration_from_keyframe_interval(
     keyframe_interval: &Option<f64>,
 ) -> Result<Duration, TypeError> {
     const DEFAULT_KEYFRAME_INTERVAL: Duration = Duration::from_millis(5000);
 
     match keyframe_interval {
-        Some(ki) if *ki < 0.0 => Err(TypeError::new("Keyframe interval cannot be negative.")),
-        Some(ki) => {
-            let ki = ki.round() as u64;
-            Ok(Duration::from_millis(ki))
+        Some(ki) if *ki < 0.0 || ki.is_nan() => {
+            Err(TypeError::new("Keyframe interval cannot be negative."))
         }
+        Some(ki) => Ok(duration_from_millis_f64(*ki)),
         None => Ok(DEFAULT_KEYFRAME_INTERVAL),
     }
 }

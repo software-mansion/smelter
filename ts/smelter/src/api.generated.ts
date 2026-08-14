@@ -416,6 +416,10 @@ export type RegisterOutput =
       ffmpeg_options?: {
         [k: string]: string;
       } | null;
+      /**
+       * Time in milliseconds when this output should start producing data. Value `0` represents time of the start request. Output is always created when this request is handled (e.g. file is created), only the moment it starts receiving frames/samples is delayed.
+       */
+      start_at_ms?: number | null;
     }
   | {
       type: "whip_client";
@@ -472,6 +476,10 @@ export type RegisterOutput =
       ffmpeg_options?: {
         [k: string]: string;
       } | null;
+      /**
+       * Time in milliseconds when this output should start producing data. Value `0` represents time of the start request. Output is always created when this request is handled (e.g. playlist is created), only the moment it starts receiving frames/samples is delayed.
+       */
+      start_at_ms?: number | null;
     };
 export type InputId = string;
 export type RtpVideoEncoderOptions =

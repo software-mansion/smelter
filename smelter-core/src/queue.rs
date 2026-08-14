@@ -161,6 +161,11 @@ impl QueueContext {
             .value()
             .unwrap_or_else(|| self.sync_point.elapsed())
     }
+
+    // PTS of queue start time
+    pub fn start_pts(&self) -> Option<Duration> {
+        self.start_pts.value()
+    }
 }
 
 #[derive(Debug)]
@@ -242,6 +247,16 @@ pub struct ScheduledEvent {
     /// Public PTS value (relative to start, not to the sync_point)
     pts: Duration,
     callback: Box<dyn FnOnce() + Send>,
+    late_policy: LateEventPolicy,
+}
+
+/// Defines what happens when an event is scheduled for a PTS the queue already passed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LateEventPolicy {
+    /// Follow the `run_late_scheduled_events` queue option.
+    Default,
+    /// Run the event anyway, on the next queue tick.
+    AlwaysRun,
 }
 
 impl<T: Clone> Clone for PipelineEvent<T> {
@@ -344,9 +359,18 @@ impl Queue {
         }
     }
 
-    pub fn schedule_event(&self, pts: Duration, callback: Box<dyn FnOnce() + Send>) {
+    pub fn schedule_event(
+        &self,
+        pts: Duration,
+        late_policy: LateEventPolicy,
+        callback: Box<dyn FnOnce() + Send>,
+    ) {
         self.scheduled_event_sender
-            .send(ScheduledEvent { pts, callback })
+            .send(ScheduledEvent {
+                pts,
+                callback,
+                late_policy,
+            })
             .unwrap();
     }
 }
@@ -364,8 +388,12 @@ impl Debug for ScheduledEvent {
 pub(super) struct SharedPts(Arc<RwLock<Option<Duration>>>);
 
 impl SharedPts {
+    /// Monotonic, PTS never goes back (e.g. when a late scheduled event is handled).
     fn update(&self, pts: Duration) {
-        *self.0.write().unwrap() = Some(pts);
+        let mut guard = self.0.write().unwrap();
+        if guard.is_none_or(|current| pts > current) {
+            *guard = Some(pts);
+        }
     }
 
     fn value(&self) -> Option<Duration> {

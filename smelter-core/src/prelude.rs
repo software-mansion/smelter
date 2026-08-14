@@ -8,6 +8,8 @@ pub use crate::output::*;
 
 pub use crate::types::*;
 
+pub use crate::queue::LateEventPolicy;
+
 pub(crate) use crate::stats::*;
 
 pub use smelter_render::{Frame, InputId, OutputId, Resolution};

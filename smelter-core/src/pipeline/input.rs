@@ -156,7 +156,7 @@ where
 
     if pipeline_input.audio_eos_received.is_some() {
         for output in guard.outputs.values_mut() {
-            if let Some(ref mut cond) = output.audio_end_condition {
+            if let Some(cond) = output.audio_end_condition_mut() {
                 cond.on_input_registered(&input_id);
             }
         }
@@ -164,7 +164,7 @@ where
 
     if pipeline_input.video_eos_received.is_some() {
         for output in guard.outputs.values_mut() {
-            if let Some(ref mut cond) = output.video_end_condition {
+            if let Some(cond) = output.video_end_condition_mut() {
                 cond.on_input_registered(&input_id);
             }
         }

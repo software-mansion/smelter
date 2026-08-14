@@ -9,7 +9,7 @@ use std::{
 use crossbeam_channel::{Receiver, Sender, select, tick};
 use tracing::{debug, info, info_span, trace, warn};
 
-use super::{Queue, QueueAudioOutput, QueueVideoOutput, ScheduledEvent};
+use super::{LateEventPolicy, Queue, QueueAudioOutput, QueueVideoOutput, ScheduledEvent};
 
 pub(super) struct QueueThread {
     queue: Arc<Queue>,
@@ -206,15 +206,21 @@ impl QueueThreadAfterStart {
         let new_event_pts = scheduled_event.pts + self.queue_start_pts;
 
         let is_future_event = new_event_pts >= min_pts;
+        let run_late = match scheduled_event.late_policy {
+            LateEventPolicy::AlwaysRun => true,
+            LateEventPolicy::Default => self.queue.run_late_scheduled_events,
+        };
+
         if !is_future_event {
-            tracing::warn!(
+            warn!(
                 ?new_event_pts,
                 ?min_pts,
+                ?run_late,
                 "Scheduled event received too late"
             )
         }
 
-        if self.queue.run_late_scheduled_events || is_future_event {
+        if run_late || is_future_event {
             match self.scheduled_events.get_mut(&scheduled_event.pts) {
                 Some(events) => {
                     events.push(scheduled_event.callback);

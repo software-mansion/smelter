@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use axum::extract::{Path, State};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use smelter_core::Pipeline;
+use smelter_core::{LateEventPolicy, Pipeline};
 use smelter_render::error::ErrorStack;
 use tracing::error;
 use utoipa::ToSchema;
@@ -52,15 +52,20 @@ pub async fn handle_output_update(
     match request.schedule_time_ms {
         Some(schedule_time_ms) => {
             let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
-            Pipeline::schedule_event(&api.pipeline()?, schedule_time, move |pipeline| {
-                if let Err(err) = pipeline.update_output(output_id, scene, audio) {
-                    error!(
-                        "Error while running scheduled output update for pts {}ms: {}",
-                        schedule_time.as_millis(),
-                        ErrorStack::new(&err).into_string()
-                    )
-                }
-            });
+            Pipeline::schedule_event(
+                &api.pipeline()?,
+                schedule_time,
+                LateEventPolicy::Default,
+                move |pipeline| {
+                    if let Err(err) = pipeline.update_output(output_id, scene, audio) {
+                        error!(
+                            "Error while running scheduled output update for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                },
+            );
         }
         None => api
             .pipeline()?
