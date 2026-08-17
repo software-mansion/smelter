@@ -655,9 +655,39 @@ impl ReferenceContext {
             }
         };
 
+        let dpb = if header.idr_pic_id.is_some() {
+            Vec::new()
+        } else {
+            self.pictures
+                .short_term
+                .iter()
+                .filter(|picture| !picture.non_existing)
+                .map(|picture| ReferencePictureInfo {
+                    id: picture.id,
+                    LongTermPicNum: None,
+                    non_existing: false,
+                    FrameNum: picture.frame_num,
+                    PicOrderCnt: picture.pic_order_cnt,
+                })
+                .chain(
+                    self.pictures
+                        .long_term
+                        .iter()
+                        .map(|picture| ReferencePictureInfo {
+                            id: picture.id,
+                            LongTermPicNum: Some(picture.LongTermFrameIdx),
+                            non_existing: false,
+                            FrameNum: picture.frame_num,
+                            PicOrderCnt: picture.pic_order_cnt,
+                        }),
+                )
+                .collect()
+        };
+
         Ok(DecodeInformation {
             reference_list_l0,
             reference_list_l1,
+            dpb,
             header: header.clone(),
             slice_indices,
             rbsp_bytes,
@@ -1272,6 +1302,7 @@ impl SliceHeaderExt for SliceHeader {
 pub struct DecodeInformation {
     pub(crate) reference_list_l0: Option<Vec<ReferencePictureInfo>>,
     pub(crate) reference_list_l1: Option<Vec<ReferencePictureInfo>>,
+    pub(crate) dpb: Vec<ReferencePictureInfo>,
     pub(crate) rbsp_bytes: Vec<u8>,
     pub(crate) slice_indices: Vec<usize>,
     pub(crate) header: Arc<SliceHeader>,
@@ -1286,6 +1317,7 @@ impl std::fmt::Debug for DecodeInformation {
         f.debug_struct("DecodeInformation")
             .field("reference_list_l0", &self.reference_list_l0)
             .field("reference_list_l1", &self.reference_list_l1)
+            .field("dpb", &self.dpb)
             .field("slice_indices", &self.slice_indices)
             .field("sps_id", &self.sps_id)
             .field("pps_id", &self.pps_id)
