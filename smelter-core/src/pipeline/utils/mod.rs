@@ -1,5 +1,7 @@
 pub(crate) mod channel;
 pub(crate) mod input_buffer;
+pub(crate) mod input_sync;
+pub(crate) mod live_sync;
 
 mod audio_buffer;
 mod h264_annexb_to_avcc;
