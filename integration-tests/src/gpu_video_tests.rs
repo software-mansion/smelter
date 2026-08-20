@@ -29,13 +29,15 @@ fn video_device() -> &'static (wgpu::Device, wgpu::Queue) {
 
     DEVICE.get_or_init(|| {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-        let mut adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
-            .into_iter()
-            .filter(|a| {
-                a.video_adapter_info()
-                    .is_some_and(|info| info.supports_decoding)
-            })
-            .collect::<Vec<_>>();
+        let mut adapters = pollster::block_on(
+            instance.enumerate_adapters(wgpu::Backends::VULKAN | wgpu::Backends::METAL),
+        )
+        .into_iter()
+        .filter(|a| {
+            a.video_adapter_info()
+                .is_some_and(|info| info.supports_decoding)
+        })
+        .collect::<Vec<_>>();
         adapters.sort_by_key(|a| a.get_info().device_type == wgpu::DeviceType::DiscreteGpu);
 
         let adapter = adapters.last().unwrap();

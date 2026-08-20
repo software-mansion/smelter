@@ -154,7 +154,7 @@ impl<'a, S> SemaphoreSubmitInfo<'a, S> {
     }
 
     #[cfg(feature = "wgpu")]
-    pub(crate) fn wgpu_wait_info(&mut self) -> (&wgpu::hal::vulkan::Fence, u64) {
+    pub(crate) fn wgpu_wait_info(&self) -> (&wgpu::hal::vulkan::Fence, u64) {
         (&self.wgpu_fence, self.signal.value.0)
     }
 
