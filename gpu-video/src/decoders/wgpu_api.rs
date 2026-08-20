@@ -1,32 +1,24 @@
 use crate::{
-    DecoderEvent, EncodedInputChunk, OutputFrame, VideoDecoderError,
-    frame_sorter::{DecodeResult, FrameSorter},
-    parser::{
-        decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
-        h264::{AccessUnit, H264Parser},
-        reference_manager::ReferenceContext,
-    },
+    DecoderEvent, EncodedInputChunk, OutputFrame, VideoDecoderError, parser::h264::AccessUnit,
 };
 
 pub(crate) trait WgpuVideoDecoderBackend: Send {
-    fn decode_to_wgpu_textures(
+    fn process_event_textures(
         &mut self,
-        wgpu_device: &wgpu::Device,
-        decoder_instructions: Vec<DecoderInstruction>,
-    ) -> Result<Vec<DecodeResult<wgpu::Texture>>, VideoDecoderError>;
+        event: DecoderEvent<'_, AccessUnit>,
+    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VideoDecoderError>;
 }
 
 /// A decoder that outputs frames stored as [`wgpu::Texture`]s
-pub struct WgpuTexturesDecoder {
-    pub(crate) wgpu_device: wgpu::Device,
-    pub(crate) decoder: Box<dyn WgpuVideoDecoderBackend>,
-    pub(crate) parser: H264Parser,
-    pub(crate) reference_ctx: ReferenceContext,
-    pub(crate) frame_sorter: FrameSorter<wgpu::Texture>,
+pub struct WgpuTexturesDecoderH264 {
+    pub(crate) backend: Box<dyn WgpuVideoDecoderBackend>,
 }
 
-impl WgpuTexturesDecoder {
+impl WgpuTexturesDecoderH264 {
     /// The produced textures have the [`wgpu::TextureFormat::NV12`] format and can be used as a texture binding.
+    ///
+    /// If [`DecoderParameters::max_in_flight_submissions`](crate::parameters::DecoderParameters::max_in_flight_submissions)
+    /// decode submissions are already in flight, this blocks until all submissions above the limit finish.
     pub fn decode(
         &mut self,
         frame: EncodedInputChunk<'_>,
@@ -49,38 +41,6 @@ impl WgpuTexturesDecoder {
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
     ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VideoDecoderError> {
-        match event {
-            DecoderEvent::DecodeChunk(chunk) => {
-                let nalus = self.parser.parse(chunk.data, chunk.pts)?;
-                self.decode_access_units(nalus)
-            }
-            DecoderEvent::DecodeParsedFrame(au) => self.decode_access_units(vec![au]),
-            DecoderEvent::SignalFrameEnd => {
-                let access_units = self.parser.flush()?;
-                self.decode_access_units(access_units)
-            }
-            DecoderEvent::SignalDataLoss => {
-                self.reference_ctx.mark_missed_frames();
-                Ok(Vec::new())
-            }
-            DecoderEvent::Flush => {
-                let access_units = self.parser.flush()?;
-                let mut frames = self.decode_access_units(access_units)?;
-                frames.append(&mut self.frame_sorter.flush());
-                Ok(frames)
-            }
-        }
-    }
-
-    fn decode_access_units(
-        &mut self,
-        access_units: Vec<AccessUnit>,
-    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VideoDecoderError> {
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
-        let unsorted_frames = self
-            .decoder
-            .decode_to_wgpu_textures(&self.wgpu_device, instructions)?;
-        let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
-        Ok(sorted_frames)
+        self.backend.process_event_textures(event)
     }
 }

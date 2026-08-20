@@ -19,6 +19,7 @@
 
 ### ✨ New features
 - Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)
+- Made decoders work asynchronously. Bytes decoder now returns frames via callback ([#2143](https://github.com/software-mansion/smelter/pull/2143) by @noituri)
 
 ### 🐛 Bug fixes
 - Fix artifacts in h264 decoder caused by unnecessary short reference deletion ([#1991](https://github.com/software-mansion/smelter/pull/1991) by @noituri)
