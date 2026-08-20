@@ -1,10 +1,10 @@
-#[cfg(vulkan)]
+#[cfg(supported)]
 use gpu_video::{
     VideoAdapterExt, VideoDeviceExt, WgpuRgbaToNv12Converter,
     parameters::{EncoderParametersH264, EncoderParametersH265},
 };
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn main() {
     use gpu_video::{
         InputFrame,
@@ -30,7 +30,7 @@ fn main() {
     let frame_count = args[3].parse::<u32>().expect("parse frame count");
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
+    let adapter = pollster::block_on(instance.enumerate_adapters(Default::default()))
         .into_iter()
         .find(|a| {
             a.video_adapter_info().is_some_and(|info| {
@@ -124,7 +124,7 @@ fn main() {
     }
 }
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 struct WgpuState {
     pipeline: wgpu::RenderPipeline,
     rgba_view: wgpu::TextureView,
@@ -137,7 +137,7 @@ struct WgpuState {
     queue: wgpu::Queue,
 }
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 impl WgpuState {
     fn new(
         device: wgpu::Device,
@@ -301,9 +301,9 @@ impl WgpuState {
     }
 }
 
-#[cfg(not(vulkan))]
+#[cfg(not(supported))]
 fn main() {
     println!(
-        "This crate doesn't work on your operating system, because it does not support vulkan"
+        "This crate doesn't work on your operating system, because it does not support vulkan or video toolbox"
     );
 }
