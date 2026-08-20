@@ -64,6 +64,7 @@ pub struct RtmpServerInputOptions {
     pub stream_key: Arc<str>,
     pub decoders: RtmpServerInputDecoders,
     pub queue_options: QueueInputOptions,
+    pub is_live: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

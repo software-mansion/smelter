@@ -4,14 +4,11 @@ use rtmp::{
     AudioConfig, AudioData, RtmpAudioCodec, RtmpEvent, RtmpVideoCodec, VideoConfig, VideoData,
 };
 use smelter_render::{InputId, error::ErrorStack};
-use tracing::{Level, info, span, warn};
+use tracing::{Level, info, span, trace, warn};
 
 use crate::{
-    MediaKind, PipelineCtx, PipelineEvent, Ref,
-    codecs::{
-        AudioCodec, FdkAacDecoderOptions, H264AvcDecoderConfigError, VideoCodec,
-        VideoDecoderOptions,
-    },
+    MediaKind, PipelineCtx, Ref,
+    codecs::{FdkAacDecoderOptions, H264AvcDecoderConfigError, VideoDecoderOptions},
     error::DecoderInitError,
     pipeline::{
         decoder::{
@@ -27,37 +24,56 @@ use crate::{
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
     },
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
-    utils::{InitializableThread, channel::Sender},
+    utils::{
+        InitializableThread,
+        input_sync::{DecoderHandleInputSyncExt, InputSync, InputSyncTrack, SimpleSync, TrackKind},
+        live_sync::{BufferingStrategy, ChunkBuffer, LiveSync, LiveSyncOptions},
+    },
 };
 
 use crate::prelude::*;
 
 const RTMP_BUFFER: Duration = Duration::from_secs(2);
-const RTMP_MAX_BUFFER: Duration = Duration::from_secs(20);
+const RTMP_MAX_BUFFER: Duration = Duration::from_secs(60);
 
 pub(crate) fn start_connection_thread(
     ctx: Arc<PipelineCtx>,
     input_ref: &Ref<InputId>,
     input: &RtmpInputState,
     conn: rtmp::RtmpServerConnection,
+    is_live: bool,
 ) -> Option<JoinHandle<()>> {
     let input_id = input_ref.to_string();
     let queue_input = input.queue_input.upgrade()?;
     let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
         video: true,
         audio: true,
-        offset: QueueTrackOffset::Pts(ctx.queue_ctx.effective_last_pts() + RTMP_BUFFER),
+        offset: match is_live {
+            true => QueueTrackOffset::Pts(Duration::ZERO),
+            false => QueueTrackOffset::None,
+        },
     });
+    let sync = match is_live {
+        true => InputSync::Live(LiveSync::new(
+            LiveSyncOptions::with_desired_buffer(BufferingStrategy::Range {
+                min: Duration::from_secs(1),
+                max: Duration::from_secs(5),
+                desired: RTMP_BUFFER,
+            }),
+            ctx.queue_ctx.sync_point,
+        )),
+        false => InputSync::Simple(SimpleSync::new()),
+    };
 
     let mut state = RtmpConnectionState {
-        ctx,
+        ctx: ctx.clone(),
         input_ref: input_ref.clone(),
         decoders: input.decoders.clone(),
         video_track_state: TrackState::BeforeFirstEvent,
         audio_track_state: TrackState::BeforeFirstEvent,
         video_sender,
         audio_sender,
-        first_pts: None,
+        sync,
     };
 
     let handle = std::thread::Builder::new()
@@ -67,18 +83,22 @@ pub(crate) fn start_connection_thread(
 
             let app: &str = conn.app();
             let stream_key: &str = conn.stream_key();
-            info!(app, stream_key, "RTMP stream connection established");
+            info!(
+                app,
+                stream_key, is_live, "RTMP stream connection established"
+            );
 
             for event in &conn {
                 if let Err(err) = state.handle_rtmp_event(event) {
                     match err {
-                        RtmpConnectionError::ChannelClosed => {
-                            break;
-                        }
+                        // decoders are gone, so there is nothing to read the
+                        // connection for anymore
+                        RtmpConnectionError::TrackClosed => break,
                         _ => warn!("{}", ErrorStack::new(&err).into_string()),
                     }
                 }
             }
+            state.sync.flush();
 
             info!("RTMP stream connection closed");
         })
@@ -91,13 +111,13 @@ enum TrackState {
     /// This state can be reached only if the first packet for the track is not a config.
     /// It is a separate state from BeforeFirstEvent to log a warning only once.
     ConfigMissing,
-    Ready(DecoderThreadHandle),
+    Ready(InputSyncTrack<ChunkBuffer>),
 }
 
 impl TrackState {
-    fn chunk_sender(&mut self) -> Option<Sender<PipelineEvent<EncodedInputChunk>>> {
+    fn try_ready(&mut self) -> Option<&mut InputSyncTrack<ChunkBuffer>> {
         match self {
-            TrackState::Ready(handle) => Some(handle.chunk_sender.clone()),
+            TrackState::Ready(sync) => Some(sync),
             TrackState::BeforeFirstEvent => {
                 *self = TrackState::ConfigMissing;
                 None
@@ -118,8 +138,8 @@ enum RtmpConnectionError {
     #[error("Failed to initialize audio decoder")]
     InitAudioDecoder(#[source] DecoderInitError),
 
-    #[error("Decoder channel closed")]
-    ChannelClosed,
+    #[error("Track closed")]
+    TrackClosed,
 
     #[error("Video decoder not initialized yet")]
     VideoDecoderNotInitialized,
@@ -138,13 +158,12 @@ struct RtmpConnectionState {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
     decoders: RtmpServerInputDecoders,
+    sync: InputSync<ChunkBuffer>,
 
     video_track_state: TrackState,
     audio_track_state: TrackState,
     video_sender: Option<QueueSender<Frame>>,
     audio_sender: Option<QueueSender<InputAudioSamples>>,
-
-    first_pts: Option<Duration>,
 }
 
 impl RtmpConnectionState {
@@ -152,17 +171,56 @@ impl RtmpConnectionState {
         match rtmp_event {
             RtmpEvent::VideoConfig(config) => self.process_video_config(config)?,
             RtmpEvent::AudioConfig(config) => self.process_audio_config(config)?,
-            RtmpEvent::VideoData(data) => match data.codec {
-                RtmpVideoCodec::H264 => self.process_video(data, VideoCodec::H264)?,
-                RtmpVideoCodec::Vp8 => self.process_video(data, VideoCodec::Vp8)?,
-                RtmpVideoCodec::Vp9 => self.process_video(data, VideoCodec::Vp9)?,
-            },
-            RtmpEvent::AudioData(data) => match data.codec {
-                RtmpAudioCodec::Aac => self.process_audio(data, AudioCodec::Aac)?,
-                RtmpAudioCodec::Opus => self.process_audio(data, AudioCodec::Opus)?,
-            },
+            RtmpEvent::VideoData(data) => self.handle_video_chunk(data)?,
+            RtmpEvent::AudioData(data) => self.handle_audio_chunk(data)?,
             RtmpEvent::Metadata(metadata) => info!(?metadata, "Received metadata"),
         }
+        Ok(())
+    }
+
+    fn handle_video_chunk(&mut self, video: VideoData) -> Result<(), RtmpConnectionError> {
+        let Some(sync) = self.video_track_state.try_ready() else {
+            return Err(RtmpConnectionError::VideoDecoderNotInitialized);
+        };
+
+        trace!(pts=?video.pts, "Received video chunk");
+        let chunk = EncodedInputChunk {
+            data: video.data,
+            pts: video.pts,
+            dts: Some(video.dts),
+            kind: MediaKind::Video(video.codec.into()),
+            present: true,
+        };
+
+        self.ctx.stats_sender.send(
+            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
+                .into_event(&self.input_ref, StatsTrackKind::Video),
+        );
+        sync.write_chunk(chunk)
+            .map_err(|_| RtmpConnectionError::TrackClosed)?;
+        Ok(())
+    }
+
+    fn handle_audio_chunk(&mut self, audio: AudioData) -> Result<(), RtmpConnectionError> {
+        let Some(sync) = self.audio_track_state.try_ready() else {
+            return Err(RtmpConnectionError::AudioDecoderNotInitialized);
+        };
+
+        trace!(pts=?audio.pts, "Received audio chunk");
+        let chunk = EncodedInputChunk {
+            data: audio.data.clone(),
+            pts: audio.pts,
+            dts: None,
+            kind: MediaKind::Audio(audio.codec.into()),
+            present: true,
+        };
+
+        self.ctx.stats_sender.send(
+            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
+                .into_event(&self.input_ref, StatsTrackKind::Audio),
+        );
+        sync.write_chunk(chunk)
+            .map_err(|_| RtmpConnectionError::TrackClosed)?;
         Ok(())
     }
 
@@ -170,55 +228,18 @@ impl RtmpConnectionState {
         let Some(frame_sender) = self.video_sender.take() else {
             return Err(RtmpConnectionError::ReceivedSecondVideoTrack);
         };
+        trace!(?config, "Received video config");
 
-        let codec = config.codec;
-        let transformer = match codec {
-            RtmpVideoCodec::H264 => {
-                let h264_config = H264AvcDecoderConfig::parse(config.data)?;
-                Some(H264AvccToAnnexB::new(h264_config))
-            }
-            _ => None,
-        };
-
-        let options = VideoDecoderThreadOptions {
-            ctx: self.ctx.clone(),
-            transformer,
+        let handle = spawn_video_decoder(
+            &self.ctx,
+            &self.input_ref,
+            &self.decoders,
+            config,
             frame_sender,
-            input_buffer_size: RTMP_MAX_BUFFER,
-        };
+        )?;
 
-        let decoder_opt = match codec {
-            RtmpVideoCodec::H264 => self.decoders.h264.unwrap_or_else(|| {
-                match self.ctx.graphics_context.has_vulkan_decoder_support() {
-                    true => VideoDecoderOptions::VulkanH264,
-                    false => VideoDecoderOptions::FfmpegH264,
-                }
-            }),
-            RtmpVideoCodec::Vp8 => VideoDecoderOptions::FfmpegVp8,
-            RtmpVideoCodec::Vp9 => VideoDecoderOptions::FfmpegVp9,
-        };
-
-        let input_ref = self.input_ref.clone();
-        let handle = match decoder_opt {
-            VideoDecoderOptions::FfmpegH264 => {
-                VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitVideoDecoder)?
-            }
-            VideoDecoderOptions::VulkanH264 => {
-                VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitVideoDecoder)?
-            }
-            VideoDecoderOptions::FfmpegVp8 => {
-                VideoDecoderThread::<ffmpeg_vp8::FfmpegVp8Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitVideoDecoder)?
-            }
-            VideoDecoderOptions::FfmpegVp9 => {
-                VideoDecoderThread::<ffmpeg_vp9::FfmpegVp9Decoder, _>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitVideoDecoder)?
-            }
-        };
-
-        self.video_track_state = TrackState::Ready(handle);
+        let sync = self.sync.add_track_with_handle(TrackKind::Video, handle);
+        self.video_track_state = TrackState::Ready(sync);
         Ok(())
     }
 
@@ -227,105 +248,101 @@ impl RtmpConnectionState {
             return Err(RtmpConnectionError::ReceivedSecondAudioTrack);
         };
 
-        let input_ref = self.input_ref.clone();
-        let handle = match config.codec {
-            RtmpAudioCodec::Aac => {
-                let options = AudioDecoderThreadOptions {
-                    ctx: self.ctx.clone(),
-                    decoder_options: FdkAacDecoderOptions {
-                        asc: Some(config.data.clone()),
-                    },
-                    samples_sender,
-                    input_buffer_size: RTMP_MAX_BUFFER,
-                };
-                AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitAudioDecoder)?
-            }
-            RtmpAudioCodec::Opus => {
-                let options = AudioDecoderThreadOptions {
-                    ctx: self.ctx.clone(),
-                    decoder_options: (),
-                    samples_sender,
-                    input_buffer_size: RTMP_MAX_BUFFER,
-                };
-                AudioDecoderThread::<OpusDecoder>::spawn(input_ref, options)
-                    .map_err(RtmpConnectionError::InitAudioDecoder)?
-            }
-        };
+        trace!(?config, "Received audio config");
+        let handle = spawn_audio_decoder(&self.ctx, &self.input_ref, config, samples_sender)?;
 
-        self.audio_track_state = TrackState::Ready(handle);
+        let sync = self.sync.add_track_with_handle(TrackKind::Audio, handle);
+        self.audio_track_state = TrackState::Ready(sync);
         Ok(())
     }
+}
 
-    fn process_video(
-        &mut self,
-        video: VideoData,
-        codec: VideoCodec,
-    ) -> Result<(), RtmpConnectionError> {
-        let sender = self
-            .video_track_state
-            .chunk_sender()
-            .ok_or(RtmpConnectionError::VideoDecoderNotInitialized)?;
-
-        let pts = self.normalize_pts(video.pts);
-        let chunk = EncodedInputChunk {
-            data: video.data,
-            pts,
-            dts: Some(video.dts),
-            kind: MediaKind::Video(codec),
-            present: true,
-        };
-
-        self.ctx.stats_sender.send(
-            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
-                .into_event(&self.input_ref, StatsTrackKind::Video),
-        );
-        sender
-            .send(PipelineEvent::Data(chunk))
-            .map_err(|_| RtmpConnectionError::ChannelClosed)?;
-        Ok(())
-    }
-
-    fn process_audio(
-        &mut self,
-        audio: AudioData,
-        codec: AudioCodec,
-    ) -> Result<(), RtmpConnectionError> {
-        let sender = self
-            .audio_track_state
-            .chunk_sender()
-            .ok_or(RtmpConnectionError::AudioDecoderNotInitialized)?;
-
-        let pts = self.normalize_pts(audio.pts);
-        let chunk = EncodedInputChunk {
-            data: audio.data.clone(),
-            pts,
-            dts: None,
-            kind: MediaKind::Audio(codec),
-            present: true,
-        };
-
-        self.ctx.stats_sender.send(
-            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
-                .into_event(&self.input_ref, StatsTrackKind::Audio),
-        );
-        sender
-            .send(PipelineEvent::Data(chunk))
-            .map_err(|_| RtmpConnectionError::ChannelClosed)?;
-        Ok(())
-    }
-
-    fn normalize_pts(&mut self, pts: Duration) -> Duration {
-        let first_pts = *self.first_pts.get_or_insert(pts);
-
-        // drop unused track, it matters only if input is required
-        // and does not have audio or video track. Channels need to be large
-        // enough to fit 5 second
-        if pts.saturating_sub(first_pts) > Duration::from_secs(5) {
-            self.video_sender.take();
-            self.audio_sender.take();
+fn spawn_video_decoder(
+    ctx: &Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
+    decoders: &RtmpServerInputDecoders,
+    config: VideoConfig,
+    frame_sender: QueueSender<Frame>,
+) -> Result<DecoderThreadHandle, RtmpConnectionError> {
+    let codec = config.codec;
+    let transformer = match codec {
+        RtmpVideoCodec::H264 => {
+            let h264_config = H264AvcDecoderConfig::parse(config.data)?;
+            Some(H264AvccToAnnexB::new(h264_config))
         }
+        _ => None,
+    };
 
-        pts.saturating_sub(first_pts)
-    }
+    let options = VideoDecoderThreadOptions {
+        ctx: ctx.clone(),
+        transformer,
+        frame_sender,
+        input_buffer_size: RTMP_MAX_BUFFER,
+    };
+
+    let decoder_opt = match codec {
+        RtmpVideoCodec::H264 => decoders.h264.unwrap_or_else(|| {
+            match ctx.graphics_context.has_vulkan_decoder_support() {
+                true => VideoDecoderOptions::VulkanH264,
+                false => VideoDecoderOptions::FfmpegH264,
+            }
+        }),
+        RtmpVideoCodec::Vp8 => VideoDecoderOptions::FfmpegVp8,
+        RtmpVideoCodec::Vp9 => VideoDecoderOptions::FfmpegVp9,
+    };
+
+    let input_ref = input_ref.clone();
+    let handle = match decoder_opt {
+        VideoDecoderOptions::FfmpegH264 => {
+            VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(input_ref, options)
+                .map_err(RtmpConnectionError::InitVideoDecoder)?
+        }
+        VideoDecoderOptions::VulkanH264 => {
+            VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(input_ref, options)
+                .map_err(RtmpConnectionError::InitVideoDecoder)?
+        }
+        VideoDecoderOptions::FfmpegVp8 => {
+            VideoDecoderThread::<ffmpeg_vp8::FfmpegVp8Decoder, _>::spawn(input_ref, options)
+                .map_err(RtmpConnectionError::InitVideoDecoder)?
+        }
+        VideoDecoderOptions::FfmpegVp9 => {
+            VideoDecoderThread::<ffmpeg_vp9::FfmpegVp9Decoder, _>::spawn(input_ref, options)
+                .map_err(RtmpConnectionError::InitVideoDecoder)?
+        }
+    };
+    Ok(handle)
+}
+
+fn spawn_audio_decoder(
+    ctx: &Arc<PipelineCtx>,
+    input_ref: &Ref<InputId>,
+    config: AudioConfig,
+    samples_sender: QueueSender<InputAudioSamples>,
+) -> Result<DecoderThreadHandle, RtmpConnectionError> {
+    let input_ref = input_ref.clone();
+    let handle = match config.codec {
+        RtmpAudioCodec::Aac => {
+            let options = AudioDecoderThreadOptions {
+                ctx: ctx.clone(),
+                decoder_options: FdkAacDecoderOptions {
+                    asc: Some(config.data.clone()),
+                },
+                samples_sender,
+                input_buffer_size: RTMP_MAX_BUFFER,
+            };
+            AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref, options)
+                .map_err(RtmpConnectionError::InitAudioDecoder)?
+        }
+        RtmpAudioCodec::Opus => {
+            let options = AudioDecoderThreadOptions {
+                ctx: ctx.clone(),
+                decoder_options: (),
+                samples_sender,
+                input_buffer_size: RTMP_MAX_BUFFER,
+            };
+            AudioDecoderThread::<OpusDecoder>::spawn(input_ref, options)
+                .map_err(RtmpConnectionError::InitAudioDecoder)?
+        }
+    };
+    Ok(handle)
 }
