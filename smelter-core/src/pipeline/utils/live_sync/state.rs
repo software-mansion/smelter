@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::{LiveSyncOptions, buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator};
 use crate::pipeline::utils::input_sync::{
-    InputSyncItem, TimestampAnchor, TrackCallback, TrackKind,
+    BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackKind,
 };
 
 /// pts jump (in either direction) treated as a discontinuity of the input
@@ -57,7 +57,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
     }
 
-    pub(super) fn add_track(&mut self, kind: TrackKind, on_chunk_release: TrackCallback<B::Chunk>) {
+    pub(super) fn add_track(&mut self, kind: TrackKind, sink: BoxedTrackSink<B::Chunk>) {
         let track = TrackState {
             options: self.options,
             sync_point: self.sync_point,
@@ -67,7 +67,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             ),
             start: StartState::WaitingForStart,
             buffer: B::default(),
-            on_chunk_release,
+            sink,
             last_released_pts: None,
         };
         match kind {
@@ -81,6 +81,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     /// by the periodic ticker, so time-based transitions fire during delivery
     /// pauses too.
     pub(super) fn tick(&mut self, now: Instant) {
+        self.drop_closed_tracks();
         if let Some(track) = self.audio.as_mut() {
             track.maybe_reset(now, self.anchor);
             track.maybe_start(now, &self.shared_estimator, &mut self.anchor);
@@ -114,7 +115,32 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
     }
 
-    pub(super) fn write_chunk(&mut self, kind: TrackKind, chunk: B::Chunk) {
+    /// Drops the tracks whose sink is gone, so nothing is released into the
+    /// void and the next write to them fails.
+    fn drop_closed_tracks(&mut self) {
+        if self
+            .audio
+            .as_ref()
+            .is_some_and(|track| track.sink.is_closed())
+        {
+            self.audio = None;
+        }
+        if self
+            .video
+            .as_ref()
+            .is_some_and(|track| track.sink.is_closed())
+        {
+            self.video = None;
+        }
+    }
+
+    /// Fails once the sink of the track is gone, so the input can stop
+    /// producing for it.
+    pub(super) fn write_chunk(
+        &mut self,
+        kind: TrackKind,
+        chunk: B::Chunk,
+    ) -> Result<(), TrackClosedError> {
         let now = Instant::now();
         self.reset_on_discontinuity(kind, now, chunk.pts());
 
@@ -123,7 +149,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             TrackKind::Video => self.video.as_mut(),
         };
         let Some(track) = track else {
-            return;
+            return Err(TrackClosedError);
         };
 
         // both estimators observe for the whole lifetime of the input
@@ -132,6 +158,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         track.buffer.write(chunk);
 
         self.tick(now);
+        Ok(())
     }
 
     fn try_release_chunk(&mut self, kind: TrackKind, now: Instant) -> bool {
@@ -277,17 +304,33 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         let Some(track) = track else {
             return;
         };
-        if track.is_discontinuity(now, pts) {
-            if let Some(track) = self.audio.as_mut() {
-                track.reset(now, self.anchor);
-            }
-            if let Some(track) = self.video.as_mut() {
-                track.reset(now, self.anchor);
-            }
-            self.shared_estimator =
-                LiveEdgeEstimator::new(self.sync_point, self.options.stabilization_tolerance);
-            self.anchor = None;
+        if !track.is_discontinuity(now, pts) {
+            return;
         }
+
+        if let Some(track) = self.audio.as_mut() {
+            track.reset(now, self.anchor);
+        }
+        if let Some(track) = self.video.as_mut() {
+            track.reset(now, self.anchor);
+        }
+
+        // Even though only one track had a gap we restart both of them. 
+        //
+        // Especially, important for HLS where discontinuity on both tracks
+        // can be slightly of (e.g. by a packet) which will cause 2 resets,
+        // but only one discontinuity should be send downstream (e.g. to decoder)
+        let track = match kind {
+            TrackKind::Audio => self.audio.as_mut(),
+            TrackKind::Video => self.video.as_mut(),
+        };
+        if let Some(track) = track {
+            track.sink.on_discontinuity();
+        }
+
+        self.shared_estimator =
+            LiveEdgeEstimator::new(self.sync_point, self.options.stabilization_tolerance);
+        self.anchor = None;
     }
 }
 
@@ -302,7 +345,7 @@ struct TrackState<B: LiveSyncBuffer> {
     start: StartState,
     buffer: B,
     /// Receives the chunks this track releases.
-    on_chunk_release: TrackCallback<B::Chunk>,
+    sink: BoxedTrackSink<B::Chunk>,
     /// Output pts the released content ends at. Used to maintain continuity after
     /// reset so it has to survive the reset itself.
     last_released_pts: Option<Duration>,
@@ -449,7 +492,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             Some(previous) => Duration::max(previous, chunk.pts()),
             None => chunk.pts(),
         });
-        (self.on_chunk_release)(chunk);
+        self.sink.send(chunk);
     }
 
     /// Gives up on the live edge: releases everything buffered with the

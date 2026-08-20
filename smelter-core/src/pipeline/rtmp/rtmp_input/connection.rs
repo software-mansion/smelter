@@ -90,7 +90,12 @@ pub(crate) fn start_connection_thread(
 
             for event in &conn {
                 if let Err(err) = state.handle_rtmp_event(event) {
-                    warn!("{}", ErrorStack::new(&err).into_string());
+                    match err {
+                        // decoders are gone, so there is nothing to read the
+                        // connection for anymore
+                        RtmpConnectionError::TrackClosed => break,
+                        _ => warn!("{}", ErrorStack::new(&err).into_string()),
+                    }
                 }
             }
             state.sync.flush();
@@ -132,6 +137,9 @@ enum RtmpConnectionError {
 
     #[error("Failed to initialize audio decoder")]
     InitAudioDecoder(#[source] DecoderInitError),
+
+    #[error("Track closed")]
+    TrackClosed,
 
     #[error("Video decoder not initialized yet")]
     VideoDecoderNotInitialized,
@@ -188,7 +196,8 @@ impl RtmpConnectionState {
             RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
                 .into_event(&self.input_ref, StatsTrackKind::Video),
         );
-        sync.write_chunk(chunk);
+        sync.write_chunk(chunk)
+            .map_err(|_| RtmpConnectionError::TrackClosed)?;
         Ok(())
     }
 
@@ -210,7 +219,8 @@ impl RtmpConnectionState {
             RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
                 .into_event(&self.input_ref, StatsTrackKind::Audio),
         );
-        sync.write_chunk(chunk);
+        sync.write_chunk(chunk)
+            .map_err(|_| RtmpConnectionError::TrackClosed)?;
         Ok(())
     }
 

@@ -17,8 +17,9 @@
 //! ones. Tracks sharing an anchor release their chunks in a common pts order,
 //! which keeps the timestamps they produce advancing together and makes a
 //! nudge move both tracks the same way instead of desynchronizing them. A pts
-//! discontinuity is what no correction can absorb: the estimate is dropped
-//! and the detection starts over on the new timeline. A track that stops
+//! discontinuity is what no correction can absorb: the estimate is dropped,
+//! the detection starts over on the new timeline and the track that broke
+//! tells its sink, so state built from the old timeline can go. A track that stops
 //! delivering for long enough to run out the content it released goes back
 //! to the same decision on its own, so it has to earn its place on the
 //! shared timeline again when it comes back.
@@ -41,7 +42,7 @@ mod track;
 pub(crate) use buffer::{BufferingStrategy, ChunkBuffer, LiveSyncBuffer};
 pub(crate) use track::LiveSyncTrack;
 
-use crate::pipeline::utils::input_sync::{TrackCallback, TrackKind};
+use crate::pipeline::utils::input_sync::{BoxedTrackSink, TrackKind};
 use state::SharedState;
 
 #[derive(Debug, Clone, Copy)]
@@ -88,15 +89,11 @@ impl<B: LiveSyncBuffer> LiveSync<B> {
         Self { shared }
     }
 
-    /// Registers the track of the given kind; `callback` receives its chunks
+    /// Registers the track of the given kind; `sink` receives its chunks
     /// once they are synchronized. Tracks share the live edge detection but
     /// each starts on its own.
-    pub fn add_track(
-        &self,
-        kind: TrackKind,
-        callback: TrackCallback<B::Chunk>,
-    ) -> LiveSyncTrack<B> {
-        self.shared.lock().unwrap().add_track(kind, callback);
+    pub fn add_track(&self, kind: TrackKind, sink: BoxedTrackSink<B::Chunk>) -> LiveSyncTrack<B> {
+        self.shared.lock().unwrap().add_track(kind, sink);
         LiveSyncTrack::new(self.shared.clone(), kind)
     }
 

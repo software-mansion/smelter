@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use super::{InputSyncItem, TimestampAnchor, TrackCallback};
+use super::{BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError};
 
 /// Synchronization for non-live inputs: normalizes timestamps of all tracks
 /// to start at zero, based on the first chunk written to any track. Chunks
@@ -20,27 +20,31 @@ impl SimpleSync {
         }
     }
 
-    pub fn add_track<T: InputSyncItem>(&self, callback: TrackCallback<T>) -> SimpleSyncTrack<T> {
+    pub fn add_track<T: InputSyncItem>(&self, sink: BoxedTrackSink<T>) -> SimpleSyncTrack<T> {
         SimpleSyncTrack {
             first_pts: self.first_pts.clone(),
-            callback,
+            sink,
         }
     }
 }
 
 pub(crate) struct SimpleSyncTrack<T: InputSyncItem> {
     first_pts: Arc<Mutex<Option<Duration>>>,
-    callback: TrackCallback<T>,
+    sink: BoxedTrackSink<T>,
 }
 
 impl<T: InputSyncItem> SimpleSyncTrack<T> {
-    pub fn write_chunk(&mut self, mut item: T) {
-        // the callback may block, so the lock is released first
+    pub fn write_chunk(&mut self, mut item: T) -> Result<(), TrackClosedError> {
+        if self.sink.is_closed() {
+            return Err(TrackClosedError);
+        }
+        // the sink may block, so the lock is released first
         let first_pts = *self.first_pts.lock().unwrap().get_or_insert(item.pts());
         item.apply_anchor(TimestampAnchor {
             input_pts: first_pts,
             output_pts: Duration::ZERO,
         });
-        (self.callback)(item);
+        self.sink.send(item);
+        Ok(())
     }
 }

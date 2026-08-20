@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use super::{buffer::LiveSyncBuffer, state::SharedState};
-use crate::pipeline::utils::input_sync::TrackKind;
+use crate::pipeline::utils::input_sync::{TrackClosedError, TrackKind};
 
 /// Write handle to one track of an input; a thin wrapper around the input's
 /// shared state, which owns all state (per-track state included). Each
@@ -18,7 +18,7 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
         Self { shared, kind }
     }
 
-    pub fn write_chunk(&mut self, item: B::Chunk) {
+    pub fn write_chunk(&mut self, item: B::Chunk) -> Result<(), TrackClosedError> {
         self.shared.lock().unwrap().write_chunk(self.kind, item)
     }
 }

@@ -9,7 +9,7 @@
 //!   zero; register with `QueueTrackOffset::None` so the queue fixes the
 //!   placement on the first received packet.
 //!
-//! Chunks leave a track through the callback passed to
+//! Chunks leave a track through the sink passed to
 //! [`InputSync::add_track`], with timestamps already mapped onto the output
 //! timeline ([`InputSyncItem::apply_anchor`]).
 
@@ -18,6 +18,7 @@ use tracing::debug;
 use crate::pipeline::decoder::DecoderThreadHandle;
 use crate::prelude::*;
 
+use super::channel::{Sender, TrySendError};
 use super::live_sync::{LiveSync, LiveSyncBuffer, LiveSyncTrack};
 
 mod anchor;
@@ -36,18 +37,37 @@ pub(crate) enum TrackKind {
     Video,
 }
 
-/// Receives the chunks a track releases, with timestamps already mapped onto
-/// the output timeline. May be called while the input's sync lock is held,
-/// so it must not call back into the sync; for live inputs it also runs on
+/// Consumer of the chunks a track releases, with timestamps already mapped
+/// onto the output timeline. Called while the input's sync lock is held, so
+/// it must not call back into the sync; for live inputs it also runs on
 /// network threads and must not block.
-pub(crate) type TrackCallback<T> = Box<dyn FnMut(T) + Send>;
+pub(crate) trait TrackSink<T>: Send {
+    /// Pushes a chunk out. Anything that cannot be delivered is dropped.
+    fn send(&mut self, item: T);
+
+    /// Content sent after this call does not continue what came before: the
+    /// input timeline was dropped, so state built from it (codec parameters,
+    /// reference frames) does not describe the new one. Called between the
+    /// last item of the old timeline and the first one of the new, and only
+    /// on the track whose own timestamps broke.
+    fn on_discontinuity(&mut self) {}
+
+    /// Whether the consumer is gone. Once true it stays true.
+    fn is_closed(&self) -> bool;
+}
+
+pub(crate) type BoxedTrackSink<T> = Box<dyn TrackSink<T>>;
+
+/// The consumer of a track is gone, so nothing can be written to it anymore.
+#[derive(Debug, thiserror::Error)]
+#[error("Track is closed")]
+pub(crate) struct TrackClosedError;
 
 /// Decoder-channel convenience for [`InputSync`].
 pub(crate) trait DecoderHandleInputSyncExt<B: LiveSyncBuffer> {
     /// Registers the track of the given kind; its chunks are forwarded to
-    /// the decoder's channel wrapped in [`PipelineEvent::Data`]. The live
-    /// variant must not block on a full channel, so chunks the channel
-    /// cannot take are dropped; the non-live variant waits for room.
+    /// the decoder's channel wrapped in [`PipelineEvent::Data`]. A closed
+    /// channel is reported by [`InputSyncTrack::write_chunk`].
     fn add_track_with_handle(
         &self,
         kind: TrackKind,
@@ -64,17 +84,64 @@ impl<B: LiveSyncBuffer<Chunk = EncodedInputChunk>> DecoderHandleInputSyncExt<B> 
         let is_live = matches!(self, InputSync::Live(_));
         self.add_track(
             kind,
-            Box::new(move |chunk| {
-                let event = PipelineEvent::Data(chunk);
-                let result = match is_live {
-                    true => handle.chunk_sender.try_send(event).map_err(|_| ()),
-                    false => handle.chunk_sender.send(event).map_err(|_| ()),
-                };
-                if result.is_err() {
-                    debug!("Dropping chunk; channel full or closed");
-                }
+            Box::new(DecoderTrackSink {
+                chunk_sender: handle.chunk_sender,
+                is_live,
+                closed: false,
             }),
         )
+    }
+}
+
+/// Forwards the chunks of a track to a decoder thread. The live variant must
+/// not block on a full channel, so chunks the channel cannot take are
+/// dropped; the non-live variant waits for room.
+struct DecoderTrackSink {
+    chunk_sender: Sender<PipelineEvent<EncodedInputChunk>>,
+    is_live: bool,
+    /// Set once the decoder side is gone. Only a send can observe it, so a
+    /// track that never released anything does not notice.
+    ///
+    /// TODO: read it from the channel instead, so a track that is still
+    /// buffering sees a closed decoder too. Needs `Sender::is_closed` in
+    /// [`super::channel`], where `receiver_alive` already tracks it.
+    closed: bool,
+}
+
+impl TrackSink<EncodedInputChunk> for DecoderTrackSink {
+    fn send(&mut self, chunk: EncodedInputChunk) {
+        let event = PipelineEvent::Data(chunk);
+        match self.is_live {
+            true => match self.chunk_sender.try_send(event) {
+                Ok(()) => (),
+                Err(TrySendError::Full(_)) => debug!("Dropping chunk; decoder is not keeping up"),
+                Err(TrySendError::Disconnected(_)) => self.closed = true,
+            },
+            false => {
+                if self.chunk_sender.send(event).is_err() {
+                    self.closed = true;
+                }
+            }
+        }
+    }
+
+    // TODO: implement `on_discontinuity` once the decoder channel carries
+    // `EncodedInputEvent` instead of `EncodedInputChunk`: send
+    // `EncodedInputEvent::Discontinuity`, so the bytestream transformer
+    // re-emits the parameter sets (`H264AvccToAnnexB` keeps the config it
+    // needs for that) and the decoder drops the state built for the old
+    // timeline. The marker has to survive a full channel, so it needs to be
+    // held and sent ahead of the next chunk the channel accepts instead of
+    // being dropped like one; a lost marker leaves the decoder decoding the
+    // new timeline with the old state.
+    //
+    // A source that comes back with a different codec config needs the
+    // decoder thread respawned rather than reset, and this sink is where
+    // that decision belongs - the timestamps live sync sees cannot tell the
+    // two apart.
+
+    fn is_closed(&self) -> bool {
+        self.closed
     }
 }
 
@@ -89,16 +156,12 @@ pub(crate) enum InputSync<B: LiveSyncBuffer> {
 }
 
 impl<B: LiveSyncBuffer> InputSync<B> {
-    /// Registers the track of the given kind; `callback` receives its chunks
+    /// Registers the track of the given kind; `sink` receives its chunks
     /// once they are synchronized.
-    pub fn add_track(
-        &self,
-        kind: TrackKind,
-        callback: TrackCallback<B::Chunk>,
-    ) -> InputSyncTrack<B> {
+    pub fn add_track(&self, kind: TrackKind, sink: BoxedTrackSink<B::Chunk>) -> InputSyncTrack<B> {
         match self {
-            InputSync::Live(sync) => InputSyncTrack::Live(sync.add_track(kind, callback)),
-            InputSync::Simple(sync) => InputSyncTrack::Simple(sync.add_track(callback)),
+            InputSync::Live(sync) => InputSyncTrack::Live(sync.add_track(kind, sink)),
+            InputSync::Simple(sync) => InputSyncTrack::Simple(sync.add_track(sink)),
         }
     }
 
@@ -119,7 +182,9 @@ pub(crate) enum InputSyncTrack<B: LiveSyncBuffer> {
 }
 
 impl<B: LiveSyncBuffer> InputSyncTrack<B> {
-    pub fn write_chunk(&mut self, item: B::Chunk) {
+    /// Writes a chunk to the track. Fails once the consumer of the track is
+    /// gone; the caller is expected to stop producing for this input.
+    pub fn write_chunk(&mut self, item: B::Chunk) -> Result<(), TrackClosedError> {
         match self {
             InputSyncTrack::Live(track) => track.write_chunk(item),
             InputSyncTrack::Simple(track) => track.write_chunk(item),
