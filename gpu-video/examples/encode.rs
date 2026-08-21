@@ -1,9 +1,6 @@
 #[cfg(vulkan)]
 fn main() {
-    use std::{
-        io::{Read, Write},
-        num::NonZeroU32,
-    };
+    use std::{io::Read, num::NonZeroU32};
 
     use gpu_video::{
         InputFrame, RawFrameData, VideoInstance,
@@ -42,42 +39,50 @@ fn main() {
         .create_device(&VideoDeviceDescriptor::default())
         .unwrap();
 
+    let (h264_writer_thread_handle, h264_chunk_sender) = spawn_writer_thread("output.h264");
+    let (h265_writer_thread_handle, h265_chunk_sender) = spawn_writer_thread("output.h265");
+
     let mut encoder_h264 = video_device
-        .create_bytes_encoder_h264(EncoderParametersH264 {
-            input_parameters: VideoParameters {
-                width,
-                height,
-                target_framerate: 24.into(),
+        .create_bytes_encoder_h264(
+            EncoderParametersH264 {
+                input_parameters: VideoParameters {
+                    width,
+                    height,
+                    target_framerate: 24.into(),
+                },
+                output_parameters: video_device
+                    .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
+                        average_bitrate: 1_000_000,
+                        max_bitrate: 2_000_000,
+                        virtual_buffer_size: std::time::Duration::from_secs(2),
+                    })
+                    .unwrap(),
+                max_in_flight_submissions: None,
             },
-            output_parameters: video_device
-                .encoder_output_parameters_h264_high_quality(RateControl::VariableBitrate {
-                    average_bitrate: 1_000_000,
-                    max_bitrate: 2_000_000,
-                    virtual_buffer_size: std::time::Duration::from_secs(2),
-                })
-                .unwrap(),
-        })
+            move |chunk| h264_chunk_sender.send(chunk).unwrap(),
+        )
         .expect("create encoder");
 
     let mut encoder_h265 = video_device
-        .create_bytes_encoder_h265(EncoderParametersH265 {
-            input_parameters: VideoParameters {
-                width,
-                height,
-                target_framerate: 24.into(),
+        .create_bytes_encoder_h265(
+            EncoderParametersH265 {
+                input_parameters: VideoParameters {
+                    width,
+                    height,
+                    target_framerate: 24.into(),
+                },
+                output_parameters: video_device
+                    .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
+                        average_bitrate: 1_000_000,
+                        max_bitrate: 2_000_000,
+                        virtual_buffer_size: std::time::Duration::from_secs(2),
+                    })
+                    .unwrap(),
+                max_in_flight_submissions: None,
             },
-            output_parameters: video_device
-                .encoder_output_parameters_h265_high_quality(RateControl::VariableBitrate {
-                    average_bitrate: 1_000_000,
-                    max_bitrate: 2_000_000,
-                    virtual_buffer_size: std::time::Duration::from_secs(2),
-                })
-                .unwrap(),
-        })
+            move |chunk| h265_chunk_sender.send(chunk).unwrap(),
+        )
         .expect("create encoder");
-
-    let mut output_file_h264 = std::fs::File::create("output.h264").unwrap();
-    let mut output_file_h265 = std::fs::File::create("output.h265").unwrap();
 
     let mut frame = InputFrame {
         data: RawFrameData {
@@ -89,11 +94,37 @@ fn main() {
     };
 
     while let Ok(()) = nv12.read_exact(&mut frame.data.frame) {
-        let h264 = encoder_h264.encode(&frame, false).expect("encode");
-        output_file_h264.write_all(&h264.data).expect("write");
-        let h265 = encoder_h265.encode(&frame, false).expect("encode");
-        output_file_h265.write_all(&h265.data).expect("write");
+        encoder_h264.encode(&frame, false).expect("encode");
+        encoder_h265.encode(&frame, false).expect("encode");
     }
+
+    encoder_h264.flush().expect("flush");
+    encoder_h265.flush().expect("flush");
+    drop(encoder_h264);
+    drop(encoder_h265);
+
+    h264_writer_thread_handle.join().unwrap();
+    h265_writer_thread_handle.join().unwrap();
+}
+
+#[cfg(vulkan)]
+fn spawn_writer_thread(
+    file_name: &'static str,
+) -> (
+    std::thread::JoinHandle<()>,
+    std::sync::mpsc::Sender<gpu_video::EncodedOutputChunk<Vec<u8>>>,
+) {
+    use std::io::Write;
+
+    let (chunk_sender, chunk_receiver) =
+        std::sync::mpsc::channel::<gpu_video::EncodedOutputChunk<Vec<u8>>>();
+    let writer_thread_handle = std::thread::spawn(move || {
+        let mut output_file = std::fs::File::create(file_name).unwrap();
+        for chunk in chunk_receiver.iter() {
+            output_file.write_all(&chunk.data).unwrap();
+        }
+    });
+    (writer_thread_handle, chunk_sender)
 }
 
 #[cfg(not(vulkan))]
