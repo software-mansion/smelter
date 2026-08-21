@@ -16,7 +16,9 @@ use crate::backends::vulkan::{
     },
     vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers, VulkanDecoderError},
     vulkan_device::DecodingDevice,
-    wrappers::{DecodeInputBufferPool, DecodingQueryPool, OpenCommandBuffer, VideoSession},
+    wrappers::{
+        DecodeInputBufferPool, OpenCommandBuffer, QueryPool, ResultQueryPool, VideoSession,
+    },
 };
 
 mod images;
@@ -29,7 +31,7 @@ pub(super) struct VideoSessionResources<'a> {
     pub(crate) decoding_images: DecodingImages<'a>,
     pub(crate) sps: FxHashMap<u8, SeqParameterSet>,
     pub(crate) pps: FxHashMap<(u8, u8), PicParameterSet>,
-    pub(crate) decode_query_pool: Option<DecodingQueryPool>,
+    pub(crate) decode_query_pool: Option<ResultQueryPool<vk::QueryResultStatusKHR>>,
     pub(crate) decode_buffer_pool: DecodeInputBufferPool<'a>,
     parameters_scheduled_for_reset: Option<SessionParams<'a>>,
     image_modifiers: ImageModifiers,
@@ -126,8 +128,8 @@ impl<'a> VideoSessionResources<'a> {
             .h264_decode_queues
             .supports_result_status_queries()
         {
-            Some(DecodingQueryPool::new(
-                decoding_device.vulkan_device.device.clone(),
+            Some(Self::new_query_pool(
+                decoding_device,
                 profile_info.profile_info.profile_info,
                 decode_query_pool_size,
             )?)
@@ -245,8 +247,8 @@ impl<'a> VideoSessionResources<'a> {
 
         if self.parameters.profile_info != params.profile_info {
             self.decode_query_pool = match self.decode_query_pool.as_ref() {
-                Some(pool) => Some(DecodingQueryPool::new(
-                    decoding_device.vulkan_device.device.clone(),
+                Some(pool) => Some(Self::new_query_pool(
+                    decoding_device,
                     params.profile_info.profile_info.profile_info,
                     pool.query_count(),
                 )?),
@@ -344,6 +346,22 @@ impl<'a> VideoSessionResources<'a> {
         )?;
 
         Ok(decoding_images)
+    }
+
+    fn new_query_pool(
+        device: &DecodingDevice,
+        profile: vk::VideoProfileInfoKHR,
+        query_count: u32,
+    ) -> Result<ResultQueryPool<vk::QueryResultStatusKHR>, VulkanDecoderError> {
+        let pool = QueryPool::new(
+            device.device.clone(),
+            vk::QueryType::RESULT_STATUS_ONLY_KHR,
+            query_count,
+            Some(profile),
+            None::<vk::VideoProfileInfoKHR>, // ugh.....
+        )?;
+
+        Ok(ResultQueryPool::new(pool, query_count))
     }
 
     pub(crate) fn free_reference_picture(&mut self, i: usize) {

@@ -4,8 +4,8 @@ use std::sync::Arc;
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl};
 use crate::{
-    BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, OutputFrame, RawFrameData,
-    VideoDecoderError, VideoEncoderError,
+    BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, EncodedOutputChunk, OutputFrame,
+    RawFrameData, VideoDecoderError, VideoEncoderError,
 };
 
 #[cfg(feature = "wgpu")]
@@ -224,6 +224,10 @@ pub struct EncoderOutputParameters<P> {
 pub struct EncoderParametersH264 {
     pub input_parameters: VideoParameters,
     pub output_parameters: EncoderOutputParameters<H264Profile>,
+    /// Maximum number of encode submissions that can be in flight. When the limit is reached,
+    /// encoding blocks until the oldest submission finishes.
+    /// If [`None`], defaults to 3.
+    pub max_in_flight_submissions: Option<u32>,
 }
 
 /// Parameters for H.265 encoder creation
@@ -231,6 +235,10 @@ pub struct EncoderParametersH264 {
 pub struct EncoderParametersH265 {
     pub input_parameters: VideoParameters,
     pub output_parameters: EncoderOutputParameters<H265Profile>,
+    /// Maximum number of encode submissions that can be in flight. When the limit is reached,
+    /// encoding blocks until the oldest submission finishes.
+    /// If [`None`], defaults to 3.
+    pub max_in_flight_submissions: Option<u32>,
 }
 
 pub(crate) trait CoreVideoDeviceBackend: Send + Sync {
@@ -243,11 +251,13 @@ pub(crate) trait CoreVideoDeviceBackend: Send + Sync {
     fn create_bytes_encoder_h264(
         self: Arc<Self>,
         parameters: EncoderParametersH264,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH264, VideoEncoderError>;
 
     fn create_bytes_encoder_h265(
         self: Arc<Self>,
         parameters: EncoderParametersH265,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH265, VideoEncoderError>;
 
     #[cfg(feature = "transcoder")]
