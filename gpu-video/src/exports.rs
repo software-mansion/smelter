@@ -230,26 +230,58 @@ impl VideoDevice {
         self.inner.clone().create_transcoder(parameters)
     }
 
-    pub fn create_bytes_encoder_h264(
+    /// Creates an H.264 encoder that sends each encoded frame via callback.
+    ///
+    /// Heavy work in the callback can delay the delivery of chunks and block [`BytesEncoderH264::encode`].
+    /// On vulkan, the delivery is done on one thread that's shared between all decoders and
+    /// encoders, so a slow callback would affect them all.
+    pub fn create_bytes_encoder_h264<F>(
         &self,
         parameters: EncoderParametersH264,
-    ) -> Result<BytesEncoderH264, VideoEncoderError> {
-        self.inner.clone().create_bytes_encoder_h264(parameters)
+        on_chunk: F,
+    ) -> Result<BytesEncoderH264, VideoEncoderError>
+    where
+        F: FnMut(EncodedOutputChunk<Vec<u8>>) + Send + 'static,
+    {
+        self.inner
+            .clone()
+            .create_bytes_encoder_h264(parameters, Box::new(on_chunk))
     }
 
-    pub fn create_bytes_encoder_h265(
+    /// Creates an H.265 encoder that sends each encoded frame via callback.
+    ///
+    /// Heavy work in the callback can delay the delivery of chunks and block [`BytesEncoderH265::encode`].
+    /// On vulkan, the delivery is done on one thread that's shared between all decoders and
+    /// encoders, so a slow callback would affect them all.
+    pub fn create_bytes_encoder_h265<F>(
         &self,
         parameters: EncoderParametersH265,
-    ) -> Result<BytesEncoderH265, VideoEncoderError> {
-        self.inner.clone().create_bytes_encoder_h265(parameters)
+        on_chunk: F,
+    ) -> Result<BytesEncoderH265, VideoEncoderError>
+    where
+        F: FnMut(EncodedOutputChunk<Vec<u8>>) + Send + 'static,
+    {
+        self.inner
+            .clone()
+            .create_bytes_encoder_h265(parameters, Box::new(on_chunk))
     }
 
+    /// Creates an H.264 encoder that takes input frames as [`wgpu::Texture`]s and sends each
+    /// encoded frame via callback.
+    ///
+    /// Heavy work in the callback can delay the delivery of chunks and block [`WgpuTexturesEncoderH264::encode`].
+    /// On vulkan, the delivery is done on one thread that's shared between all decoders and
+    /// encoders, so a slow callback would affect them all.
     #[cfg(feature = "wgpu")]
-    pub fn create_wgpu_textures_encoder_h264(
+    pub fn create_wgpu_textures_encoder_h264<F>(
         &self,
         wgpu_queue: &wgpu::Queue,
         parameters: EncoderParametersH264,
-    ) -> Result<WgpuTexturesEncoderH264, VideoEncoderError> {
+        on_chunk: F,
+    ) -> Result<WgpuTexturesEncoderH264, VideoEncoderError>
+    where
+        F: FnMut(EncodedOutputChunk<Vec<u8>>) + Send + 'static,
+    {
         let Some(wgpu_device) = self.wgpu_device.clone() else {
             return Err(VideoEncoderError::VideoDeviceWithoutWgpu);
         };
@@ -258,15 +290,26 @@ impl VideoDevice {
             wgpu_device,
             wgpu_queue.clone(),
             parameters,
+            Box::new(on_chunk),
         )
     }
 
+    /// Creates an H.265 encoder that takes input frames as [`wgpu::Texture`]s and sends each
+    /// encoded frame via callback.
+    ///
+    /// Heavy work in the callback can delay the delivery of chunks and block [`WgpuTexturesEncoderH265::encode`].
+    /// On vulkan, the delivery is done on one thread that's shared between all decoders and
+    /// encoders, so a slow callback would affect them all.
     #[cfg(feature = "wgpu")]
-    pub fn create_wgpu_textures_encoder_h265(
+    pub fn create_wgpu_textures_encoder_h265<F>(
         &self,
         wgpu_queue: &wgpu::Queue,
         parameters: EncoderParametersH265,
-    ) -> Result<WgpuTexturesEncoderH265, VideoEncoderError> {
+        on_chunk: F,
+    ) -> Result<WgpuTexturesEncoderH265, VideoEncoderError>
+    where
+        F: FnMut(EncodedOutputChunk<Vec<u8>>) + Send + 'static,
+    {
         let Some(wgpu_device) = self.wgpu_device.clone() else {
             return Err(VideoEncoderError::VideoDeviceWithoutWgpu);
         };
@@ -275,6 +318,7 @@ impl VideoDevice {
             wgpu_device,
             wgpu_queue.clone(),
             parameters,
+            Box::new(on_chunk),
         )
     }
 
@@ -360,6 +404,7 @@ impl VideoDevice {
             inline_stream_params: None,
             color_space: None,
             color_range: None,
+            max_in_flight_submissions: None,
         }
     }
 
@@ -377,6 +422,7 @@ impl VideoDevice {
             inline_stream_params: None,
             color_space: None,
             color_range: None,
+            max_in_flight_submissions: None,
         }
     }
 }

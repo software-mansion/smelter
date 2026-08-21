@@ -7,7 +7,7 @@ use gpu_video::{
 #[cfg(vulkan)]
 fn main() {
     use gpu_video::{
-        InputFrame,
+        EncodedOutputChunk, InputFrame,
         parameters::{RateControl, VideoDeviceDescriptor, VideoParameters},
     };
     use std::{io::Write, num::NonZeroU32};
@@ -51,6 +51,32 @@ fn main() {
 
     let video_device = device.video().unwrap();
 
+    // TODO: remake this example
+    let (h264_chunk_sender, h264_chunk_receiver) =
+        std::sync::mpsc::channel::<EncodedOutputChunk<Vec<u8>>>();
+    let (h265_chunk_sender, h265_chunk_receiver) =
+        std::sync::mpsc::channel::<EncodedOutputChunk<Vec<u8>>>();
+
+    let h264_waiter_thread_handle = std::thread::spawn(move || {
+        let mut output_file = std::fs::File::create("output.h264").unwrap();
+        for chunk in h264_chunk_receiver.iter() {
+            output_file.write_all(&chunk.data).unwrap();
+        }
+    });
+    let h265_waiter_thread_handle = std::thread::spawn(move || {
+        let mut output_file = std::fs::File::create("output.h265").unwrap();
+        for chunk in h265_chunk_receiver.iter() {
+            output_file.write_all(&chunk.data).unwrap();
+        }
+    });
+
+    let on_h264_chunk = move |chunk| {
+        h264_chunk_sender.send(chunk).unwrap();
+    };
+    let on_h265_chunk = move |chunk| {
+        h265_chunk_sender.send(chunk).unwrap();
+    };
+
     let mut encoder_h264 = video_device
         .create_wgpu_textures_encoder_h264(
             &queue,
@@ -68,6 +94,7 @@ fn main() {
                     })
                     .unwrap(),
             },
+            on_h264_chunk,
         )
         .unwrap();
 
@@ -88,19 +115,17 @@ fn main() {
                     })
                     .unwrap(),
             },
+            on_h265_chunk,
         )
         .unwrap();
 
     let wgpu_state = WgpuState::new(device, queue, width, height);
 
-    let mut output_file_h264 = std::fs::File::create("output.h264").unwrap();
-    let mut output_file_h265 = std::fs::File::create("output.h265").unwrap();
-
     for i in 0..frame_count {
         let time = 1.0 / 30.0 * i as f32;
         wgpu_state.render(time);
 
-        let h264 = encoder_h264
+        encoder_h264
             .encode(
                 InputFrame {
                     data: wgpu_state.nv12_texture.clone(),
@@ -109,9 +134,8 @@ fn main() {
                 false,
             )
             .unwrap();
-        output_file_h264.write_all(&h264.data).unwrap();
 
-        let h265 = encoder_h265
+        encoder_h265
             .encode(
                 InputFrame {
                     data: wgpu_state.nv12_texture.clone(),
@@ -120,8 +144,15 @@ fn main() {
                 false,
             )
             .unwrap();
-        output_file_h265.write_all(&h265.data).unwrap();
     }
+
+    encoder_h264.flush().unwrap();
+    encoder_h265.flush().unwrap();
+    drop(encoder_h264);
+    drop(encoder_h265);
+
+    h264_waiter_thread_handle.join().unwrap();
+    h265_waiter_thread_handle.join().unwrap();
 }
 
 #[cfg(vulkan)]

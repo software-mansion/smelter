@@ -11,7 +11,7 @@ use crate::backends::vulkan::vulkan_decoder::decoders_h264::VulkanBytesDecoderH2
 use crate::backends::vulkan::vulkan_encoder::FullEncoderParameters;
 use crate::backends::vulkan::waiter_thread::{WaiterThread, WaiterThreadHandle};
 use crate::backends::vulkan::{
-    VulkanAdapter, VulkanAdapterInfo, VulkanDecoderError, VulkanEncoder, VulkanEncoderError,
+    VulkanAdapter, VulkanAdapterInfo, VulkanCallbackEncoder, VulkanDecoderError, VulkanEncoderError
 };
 use crate::backends::vulkan::{VulkanCommonError, wrappers::*};
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
@@ -21,8 +21,8 @@ use crate::device::{
 };
 use crate::parameters::EncoderPreset;
 use crate::{
-    BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, OutputFrame, RawFrameData,
-    VideoBackendError, VideoDecoderError, VideoDeviceInitError, VideoEncoderError,
+    BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, EncodedOutputChunk, OutputFrame,
+    RawFrameData, VideoBackendError, VideoDecoderError, VideoDeviceInitError, VideoEncoderError,
 };
 
 use self::caps::{
@@ -60,15 +60,19 @@ impl CoreVideoDeviceBackend for VulkanDevice {
     fn create_bytes_encoder_h264(
         self: Arc<Self>,
         parameters: EncoderParametersH264,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH264, VideoEncoderError> {
-        VulkanDevice::create_bytes_encoder_h264(self, parameters).map_err(Into::into)
+        VulkanDevice::create_bytes_encoder_h264(self, parameters, on_chunk_callback)
+            .map_err(Into::into)
     }
 
     fn create_bytes_encoder_h265(
         self: Arc<Self>,
         parameters: EncoderParametersH265,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH265, VideoEncoderError> {
-        VulkanDevice::create_bytes_encoder_h265(self, parameters).map_err(Into::into)
+        VulkanDevice::create_bytes_encoder_h265(self, parameters, on_chunk_callback)
+            .map_err(Into::into)
     }
 
     #[cfg(feature = "transcoder")]
@@ -258,6 +262,7 @@ impl VulkanDevice {
     pub fn create_bytes_encoder_h264(
         self: Arc<Self>,
         parameters: EncoderParametersH264,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH264, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
             parameters.output_parameters,
@@ -267,9 +272,11 @@ impl VulkanDevice {
         )?;
 
         Ok(BytesEncoderH264 {
-            encoder: Box::new(VulkanEncoder::new(
+            encoder: Box::new(VulkanCallbackEncoder::new(
                 Arc::new(self.encoding_device()?),
                 parameters,
+                on_chunk_callback,
+                self.waiter_thread.clone(),
             )?),
         })
     }
@@ -277,6 +284,7 @@ impl VulkanDevice {
     pub fn create_bytes_encoder_h265(
         self: Arc<Self>,
         parameters: EncoderParametersH265,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH265, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
             parameters.output_parameters,
@@ -286,9 +294,11 @@ impl VulkanDevice {
         )?;
 
         Ok(BytesEncoderH265 {
-            encoder: Box::new(VulkanEncoder::new(
+            encoder: Box::new(VulkanCallbackEncoder::new(
                 Arc::new(self.encoding_device()?),
                 parameters,
+                on_chunk_callback,
+                self.waiter_thread.clone(),
             )?),
         })
     }
@@ -467,6 +477,9 @@ impl VulkanDevice {
             inline_stream_params: encoder_parameters.inline_stream_params.unwrap_or(true),
             color_space,
             color_range,
+            max_in_flight_submissions: encoder_parameters
+                .max_in_flight_submissions
+                .unwrap_or(NonZeroU32::new(3).unwrap()),
         })
     }
 }

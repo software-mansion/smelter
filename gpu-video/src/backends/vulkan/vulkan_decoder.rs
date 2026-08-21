@@ -875,17 +875,11 @@ pub enum VulkanDecoderError {
     )]
     NonExistentReferenceRequested,
 
-    #[error("A vulkan decode operation failed with code {0:?}")]
-    DecodeOperationFailed(vk::QueryResultStatusKHR),
-
     #[error("Invalid input data for the decoder: {0}.")]
     InvalidInputData(String),
 
     #[error("Monochrome video is not supported")]
     MonochromeChromaFormatUnsupported,
-
-    #[error("Timed out waiting for a decode submission to finish")]
-    SubmissionWaitTimeout,
 
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
@@ -898,11 +892,12 @@ impl From<VulkanDecoderError> for VideoDecoderError {
             VulkanDecoderError::InvalidInputData(err_msg) => {
                 VideoDecoderError::InvalidInputData(err_msg)
             }
-            VulkanDecoderError::SubmissionWaitTimeout => VideoDecoderError::DecodeSubmissionTimeout,
+            VulkanDecoderError::VulkanCommonError(VulkanCommonError::SubmissionWaitTimeout) => {
+                VideoDecoderError::DecodeSubmissionTimeout
+            }
             VulkanDecoderError::VkError(_)
             | VulkanDecoderError::NoSession
             | VulkanDecoderError::NonExistentReferenceRequested
-            | VulkanDecoderError::DecodeOperationFailed(_)
             | VulkanDecoderError::MonochromeChromaFormatUnsupported
             | VulkanDecoderError::VulkanCommonError(_) => Self::BackendError(VideoBackendError {
                 message: err.to_string(),
@@ -976,7 +971,7 @@ impl Drop for InFlightDecodeResources {
 pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
     pub(crate) decode_result: DecodeResult<DecodeSubmissionImageInfo>,
     pub(crate) decoder: &'borrow mut VulkanDecoder<'decoder>,
-    pub(crate) result_query: Option<DecodeResultQuery>,
+    pub(crate) result_query: Option<ResultQuery<vk::QueryResultStatusKHR>>,
     #[cfg_attr(not(feature = "transcoder"), expect(dead_code))]
     pub(crate) semaphore_wait_value: SemaphoreWaitValue,
     pub(crate) in_flight_resources: InFlightDecodeResources,
@@ -1025,7 +1020,7 @@ impl DecodeSubmission<'_, '_> {
 pub(crate) struct DownloadFrameSubmission<T> {
     pub(crate) frame: T,
     pub(crate) decode_metadata: DecodeResultMetadata,
-    pub(crate) result_query: Option<DecodeResultQuery>,
+    pub(crate) result_query: Option<ResultQuery<vk::QueryResultStatusKHR>>,
     pub(crate) _in_flight_resources: InFlightDecodeResources,
 }
 
@@ -1056,11 +1051,12 @@ impl DownloadFrameSubmission<Buffer> {
 }
 
 impl<T> DownloadFrameSubmission<T> {
-    pub(crate) fn check_decode_results(&self) -> Result<(), VulkanDecoderError> {
-        let Some(query) = &self.result_query else {
-            return Ok(());
+    pub(crate) fn check_decode_results(&self) -> Result<(), VulkanCommonError> {
+        if let Some(query) = &self.result_query {
+            query.check_results_blocking()?;
         };
-        query.check_results_blocking()
+
+        Ok(())
     }
 }
 
