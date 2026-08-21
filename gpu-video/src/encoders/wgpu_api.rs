@@ -1,5 +1,5 @@
 use crate::{
-    EncodedOutputChunk, InputFrame, VideoEncoderError,
+    InputFrame, VideoEncoderError,
     encoders::{VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
 };
 
@@ -10,7 +10,9 @@ pub(crate) trait WgpuVideoEncoderBackend: Send {
         wgpu_queue: &wgpu::Queue,
         frame: InputFrame<wgpu::Texture>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError>;
+    ) -> Result<(), VideoEncoderError>;
+
+    fn flush(&mut self) -> Result<(), VideoEncoderError>;
 }
 
 pub(crate) trait WgpuVideoEncoderBackendH264:
@@ -39,18 +41,32 @@ pub struct WgpuTexturesEncoderH264 {
 }
 
 impl WgpuTexturesEncoderH264 {
-    /// The result is a chunk of H264 bitstream.
+    /// Encode a frame. The resulting chunks of H264 bitstream are sent via the callback provided
+    /// at encoder creation.
     ///
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
     /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
     /// Otherwise, the encoder will decide which frames should be coded this way.
+    ///
+    /// If [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
+    /// encode submissions are already in flight, this blocks until all submissions above the limit finish.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode(
         &mut self,
         frame: InputFrame<wgpu::Texture>,
         force_keyframe: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    ) -> Result<(), VideoEncoderError> {
         self.encoder
             .encode_texture(&self.wgpu_device, &self.wgpu_queue, frame, force_keyframe)
+    }
+
+    /// Flush all chunks from the encoder.
+    /// This blocks until all chunks have been sent via the provided callback.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
+    pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
+        self.encoder.flush()
     }
 
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
@@ -78,18 +94,32 @@ pub struct WgpuTexturesEncoderH265 {
 }
 
 impl WgpuTexturesEncoderH265 {
-    /// The result is a chunk of H265 bitstream.
+    /// Encode a frame. The resulting chunks of H265 bitstream are sent via the callback provided
+    /// at encoder creation.
     ///
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
     /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
     /// Otherwise, the encoder will decide which frames should be coded this way.
+    ///
+    /// If [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
+    /// encode submissions are already in flight, this blocks until all submissions above the limit finish.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode(
         &mut self,
         frame: InputFrame<wgpu::Texture>,
         force_keyframe: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    ) -> Result<(), VideoEncoderError> {
         self.encoder
             .encode_texture(&self.wgpu_device, &self.wgpu_queue, frame, force_keyframe)
+    }
+
+    /// Flush all chunks from the encoder.
+    /// This blocks until all chunks have been sent via the provided callback.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
+    pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
+        self.encoder.flush()
     }
 
     /// Retrieve encoded VPS NAL units from the video session parameters, in Annex B.

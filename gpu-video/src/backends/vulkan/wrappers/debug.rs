@@ -151,10 +151,10 @@ impl DecodingQueryPool {
         self.query_count
     }
 
-    pub(crate) fn query(&self) -> DecodeResultQuery {
+    pub(crate) fn query(&self) -> ResultQuery {
         let query_index = self.freelist.lock().unwrap().pop().unwrap();
 
-        DecodeResultQuery {
+        ResultQuery {
             pool: self.pool.clone(),
             query_index,
             freelist: Arc::downgrade(&self.freelist),
@@ -162,13 +162,25 @@ impl DecodingQueryPool {
     }
 }
 
-pub(crate) struct DecodeResultQuery {
+pub(crate) struct ResultQuery {
     pool: Arc<QueryPool>,
     query_index: u32,
     freelist: Weak<Mutex<Vec<u32>>>,
 }
 
-impl DecodeResultQuery {
+impl ResultQuery {
+    pub(crate) fn new(
+        pool: Arc<QueryPool>,
+        query_index: u32,
+        freelist: Weak<Mutex<Vec<u32>>>,
+    ) -> Self {
+        Self {
+            pool,
+            query_index,
+            freelist,
+        }
+    }
+
     pub(crate) fn reset(&self, buffer: vk::CommandBuffer) {
         self.pool.reset(buffer, self.query_index);
     }
@@ -181,22 +193,22 @@ impl DecodeResultQuery {
         self.pool.end_query(buffer, self.query_index);
     }
 
-    fn get_result_blocking(&self) -> Result<vk::QueryResultStatusKHR, VulkanDecoderError> {
-        let mut result = vk::QueryResultStatusKHR::NOT_READY;
+    pub(crate) fn get_result_blocking<T: ResultQueryOutput>(&self) -> Result<T, VulkanCommonError> {
+        let mut result = [T::default()];
         unsafe {
             self.pool.device.get_query_pool_results(
                 self.pool.pool,
                 self.query_index,
-                std::slice::from_mut(&mut result),
+                &mut result,
                 vk::QueryResultFlags::WAIT | vk::QueryResultFlags::WITH_STATUS_KHR,
             )?
         };
 
-        Ok(result)
+        Ok(result[0].clone())
     }
 
     pub(crate) fn check_results_blocking(&self) -> Result<(), VulkanDecoderError> {
-        let result = self.get_result_blocking()?;
+        let result = self.get_result_blocking::<vk::QueryResultStatusKHR>()?;
         if result.as_raw() < 0 {
             return Err(VulkanDecoderError::DecodeOperationFailed(result));
         }
@@ -205,13 +217,17 @@ impl DecodeResultQuery {
     }
 }
 
-impl Drop for DecodeResultQuery {
+impl Drop for ResultQuery {
     fn drop(&mut self) {
         if let Some(freelist) = self.freelist.upgrade() {
             freelist.lock().unwrap().push(self.query_index);
         }
     }
 }
+
+pub(crate) trait ResultQueryOutput: Default + Clone {}
+
+impl ResultQueryOutput for vk::QueryResultStatusKHR {}
 
 pub(crate) struct QueryPool {
     pub(crate) pool: vk::QueryPool,

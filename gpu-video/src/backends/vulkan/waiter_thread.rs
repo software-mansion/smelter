@@ -1,6 +1,11 @@
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    collections::VecDeque,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc::Receiver,
+    },
+    time::Duration,
 };
 
 use ash::vk;
@@ -9,7 +14,7 @@ use tracing::debug;
 
 use crate::backends::vulkan::{
     VulkanCommonError,
-    wrappers::{Device, SemaphoreWaitValue, TimelineSemaphore},
+    wrappers::{CommandBufferPoolStorage, Device, SemaphoreWaitValue, TimelineSemaphore},
 };
 
 struct SharedState {
@@ -137,6 +142,86 @@ pub(crate) struct SubmissionWaitRequest {
     pub(crate) semaphore: Arc<TimelineSemaphore>,
     pub(crate) wait_for: SemaphoreWaitValue,
     pub(crate) on_finish: Box<dyn FnOnce() + Send>,
+}
+
+pub(crate) struct SubmissionTracker<P: CommandBufferPoolStorage> {
+    waiter_thread: Arc<WaiterThreadHandle>,
+    semaphore: Arc<TimelineSemaphore>,
+    command_buffer_pools: P,
+
+    max_in_flight: usize,
+    in_flight: VecDeque<Receiver<()>>,
+
+    submission_failed: Arc<AtomicBool>,
+}
+
+impl<P: CommandBufferPoolStorage + Clone + Send + 'static> SubmissionTracker<P> {
+    pub(crate) fn new(
+        command_buffer_pools: P,
+        semaphore: Arc<TimelineSemaphore>,
+        waiter_thread: Arc<WaiterThreadHandle>,
+        max_in_flight: usize,
+        submission_failed: Arc<AtomicBool>,
+    ) -> Self {
+        Self {
+            waiter_thread,
+            semaphore,
+            command_buffer_pools,
+            max_in_flight,
+            in_flight: VecDeque::new(),
+            submission_failed,
+        }
+    }
+
+    pub(crate) fn add_wait_request<E: std::fmt::Display>(
+        &mut self,
+        wait_for: SemaphoreWaitValue,
+        on_finish: impl FnOnce() -> Result<(), E> + Send + 'static,
+    ) -> Result<(), VulkanCommonError> {
+        let command_buffer_pools = self.command_buffer_pools.clone();
+        let submission_failed = self.submission_failed.clone();
+        let (finished_sender, finished_receiver) = std::sync::mpsc::channel();
+
+        self.waiter_thread.submit(SubmissionWaitRequest {
+            semaphore: self.semaphore.clone(),
+            wait_for,
+            on_finish: Box::new(move || {
+                command_buffer_pools.mark_submitted_as_free(wait_for);
+                if let Err(err) = on_finish() {
+                    debug!("Submission processing failed: {err}");
+                    submission_failed.store(true, Ordering::Relaxed);
+                }
+                let _ = finished_sender.send(());
+            }),
+        })?;
+
+        self.in_flight.push_back(finished_receiver);
+        Ok(())
+    }
+
+    pub(crate) fn wait_if_full(&mut self) -> Result<(), VulkanCommonError> {
+        while self.in_flight.len() >= self.max_in_flight {
+            self.in_flight
+                .front()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(1))
+                .map_err(|_| VulkanCommonError::SubmissionWaitTimeout)?;
+            self.in_flight.pop_front();
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn wait_for_all(&mut self) -> Result<(), VulkanCommonError> {
+        while let Some(receiver) = self.in_flight.front() {
+            receiver
+                .recv_timeout(Duration::from_secs(1))
+                .map_err(|_| VulkanCommonError::SubmissionWaitTimeout)?;
+            self.in_flight.pop_front();
+        }
+
+        Ok(())
+    }
 }
 
 struct InterruptSemaphore {

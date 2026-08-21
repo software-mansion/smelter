@@ -884,9 +884,6 @@ pub enum VulkanDecoderError {
     #[error("Monochrome video is not supported")]
     MonochromeChromaFormatUnsupported,
 
-    #[error("Timed out waiting for a decode submission to finish")]
-    SubmissionWaitTimeout,
-
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
 }
@@ -903,7 +900,6 @@ impl From<VulkanDecoderError> for VideoDecoderError {
             | VulkanDecoderError::NonExistentReferenceRequested
             | VulkanDecoderError::DecodeOperationFailed(_)
             | VulkanDecoderError::MonochromeChromaFormatUnsupported
-            | VulkanDecoderError::SubmissionWaitTimeout
             | VulkanDecoderError::VulkanCommonError(_) => Self::BackendError(VideoBackendError {
                 message: err.to_string(),
                 source: Box::new(err),
@@ -976,7 +972,7 @@ impl Drop for InFlightDecodeResources {
 pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
     pub(crate) decode_result: DecodeResult<DecodeSubmissionImageInfo>,
     pub(crate) decoder: &'borrow mut VulkanDecoder<'decoder>,
-    pub(crate) decode_query_pool: Option<DecodeResultQuery>,
+    pub(crate) decode_query_pool: Option<ResultQuery>,
     #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     pub(crate) semaphore_wait_value: SemaphoreWaitValue,
     pub(crate) in_flight_resources: InFlightDecodeResources,
@@ -1025,7 +1021,7 @@ impl DecodeSubmission<'_, '_> {
 pub(crate) struct DownloadFrameSubmission<T> {
     pub(crate) frame: T,
     pub(crate) decode_metadata: DecodeResultMetadata,
-    pub(crate) decode_query_pool: Option<DecodeResultQuery>,
+    pub(crate) decode_query_pool: Option<ResultQuery>,
     pub(crate) _in_flight_resources: InFlightDecodeResources,
 }
 

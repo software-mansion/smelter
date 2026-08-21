@@ -24,7 +24,7 @@ pub use vulkan_device::{VulkanDevice, VulkanDeviceInitError};
 #[cfg(feature = "transcoder")]
 pub use vulkan_transcoder::{VulkanTranscoder, VulkanTranscoderError};
 // TODO: expose-backend api
-pub(crate) use vulkan_encoder::{VulkanEncoder, VulkanEncoderError};
+pub(crate) use vulkan_encoder::VulkanEncoderError;
 pub use vulkan_instance::{VulkanInstance, VulkanInstanceInitError};
 
 pub struct VulkanBackend;
@@ -96,8 +96,8 @@ pub enum VulkanCommonError {
     #[error("DPB can have at most 32 slots, {0} was requested")]
     DpbTooLong(u32),
 
-    #[error("Tried to wait for an unsignaled semaphore value")]
-    SemaphoreWaitOnUnsignaledValue,
+    #[error("Timed out waiting for a submission to finish")]
+    SubmissionWaitTimeout,
 
     #[error("Tried to register {0:x?} as a new image, while it already exists")]
     RegisteredNewImageTwice(ImageKey),

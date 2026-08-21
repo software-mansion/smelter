@@ -66,6 +66,7 @@ pub(crate) struct Queues {
     pub(crate) compute: Queue,
     pub(crate) h264_decode: Option<Arc<VideoQueues>>,
     pub(crate) encode: Option<Arc<VideoQueues>>,
+    #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
     pub(crate) wgpu: Queue,
 }
 

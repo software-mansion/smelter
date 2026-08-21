@@ -8,6 +8,7 @@ use crate::backends::vulkan::{
     codec::h264::parameters::H264DecodeProfileInfo,
     vulkan_decoder::VulkanDecoderError,
     vulkan_device::EncodingDevice,
+    vulkan_encoder::VulkanEncoderError,
     wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
 };
 
@@ -162,6 +163,115 @@ impl DecodeInputBuffer {
         Ok(())
     }
 
+    pub(crate) fn release_to_pool(self) {
+        if let Some(pool_freelist) = self.pool_freelist.upgrade() {
+            pool_freelist.lock().unwrap().push(self);
+        }
+    }
+}
+
+pub(crate) struct EncodeOutputBufferPool<'a> {
+    freelist: Arc<Mutex<Vec<EncodeOutputBuffer>>>,
+    allocator: Arc<Allocator>,
+    profile: Arc<ProfileInfo<'a>>,
+    buffer_len: u64,
+}
+
+impl<'a> EncodeOutputBufferPool<'a> {
+    pub(crate) fn new(
+        allocator: Arc<Allocator>,
+        profile: Arc<ProfileInfo<'a>>,
+        buffer_len: u64,
+    ) -> Self {
+        Self {
+            allocator,
+            freelist: Arc::new(Mutex::new(Vec::new())),
+            profile,
+            buffer_len,
+        }
+    }
+
+    pub(crate) fn buffer(&mut self) -> Result<EncodeOutputBuffer, VulkanEncoderError> {
+        if let Some(buffer) = self.freelist.lock().unwrap().pop() {
+            return Ok(buffer);
+        }
+
+        let buffer = Buffer::new_encode(self.allocator.clone(), self.buffer_len, &self.profile)?;
+
+        Ok(EncodeOutputBuffer {
+            buffer,
+            pool_freelist: Arc::downgrade(&self.freelist),
+        })
+    }
+}
+
+pub(crate) struct EncodeOutputBuffer {
+    pub(crate) buffer: Buffer,
+    pool_freelist: Weak<Mutex<Vec<EncodeOutputBuffer>>>,
+}
+
+impl EncodeOutputBuffer {
+    pub(crate) fn release_to_pool(self) {
+        if let Some(pool_freelist) = self.pool_freelist.upgrade() {
+            pool_freelist.lock().unwrap().push(self);
+        }
+    }
+}
+
+#[cfg(feature = "wgpu")]
+pub(crate) struct EncodeInputImagePool<'a> {
+    freelist: Arc<Mutex<Vec<EncodeInputImage>>>,
+    encoding_device: Arc<EncodingDevice>,
+    profile: Arc<ProfileInfo<'a>>,
+    extent: vk::Extent3D,
+    layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
+}
+
+#[cfg(feature = "wgpu")]
+impl<'a> EncodeInputImagePool<'a> {
+    pub(crate) fn new(
+        encoding_device: Arc<EncodingDevice>,
+        profile: Arc<ProfileInfo<'a>>,
+        extent: vk::Extent3D,
+        layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
+    ) -> Self {
+        Self {
+            freelist: Arc::new(Mutex::new(Vec::new())),
+            encoding_device,
+            profile,
+            extent,
+            layout_tracker,
+        }
+    }
+
+    pub(crate) fn image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError> {
+        if let Some(image) = self.freelist.lock().unwrap().pop() {
+            return Ok(image);
+        }
+
+        let image = Image::new_encode(
+            &self.encoding_device,
+            self.extent,
+            &self.profile,
+            self.encoding_device.queues.wgpu.family_index as u32,
+            self.layout_tracker.clone(),
+        )?;
+
+        Ok(EncodeInputImage {
+            image: Arc::new(image),
+            pool_freelist: Arc::downgrade(&self.freelist),
+        })
+    }
+}
+
+#[cfg(feature = "wgpu")]
+pub(crate) struct EncodeInputImage {
+    pub(crate) image: Arc<Image>,
+    pool_freelist: Weak<Mutex<Vec<EncodeInputImage>>>,
+}
+
+#[cfg(feature = "wgpu")]
+impl EncodeInputImage {
     pub(crate) fn release_to_pool(self) {
         if let Some(pool_freelist) = self.pool_freelist.upgrade() {
             pool_freelist.lock().unwrap().push(self);
@@ -380,6 +490,7 @@ impl Image {
         })
     }
 
+    #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
     pub(crate) fn new_encode(
         device: &EncodingDevice,
         extent: vk::Extent3D,

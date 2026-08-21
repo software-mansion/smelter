@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     num::NonZeroU32,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
 use ash::vk;
@@ -17,11 +17,13 @@ use crate::{
             h265::{H265Codec, encode::H265WriteParametersInfo},
         },
         vulkan_device::EncodingDevice,
+        waiter_thread::{SubmissionTracker, WaiterThreadHandle},
         wrappers::{
-            Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
-            ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
-            SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt, VideoQueueExt,
-            VideoSession, VideoSessionParameters,
+            Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer,
+            EncodeOutputBuffer, EncodeOutputBufferPool, Image, ImageLayoutTracker, ImageView,
+            ImageWithView, OpenCommandBuffer, ProfileInfo, QueryPool, ResultQuery,
+            ResultQueryOutput, SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt,
+            VideoQueueExt, VideoSession, VideoSessionParameters,
         },
     },
     device::{ColorRange, ColorSpace, Rational},
@@ -31,6 +33,9 @@ use crate::{
     },
     parameters::RateControl,
 };
+
+#[cfg(feature = "wgpu")]
+use crate::backends::vulkan::wrappers::{EncodeInputImage, EncodeInputImagePool};
 
 const MB: u64 = 1024 * 1024;
 
@@ -113,8 +118,8 @@ impl From<VulkanEncoderError> for VideoEncoderError {
 
 struct VideoSessionResources<'a> {
     max_dpb_slots: u32,
-    video_session: VideoSession,
-    parameters: VideoSessionParameters,
+    video_session: Arc<VideoSession>,
+    parameters: Arc<VideoSessionParameters>,
     dpb: DecodedPicturesBuffer<'a>,
     quality_level: u32,
     rate_control: RateControl,
@@ -184,9 +189,9 @@ impl VideoSessionResources<'_> {
         )?;
 
         Ok(Self {
-            video_session,
+            video_session: Arc::new(video_session),
             dpb,
-            parameters: session_parameters,
+            parameters: Arc::new(session_parameters),
             max_dpb_slots,
             quality_level: parameters.quality_level,
             rate_control: RateControl::EncoderDefault,
@@ -196,15 +201,8 @@ impl VideoSessionResources<'_> {
 }
 
 struct EncodingQueryPool {
-    pool: QueryPool,
-}
-
-impl std::ops::Deref for EncodingQueryPool {
-    type Target = QueryPool;
-
-    fn deref(&self) -> &Self::Target {
-        &self.pool
-    }
+    pool: Arc<QueryPool>,
+    freelist: Arc<Mutex<Vec<u32>>>,
 }
 
 impl EncodingQueryPool {
@@ -212,6 +210,7 @@ impl EncodingQueryPool {
         encoding_device: &EncodingDevice,
         profile: C::Profile,
         profile_info: vk::VideoProfileInfoKHR,
+        query_count: u32,
     ) -> Result<Self, VulkanEncoderError> {
         let encode_capabilities = C::encode_codec_profile_capabilities(
             &encoding_device.native_encode_capabilities,
@@ -231,7 +230,7 @@ impl EncodingQueryPool {
         let pool = QueryPool::new(
             encoding_device.vulkan_device.device.clone(),
             vk::QueryType::VIDEO_ENCODE_FEEDBACK_KHR,
-            1,
+            query_count,
             Some(profile_info),
             Some(
                 vk::QueryPoolVideoEncodeFeedbackCreateInfoKHR::default().encode_feedback_flags(
@@ -241,36 +240,32 @@ impl EncodingQueryPool {
             ),
         )?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool: Arc::new(pool),
+            freelist: Arc::new(Mutex::new((0..query_count).collect())),
+        })
     }
 
-    pub(crate) fn get_result_blocking(&self) -> Result<EncodeFeedback, VulkanEncoderError> {
-        let mut result = [EncodeFeedback {
-            offset: 0,
-            bytes_written: 0,
-            status: vk::QueryResultStatusKHR::NOT_READY,
-        }];
+    fn query(&self) -> ResultQuery {
+        let query_index = self.freelist.lock().unwrap().pop().unwrap();
 
-        unsafe {
-            self.pool.device.get_query_pool_results(
-                self.pool.pool,
-                0,
-                &mut result,
-                vk::QueryResultFlags::WAIT | vk::QueryResultFlags::WITH_STATUS_KHR,
-            )?
-        };
-
-        Ok(result[0])
+        ResultQuery::new(
+            self.pool.clone(),
+            query_index,
+            Arc::downgrade(&self.freelist),
+        )
     }
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 struct EncodeFeedback {
     offset: u32,
     bytes_written: u32,
     status: vk::QueryResultStatusKHR,
 }
+
+impl ResultQueryOutput for EncodeFeedback {}
 
 pub(crate) enum EncoderTrackerWaitState {
     InitializeEncoder,
@@ -282,6 +277,7 @@ pub(crate) enum EncoderTrackerWaitState {
     Encode,
 }
 
+#[derive(Clone)]
 pub(crate) struct EncoderCommandBufferPools {
     transfer: CommandBufferPool,
     encode: CommandBufferPool,
@@ -310,18 +306,14 @@ impl CommandBufferPoolStorage for EncoderCommandBufferPools {
 }
 
 pub(crate) trait DynVulkanEncoder<'a>: Send {
-    fn encode<'b>(
-        &'b mut self,
+    fn encode(
+        &mut self,
         image: Arc<Image>,
         force_idr: bool,
         pts: Option<u64>,
-    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VulkanEncoderError>;
+    ) -> Result<UnwaitedEncodeSubmission, VulkanEncoderError>;
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind>;
-    fn download_output(
-        &mut self,
-        is_idr: bool,
-        pts: Option<u64>,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError>;
 }
 
 pub(crate) struct EncoderTrackerKind {}
@@ -334,60 +326,89 @@ impl TrackerKind for EncoderTrackerKind {
 
 pub(crate) type EncoderTracker = Tracker<EncoderTrackerKind>;
 
-pub(crate) struct EncodeSubmission<'borrow, 'encoder> {
-    pub(crate) is_idr: bool,
-    pub(crate) wait_value: SemaphoreWaitValue,
-    pub(crate) encoder: &'borrow mut (dyn DynVulkanEncoder<'encoder> + 'encoder),
-    pub(crate) pts: Option<u64>,
+struct EncodedOutput {
+    on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
+}
+
+pub(crate) struct InFlightEncodeResources {
+    _video_session: Arc<VideoSession>,
+    _video_session_params: Arc<VideoSessionParameters>,
+    _dpb_image_with_view: Arc<ImageWithView>,
     _image: Arc<Image>,
     _view: ImageView,
+    _input_buffer: Option<Buffer>,
+    #[cfg(feature = "wgpu")]
+    input_image: Option<EncodeInputImage>,
+    #[cfg(feature = "wgpu")]
+    _hal_command_encoder: Option<wgpu::hal::vulkan::CommandEncoder>,
+    output_buffer: Option<EncodeOutputBuffer>,
 }
 
-impl<'a, 'b> EncodeSubmission<'a, 'b> {
-    pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        self.encoder.download_output(self.is_idr, self.pts)
-    }
+impl Drop for InFlightEncodeResources {
+    fn drop(&mut self) {
+        if let Some(output_buffer) = self.output_buffer.take() {
+            output_buffer.release_to_pool();
+        }
 
-    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
-    pub(crate) fn mark_waited(&mut self) {
-        self.encoder.tracker().mark_waited(self.wait_value);
-    }
-
-    pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VulkanEncoderError> {
-        self.encoder.tracker().wait_for(self.wait_value, timeout)?;
-        Ok(())
+        #[cfg(feature = "wgpu")]
+        if let Some(input_image) = self.input_image.take() {
+            input_image.release_to_pool();
+        }
     }
 }
 
-pub(crate) struct UnwaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
+pub(crate) struct EncodeSubmission {
+    pub(crate) is_idr: bool,
+    pub(crate) wait_value: SemaphoreWaitValue,
+    pub(crate) pts: Option<u64>,
+    prepended_stream_params: Vec<u8>,
+    query: ResultQuery,
+    in_flight_resources: InFlightEncodeResources,
+}
 
-impl<'a, 'b> UnwaitedEncodeSubmission<'a, 'b> {
+impl EncodeSubmission {
+    pub(crate) fn download(mut self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
+        let feedback = self.query.get_result_blocking::<EncodeFeedback>()?;
+
+        if feedback.status != vk::QueryResultStatusKHR::COMPLETE {
+            return Err(VulkanEncoderError::EncodeOperationFailed(feedback.status));
+        }
+
+        let mut output = std::mem::take(&mut self.prepended_stream_params);
+
+        let output_buffer = self.in_flight_resources.output_buffer.as_mut().unwrap();
+        let encoded = unsafe {
+            output_buffer.buffer.download_data_from_buffer_at(
+                feedback.offset as usize,
+                feedback.bytes_written as usize,
+            )?
+        };
+
+        output.extend_from_slice(&encoded);
+
+        Ok(EncodedOutputChunk {
+            data: output,
+            pts: self.pts,
+            is_keyframe: self.is_idr,
+        })
+    }
+}
+
+pub(crate) struct UnwaitedEncodeSubmission(pub(crate) EncodeSubmission);
+
+impl UnwaitedEncodeSubmission {
     #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
-    pub(crate) fn mark_waited(mut self) -> WaitedEncodeSubmission<'a, 'b> {
-        self.0.mark_waited();
+    pub(crate) fn mark_waited(self, tracker: &EncoderTracker) -> WaitedEncodeSubmission {
+        tracker.mark_waited(self.0.wait_value);
         WaitedEncodeSubmission(self.0)
     }
-
-    pub(crate) fn wait(
-        mut self,
-        timeout: u64,
-    ) -> Result<WaitedEncodeSubmission<'a, 'b>, VulkanEncoderError> {
-        self.0.wait(timeout)?;
-        Ok(WaitedEncodeSubmission(self.0))
-    }
-
-    pub(crate) fn wait_and_download(
-        self,
-        timeout: u64,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let waited = self.wait(timeout)?;
-        waited.download()
-    }
 }
 
-pub struct WaitedEncodeSubmission<'a, 'b>(pub(crate) EncodeSubmission<'a, 'b>);
+#[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
+pub struct WaitedEncodeSubmission(pub(crate) EncodeSubmission);
 
-impl<'a, 'b> WaitedEncodeSubmission<'a, 'b> {
+impl WaitedEncodeSubmission {
+    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
     pub(crate) fn download(self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.0.download()
     }
@@ -409,6 +430,7 @@ pub(crate) struct FullEncoderParameters<C: EncodeCodec> {
     pub(crate) inline_stream_params: bool,
     pub(crate) color_space: ColorSpace,
     pub(crate) color_range: ColorRange,
+    pub(crate) max_in_flight_submissions: NonZeroU32,
 }
 
 impl<C: EncodeCodec> From<&FullEncoderParameters<C>> for vk::VideoEncodeUsageInfoKHR<'_> {
@@ -424,18 +446,20 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     pub(crate) tracker: EncoderTracker,
     query_pool: EncodingQueryPool,
     profile: C::Profile,
-    pub(crate) profile_info: ProfileInfo<'a>,
+    pub(crate) profile_info: Arc<ProfileInfo<'a>>,
     session_resources: VideoSessionResources<'a>,
     idr_period_counter: u32,
     idr_period: u32,
-    #[allow(dead_code)]
-    input_image: Arc<Image>,
-    output_buffer: Buffer,
+    #[cfg(feature = "wgpu")]
+    input_image_pool: EncodeInputImagePool<'a>,
+    output_buffer_pool: EncodeOutputBufferPool<'a>,
     counters: C::EncodingCounters,
     active_reference_slots: VecDeque<(usize, C::ReferenceInfo)>,
     rate_control: RateControl,
     inline_stream_params: bool,
     encoding_device: Arc<EncodingDevice>,
+    submission_tracker: SubmissionTracker<EncoderCommandBufferPools>,
+    output: Arc<Mutex<EncodedOutput>>,
 }
 
 impl<'a, C: EncodeCodec + 'a> VideoEncoderBackend for VulkanEncoder<'a, C> {
@@ -443,8 +467,12 @@ impl<'a, C: EncodeCodec + 'a> VideoEncoderBackend for VulkanEncoder<'a, C> {
         &mut self,
         frame: &InputFrame<RawFrameData>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
-        VulkanEncoder::encode_bytes(self, frame, force_idr)
+    ) -> Result<(), VideoEncoderError> {
+        VulkanEncoder::encode_bytes(self, frame, force_idr).map_err(Into::into)
+    }
+
+    fn flush(&mut self) -> Result<(), VideoEncoderError> {
+        VulkanEncoder::flush(self).map_err(Into::into)
     }
 }
 
@@ -456,8 +484,13 @@ impl<'a, C: EncodeCodec + 'a> crate::encoders::WgpuVideoEncoderBackend for Vulka
         wgpu_queue: &wgpu::Queue,
         frame: InputFrame<wgpu::Texture>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    ) -> Result<(), VideoEncoderError> {
         VulkanEncoder::encode_texture(self, wgpu_device, wgpu_queue, frame, force_idr)
+            .map_err(Into::into)
+    }
+
+    fn flush(&mut self) -> Result<(), VideoEncoderError> {
+        VulkanEncoder::flush(self).map_err(Into::into)
     }
 }
 
@@ -514,8 +547,10 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     pub(crate) fn new(
         encoding_device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters<C>,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
+        waiter_thread: Arc<WaiterThreadHandle>,
     ) -> Result<Self, VulkanEncoderError> {
-        let profile_info = C::profile_info(&parameters);
+        let profile_info = Arc::new(C::profile_info(&parameters));
 
         let command_buffer_pools = EncoderCommandBufferPools::new(&encoding_device)?;
         let mut tracker = EncoderTracker::new(
@@ -528,14 +563,15 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             &encoding_device,
             parameters.profile,
             profile_info.profile_info,
+            parameters.max_in_flight_submissions.get(),
         )?;
 
-        // TODO: this buffer should grow when necessary
-        let output_buffer = Buffer::new_encode(
+        // TODO: the buffers in this pool should grow when necessary
+        let output_buffer_pool = EncodeOutputBufferPool::new(
             encoding_device.allocator.clone(),
+            profile_info.clone(),
             Self::OUTPUT_BUFFER_LEN,
-            &profile_info,
-        )?;
+        );
 
         let mut buffer = tracker.command_buffer_pools.encode.begin_buffer()?;
 
@@ -555,27 +591,39 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             EncoderTrackerWaitState::InitializeEncoder,
         )?;
 
-        let encode_image = Image::new_encode(
-            &encoding_device,
+        #[cfg(feature = "wgpu")]
+        let input_image_pool = EncodeInputImagePool::new(
+            encoding_device.clone(),
+            profile_info.clone(),
             session_resources.video_session.max_coded_extent.into(),
-            &profile_info,
-            encoding_device.queues.wgpu.family_index as u32,
             tracker.image_layout_tracker.clone(),
-        )?;
+        );
+
+        let submission_tracker = SubmissionTracker::new(
+            tracker.command_buffer_pools.clone(),
+            tracker.semaphore_tracker.semaphore.clone(),
+            waiter_thread,
+            parameters.max_in_flight_submissions.get() as usize,
+            // TODO: handling errors in encoder?
+            Arc::new(AtomicBool::new(false)),
+        );
 
         Ok(Self {
+            submission_tracker,
+            output: Arc::new(Mutex::new(EncodedOutput { on_chunk_callback })),
             idr_period_counter: 0,
             counters: C::EncodingCounters::default(),
             active_reference_slots: VecDeque::with_capacity(session_resources.dpb.len as usize),
             profile: parameters.profile,
             profile_info,
             encoding_device,
-            input_image: Arc::new(encode_image),
+            #[cfg(feature = "wgpu")]
+            input_image_pool,
             tracker,
             query_pool,
             session_resources,
             idr_period: parameters.idr_period.get(),
-            output_buffer,
+            output_buffer_pool,
             rate_control: parameters.rate_control,
             inline_stream_params: parameters.inline_stream_params,
         })
@@ -809,14 +857,15 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
         frame: &InputFrame<wgpu::Texture>,
+        input_image: &Arc<Image>,
     ) -> Result<wgpu::hal::vulkan::CommandEncoder, VulkanEncoderError> {
         use crate::encoders::WgpuTextureEncoderError;
         use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
         let encode_texture_extent = wgpu::Extent3d {
-            width: self.input_image.extent.width,
-            height: self.input_image.extent.height,
-            depth_or_array_layers: self.input_image.extent.depth,
+            width: input_image.extent.width,
+            height: input_image.extent.height,
+            depth_or_array_layers: input_image.extent.depth,
         };
 
         if !frame.data.usage().contains(wgpu::TextureUsages::COPY_SRC) {
@@ -836,10 +885,10 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         let hal_device = unsafe { wgpu_device.as_hal::<VkApi>().unwrap() };
         let hal_queue = unsafe { wgpu_queue.as_hal::<VkApi>().unwrap() };
 
-        let input_image_clone = self.input_image.clone();
+        let input_image_clone = input_image.clone();
         let hal_texture = unsafe {
             hal_device.texture_from_raw(
-                self.input_image.image,
+                input_image.image,
                 &wgpu::hal::TextureDescriptor {
                     label: None,
                     size: encode_texture_extent,
@@ -883,8 +932,6 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             encode_texture_extent,
         );
 
-        // TODO: dont wait for all here
-        self.tracker.wait_for_all(u64::MAX)?;
         wgpu_queue.submit([encoder.finish()]);
 
         self.tracker
@@ -893,7 +940,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             .unwrap()
             .map
             .insert(
-                self.input_image.key(),
+                input_image.key(),
                 vec![vk::ImageLayout::TRANSFER_DST_OPTIMAL].into_boxed_slice(),
             );
 
@@ -963,13 +1010,16 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         &mut self,
         frame: &InputFrame<RawFrameData>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
-        let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
+    ) -> Result<(), VulkanEncoderError> {
+        self.submission_tracker.wait_if_full()?;
+
+        let (image, buffer) = self.transfer_buffer_to_image(frame)?;
         let image = Arc::new(image);
 
-        self.encode(image, force_idr, frame.pts)?
-            .wait_and_download(u64::MAX)
-            .map_err(Into::into)
+        let mut submission = self.encode(image, force_idr, frame.pts)?;
+        submission.0.in_flight_resources._input_buffer = Some(buffer);
+
+        self.submit_for_waiting(submission)
     }
 
     #[cfg(feature = "wgpu")]
@@ -979,12 +1029,42 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         wgpu_queue: &wgpu::Queue,
         frame: InputFrame<wgpu::Texture>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
-        let _cmd_encoder = self.copy_wgpu_texture_to_image(wgpu_device, wgpu_queue, &frame)?;
+    ) -> Result<(), VulkanEncoderError> {
+        self.submission_tracker.wait_if_full()?;
 
-        self.encode(self.input_image.clone(), force_idr, frame.pts)?
-            .wait_and_download(u64::MAX)
-            .map_err(Into::into)
+        let input_image = self.input_image_pool.image()?;
+        let hal_encoder =
+            self.copy_wgpu_texture_to_image(wgpu_device, wgpu_queue, &frame, &input_image.image)?;
+
+        let mut submission = self.encode(input_image.image.clone(), force_idr, frame.pts)?;
+        submission.0.in_flight_resources.input_image = Some(input_image);
+        submission.0.in_flight_resources._hal_command_encoder = Some(hal_encoder);
+
+        self.submit_for_waiting(submission)
+    }
+
+    pub fn flush(&mut self) -> Result<(), VulkanEncoderError> {
+        self.submission_tracker.wait_for_all()?;
+        Ok(())
+    }
+
+    // TODO: after some thinking, maybe this should be split into 2 encoders? this is getting a bit
+    // messy
+    fn submit_for_waiting(
+        &mut self,
+        submission: UnwaitedEncodeSubmission,
+    ) -> Result<(), VulkanEncoderError> {
+        let output = self.output.clone();
+        self.submission_tracker
+            .add_wait_request(submission.0.wait_value, move || {
+                match submission.0.download() {
+                    Ok(chunk) => (output.lock().unwrap().on_chunk_callback)(chunk),
+                    Err(err) => tracing::error!("Encoding a frame failed: {err}"),
+                }
+                Ok::<_, VulkanEncoderError>(())
+            })?;
+
+        Ok(())
     }
 
     fn encoder_rate_control_for<'b>(
@@ -1084,12 +1164,15 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
 }
 
 impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
-    fn encode<'b>(
-        &'b mut self,
+    fn encode(
+        &mut self,
         image: Arc<Image>,
         force_idr: bool,
         pts: Option<u64>,
-    ) -> Result<UnwaitedEncodeSubmission<'b, 'a>, VulkanEncoderError> {
+    ) -> Result<UnwaitedEncodeSubmission, VulkanEncoderError> {
+        let query = self.query_pool.query();
+        let output_buffer = self.output_buffer_pool.buffer()?;
+
         let is_idr = force_idr || self.idr_period_counter == 0;
 
         if is_idr {
@@ -1140,7 +1223,7 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
             &view_create_info,
         )?;
 
-        self.query_pool.reset(cmd_buffer.buffer(), 0);
+        query.reset(cmd_buffer.buffer());
 
         self.begin_video_coding(cmd_buffer.buffer());
 
@@ -1254,7 +1337,7 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
             .image_view_binding(view.view);
 
         let mut encode_info = vk::VideoEncodeInfoKHR::default()
-            .dst_buffer(self.output_buffer.buffer)
+            .dst_buffer(output_buffer.buffer.buffer)
             .dst_buffer_range(Self::OUTPUT_BUFFER_LEN)
             .dst_buffer_offset(0)
             .src_picture_resource(src_picture_resource)
@@ -1265,7 +1348,7 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
             encode_info = encode_info.reference_slots(&reference_slots);
         }
 
-        self.query_pool.begin_query(cmd_buffer.buffer(), 0);
+        query.begin_query(cmd_buffer.buffer());
 
         unsafe {
             self.encoding_device
@@ -1275,7 +1358,7 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
                 .cmd_encode_video_khr(cmd_buffer.buffer(), &encode_info);
         }
 
-        self.query_pool.end_query(cmd_buffer.buffer(), 0);
+        query.end_query(cmd_buffer.buffer());
 
         unsafe {
             self.encoding_device
@@ -1305,46 +1388,34 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
         self.idr_period_counter += 1;
         self.idr_period_counter %= self.idr_period;
 
-        Ok(UnwaitedEncodeSubmission(EncodeSubmission {
-            is_idr,
-            encoder: self,
-            wait_value,
-            pts,
-            _image: image,
-            _view: view,
-        }))
-    }
-    fn download_output(
-        &mut self,
-        is_idr: bool,
-        pts: Option<u64>,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let feedback = self.query_pool.get_result_blocking()?;
-
-        if feedback.status != vk::QueryResultStatusKHR::COMPLETE {
-            return Err(VulkanEncoderError::EncodeOperationFailed(feedback.status));
-        }
-
-        let mut output = if is_idr && self.inline_stream_params {
+        let prepended_stream_params = if is_idr && self.inline_stream_params {
             self.stream_parameters(C::codec_write_parameters_info_all())?
         } else {
             Vec::new()
         };
 
-        let encoded = unsafe {
-            self.output_buffer.download_data_from_buffer_at(
-                feedback.offset as usize,
-                feedback.bytes_written as usize,
-            )?
+        let in_flight_resources = InFlightEncodeResources {
+            _video_session: self.session_resources.video_session.clone(),
+            _video_session_params: self.session_resources.parameters.clone(),
+            _dpb_image_with_view: self.session_resources.dpb.image.image_with_view.clone(),
+            _image: image,
+            _view: view,
+            _input_buffer: None,
+            #[cfg(feature = "wgpu")]
+            input_image: None,
+            #[cfg(feature = "wgpu")]
+            _hal_command_encoder: None,
+            output_buffer: Some(output_buffer),
         };
 
-        output.extend_from_slice(&encoded);
-
-        Ok(EncodedOutputChunk {
-            data: output,
+        Ok(UnwaitedEncodeSubmission(EncodeSubmission {
+            is_idr,
+            wait_value,
             pts,
-            is_keyframe: is_idr,
-        })
+            prepended_stream_params,
+            query,
+            in_flight_resources,
+        }))
     }
 
     fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind> {

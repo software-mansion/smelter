@@ -1,3 +1,5 @@
+// TODO: Change things here
+
 use std::sync::Arc;
 
 use ash::vk;
@@ -13,7 +15,7 @@ use crate::{
             DynVulkanEncoder, FullEncoderParameters, VulkanEncoder, VulkanEncoderError,
         },
         vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
-        wrappers::{DecodeResultQuery, SemaphoreWaitValue},
+        wrappers::{ResultQuery, SemaphoreWaitValue},
     },
     frame_sorter::{DecodeResult, FrameSorter},
     parameters::DecoderUsage,
@@ -36,7 +38,7 @@ enum AnyFullEncoderParameters {
 pub(crate) struct ResizedImages {
     images: ResizeSubmission,
     decoder_wait_value: SemaphoreWaitValue,
-    decode_query_pool: Option<DecodeResultQuery>,
+    decode_query_pool: Option<ResultQuery>,
     _in_flight_resources: InFlightDecodeResources,
 }
 
@@ -121,12 +123,26 @@ impl VulkanTranscoder {
             .map(|p| match p {
                 AnyFullEncoderParameters::H264(p) => device
                     .encoding_device()
-                    .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
+                    .and_then(|d| {
+                        VulkanEncoder::new(
+                            Arc::new(d),
+                            p,
+                            Box::new(|_| {}),
+                            device.waiter_thread.clone(),
+                        )
+                    })
                     .map(|e| Box::new(e) as Box<dyn DynVulkanEncoder>),
 
                 AnyFullEncoderParameters::H265(p) => device
                     .encoding_device()
-                    .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
+                    .and_then(|d| {
+                        VulkanEncoder::new(
+                            Arc::new(d),
+                            p,
+                            Box::new(|_| {}),
+                            device.waiter_thread.clone(),
+                        )
+                    })
                     .map(|e| Box::new(e) as Box<dyn DynVulkanEncoder>),
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -261,16 +277,8 @@ impl VulkanTranscoder {
 
         let mut semaphores = Vec::new();
         let mut values = Vec::new();
-        for submit in submits.iter_mut() {
-            semaphores.push(
-                submit
-                    .0
-                    .encoder
-                    .tracker()
-                    .semaphore_tracker
-                    .semaphore
-                    .semaphore,
-            );
+        for (submit, encoder) in submits.iter().zip(self.encoders.iter_mut()) {
+            semaphores.push(encoder.tracker().semaphore_tracker.semaphore.semaphore);
             values.push(submit.0.wait_value.0);
         }
         let wait = vk::SemaphoreWaitInfo::default()
@@ -279,8 +287,8 @@ impl VulkanTranscoder {
         unsafe { self.device.device.wait_semaphores(&wait, u64::MAX)? };
 
         let mut results = Vec::new();
-        for submit in submits {
-            let waited = submit.mark_waited();
+        for (submit, encoder) in submits.into_iter().zip(self.encoders.iter_mut()) {
+            let waited = submit.mark_waited(encoder.tracker());
             let result = waited.download()?;
             results.push(result);
         }

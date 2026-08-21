@@ -1,11 +1,6 @@
-use std::{
-    collections::VecDeque,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-        mpsc::Receiver,
-    },
-    time::Duration,
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
 };
 
 use crate::{
@@ -13,12 +8,12 @@ use crate::{
     backends::vulkan::{
         VulkanDecoder,
         vulkan_decoder::{
-            DecodeSubmission, DecoderCommandBufferPools, DecoderTracker, DownloadFrameSubmission,
-            ImageModifiers, VulkanDecoderError,
+            DecodeSubmission, DecoderCommandBufferPools, DownloadFrameSubmission, ImageModifiers,
+            VulkanDecoderError,
         },
         vulkan_device::DecodingDevice,
-        waiter_thread::{SubmissionWaitRequest, WaiterThreadHandle},
-        wrappers::{Buffer, CommandBufferPoolStorage, SemaphoreWaitValue, TimelineSemaphore},
+        waiter_thread::{SubmissionTracker, WaiterThreadHandle},
+        wrappers::Buffer,
     },
     decoders::{VideoDecoderBackend, VideoDecoderError},
     device::DecoderParameters,
@@ -96,88 +91,9 @@ impl VulkanDecoderH264 {
     }
 }
 
-struct SubmissionTracker {
-    waiter_thread: Arc<WaiterThreadHandle>,
-    semaphore: Arc<TimelineSemaphore>,
-    command_buffer_pools: DecoderCommandBufferPools,
-
-    max_in_flight: usize,
-    in_flight: VecDeque<Receiver<()>>,
-
-    decode_failed: Arc<AtomicBool>,
-}
-
-impl SubmissionTracker {
-    fn new(
-        tracker: &DecoderTracker,
-        waiter_thread: Arc<WaiterThreadHandle>,
-        max_in_flight: usize,
-        decode_failed: Arc<AtomicBool>,
-    ) -> Self {
-        Self {
-            waiter_thread,
-            semaphore: tracker.semaphore_tracker.semaphore.clone(),
-            command_buffer_pools: tracker.command_buffer_pools.clone(),
-            max_in_flight,
-            in_flight: VecDeque::new(),
-            decode_failed,
-        }
-    }
-
-    fn add_wait_request(
-        &mut self,
-        wait_for: SemaphoreWaitValue,
-        on_finish: impl FnOnce() -> Result<(), VulkanDecoderError> + Send + 'static,
-    ) -> Result<(), VulkanDecoderError> {
-        let command_buffer_pools = self.command_buffer_pools.clone();
-        let decode_failed = self.decode_failed.clone();
-        let (finished_sender, finished_receiver) = std::sync::mpsc::channel();
-
-        self.waiter_thread.submit(SubmissionWaitRequest {
-            semaphore: self.semaphore.clone(),
-            wait_for,
-            on_finish: Box::new(move || {
-                command_buffer_pools.mark_submitted_as_free(wait_for);
-                if let Err(err) = on_finish() {
-                    tracing::debug!("Frame decoding failed: {err}");
-                    decode_failed.store(true, Ordering::Relaxed);
-                }
-                let _ = finished_sender.send(());
-            }),
-        })?;
-
-        self.in_flight.push_back(finished_receiver);
-        Ok(())
-    }
-
-    fn wait_if_full(&mut self) -> Result<(), VulkanDecoderError> {
-        while self.in_flight.len() >= self.max_in_flight {
-            self.in_flight
-                .front()
-                .unwrap()
-                .recv_timeout(Duration::from_secs(1))
-                .map_err(|_| VulkanDecoderError::SubmissionWaitTimeout)?;
-            self.in_flight.pop_front();
-        }
-
-        Ok(())
-    }
-
-    fn wait_for_all(&mut self) -> Result<(), VulkanDecoderError> {
-        while let Some(receiver) = self.in_flight.front() {
-            receiver
-                .recv_timeout(Duration::from_secs(1))
-                .map_err(|_| VulkanDecoderError::SubmissionWaitTimeout)?;
-            self.in_flight.pop_front();
-        }
-
-        Ok(())
-    }
-}
-
 pub(crate) struct VulkanBytesDecoderH264 {
     decoder: VulkanDecoderH264,
-    submission_tracker: SubmissionTracker,
+    submission_tracker: SubmissionTracker<DecoderCommandBufferPools>,
     output: Arc<Mutex<BytesOutput>>,
 }
 
@@ -195,7 +111,8 @@ impl VulkanBytesDecoderH264 {
     ) -> Result<Self, VulkanDecoderError> {
         let decoder = VulkanDecoderH264::new(decoding_device, parameters)?;
         let submission_tracker = SubmissionTracker::new(
-            &decoder.decoder.tracker,
+            decoder.decoder.tracker.command_buffer_pools.clone(),
+            decoder.decoder.tracker.semaphore_tracker.semaphore.clone(),
             waiter_thread,
             parameters.max_in_flight_submissions.get() as usize,
             decoder.decode_failed.clone(),
@@ -221,7 +138,9 @@ impl VideoDecoderBackend for VulkanBytesDecoderH264 {
         let instructions = self.decoder.process_event(event)?;
 
         for instruction in instructions {
-            self.submission_tracker.wait_if_full()?;
+            self.submission_tracker
+                .wait_if_full()
+                .map_err(VulkanDecoderError::from)?;
 
             let Some(submission) = self.decoder.decode(instruction)? else {
                 continue;
@@ -232,11 +151,14 @@ impl VideoDecoderBackend for VulkanBytesDecoderH264 {
             self.submission_tracker
                 .add_wait_request(semaphore_wait_value, move || {
                     output.lock().unwrap().send_frame_bytes(frame)
-                })?;
+                })
+                .map_err(VulkanDecoderError::from)?;
         }
 
         if flush {
-            self.submission_tracker.wait_for_all()?;
+            self.submission_tracker
+                .wait_for_all()
+                .map_err(VulkanDecoderError::from)?;
 
             let mut output = self.output.lock().unwrap();
             let frames = output.frame_sorter.flush();
@@ -286,7 +208,7 @@ impl BytesOutput {
 #[cfg(feature = "wgpu")]
 pub(crate) struct VulkanWgpuTexturesDecoderH264 {
     decoder: VulkanDecoderH264,
-    submission_tracker: SubmissionTracker,
+    submission_tracker: SubmissionTracker<DecoderCommandBufferPools>,
     frame_sorter: FrameSorter<wgpu::Texture>,
     wgpu_device: wgpu::Device,
     wgpu_queue: wgpu::Queue,
@@ -303,7 +225,8 @@ impl VulkanWgpuTexturesDecoderH264 {
     ) -> Result<Self, VulkanDecoderError> {
         let decoder = VulkanDecoderH264::new(decoding_device, parameters)?;
         let submission_tracker = SubmissionTracker::new(
-            &decoder.decoder.tracker,
+            decoder.decoder.tracker.command_buffer_pools.clone(),
+            decoder.decoder.tracker.semaphore_tracker.semaphore.clone(),
             waiter_thread,
             parameters.max_in_flight_submissions.get() as usize,
             decoder.decode_failed.clone(),
@@ -330,7 +253,9 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanWgpuTexturesDecoderH264 
 
         let mut unordered_frames = Vec::new();
         for instruction in instructions {
-            self.submission_tracker.wait_if_full()?;
+            self.submission_tracker
+                .wait_if_full()
+                .map_err(VulkanDecoderError::from)?;
 
             let Some(submission) = self.decoder.decode(instruction)? else {
                 continue;
@@ -344,7 +269,8 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanWgpuTexturesDecoderH264 
             });
 
             self.submission_tracker
-                .add_wait_request(semaphore_wait_value, move || frame.check_decode_results())?;
+                .add_wait_request(semaphore_wait_value, move || frame.check_decode_results())
+                .map_err(VulkanDecoderError::from)?;
         }
 
         let mut ordered_frames = self.frame_sorter.put_frames(unordered_frames);

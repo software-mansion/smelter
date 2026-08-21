@@ -4,8 +4,8 @@ use std::sync::Arc;
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl};
 use crate::{
-    BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, OutputFrame, RawFrameData,
-    VideoDecoderError, VideoEncoderError,
+    BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, EncodedOutputChunk, OutputFrame,
+    RawFrameData, VideoDecoderError, VideoEncoderError,
 };
 
 #[cfg(feature = "wgpu")]
@@ -214,6 +214,10 @@ pub struct EncoderOutputParameters<P> {
     /// Color range of the encoded output.
     /// If [`None`], defaults to [`ColorRange::Limited`].
     pub color_range: Option<ColorRange>,
+    /// Maximum number of encode submissions that can be in flight. When the limit is reached,
+    /// encoding blocks until the oldest submission finishes.
+    /// If [`None`], defaults to 3.
+    pub max_in_flight_submissions: Option<NonZeroU32>,
 }
 
 /// Parameters for H.264 encoder creation
@@ -240,11 +244,13 @@ pub(crate) trait CoreVideoDeviceBackend: Send + Sync {
     fn create_bytes_encoder_h264(
         self: Arc<Self>,
         parameters: EncoderParametersH264,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH264, VideoEncoderError>;
 
     fn create_bytes_encoder_h265(
         self: Arc<Self>,
         parameters: EncoderParametersH265,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH265, VideoEncoderError>;
 
     #[cfg(feature = "transcoder")]
