@@ -62,6 +62,8 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             }
             EncodedInputEvent::LostData => H264DecoderEvent::SignalDataLoss,
             EncodedInputEvent::AuDelimiter => H264DecoderEvent::SignalFrameEnd,
+            // decodes what is still held back and drops the parser state
+            EncodedInputEvent::Discontinuity => H264DecoderEvent::Flush,
         };
 
         let frames = match self.decoder.process_event(decoder_event) {

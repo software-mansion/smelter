@@ -54,8 +54,11 @@ impl VideoDecoder for FfmpegVp9Decoder {
 impl VideoDecoderInstance for FfmpegVp9Decoder {
     fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
         trace!(?event, "FFmpeg VP9 decoder received a chunk.");
-        let EncodedInputEvent::Chunk(chunk) = event else {
-            return vec![];
+        let chunk = match event {
+            EncodedInputEvent::Chunk(chunk) => chunk,
+            // drop the state built for the old timeline
+            EncodedInputEvent::Discontinuity => return self.flush(),
+            EncodedInputEvent::LostData | EncodedInputEvent::AuDelimiter => return vec![],
         };
 
         let av_packet = match create_av_packet(chunk, VideoCodec::Vp9, TIME_BASE) {

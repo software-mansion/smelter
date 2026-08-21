@@ -4,7 +4,7 @@ use rtmp::{
     AudioConfig, AudioData, RtmpAudioCodec, RtmpEvent, RtmpVideoCodec, VideoConfig, VideoData,
 };
 use smelter_render::{InputId, error::ErrorStack};
-use tracing::{Level, info, span, trace, warn};
+use tracing::{Level, debug, info, span, trace, warn};
 
 use crate::{
     MediaKind, PipelineCtx, Ref,
@@ -12,7 +12,7 @@ use crate::{
     error::DecoderInitError,
     pipeline::{
         decoder::{
-            DecoderThreadHandle,
+            DecoderThreadHandle, EncodedInputEvent,
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac::FdkAacDecoder,
@@ -26,7 +26,8 @@ use crate::{
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
     utils::{
         InitializableThread,
-        input_sync::{DecoderHandleInputSyncExt, InputSync, InputSyncTrack, SimpleSync, TrackKind},
+        channel::{Sender, TrySendError},
+        input_sync::{InputSync, InputSyncTrack, SimpleSync, TrackEvent, TrackKind, TrackSink},
         live_sync::{BufferingStrategy, ChunkBuffer, LiveSync, LiveSyncOptions},
     },
 };
@@ -238,7 +239,8 @@ impl RtmpConnectionState {
             frame_sender,
         )?;
 
-        let sync = self.sync.add_track_with_handle(TrackKind::Video, handle);
+        let sink = RtmpTrackSink::new(handle, self.sync.is_live());
+        let sync = self.sync.add_track(TrackKind::Video, Box::new(sink));
         self.video_track_state = TrackState::Ready(sync);
         Ok(())
     }
@@ -251,9 +253,59 @@ impl RtmpConnectionState {
         trace!(?config, "Received audio config");
         let handle = spawn_audio_decoder(&self.ctx, &self.input_ref, config, samples_sender)?;
 
-        let sync = self.sync.add_track_with_handle(TrackKind::Audio, handle);
+        let sink = RtmpTrackSink::new(handle, self.sync.is_live());
+        let sync = self.sync.add_track(TrackKind::Audio, Box::new(sink));
         self.audio_track_state = TrackState::Ready(sync);
         Ok(())
+    }
+}
+
+/// Forwards the chunks of a track to its decoder thread. The live variant must
+/// not block on a full channel, so chunks the channel cannot take are dropped;
+/// the non-live variant waits for room.
+struct RtmpTrackSink {
+    chunk_sender: Sender<PipelineEvent<EncodedInputEvent>>,
+    is_live: bool,
+    /// Set once the decoder side is gone. Only a send can observe it, so a
+    /// track that never released anything does not notice.
+    closed: bool,
+}
+
+impl RtmpTrackSink {
+    fn new(handle: DecoderThreadHandle, is_live: bool) -> Self {
+        Self {
+            chunk_sender: handle.chunk_sender,
+            is_live,
+            closed: false,
+        }
+    }
+}
+
+impl TrackSink<EncodedInputChunk> for RtmpTrackSink {
+    fn on_event(&mut self, event: TrackEvent<EncodedInputChunk>) {
+        let chunk = match event {
+            TrackEvent::Chunk(chunk) => chunk,
+            // We don't expect discontinuity on RTMP.
+            TrackEvent::Discontinuity => return,
+        };
+
+        let event = PipelineEvent::Data(EncodedInputEvent::Chunk(chunk));
+        match self.is_live {
+            true => match self.chunk_sender.try_send(event) {
+                Ok(()) => (),
+                Err(TrySendError::Full(_)) => debug!("Dropping chunk; decoder is not keeping up"),
+                Err(TrySendError::Disconnected(_)) => self.closed = true,
+            },
+            false => {
+                if self.chunk_sender.send(event).is_err() {
+                    self.closed = true;
+                }
+            }
+        }
+    }
+
+    fn is_closed(&self) -> bool {
+        self.closed
     }
 }
 

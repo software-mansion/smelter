@@ -28,11 +28,11 @@ impl TryFrom<HlsInput> for core::RegisterInputOptions {
             })
             .transpose()?;
 
-        let video_decoders = core::HlsInputVideoDecoders { h264 };
+        let video_decoders = core::HlsInputDecoders { h264 };
 
         let input_options = core::HlsInputOptions {
             url,
-            video_decoders,
+            decoder_options: video_decoders,
             queue_options: core::QueueInputOptions {
                 required,
                 video_side_channel: side_channel.video.unwrap_or(false).into(),

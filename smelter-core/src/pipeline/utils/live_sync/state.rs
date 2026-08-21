@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::{LiveSyncOptions, buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator};
 use crate::pipeline::utils::input_sync::{
-    BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackKind,
+    BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackEvent, TrackKind,
 };
 
 /// pts jump (in either direction) treated as a discontinuity of the input
@@ -315,7 +315,8 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             track.reset(now, self.anchor);
         }
 
-        // Even though only one track had a gap we restart both of them. 
+        // Even though only one track had a gap we restart both of them, but
+        // only one should produce discontinuity event.
         //
         // Especially, important for HLS where discontinuity on both tracks
         // can be slightly of (e.g. by a packet) which will cause 2 resets,
@@ -325,7 +326,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             TrackKind::Video => self.video.as_mut(),
         };
         if let Some(track) = track {
-            track.sink.on_discontinuity();
+            track.sink.on_event(TrackEvent::Discontinuity);
         }
 
         self.shared_estimator =
@@ -492,7 +493,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             Some(previous) => Duration::max(previous, chunk.pts()),
             None => chunk.pts(),
         });
-        self.sink.send(chunk);
+        self.sink.on_event(TrackEvent::Chunk(chunk));
     }
 
     /// Gives up on the live edge: releases everything buffered with the

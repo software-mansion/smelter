@@ -81,6 +81,13 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
                 self.au_splitter.mark_missing_data();
                 return vec![];
             }
+            EncodedInputEvent::Discontinuity => {
+                // decode what is still held back, then drop the state built
+                // for the old timeline (reference frames, drained codec)
+                let frames = self.flush();
+                self.decoder.flush();
+                return frames;
+            }
             EncodedInputEvent::AuDelimiter => match self.au_splitter.flush() {
                 Ok(chunks) => chunks,
                 Err(err) => {

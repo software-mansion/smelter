@@ -15,7 +15,6 @@ pub(crate) enum BufferingStrategy {
         max: Duration, // compare to upper bound
         desired: Duration,
     },
-    #[allow(dead_code)]
     WithSpread {
         min: Duration, // compare to lower bound
         max: Duration, // compare to lower bound
@@ -144,23 +143,30 @@ pub(crate) trait LiveSyncBuffer: Default + Send + 'static {
 /// Plain FIFO buffer: items come out in write order and nothing is ever held
 /// back, so [`read`](LiveSyncBuffer::read) and
 /// [`try_read`](LiveSyncBuffer::try_read) behave the same.
-#[derive(Default)]
-pub(crate) struct ChunkBuffer {
-    queue: VecDeque<EncodedInputChunk>,
+pub(crate) struct FifoBuffer<T> {
+    queue: VecDeque<T>,
 }
 
-impl LiveSyncBuffer for ChunkBuffer {
-    type Chunk = EncodedInputChunk;
+impl<T> Default for FifoBuffer<T> {
+    fn default() -> Self {
+        Self {
+            queue: VecDeque::new(),
+        }
+    }
+}
 
-    fn write(&mut self, item: EncodedInputChunk) {
+impl<T: InputSyncItem + Send + 'static> LiveSyncBuffer for FifoBuffer<T> {
+    type Chunk = T;
+
+    fn write(&mut self, item: T) {
         self.queue.push_back(item);
     }
 
-    fn read(&mut self) -> Option<EncodedInputChunk> {
+    fn read(&mut self) -> Option<T> {
         self.queue.pop_front()
     }
 
-    fn try_read(&mut self) -> Option<EncodedInputChunk> {
+    fn try_read(&mut self) -> Option<T> {
         self.read()
     }
 
@@ -168,3 +174,5 @@ impl LiveSyncBuffer for ChunkBuffer {
         self.queue.iter().map(|chunk| chunk.pts())
     }
 }
+
+pub(crate) type ChunkBuffer = FifoBuffer<EncodedInputChunk>;

@@ -7,7 +7,7 @@ use smelter_api::*;
 use smelter_core::QueueInputOptions;
 use smelter_core::codecs::VideoDecoderOptions;
 use smelter_core::protocols::{
-    HlsInputOptions, HlsInputVideoDecoders, Mp4InputOptions, Mp4InputSource, Mp4InputVideoDecoders,
+    HlsInputOptions, HlsInputDecoders, Mp4InputOptions, Mp4InputSource, Mp4InputVideoDecoders,
     PortOrRange, RtmpServerInputDecoders, RtmpServerInputOptions, RtpAudioOptions, RtpInputOptions,
     RtpInputTransportProtocol, WebrtcVideoDecoderOptions, WhepInputOptions, WhipInputOptions,
 };
@@ -822,7 +822,7 @@ fn hls_minimal() {
         }),
         CoreInput::Hls(HlsInputOptions {
             url: Arc::from("https://example.com/stream.m3u8"),
-            video_decoders: HlsInputVideoDecoders { h264: None },
+            decoder_options: HlsInputDecoders { h264: None },
             queue_options: default_queue(),
             offset: None,
         }),
@@ -845,7 +845,7 @@ fn hls_with_all_options() {
         }),
         CoreInput::Hls(HlsInputOptions {
             url: Arc::from("https://example.com/stream.m3u8"),
-            video_decoders: HlsInputVideoDecoders {
+            decoder_options: HlsInputDecoders {
                 h264: Some(VideoDecoderOptions::FfmpegH264),
             },
             queue_options: QueueInputOptions {
@@ -872,7 +872,7 @@ fn hls_vulkan_decoder() {
         }),
         CoreInput::Hls(HlsInputOptions {
             url: Arc::from("https://example.com/stream.m3u8"),
-            video_decoders: HlsInputVideoDecoders {
+            decoder_options: HlsInputDecoders {
                 h264: Some(VideoDecoderOptions::VulkanH264),
             },
             queue_options: default_queue(),

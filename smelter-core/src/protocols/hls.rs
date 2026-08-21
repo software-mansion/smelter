@@ -6,8 +6,10 @@ use crate::queue::QueueInputOptions;
 #[derive(Debug, Clone, PartialEq)]
 pub struct HlsInputOptions {
     pub url: Arc<str>,
-    pub video_decoders: HlsInputVideoDecoders,
+    pub decoder_options: HlsInputDecoders,
     pub queue_options: QueueInputOptions,
+    /// Ignored for live playlists, where the live edge decides where the
+    /// playback starts.
     pub offset: Option<Duration>,
 }
 
@@ -21,6 +23,6 @@ pub struct HlsOutputOptions {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct HlsInputVideoDecoders {
+pub struct HlsInputDecoders {
     pub h264: Option<VideoDecoderOptions>,
 }

@@ -58,6 +58,11 @@ impl AudioDecoder for OpusDecoder {
                 return Ok(vec![]);
             }
             EncodedInputEvent::AuDelimiter => return Ok(vec![]),
+            EncodedInputEvent::Discontinuity => {
+                // nothing of the old timeline is worth recovering
+                self.unhandled_lost_packets = 0;
+                return Ok(vec![]);
+            }
         };
 
         trace!(?encoded_chunk, "libopus decoder received a chunk.");

@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use super::{BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError};
+use super::{BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackEvent};
 
 /// Synchronization for non-live inputs: normalizes timestamps of all tracks
 /// to start at zero, based on the first chunk written to any track. Chunks
@@ -44,7 +44,7 @@ impl<T: InputSyncItem> SimpleSyncTrack<T> {
             input_pts: first_pts,
             output_pts: Duration::ZERO,
         });
-        self.sink.send(item);
+        self.sink.on_event(TrackEvent::Chunk(item));
         Ok(())
     }
 }

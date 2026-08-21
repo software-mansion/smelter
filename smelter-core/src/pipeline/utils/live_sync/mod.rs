@@ -39,7 +39,7 @@ mod edge_estimator;
 mod state;
 mod track;
 
-pub(crate) use buffer::{BufferingStrategy, ChunkBuffer, LiveSyncBuffer};
+pub(crate) use buffer::{BufferingStrategy, ChunkBuffer, FifoBuffer, LiveSyncBuffer};
 pub(crate) use track::LiveSyncTrack;
 
 use crate::pipeline::utils::input_sync::{BoxedTrackSink, TrackKind};
