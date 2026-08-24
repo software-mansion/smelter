@@ -53,6 +53,9 @@ ash = { workspace = true }
 vk-mem = "0.4.0"
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
+wgpu = { version = "30.0.0", optional = true, default-features = false, features = [
+    "metal",
+] }
 objc2-video-toolbox = { version = "0.3.2", default-features = false, features = [
     "std",
     "VTBase",
