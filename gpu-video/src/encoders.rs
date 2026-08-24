@@ -240,6 +240,9 @@ pub enum VideoEncoderError {
     #[error("Encode submission timed out")]
     EncodeSubmissionTimeout,
 
+    #[error("The encoder is no longer usable and has to be recreated: {0}")]
+    EncoderLost(VideoBackendError),
+
     #[error("Encoder error: {0}")]
     BackendError(VideoBackendError),
 }
