@@ -1214,7 +1214,7 @@ fn apply_preset(session: &vt::VTCompressionSession, preset: EncoderPreset) {
     let Some(key) = cfstring_constant(symbol) else {
         // compression presets were added in macOS 26
         tracing::debug!(
-            "VideoToolbox has no compression presets on this macOS; skipping the {name} preset base configuration"
+            "VideoToolbox has no compression presets on this macOS version; skipping the {name} preset base configuration"
         );
         return;
     };
