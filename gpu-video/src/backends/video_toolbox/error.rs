@@ -398,6 +398,12 @@ impl From<VTEncoderError> for VideoEncoderError {
             VTEncoderError::WgpuTextureEncoder(err) => {
                 VideoEncoderError::WgpuTextureEncoderError(err)
             }
+            err @ (VTEncoderError::ParametersDiverged | VTEncoderError::SessionInvalidated(_)) => {
+                VideoEncoderError::EncoderLost(VideoBackendError {
+                    message: err.to_string(),
+                    source: Box::new(err),
+                })
+            }
             err => VideoEncoderError::BackendError(VideoBackendError {
                 message: err.to_string(),
                 source: Box::new(err),

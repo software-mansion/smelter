@@ -168,6 +168,9 @@ pub enum VideoEncoderError {
     #[error(transparent)]
     WgpuTextureEncoderError(#[from] WgpuTextureEncoderError),
 
+    #[error("The encoder is no longer usable and has to be recreated: {0}")]
+    EncoderLost(VideoBackendError),
+
     #[error("Encoder error: {0}")]
     BackendError(VideoBackendError),
 }
