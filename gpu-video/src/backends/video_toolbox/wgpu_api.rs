@@ -43,8 +43,7 @@ impl WgpuBackend for VTBackend {
             device_type: info.device_type.into(),
             vendor: info.vendor.to_string(),
             api_version: query_api_version(),
-            supports_decoding: decode_capabilities.h264.is_some()
-                || decode_capabilities.h265.is_some(),
+            supports_decoding: decode_capabilities.h264.is_some(),
             supports_encoding: encode_capabilities.h264.is_some()
                 || encode_capabilities.h265.is_some(),
             decode_capabilities,

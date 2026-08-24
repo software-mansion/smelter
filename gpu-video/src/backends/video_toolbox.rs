@@ -58,7 +58,7 @@ pub struct VTAdapter;
 
 impl VideoAdapterBackend for VTAdapter {
     fn build_info(&self) -> VideoAdapterInfo {
-        let name = sysctlbyname_string("machdep.cpu.brand_string").unwrap_or_else(|_| "".into());
+        let name = sysctlbyname_string(c"machdep.cpu.brand_string").unwrap_or_else(|_| "".into());
         let device_type = if cfg!(target_arch = "aarch64") {
             DeviceType::IntegratedGpu
         } else {
@@ -69,8 +69,7 @@ impl VideoAdapterBackend for VTAdapter {
         let decode_capabilities = caps::query_decode_capabilities();
         let encode_capabilities = caps::query_encode_capabilities();
 
-        let supports_decoding =
-            decode_capabilities.h264.is_some() || decode_capabilities.h265.is_some();
+        let supports_decoding = decode_capabilities.h264.is_some();
         let supports_encoding =
             encode_capabilities.h264.is_some() || encode_capabilities.h265.is_some();
 
@@ -102,7 +101,7 @@ impl VideoAdapterBackend for VTAdapter {
 }
 
 fn query_api_version() -> String {
-    sysctlbyname_string("kern.osproductversion").unwrap_or_else(|_| "???".into())
+    sysctlbyname_string(c"kern.osproductversion").unwrap_or_else(|_| "???".into())
 }
 
 struct VTDevice {}
@@ -194,9 +193,9 @@ fn allocate_retained<R: objc2_core_foundation::Type, P: OutPtr<R>, F: FnOnce(Non
     })
 }
 
-fn sysctlbyname_string(name: &str) -> Result<String, std::io::Error> {
+fn sysctlbyname_string(name: &std::ffi::CStr) -> Result<String, std::io::Error> {
     let mut len = 0;
-    let name = name.as_ptr() as *const i8;
+    let name = name.as_ptr();
     let result = unsafe { libc::sysctlbyname(name, null_mut(), &mut len, null_mut(), 0) };
     if result != 0 {
         return Err(std::io::Error::last_os_error());
