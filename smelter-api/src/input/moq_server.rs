@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::SideChannel;
+use super::{InputBuffer, SideChannel};
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -19,6 +19,9 @@ pub struct MoqServerInput {
     pub decoder_map: Option<HashMap<InputMoqServerCodec, MoqServerVideoDecoderOptions>>,
     /// Enable side channel for video and/or audio track.
     pub side_channel: Option<SideChannel>,
+    /// (default=2000) Buffer kept between the live edge of the stream and playback.
+    /// A number value represents `buffer.desired_ms` option
+    pub buffer: Option<InputBuffer>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq, Eq, Hash)]

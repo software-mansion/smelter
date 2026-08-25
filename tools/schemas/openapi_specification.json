@@ -2800,6 +2800,17 @@
                 "description": "Enable side channel for video and/or audio track."
               }
             ]
+          },
+          "buffer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputBuffer",
+                "description": "(default=2000) Buffer kept between the live edge of the stream and playback.\nA number value represents `buffer.desired_ms` option"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -3199,6 +3210,17 @@
               {
                 "$ref": "#/components/schemas/SideChannel",
                 "description": "Enable side channel for video and/or audio track."
+              }
+            ]
+          },
+          "buffer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputBuffer",
+                "description": "(default=2000) Buffer kept between the live edge of the stream and playback.\nA number value represents `buffer.desired_ms` option"
               }
             ]
           }

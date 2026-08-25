@@ -1,4 +1,4 @@
-mod buffer;
+pub(crate) mod buffer;
 mod input;
 
 pub(super) mod connection;
