@@ -98,9 +98,11 @@ impl<B: LiveSyncBuffer> LiveSync<B> {
 /// waits) while delivery pauses, pushing releasable chunks to the track
 /// callbacks; exits once every handle to the input is dropped.
 fn spawn_tick_thread<B: LiveSyncBuffer>(shared: Weak<Mutex<SharedState<B>>>) {
+    let span = tracing::Span::current();
     std::thread::Builder::new()
         .name("Live sync ticker".to_string())
         .spawn(move || {
+            let _guard = span.entered();
             loop {
                 std::thread::sleep(TICK_INTERVAL);
                 let Some(shared) = shared.upgrade() else {

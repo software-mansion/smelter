@@ -1,5 +1,7 @@
 use std::time::{Duration, Instant};
 
+use tracing::{debug, trace};
+
 use super::{LiveSyncOptions, buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator};
 use crate::pipeline::utils::input_sync::{
     BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackEvent, TrackKind,
@@ -58,7 +60,9 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     }
 
     pub(super) fn add_track(&mut self, kind: TrackKind, sink: BoxedTrackSink<B::Chunk>) {
+        debug!(?kind, "Live sync: adding track");
         let track = TrackState {
+            kind,
             options: self.options,
             sync_point: self.sync_point,
             estimator: LiveEdgeEstimator::new(
@@ -106,6 +110,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     /// Give up on live edge detection; every track releases what it buffered
     /// through its callback. Shared live edge state stays intact.
     pub(super) fn flush(&mut self) {
+        debug!("Live sync: flush");
         let now = Instant::now();
         if let Some(track) = self.audio.as_mut() {
             track.reset(now, self.anchor);
@@ -123,6 +128,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             .as_ref()
             .is_some_and(|track| track.sink.is_closed())
         {
+            debug!("Live sync: audio track sink closed, dropping track");
             self.audio = None;
         }
         if self
@@ -130,6 +136,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             .as_ref()
             .is_some_and(|track| track.sink.is_closed())
         {
+            debug!("Live sync: video track sink closed, dropping track");
             self.video = None;
         }
     }
@@ -155,6 +162,12 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         // both estimators observe for the whole lifetime of the input
         track.estimator.observe(now, chunk.pts());
         self.shared_estimator.observe(now, chunk.pts());
+        trace!(
+            ?kind,
+            pts=?chunk.pts(),
+            now_pts=?now.saturating_duration_since(self.sync_point),
+            "Live sync: observed chunk"
+        );
         track.buffer.write(chunk);
 
         self.tick(now);
@@ -232,6 +245,10 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             let strategy = self.options.buffering_strategy;
             if !strategy.buffer_in_range(estimation, anchor.current, now_pts) {
                 anchor.target = strategy.desired_anchor(estimation, now_pts);
+                trace!(
+                    target_offset = anchor.target.offset_string(),
+                    "Live sync: shared anchor out of range, correcting target"
+                );
             }
         }
 
@@ -307,6 +324,11 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         if !track.is_discontinuity(now, pts) {
             return;
         }
+        debug!(
+            ?kind,
+            ?pts,
+            "Live sync: discontinuity detected, resetting input"
+        );
 
         if let Some(track) = self.audio.as_mut() {
             track.reset(now, self.anchor);
@@ -333,6 +355,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
 
 /// State of a single track, owned by [`SharedState`].
 struct TrackState<B: LiveSyncBuffer> {
+    kind: TrackKind,
     /// Input-wide config, copied so a track can run its own transitions.
     options: LiveSyncOptions,
     /// Instant that output timestamps are measured from.
@@ -369,6 +392,12 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             return;
         }
 
+        debug!(
+            kind=?self.kind,
+            last_released_pts=?last_pts,
+            ?now_pts,
+            "Live sync: track stalled, resetting"
+        );
         self.reset(now, shared_anchor);
     }
 
@@ -391,7 +420,12 @@ impl<B: LiveSyncBuffer> TrackState<B> {
 
         match source {
             EdgeSource::Shared => {
-                if shared_anchor.is_some() {
+                if let Some(anchor) = shared_anchor {
+                    debug!(
+                        kind=?self.kind,
+                        offset=anchor.current.offset_string(),
+                        "Live sync: track started, adopting shared anchor"
+                    );
                     self.start = StartState::StartedShared;
                     return;
                 }
@@ -402,6 +436,13 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                     .options
                     .buffering_strategy
                     .desired_anchor(estimation, now_pts);
+                debug!(
+                    kind=?self.kind,
+                    offset=anchor.offset_string(),
+                    buffered=?self.buffered_duration(),
+                    ?estimation,
+                    "Live sync: track started, establishing shared anchor"
+                );
                 *shared_anchor = Some(SharedAnchor {
                     current: anchor,
                     target: anchor,
@@ -417,6 +458,13 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                     .options
                     .buffering_strategy
                     .desired_anchor(estimation, now_pts);
+                debug!(
+                    kind=?self.kind,
+                    offset=anchor.offset_string(),
+                    buffered=?self.buffered_duration(),
+                    ?estimation,
+                    "Live sync: track started with its own anchor"
+                );
                 self.start = StartState::StartedTrack {
                     target_anchor: anchor,
                     current_anchor: anchor,
@@ -464,6 +512,11 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                 *target_anchor = shared_anchor.current;
                 let anchor_distance = shared_anchor.current.distance_to(*current_anchor);
                 if anchor_distance < Duration::from_millis(50) {
+                    debug!(
+                        kind=?self.kind,
+                        offset=shared_anchor.current.offset_string(),
+                        "Live sync: track converged, switching to shared anchor"
+                    );
                     self.start = StartState::StartedShared
                 }
                 return;
@@ -474,13 +527,38 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         let now_pts = now.saturating_duration_since(self.sync_point);
         if !strategy.buffer_in_range(track_estimation, *current_anchor, now_pts) {
             *target_anchor = strategy.desired_anchor(track_estimation, now_pts);
+            trace!(
+                kind=?self.kind,
+                target_offset=target_anchor.offset_string(),
+                "Live sync: track anchor out of range, correcting target"
+            );
+        }
+    }
+
+    /// pts span of the buffered content.
+    fn buffered_duration(&self) -> Duration {
+        let min = self.buffer.pts_values().min();
+        let max = self.buffer.pts_values().max();
+        match (min, max) {
+            (Some(min), Some(max)) => max - min,
+            _ => Duration::ZERO,
         }
     }
 
     /// Pushes a chunk out, with its timestamps mapped onto the output
     /// timeline by `anchor`.
     fn release_chunk(&mut self, mut chunk: B::Chunk, anchor: TimestampAnchor) {
+        let input_pts = chunk.pts();
         chunk.apply_anchor(anchor);
+        let output_pts = chunk.pts();
+
+        trace!(
+            kind=?self.kind,
+            ?input_pts,
+            ?output_pts,
+            lead=?chunk.pts().checked_sub(self.sync_point.elapsed()),
+            "Live sync: releasing chunk"
+        );
         self.last_released_pts = Some(match self.last_released_pts {
             Some(previous) => Duration::max(previous, chunk.pts()),
             None => chunk.pts(),
@@ -492,6 +570,13 @@ impl<B: LiveSyncBuffer> TrackState<B> {
     /// mapping in use and goes back to waiting for a start decision.
     fn reset(&mut self, now: Instant, shared_anchor: Option<SharedAnchor>) {
         let anchor = self.best_effort_anchor(now, shared_anchor);
+        debug!(
+            kind=?self.kind,
+            start=?self.start,
+            offset=anchor.map(|anchor| anchor.offset_string()),
+            buffered=self.buffer.pts_values().count(),
+            "Live sync: resetting track"
+        );
 
         self.estimator =
             LiveEdgeEstimator::new(self.sync_point, self.options.stabilization_tolerance);
@@ -571,11 +656,12 @@ impl<B: LiveSyncBuffer> TrackState<B> {
 
         let track_stable = track.upper_bound.stable_for > self.options.stabilization_period;
         let shared_stable = shared.upper_bound.stable_for > self.options.stabilization_period;
+        let both_stable = track_stable && shared_stable;
         // measured on this track, so a track that starts (or resumes)
         // delivering later still gets the full stabilization window
         let waiting_too_long = track.delivery.observed_for >= self.options.max_wait;
 
-        if !(track_stable && shared_stable) && !waiting_too_long {
+        if !both_stable && !waiting_too_long {
             return None;
         }
 
