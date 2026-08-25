@@ -15,6 +15,14 @@ pub(crate) struct TimestampAnchor {
 }
 
 impl TimestampAnchor {
+    /// The mapping as a single signed offset (`output_pts - input_pts`), for logs.
+    pub(crate) fn offset_string(&self) -> String {
+        match self.output_pts >= self.input_pts {
+            true => format!("+{:?}", self.output_pts - self.input_pts),
+            false => format!("-{:?}", self.input_pts - self.output_pts),
+        }
+    }
+
     /// Maps a raw timestamp (pts or dts) onto the output timeline.
     /// Timestamps below `input_pts` (initial backlog) map before the start
     /// point, saturating at zero; such content plays late or is dropped by
@@ -53,10 +61,21 @@ impl TimestampAnchor {
     /// describe the same mapping.
     pub(crate) fn nudge_towards(&mut self, target: TimestampAnchor, step: Duration) {
         let (own, wanted) = self.common_pts(target);
+        if own == wanted {
+            return;
+        }
+        let before = *self;
         match own > wanted {
             // presenting later than the target, so shift earlier
             true => self.input_pts += Duration::min(step, own - wanted),
             false => self.output_pts += Duration::min(step, wanted - own),
         }
+        tracing::trace!(
+            before_offset = before.offset_string(),
+            after_offset = self.offset_string(),
+            target_offset = target.offset_string(),
+            ?step,
+            "Nudging anchor towards target"
+        );
     }
 }
