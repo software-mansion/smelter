@@ -36,7 +36,7 @@ enum AnyFullEncoderParameters {
 pub(crate) struct ResizedImages {
     images: ResizeSubmission,
     decoder_wait_value: SemaphoreWaitValue,
-    decode_query_pool: Option<DecodeResultQuery>,
+    result_query: Option<DecodeResultQuery>,
     _in_flight_resources: InFlightDecodeResources,
 }
 
@@ -230,7 +230,7 @@ impl VulkanTranscoder {
                 frame: ResizedImages {
                     images: output,
                     decoder_wait_value: frame.semaphore_wait_value,
-                    decode_query_pool: frame.decode_query_pool,
+                    result_query: frame.result_query,
                     _in_flight_resources: frame.in_flight_resources,
                 },
                 metadata: frame.decode_result.metadata,
@@ -295,8 +295,8 @@ impl VulkanTranscoder {
         self.resizing_pipeline
             .free_submission(resized_images.data.images);
 
-        if let Some(query_pool) = resized_images.data.decode_query_pool {
-            query_pool.check_results_blocking()?
+        if let Some(query) = resized_images.data.result_query {
+            query.check_results_blocking()?
         }
 
         Ok(results)

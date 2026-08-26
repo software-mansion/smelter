@@ -14,8 +14,8 @@ use crate::backends::vulkan::{
 
 struct SharedState {
     wait_requests: Mutex<Vec<SubmissionWaitRequest>>,
-    interrupt_semaphore: InterruptSemaphore,
-    quit_thread: AtomicBool,
+    waker_semaphore: WakerSemaphore,
+    should_quit: AtomicBool,
 }
 
 pub(crate) struct WaiterThreadHandle {
@@ -26,7 +26,7 @@ pub(crate) struct WaiterThreadHandle {
 impl WaiterThreadHandle {
     pub(crate) fn submit(&self, request: SubmissionWaitRequest) -> Result<(), VulkanCommonError> {
         self.shared.wait_requests.lock().unwrap().push(request);
-        self.shared.interrupt_semaphore.interrupt()
+        self.shared.waker_semaphore.wake()
     }
 }
 
@@ -36,8 +36,8 @@ impl Drop for WaiterThreadHandle {
             return;
         };
 
-        self.shared.quit_thread.store(true, Ordering::Relaxed);
-        self.shared.interrupt_semaphore.interrupt().unwrap();
+        self.shared.should_quit.store(true, Ordering::Relaxed);
+        self.shared.waker_semaphore.wake().unwrap();
         handle.join().unwrap()
     }
 }
@@ -51,8 +51,8 @@ impl WaiterThread {
     pub(crate) fn spawn(device: Arc<Device>) -> Result<WaiterThreadHandle, VulkanCommonError> {
         let shared_state = Arc::new(SharedState {
             wait_requests: Mutex::new(Vec::new()),
-            quit_thread: AtomicBool::new(false),
-            interrupt_semaphore: InterruptSemaphore::new(device.clone())?,
+            should_quit: AtomicBool::new(false),
+            waker_semaphore: WakerSemaphore::new(device.clone())?,
         });
 
         let shared_state_clone = shared_state.clone();
@@ -84,13 +84,13 @@ impl WaiterThread {
             {
                 let requests = self.shared.wait_requests.lock().unwrap();
 
-                let quit = self.shared.quit_thread.load(Ordering::Relaxed);
+                let quit = self.shared.should_quit.load(Ordering::Relaxed);
                 if quit && requests.is_empty() {
                     return;
                 }
 
-                semaphores.push(self.shared.interrupt_semaphore.semaphore.semaphore);
-                wait_values.push(self.shared.interrupt_semaphore.wait_value().0);
+                semaphores.push(self.shared.waker_semaphore.semaphore.semaphore);
+                wait_values.push(self.shared.waker_semaphore.wait_value().0);
                 for req in requests.iter() {
                     semaphores.push(req.semaphore.semaphore);
                     wait_values.push(req.wait_for.0);
@@ -114,7 +114,8 @@ impl WaiterThread {
         let finished = {
             let mut requests = self.shared.wait_requests.lock().unwrap();
 
-            // semaphore values can increase as we iterate, so it's possible that the later submissions would qualify as finished while the early ones wouldn't
+            // we can only read each semaphore's value once, because if we check more times and it changes between two checks,
+            // we will run the finisher for a later frame before an earlier one
             let mut semaphore_values = FxHashMap::default();
             let (finished, unfinished) =
                 std::mem::take(&mut *requests).into_iter().partition(|r| {
@@ -139,12 +140,12 @@ pub(crate) struct SubmissionWaitRequest {
     pub(crate) on_finish: Box<dyn FnOnce() + Send>,
 }
 
-struct InterruptSemaphore {
+struct WakerSemaphore {
     wait_for: Mutex<SemaphoreWaitValue>,
     semaphore: TimelineSemaphore,
 }
 
-impl InterruptSemaphore {
+impl WakerSemaphore {
     fn new(device: Arc<Device>) -> Result<Self, VulkanCommonError> {
         let wait_for = Mutex::new(SemaphoreWaitValue(1));
         let semaphore = TimelineSemaphore::new(device, 0, Some("interrupt submission wait"))?;
@@ -159,7 +160,12 @@ impl InterruptSemaphore {
         *self.wait_for.lock().unwrap()
     }
 
-    fn interrupt(&self) -> Result<(), VulkanCommonError> {
+    fn wake(&self) -> Result<(), VulkanCommonError> {
+        // `wait_for` uses a mutex instead of atomic here by design.
+        // If we used AtomicU64, 2 threads would fetch_add `wait_for` value
+        // and then call signal with the `wait_for` value they fetched.
+        // Depending on which thread signals first, this could result in
+        // the semaphore being signaled in the wrong order (i.e. signaled with `2` and then `1`)
         let mut wait_for = self.wait_for.lock().unwrap();
         self.semaphore.signal(*wait_for)?;
         *wait_for = SemaphoreWaitValue(wait_for.0 + 1);

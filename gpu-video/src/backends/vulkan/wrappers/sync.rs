@@ -120,7 +120,7 @@ impl<K: TrackerKind> Tracker<K> {
         })
     }
 
-    #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
+    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
     pub(crate) fn wait_for_all(&mut self, timeout: u64) -> Result<(), VulkanCommonError> {
         let waited_for = self.semaphore_tracker.wait_for_all(timeout)?;
 
@@ -146,7 +146,7 @@ impl<K: TrackerKind> Tracker<K> {
         self.command_buffer_pools.mark_submitted_as_free(value);
     }
 
-    #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
+    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
     pub(crate) fn raw_semaphore(&self) -> vk::Semaphore {
         self.semaphore_tracker.semaphore.semaphore
     }

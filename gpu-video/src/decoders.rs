@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     DecoderEvent, EncodedInputChunk, H264ParserError, ReferenceManagementError, VideoBackendError,
     parser::h264::AccessUnit,
@@ -12,6 +14,7 @@ pub(crate) trait VideoDecoderBackend: Send {
     fn process_event_bytes(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
+        timeout: Duration,
     ) -> Result<(), VideoDecoderError>;
 }
 
@@ -21,15 +24,14 @@ pub struct BytesDecoderH264 {
 }
 
 impl BytesDecoderH264 {
-    /// The result is a sequence of frames. The payload of each [`OutputFrame`] struct is a [`Vec<u8>`]. Each [`Vec<u8>`] contains a single
-    /// decoded frame in the [NV12 format](https://en.wikipedia.org/wiki/YCbCr#4:2:0).
+    /// The decoded frames are sent via the callback provided at creation.
     ///
     /// If [`DecoderParameters::max_in_flight_submissions`](crate::parameters::DecoderParameters::max_in_flight_submissions)
     /// decode submissions are already in flight, this blocks until all submissions above the limit finish.
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn decode(&mut self, frame: EncodedInputChunk<'_>) -> Result<(), VideoDecoderError> {
-        self.process_event(DecoderEvent::DecodeChunk(frame))
+        self.process_event(DecoderEvent::DecodeChunk(frame), None)
     }
 
     /// Flush all frames from the decoder.
@@ -40,18 +42,23 @@ impl BytesDecoderH264 {
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush(&mut self) -> Result<(), VideoDecoderError> {
-        self.process_event(DecoderEvent::Flush)
+        self.process_event(DecoderEvent::Flush, None)
     }
 
     /// Process a [`DecoderEvent`]. For most use cases, using [`Self::decode`] and [`Self::flush`] is enough.
     /// Use this only when you need more fine-grained control.
     ///
+    /// If the provided event does any decoding operation and [`DecoderParameters::max_in_flight_submissions`](crate::parameters::DecoderParameters::max_in_flight_submissions)
+    /// decode submissions are already in flight, this blocks until all submissions above the limit finish, or times out after `timeout`.
+    ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn process_event(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
+        timeout: Option<Duration>,
     ) -> Result<(), VideoDecoderError> {
-        self.backend.process_event_bytes(event)
+        self.backend
+            .process_event_bytes(event, timeout.unwrap_or(Duration::MAX))
     }
 }
 
@@ -75,6 +82,9 @@ pub enum VideoDecoderError {
     )]
     VideoDeviceWithoutWgpu,
 
-    #[error("Encoder error: {0}")]
+    #[error("Decode submission timed out")]
+    DecodeSubmissionTimeout,
+
+    #[error("Decoder error: {0}")]
     BackendError(VideoBackendError),
 }

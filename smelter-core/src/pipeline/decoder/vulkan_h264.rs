@@ -68,7 +68,7 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             EncodedInputEvent::AuDelimiter => H264DecoderEvent::SignalFrameEnd,
         };
 
-        let frames = match self.decoder.process_event(decoder_event) {
+        let frames = match self.decoder.process_event(decoder_event, None) {
             Ok(frames) => frames,
             Err(VideoDecoderError::ReferenceManagementError(
                 ReferenceManagementError::CorruptedState,

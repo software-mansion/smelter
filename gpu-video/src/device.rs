@@ -70,8 +70,11 @@ pub struct DecoderParameters {
     /// Maximum number of decode submissions that can be in flight. When the limit is reached,
     /// decoding blocks until the oldest submission finishes.
     ///
+    /// If set to `0`, each decode operation blocks until the submission finishes, making the decoder
+    /// work synchronously.
+    ///
     /// **Defaults to 3**
-    pub max_in_flight_submissions: NonZeroU32,
+    pub max_in_flight_submissions: u32,
 }
 
 impl Default for DecoderParameters {
@@ -79,7 +82,7 @@ impl Default for DecoderParameters {
         Self {
             corrupted_state_handling: Default::default(),
             usage_flags: Default::default(),
-            max_in_flight_submissions: NonZeroU32::new(3).unwrap(),
+            max_in_flight_submissions: 3,
         }
     }
 }

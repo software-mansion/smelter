@@ -95,7 +95,7 @@ impl<T> FrameSorter<T> {
         result
     }
 
-    #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
+    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
     pub(crate) fn put_frames(&mut self, frames: Vec<DecodeResult<T>>) -> Vec<OutputFrame<T>> {
         let mut result = Vec::new();
         for unsorted_frame in frames {

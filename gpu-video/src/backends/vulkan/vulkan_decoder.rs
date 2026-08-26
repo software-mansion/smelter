@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
 
 use crate::{
-    VideoBackendError,
+    RawFrameData, VideoBackendError,
     backends::vulkan::{
         VulkanCommonError, codec::h264::parameters::SeqParameterSetExt,
         vulkan_device::DecodingDevice, wrappers::*,
@@ -282,12 +282,12 @@ impl<'a> VulkanDecoder<'a> {
                 )
         };
 
-        let decode_query_pool = video_session_resources
+        let result_query = video_session_resources
             .decode_query_pool
             .as_mut()
             .map(|p| p.query());
 
-        if let Some(query) = decode_query_pool.as_ref() {
+        if let Some(query) = result_query.as_ref() {
             query.reset(cmd_buffer.buffer());
         }
 
@@ -419,7 +419,7 @@ impl<'a> VulkanDecoder<'a> {
             .reference_slots(&pic_reference_slots)
             .push_next(&mut decode_h264_picture_info);
 
-        if let Some(query) = decode_query_pool.as_ref() {
+        if let Some(query) = result_query.as_ref() {
             query.begin_query(cmd_buffer.buffer());
         }
 
@@ -431,7 +431,7 @@ impl<'a> VulkanDecoder<'a> {
                 .cmd_decode_video_khr(cmd_buffer.buffer(), &decode_info)
         };
 
-        if let Some(query) = decode_query_pool.as_ref() {
+        if let Some(query) = result_query.as_ref() {
             query.end_query(cmd_buffer.buffer());
         }
 
@@ -496,7 +496,7 @@ impl<'a> VulkanDecoder<'a> {
                 },
             },
             semaphore_wait_value,
-            decode_query_pool,
+            result_query,
             in_flight_resources,
             decoder: self,
         })
@@ -898,12 +898,12 @@ impl From<VulkanDecoderError> for VideoDecoderError {
             VulkanDecoderError::InvalidInputData(err_msg) => {
                 VideoDecoderError::InvalidInputData(err_msg)
             }
+            VulkanDecoderError::SubmissionWaitTimeout => VideoDecoderError::DecodeSubmissionTimeout,
             VulkanDecoderError::VkError(_)
             | VulkanDecoderError::NoSession
             | VulkanDecoderError::NonExistentReferenceRequested
             | VulkanDecoderError::DecodeOperationFailed(_)
             | VulkanDecoderError::MonochromeChromaFormatUnsupported
-            | VulkanDecoderError::SubmissionWaitTimeout
             | VulkanDecoderError::VulkanCommonError(_) => Self::BackendError(VideoBackendError {
                 message: err.to_string(),
                 source: Box::new(err),
@@ -976,8 +976,8 @@ impl Drop for InFlightDecodeResources {
 pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
     pub(crate) decode_result: DecodeResult<DecodeSubmissionImageInfo>,
     pub(crate) decoder: &'borrow mut VulkanDecoder<'decoder>,
-    pub(crate) decode_query_pool: Option<DecodeResultQuery>,
-    #[cfg_attr(not(feature = "transcoder"), allow(dead_code))]
+    pub(crate) result_query: Option<DecodeResultQuery>,
+    #[cfg_attr(not(feature = "transcoder"), expect(dead_code))]
     pub(crate) semaphore_wait_value: SemaphoreWaitValue,
     pub(crate) in_flight_resources: InFlightDecodeResources,
 }
@@ -992,7 +992,7 @@ impl DecodeSubmission<'_, '_> {
             DownloadFrameSubmission {
                 frame: buffer,
                 decode_metadata: self.decode_result.metadata,
-                decode_query_pool: self.decode_query_pool,
+                result_query: self.result_query,
                 _in_flight_resources: self.in_flight_resources,
             },
             wait_value,
@@ -1014,7 +1014,7 @@ impl DecodeSubmission<'_, '_> {
             DownloadFrameSubmission {
                 frame: texture,
                 decode_metadata: self.decode_result.metadata,
-                decode_query_pool: self.decode_query_pool,
+                result_query: self.result_query,
                 _in_flight_resources: self.in_flight_resources,
             },
             wait_value,
@@ -1025,13 +1025,39 @@ impl DecodeSubmission<'_, '_> {
 pub(crate) struct DownloadFrameSubmission<T> {
     pub(crate) frame: T,
     pub(crate) decode_metadata: DecodeResultMetadata,
-    pub(crate) decode_query_pool: Option<DecodeResultQuery>,
+    pub(crate) result_query: Option<DecodeResultQuery>,
     pub(crate) _in_flight_resources: InFlightDecodeResources,
+}
+
+impl DownloadFrameSubmission<Buffer> {
+    /// ## Safety
+    /// the submission must finish before this method can be called
+    pub(crate) unsafe fn output_to_bytes(
+        mut self,
+    ) -> Result<DecodeResult<RawFrameData>, VulkanDecoderError> {
+        let metadata = self.decode_metadata;
+        let width = metadata.cropped_width;
+        let height = metadata.cropped_height;
+
+        let data = unsafe {
+            self.frame
+                .download_data_from_buffer(width as usize * height as usize * 3 / 2)?
+        };
+
+        Ok(DecodeResult {
+            frame: RawFrameData {
+                frame: data,
+                width,
+                height,
+            },
+            metadata,
+        })
+    }
 }
 
 impl<T> DownloadFrameSubmission<T> {
     pub(crate) fn check_decode_results(&self) -> Result<(), VulkanDecoderError> {
-        let Some(query) = &self.decode_query_pool else {
+        let Some(query) = &self.result_query else {
             return Ok(());
         };
         query.check_results_blocking()

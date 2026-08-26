@@ -38,7 +38,7 @@ fn main() {
 
     let (frame_sender, frame_receiver) = std::sync::mpsc::channel::<OutputFrame<RawFrameData>>();
 
-    let waiter_thread_handle = std::thread::spawn(move || {
+    let writer_thread_handle = std::thread::spawn(move || {
         let mut output_file = std::fs::File::create("output.nv12").unwrap();
         for frame in frame_receiver.iter() {
             output_file.write_all(&frame.data.frame).unwrap();
@@ -65,7 +65,7 @@ fn main() {
     decoder.flush().unwrap();
     drop(decoder);
 
-    waiter_thread_handle.join().unwrap();
+    writer_thread_handle.join().unwrap();
 }
 
 #[cfg(not(vulkan))]
