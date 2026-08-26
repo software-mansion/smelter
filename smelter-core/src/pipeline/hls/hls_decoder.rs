@@ -40,7 +40,7 @@ pub(super) fn spawn_video_decoder(
         });
 
     let vulkan_supported = input.ctx.graphics_context.has_vulkan_decoder_support();
-    let decoder = match input.decoder_options.h264 {
+    let decoder = match input.opts.decoder_options.h264 {
         Some(VideoDecoderOptions::VulkanH264) if !vulkan_supported => {
             return Err(InputInitError::DecoderError(
                 DecoderInitError::VulkanContextRequiredForVulkanDecoder,

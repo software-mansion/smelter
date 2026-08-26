@@ -75,14 +75,6 @@ impl HlsInput {
         input_ref: Ref<InputId>,
         opts: HlsInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
-        let HlsInputOptions {
-            url,
-            decoder_options,
-            queue_options,
-            offset,
-            buffer,
-        } = opts;
-
         let _span = span!(Level::INFO, "HLS input", input_id = input_ref.to_string()).entered();
         let should_close = Arc::new(AtomicBool::new(false));
         ctx.stats_sender.send(StatsEvent::NewInput {
@@ -90,16 +82,16 @@ impl HlsInput {
             kind: InputProtocolKind::Hls,
         });
 
-        let ffmpeg_ctx = FfmpegInputContext::new(&url, should_close.clone())?;
-        let queue_input = QueueInput::new(&ctx, &input_ref, queue_options);
+        let ffmpeg_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
+        let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options.clone());
 
         let input_ctx = HlsInputContext {
             ctx,
             input_ref,
-            decoder_options,
+            opts,
         };
 
-        HlsDemuxerThread::new(input_ctx, ffmpeg_ctx, &queue_input, offset, buffer)?.spawn();
+        HlsDemuxerThread::new(input_ctx, ffmpeg_ctx, &queue_input)?.spawn();
 
         Ok((
             Input::Hls(Self { should_close }),
@@ -121,7 +113,7 @@ impl Drop for HlsInput {
 pub(super) struct HlsInputContext {
     pub(super) ctx: Arc<PipelineCtx>,
     pub(super) input_ref: Ref<InputId>,
-    pub(super) decoder_options: HlsInputDecoders,
+    pub(super) opts: HlsInputOptions,
 }
 
 struct HlsDemuxerThread {
@@ -137,9 +129,8 @@ impl HlsDemuxerThread {
         input_ctx: HlsInputContext,
         ffmpeg_ctx: FfmpegInputContext,
         queue_input: &QueueInput,
-        offset: Option<Duration>,
-        buffer: LiveInputBufferOptions,
     ) -> Result<Self, InputInitError> {
+        let offset = input_ctx.opts.offset;
         let is_live = ffmpeg_ctx.is_live();
         let audio_stream = ffmpeg_ctx.audio_stream();
         let video_stream = ffmpeg_ctx.video_stream();
@@ -166,26 +157,23 @@ impl HlsDemuxerThread {
             },
         });
 
-        let (min, desired, max) = resolve_buffer_options(buffer);
+        let (min, desired, max) = resolve_buffer_options(input_ctx.opts.buffer);
         let input_sync = match is_live {
             true => InputSync::Live(LiveSync::new(
                 LiveSyncOptions {
                     buffering_strategy: BufferingStrategy::WithSpread { min, max, desired },
                     stabilization_period: Duration::from_millis(1000),
-                    // segments are fetched over HTTP in whole batches, so estimate
-                    // improvements jump more than with a continuous stream
+                    // mostly dead value, chunks are usually larger than stabilization_period
+                    // so tolerance does not matter, stable state will trigger as soon as we have
+                    // a gap between chunks.
                     stabilization_tolerance: Duration::from_millis(250),
-                    // content arrives one segment at a time, so the estimate needs
-                    // a few fetches before giving up
-                    max_wait: desired * 2,
+                    max_wait: Duration::max(desired * 2, Duration::from_secs(5)),
                 },
                 input_ctx.ctx.queue_ctx.sync_point,
             )),
             false => InputSync::Simple(SimpleSync::new(desired)),
         };
-        // If we assume that max reasonable segment size is 10 second, then a channel
-        // between the demuxer and a decoder has to fit more than one of them.
-        let decoder_buffer_size = Duration::max(Duration::from_secs(40), max * 2);
+        let decoder_buffer_size = Duration::max(Duration::from_secs(60), max * 2);
 
         let audio = match (audio_stream, samples_sender) {
             (Some(stream), Some(sender)) => Some(stream.start_audio_track(
