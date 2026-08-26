@@ -22,6 +22,7 @@ mod state;
 mod utils;
 
 pub(crate) use input::*;
+pub(crate) use input_reports::{LiveSyncTrackState, SimpleSyncTrackState};
 pub(crate) use output::*;
 pub(crate) use state::StatsEvent;
 

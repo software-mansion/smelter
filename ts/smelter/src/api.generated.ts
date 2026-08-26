@@ -1618,24 +1618,28 @@ export type InputStatsReport =
   | {
       type: "hls";
       /**
-       * Stats for the video track.
+       * Stats for the video track. `None` when the track is not active.
        */
-      video: HlsInputTrackStatsReport;
+      video?: InputSyncTrackStatsReport | null;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track. `None` when the track is not active.
        */
-      audio: HlsInputTrackStatsReport;
+      audio?: InputSyncTrackStatsReport | null;
     }
   | {
       type: "rtmp";
       /**
-       * Stats for the video track.
+       * Whether a client is currently connected.
        */
-      video: RtmpInputTrackStatsReport;
+      is_connected: boolean;
       /**
-       * Stats for the audio track.
+       * Stats for the video track. `None` when the track is not active.
        */
-      audio: RtmpInputTrackStatsReport;
+      video?: InputSyncTrackStatsReport | null;
+      /**
+       * Stats for the audio track. `None` when the track is not active.
+       */
+      audio?: InputSyncTrackStatsReport | null;
     }
   | {
       type: "moq_server";
@@ -1670,6 +1674,82 @@ export type InputStatsReport =
        */
       audio: Mp4InputTrackStatsReport;
     };
+/**
+ * Stats report for a track synchronized by the input sync (`RTMP`, `HLS`).
+ */
+export type InputSyncTrackStatsReport =
+  | {
+      mode: "simple";
+      /**
+       * Bitrate in the 1-second window.
+       */
+      bitrate_1_second: number;
+      /**
+       * Bitrate in the 1-minute window.
+       */
+      bitrate_1_minute: number;
+      /**
+       * State of the synchronization.
+       */
+      state: SimpleSyncTrackState;
+    }
+  | {
+      mode: "live";
+      /**
+       * Bitrate in the 1-second window.
+       */
+      bitrate_1_second: number;
+      /**
+       * Bitrate in the 1-minute window.
+       */
+      bitrate_1_minute: number;
+      /**
+       * State of the live edge synchronization.
+       */
+      state: LiveSyncTrackState;
+      /**
+       * Total count of timestamp discontinuities detected.
+       */
+      discontinuities_detected: number;
+      /**
+       * Remaining shift of the playback position to reach the target buffer. Positive when the buffer is being shrunk, negative when it is being grown, zero when converged.
+       */
+      target_offset_distance_seconds: number;
+      /**
+       * How far the playback position is behind the pessimistic live edge estimate (content arriving as slow as the slowest recent chunk). Margin before the playback runs out of content. `None` before the track starts.
+       */
+      live_edge_lower_bound_distance_seconds?: number | null;
+      /**
+       * How far the playback position is behind the optimistic live edge estimate (content arriving as fast as the fastest recent chunk). Total latency introduced by the synchronization. `None` before the track starts.
+       */
+      live_edge_upper_bound_distance_seconds?: number | null;
+      /**
+       * Content currently held back by the sync.
+       */
+      buffer: LiveSyncBufferStatsReport;
+      /**
+       * Track stats in the 10-second window.
+       */
+      last_10_seconds: LiveSyncTrackSlidingWindowStatsReport;
+    };
+/**
+ * State of the synchronization of a non-live track.
+ */
+export type SimpleSyncTrackState = "running" | "initial_buffering";
+/**
+ * State of the live edge synchronization of a track.
+ */
+export type LiveSyncTrackState = "waiting_for_start" | "started_shared" | "started_track";
+/**
+ * Stats report for the content currently held in the sync buffer.
+ */
+export type LiveSyncBufferStatsReport = {
+  type: "fifo";
+  /**
+   * Duration of the buffered content.
+   */
+  duration_seconds: number;
+};
 /**
  * Stats report for outputs.
  */
@@ -2265,79 +2345,37 @@ export interface RtpJitterBufferSlidingWindowStatsReport {
   input_buffer_min_seconds: number;
 }
 /**
- * Stats report for a track in the `HLS` input.
+ * Stats report for the given time window in a live stream track.
  */
-export interface HlsInputTrackStatsReport {
+export interface LiveSyncTrackSlidingWindowStatsReport {
   /**
-   * Total count of the packets received.
-   */
-  packets_received: number;
-  /**
-   * Total count of discontinuities between packet timestamps.
+   * Count of timestamp discontinuities detected during the given time window.
    */
   discontinuities_detected: number;
   /**
-   * Bitrate in the 1-second window.
+   * Measured when chunk enters the sync buffer, using the current timestamp mapping. This value represents how much time chunk has to reach the queue to be processed, before any waiting in the sync buffer. Negative when the chunk is already late. Not measured before the track starts.
    */
-  bitrate_1_second: number;
+  effective_buffer_on_receive_avg_seconds: number;
   /**
-   * Bitrate in the 1-minute window.
+   * Measured when chunk enters the sync buffer, using the current timestamp mapping. This value represents how much time chunk has to reach the queue to be processed, before any waiting in the sync buffer. Negative when the chunk is already late. Not measured before the track starts.
    */
-  bitrate_1_minute: number;
+  effective_buffer_on_receive_max_seconds: number;
   /**
-   * Track stats in the 10-second window.
+   * Measured when chunk enters the sync buffer, using the current timestamp mapping. This value represents how much time chunk has to reach the queue to be processed, before any waiting in the sync buffer. Negative when the chunk is already late. Not measured before the track starts.
    */
-  last_10_seconds: HlsInputTrackSlidingWindowStatsReport;
-}
-/**
- * Stats report for the given time window in the `HLS` input track.
- */
-export interface HlsInputTrackSlidingWindowStatsReport {
+  effective_buffer_on_receive_min_seconds: number;
   /**
-   * Count of packets received during the given time window.
+   * Measured when chunk leaves the sync buffer. This value represents how much time chunk has to reach the queue to be processed. Negative when the chunk is already late.
    */
-  packets_received: number;
+  effective_buffer_on_output_avg_seconds: number;
   /**
-   * Count of discontinuities between packet timestamps during the given time window.
+   * Measured when chunk leaves the sync buffer. This value represents how much time chunk has to reach the queue to be processed. Negative when the chunk is already late.
    */
-  discontinuities_detected: number;
+  effective_buffer_on_output_max_seconds: number;
   /**
-   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
+   * Measured when chunk leaves the sync buffer. This value represents how much time chunk has to reach the queue to be processed. Negative when the chunk is already late.
    */
-  effective_buffer_avg_seconds: number;
-  /**
-   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
-   */
-  effective_buffer_max_seconds: number;
-  /**
-   * Measured when packet leaves jitter buffer. This value represents how much time packet has to reach the queue to be processed.
-   */
-  effective_buffer_min_seconds: number;
-  /**
-   * Size of the input buffer.
-   */
-  input_buffer_avg_seconds: number;
-  /**
-   * Size of the input buffer.
-   */
-  input_buffer_max_seconds: number;
-  /**
-   * Size of the input buffer.
-   */
-  input_buffer_min_seconds: number;
-}
-/**
- * Stats report for a track in `RTMP` input.
- */
-export interface RtmpInputTrackStatsReport {
-  /**
-   * Bitrate in the 1-second window.
-   */
-  bitrate_1_second: number;
-  /**
-   * Bitrate in the 1-minute window.
-   */
-  bitrate_1_minute: number;
+  effective_buffer_on_output_min_seconds: number;
 }
 /**
  * Stats report for a track in `MoQ` server input.

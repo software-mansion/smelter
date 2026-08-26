@@ -148,10 +148,6 @@ impl<T: TimedValue> Sender<T> {
             }
         }
     }
-
-    pub fn buffered_duration(&self) -> Duration {
-        self.shared.inner.lock().unwrap().buffered_duration()
-    }
 }
 
 impl<T> Clone for Sender<T> {

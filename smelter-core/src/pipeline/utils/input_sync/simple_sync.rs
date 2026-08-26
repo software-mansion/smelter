@@ -3,13 +3,20 @@ use std::{
     time::Duration,
 };
 
-use super::{BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackEvent};
+use super::{
+    BoxedTrackSink, InputSyncItem, InputSyncStatsSender, TimestampAnchor, TrackClosedError,
+    TrackEvent, TrackKind,
+};
+use crate::stats::{
+    InputSyncMode, InputSyncStatsEvent, SimpleSyncStatsEvent, SimpleSyncTrackState,
+};
 
 /// The most basic sync mechanism.
 /// - Buffers at the start to have at least `desired_buffer` of data.
 /// - Normalizes all PTS to start from zero (based on minimal not last pts)
 pub(crate) struct SimpleSync {
     state: Arc<Mutex<SimpleSyncState>>,
+    stats: InputSyncStatsSender,
 }
 
 struct SimpleSyncState {
@@ -51,7 +58,7 @@ impl SimpleSyncState {
 }
 
 impl SimpleSync {
-    pub fn new(desired_buffer: Duration) -> Self {
+    pub fn new(desired_buffer: Duration, stats: InputSyncStatsSender) -> Self {
         Self {
             state: Arc::new(Mutex::new(SimpleSyncState {
                 desired_buffer,
@@ -59,12 +66,21 @@ impl SimpleSync {
                 max_pts: None,
                 buffering: true,
             })),
+            stats,
         }
     }
 
-    pub fn add_track<T: InputSyncItem>(&self, sink: BoxedTrackSink<T>) -> SimpleSyncTrack<T> {
+    pub fn add_track<T: InputSyncItem>(
+        &self,
+        kind: TrackKind,
+        sink: BoxedTrackSink<T>,
+    ) -> SimpleSyncTrack<T> {
+        self.stats
+            .send(kind, InputSyncStatsEvent::TrackAdded(InputSyncMode::Simple));
         SimpleSyncTrack {
             state: self.state.clone(),
+            kind,
+            stats: self.stats.clone(),
             anchor: None,
             buffer: Vec::new(),
             sink,
@@ -80,6 +96,8 @@ impl SimpleSync {
 
 pub(crate) struct SimpleSyncTrack<T: InputSyncItem> {
     state: Arc<Mutex<SimpleSyncState>>,
+    kind: TrackKind,
+    stats: InputSyncStatsSender,
     /// Set once the shared state reports released. The anchor is fixed from
     /// then on, so the shared state does not have to be checked anymore.
     anchor: Option<TimestampAnchor>,
@@ -93,11 +111,19 @@ impl<T: InputSyncItem> SimpleSyncTrack<T> {
         if self.sink.is_closed() {
             return Err(TrackClosedError);
         }
+        self.stats
+            .send(self.kind, InputSyncStatsEvent::BytesReceived(chunk.size()));
         let anchor = match self.anchor {
             Some(anchor) => anchor,
             None => match self.state.lock().unwrap().register_pts(chunk.pts()) {
                 Some(anchor) => {
                     self.anchor = Some(anchor);
+                    self.stats.send(
+                        self.kind,
+                        InputSyncStatsEvent::Simple(SimpleSyncStatsEvent::StateChanged(
+                            SimpleSyncTrackState::Running,
+                        )),
+                    );
                     anchor
                 }
                 None => {
@@ -118,6 +144,8 @@ impl<T: InputSyncItem> SimpleSyncTrack<T> {
 
 impl<T: InputSyncItem> Drop for SimpleSyncTrack<T> {
     fn drop(&mut self) {
+        self.stats
+            .send(self.kind, InputSyncStatsEvent::TrackRemoved);
         // the stream can end before the desired buffer is collected
         if self.sink.is_closed() {
             return;

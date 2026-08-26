@@ -27,7 +27,10 @@ use crate::{
     utils::{
         InitializableThread,
         channel::{Sender, TrySendError},
-        input_sync::{InputSync, InputSyncTrack, SimpleSync, TrackEvent, TrackKind, TrackSink},
+        input_sync::{
+            InputSync, InputSyncStatsSender, InputSyncTrack, SimpleSync, TrackEvent, TrackKind,
+            TrackSink,
+        },
         live_sync::{BufferingStrategy, ChunkBuffer, LiveSync, LiveSyncOptions},
     },
 };
@@ -51,7 +54,9 @@ pub(crate) fn start_connection_thread(
             false => QueueTrackOffset::None,
         },
     });
+
     let (min, desired, max) = resolve_buffer_options(input.buffer);
+    let stats = InputSyncStatsSender::new(input_ref, &ctx.stats_sender);
     let input_sync = match is_live {
         true => InputSync::Live(LiveSync::new(
             LiveSyncOptions {
@@ -61,8 +66,9 @@ pub(crate) fn start_connection_thread(
                 max_wait: desired * 2,
             },
             ctx.queue_ctx.sync_point,
+            stats,
         )),
-        false => InputSync::Simple(SimpleSync::new(desired)),
+        false => InputSync::Simple(SimpleSync::new(desired, stats)),
     };
     let decoder_buffer_size = Duration::max(Duration::from_secs(60), max * 2);
 
@@ -89,6 +95,10 @@ pub(crate) fn start_connection_thread(
                 app,
                 stream_key, is_live, "RTMP stream connection established"
             );
+            state
+                .ctx
+                .stats_sender
+                .send(RtmpInputStatsEvent::ConnectionEstablished.into_event(&state.input_ref));
 
             for event in &conn {
                 if let Err(err) = state.handle_rtmp_event(event) {
@@ -103,6 +113,10 @@ pub(crate) fn start_connection_thread(
             state.input_sync.flush();
 
             info!("RTMP stream connection closed");
+            state
+                .ctx
+                .stats_sender
+                .send(RtmpInputStatsEvent::ConnectionClosed.into_event(&state.input_ref));
         })
         .unwrap();
     Some(handle)
@@ -195,10 +209,6 @@ impl RtmpConnectionState {
             present: true,
         };
 
-        self.ctx.stats_sender.send(
-            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
-                .into_event(&self.input_ref, StatsTrackKind::Video),
-        );
         track_sync
             .write_chunk(chunk)
             .map_err(|_| RtmpConnectionError::TrackClosed)?;
@@ -219,10 +229,6 @@ impl RtmpConnectionState {
             present: true,
         };
 
-        self.ctx.stats_sender.send(
-            RtmpInputTrackStatsEvent::BytesReceived(chunk.data.len())
-                .into_event(&self.input_ref, StatsTrackKind::Audio),
-        );
         track_sync
             .write_chunk(chunk)
             .map_err(|_| RtmpConnectionError::TrackClosed)?;
