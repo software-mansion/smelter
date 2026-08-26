@@ -342,7 +342,7 @@ export type InputRtpAudioOptions =
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
 export type RtmpVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
-export type RtmpIngestMode = "realtime" | "file";
+export type RtmpIngestMode = "realtime" | "offline";
 /**
  * Buffer a live input keeps between the live edge of the stream and playback. A larger buffer adds latency, but tolerates more delivery jitter and network stalls.
  */

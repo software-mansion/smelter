@@ -5229,7 +5229,7 @@
         "type": "string",
         "enum": [
           "realtime",
-          "file"
+          "offline"
         ]
       },
       "RtmpInput": {

@@ -31,7 +31,7 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             decoders: core::RtmpServerInputDecoders { h264 },
             is_live: match ingest_mode.unwrap_or(RtmpIngestMode::Realtime) {
                 RtmpIngestMode::Realtime => true,
-                RtmpIngestMode::File => false,
+                RtmpIngestMode::Offline => false,
             },
             queue_options: core::QueueInputOptions {
                 required: required.unwrap_or(false),
