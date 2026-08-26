@@ -44,7 +44,7 @@ pub enum RtmpIngestMode {
 
     /// Assume that source is a file or other static resource. It can push media
     /// faster than real time and it is server responsibility to throttle it
-    File,
+    Offline,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
