@@ -24,13 +24,18 @@ struct SimpleSyncState {
 impl SimpleSyncState {
     /// Records a written pts. Returns the anchor once the buffer is released.
     fn register_pts(&mut self, pts: Duration) -> Option<TimestampAnchor> {
+        if !self.buffering {
+            return Some(self.anchor());
+        };
         let min_pts = self.min_pts.map_or(pts, |min| Duration::min(min, pts));
         let max_pts = self.max_pts.map_or(pts, |max| Duration::max(max, pts));
         self.min_pts = Some(min_pts);
         self.max_pts = Some(max_pts);
+
         if max_pts - min_pts >= self.desired_buffer {
             self.buffering = false;
         }
+
         match self.buffering {
             false => Some(self.anchor()),
             true => None,
