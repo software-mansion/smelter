@@ -158,7 +158,7 @@ impl LiveEdgeEstimator {
     /// Record a chunk with `pts` that arrived at `now`.
     pub fn observe(&mut self, now: Instant, pts: Duration) {
         let arrival_ns = signed_ns(now.saturating_duration_since(self.sync_point));
-        let offset_ns = arrival_ns - signed_ns(pts);
+        let offset_ns = arrival_ns.saturating_sub(signed_ns(pts));
         let now_index = self.bucket_index(now);
 
         let Some(observations) = &mut self.observations else {
@@ -203,11 +203,11 @@ impl LiveEdgeEstimator {
             // wall clock, and the estimate is meaningless for such streams
             // anyway
             upper_bound: PtsBound {
-                pts: Duration::from_nanos(i64::max(now_ns - min_offset_ns, 0) as u64),
+                pts: Duration::from_nanos(i64::max(now_ns.saturating_sub(min_offset_ns), 0) as u64),
                 stable_for: now.saturating_duration_since(observations.min_offset_stability.since),
             },
             lower_bound: PtsBound {
-                pts: Duration::from_nanos(i64::max(now_ns - max_offset_ns, 0) as u64),
+                pts: Duration::from_nanos(i64::max(now_ns.saturating_sub(max_offset_ns), 0) as u64),
                 stable_for: now.saturating_duration_since(observations.max_offset_stability.since),
             },
             delivery: DeliveryStats {
@@ -265,8 +265,8 @@ impl Stability {
     /// reset stability.
     fn track(&mut self, now: Instant, current_ns: i64, tolerance_ns: i64) {
         let extension_ns = match self.extreme {
-            Extreme::Min => self.reference_ns - current_ns,
-            Extreme::Max => current_ns - self.reference_ns,
+            Extreme::Min => self.reference_ns.saturating_sub(current_ns),
+            Extreme::Max => current_ns.saturating_sub(self.reference_ns),
         };
         if extension_ns > tolerance_ns {
             self.reference_ns = current_ns;

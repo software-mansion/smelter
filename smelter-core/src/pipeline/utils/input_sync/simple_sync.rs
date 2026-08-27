@@ -18,7 +18,7 @@ struct SimpleSyncState {
     min_pts: Option<Duration>,
     /// Highest pts seen so far, used to measure the collected buffer.
     max_pts: Option<Duration>,
-    released: bool,
+    buffering: bool,
 }
 
 impl SimpleSyncState {
@@ -29,9 +29,12 @@ impl SimpleSyncState {
         self.min_pts = Some(min_pts);
         self.max_pts = Some(max_pts);
         if max_pts - min_pts >= self.desired_buffer {
-            self.released = true;
+            self.buffering = false;
         }
-        self.released.then(|| self.anchor())
+        match self.buffering {
+            false => Some(self.anchor()),
+            true => None,
+        }
     }
 
     fn anchor(&self) -> TimestampAnchor {
@@ -49,7 +52,7 @@ impl SimpleSync {
                 desired_buffer,
                 min_pts: None,
                 max_pts: None,
-                released: false,
+                buffering: true,
             })),
         }
     }
@@ -66,7 +69,7 @@ impl SimpleSync {
     /// Stop holding chunks back; each track pushes what it holds on its next
     /// write or when it is dropped.
     pub fn flush(&self) {
-        self.state.lock().unwrap().released = true;
+        self.state.lock().unwrap().buffering = true;
     }
 }
 
