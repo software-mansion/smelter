@@ -74,7 +74,7 @@ impl SimpleSync {
     /// Stop holding chunks back; each track pushes what it holds on its next
     /// write or when it is dropped.
     pub fn flush(&self) {
-        self.state.lock().unwrap().buffering = true;
+        self.state.lock().unwrap().buffering = false;
     }
 }
 
