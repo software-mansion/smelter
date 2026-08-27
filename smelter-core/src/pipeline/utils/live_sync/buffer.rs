@@ -67,7 +67,7 @@ impl BufferingStrategy {
     /// oldest, leaving the batch spread on top of it.
     pub(super) fn desired_anchor(
         &self,
-        estimation: EdgeEstimate,
+        estimation: &EdgeEstimate,
         now_pts: Duration,
     ) -> TimestampAnchor {
         let input_pts = match *self {
@@ -80,9 +80,8 @@ impl BufferingStrategy {
         }
     }
 
-    /// Whether the buffer `anchor` produces is within the range this strategy
-    /// allows; when it is not, the anchor should be re-anchored at
-    /// [`desired_anchor`](Self::desired_anchor).
+    /// Whether the buffer `anchor` produces is within the range this strategy allows;
+    /// when it is not, the anchor should be re-anchored at [`desired_anchor`](Self::desired_anchor).
     pub(super) fn buffer_in_range(
         &self,
         estimation: EdgeEstimate,

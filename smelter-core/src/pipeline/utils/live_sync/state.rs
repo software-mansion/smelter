@@ -3,8 +3,11 @@ use std::time::{Duration, Instant};
 use tracing::{debug, trace};
 
 use super::{LiveSyncOptions, buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator};
-use crate::pipeline::utils::input_sync::{
-    BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackEvent, TrackKind,
+use crate::{
+    pipeline::utils::input_sync::{
+        BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackEvent, TrackKind,
+    },
+    utils::live_sync::edge_estimator::EdgeEstimate,
 };
 
 /// pts jump (in either direction) treated as a discontinuity of the input
@@ -12,7 +15,7 @@ use crate::pipeline::utils::input_sync::{
 const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
 
 /// Lead over the playback position content needs to still reach the queue.
-const MIN_QUEUE_HEADROOM: Duration = Duration::from_millis(80);
+const MIN_QUEUE_HEADROOM: Duration = Duration::from_millis(100);
 
 /// The whole mutable state of an input, cross-track and per-track, kept
 /// behind one mutex; [`LiveSync`] and [`LiveSyncTrack`] are thin handles to
@@ -86,14 +89,8 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     /// pauses too.
     pub(super) fn tick(&mut self, now: Instant) {
         self.drop_closed_tracks();
-        if let Some(track) = self.audio.as_mut() {
-            track.maybe_reset(now, self.anchor);
-            track.maybe_start(now, &self.shared_estimator, &mut self.anchor);
-        }
-        if let Some(track) = self.video.as_mut() {
-            track.maybe_reset(now, self.anchor);
-            track.maybe_start(now, &self.shared_estimator, &mut self.anchor);
-        }
+        self.maybe_reset(now);
+        self.maybe_start(now);
         self.maybe_correct(now);
 
         // push every releasable chunk to the track callbacks, in pts order
@@ -117,27 +114,6 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
         if let Some(track) = self.video.as_mut() {
             track.reset(now, self.anchor);
-        }
-    }
-
-    /// Drops the tracks whose sink is gone, so nothing is released into the
-    /// void and the next write to them fails.
-    fn drop_closed_tracks(&mut self) {
-        if self
-            .audio
-            .as_ref()
-            .is_some_and(|track| track.sink.is_closed())
-        {
-            debug!("Live sync: audio track sink closed, dropping track");
-            self.audio = None;
-        }
-        if self
-            .video
-            .as_ref()
-            .is_some_and(|track| track.sink.is_closed())
-        {
-            debug!("Live sync: video track sink closed, dropping track");
-            self.video = None;
         }
     }
 
@@ -236,6 +212,84 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
     }
 
+    fn drop_closed_tracks(&mut self) {
+        if let Some(audio) = &self.audio
+            && audio.sink.is_closed()
+        {
+            debug!("Live sync: audio track sink closed, dropping track");
+            self.audio = None;
+        }
+        if let Some(video) = &self.video
+            && video.sink.is_closed()
+        {
+            debug!("Live sync: video track sink closed, dropping track");
+            self.video = None;
+        }
+    }
+
+    fn maybe_reset(&mut self, now: Instant) {
+        if let Some(track) = self.audio.as_mut() {
+            track.maybe_reset(now, self.anchor);
+        }
+        if let Some(track) = self.video.as_mut() {
+            track.maybe_reset(now, self.anchor);
+        }
+    }
+
+    fn maybe_start(&mut self, now: Instant) {
+        let shared_timeline = self.tracks_share_timeline(now);
+
+        if let Some(track) = self.audio.as_mut() {
+            track.maybe_start(
+                now,
+                &self.shared_estimator,
+                &mut self.anchor,
+                shared_timeline,
+            );
+        }
+        if let Some(track) = self.video.as_mut() {
+            track.maybe_start(
+                now,
+                &self.shared_estimator,
+                &mut self.anchor,
+                shared_timeline,
+            );
+        }
+    }
+
+    /// Heuristic that decides if all tracks are on the same timeline
+    fn tracks_share_timeline(&self, now: Instant) -> bool {
+        let audio = self.audio.as_ref().and_then(|a| a.estimator.estimate(now));
+        let video = self.video.as_ref().and_then(|v| v.estimator.estimate(now));
+        let (Some(audio), Some(video)) = (audio, video) else {
+            return true;
+        };
+        let (audio, video) = (audio.upper_bound, video.upper_bound);
+
+        let diff = Duration::abs_diff(audio.pts, video.pts);
+        // If diff is that large we ignore stability, timelines have to
+        // be diverged
+        if diff >= Duration::from_secs(120) {
+            return false;
+        }
+
+        // If diff is over 10 second we check stability too before deciding
+        if diff < Duration::from_secs(10) {
+            return true;
+        }
+
+        let stabilization_period = self.options.stabilization_period;
+        let audio_stable = audio.stable_for > stabilization_period;
+        let video_stable = video.stable_for > stabilization_period;
+        match (audio_stable, video_stable) {
+            (true, true) => false,
+            // unstable track behind the stable one: could be backlog
+            (true, false) => video.pts < audio.pts,
+            (false, true) => audio.pts < video.pts,
+            (false, false) => true,
+        }
+    }
+
     fn maybe_correct(&mut self, now: Instant) {
         let now_pts = now.saturating_duration_since(self.sync_point);
 
@@ -244,7 +298,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         {
             let strategy = self.options.buffering_strategy;
             if !strategy.buffer_in_range(estimation, anchor.current, now_pts) {
-                anchor.target = strategy.desired_anchor(estimation, now_pts);
+                anchor.target = strategy.desired_anchor(&estimation, now_pts);
                 trace!(
                     target_offset = anchor.target.offset_string(),
                     "Live sync: shared anchor out of range, correcting target"
@@ -408,18 +462,22 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         now: Instant,
         shared_estimator: &LiveEdgeEstimator,
         shared_anchor: &mut Option<SharedAnchor>,
+        shared_timeline: bool,
     ) {
         if !matches!(self.start, StartState::WaitingForStart) {
             return;
         }
-        let now_pts = now.saturating_duration_since(self.sync_point);
 
-        let Some(source) = self.resolve_should_start(now, shared_estimator) else {
+        let now_pts = now.saturating_duration_since(self.sync_point);
+        let Some(shared_estimation) = shared_estimator.estimate(now) else {
             return;
         };
+        if !self.resolve_should_start(now, &shared_estimation) {
+            return;
+        }
 
-        match source {
-            EdgeSource::Shared => {
+        match shared_timeline {
+            true => {
                 if let Some(anchor) = shared_anchor {
                     debug!(
                         kind=?self.kind,
@@ -429,18 +487,15 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                     self.start = StartState::StartedShared;
                     return;
                 }
-                let Some(estimation) = shared_estimator.estimate(now) else {
-                    return;
-                };
                 let anchor = self
                     .options
                     .buffering_strategy
-                    .desired_anchor(estimation, now_pts);
+                    .desired_anchor(&shared_estimation, now_pts);
                 debug!(
                     kind=?self.kind,
                     offset=anchor.offset_string(),
                     buffered=?self.buffered_duration(),
-                    ?estimation,
+                    ?shared_estimation,
                     "Live sync: track started, establishing shared anchor"
                 );
                 *shared_anchor = Some(SharedAnchor {
@@ -450,14 +505,14 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                 });
                 self.start = StartState::StartedShared;
             }
-            EdgeSource::Track => {
+            false => {
                 let Some(estimation) = self.estimator.estimate(now) else {
                     return;
                 };
                 let anchor = self
                     .options
                     .buffering_strategy
-                    .desired_anchor(estimation, now_pts);
+                    .desired_anchor(&estimation, now_pts);
                 debug!(
                     kind=?self.kind,
                     offset=anchor.offset_string(),
@@ -496,17 +551,34 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         // The verdict that this track runs its own timeline can turn out to be wrong.
         // If both estimators start to be relatively close then try to converge on shared
         // target.
-        if let (Some(shared_anchor), Some(shared_estimation)) =
-            (*shared_anchor, shared_estimator.estimate(now))
-        {
-            let track_diff = Duration::abs_diff(
+        if let Some(shared_estimation) = shared_estimator.estimate(now) {
+            let upper_diff = Duration::abs_diff(
                 track_estimation.upper_bound.pts,
                 shared_estimation.upper_bound.pts,
             );
 
+            let lower_diff = Duration::abs_diff(
+                track_estimation.lower_bound.pts,
+                shared_estimation.lower_bound.pts,
+            );
+
             // stricter than the difference that splits the tracks, so they
             // cannot flap between sharing an anchor and running their own
-            if track_diff < Duration::from_secs(3) {
+            if upper_diff < Duration::from_secs(3) && lower_diff < Duration::from_secs(3) {
+                let Some(shared_anchor) = shared_anchor else {
+                    debug!(
+                        kind=?self.kind,
+                        offset=current_anchor.offset_string(),
+                        "Live sync: track anchor promoted to shared anchor"
+                    );
+                    *shared_anchor = Some(SharedAnchor {
+                        current: *current_anchor,
+                        target: *current_anchor,
+                        last_released_pts: None,
+                    });
+                    self.start = StartState::StartedShared;
+                    return;
+                };
                 // We no longer update target anchor based on estimator, but track
                 // estimator can still break this cycle if it diverges.
                 *target_anchor = shared_anchor.current;
@@ -526,7 +598,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         let strategy = self.options.buffering_strategy;
         let now_pts = now.saturating_duration_since(self.sync_point);
         if !strategy.buffer_in_range(track_estimation, *current_anchor, now_pts) {
-            *target_anchor = strategy.desired_anchor(track_estimation, now_pts);
+            *target_anchor = strategy.desired_anchor(&track_estimation, now_pts);
             trace!(
                 kind=?self.kind,
                 target_offset=target_anchor.offset_string(),
@@ -646,13 +718,10 @@ impl<B: LiveSyncBuffer> TrackState<B> {
 
     /// Which live edge estimate this track should start with, or `None` if it
     /// should keep waiting.
-    fn resolve_should_start(
-        &self,
-        now: Instant,
-        shared_estimator: &LiveEdgeEstimator,
-    ) -> Option<EdgeSource> {
-        let shared = shared_estimator.estimate(now)?;
-        let track = self.estimator.estimate(now)?;
+    fn resolve_should_start(&self, now: Instant, shared: &EdgeEstimate) -> bool {
+        let Some(track) = self.estimator.estimate(now) else {
+            return false;
+        };
 
         let track_stable = track.upper_bound.stable_for > self.options.stabilization_period;
         let shared_stable = shared.upper_bound.stable_for > self.options.stabilization_period;
@@ -662,16 +731,10 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         let waiting_too_long = track.delivery.observed_for >= self.options.max_wait;
 
         if !both_stable && !waiting_too_long {
-            return None;
+            return false;
         }
 
-        // a difference this large cannot come from sender misalignment, chunk
-        // sizes or delivery lag, so the timestamps are counted from another origin
-        let tracks_diff = Duration::abs_diff(track.upper_bound.pts, shared.upper_bound.pts);
-        match tracks_diff < Duration::from_secs(10) {
-            true => Some(EdgeSource::Shared),
-            false => Some(EdgeSource::Track),
-        }
+        return true;
     }
 }
 
@@ -695,11 +758,4 @@ enum StartState {
         /// Largest pts released so far; sizes the slew steps.
         last_released_pts: Option<Duration>,
     },
-}
-
-/// Which live edge estimate a track aligns to when it starts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EdgeSource {
-    Shared,
-    Track,
 }
