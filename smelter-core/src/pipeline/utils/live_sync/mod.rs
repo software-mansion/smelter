@@ -24,6 +24,17 @@
 //! to the same decision on its own, so it has to earn its place on the
 //! shared timeline again when it comes back.
 //!
+//! Known issues:
+//! - If tracks do not share the timeline, and at the start one of the tracks
+//!   do not stream anything during stabilization period, but starts after that, then
+//!   The first track will be StartedShared, while the other StartedTrack. The second
+//!   one will pollute shared estimator.
+//! - If tracks diverge from each other after the initial stabilization they will never
+//!   switch to StartedTrack, unless there is a discontinuity.
+//! - If input stream clocks drifts over time faster than 4% the maybe_correct logic
+//!   will not be able to handle that. This implementation can only handle <4% or imiediete
+//!   discontinuity in timestamps > 10s
+//!
 //! Live edge detection itself is implemented by [`LiveEdgeEstimator`], usable
 //! on its own by inputs with different buffering logic.
 //!
