@@ -8,16 +8,16 @@ use crate::{
 
 use crate::prelude::*;
 
+/// Buffer measured from the freshest delivered content (the upper bound).
+///
+/// The buffer can never be smaller than the delivery spread (upper minus
+/// lower bound, i.e. jitter or the size of a batch), so if `desired` or
+/// `max` do not leave room for it above `min` they are raised to fit.
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum BufferingStrategy {
     Range {
         min: Duration, // compare to lower bound
         max: Duration, // compare to upper bound
-        desired: Duration,
-    },
-    WithSpread {
-        min: Duration, // compare to lower bound
-        max: Duration, // compare to lower bound
         desired: Duration,
     },
 }
@@ -26,7 +26,6 @@ impl BufferingStrategy {
     pub fn desired_buffer(&self) -> Duration {
         match *self {
             BufferingStrategy::Range { desired, .. } => desired,
-            BufferingStrategy::WithSpread { desired, .. } => desired,
         }
     }
 
@@ -61,43 +60,39 @@ impl BufferingStrategy {
         }
     }
 
-    /// Anchor this strategy aims for: the mapping that gives the buffer it is
-    /// configured to keep. Each variant places the bound it measures, so
-    /// `Range` puts the freshest content at `desired` and `WithSpread` the
-    /// oldest, leaving the batch spread on top of it.
+    /// Anchor this strategy aims for: the freshest content at `desired`, or
+    /// further back if the delivery spread does not fit above `min`.
     pub(super) fn desired_anchor(
         &self,
         estimation: &EdgeEstimate,
         now_pts: Duration,
     ) -> TimestampAnchor {
-        let input_pts = match *self {
-            BufferingStrategy::Range { .. } => estimation.upper_bound.pts,
-            BufferingStrategy::WithSpread { .. } => estimation.lower_bound.pts,
-        };
+        let BufferingStrategy::Range { min, desired, .. } = *self;
+        let spread = estimation.spread();
         TimestampAnchor {
-            input_pts,
-            output_pts: now_pts + self.desired_buffer(),
+            input_pts: estimation.upper_bound.pts,
+            output_pts: now_pts + Duration::max(desired, spread + min),
         }
     }
 
     /// Whether the buffer `anchor` produces is within the range this strategy allows;
     /// when it is not, the anchor should be re-anchored at [`desired_anchor`](Self::desired_anchor).
+    ///
+    /// A lower bound that is not stable (see [`PtsBound::stable`]) is not
+    /// judged.
     pub(super) fn buffer_in_range(
         &self,
         estimation: EdgeEstimate,
         anchor: TimestampAnchor,
         now_pts: Duration,
     ) -> bool {
+        let BufferingStrategy::Range { min, max, .. } = *self;
         let lower_bound = anchor.to_output_pts(estimation.lower_bound.pts);
         let upper_bound = anchor.to_output_pts(estimation.upper_bound.pts);
-        match *self {
-            BufferingStrategy::Range { min, max, .. } => {
-                lower_bound >= now_pts + min && upper_bound <= now_pts + max
-            }
-            BufferingStrategy::WithSpread { min, max, .. } => {
-                lower_bound >= now_pts + min && lower_bound <= now_pts + max
-            }
-        }
+        let spread = estimation.spread();
+        let min_ok = !estimation.lower_bound.stable || lower_bound >= now_pts + min;
+        let max_ok = upper_bound <= now_pts + Duration::max(max, spread + min);
+        min_ok && max_ok
     }
 }
 
