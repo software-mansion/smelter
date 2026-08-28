@@ -3,11 +3,8 @@ use std::time::{Duration, Instant};
 use tracing::{debug, trace};
 
 use super::{LiveSyncOptions, buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator};
-use crate::{
-    pipeline::utils::input_sync::{
-        BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackEvent, TrackKind,
-    },
-    utils::live_sync::edge_estimator::EdgeEstimate,
+use crate::pipeline::utils::input_sync::{
+    BoxedTrackSink, InputSyncItem, TimestampAnchor, TrackClosedError, TrackEvent, TrackKind,
 };
 
 /// pts jump (in either direction) treated as a discontinuity of the input
@@ -55,7 +52,11 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         Self {
             options,
             sync_point,
-            shared_estimator: LiveEdgeEstimator::new(sync_point, options.stabilization_tolerance),
+            shared_estimator: LiveEdgeEstimator::new(
+                sync_point,
+                options.stabilization_tolerance,
+                options.stabilization_period,
+            ),
             anchor: None,
             audio: None,
             video: None,
@@ -71,6 +72,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             estimator: LiveEdgeEstimator::new(
                 self.sync_point,
                 self.options.stabilization_tolerance,
+                self.options.stabilization_period,
             ),
             start: StartState::WaitingForStart,
             buffer: B::default(),
@@ -278,10 +280,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             return true;
         }
 
-        let stabilization_period = self.options.stabilization_period;
-        let audio_stable = audio.stable_for > stabilization_period;
-        let video_stable = video.stable_for > stabilization_period;
-        match (audio_stable, video_stable) {
+        match (audio.stable, video.stable) {
             (true, true) => false,
             // unstable track behind the stable one: could be backlog
             (true, false) => video.pts < audio.pts,
@@ -401,8 +400,11 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             track.sink.on_event(TrackEvent::Discontinuity);
         }
 
-        self.shared_estimator =
-            LiveEdgeEstimator::new(self.sync_point, self.options.stabilization_tolerance);
+        self.shared_estimator = LiveEdgeEstimator::new(
+            self.sync_point,
+            self.options.stabilization_tolerance,
+            self.options.stabilization_period,
+        );
         self.anchor = None;
     }
 }
@@ -472,7 +474,14 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         let Some(shared_estimation) = shared_estimator.estimate(now) else {
             return;
         };
-        if !self.resolve_should_start(now, &shared_estimation) {
+        let Some(track_estimation) = self.estimator.estimate(now) else {
+            return;
+        };
+
+        let both_stable =
+            track_estimation.upper_bound.stable && shared_estimation.upper_bound.stable;
+        let waiting_too_long = track_estimation.delivery.observed_for >= self.options.max_wait;
+        if !both_stable && !waiting_too_long {
             return;
         }
 
@@ -506,18 +515,15 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                 self.start = StartState::StartedShared;
             }
             false => {
-                let Some(estimation) = self.estimator.estimate(now) else {
-                    return;
-                };
                 let anchor = self
                     .options
                     .buffering_strategy
-                    .desired_anchor(&estimation, now_pts);
+                    .desired_anchor(&track_estimation, now_pts);
                 debug!(
                     kind=?self.kind,
                     offset=anchor.offset_string(),
                     buffered=?self.buffered_duration(),
-                    ?estimation,
+                    ?track_estimation,
                     "Live sync: track started with its own anchor"
                 );
                 self.start = StartState::StartedTrack {
@@ -650,8 +656,11 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             "Live sync: resetting track"
         );
 
-        self.estimator =
-            LiveEdgeEstimator::new(self.sync_point, self.options.stabilization_tolerance);
+        self.estimator = LiveEdgeEstimator::new(
+            self.sync_point,
+            self.options.stabilization_tolerance,
+            self.options.stabilization_period,
+        );
         self.start = StartState::WaitingForStart;
 
         if let Some(anchor) = anchor {
@@ -714,27 +723,6 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             input_pts: self.buffer.pts_values().max()?, // most recently observed
             output_pts: now_pts + self.options.buffering_strategy.desired_buffer(),
         })
-    }
-
-    /// Which live edge estimate this track should start with, or `None` if it
-    /// should keep waiting.
-    fn resolve_should_start(&self, now: Instant, shared: &EdgeEstimate) -> bool {
-        let Some(track) = self.estimator.estimate(now) else {
-            return false;
-        };
-
-        let track_stable = track.upper_bound.stable_for > self.options.stabilization_period;
-        let shared_stable = shared.upper_bound.stable_for > self.options.stabilization_period;
-        let both_stable = track_stable && shared_stable;
-        // measured on this track, so a track that starts (or resumes)
-        // delivering later still gets the full stabilization window
-        let waiting_too_long = track.delivery.observed_for >= self.options.max_wait;
-
-        if !both_stable && !waiting_too_long {
-            return false;
-        }
-
-        return true;
     }
 }
 

@@ -161,7 +161,7 @@ impl HlsDemuxerThread {
         let input_sync = match is_live {
             true => InputSync::Live(LiveSync::new(
                 LiveSyncOptions {
-                    buffering_strategy: BufferingStrategy::WithSpread { min, max, desired },
+                    buffering_strategy: BufferingStrategy::Range { min, max, desired },
                     stabilization_period: Duration::from_millis(1000),
                     // mostly dead value, chunks are usually larger than stabilization_period
                     // so tolerance does not matter, stable state will trigger as soon as we have
@@ -622,9 +622,10 @@ impl HlsInputTrackStatsSender {
 
 /// Resolves the buffer options into concrete `(min, desired, max)` values.
 ///
-/// Live playlists deliver whole segments at once, so the buffer is measured on
-/// the oldest content of a batch and the spread of the segment sits on top of
-/// it: playback ends up roughly one segment plus `desired` behind the live edge.
+/// The buffer is measured from the newest delivered content. Live playlists
+/// deliver whole segments at once, so a buffer smaller than a segment runs
+/// dry before the next one arrives; the sync then raises it to fit the
+/// observed segment size.
 fn resolve_buffer_options(options: LiveInputBufferOptions) -> (Duration, Duration, Duration) {
     // minimal delta between bounds or above zero
     const D: Duration = Duration::from_millis(500);
@@ -646,8 +647,6 @@ fn resolve_buffer_options(options: LiveInputBufferOptions) -> (Duration, Duratio
             (None, None) => DEFAULT,
         },
     };
-    // the bounds are compared on the oldest content of a batch, so unlike RTMP
-    // no chunk allowance has to be added on top of the default upper limit;
     let max = Duration::max(options.max.unwrap_or(desired * 2), desired + D);
     let min = Duration::clamp(options.min.unwrap_or(desired / 2), D, desired - D);
     (min, desired, max)

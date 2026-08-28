@@ -36,7 +36,7 @@ const GAP_LOOKBACK: Duration = Duration::from_secs(60);
 ///
 /// An estimate is available from the first observation on and can be queried
 /// at any time; it is always the best knowable at that moment, and
-/// [`PtsBound::stable_for`] tells how much to trust each bound (a backlog
+/// [`PtsBound::stable`] tells whether to trust each bound (a backlog
 /// flush right after connecting keeps extending the upper bound until
 /// delivery drops to a real time rate).
 ///
@@ -58,6 +58,9 @@ pub(crate) struct LiveEdgeEstimator {
     /// Bound extensions smaller than this (delivery jitter) do not reset the
     /// stability timers.
     tolerance: Duration,
+    /// How long the upper bound has to be stable before chunks count towards
+    /// a stable lower bound (see [`PtsBound::stable`]).
+    stabilization_period: Duration,
     observations: Option<Observations>,
 }
 
@@ -70,7 +73,6 @@ struct Observations {
     /// when pts run ahead of the wall clock.
     buckets: VecDeque<Bucket>,
     min_offset_stability: Stability,
-    max_offset_stability: Stability,
 }
 
 /// Snapshot of the live edge estimate at a specific instant.
@@ -118,14 +120,33 @@ pub(crate) struct EdgeEstimate {
     pub delivery: DeliveryStats,
 }
 
+impl EdgeEstimate {
+    /// Distance between the bounds; how much of a buffer the delivery pattern
+    /// itself (jitter, batch size) takes up. Zero while the lower bound is
+    /// not stable.
+    pub fn spread(&self) -> Duration {
+        match self.lower_bound.stable {
+            true => self.upper_bound.pts.saturating_sub(self.lower_bound.pts),
+            false => Duration::ZERO,
+        }
+    }
+}
+
 /// One side of the live edge estimate.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PtsBound {
     pub pts: Duration,
-    /// How long the bound has not been pushed outward / relaxed (beyond the
-    /// jitter tolerance) by an observed chunk. The bound tightening as old
-    /// extremes rotate out of the window does not reset it.
-    pub stable_for: Duration,
+    /// Upper bound: not pushed outward (beyond the jitter tolerance) by an
+    /// observed chunk for at least the stabilization period. The bound
+    /// tightening as old extremes rotate out of the window does not reset it.
+    ///
+    /// Lower bound: the window holds a chunk observed while the upper bound
+    /// was already stable. Earlier chunks are left out, because they may be
+    /// part of a backlog flush (e.g. preloaded HLS segments), where old
+    /// content arrives together with newer content and its offset says
+    /// nothing about delivery speed. Without such a chunk the lower bound
+    /// equals the upper bound.
+    pub stable: bool,
 }
 
 /// Observed delivery statistics of the stream.
@@ -147,10 +168,11 @@ pub(crate) struct DeliveryStats {
 }
 
 impl LiveEdgeEstimator {
-    pub fn new(sync_point: Instant, tolerance: Duration) -> Self {
+    pub fn new(sync_point: Instant, tolerance: Duration, stabilization_period: Duration) -> Self {
         Self {
             sync_point,
             tolerance,
+            stabilization_period,
             observations: None,
         }
     }
@@ -169,26 +191,24 @@ impl LiveEdgeEstimator {
                 buckets: VecDeque::from([Bucket {
                     index: now_index,
                     min_offset_ns: offset_ns,
-                    max_offset_ns: offset_ns,
+                    max_offset_ns: None,
                     max_gap: Duration::ZERO,
                 }]),
-                min_offset_stability: Stability::new(Extreme::Min, now, offset_ns),
-                max_offset_stability: Stability::new(Extreme::Max, now, offset_ns),
+                min_offset_stability: Stability::new(now, offset_ns),
             });
             return;
         };
 
-        observations.record(now, now_index, offset_ns, pts);
+        // judged before this chunk updates the upper bound, so a later
+        // extension does not disqualify chunks observed earlier
+        let upper_stable = observations.upper_stable(now, self.stabilization_period);
+        observations.record(now, now_index, offset_ns, pts, upper_stable);
 
         let max_gap = observations.max_arrival_gap(now, now_index);
-        let (min_offset_ns, max_offset_ns) = observations.offset_bounds_ns(now_index, max_gap);
-        let tolerance_ns = signed_ns(self.tolerance);
+        let (min_offset_ns, _) = observations.offset_bounds_ns(now_index, max_gap);
         observations
             .min_offset_stability
-            .track(now, min_offset_ns, tolerance_ns);
-        observations
-            .max_offset_stability
-            .track(now, max_offset_ns, tolerance_ns);
+            .track(now, min_offset_ns, signed_ns(self.tolerance));
     }
 
     /// Current estimate; `None` until the first observation.
@@ -198,18 +218,30 @@ impl LiveEdgeEstimator {
         let max_gap = observations.max_arrival_gap(now, now_index);
         let (min_offset_ns, max_offset_ns) = observations.offset_bounds_ns(now_index, max_gap);
         let now_ns = signed_ns(now.saturating_duration_since(self.sync_point));
+        // pts saturate at zero: negative only when pts run ahead of the
+        // wall clock, and the estimate is meaningless for such streams
+        // anyway
+        let bound_pts = |offset_ns: i64| {
+            Duration::from_nanos(i64::max(now_ns.saturating_sub(offset_ns), 0) as u64)
+        };
+        let upper_bound = PtsBound {
+            pts: bound_pts(min_offset_ns),
+            stable: observations.upper_stable(now, self.stabilization_period),
+        };
+        // without a stable sample the lower bound falls back to the upper one
+        let lower_bound = match max_offset_ns {
+            Some(max_offset_ns) => PtsBound {
+                pts: bound_pts(max_offset_ns),
+                stable: true,
+            },
+            None => PtsBound {
+                pts: upper_bound.pts,
+                stable: false,
+            },
+        };
         Some(EdgeEstimate {
-            // pts saturate at zero: negative only when pts run ahead of the
-            // wall clock, and the estimate is meaningless for such streams
-            // anyway
-            upper_bound: PtsBound {
-                pts: Duration::from_nanos(i64::max(now_ns.saturating_sub(min_offset_ns), 0) as u64),
-                stable_for: now.saturating_duration_since(observations.min_offset_stability.since),
-            },
-            lower_bound: PtsBound {
-                pts: Duration::from_nanos(i64::max(now_ns.saturating_sub(max_offset_ns), 0) as u64),
-                stable_for: now.saturating_duration_since(observations.max_offset_stability.since),
-            },
+            upper_bound,
+            lower_bound,
             delivery: DeliveryStats {
                 last_pts: observations.last_pts,
                 observed_for: now.saturating_duration_since(observations.first_observation),
@@ -232,42 +264,28 @@ fn signed_ns(duration: Duration) -> i64 {
     i64::try_from(duration.as_nanos()).unwrap_or(i64::MAX)
 }
 
-/// Which offset extreme a [`Stability`] tracker follows, i.e. which direction
-/// counts as extending.
-enum Extreme {
-    /// Offset minimum; extends downward. Backs the upper pts bound.
-    Min,
-    /// Offset maximum; extends upward. Backs the lower pts bound.
-    Max,
-}
-
-/// One-sided stability tracking of one offset extreme: how long since the
-/// extreme was last extended (i.e. revealed new information about delivery).
+/// Stability tracking of the offset minimum: how long since it was last
+/// extended downward (i.e. revealed new information about delivery).
 struct Stability {
-    extreme: Extreme,
-    /// Extreme value when the timer was last reset.
+    /// Minimum when the timer was last reset.
     reference_ns: i64,
     since: Instant,
 }
 
 impl Stability {
-    fn new(extreme: Extreme, now: Instant, offset_ns: i64) -> Self {
+    fn new(now: Instant, offset_ns: i64) -> Self {
         Self {
-            extreme,
             reference_ns: offset_ns,
             since: now,
         }
     }
 
     /// Only an extension beyond the tolerance resets the timer; a tightening
-    /// (the old extreme rotating out of the window) re-bases the reference so
+    /// (the old minimum rotating out of the window) re-bases the reference so
     /// later extensions are measured against the current level, but does not
     /// reset stability.
     fn track(&mut self, now: Instant, current_ns: i64, tolerance_ns: i64) {
-        let extension_ns = match self.extreme {
-            Extreme::Min => self.reference_ns.saturating_sub(current_ns),
-            Extreme::Max => current_ns.saturating_sub(self.reference_ns),
-        };
+        let extension_ns = self.reference_ns.saturating_sub(current_ns);
         if extension_ns > tolerance_ns {
             self.reference_ns = current_ns;
             self.since = now;
@@ -280,30 +298,46 @@ impl Stability {
 struct Bucket {
     index: u64,
     min_offset_ns: i64,
-    max_offset_ns: i64,
+    /// Maximum over the chunks observed while the upper bound was already
+    /// stable (see [`PtsBound::stable`]); `None` if there were none.
+    max_offset_ns: Option<i64>,
     /// Largest gap between consecutive arrivals, attributed to the bucket
     /// where the gap ended.
     max_gap: Duration,
 }
 
 impl Observations {
+    /// Whether the offset minimum has not been extended for at least
+    /// `stabilization_period` (see [`PtsBound::stable`]).
+    fn upper_stable(&self, now: Instant, stabilization_period: Duration) -> bool {
+        now.saturating_duration_since(self.min_offset_stability.since) > stabilization_period
+    }
+
     /// Record one chunk: update delivery stats, fold the offset into the
     /// bucket for `now_index` and trim buckets beyond the retention window.
-    fn record(&mut self, now: Instant, now_index: u64, offset_ns: i64, pts: Duration) {
+    fn record(
+        &mut self,
+        now: Instant,
+        now_index: u64,
+        offset_ns: i64,
+        pts: Duration,
+        upper_stable: bool,
+    ) {
         let gap = now.saturating_duration_since(self.last_observation);
         self.last_observation = now;
         self.last_pts = Duration::max(self.last_pts, pts);
 
+        let max_offset_ns = upper_stable.then_some(offset_ns);
         match self.buckets.back_mut() {
             Some(bucket) if bucket.index == now_index => {
                 bucket.min_offset_ns = i64::min(bucket.min_offset_ns, offset_ns);
-                bucket.max_offset_ns = i64::max(bucket.max_offset_ns, offset_ns);
+                bucket.max_offset_ns = Option::max(bucket.max_offset_ns, max_offset_ns);
                 bucket.max_gap = Duration::max(bucket.max_gap, gap);
             }
             _ => self.buckets.push_back(Bucket {
                 index: now_index,
                 min_offset_ns: offset_ns,
-                max_offset_ns: offset_ns,
+                max_offset_ns,
                 max_gap: gap,
             }),
         }
@@ -336,11 +370,12 @@ impl Observations {
     /// with the arrival gap so batched delivery keeps several bursts in
     /// view. Falls back to the newest bucket when nothing was observed
     /// within the window (prolonged stall), so the last known regime keeps
-    /// being reported.
-    fn offset_bounds_ns(&self, now_index: u64, max_gap: Duration) -> (i64, i64) {
+    /// being reported. The maximum is `None` if the window holds no stable
+    /// sample.
+    fn offset_bounds_ns(&self, now_index: u64, max_gap: Duration) -> (i64, Option<i64>) {
         let lookback = Duration::clamp(max_gap * LOOKBACK_GAPS, MIN_LOOKBACK, MAX_LOOKBACK);
         let oldest_valid = now_index.saturating_sub(buckets_in(lookback) - 1);
-        let mut bounds = None;
+        let mut bounds: Option<(i64, Option<i64>)> = None;
         for bucket in &self.buckets {
             if bucket.index < oldest_valid {
                 continue;
@@ -349,7 +384,7 @@ impl Observations {
                 None => (bucket.min_offset_ns, bucket.max_offset_ns),
                 Some((min, max)) => (
                     i64::min(min, bucket.min_offset_ns),
-                    i64::max(max, bucket.max_offset_ns),
+                    Option::max(max, bucket.max_offset_ns),
                 ),
             });
         }
