@@ -157,7 +157,8 @@ impl HlsDemuxerThread {
             },
         });
 
-        let (min, desired, max) = resolve_buffer_options(input_ctx.opts.buffer);
+        let buffer_opts = input_ctx.opts.buffer;
+        let (min, desired, max) = resolve_buffer_options(buffer_opts);
         let input_sync = match is_live {
             true => InputSync::Live(LiveSync::new(
                 LiveSyncOptions {
@@ -167,11 +168,13 @@ impl HlsDemuxerThread {
                     // so tolerance does not matter, stable state will trigger as soon as we have
                     // a gap between chunks.
                     stabilization_tolerance: Duration::from_millis(250),
-                    max_wait: Duration::max(desired * 2, Duration::from_secs(5)),
+                    max_wait: Duration::from_secs(10),
                 },
                 input_ctx.ctx.queue_ctx.sync_point,
             )),
-            false => InputSync::Simple(SimpleSync::new(desired)),
+            false => InputSync::Simple(SimpleSync::new(
+                buffer_opts.desired.unwrap_or(NON_LIVE_DEFAULT_BUFFER),
+            )),
         };
         let decoder_buffer_size = Duration::max(Duration::from_secs(60), max * 2);
 
@@ -620,16 +623,21 @@ impl HlsInputTrackStatsSender {
     }
 }
 
+const NON_LIVE_DEFAULT_BUFFER: Duration = Duration::from_secs(4);
+
 /// Resolves the buffer options into concrete `(min, desired, max)` values.
 ///
-/// The buffer is measured from the newest delivered content. Live playlists
-/// deliver whole segments at once, so a buffer smaller than a segment runs
-/// dry before the next one arrives; the sync then raises it to fit the
-/// observed segment size.
+/// The default covers the common segment size with room for jitter and `min`
+/// on top. Specifically:
+///   - for segments <= 6s we still have at least 4s for jitter
+///   - for segments < 12s we should be able to recover by stretching the buffer (depends on the
+///     jitter)
+///   - for larger segments there might be issues at the start, but it should recover with time
 fn resolve_buffer_options(options: LiveInputBufferOptions) -> (Duration, Duration, Duration) {
     // minimal delta between bounds or above zero
     const D: Duration = Duration::from_millis(500);
-    const DEFAULT: Duration = Duration::from_secs(4);
+    const DEFAULT: Duration = Duration::from_secs(12);
+    const DEFAULT_MIN: Duration = Duration::from_secs(2);
 
     // provided values below the floors are raised instead of rejected
     let options = LiveInputBufferOptions {
@@ -643,12 +651,15 @@ fn resolve_buffer_options(options: LiveInputBufferOptions) -> (Duration, Duratio
         None => match (options.min, options.max) {
             (Some(min), Some(max)) => (min + max) / 2,
             (Some(min), None) => Duration::max(min + D, DEFAULT),
-            (None, Some(max)) => Duration::min(max.saturating_sub(D), DEFAULT),
+            (None, Some(max)) => max * 2 / 3,
             (None, None) => DEFAULT,
         },
     };
+
+    // If max not provided default to 2x of desired, but if max is provided
+    // then desired defaults to max * (2/3). Intentionally asymmetric.
     let max = Duration::max(options.max.unwrap_or(desired * 2), desired + D);
-    let min = Duration::clamp(options.min.unwrap_or(desired / 2), D, desired - D);
+    let min = Duration::clamp(options.min.unwrap_or(DEFAULT_MIN), D, desired - D);
     (min, desired, max)
 }
 
@@ -674,14 +685,14 @@ mod tests {
 
     #[test]
     fn defaults() {
-        assert_eq!(resolve(None, None, None), (ms(2000), ms(4000), ms(8000)));
+        assert_eq!(resolve(None, None, None), (ms(2000), ms(12000), ms(24000)));
     }
 
     #[test]
     fn desired_only() {
         assert_eq!(
             resolve(None, Some(6000), None),
-            (ms(3000), ms(6000), ms(12000))
+            (ms(2000), ms(6000), ms(12000))
         );
         // the smallest desired with a 500ms floor on min
         assert_eq!(
@@ -692,27 +703,66 @@ mod tests {
 
     #[test]
     fn min_only() {
-        // desired follows a larger min
+        // a min below the default desired does not drag desired down
         assert_eq!(
             resolve(Some(4000), None, None),
-            (ms(4000), ms(4500), ms(9000))
+            (ms(4000), ms(12000), ms(24000))
         );
         assert_eq!(
             resolve(Some(500), None, None),
-            (ms(500), ms(4000), ms(8000))
+            (ms(500), ms(12000), ms(24000))
+        );
+        // desired follows a min above the default
+        assert_eq!(
+            resolve(Some(20000), None, None),
+            (ms(20000), ms(20500), ms(41000))
         );
     }
 
     #[test]
     fn max_only() {
-        // desired follows a smaller max
+        // desired follows a smaller max, leaving headroom under it
         assert_eq!(
-            resolve(None, None, Some(2000)),
-            (ms(750), ms(1500), ms(2000))
+            resolve(None, None, Some(3000)),
+            (ms(1500), ms(2000), ms(3000))
         );
         assert_eq!(
+            resolve(None, None, Some(12000)),
+            (ms(2000), ms(8000), ms(12000))
+        );
+        // desired scales with max, it is not capped by the default
+        assert_eq!(
+            resolve(None, None, Some(30000)),
+            (ms(2000), ms(20000), ms(30000))
+        );
+        // a max that is not divisible by 3 gives a non-round desired
+        assert_eq!(
             resolve(None, None, Some(20000)),
-            (ms(2000), ms(4000), ms(20000))
+            (ms(2000), Duration::from_nanos(13_333_333_333), ms(20000))
+        );
+        // the smallest max keeps the D margin on both sides
+        assert_eq!(
+            resolve(None, None, Some(1500)),
+            (ms(500), ms(1000), ms(1500))
+        );
+    }
+
+    #[test]
+    fn min_does_not_scale_with_desired() {
+        // min stays at the 2s default, so `desired` is what the buffer settles
+        // on for a stream whose delivery spread fits below it
+        assert_eq!(
+            resolve(None, Some(10000), None),
+            (ms(2000), ms(10000), ms(20000))
+        );
+        assert_eq!(
+            resolve(None, Some(20000), None),
+            (ms(2000), ms(20000), ms(40000))
+        );
+        // ...until desired is small enough that the 500ms margin binds
+        assert_eq!(
+            resolve(None, Some(2000), None),
+            (ms(1500), ms(2000), ms(4000))
         );
     }
 
