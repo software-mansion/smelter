@@ -349,9 +349,9 @@ impl BufferTrackWriter {
     }
 }
 
-/// Demuxed packet of one track, buffered by the sync as it was read.
-/// Timestamps are calculated only when they are needed, so a packet that
-/// never leaves the sync costs nothing to convert.
+/// Demuxed packet of one track, buffered by the sync as it was read. The pts
+/// is converted on every observation; only the dts conversion is deferred
+/// until the packet leaves the sync.
 struct HlsPacket {
     packet: Packet,
     time_base: Rational,
