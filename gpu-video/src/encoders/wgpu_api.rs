@@ -3,7 +3,22 @@ use crate::{
     encoders::{VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
 };
 
+pub(crate) struct EncodeTexture {
+    wgpu_texture: wgpu::Texture, 
+}
+
+impl EncodeTexture {
+    pub fn texture(&self) -> &wgpu::Texture {
+        &self.wgpu_texture
+    }
+}
+
 pub(crate) trait WgpuVideoEncoderBackend: Send {
+    // TODO: maybe it would be better to have a separate struct for creating inputs?
+    // so that input creation is disjoint with encoder
+    fn new_input(&mut self, wgpu_device: &wgpu::Device)
+    -> Result<EncodeTexture, VideoEncoderError>;
+
     fn encode_texture(
         &mut self,
         wgpu_device: &wgpu::Device,

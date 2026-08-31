@@ -942,7 +942,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         frame: &InputFrame<RawFrameData>,
         force_idr: bool,
     ) -> Result<UnwaitedEncodeSubmission, VulkanEncoderError> {
-        let input_image = self.input_image_pool.image()?;
+        let input_image = self.input_image_pool.vk_image()?;
         let buffer = self.transfer_buffer_to_image(frame, &input_image.image)?;
 
         let mut submission = self.encode(input_image.image.clone(), force_idr, frame.pts)?;
@@ -961,7 +961,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         frame: InputFrame<wgpu::Texture>,
         force_idr: bool,
     ) -> Result<UnwaitedEncodeSubmission, VulkanEncoderError> {
-        let input_image = self.input_image_pool.image()?;
+        let input_image = self.input_image_pool.vk_image()?;
         let hal_encoder =
             self.copy_wgpu_texture_to_image(wgpu_device, wgpu_queue, &frame, &input_image.image)?;
 
