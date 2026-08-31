@@ -125,7 +125,7 @@ export type RegisterHlsInput = {
   /**
    * Input buffer configuration.
    *
-   * Defaults: `desiredMs=4000`, `minMs=2000`, `maxMs=8000`.
+   * Defaults: `desiredMs=12000`, `minMs=2000`, `maxMs=24000`.
    */
   buffer?: InputBuffer | null;
 };

@@ -1567,7 +1567,7 @@
               },
               {
                 "$ref": "#/components/schemas/InputBuffer",
-                "description": "Input buffer configuration.\n\nDefaults: `desired_ms=4000`, `min_ms=2000`, `max_ms=8000`."
+                "description": "Input buffer configuration.\n\nDefaults: `desired_ms=12000`, `min_ms=2000`, `max_ms=24000`."
               }
             ]
           }
