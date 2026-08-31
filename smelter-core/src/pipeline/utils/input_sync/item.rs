@@ -17,6 +17,11 @@ pub(crate) trait InputSyncItem {
     /// output timeline `anchor` describes. Called by the track when the item
     /// is read.
     fn apply_anchor(&mut self, anchor: TimestampAnchor);
+
+    /// Marks the item as decode-only: it still has to reach the decoder
+    /// (later items need it decoded, e.g. video reference frames), but the
+    /// content decoded from it must not be presented.
+    fn mark_decode_only(&mut self);
 }
 
 impl InputSyncItem for EncodedInputChunk {
@@ -27,5 +32,9 @@ impl InputSyncItem for EncodedInputChunk {
     fn apply_anchor(&mut self, anchor: TimestampAnchor) {
         self.pts = anchor.to_output_pts(self.pts);
         self.dts = self.dts.map(|dts| anchor.to_output_pts(dts));
+    }
+
+    fn mark_decode_only(&mut self) {
+        self.present = false;
     }
 }

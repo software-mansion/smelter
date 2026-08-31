@@ -358,6 +358,9 @@ struct HlsPacket {
     /// Mapping onto the output timeline; identity until the track applies its
     /// own on read.
     anchor: TimestampAnchor,
+    /// The packet has to be decoded, but the decoded content must not be
+    /// presented (see [`InputSyncItem::mark_decode_only`]).
+    decode_only: bool,
 }
 
 impl HlsPacket {
@@ -369,6 +372,7 @@ impl HlsPacket {
                 input_pts: Duration::ZERO,
                 output_pts: Duration::ZERO,
             },
+            decode_only: false,
         }
     }
 
@@ -391,7 +395,7 @@ impl HlsPacket {
             pts: self.pts(),
             dts: self.packet.dts().map(|dts| self.timestamp(dts)),
             kind,
-            present: true,
+            present: !self.decode_only,
         }
     }
 }
@@ -403,6 +407,10 @@ impl InputSyncItem for HlsPacket {
 
     fn apply_anchor(&mut self, anchor: TimestampAnchor) {
         self.anchor = anchor;
+    }
+
+    fn mark_decode_only(&mut self) {
+        self.decode_only = true;
     }
 }
 
