@@ -485,35 +485,38 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             return;
         }
 
-        match shared_timeline {
-            true => {
-                if let Some(anchor) = shared_anchor {
+        let anchor = match shared_timeline {
+            true => match shared_anchor {
+                Some(anchor) => {
                     debug!(
                         kind=?self.kind,
                         offset=anchor.current.offset_string(),
                         "Live sync: track started, adopting shared anchor"
                     );
                     self.start = StartState::StartedShared;
-                    return;
+                    anchor.current
                 }
-                let anchor = self
-                    .options
-                    .buffering_strategy
-                    .desired_anchor(&shared_estimation, now_pts);
-                debug!(
-                    kind=?self.kind,
-                    offset=anchor.offset_string(),
-                    buffered=?self.buffered_duration(),
-                    ?shared_estimation,
-                    "Live sync: track started, establishing shared anchor"
-                );
-                *shared_anchor = Some(SharedAnchor {
-                    current: anchor,
-                    target: anchor,
-                    last_released_pts: None,
-                });
-                self.start = StartState::StartedShared;
-            }
+                None => {
+                    let anchor = self
+                        .options
+                        .buffering_strategy
+                        .desired_anchor(&shared_estimation, now_pts);
+                    debug!(
+                        kind=?self.kind,
+                        offset=anchor.offset_string(),
+                        buffered=?self.buffered_duration(),
+                        ?shared_estimation,
+                        "Live sync: track started, establishing shared anchor"
+                    );
+                    *shared_anchor = Some(SharedAnchor {
+                        current: anchor,
+                        target: anchor,
+                        last_released_pts: None,
+                    });
+                    self.start = StartState::StartedShared;
+                    anchor
+                }
+            },
             false => {
                 let anchor = self
                     .options
@@ -531,7 +534,18 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                     current_anchor: anchor,
                     last_released_pts: None,
                 };
+                anchor
             }
+        };
+
+        while let Some(mut chunk) = self.buffer.try_read() {
+            if anchor.to_output_pts(chunk.pts()) <= now_pts {
+                // Decoder should only drop late packets during startup phase.
+                // It avoids visible video speedup when queue input drains
+                // decoder to reach "on time" position
+                chunk.mark_decode_only();
+            }
+            self.release_chunk(chunk, anchor);
         }
     }
 
