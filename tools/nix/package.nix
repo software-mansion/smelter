@@ -9,7 +9,6 @@
 , lib
 , vulkan-loader
 , mesa
-, darwin
 , stdenv
 , makeWrapper
 }:
@@ -21,12 +20,7 @@ let
     libGL
     vulkan-loader
     stdenv.cc.cc
-  ] ++ lib.optionals stdenv.isDarwin [
-    darwin.apple_sdk.frameworks.Metal
-    darwin.apple_sdk.frameworks.Foundation
-    darwin.apple_sdk.frameworks.QuartzCore
-    darwin.libobjc
-  ] ++ lib.optionals stdenv.isLinux [
+  ] ++ lib.optionals stdenv.hostPlatform.isLinux [
     mesa
   ];
   rpath = lib.makeLibraryPath buildInputs;
@@ -55,7 +49,7 @@ rustPlatform.buildRustPackage {
 
       mv $out/bin/main_process $out/bin/smelter
     '' + (
-      lib.optionalString stdenv.isLinux ''
+      lib.optionalString stdenv.hostPlatform.isLinux ''
         patchelf --set-rpath ${rpath} $out/bin/smelter
         wrapProgram $out/bin/smelter \
         --prefix XDG_DATA_DIRS : "${mesa}/share" \
