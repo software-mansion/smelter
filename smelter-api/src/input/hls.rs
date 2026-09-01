@@ -25,7 +25,7 @@ pub struct HlsInput {
     pub side_channel: Option<SideChannel>,
     /// Input buffer configuration.
     ///
-    /// Defaults: `desired_ms=12000`, `min_ms=2000`, `max_ms=24000`.
+    /// Defaults: `desired_ms=10000`, `min_ms=2000`, `max_ms=20000`.
     pub buffer: Option<InputBuffer>,
 }
 

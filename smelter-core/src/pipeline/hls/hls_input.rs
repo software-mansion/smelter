@@ -635,14 +635,14 @@ const NON_LIVE_DEFAULT_BUFFER: Duration = Duration::from_secs(4);
 ///
 /// The default covers the common segment size with room for jitter and `min`
 /// on top. Specifically:
-///   - for segments <= 6s we still have at least 4s for jitter
-///   - for segments < 12s we should be able to recover by stretching the buffer (depends on the
+///   - for segments <= 6s we still have at least 2s for jitter
+///   - for segments < 10s we should be able to recover by stretching the buffer (depends on the
 ///     jitter)
 ///   - for larger segments there might be issues at the start, but it should recover with time
 fn resolve_buffer_options(options: LiveInputBufferOptions) -> (Duration, Duration, Duration) {
     // minimal delta between bounds or above zero
     const D: Duration = Duration::from_millis(500);
-    const DEFAULT: Duration = Duration::from_secs(12);
+    const DEFAULT: Duration = Duration::from_secs(10);
     const DEFAULT_MIN: Duration = Duration::from_secs(2);
 
     // provided values below the floors are raised instead of rejected
@@ -691,7 +691,7 @@ mod tests {
 
     #[test]
     fn defaults() {
-        assert_eq!(resolve(None, None, None), (ms(2000), ms(12000), ms(24000)));
+        assert_eq!(resolve(None, None, None), (ms(2000), ms(10000), ms(20000)));
     }
 
     #[test]
@@ -712,11 +712,11 @@ mod tests {
         // a min below the default desired does not drag desired down
         assert_eq!(
             resolve(Some(4000), None, None),
-            (ms(4000), ms(12000), ms(24000))
+            (ms(4000), ms(10000), ms(20000))
         );
         assert_eq!(
             resolve(Some(500), None, None),
-            (ms(500), ms(12000), ms(24000))
+            (ms(500), ms(10000), ms(20000))
         );
         // desired follows a min above the default
         assert_eq!(
