@@ -1,4 +1,4 @@
-use std::{iter, sync::Arc};
+use std::sync::Arc;
 
 use crate::pipeline::{
     decoder::{
@@ -134,31 +134,32 @@ impl FfmpegH264Decoder {
     }
 
     fn read_all_frames(&mut self) -> Vec<Frame> {
-        iter::from_fn(|| {
+        let mut frames = Vec::new();
+        loop {
             match self.decoder.receive_frame(&mut self.av_frame) {
                 Ok(_) => match from_av_frame(&mut self.av_frame, TIME_BASE) {
                     Ok(frame) => {
                         trace!(pts=?frame.pts, drop_frames=?self.drop_frames, "H264 decoder produced a frame.");
-                        match self.drop_frames {
-                            true => None,
-                            false => Some(frame),
+                        if self.drop_frames {
+                            continue;
                         }
+                        frames.push(frame);
                     }
                     Err(err) => {
                         warn!("Dropping frame: {}", err);
-                        None
+                        break;
                     }
                 },
-                Err(ffmpeg_next::Error::Eof) => None,
+                Err(ffmpeg_next::Error::Eof) => break,
                 Err(ffmpeg_next::Error::Other {
                     errno: ffmpeg_next::error::EAGAIN,
-                }) => None, // decoder needs more chunks to produce frame
+                }) => break, // decoder needs more chunks to produce frame
                 Err(e) => {
                     error!("Decoder error: {e}.");
-                    None
+                    break;
                 }
             }
-        })
-        .collect()
+        }
+        frames
     }
 }
