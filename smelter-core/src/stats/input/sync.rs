@@ -86,17 +86,18 @@ struct InputSyncTrackModeState {
 
 #[derive(Debug)]
 enum InputSyncModeState {
-    Simple {
-        state: SimpleSyncTrackState,
-    },
-    Live {
-        state: LiveSyncTrackState,
-        discontinuities_detected: u32,
-        discontinuities_detected_10_secs: SlidingWindowValue<u32>,
-        effective_buffer_on_receive_10_secs: SlidingWindowValue<i64>,
-        effective_buffer_on_output_10_secs: SlidingWindowValue<i64>,
-        snapshot: LiveSyncSnapshot,
-    },
+    Simple { state: SimpleSyncTrackState },
+    Live(Box<LiveSyncModeState>),
+}
+
+#[derive(Debug)]
+struct LiveSyncModeState {
+    state: LiveSyncTrackState,
+    discontinuities_detected: u32,
+    discontinuities_detected_10_secs: SlidingWindowValue<u32>,
+    effective_buffer_on_receive_10_secs: SlidingWindowValue<i64>,
+    effective_buffer_on_output_10_secs: SlidingWindowValue<i64>,
+    snapshot: LiveSyncSnapshot,
 }
 
 /// Per-input pair of track states, shared by every protocol using the input sync.
@@ -142,54 +143,53 @@ impl InputSyncTrackState {
                     state: *state,
                 })
             }
-            InputSyncModeState::Live {
-                state,
-                discontinuities_detected,
-                discontinuities_detected_10_secs,
-                effective_buffer_on_receive_10_secs,
-                effective_buffer_on_output_10_secs,
-                snapshot,
-            } => InputSyncTrackStatsReport::Live(LiveSyncTrackStatsReport {
-                bitrate_1_second,
-                bitrate_1_minute,
-                state: *state,
-                discontinuities_detected: *discontinuities_detected,
-                target_offset_distance_seconds: ns_to_secs(snapshot.target_offset_distance_ns),
-                live_edge_lower_bound_distance_seconds: snapshot
-                    .live_edge_lower_bound_distance_ns
-                    .map(ns_to_secs),
-                live_edge_upper_bound_distance_seconds: snapshot
-                    .live_edge_upper_bound_distance_ns
-                    .map(ns_to_secs),
-                buffer: match snapshot.buffer {
-                    LiveSyncBufferStats::Fifo { duration } => {
-                        LiveSyncBufferStatsReport::Fifo(FifoBufferStatsReport {
-                            duration_seconds: duration.as_secs_f64(),
-                        })
-                    }
-                },
-                last_10_seconds: LiveSyncTrackSlidingWindowStatsReport {
-                    discontinuities_detected: discontinuities_detected_10_secs.sum(),
-                    effective_buffer_on_receive_avg_seconds: avg_secs(
-                        effective_buffer_on_receive_10_secs,
+            InputSyncModeState::Live(live) => {
+                InputSyncTrackStatsReport::Live(LiveSyncTrackStatsReport {
+                    bitrate_1_second,
+                    bitrate_1_minute,
+                    state: live.state,
+                    discontinuities_detected: live.discontinuities_detected,
+                    target_offset_distance_seconds: ns_to_secs(
+                        live.snapshot.target_offset_distance_ns,
                     ),
-                    effective_buffer_on_receive_max_seconds: ns_to_secs(
-                        effective_buffer_on_receive_10_secs.max(),
-                    ),
-                    effective_buffer_on_receive_min_seconds: ns_to_secs(
-                        effective_buffer_on_receive_10_secs.min(),
-                    ),
-                    effective_buffer_on_output_avg_seconds: avg_secs(
-                        effective_buffer_on_output_10_secs,
-                    ),
-                    effective_buffer_on_output_max_seconds: ns_to_secs(
-                        effective_buffer_on_output_10_secs.max(),
-                    ),
-                    effective_buffer_on_output_min_seconds: ns_to_secs(
-                        effective_buffer_on_output_10_secs.min(),
-                    ),
-                },
-            }),
+                    live_edge_lower_bound_distance_seconds: live
+                        .snapshot
+                        .live_edge_lower_bound_distance_ns
+                        .map(ns_to_secs),
+                    live_edge_upper_bound_distance_seconds: live
+                        .snapshot
+                        .live_edge_upper_bound_distance_ns
+                        .map(ns_to_secs),
+                    buffer: match live.snapshot.buffer {
+                        LiveSyncBufferStats::Fifo { duration } => {
+                            LiveSyncBufferStatsReport::Fifo(FifoBufferStatsReport {
+                                duration_seconds: duration.as_secs_f64(),
+                            })
+                        }
+                    },
+                    last_10_seconds: LiveSyncTrackSlidingWindowStatsReport {
+                        discontinuities_detected: live.discontinuities_detected_10_secs.sum(),
+                        effective_buffer_on_receive_avg_seconds: avg_secs(
+                            &mut live.effective_buffer_on_receive_10_secs,
+                        ),
+                        effective_buffer_on_receive_max_seconds: ns_to_secs(
+                            live.effective_buffer_on_receive_10_secs.max(),
+                        ),
+                        effective_buffer_on_receive_min_seconds: ns_to_secs(
+                            live.effective_buffer_on_receive_10_secs.min(),
+                        ),
+                        effective_buffer_on_output_avg_seconds: avg_secs(
+                            &mut live.effective_buffer_on_output_10_secs,
+                        ),
+                        effective_buffer_on_output_max_seconds: ns_to_secs(
+                            live.effective_buffer_on_output_10_secs.max(),
+                        ),
+                        effective_buffer_on_output_min_seconds: ns_to_secs(
+                            live.effective_buffer_on_output_10_secs.min(),
+                        ),
+                    },
+                })
+            }
         };
         Some(report)
     }
@@ -222,29 +222,23 @@ impl InputSyncTrackState {
                 InputSyncStatsEvent::Simple(SimpleSyncStatsEvent::StateChanged(new_state)),
                 InputSyncModeState::Simple { state },
             ) => *state = new_state,
-            (
-                InputSyncStatsEvent::Live(event),
-                InputSyncModeState::Live {
-                    state,
-                    discontinuities_detected,
-                    discontinuities_detected_10_secs,
-                    effective_buffer_on_receive_10_secs,
-                    effective_buffer_on_output_10_secs,
-                    snapshot,
-                },
-            ) => match event {
-                LiveSyncStatsEvent::StateChanged(new_state) => *state = new_state,
+            (InputSyncStatsEvent::Live(event), InputSyncModeState::Live(live)) => match event {
+                LiveSyncStatsEvent::StateChanged(new_state) => live.state = new_state,
                 LiveSyncStatsEvent::Discontinuity => {
-                    *discontinuities_detected += 1;
-                    discontinuities_detected_10_secs.push(1);
+                    live.discontinuities_detected += 1;
+                    live.discontinuities_detected_10_secs.push(1);
                 }
                 LiveSyncStatsEvent::ChunkReceived {
                     effective_buffer_ns,
-                } => effective_buffer_on_receive_10_secs.push(effective_buffer_ns),
+                } => live
+                    .effective_buffer_on_receive_10_secs
+                    .push(effective_buffer_ns),
                 LiveSyncStatsEvent::ChunkOutput {
                     effective_buffer_ns,
-                } => effective_buffer_on_output_10_secs.push(effective_buffer_ns),
-                LiveSyncStatsEvent::Snapshot(new_snapshot) => *snapshot = new_snapshot,
+                } => live
+                    .effective_buffer_on_output_10_secs
+                    .push(effective_buffer_ns),
+                LiveSyncStatsEvent::Snapshot(new_snapshot) => live.snapshot = new_snapshot,
             },
             (event, mode) => tracing::error!(?event, ?mode, "Wrong event type for sync mode"),
         }
@@ -260,7 +254,7 @@ impl InputSyncTrackModeState {
                 InputSyncMode::Simple => InputSyncModeState::Simple {
                     state: SimpleSyncTrackState::InitialBuffering,
                 },
-                InputSyncMode::Live => InputSyncModeState::Live {
+                InputSyncMode::Live => InputSyncModeState::Live(Box::new(LiveSyncModeState {
                     state: LiveSyncTrackState::WaitingForStart,
                     discontinuities_detected: 0,
                     discontinuities_detected_10_secs: SlidingWindowValue::new(Duration::from_secs(
@@ -280,7 +274,7 @@ impl InputSyncTrackModeState {
                         live_edge_lower_bound_distance_ns: None,
                         live_edge_upper_bound_distance_ns: None,
                     },
-                },
+                })),
             },
         }
     }
