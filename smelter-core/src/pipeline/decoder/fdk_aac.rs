@@ -32,6 +32,10 @@ impl AudioDecoder for FdkAacDecoder {
         let chunk = match event {
             EncodedInputEvent::Chunk(chunk) => chunk,
             EncodedInputEvent::LostData | EncodedInputEvent::AuDelimiter => return Ok(vec![]),
+            EncodedInputEvent::Discontinuity => {
+                self.decoder = None;
+                return Ok(vec![]);
+            }
         };
         match &mut self.decoder {
             Some(decoder) => Ok(decoder.decode(chunk)?),

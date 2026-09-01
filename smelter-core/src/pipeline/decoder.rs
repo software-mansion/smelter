@@ -38,11 +38,16 @@ pub(crate) enum EncodedInputEvent {
     Chunk(EncodedInputChunk),
     LostData,
     AuDelimiter,
+    /// What follows does not continue what came before: the input timeline was
+    /// dropped, so state built from it (reference frames, partially parsed
+    /// access units, codec parameters) does not describe what comes next.
+    /// Everything the decoder still holds is decoded first.
+    Discontinuity,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct DecoderThreadHandle {
-    pub chunk_sender: Sender<PipelineEvent<EncodedInputChunk>>,
+    pub chunk_sender: Sender<PipelineEvent<EncodedInputEvent>>,
 }
 
 pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
@@ -61,6 +66,10 @@ pub(crate) trait VideoDecoderInstance {
 
 pub(crate) trait BytestreamTransformer: Send + 'static {
     fn transform(&mut self, data: bytes::Bytes) -> bytes::Bytes;
+
+    /// The stream continues on a new timeline, so anything the decoder needs
+    /// to start over (e.g. parameter sets) has to be emitted again.
+    fn on_discontinuity(&mut self) {}
 }
 
 pub(crate) trait AudioDecoder: Sized {
@@ -73,9 +82,9 @@ pub(crate) trait AudioDecoder: Sized {
     fn flush(&mut self) -> Vec<InputAudioSamples>;
 }
 
-pub struct BytestreamTransformStream<Source, Transformer>
+pub(crate) struct BytestreamTransformStream<Source, Transformer>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
     Transformer: BytestreamTransformer,
 {
     transformer: Option<Transformer>,
@@ -85,7 +94,7 @@ where
 
 impl<Source, Transformer> BytestreamTransformStream<Source, Transformer>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
     Transformer: BytestreamTransformer,
 {
     pub fn new(transformer: Option<Transformer>, source: Source) -> Self {
@@ -99,19 +108,26 @@ where
 
 impl<Source, Transformer> Iterator for BytestreamTransformStream<Source, Transformer>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
     Transformer: BytestreamTransformer,
 {
-    type Item = PipelineEvent<EncodedInputChunk>;
+    type Item = PipelineEvent<EncodedInputEvent>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(mut chunk)) => {
+            Some(PipelineEvent::Data(EncodedInputEvent::Chunk(mut chunk))) => {
                 if let Some(ref mut transformer) = self.transformer {
                     chunk.data = transformer.transform(chunk.data);
                 }
-                Some(PipelineEvent::Data(chunk))
+                Some(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)))
             }
+            Some(PipelineEvent::Data(EncodedInputEvent::Discontinuity)) => {
+                if let Some(ref mut transformer) = self.transformer {
+                    transformer.on_discontinuity();
+                }
+                Some(PipelineEvent::Data(EncodedInputEvent::Discontinuity))
+            }
+            Some(PipelineEvent::Data(event)) => Some(PipelineEvent::Data(event)),
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,
                 false => {

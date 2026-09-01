@@ -3,7 +3,7 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 use tracing::warn;
 
 use crate::{
-    pipeline::decoder::{AudioDecoderStream, DecoderThreadHandle, EncodedInputEvent},
+    pipeline::decoder::{AudioDecoderStream, DecoderThreadHandle},
     queue::QueueSender,
     utils::{InitializableThread, ThreadMetadata, channel::duration_bounded},
 };
@@ -44,13 +44,11 @@ where
 
         let (chunk_sender, chunk_receiver) = duration_bounded(buffer_size);
 
-        let chunk_stream = chunk_receiver.into_iter().map(|event| match event {
-            PipelineEvent::Data(chunk) => PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)),
-            PipelineEvent::EOS => PipelineEvent::EOS,
-        });
-
-        let decoded_stream =
-            AudioDecoderStream::<Decoder, _>::new(ctx, decoder_options, chunk_stream)?;
+        let decoded_stream = AudioDecoderStream::<Decoder, _>::new(
+            ctx,
+            decoder_options,
+            chunk_receiver.into_iter(),
+        )?;
 
         let state = Self {
             stream: Box::new(decoded_stream.flatten()),

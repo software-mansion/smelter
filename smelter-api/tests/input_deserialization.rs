@@ -7,7 +7,7 @@ use smelter_api::*;
 use smelter_core::QueueInputOptions;
 use smelter_core::codecs::VideoDecoderOptions;
 use smelter_core::protocols::{
-    HlsInputOptions, HlsInputVideoDecoders, Mp4InputOptions, Mp4InputSource, Mp4InputVideoDecoders,
+    HlsInputDecoders, HlsInputOptions, Mp4InputOptions, Mp4InputSource, Mp4InputVideoDecoders,
     PortOrRange, RtmpServerInputDecoders, RtmpServerInputOptions, RtpAudioOptions, RtpInputOptions,
     RtpInputTransportProtocol, WebrtcVideoDecoderOptions, WhepInputOptions, WhipInputOptions,
 };
@@ -149,6 +149,8 @@ fn rtmp_minimal() {
             stream_key: Arc::from("stream_1"),
             decoders: RtmpServerInputDecoders { h264: None },
             queue_options: default_queue(),
+            is_live: true,
+            buffer: Default::default(),
         }),
     );
 }
@@ -180,6 +182,8 @@ fn rtmp_with_all_options() {
                 audio_side_channel: false.into(),
                 side_channel_delay: Duration::ZERO,
             },
+            is_live: true,
+            buffer: Default::default(),
         }),
     );
 }
@@ -201,6 +205,8 @@ fn rtmp_vulkan_decoder() {
                 h264: Some(VideoDecoderOptions::VulkanH264),
             },
             queue_options: default_queue(),
+            is_live: true,
+            buffer: Default::default(),
         }),
     );
 }
@@ -822,9 +828,10 @@ fn hls_minimal() {
         }),
         CoreInput::Hls(HlsInputOptions {
             url: Arc::from("https://example.com/stream.m3u8"),
-            video_decoders: HlsInputVideoDecoders { h264: None },
+            decoder_options: HlsInputDecoders { h264: None },
             queue_options: default_queue(),
             offset: None,
+            buffer: Default::default(),
         }),
     );
 }
@@ -845,7 +852,7 @@ fn hls_with_all_options() {
         }),
         CoreInput::Hls(HlsInputOptions {
             url: Arc::from("https://example.com/stream.m3u8"),
-            video_decoders: HlsInputVideoDecoders {
+            decoder_options: HlsInputDecoders {
                 h264: Some(VideoDecoderOptions::FfmpegH264),
             },
             queue_options: QueueInputOptions {
@@ -855,6 +862,7 @@ fn hls_with_all_options() {
                 side_channel_delay: Duration::ZERO,
             },
             offset: Some(Duration::from_millis(500)),
+            buffer: Default::default(),
         }),
     );
 }
@@ -872,11 +880,12 @@ fn hls_vulkan_decoder() {
         }),
         CoreInput::Hls(HlsInputOptions {
             url: Arc::from("https://example.com/stream.m3u8"),
-            video_decoders: HlsInputVideoDecoders {
+            decoder_options: HlsInputDecoders {
                 h264: Some(VideoDecoderOptions::VulkanH264),
             },
             queue_options: default_queue(),
             offset: None,
+            buffer: Default::default(),
         }),
     );
 }

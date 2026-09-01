@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use smelter_render::Frame;
 
-use crate::pipeline::rtp::RtpInputEvent;
+use crate::pipeline::{decoder::EncodedInputEvent, rtp::RtpInputEvent};
 
 use crate::prelude::*;
 
@@ -41,6 +41,18 @@ impl TimedValue for EncodedInputChunk {
             self.pts.saturating_sub(Duration::from_millis(10)),
             self.pts + Duration::from_millis(10),
         ))
+    }
+}
+
+impl TimedValue for EncodedInputEvent {
+    fn timestamp_range(&self) -> Option<(Duration, Duration)> {
+        match self {
+            EncodedInputEvent::Chunk(chunk) => chunk.timestamp_range(),
+            // markers do not extend the buffered range
+            EncodedInputEvent::LostData
+            | EncodedInputEvent::AuDelimiter
+            | EncodedInputEvent::Discontinuity => None,
+        }
     }
 }
 

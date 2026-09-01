@@ -2,7 +2,7 @@ import type * as Api from '../api.js';
 import type { InputHlsDecoderMap } from './input/hls.js';
 import type { InputMp4DecoderMap } from './input/mp4.js';
 import type { InputRtpAudioOptions, InputRtpVideoOptions } from './input/rtp.js';
-import type { SideChannel } from './input/common.js';
+import type { InputBuffer, SideChannel } from './input/common.js';
 import type { InputWhipVideoOptions } from './input/whip.js';
 import type { InputWhepVideoOptions } from './input/whep.js';
 import type { InputRtmpDecoderMap } from './input/rtmp.js';
@@ -122,6 +122,12 @@ export type RegisterHlsInput = {
    * Enable side channel for video and/or audio track.
    */
   sideChannel?: SideChannel;
+  /**
+   * Input buffer configuration.
+   *
+   * Defaults: `desiredMs=10000`, `minMs=2000`, `maxMs=20000`.
+   */
+  buffer?: InputBuffer | null;
 };
 
 export type RegisterWhipServerInput = {
@@ -206,6 +212,16 @@ export type RegisterRtmpServerInput = {
    * Enable side channel for video and/or audio track.
    */
   sideChannel?: SideChannel;
+  /**
+   * (**default=`"realtime"`**) Defines if stream is real-time.
+   */
+  ingestMode?: Api.RtmpIngestMode | null;
+  /**
+   * Input buffer configuration.
+   *
+   * Defaults: `desiredMs=2000`, `minMs=1000`, `maxMs=5000`.
+   */
+  buffer?: InputBuffer | null;
 };
 
 export type RegisterMoqServerInput = {

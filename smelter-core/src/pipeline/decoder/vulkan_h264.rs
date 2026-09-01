@@ -62,6 +62,7 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             }
             EncodedInputEvent::LostData => H264DecoderEvent::SignalDataLoss,
             EncodedInputEvent::AuDelimiter => H264DecoderEvent::SignalFrameEnd,
+            EncodedInputEvent::Discontinuity => H264DecoderEvent::Flush,
         };
 
         let frames = match self.decoder.process_event(decoder_event) {
@@ -88,11 +89,13 @@ impl VideoDecoderInstance for VulkanH264Decoder {
     }
 
     fn flush(&mut self) -> Vec<Frame> {
-        if self.drop_frames {
-            return Vec::new();
-        }
         match self.decoder.flush() {
-            Ok(frames) => frames.into_iter().map(from_vk_frame).collect(),
+            Ok(frames) => {
+                if self.drop_frames {
+                    return Vec::new();
+                }
+                frames.into_iter().map(from_vk_frame).collect()
+            }
             Err(err) => {
                 warn!("Failed to flush the decoder: {err}");
                 Vec::new()

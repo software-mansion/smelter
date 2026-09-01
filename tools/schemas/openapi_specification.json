@@ -1559,6 +1559,17 @@
                 "description": "Enable side channel for video and/or audio track."
               }
             ]
+          },
+          "buffer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputBuffer",
+                "description": "Input buffer configuration.\n\nDefaults: `desired_ms=10000`, `min_ms=2000`, `max_ms=20000`."
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -2088,6 +2099,50 @@
             }
           }
         ]
+      },
+      "InputBuffer": {
+        "oneOf": [
+          {
+            "type": "number",
+            "format": "double",
+            "description": "Desired buffer in milliseconds; the allowed range is derived from it."
+          },
+          {
+            "$ref": "#/components/schemas/InputBufferOptions"
+          }
+        ],
+        "description": "Buffer a live input keeps between the live edge of the stream and playback.\nA larger buffer adds latency, but tolerates more delivery jitter and\nnetwork stalls."
+      },
+      "InputBufferOptions": {
+        "type": "object",
+        "description": "Values that are not provided are derived from the provided ones and the\nprotocol defaults.",
+        "properties": {
+          "desired_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Buffer the input aims to keep, in milliseconds. At the start it should\nbuffer at least that much media before producing first chunk."
+          },
+          "min_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Lower range of what is considered stable state. If buffer is smaller than this\nvalue then media will be slightly \"stretched\" so the buffer converges on desired value."
+          },
+          "max_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Upper range of what is considered stable state. If buffer is larger than this\nvalue then media will be slightly \"squashed\" so the buffer converges on desired value."
+          }
+        },
+        "additionalProperties": false
       },
       "InputId": {
         "type": "string"
@@ -5170,6 +5225,13 @@
           }
         ]
       },
+      "RtmpIngestMode": {
+        "type": "string",
+        "enum": [
+          "realtime",
+          "offline"
+        ]
+      },
       "RtmpInput": {
         "type": "object",
         "required": [
@@ -5211,6 +5273,28 @@
               {
                 "$ref": "#/components/schemas/SideChannel",
                 "description": "Enable side channel for video and/or audio track."
+              }
+            ]
+          },
+          "ingest_mode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RtmpIngestMode",
+                "description": "(**default=`\"realtime\"`**) Defines if stream is real-time."
+              }
+            ]
+          },
+          "buffer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputBuffer",
+                "description": "Input buffer configuration.\n\nDefaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`."
               }
             ]
           }

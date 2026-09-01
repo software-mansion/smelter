@@ -125,6 +125,7 @@ function intoHlsRegisterInput(input: Inputs.RegisterHlsInput): RegisterInputRequ
     offset_ms: input.offsetMs,
     decoder_map: input.decoderMap,
     side_channel: intoSideChannel(input.sideChannel),
+    buffer: intoInputBuffer(input.buffer),
   };
 }
 
@@ -172,6 +173,8 @@ function intoRtmpRegisterInput(input: Inputs.RegisterRtmpServerInput): RegisterI
     required: input.required,
     decoder_map: input.decoderMap,
     side_channel: intoSideChannel(input.sideChannel),
+    ingest_mode: input.ingestMode,
+    buffer: intoInputBuffer(input.buffer),
   };
 }
 
@@ -205,6 +208,20 @@ function intoV4l2RegisterInput(input: Inputs.RegisterV4l2Input): RegisterInputRe
     framerate: input.framerate,
     required: input.required,
     side_channel: intoSideChannel(input.sideChannel),
+  };
+}
+
+function intoInputBuffer(buffer?: Inputs.InputBuffer | null): Api.InputBuffer | undefined {
+  if (buffer == null) {
+    return undefined;
+  }
+  if (typeof buffer === 'number') {
+    return buffer;
+  }
+  return {
+    desired_ms: buffer.desiredMs,
+    min_ms: buffer.minMs,
+    max_ms: buffer.maxMs,
   };
 }
 
