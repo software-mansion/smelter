@@ -4,8 +4,9 @@ use smelter_render::{Frame, error::ErrorStack};
 use tracing::error;
 
 use crate::pipeline::decoder::{
-    EncodedInputEvent, VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
-    ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder,
+    DecodeOnlyFilter, EncodedInputEvent, VideoDecoder, VideoDecoderInstance,
+    ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder,
+    vulkan_h264::VulkanH264Decoder,
 };
 
 use crate::prelude::*;
@@ -47,6 +48,7 @@ where
 {
     ctx: Arc<PipelineCtx>,
     decoder: Option<Box<dyn VideoDecoderInstance>>,
+    decode_only_filter: DecodeOnlyFilter,
     last_chunk_kind: Option<MediaKind>,
     source: Source,
     decoders_info: VideoDecoderMapping,
@@ -66,6 +68,7 @@ where
         Self {
             ctx,
             decoder: None,
+            decode_only_filter: DecodeOnlyFilter::default(),
             last_chunk_kind: None,
             source,
             decoders_info,
@@ -144,16 +147,20 @@ where
                     self.ensure_decoder(chunk.kind);
                 }
                 let decoder = self.decoder.as_mut()?;
-                Some(decoder.decode(event))
+                self.decode_only_filter.on_event(&event);
+                let mut frames = decoder.decode(event);
+                frames.retain(|frame| !self.decode_only_filter.should_drop(frame.pts));
+                Some(frames)
             }
             Some(PipelineEvent::EOS) | None => {
-                let chunks = self
+                let mut frames = self
                     .decoder
                     .as_mut()
                     .map(|decoder| decoder.flush())
                     .unwrap_or_default();
-                match chunks.is_empty() {
-                    false => Some(chunks),
+                frames.retain(|frame| !self.decode_only_filter.should_drop(frame.pts));
+                match frames.is_empty() {
+                    false => Some(frames),
                     true => None,
                 }
             }

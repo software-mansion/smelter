@@ -3,7 +3,7 @@ use tracing::warn;
 
 use smelter_render::{Frame, error::ErrorStack};
 
-use crate::pipeline::decoder::{AudioDecoder, EncodedInputEvent, VideoDecoder};
+use crate::pipeline::decoder::{AudioDecoder, DecodeOnlyFilter, EncodedInputEvent, VideoDecoder};
 
 use crate::prelude::*;
 
@@ -13,6 +13,7 @@ where
     Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     decoder: Decoder,
+    decode_only_filter: DecodeOnlyFilter,
     source: Source,
 }
 
@@ -23,7 +24,11 @@ where
 {
     pub fn new(ctx: Arc<PipelineCtx>, source: Source) -> Result<Self, DecoderInitError> {
         let decoder = Decoder::new(&ctx, None)?;
-        Ok(Self { decoder, source })
+        Ok(Self {
+            decoder,
+            decode_only_filter: DecodeOnlyFilter::default(),
+            source,
+        })
     }
 }
 
@@ -36,11 +41,17 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(event)) => Some(self.decoder.decode(event)),
+            Some(PipelineEvent::Data(event)) => {
+                self.decode_only_filter.on_event(&event);
+                let mut frames = self.decoder.decode(event);
+                frames.retain(|frame| !self.decode_only_filter.should_drop(frame.pts));
+                Some(frames)
+            }
             Some(PipelineEvent::EOS) | None => {
-                let chunks = self.decoder.flush();
-                match chunks.is_empty() {
-                    false => Some(chunks),
+                let mut frames = self.decoder.flush();
+                frames.retain(|frame| !self.decode_only_filter.should_drop(frame.pts));
+                match frames.is_empty() {
+                    false => Some(frames),
                     true => None,
                 }
             }
@@ -54,6 +65,7 @@ where
     Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     decoder: Decoder,
+    decode_only_filter: DecodeOnlyFilter,
     source: Source,
 }
 
@@ -68,7 +80,11 @@ where
         source: Source,
     ) -> Result<Self, DecoderInitError> {
         let decoder = Decoder::new(&ctx, options)?;
-        Ok(Self { decoder, source })
+        Ok(Self {
+            decoder,
+            decode_only_filter: DecodeOnlyFilter::default(),
+            source,
+        })
     }
 }
 
@@ -81,20 +97,29 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(event)) => match self.decoder.decode(event) {
-                Ok(chunks) => Some(chunks),
-                Err(err) => {
-                    warn!(
-                        "Audio decoder error: {}",
-                        ErrorStack::new(&err).into_string()
-                    );
-                    Some(vec![])
+            Some(PipelineEvent::Data(event)) => {
+                self.decode_only_filter.on_event(&event);
+                match self.decoder.decode(event) {
+                    Ok(mut samples) => {
+                        samples.retain(|samples| {
+                            !self.decode_only_filter.should_drop(samples.start_pts)
+                        });
+                        Some(samples)
+                    }
+                    Err(err) => {
+                        warn!(
+                            "Audio decoder error: {}",
+                            ErrorStack::new(&err).into_string()
+                        );
+                        Some(vec![])
+                    }
                 }
-            },
+            }
             Some(PipelineEvent::EOS) | None => {
-                let chunks = self.decoder.flush();
-                match chunks.is_empty() {
-                    false => Some(chunks),
+                let mut samples = self.decoder.flush();
+                samples.retain(|samples| !self.decode_only_filter.should_drop(samples.start_pts));
+                match samples.is_empty() {
+                    false => Some(samples),
                     true => None,
                 }
             }
