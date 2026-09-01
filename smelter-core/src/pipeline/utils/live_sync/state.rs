@@ -11,7 +11,7 @@ use crate::pipeline::utils::input_sync::{
 /// timeline; the old edge estimate does not describe the new timeline.
 const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
 
-/// Lead over the playback position content needs to still reach the queue.
+/// Lead over the playback position below which chunks are force-released.
 const MIN_QUEUE_HEADROOM: Duration = Duration::from_millis(100);
 
 /// The whole mutable state of an input, cross-track and per-track, kept
@@ -40,10 +40,10 @@ struct SharedAnchor {
     current: TimestampAnchor,
     /// Mapping the corrections aim for.
     target: TimestampAnchor,
-    /// Largest pts released so far by any track applying this anchor.
+    /// Largest input pts released so far by any track applying this anchor.
     ///
-    /// It is used to ensure synchronize releasing chunks in PTS order.
-    /// Value is reset (together with entire anchor) on discontinuity.
+    /// Used to maintain interleaved (by pts) order on sync output between tracks.
+    /// Reset (together with the entire anchor) on discontinuity.
     last_released_pts: Option<Duration>,
 }
 
@@ -332,9 +332,10 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         audio_shared || video_shared
     }
 
-    // Releasing chunks from buffer needs to be synchronized between tracks, so we can
-    // use single anchor to slightly shift the chunks. Otherwise it requires far more complex
-    // setup, or it would cause a/v desync while 2 tracks converge on target anchor
+    // Tracks sharing the anchor have to release their chunks in pts order, so
+    // a single anchor can be slewed as chunks are released. Without that
+    // ordering it would require a far more complex setup, or the tracks would
+    // desync while the anchor converges on its target.
     fn should_wait_for_other_track(&self, kind: TrackKind, now: Instant) -> bool {
         let (track, other) = match kind {
             TrackKind::Audio => (self.audio.as_ref(), self.video.as_ref()),
@@ -354,8 +355,8 @@ impl<B: LiveSyncBuffer> SharedState<B> {
 
         let now_pts = now.saturating_duration_since(self.sync_point);
         if anchor.current.to_output_pts(pts) <= now_pts + MIN_QUEUE_HEADROOM {
-            // check if with current anchor we have still time to reach queue. If yes, then
-            // we can still wait a bit
+            // the chunk is about to miss the queue; release it now instead of
+            // waiting for the other track
             return false;
         }
         match other.buffer.peek_pts() {
@@ -742,7 +743,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
 
 #[derive(Debug, Clone)]
 enum StartState {
-    /// Written chunks are buffered and never returned. On each write and on
+    /// Written chunks are buffered and not released yet. On each write and on
     /// each tick we are checking if both edge estimators are ready.
     ///
     /// If shared and track estimator diverge too much the track starts with

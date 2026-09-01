@@ -39,7 +39,8 @@ pub(crate) enum TrackEvent<T> {
     /// timeline was dropped, so state built from it (codec parameters,
     /// reference frames) does not describe the new one. Sent between the last
     /// chunk of the old timeline and the first one of the new, and only on
-    /// the track whose own timestamps broke.
+    /// the track that delivered the chunk revealing the break; the other
+    /// tracks of the input are reset without an event.
     Discontinuity,
 }
 

@@ -33,8 +33,6 @@ impl AudioDecoder for FdkAacDecoder {
             EncodedInputEvent::Chunk(chunk) => chunk,
             EncodedInputEvent::LostData | EncodedInputEvent::AuDelimiter => return Ok(vec![]),
             EncodedInputEvent::Discontinuity => {
-                // the new timeline can carry a different config, so the
-                // decoder is built again from its first chunk
                 self.decoder = None;
                 return Ok(vec![]);
             }

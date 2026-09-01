@@ -12,8 +12,9 @@ pub struct HlsInputOptions {
     /// Ignored for live playlists, where the live edge decides where the
     /// playback starts.
     pub offset: Option<Duration>,
-    /// For non-live playlists only the desired buffer is used; `min`/`max` are
-    /// ignored.
+    /// For non-live playlists only the desired buffer is used to buffer at the
+    /// start; `min`/`max` still shape the derived value when `desired` is not
+    /// set, and `max` sizes the decoder channel.
     pub buffer: LiveInputBufferOptions,
 }
 

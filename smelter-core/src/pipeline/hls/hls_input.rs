@@ -350,8 +350,6 @@ impl BufferTrackWriter {
 }
 
 /// Demuxed packet of one track, buffered by the sync as it was read.
-/// Timestamps are calculated only when they are needed, so a packet that
-/// never leaves the sync costs nothing to convert.
 struct HlsPacket {
     packet: Packet,
     time_base: Rational,

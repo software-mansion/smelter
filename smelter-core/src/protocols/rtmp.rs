@@ -66,7 +66,9 @@ pub struct RtmpServerInputOptions {
     pub decoders: RtmpServerInputDecoders,
     pub queue_options: QueueInputOptions,
     pub is_live: bool,
-    /// Without `is_live` only the desired buffer is used; `min`/`max` are ignored.
+    /// Without `is_live` only the desired buffer is used to buffer at the
+    /// start; `min`/`max` still shape the derived value when `desired` is not
+    /// set.
     pub buffer: LiveInputBufferOptions,
 }
 

@@ -93,8 +93,8 @@ pub(crate) fn start_connection_thread(
             for event in &conn {
                 if let Err(err) = state.handle_rtmp_event(event) {
                     match err {
-                        // decoders are gone, so there is nothing to read the
-                        // connection for anymore
+                        // If one track is closed it means that either input was unregistered
+                        // or something panicked downstream
                         RtmpConnectionError::TrackClosed => break,
                         _ => warn!("{}", ErrorStack::new(&err).into_string()),
                     }
@@ -296,7 +296,7 @@ impl TrackSink<EncodedInputChunk> for RtmpTrackSink {
     fn on_event(&mut self, event: TrackEvent<EncodedInputChunk>) {
         let chunk = match event {
             TrackEvent::Chunk(chunk) => chunk,
-            // We don't expect discontinuity on RTMP.
+            // ignore, assume that decoder does not need reset
             TrackEvent::Discontinuity => return,
         };
 
