@@ -89,7 +89,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             sink,
             last_released_pts: None,
             last_written: None,
-            stats: LiveSyncTrackStats::new(self.stats_sender.clone(), kind, self.sync_point),
+            stats: LiveSyncTrackStats::new(&self.stats_sender, kind, self.sync_point),
         };
         match kind {
             TrackKind::Audio => self.audio = Some(track),
@@ -118,21 +118,11 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
 
         let shared_anchor = self.anchor;
-        let shared_estimate = self.shared_estimator.estimate(now);
-        for track in [self.audio.as_mut(), self.video.as_mut()]
-            .into_iter()
-            .flatten()
-        {
-            let anchors = track.anchors(shared_anchor);
-            // same estimate the corrections of this track are based on
-            let estimate = match track.start {
-                StartState::WaitingForStart => None,
-                StartState::StartedShared => shared_estimate,
-                StartState::StartedTrack { .. } => track.estimator.estimate(now),
-            };
-            track
-                .stats
-                .send_snapshot(now, &track.buffer, anchors, estimate);
+        if let Some(track) = self.audio.as_mut() {
+            track.report_stats_track_snapshot(shared_anchor, &self.shared_estimator);
+        }
+        if let Some(track) = self.video.as_mut() {
+            track.report_stats_track_snapshot(shared_anchor, &self.shared_estimator);
         }
     }
 
@@ -168,12 +158,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         };
 
         track.last_written = Some((chunk.pts(), now));
-        track.stats.send_bytes_received(chunk.size());
-        if let Some((current, _)) = track.anchors(self.anchor) {
-            track
-                .stats
-                .send_chunk_received(current.to_output_pts(chunk.pts()), now);
-        }
+        track.report_stats_chunk_received(self.anchor, &chunk);
 
         // both estimators observe for the whole lifetime of the input
         track.estimator.observe(now, chunk.pts());
@@ -441,7 +426,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         };
         if let Some(track) = track {
             track.sink.on_event(TrackEvent::Discontinuity);
-            track.stats.send_discontinuity();
+            track.stats.report_discontinuity();
         }
     }
 }
@@ -469,26 +454,43 @@ struct TrackState<B: LiveSyncBuffer> {
 }
 
 impl<B: LiveSyncBuffer> TrackState<B> {
-    /// `(current, target)` anchors the track applies, `None` before it started.
-    fn anchors(
-        &self,
-        shared_anchor: Option<SharedAnchor>,
-    ) -> Option<(TimestampAnchor, TimestampAnchor)> {
-        match self.start {
+    fn set_start(&mut self, start: StartState) {
+        self.start = start;
+        self.stats.report_state_change(&self.start);
+    }
+
+    fn report_stats_chunk_received(&self, shared_anchor: Option<SharedAnchor>, chunk: &B::Chunk) {
+        self.stats.report_bytes_received(chunk.size());
+        let current_anchor = match self.start {
             StartState::WaitingForStart => None,
-            StartState::StartedShared => shared_anchor.map(|a| (a.current, a.target)),
+            StartState::StartedShared => shared_anchor.map(|a| a.current),
+            StartState::StartedTrack { current_anchor, .. } => Some(current_anchor),
+        };
+        if let Some(current) = current_anchor {
+            self.stats
+                .report_chunk_received(current.to_output_pts(chunk.pts()));
+        }
+    }
+
+    fn report_stats_track_snapshot(
+        &mut self,
+        shared_anchor: Option<SharedAnchor>,
+        shared_estimator: &LiveEdgeEstimator,
+    ) {
+        let (anchors, estimator) = match self.start {
+            StartState::WaitingForStart => (None, None),
+            StartState::StartedShared => (
+                shared_anchor.map(|a| (a.current, a.target)),
+                Some(shared_estimator),
+            ),
             StartState::StartedTrack {
                 target_anchor,
                 current_anchor,
                 ..
-            } => Some((current_anchor, target_anchor)),
-        }
-    }
-
-    /// Replaces the start state and reports it.
-    fn set_start(&mut self, start: StartState) {
-        self.start = start;
-        self.stats.send_state(&self.start);
+            } => (Some((current_anchor, target_anchor)), Some(&self.estimator)),
+        };
+        self.stats
+            .report_track_snapshot(&self.buffer, anchors, estimator);
     }
 
     /// Mainly detects tracks that stopped sending data, but it can also trigger
@@ -714,7 +716,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             lead=?output_pts.checked_sub(self.sync_point.elapsed()),
             "Live sync: releasing chunk"
         );
-        self.stats.send_chunk_output(output_pts, Instant::now());
+        self.stats.report_chunk_released(output_pts);
         self.last_released_pts = Some(match self.last_released_pts {
             Some(previous) => Duration::max(previous, chunk.pts()),
             None => chunk.pts(),

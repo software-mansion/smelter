@@ -48,7 +48,7 @@ pub(crate) enum LiveSyncStatsEvent {
     },
     /// Chunk left the sync buffer; `effective_buffer_ns` is how much time it
     /// has to reach the queue, negative when it is already late.
-    ChunkOutput {
+    ChunkReleased {
         effective_buffer_ns: i64,
     },
     /// Periodic snapshot of the sync state.
@@ -233,7 +233,7 @@ impl InputSyncTrackState {
                 } => live
                     .effective_buffer_on_receive_10_secs
                     .push(effective_buffer_ns),
-                LiveSyncStatsEvent::ChunkOutput {
+                LiveSyncStatsEvent::ChunkReleased {
                     effective_buffer_ns,
                 } => live
                     .effective_buffer_on_output_10_secs

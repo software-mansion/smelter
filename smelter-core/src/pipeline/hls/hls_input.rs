@@ -23,7 +23,7 @@ use crate::{
             channel::TrySendError,
             input_sync::{
                 InputSync, InputSyncItem, InputSyncStatsSender, InputSyncTrack, SimpleSync,
-                TimestampAnchor, TrackClosedError, TrackEvent, TrackKind, TrackSink,
+                TimestampAnchor, TrackEvent, TrackKind, TrackSink,
             },
             live_sync::{BufferingStrategy, FifoBuffer, LiveSync, LiveSyncOptions},
         },
@@ -242,7 +242,9 @@ impl HlsDemuxerThread {
                 continue;
             }
 
-            if track.write_packet(packet).is_err() {
+            let chunk = HlsPacket::new(packet, track.time_base);
+            trace!(stream_id, pts=?chunk.pts(), key=chunk.is_key(), "Received packet");
+            if track.track_sync.write_chunk(chunk).is_err() {
                 break;
             }
         }
@@ -325,20 +327,6 @@ struct BufferTrackWriter {
     index: usize,
     time_base: Rational,
     track_sync: InputSyncTrack<HlsBuffer>,
-}
-
-impl BufferTrackWriter {
-    /// Fails once the consumer of the track is gone.
-    fn write_packet(&mut self, packet: Packet) -> Result<(), TrackClosedError> {
-        trace!(
-            stream_id = self.index,
-            pts = packet.pts(),
-            key = packet.is_key(),
-            "Received packet"
-        );
-        self.track_sync
-            .write_chunk(HlsPacket::new(packet, self.time_base))
-    }
 }
 
 /// Demuxed packet of one track, buffered by the sync as it was read.
@@ -432,15 +420,6 @@ impl DecoderTrackWriter {
         }
     }
 
-    /// The input timeline broke. The decoder keeps running - it decodes
-    /// everything it still holds from the old timeline first, and drops the
-    /// state built from it when the marker reaches it.
-    fn on_discontinuity(&mut self) {
-        self.pending_discontinuity = true;
-        self.waiting_for_keyframe = true;
-        self.maybe_handle_discontinuity();
-    }
-
     fn send_chunk(&mut self, packet: HlsPacket) {
         self.maybe_handle_discontinuity();
         if self.pending_discontinuity {
@@ -500,7 +479,11 @@ impl TrackSink<HlsPacket> for DecoderTrackWriter {
     fn on_event(&mut self, event: TrackEvent<HlsPacket>) {
         match event {
             TrackEvent::Chunk(packet) => self.send_chunk(packet),
-            TrackEvent::Discontinuity => self.on_discontinuity(),
+            TrackEvent::Discontinuity => {
+                self.pending_discontinuity = true;
+                self.waiting_for_keyframe = true;
+                self.maybe_handle_discontinuity();
+            }
         }
     }
 
