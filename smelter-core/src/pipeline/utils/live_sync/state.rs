@@ -78,6 +78,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             buffer: B::default(),
             sink,
             last_released_pts: None,
+            last_written: None,
         };
         match kind {
             TrackKind::Audio => self.audio = Some(track),
@@ -137,6 +138,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             return Err(TrackClosedError);
         };
 
+        track.last_written = Some((chunk.pts(), now));
         // both estimators observe for the whole lifetime of the input
         track.estimator.observe(now, chunk.pts());
         self.shared_estimator.observe(now, chunk.pts());
@@ -378,21 +380,25 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         if !track.is_discontinuity(now, pts) {
             return;
         }
-        debug!(
-            ?kind,
-            ?pts,
-            "Live sync: discontinuity detected, resetting input"
-        );
+        debug!(?kind, ?pts, "Live sync: discontinuity detected");
 
-        if let Some(track) = self.audio.as_mut() {
-            track.reset(now, self.anchor);
-        }
-        if let Some(track) = self.video.as_mut() {
-            track.reset(now, self.anchor);
+        // Only reset if track had any data since last reset
+        if track.estimator.estimate(now).is_some() {
+            if let Some(track) = self.audio.as_mut() {
+                track.reset(now, self.anchor);
+            }
+            if let Some(track) = self.video.as_mut() {
+                track.reset(now, self.anchor);
+            }
+            self.shared_estimator = LiveEdgeEstimator::new(
+                self.sync_point,
+                self.options.stabilization_tolerance,
+                self.options.stabilization_period,
+            );
+            self.anchor = None;
         }
 
-        // Both tracks are reset, but only one should emit a discontinuity event.
-        // In HLS both tracks can detect the gap slightly off (e.g. by a packet).
+        // After the resets, so flushed old chunks precede the event in the sink.
         let track = match kind {
             TrackKind::Audio => self.audio.as_mut(),
             TrackKind::Video => self.video.as_mut(),
@@ -400,13 +406,6 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         if let Some(track) = track {
             track.sink.on_event(TrackEvent::Discontinuity);
         }
-
-        self.shared_estimator = LiveEdgeEstimator::new(
-            self.sync_point,
-            self.options.stabilization_tolerance,
-            self.options.stabilization_period,
-        );
-        self.anchor = None;
     }
 }
 
@@ -426,6 +425,9 @@ struct TrackState<B: LiveSyncBuffer> {
     /// Output pts the released content ends at. Used to maintain continuity after
     /// reset so it has to survive the reset itself.
     last_released_pts: Option<Duration>,
+    /// pts of the last written chunk and its arrival time. Deliberately not
+    /// cleared on reset, so a discontinuity is detectable right after one.
+    last_written: Option<(Duration, Instant)>,
 }
 
 impl<B: LiveSyncBuffer> TrackState<B> {
@@ -689,15 +691,14 @@ impl<B: LiveSyncBuffer> TrackState<B> {
     /// Whether `pts` belongs to a different timeline than the one this track
     /// has been observing.
     fn is_discontinuity(&self, now: Instant, pts: Duration) -> bool {
-        let Some(estimation) = self.estimator.estimate(now) else {
+        let Some((last_pts, arrived_at)) = self.last_written else {
             return false;
         };
-        let delivery = estimation.delivery;
         // pts expected if the stream kept producing in real time since the
         // newest received chunk
-        let expected_pts = delivery.last_pts + delivery.since_last_arrival;
+        let expected_pts = last_pts + now.saturating_duration_since(arrived_at);
         let forward_jump = pts > expected_pts + DISCONTINUITY_THRESHOLD;
-        let backward_jump = pts + DISCONTINUITY_THRESHOLD < delivery.last_pts;
+        let backward_jump = pts + DISCONTINUITY_THRESHOLD < last_pts;
         forward_jump || backward_jump
     }
 

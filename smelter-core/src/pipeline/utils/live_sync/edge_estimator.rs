@@ -154,6 +154,7 @@ pub(crate) struct PtsBound {
 pub(crate) struct DeliveryStats {
     /// Largest observed pts (not the last received one, so decode order does
     /// not matter); the newest delivered content.
+    #[allow(dead_code)]
     pub last_pts: Duration,
     /// Time since the first observed chunk.
     pub observed_for: Duration,
@@ -164,6 +165,7 @@ pub(crate) struct DeliveryStats {
     pub max_arrival_gap: Duration,
     /// Time since the newest observed arrival; the arrival gap currently in
     /// progress.
+    #[allow(dead_code)]
     pub since_last_arrival: Duration,
 }
 
