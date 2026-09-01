@@ -37,7 +37,7 @@
             cups
             libxshmfence
           ] ++ (
-            pkgs.lib.optionals pkgs.stdenv.isLinux [
+            pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               libdrm
               libgbm
               udev
@@ -73,16 +73,19 @@
 
             clang-tools
             llvmPackages.bintools
-            wayland
             libGL
             vulkan-loader
 
             streamlink
-          ];
+          ] ++ (
+            pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              wayland
+            ]
+          );
         in
         {
           devShells = {
-            default = if pkgs.stdenv.isLinux then self'.devShells.linux else self'.devShells.macos;
+            default = if pkgs.stdenv.hostPlatform.isLinux then self'.devShells.linux else self'.devShells.macos;
             linux = pkgs.mkShell {
               packages = devDependencies ++ [ pkgs.mesa pkgs.blackmagic-desktop-video ];
 
