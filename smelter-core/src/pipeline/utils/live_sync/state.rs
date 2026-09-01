@@ -175,7 +175,6 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 .send_chunk_received(current.to_output_pts(chunk.pts()), now);
         }
 
-
         // both estimators observe for the whole lifetime of the input
         track.estimator.observe(now, chunk.pts());
         self.shared_estimator.observe(now, chunk.pts());
