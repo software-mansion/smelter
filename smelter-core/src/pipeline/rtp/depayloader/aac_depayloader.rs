@@ -94,7 +94,7 @@ impl Depayloader for AacDepayloader {
                 data: payload,
                 dts: None,
                 kind: MediaKind::Audio(AudioCodec::Aac),
-                present: true,
+                decode_only: false,
             };
             trace!(?chunk, "RTP AAC depayloader produced a new chunk");
             chunks.push(EncodedInputEvent::Chunk(chunk));

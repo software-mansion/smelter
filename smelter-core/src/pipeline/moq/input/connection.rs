@@ -265,7 +265,7 @@ async fn run_video_track(
             pts: raw_pts,
             dts: None,
             kind: MediaKind::Video(video.codec),
-            present: true,
+            decode_only: false,
         };
 
         let channel_closed = aligner
@@ -348,7 +348,7 @@ async fn run_audio_track(
             pts: raw_pts,
             dts: None,
             kind: MediaKind::Audio(audio.codec),
-            present: true,
+            decode_only: false,
         };
 
         let channel_closed = aligner

@@ -54,7 +54,7 @@ impl VideoDecoderInstance for VulkanH264Decoder {
 
         let decoder_event = match &event {
             EncodedInputEvent::Chunk(chunk) => {
-                self.drop_frames = !chunk.present;
+                self.drop_frames = chunk.decode_only;
                 H264DecoderEvent::DecodeChunk(gpu_video::EncodedInputChunk {
                     data: chunk.data.as_ref(),
                     pts: Some(chunk.pts.as_micros() as u64),

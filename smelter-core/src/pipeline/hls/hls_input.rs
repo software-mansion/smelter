@@ -373,7 +373,7 @@ impl HlsPacket {
             pts: self.pts(),
             dts: self.packet.dts().map(|dts| self.timestamp(dts)),
             kind,
-            present: !self.decode_only,
+            decode_only: self.decode_only,
         }
     }
 }

@@ -11,8 +11,8 @@ pub struct EncodedInputChunk {
 
     /// Sometimes we need to send data to the decoder, so the next chunks can
     /// be decoded correctly, but resulting frames should not be sent to the queue.
-    /// In those cases this field should be set to false.
-    pub present: bool,
+    /// In those cases this field should be set to true.
+    pub decode_only: bool,
 }
 
 impl fmt::Debug for EncodedInputChunk {
@@ -24,7 +24,7 @@ impl fmt::Debug for EncodedInputChunk {
             .field("pts", &self.pts)
             .field("dts", &self.dts)
             .field("kind", &self.kind)
-            .field("present", &self.present)
+            .field("decode_only", &self.decode_only)
             .finish()
     }
 }

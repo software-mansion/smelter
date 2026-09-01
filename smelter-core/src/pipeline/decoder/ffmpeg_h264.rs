@@ -65,7 +65,7 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
         trace!(?event, "FFmpeg H264 decoder received an event.");
         let au_chunks = match event {
             EncodedInputEvent::Chunk(chunk) => {
-                self.drop_frames = !chunk.present;
+                self.drop_frames = chunk.decode_only;
                 match self.au_splitter.put_chunk(chunk) {
                     Ok(chunks) => chunks,
                     Err(err) => {
