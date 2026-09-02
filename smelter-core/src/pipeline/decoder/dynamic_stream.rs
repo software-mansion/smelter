@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use smelter_render::{Frame, error::ErrorStack};
+use smelter_render::error::ErrorStack;
 use tracing::error;
 
 use crate::pipeline::decoder::{

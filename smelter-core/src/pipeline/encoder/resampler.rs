@@ -5,7 +5,7 @@ use rubato::{FixedSync, Resampler};
 use tracing::{error, info, trace};
 
 use crate::{
-    AudioChannels, AudioSamples, PipelineEvent, prelude::OutputAudioSamples,
+    AudioChannels, AudioSamples, PipelineEvent, Timestamp, prelude::OutputAudioSamples,
     utils::AudioSamplesBuffer,
 };
 
@@ -79,7 +79,7 @@ struct OutputResampler {
 
     /// Audio mixer guarantees continuity on output, so we only need to keep track
     /// of produces samples and first pts.
-    first_sample_pts: Option<Duration>,
+    first_sample_pts: Option<Timestamp>,
     samples_produced: u64,
 }
 

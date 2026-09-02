@@ -187,7 +187,7 @@ async fn init_whep_client(
         let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
             audio: true,
-            offset: QueueTrackOffset::Pts(Duration::ZERO),
+            offset: QueueTrackOffset::Pts(Timestamp::ZERO),
         });
 
         pc.on_track(move |track_ctx| {

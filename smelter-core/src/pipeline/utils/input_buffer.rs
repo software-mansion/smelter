@@ -26,7 +26,7 @@ impl<T: TimedValue> InputDelayBuffer<T> {
             let first_ts = self.buffer.iter().find_map(|i| i.timestamp_range());
             let last_ts = self.buffer.iter().rev().find_map(|i| i.timestamp_range());
             if let (Some(first), Some(last)) = (first_ts, last_ts) {
-                self.ready = last.1.abs_diff(first.0) > self.size;
+                self.ready = (last.1 - first.0).abs_duration() > self.size;
             }
         }
     }

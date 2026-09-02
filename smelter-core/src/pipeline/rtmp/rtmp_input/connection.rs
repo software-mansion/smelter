@@ -50,7 +50,7 @@ pub(crate) fn start_connection_thread(
         video: true,
         audio: true,
         offset: match is_live {
-            true => QueueTrackOffset::Pts(Duration::ZERO),
+            true => QueueTrackOffset::Pts(Timestamp::ZERO),
             false => QueueTrackOffset::None,
         },
     });
@@ -203,8 +203,8 @@ impl RtmpConnectionState {
         trace!(pts=?video.pts, "Received video chunk");
         let chunk = EncodedInputChunk {
             data: video.data,
-            pts: video.pts,
-            dts: Some(video.dts),
+            pts: video.pts.into(),
+            dts: Some(video.dts.into()),
             kind: MediaKind::Video(video.codec.into()),
             decode_only: false,
         };
@@ -223,7 +223,7 @@ impl RtmpConnectionState {
         trace!(pts=?audio.pts, "Received audio chunk");
         let chunk = EncodedInputChunk {
             data: audio.data.clone(),
-            pts: audio.pts,
+            pts: audio.pts.into(),
             dts: None,
             kind: MediaKind::Audio(audio.codec.into()),
             decode_only: false,

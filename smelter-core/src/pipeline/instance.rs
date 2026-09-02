@@ -393,7 +393,7 @@ impl Pipeline {
 
     pub fn schedule_event<F: FnOnce(&mut Self) + Send + 'static>(
         pipeline: &Arc<Mutex<Self>>,
-        pts: Duration,
+        pts: Timestamp,
         late_policy: LateEventPolicy,
         callback: F,
     ) {
@@ -491,7 +491,10 @@ fn run_renderer_thread(
                 continue;
             };
 
-            if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
+            if frame_sender
+                .send(PipelineEvent::Data(frame.into()))
+                .is_err()
+            {
                 warn!(?output_id, "Failed to send output frames. Channel closed.");
                 renderer.unregister_output(&output_id);
             }

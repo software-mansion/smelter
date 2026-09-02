@@ -1,7 +1,9 @@
 use std::sync::Arc;
-use std::time::Duration;
 
-use crate::event::{Event, EventEmitter};
+use crate::{
+    Timestamp,
+    event::{Event, EventEmitter},
+};
 
 /// Guards against emitting a particular event more than once.
 /// Use `reset` to re-arm after EOS so the event can fire again.
@@ -39,7 +41,7 @@ impl EmitOnceGuard {
 
 pub struct PauseState {
     /// Internal PTS (relative to sync_point) when input was paused.
-    paused_at_pts: Option<Duration>,
+    paused_at_pts: Option<Timestamp>,
 }
 
 impl PauseState {
@@ -50,7 +52,7 @@ impl PauseState {
     }
 
     /// Sets paused state. Returns `true` if the pause state was changed
-    pub fn pause(&mut self, pts: Duration) -> bool {
+    pub fn pause(&mut self, pts: Timestamp) -> bool {
         if self.paused_at_pts.is_some() {
             return false;
         }
@@ -59,20 +61,20 @@ impl PauseState {
     }
 
     /// Clears paused state. Returns `true` if pause state was changed
-    pub fn resume(&mut self, pts: Duration) -> Option<Duration> {
+    pub fn resume(&mut self, pts: Timestamp) -> Option<Timestamp> {
         let pause_start = self.paused_at_pts.take()?;
-        Some(pts.saturating_sub(pause_start))
+        Some(pts - pause_start)
     }
 
     pub fn is_paused(&self) -> bool {
         self.paused_at_pts().is_some()
     }
 
-    pub fn paused_at_pts(&self) -> Option<Duration> {
+    pub fn paused_at_pts(&self) -> Option<Timestamp> {
         self.paused_at_pts
     }
 
-    pub fn reset(&mut self, pts: Duration) {
+    pub fn reset(&mut self, pts: Timestamp) {
         self.paused_at_pts = Some(pts);
     }
 }

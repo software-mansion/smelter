@@ -183,7 +183,7 @@ impl Decoder {
 
                 let samples = InputAudioSamples {
                     samples,
-                    start_pts: chunk.pts.saturating_sub(output_delay),
+                    start_pts: chunk.pts - output_delay,
                     sample_rate,
                 };
                 trace!(?samples, "FDK AAC decoder produced a samples.");

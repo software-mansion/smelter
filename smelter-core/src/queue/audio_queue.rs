@@ -1,12 +1,12 @@
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, time::Instant};
 
 use smelter_render::InputId;
 use tracing::debug;
 
-use crate::queue::{QueueAudioOutput, WeakQueueInput};
+use crate::{
+    Timestamp,
+    queue::{QueueAudioOutput, WeakQueueInput},
+};
 
 pub struct AudioQueue {
     sync_point: Instant,
@@ -33,8 +33,8 @@ impl AudioQueue {
 
     pub(super) fn pop_samples_set(
         &mut self,
-        range: (Duration, Duration),
-        queue_start_pts: Duration,
+        range: (Timestamp, Timestamp),
+        queue_start_pts: Timestamp,
     ) -> QueueAudioOutput {
         let (start_pts, end_pts) = range;
         let mut required = false;
@@ -60,8 +60,8 @@ impl AudioQueue {
 
     pub(super) fn should_push_for_pts_range(
         &mut self,
-        pts_range: (Duration, Duration),
-        queue_start_pts: Duration,
+        pts_range: (Timestamp, Timestamp),
+        queue_start_pts: Timestamp,
     ) -> bool {
         self.inputs
             .values()

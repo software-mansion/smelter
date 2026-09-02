@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tracing::warn;
 
-use smelter_render::{Frame, error::ErrorStack};
+use smelter_render::error::ErrorStack;
 
 use crate::pipeline::decoder::{AudioDecoder, EncodedInputEvent, VideoDecoder};
 

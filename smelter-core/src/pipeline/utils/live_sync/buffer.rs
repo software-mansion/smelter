@@ -34,10 +34,10 @@ impl BufferingStrategy {
         &self,
         current: TimestampAnchor,
         target: TimestampAnchor,
-        input_step: Duration,
-    ) -> Duration {
+        input_step: Timestamp,
+    ) -> Timestamp {
         if current == target {
-            return Duration::ZERO;
+            return Timestamp::ZERO;
         }
 
         let desired = self.desired_buffer();
@@ -66,13 +66,13 @@ impl BufferingStrategy {
     pub(super) fn desired_anchor(
         &self,
         estimation: &EdgeEstimate,
-        now_pts: Duration,
+        now_pts: Timestamp,
     ) -> TimestampAnchor {
         let BufferingStrategy::Range { min, desired, .. } = *self;
         let spread = estimation.spread();
         TimestampAnchor {
             input_pts: estimation.upper_bound.pts,
-            output_pts: now_pts + Duration::max(desired, spread + min),
+            output_pts: Timestamp::max(now_pts + desired, now_pts + spread + min),
         }
     }
 
@@ -85,14 +85,14 @@ impl BufferingStrategy {
         &self,
         estimation: EdgeEstimate,
         anchor: TimestampAnchor,
-        now_pts: Duration,
+        now_pts: Timestamp,
     ) -> bool {
         let BufferingStrategy::Range { min, max, .. } = *self;
         let lower_bound = anchor.to_output_pts(estimation.lower_bound.pts);
         let upper_bound = anchor.to_output_pts(estimation.upper_bound.pts);
         let spread = estimation.spread();
         let min_ok = !estimation.lower_bound.stable || lower_bound >= now_pts + min;
-        let max_ok = upper_bound <= now_pts + Duration::max(max, spread + min);
+        let max_ok = upper_bound <= Timestamp::max(now_pts + max, now_pts + spread + min);
         min_ok && max_ok
     }
 }
@@ -127,11 +127,11 @@ pub(crate) trait LiveSyncBuffer: Default + Send + 'static {
     /// Pts of the buffered items, in the order [`read`](Self::read) would
     /// produce them. Items held back by [`try_read`](Self::try_read) are
     /// included.
-    fn pts_values(&self) -> impl Iterator<Item = Duration>;
+    fn pts_values(&self) -> impl Iterator<Item = Timestamp>;
 
     /// Pts of the item [`read`](Self::read) would produce; `None` only when
     /// the buffer is empty.
-    fn peek_pts(&self) -> Option<Duration> {
+    fn peek_pts(&self) -> Option<Timestamp> {
         self.pts_values().next()
     }
 
@@ -169,7 +169,7 @@ impl<T: InputSyncItem + Send + 'static> LiveSyncBuffer for FifoBuffer<T> {
         self.read()
     }
 
-    fn pts_values(&self) -> impl Iterator<Item = Duration> {
+    fn pts_values(&self) -> impl Iterator<Item = Timestamp> {
         self.queue.iter().map(|chunk| chunk.pts())
     }
 
@@ -179,7 +179,7 @@ impl<T: InputSyncItem + Send + 'static> LiveSyncBuffer for FifoBuffer<T> {
         LiveSyncBufferStats::Fifo {
             duration: match (min, max) {
                 (Some(min), Some(max)) => max - min,
-                _ => Duration::ZERO,
+                _ => Timestamp::ZERO,
             },
         }
     }

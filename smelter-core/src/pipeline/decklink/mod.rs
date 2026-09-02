@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use tracing::{Level, error, span};
 
@@ -92,7 +91,7 @@ impl DeckLink {
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
             audio: opts.enable_audio,
-            offset: QueueTrackOffset::Pts(Duration::ZERO),
+            offset: QueueTrackOffset::Pts(Timestamp::ZERO),
         });
         let callback = ChannelCallbackAdapter::new(
             &ctx,

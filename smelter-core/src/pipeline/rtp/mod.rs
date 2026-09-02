@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 pub(super) mod depayloader;
 pub(super) mod payloader;
 
@@ -13,10 +11,12 @@ pub(crate) use rtp_input::{
 };
 pub(crate) use rtp_output::RtpOutput;
 
+use crate::Timestamp;
+
 #[derive(Clone)]
 pub struct RtpPacket {
     pub packet: webrtc::rtp::packet::Packet,
-    pub timestamp: Duration,
+    pub timestamp: Timestamp,
 }
 
 #[derive(Debug, Clone)]

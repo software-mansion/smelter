@@ -7,8 +7,9 @@ use super::{
     BoxedTrackSink, InputSyncItem, InputSyncStatsSender, TimestampAnchor, TrackClosedError,
     TrackEvent, TrackKind,
 };
-use crate::stats::{
-    InputSyncMode, InputSyncTrackStatsEvent, SimpleSyncStatsEvent, SimpleSyncTrackState,
+use crate::{
+    Timestamp,
+    stats::{InputSyncMode, InputSyncTrackStatsEvent, SimpleSyncStatsEvent, SimpleSyncTrackState},
 };
 
 /// The most basic sync mechanism.
@@ -22,24 +23,24 @@ pub(crate) struct SimpleSync {
 struct SimpleSyncState {
     desired_buffer: Duration,
     /// Lowest pts seen so far; fixed once released.
-    min_pts: Option<Duration>,
+    min_pts: Option<Timestamp>,
     /// Highest pts seen so far, used to measure the collected buffer.
-    max_pts: Option<Duration>,
+    max_pts: Option<Timestamp>,
     buffering: bool,
 }
 
 impl SimpleSyncState {
     /// Records a written pts. Returns the anchor once the buffer is released.
-    fn register_pts(&mut self, pts: Duration) -> Option<TimestampAnchor> {
+    fn register_pts(&mut self, pts: Timestamp) -> Option<TimestampAnchor> {
         if !self.buffering {
             return Some(self.anchor());
         };
-        let min_pts = self.min_pts.map_or(pts, |min| Duration::min(min, pts));
-        let max_pts = self.max_pts.map_or(pts, |max| Duration::max(max, pts));
+        let min_pts = self.min_pts.map_or(pts, |min| Timestamp::min(min, pts));
+        let max_pts = self.max_pts.map_or(pts, |max| Timestamp::max(max, pts));
         self.min_pts = Some(min_pts);
         self.max_pts = Some(max_pts);
 
-        if max_pts - min_pts >= self.desired_buffer {
+        if max_pts >= min_pts + self.desired_buffer {
             self.buffering = false;
         }
 
@@ -51,8 +52,8 @@ impl SimpleSyncState {
 
     fn anchor(&self) -> TimestampAnchor {
         TimestampAnchor {
-            input_pts: self.min_pts.unwrap_or(Duration::ZERO),
-            output_pts: Duration::ZERO,
+            input_pts: self.min_pts.unwrap_or(Timestamp::ZERO),
+            output_pts: Timestamp::ZERO,
         }
     }
 }

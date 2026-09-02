@@ -299,8 +299,8 @@ fn video_chunk_to_event(chunk: EncodedOutputChunk, codec: RtmpVideoCodec) -> Vid
     VideoData {
         track_id: TrackId::PRIMARY,
         codec,
-        pts: chunk.pts,
-        dts: chunk.dts.unwrap_or(chunk.pts),
+        pts: chunk.pts.to_duration_saturating(),
+        dts: chunk.dts.unwrap_or(chunk.pts).to_duration_saturating(),
         data: chunk.data,
         is_keyframe: chunk.is_keyframe,
     }
@@ -310,7 +310,7 @@ fn audio_chunk_to_event(chunk: EncodedOutputChunk, codec: RtmpAudioCodec) -> Aud
     AudioData {
         track_id: TrackId::PRIMARY,
         codec,
-        pts: chunk.pts,
+        pts: chunk.pts.to_duration_saturating(),
         data: chunk.data,
     }
 }

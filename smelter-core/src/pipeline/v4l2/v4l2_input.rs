@@ -1,7 +1,6 @@
 use std::{
     path::Path,
     sync::{Arc, atomic::AtomicBool},
-    time::Duration,
 };
 
 use crossbeam_channel::TrySendError;
@@ -87,7 +86,7 @@ impl V4l2Input {
         let (Some(video_sender), _) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
             audio: false,
-            offset: QueueTrackOffset::Pts(Duration::ZERO),
+            offset: QueueTrackOffset::Pts(Timestamp::ZERO),
         }) else {
             return Err(InputInitError::InternalServerError(
                 "Video sender is None in V4L2 input",
@@ -350,7 +349,7 @@ impl InputState<'_> {
             };
 
             let frame = Frame {
-                pts: self.ctx.queue_ctx.sync_point.elapsed(),
+                pts: Timestamp::since(self.ctx.queue_ctx.sync_point),
                 resolution: self.config.resolution,
                 data,
             };
@@ -360,7 +359,7 @@ impl InputState<'_> {
                     resolution: frame.resolution,
                     pts: frame.pts,
                     data: FrameData::Rgba8UnormWgpuTexture(
-                        pre_processor.process_to_texture(frame, None),
+                        pre_processor.process_to_texture(frame.into(), None),
                     ),
                 },
                 None => frame,

@@ -21,7 +21,7 @@ pub struct OpusEncoder {
     output_buffer: Vec<u8>,
 
     // This logic relays on the fact that input samples will always be continuous.
-    first_input_pts: Option<Duration>,
+    first_input_pts: Option<Timestamp>,
     encoded_samples: u64,
 }
 

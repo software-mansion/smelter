@@ -19,7 +19,7 @@ use crate::prelude::*;
 
 struct JitterBufferPacket {
     packet: webrtc::rtp::packet::Packet,
-    pts: Duration,
+    pts: Timestamp,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -183,10 +183,9 @@ impl RtpJitterBuffer {
         // PTS sits compared to wall clock the moment it lands. The pop-side
         // counterpart is emitted in `read_packet` after `apply_offset` runs.
         let reference_time = self.ntp_sync_point.reference_time;
-        let effective_buffer =
-            (pts + self.input_buffer.size()).saturating_sub(reference_time.elapsed());
+        let effective_buffer = pts + self.input_buffer.size() - Timestamp::since(reference_time);
         (self.on_stats_event)(RtpJitterBufferStatsEvent::EffectiveBufferOnWrite(
-            effective_buffer,
+            effective_buffer.to_duration_saturating(),
         ));
 
         trace!(packet=?packet.header, ?pts, buffer_size=self.packets.len(), "Writing packet to jitter buffer");
@@ -205,7 +204,7 @@ impl RtpJitterBuffer {
             RtpJitterBufferMode::FixedWindow { size } => {
                 let lowest_pts = self.packets.values().map(|packet| packet.pts).min()?;
                 let highest_pts = self.packets.values().map(|packet| packet.pts).max()?;
-                highest_pts.saturating_sub(lowest_pts) < size
+                highest_pts < lowest_pts + size
             }
             RtpJitterBufferMode::RealTime { .. } => {
                 let lowest_pts = self.packets.values().map(|packet| packet.pts).min()?;
@@ -216,7 +215,7 @@ impl RtpJitterBuffer {
                 // case scenario this could be 16 frames that needs to decoded in that time
                 let next_pts = lowest_pts + self.input_buffer.size();
                 let reference_time = self.ntp_sync_point.reference_time;
-                next_pts > reference_time.elapsed() + MIN_DECODE_TIME
+                next_pts > Timestamp::since(reference_time) + MIN_DECODE_TIME
             }
         };
 
@@ -245,7 +244,7 @@ impl RtpJitterBuffer {
 
         let reference_time = self.ntp_sync_point.reference_time;
         (self.on_stats_event)(RtpJitterBufferStatsEvent::EffectiveBufferOnPop(
-            timestamp.saturating_sub(reference_time.elapsed()),
+            (timestamp - Timestamp::since(reference_time)).to_duration_saturating(),
         ));
         (self.on_stats_event)(RtpJitterBufferStatsEvent::InputBufferSize(
             self.input_buffer.size(),
@@ -258,7 +257,7 @@ impl RtpJitterBuffer {
         }))
     }
 
-    pub fn peek_next_pts(&self) -> Option<Duration> {
+    pub fn peek_next_pts(&self) -> Option<Timestamp> {
         let (_, packet) = self.packets.first_key_value()?;
         Some(packet.pts + self.input_buffer.size())
     }
@@ -288,14 +287,14 @@ impl BufferingStrategy {
     /// sitting in the jitter buffer waiting for predecessors don't get misread
     /// as emergencies) and updates the shared target size. Per-track size
     /// converges toward that target separately in `apply_offset` at pop time.
-    pub fn on_new_packet(&mut self, pts: Duration) {
+    pub fn on_new_packet(&mut self, pts: Timestamp) {
         match self {
             BufferingStrategy::LatencyOptimized(buffer) => buffer.on_new_packet(pts),
             BufferingStrategy::FixedOffset { .. } => (),
         }
     }
 
-    pub fn apply_offset(&mut self, pts: Duration) -> Duration {
+    pub fn apply_offset(&mut self, pts: Timestamp) -> Timestamp {
         match self {
             BufferingStrategy::FixedOffset { offset } => pts + *offset,
             BufferingStrategy::LatencyOptimized(buffer) => buffer.apply_offset(pts),
@@ -321,7 +320,7 @@ pub(crate) struct LatencyOptimizedBuffer {
     /// Per-track buffer size. Slowly converges toward `inner.target_size`.
     size: Duration,
     /// Per-track largest PTS seen — drives the linear convergence's stream_delta.
-    max_pts: Option<Duration>,
+    max_pts: Option<Timestamp>,
 }
 
 impl LatencyOptimizedBuffer {
@@ -347,17 +346,17 @@ impl LatencyOptimizedBuffer {
 
     /// Decides the size of the buffer, but the change will be applied
     /// immediately on packets removed from jitter buffer
-    fn on_new_packet(&mut self, pts: Duration) {
+    fn on_new_packet(&mut self, pts: Timestamp) {
         self.inner.lock().unwrap().on_new_packet(pts);
     }
 
-    fn apply_offset(&mut self, pts: Duration) -> Duration {
+    fn apply_offset(&mut self, pts: Timestamp) -> Timestamp {
         let target_size = self.inner.lock().unwrap().target_size;
 
-        let stream_delta = match self.max_pts {
+        let abs_delta = match self.max_pts {
             Some(prev_max_pts) => {
-                self.max_pts = Some(Duration::max(prev_max_pts, pts));
-                pts.saturating_sub(prev_max_pts)
+                self.max_pts = Some(Timestamp::max(prev_max_pts, pts));
+                (pts - prev_max_pts).to_duration_saturating()
             }
             None => {
                 self.max_pts = Some(pts);
@@ -373,7 +372,7 @@ impl LatencyOptimizedBuffer {
                     1.0,
                     diff.as_secs_f64() / Self::LINEAR_THRESHOLD.as_secs_f64(),
                 );
-            let max_step = stream_delta.mul_f64(rate);
+            let max_step = abs_delta.mul_f64(rate);
             self.size = target_size.clamp(
                 self.size.saturating_sub(max_step),
                 self.size.saturating_add(max_step),
@@ -408,7 +407,7 @@ struct InnerLatencyOptimizedBuffer {
     target_size: Duration,
 
     /// Largest PTS observed so far. Target-size changes only run when a new packet exceeds it.
-    max_pts: Option<Duration>,
+    max_pts: Option<Timestamp>,
     /// PTS at which the last `+GROW_JUMP` was applied. Drives the rate-limit
     /// on jumps; not used as a zone observation. Initialized to `ZERO` and
     /// re-anchored to the first observed PTS in `on_new_packet` so the same
@@ -417,26 +416,26 @@ struct InnerLatencyOptimizedBuffer {
     /// slew, NTP-snap, fill-buffer bursts) routinely produce a low
     /// effective_buffer that would otherwise instantly inflate the target
     /// before the proportional grow rates have a chance to react.
-    last_jump_pts: Duration,
+    last_jump_pts: Timestamp,
 
     /// Largest PTS observed with each grow-side zone classification. The effective
     /// `trend` returns the most-grow-leaning zone whose timestamp still lies within
     /// 5 seconds of `pts`. A grow signal latches for that long so that
     /// a recent Grow outranks a newer Shrink.
-    last_jump_grow_pts: Option<Duration>,
-    last_grow_fast_pts: Option<Duration>,
-    last_grow_pts: Option<Duration>,
-    last_stable_pts: Option<Duration>,
+    last_jump_grow_pts: Option<Timestamp>,
+    last_grow_fast_pts: Option<Timestamp>,
+    last_grow_pts: Option<Timestamp>,
+    last_stable_pts: Option<Timestamp>,
 
     /// PTS at which the current uninterrupted Shrink-or-stronger streak began, or
     /// `None` if the streak was just broken by a non-shrink observation. The trend
     /// only resolves to Shrink once `pts - shrink_streak_start >= TREND_WINDOW`,
     /// and the streak is intentionally preserved across successive shrink scales
     /// so we don't have to re-accumulate the window after every shrink.
-    shrink_streak_start: Option<Duration>,
+    shrink_streak_start: Option<Timestamp>,
     /// Same idea for ShrinkFast — only ShrinkFast observations keep this streak
     /// alive; a plain Shrink (or any grow-side observation) clears it.
-    shrink_fast_streak_start: Option<Duration>,
+    shrink_fast_streak_start: Option<Timestamp>,
 
     /// Stream-time PTS of recent successful grow jumps within the last
     /// `JUMP_RECURRENCE_WINDOW`. Once the count exceeds
@@ -444,7 +443,7 @@ struct InnerLatencyOptimizedBuffer {
     /// shift every threshold (except `grow_jump`) up by `THRESHOLD_BUMP` to
     /// raise the comfort zone, and clear the deque so the next bump requires
     /// a fresh window of recurrence.
-    recent_jump_pts: VecDeque<Duration>,
+    recent_jump_pts: VecDeque<Timestamp>,
 
     thresholds: LatencyThresholds,
 }
@@ -504,7 +503,7 @@ impl InnerLatencyOptimizedBuffer {
             reference_time,
             target_size: shrink,
             max_pts: None,
-            last_jump_pts: Duration::ZERO,
+            last_jump_pts: Timestamp::ZERO,
             last_jump_grow_pts: None,
             last_grow_fast_pts: None,
             last_grow_pts: None,
@@ -520,10 +519,13 @@ impl InnerLatencyOptimizedBuffer {
     /// *receive-time* effective buffer, records the observation, resolves the
     /// trend, and updates `target_size`. Per-track wrappers read the updated
     /// target separately in `apply_offset`.
-    fn on_new_packet(&mut self, pts: Duration) {
+    fn on_new_packet(&mut self, pts: Timestamp) {
         let next_pts = pts + self.target_size;
-        let effective_buffer = next_pts.saturating_sub(self.reference_time.elapsed());
-        let observed = LatencyTrend::from_effective_buffer(effective_buffer, &self.thresholds);
+        let effective_buffer = next_pts - Timestamp::since(self.reference_time);
+        let observed = LatencyTrend::from_effective_buffer(
+            effective_buffer.to_duration_saturating(),
+            &self.thresholds,
+        );
         trace!(
             ?effective_buffer,
             target_size=?self.target_size,
@@ -536,14 +538,14 @@ impl InnerLatencyOptimizedBuffer {
         // first packets the delta is zero, which makes every proportional op a noop.
         let stream_delta = match self.max_pts {
             Some(prev_max_pts) => {
-                self.max_pts = Some(Duration::max(prev_max_pts, pts));
-                pts.saturating_sub(prev_max_pts)
+                self.max_pts = Some(Timestamp::max(prev_max_pts, pts));
+                Timestamp::max(Timestamp::ZERO, pts - prev_max_pts)
             }
             None => {
                 self.max_pts = Some(pts);
                 // Block grow jumps in initial `GROW_JUMP_INTERVAL`
                 self.last_jump_pts = pts;
-                Duration::ZERO
+                Timestamp::ZERO
             }
         };
 
@@ -557,7 +559,7 @@ impl InnerLatencyOptimizedBuffer {
         }
     }
 
-    fn record_observation(&mut self, observed: LatencyTrend, pts: Duration) {
+    fn record_observation(&mut self, observed: LatencyTrend, pts: Timestamp) {
         let grow_slot = match observed {
             LatencyTrend::JumpGrow => Some(&mut self.last_jump_grow_pts),
             LatencyTrend::GrowFast => Some(&mut self.last_grow_fast_pts),
@@ -567,7 +569,7 @@ impl InnerLatencyOptimizedBuffer {
         };
         if let Some(slot) = grow_slot {
             *slot = Some(match *slot {
-                Some(prev) => Duration::max(prev, pts),
+                Some(prev) => Timestamp::max(prev, pts),
                 None => pts,
             });
         }
@@ -596,12 +598,12 @@ impl InnerLatencyOptimizedBuffer {
     /// Walk the zones from most-grow to most-shrink. Grow-side zones latch on a single
     /// recent observation. Shrink-side zones require a continuous streak of at least
     /// `TREND_WINDOW` of stream time, so an isolated shrink signal never fires.
-    fn resolve_trend(&self, pts: Duration) -> LatencyTrend {
-        let recent = |last: Option<Duration>| -> bool {
-            last.is_some_and(|p| pts.saturating_sub(p) < Duration::from_secs(5))
+    fn resolve_trend(&self, pts: Timestamp) -> LatencyTrend {
+        let recent = |last: Option<Timestamp>| -> bool {
+            last.is_some_and(|p| pts < p + Duration::from_secs(5))
         };
-        let streak_ready = |start: Option<Duration>| -> bool {
-            start.is_some_and(|s| pts.saturating_sub(s) >= Self::TREND_WINDOW)
+        let streak_ready = |start: Option<Timestamp>| -> bool {
+            start.is_some_and(|s| pts >= s + Self::TREND_WINDOW)
         };
         if recent(self.last_jump_grow_pts) {
             LatencyTrend::JumpGrow
@@ -620,8 +622,8 @@ impl InnerLatencyOptimizedBuffer {
         }
     }
 
-    fn scale_target(&mut self, rate: f64, stream_delta: Duration) {
-        if stream_delta == Duration::ZERO {
+    fn scale_target(&mut self, rate: f64, stream_delta: Timestamp) {
+        if stream_delta == Timestamp::ZERO {
             return;
         }
         let factor = 1.0 + rate * stream_delta.as_secs_f64();
@@ -636,9 +638,9 @@ impl InnerLatencyOptimizedBuffer {
         self.reset_grow_observations();
     }
 
-    fn try_grow_jump(&mut self, pts: Duration, stream_delta: Duration) {
+    fn try_grow_jump(&mut self, pts: Timestamp, stream_delta: Timestamp) {
         self.reset_grow_observations();
-        if pts.saturating_sub(self.last_jump_pts) < Self::GROW_JUMP_INTERVAL {
+        if pts < self.last_jump_pts + Self::GROW_JUMP_INTERVAL {
             // Fallback to regular buffer growth if jumps are throttled
             self.scale_target(Self::GROW_FAST_RATE, stream_delta);
             return;
@@ -655,9 +657,9 @@ impl InnerLatencyOptimizedBuffer {
     /// exceeds the recurrence threshold, raise every non-`grow_jump`
     /// threshold by `THRESHOLD_BUMP` and reset the window so the next bump
     /// only fires after a fresh round of recurrence.
-    fn record_jump_grow_event(&mut self, pts: Duration) {
+    fn record_jump_grow_event(&mut self, pts: Timestamp) {
         self.recent_jump_pts.push_back(pts);
-        let cutoff = pts.saturating_sub(Self::JUMP_RECURRENCE_WINDOW);
+        let cutoff = pts - Self::JUMP_RECURRENCE_WINDOW;
         while self.recent_jump_pts.front().is_some_and(|p| *p < cutoff) {
             self.recent_jump_pts.pop_front();
         }

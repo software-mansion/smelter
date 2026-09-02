@@ -17,6 +17,12 @@ pub use pipeline::*;
 mod types;
 pub use types::*;
 
+mod frame;
+pub use frame::*;
+
+mod timestamp;
+pub use timestamp::*;
+
 mod input;
 pub use input::*;
 

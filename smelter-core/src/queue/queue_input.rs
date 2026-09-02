@@ -5,7 +5,7 @@ use std::{
 };
 
 use crossbeam_channel::{Receiver, Sender, bounded};
-use smelter_render::{Frame, InputId};
+use smelter_render::InputId;
 use tracing::info;
 
 use crate::{
@@ -214,7 +214,7 @@ impl InnerQueueInput {
 pub(crate) enum QueueTrackOffset {
     None,
     /// Effectively offset from sync point
-    Pts(Duration),
+    Pts(Timestamp),
     /// Offset from start point
     FromStart(Duration),
 }
@@ -410,24 +410,24 @@ impl WeakQueueInput {
 }
 
 #[derive(Default, Clone)]
-pub(super) struct TrackOffset(Arc<Mutex<Option<Duration>>>);
+pub(super) struct TrackOffset(Arc<Mutex<Option<Timestamp>>>);
 
 impl TrackOffset {
-    pub fn new(value: Duration) -> Self {
+    pub fn new(value: Timestamp) -> Self {
         Self(Arc::new(Mutex::new(Some(value))))
     }
 
-    pub fn get(&self) -> Option<Duration> {
+    pub fn get(&self) -> Option<Timestamp> {
         *self.0.lock().unwrap()
     }
 
-    pub fn get_or_init(&self, offset: Duration) -> Duration {
+    pub fn get_or_init(&self, offset: Timestamp) -> Timestamp {
         *self.0.lock().unwrap().get_or_insert(offset)
     }
 
-    pub fn map_add(&self, duration: Duration) {
+    pub fn map_add(&self, delta: Timestamp) {
         if let Some(offset) = self.0.lock().unwrap().deref_mut() {
-            *offset += duration
+            *offset += delta
         }
     }
 }

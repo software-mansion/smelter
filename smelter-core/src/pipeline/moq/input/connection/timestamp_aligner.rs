@@ -1,5 +1,4 @@
 use std::{
-    cmp::Ordering,
     sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
@@ -35,51 +34,20 @@ const MOQ_EPOCH_OFFSET_JUMP: Duration = Duration::from_secs(2);
 /// Signed offset `raw_pts − elapsed` (a track's raw PTS at the shared anchor
 /// instant). Negative when a track's near-zero raw PTS is first observed
 /// well *after* another track set the anchor.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-struct EpochOffset {
-    magnitude: Duration,
-    negative: bool,
-}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+struct EpochOffset(Timestamp);
 
 impl EpochOffset {
-    fn new(raw: Duration, elapsed: Duration) -> Self {
-        Self {
-            magnitude: raw.abs_diff(elapsed),
-            negative: raw < elapsed,
-        }
+    fn new(raw: Timestamp, elapsed: Duration) -> Self {
+        Self(raw - elapsed)
     }
 
-    fn normalize(self, raw: Duration) -> Duration {
-        if self.negative {
-            raw.saturating_add(self.magnitude)
-        } else {
-            raw.saturating_sub(self.magnitude)
-        }
+    fn normalize(self, raw: Timestamp) -> Timestamp {
+        raw - self.0
     }
 
     fn abs_diff(self, other: Self) -> Duration {
-        if self.negative == other.negative {
-            self.magnitude.abs_diff(other.magnitude)
-        } else {
-            self.magnitude.saturating_add(other.magnitude)
-        }
-    }
-}
-
-impl Ord for EpochOffset {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self.negative, other.negative) {
-            (false, true) => Ordering::Greater,
-            (true, false) => Ordering::Less,
-            (false, false) => self.magnitude.cmp(&other.magnitude),
-            (true, true) => other.magnitude.cmp(&self.magnitude), // less-negative is greater
-        }
-    }
-}
-
-impl PartialOrd for EpochOffset {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        (self.0 - other.0).abs_duration()
     }
 }
 
@@ -220,7 +188,7 @@ pub(super) struct TimestampAligner {
     /// Previous frame's `(raw_pts, offset)`, updated on every frame (locked or
     /// warming). Baseline for the epoch-discontinuity check. `reset()` does *not*
     /// clear it: the post-jump frame becomes the next baseline.
-    previous: Option<(Duration, EpochOffset)>,
+    previous: Option<(Timestamp, EpochOffset)>,
 
     /// Consecutive frames that did not raise the max by more than [`PLATEAU_EPSILON`].
     plateau_frames: u32,
@@ -293,7 +261,7 @@ impl TimestampAligner {
 
     fn advance_warmup(
         &mut self,
-        raw: Duration,
+        raw: Timestamp,
         elapsed: Duration,
         chunk: EncodedInputChunk,
     ) -> Vec<EncodedInputChunk> {
@@ -416,9 +384,9 @@ impl TimestampAligner {
 
 fn is_epoch_discontinuity(
     keyframe: bool,
-    raw_pts: Duration,
+    raw_pts: Timestamp,
     offset: EpochOffset,
-    previous: Option<(Duration, EpochOffset)>, // (previous_raw_pts, previous_offset)
+    previous: Option<(Timestamp, EpochOffset)>, // (previous_raw_pts, previous_offset)
 ) -> bool {
     if !keyframe {
         return false;
@@ -427,7 +395,7 @@ fn is_epoch_discontinuity(
         return false;
     };
     // 1. Small forward step -> normal group cadence, not an epoch change.
-    if raw_pts >= previous_raw_pts && raw_pts - previous_raw_pts < MOQ_EPOCH_MIN_STEP {
+    if raw_pts >= previous_raw_pts && raw_pts < previous_raw_pts + MOQ_EPOCH_MIN_STEP {
         return false;
     }
     // 2. Time went backwards -> clock reset / new epoch.

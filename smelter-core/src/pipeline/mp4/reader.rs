@@ -326,12 +326,12 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
             Duration::from_secs_f64(sample.duration as f64 / self.track.timescale as f64);
         let presentation_delay = self.track.presentation_delay;
 
-        let dts = Duration::from_secs_f64(start_time as f64 / self.track.timescale as f64);
-        let mut pts = Duration::from_secs_f64(
+        let dts = Timestamp::from_secs_f64(start_time as f64 / self.track.timescale as f64);
+        let mut pts = Timestamp::from_secs_f64(
             (start_time as f64 + rendering_offset as f64) / self.track.timescale as f64,
         );
         pts += presentation_delay;
-        pts = pts.saturating_sub(self.track_seek);
+        pts -= self.track_seek;
 
         // When seeking in video, we start reading from the nearest sync (keyframe)
         // sample before the seek point so the decoder can build up its reference

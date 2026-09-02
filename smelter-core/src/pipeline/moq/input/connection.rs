@@ -259,7 +259,7 @@ async fn run_video_track(
         };
         stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Video);
 
-        let raw_pts: Duration = frame.timestamp.into();
+        let raw_pts = Timestamp::from_micros(frame.timestamp.as_micros() as i64);
         let chunk = EncodedInputChunk {
             data: frame.payload,
             pts: raw_pts,
@@ -342,7 +342,7 @@ async fn run_audio_track(
         };
         stats_sender.bytes_received_event(frame.payload.len(), StatsTrackKind::Audio);
 
-        let raw_pts: Duration = frame.timestamp.into();
+        let raw_pts = Timestamp::from_micros(frame.timestamp.as_micros() as i64);
         let chunk = EncodedInputChunk {
             data: frame.payload,
             pts: raw_pts,
