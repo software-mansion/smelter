@@ -14,8 +14,10 @@ pub struct RtmpInput {
     /// In most RTMP clients you will need to provide url in following format
     /// `rtmp://<ip_address>:<port>/<input_id>/<stream_key>`
     pub stream_key: Arc<str>,
-    /// (**default=`false`**) If input is required and the stream is not delivered
-    /// on time, then Smelter will delay producing output frames.
+    /// If input is required and the stream is not delivered on time, then Smelter will delay
+    /// producing output frames.
+    ///
+    /// Defaults to `false`.
     pub required: Option<bool>,
     /// Assigns which decoder should be used for media encoded with a specific codec.
     pub decoder_map: Option<HashMap<InputRtmpCodec, RtmpVideoDecoderOptions>>,

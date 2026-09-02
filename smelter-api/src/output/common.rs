@@ -15,20 +15,21 @@ pub enum PixelFormat {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(untagged)]
 pub enum VideoEncoderBitrate {
-    /// Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
-    /// but may temporarily increase it by 25%.
+    /// Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the
+    /// provided average, but may temporarily increase it by 25%.
     AverageBitrate(u64),
     Vbr {
-        /// Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
-        /// but may temporarily increase it to the provided max bitrate.
+        /// Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the
+        /// provided average, but may temporarily increase it to the provided max bitrate.
         average_bitrate: u64,
         /// Max bitrate measured in bits/second.
         max_bitrate: u64,
     },
 }
 
-/// This type defines when end of an input stream should trigger end of the output stream. Only one of those fields can be set at the time.
-/// Unless specified otherwise the input stream is considered finished/ended when:
+/// This type defines when end of an input stream should trigger end of the output stream. Only one
+/// of those fields can be set at the time. Unless specified otherwise the input stream is
+/// considered finished/ended when:
 /// - TCP connection was dropped/closed.
 /// - RTCP Goodbye packet (`BYE`) was received.
 /// - Mp4 track has ended.
@@ -40,9 +41,12 @@ pub struct OutputEndCondition {
     pub any_of: Option<Vec<InputId>>,
     /// Terminate output stream if all the input streams from the list are finished.
     pub all_of: Option<Vec<InputId>>,
-    /// Terminate output stream if any of the input streams ends. This includes streams added after the output was registered. In particular, output stream will **not be** terminated if no inputs were ever connected.
+    /// Terminate output stream if any of the input streams ends. This includes streams added after
+    /// the output was registered. In particular, output stream will **not be** terminated if no
+    /// inputs were ever connected.
     pub any_input: Option<bool>,
-    /// Terminate output stream if all the input streams finish. In particular, output stream will **be** terminated if no inputs were ever connected.
+    /// Terminate output stream if all the input streams finish. In particular, output stream will
+    /// **be** terminated if no inputs were ever connected.
     pub all_inputs: Option<bool>,
 }
 

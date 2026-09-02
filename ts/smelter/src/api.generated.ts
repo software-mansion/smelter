@@ -37,7 +37,9 @@ export type RegisterInput =
        */
       audio?: InputRtpAudioOptions | null;
       /**
-       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       * If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -62,7 +64,9 @@ export type RegisterInput =
        */
       stream_key: string;
       /**
-       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       * If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -83,7 +87,9 @@ export type RegisterInput =
        */
       auth_token: string;
       /**
-       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       * If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -108,7 +114,9 @@ export type RegisterInput =
        */
       broadcast_path: string;
       /**
-       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       * If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -133,11 +141,13 @@ export type RegisterInput =
        */
       path?: string | null;
       /**
-       * (**default=`false`**) If input should be played in the loop. <span class="badge badge--primary">Added in v0.4.0</span>
+       * If input should be played in the loop. Defaults to `false`.
        */
       loop?: boolean | null;
       /**
-       * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       * If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -170,7 +180,9 @@ export type RegisterInput =
        */
       bearer_token?: string | null;
       /**
-       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       * If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -197,7 +209,9 @@ export type RegisterInput =
        */
       video?: InputWhepVideoOptions | null;
       /**
-       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       * If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -216,7 +230,9 @@ export type RegisterInput =
        */
       url: string;
       /**
-       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       * If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -259,7 +275,9 @@ export type RegisterInput =
        */
       framerate?: Framerate | null;
       /**
-       * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       * If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -288,11 +306,13 @@ export type RegisterInput =
        */
       persistent_id?: string | null;
       /**
-       * (**default=`true`**) Enable audio support.
+       * Enable audio support. Defaults to `true`.
        */
       enable_audio?: boolean | null;
       /**
-       * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       * If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       *
+       * Defaults to `false`.
        */
       required?: boolean | null;
       /**
@@ -320,7 +340,9 @@ export type InputRtpAudioOptions =
        */
       audio_specific_config: string;
       /**
-       * (**default=`"high_bitrate"`**) Specifies the [RFC 3640 mode](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that should be used when depacketizing this stream.
+       * Specifies the [RFC 3640 mode](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that should be used when depacketizing this stream.
+       *
+       * Defaults to `"high_bitrate"`.
        */
       rtp_mode?: AacRtpMode | null;
     };
@@ -346,7 +368,7 @@ export type RegisterOutput =
        */
       ip?: string | null;
       /**
-       * (**default=`"udp"`**) Transport layer protocol that will be used to send RTP packets.
+       * Transport layer protocol that will be used to send RTP packets. Defaults to `"udp"`.
        */
       transport_protocol?: TransportProtocol | null;
       /**
@@ -384,7 +406,7 @@ export type RegisterOutput =
        */
       broadcast_path: string;
       /**
-       * (**default=`"cmaf"`**) Container used to frame encoded media.
+       * Container used to frame encoded media. Defaults to `"cmaf"`.
        */
       container?: MoqOutputContainer | null;
       /**
@@ -486,7 +508,9 @@ export type RtpVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       *
+       * Defaults to `"fast"`.
        */
       preset?: H264EncoderPreset | null;
       /**
@@ -494,11 +518,11 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format.
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -515,7 +539,7 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
@@ -532,11 +556,11 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format.
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -553,7 +577,7 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * Interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
     };
@@ -640,23 +664,25 @@ export type Component =
        */
       transition?: Transition | null;
       /**
-       * (**default=`"hidden"`**) Controls what happens to content that is too big to fit into an area.
+       * Controls what happens to content that is too big to fit into an area.
+       *
+       * Defaults to `"hidden"`.
        */
       overflow?: Overflow | null;
       /**
-       * (**default=`"#00000000"`**) Background color in a `"#RRGGBBAA"` format.
+       * Background color in a `"#RRGGBBAA"` format. Defaults to `"#00000000"`.
        */
       background_color?: RGBAColor | null;
       /**
-       * (**default=`0.0`**) Radius of a rounded corner.
+       * Radius of a rounded corner. Defaults to `0.0`.
        */
       border_radius?: number | null;
       /**
-       * (**default=`0.0`**) Border width.
+       * Border width. Defaults to `0.0`.
        */
       border_width?: number | null;
       /**
-       * (**default=`"#00000000"`**) Border color in a `"#RRGGBBAA"` format.
+       * Border color in a `"#RRGGBBAA"` format. Defaults to `"#00000000"`.
        */
       border_color?: RGBAColor | null;
       /**
@@ -664,31 +690,31 @@ export type Component =
        */
       box_shadow?: BoxShadow[] | null;
       /**
-       * (**default=`0.0`**) Padding for all sides of the component.
+       * Padding for all sides of the component. Defaults to `0.0`.
        */
       padding?: number | null;
       /**
-       * (**default=`0.0`**) Padding for the top and bottom of the component.
+       * Padding for the top and bottom of the component. Defaults to `0.0`.
        */
       padding_vertical?: number | null;
       /**
-       * (**default=`0.0`**) Padding for the left and right of the component.
+       * Padding for the left and right of the component. Defaults to `0.0`.
        */
       padding_horizontal?: number | null;
       /**
-       * (**default=`0.0`**) Padding on top side in pixels.
+       * Padding on top side in pixels. Defaults to `0.0`.
        */
       padding_top?: number | null;
       /**
-       * (**default=`0.0`**) Padding on right side in pixels.
+       * Padding on right side in pixels. Defaults to `0.0`.
        */
       padding_right?: number | null;
       /**
-       * (**default=`0.0`**) Padding on bottom side in pixels.
+       * Padding on bottom side in pixels. Defaults to `0.0`.
        */
       padding_bottom?: number | null;
       /**
-       * (**default=`0.0`**) Padding on left side in pixels.
+       * Padding on left side in pixels. Defaults to `0.0`.
        */
       padding_left?: number | null;
     }
@@ -772,11 +798,15 @@ export type Component =
        */
       height?: number | null;
       /**
-       * (**default=`7682`**) Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is ignored if `width` is defined.
+       * Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is ignored if `width` is defined.
+       *
+       * Defaults to `7682`.
        */
       max_width?: number | null;
       /**
-       * (**default=`4320`**) Maximal `height`. Limits the height of the texture that the text will be rendered on. Value is ignored if height is defined.
+       * Maximal `height`. Limits the height of the texture that the text will be rendered on. Value is ignored if height is defined.
+       *
+       * Defaults to `4320`.
        */
       max_height?: number | null;
       /**
@@ -788,31 +818,35 @@ export type Component =
        */
       line_height?: number | null;
       /**
-       * (**default=`"#FFFFFFFF"`**) Font color in `#RRGGBBAA` format.
+       * Font color in `#RRGGBBAA` format. Defaults to `"#FFFFFFFF"`.
        */
       color?: RGBAColor | null;
       /**
-       * (**default=`"#00000000"`**) Background color in `#RRGGBBAA` format.
+       * Background color in `#RRGGBBAA` format. Defaults to `"#00000000"`.
        */
       background_color?: RGBAColor | null;
       /**
-       * (**default=`"Verdana"`**) Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific font. "generic-family" values like e.g. "sans-serif" will not work.
+       * Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific font. "generic-family" values like e.g. "sans-serif" will not work.
+       *
+       * Defaults to `"Verdana"`.
        */
       font_family?: string | null;
       /**
-       * (**default=`"normal"`**) Font style. The selected font needs to support the specified style.
+       * Font style. The selected font needs to support the specified style. Defaults to `"normal"`.
        */
       style?: TextStyle | null;
       /**
-       * (**default=`"left"`**) Text align.
+       * Text align. Defaults to `"left"`.
        */
       align?: HorizontalAlign | null;
       /**
-       * (**default=`"none"`**) Text wrapping options.
+       * Text wrapping options. Defaults to `"none"`.
        */
       wrap?: TextWrapMode | null;
       /**
-       * (**default=`"normal"`**) Font weight. The selected font needs to support the specified weight.
+       * Font weight. The selected font needs to support the specified weight.
+       *
+       * Defaults to `"normal"`.
        */
       weight?: TextWeight | null;
     }
@@ -835,27 +869,27 @@ export type Component =
        */
       height?: number | null;
       /**
-       * (**default=`"#00000000"`**) Background color in a `"#RRGGBBAA"` format.
+       * Background color in a `"#RRGGBBAA"` format. Defaults to `"#00000000"`.
        */
       background_color?: RGBAColor | null;
       /**
-       * (**default=`"16:9"`**) Aspect ratio of a tile in `"W:H"` format, where W and H are integers.
+       * Aspect ratio of a tile in `"W:H"` format, where W and H are integers. Defaults to `"16:9"`.
        */
       tile_aspect_ratio?: AspectRatio | null;
       /**
-       * (**default=`0`**) Margin of each tile in pixels.
+       * Margin of each tile in pixels. Defaults to `0`.
        */
       margin?: number | null;
       /**
-       * (**default=`0`**) Padding on each tile in pixels.
+       * Padding on each tile in pixels. Defaults to `0`.
        */
       padding?: number | null;
       /**
-       * (**default=`"center"`**) Horizontal alignment of tiles.
+       * Horizontal alignment of tiles. Defaults to `"center"`.
        */
       horizontal_align?: HorizontalAlign | null;
       /**
-       * (**default=`"center"`**) Vertical alignment of tiles.
+       * Vertical alignment of tiles. Defaults to `"center"`.
        */
       vertical_align?: VerticalAlign | null;
       /**
@@ -874,15 +908,15 @@ export type Component =
        */
       child: Component;
       /**
-       * (**default=`"fit"`**) Resize mode:
+       * Resize mode. Defaults to `"fit"`.
        */
       mode?: RescaleMode | null;
       /**
-       * (**default=`"center"`**) Horizontal alignment.
+       * Horizontal alignment. Defaults to `"center"`.
        */
       horizontal_align?: HorizontalAlign | null;
       /**
-       * (**default=`"center"`**) Vertical alignment.
+       * Vertical alignment. Defaults to `"center"`.
        */
       vertical_align?: VerticalAlign | null;
       /**
@@ -918,15 +952,15 @@ export type Component =
        */
       transition?: Transition | null;
       /**
-       * (**default=`0.0`**) Radius of a rounded corner.
+       * Radius of a rounded corner. Defaults to `0.0`.
        */
       border_radius?: number | null;
       /**
-       * (**default=`0.0`**) Border width.
+       * Border width. Defaults to `0.0`.
        */
       border_width?: number | null;
       /**
-       * (**default=`"#00000000"`**) Border color in a `"#RRGGBBAA"` format.
+       * Border color in a `"#RRGGBBAA"` format. Defaults to `"#00000000"`.
        */
       border_color?: RGBAColor | null;
       /**
@@ -1032,19 +1066,21 @@ export type AudioMixingStrategy = "sum_clip" | "sum_scale";
 export type RtpAudioEncoderOptions = {
   type: "opus";
   /**
-   * (**default="voip"**) Audio output encoder preset.
+   * Audio output encoder preset. Defaults to `"voip"`.
    */
   preset?: OpusEncoderPreset | null;
   /**
-   * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+   * Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.
    */
   sample_rate?: number | null;
   /**
-   * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+   * Specifies if forward error correction (FEC) should be used. Defaults to `false`.
    */
   forward_error_correction?: boolean | null;
   /**
-   * (**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`, then this value should be greater than `0`. Allowed values: [0, 100];
+   * Expected packet loss. When `forward_error_correction` is set to `true`, then this value should be greater than `0`. Allowed values: [0, 100];
+   *
+   * Defaults to `0`.
    */
   expected_packet_loss?: number | null;
 };
@@ -1054,7 +1090,9 @@ export type RtmpClientVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       *
+       * Defaults to `"fast"`.
        */
       preset?: H264EncoderPreset | null;
       /**
@@ -1062,11 +1100,11 @@ export type RtmpClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1083,7 +1121,7 @@ export type RtmpClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
@@ -1100,11 +1138,11 @@ export type RtmpClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format.
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1121,7 +1159,7 @@ export type RtmpClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * Interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
     };
@@ -1129,18 +1167,18 @@ export type RtmpClientAudioEncoderOptions =
   | {
       type: "aac";
       /**
-       * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+       * Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.
        */
       sample_rate?: number | null;
     }
   | {
       type: "opus";
       /**
-       * (**default=`"voip"`**) Audio output encoder preset.
+       * Audio output encoder preset. Defaults to `"voip"`.
        */
       preset?: OpusEncoderPreset | null;
       /**
-       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       * Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.
        */
       sample_rate?: number | null;
     };
@@ -1149,7 +1187,9 @@ export type MoqClientVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       *
+       * Defaults to `"fast"`.
        */
       preset?: H264EncoderPreset | null;
       /**
@@ -1157,11 +1197,11 @@ export type MoqClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format.
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1178,7 +1218,7 @@ export type MoqClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
@@ -1195,11 +1235,11 @@ export type MoqClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format.
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1216,7 +1256,7 @@ export type MoqClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * Interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
     };
@@ -1224,26 +1264,28 @@ export type MoqClientAudioEncoderOptions =
   | {
       type: "aac";
       /**
-       * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+       * Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.
        */
       sample_rate?: number | null;
     }
   | {
       type: "opus";
       /**
-       * (**default="voip"**) Audio output encoder preset.
+       * Audio output encoder preset. Defaults to `"voip"`.
        */
       preset?: OpusEncoderPreset | null;
       /**
-       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       * Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.
        */
       sample_rate?: number | null;
       /**
-       * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+       * Specifies if forward error correction (FEC) should be used. Defaults to `false`.
        */
       forward_error_correction?: boolean | null;
       /**
-       * (**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`, then this value should be greater than `0`. Allowed values: [0, 100];
+       * Expected packet loss. When `forward_error_correction` is set to `true`, then this value should be greater than `0`. Allowed values: [0, 100];
+       *
+       * Defaults to `0`.
        */
       expected_packet_loss?: number | null;
     };
@@ -1251,7 +1293,9 @@ export type Mp4VideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       *
+       * Defaults to `"fast"`.
        */
       preset?: H264EncoderPreset | null;
       /**
@@ -1259,11 +1303,11 @@ export type Mp4VideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format.
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1280,14 +1324,14 @@ export type Mp4VideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * Interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
     };
 export type Mp4AudioEncoderOptions = {
   type: "aac";
   /**
-   * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+   * Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.
    */
   sample_rate?: number | null;
 };
@@ -1295,7 +1339,9 @@ export type WhipVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       *
+       * Defaults to `"fast"`.
        */
       preset?: H264EncoderPreset | null;
       /**
@@ -1303,11 +1349,11 @@ export type WhipVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1324,7 +1370,7 @@ export type WhipVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
@@ -1341,11 +1387,11 @@ export type WhipVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1362,7 +1408,7 @@ export type WhipVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * Interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
     }
@@ -1373,15 +1419,15 @@ export type WhipAudioEncoderOptions =
   | {
       type: "opus";
       /**
-       * (**default="voip"**) Specifies preset for audio output encoder.
+       * Specifies preset for audio output encoder. Defaults to `"voip"`.
        */
       preset?: OpusEncoderPreset | null;
       /**
-       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       * Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.
        */
       sample_rate?: number | null;
       /**
-       * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+       * Specifies if forward error correction (FEC) should be used. Defaults to `false`.
        */
       forward_error_correction?: boolean | null;
     }
@@ -1392,7 +1438,9 @@ export type WhepVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       *
+       * Defaults to `"fast"`.
        */
       preset?: H264EncoderPreset | null;
       /**
@@ -1400,11 +1448,11 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format.
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1421,7 +1469,7 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
@@ -1438,11 +1486,11 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format.
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1459,26 +1507,28 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * Interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
     };
 export type WhepAudioEncoderOptions = {
   type: "opus";
   /**
-   * (**default="voip"**) Specifies preset for audio output encoder.
+   * Specifies preset for audio output encoder. Defaults to `"voip"`.
    */
   preset?: OpusEncoderPreset | null;
   /**
-   * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+   * Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.
    */
   sample_rate?: number | null;
   /**
-   * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+   * Specifies if forward error correction (FEC) should be used. Defaults to `false`.
    */
   forward_error_correction?: boolean | null;
   /**
-   * (**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`, then this value should be greater than `0`. Allowed values: [0, 100];
+   * Expected packet loss. When `forward_error_correction` is set to `true`, then this value should be greater than `0`. Allowed values: [0, 100];
+   *
+   * Defaults to `0`.
    */
   expected_packet_loss?: number | null;
 };
@@ -1486,7 +1536,9 @@ export type HlsVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       *
+       * Defaults to `"fast"`.
        */
       preset?: H264EncoderPreset | null;
       /**
@@ -1494,11 +1546,11 @@ export type HlsVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       * Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format
+       * Encoder pixel format. Defaults to `"yuv420p"`.
        */
       pixel_format?: PixelFormat | null;
       /**
@@ -1515,14 +1567,14 @@ export type HlsVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * Interval between keyframes, in milliseconds. Defaults to `5000`.
        */
       keyframe_interval_ms?: number | null;
     };
 export type HlsAudioEncoderOptions = {
   type: "aac";
   /**
-   * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+   * Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.
    */
   sample_rate?: number | null;
 };
@@ -1820,11 +1872,13 @@ export interface Transition {
    */
   duration_ms: number;
   /**
-   * (**default=`"linear"`**) Easing function to be used for the transition.
+   * Easing function to be used for the transition. Defaults to `"linear"`.
    */
   easing_function?: EasingFunction | null;
   /**
-   * (**default=`false`**) On scene update, if there is already a transition in progress, it will be interrupted and the new transition will start from the current state.
+   * On scene update, if there is already a transition in progress, it will be interrupted and the new transition will start from the current state.
+   *
+   * Defaults to `false`.
    */
   should_interrupt?: boolean | null;
 }
@@ -1836,7 +1890,7 @@ export interface BoxShadow {
 }
 export interface OutputRtpAudioOptions {
   /**
-   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**
@@ -1862,7 +1916,7 @@ export interface AudioScene {
 export interface AudioSceneInput {
   input_id: InputId;
   /**
-   * (**default=`1.0`**) float in `[0, 2]` range representing input volume
+   * float in `[0, 2]` range representing input volume. Defaults to `1.0`.
    */
   volume?: number | null;
 }
@@ -1886,7 +1940,7 @@ export interface OutputRtmpClientVideoOptions {
 }
 export interface OutputRtmpClientAudioOptions {
   /**
-   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**
@@ -1926,7 +1980,7 @@ export interface OutputMoqClientVideoOptions {
 }
 export interface OutputMoqClientAudioOptions {
   /**
-   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**
@@ -1966,7 +2020,7 @@ export interface OutputMp4VideoOptions {
 }
 export interface OutputMp4AudioOptions {
   /**
-   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**
@@ -2006,7 +2060,7 @@ export interface OutputWhipVideoOptions {
 }
 export interface OutputWhipAudioOptions {
   /**
-   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**
@@ -2046,7 +2100,7 @@ export interface OutputWhepVideoOptions {
 }
 export interface OutputWhepAudioOptions {
   /**
-   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**
@@ -2086,7 +2140,7 @@ export interface OutputHlsVideoOptions {
 }
 export interface OutputHlsAudioOptions {
   /**
-   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**

@@ -15,8 +15,10 @@ pub struct WhepInput {
     pub bearer_token: Option<Arc<str>>,
     /// Parameters of a video source included in the RTP stream.
     pub video: Option<InputWhepVideoOptions>,
-    /// (**default=`false`**) If input is required and the stream is not delivered
-    /// on time, then Smelter will delay producing output frames.
+    /// If input is required and the stream is not delivered on time, then Smelter will delay
+    /// producing output frames.
+    ///
+    /// Defaults to `false`.
     pub required: Option<bool>,
     /// Minimum and starting size of the jitter buffer in milliseconds. The buffer
     /// adapts dynamically based on observed network jitter but will not shrink

@@ -12,8 +12,10 @@ use super::SideChannel;
 pub struct HlsInput {
     /// URL to HLS playlist
     pub url: Arc<str>,
-    /// (**default=`false`**) If input is required and the stream is not delivered
-    /// on time, then Smelter will delay producing output frames.
+    /// If input is required and the stream is not delivered on time, then Smelter will delay
+    /// producing output frames.
+    ///
+    /// Defaults to `false`.
     pub required: Option<bool>,
     /// Offset in milliseconds relative to the pipeline start (start request). If the offset is
     /// not defined then the stream will be synchronized based on the delivery time of the initial

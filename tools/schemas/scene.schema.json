@@ -194,7 +194,7 @@
               ]
             },
             "overflow": {
-              "description": "(**default=`\"hidden\"`**) Controls what happens to content that is too big to fit into an area.",
+              "description": "Controls what happens to content that is too big to fit into an area.\n\nDefaults to `\"hidden\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/Overflow"
@@ -205,7 +205,7 @@
               ]
             },
             "background_color": {
-              "description": "(**default=`\"#00000000\"`**) Background color in a `\"#RRGGBBAA\"` format.",
+              "description": "Background color in a `\"#RRGGBBAA\"` format. Defaults to `\"#00000000\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/RGBAColor"
@@ -216,7 +216,7 @@
               ]
             },
             "border_radius": {
-              "description": "(**default=`0.0`**) Radius of a rounded corner.",
+              "description": "Radius of a rounded corner. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -224,7 +224,7 @@
               "format": "float"
             },
             "border_width": {
-              "description": "(**default=`0.0`**) Border width.",
+              "description": "Border width. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -232,7 +232,7 @@
               "format": "float"
             },
             "border_color": {
-              "description": "(**default=`\"#00000000\"`**) Border color in a `\"#RRGGBBAA\"` format.",
+              "description": "Border color in a `\"#RRGGBBAA\"` format. Defaults to `\"#00000000\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/RGBAColor"
@@ -253,7 +253,7 @@
               }
             },
             "padding": {
-              "description": "(**default=`0.0`**) Padding for all sides of the component.",
+              "description": "Padding for all sides of the component. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -261,7 +261,7 @@
               "format": "float"
             },
             "padding_vertical": {
-              "description": "(**default=`0.0`**) Padding for the top and bottom of the component.",
+              "description": "Padding for the top and bottom of the component. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -269,7 +269,7 @@
               "format": "float"
             },
             "padding_horizontal": {
-              "description": "(**default=`0.0`**) Padding for the left and right of the component.",
+              "description": "Padding for the left and right of the component. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -277,7 +277,7 @@
               "format": "float"
             },
             "padding_top": {
-              "description": "(**default=`0.0`**) Padding on top side in pixels.",
+              "description": "Padding on top side in pixels. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -285,7 +285,7 @@
               "format": "float"
             },
             "padding_right": {
-              "description": "(**default=`0.0`**) Padding on right side in pixels.",
+              "description": "Padding on right side in pixels. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -293,7 +293,7 @@
               "format": "float"
             },
             "padding_bottom": {
-              "description": "(**default=`0.0`**) Padding on bottom side in pixels.",
+              "description": "Padding on bottom side in pixels. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -301,7 +301,7 @@
               "format": "float"
             },
             "padding_left": {
-              "description": "(**default=`0.0`**) Padding on left side in pixels.",
+              "description": "Padding on left side in pixels. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -519,7 +519,7 @@
               "format": "float"
             },
             "max_width": {
-              "description": "(**default=`7682`**) Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is ignored if `width` is defined.",
+              "description": "Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is ignored if `width` is defined.\n\nDefaults to `7682`.",
               "type": [
                 "number",
                 "null"
@@ -527,7 +527,7 @@
               "format": "float"
             },
             "max_height": {
-              "description": "(**default=`4320`**) Maximal `height`. Limits the height of the texture that the text will be rendered on. Value is ignored if height is defined.",
+              "description": "Maximal `height`. Limits the height of the texture that the text will be rendered on. Value is ignored if height is defined.\n\nDefaults to `4320`.",
               "type": [
                 "number",
                 "null"
@@ -548,7 +548,7 @@
               "format": "float"
             },
             "color": {
-              "description": "(**default=`\"#FFFFFFFF\"`**) Font color in `#RRGGBBAA` format.",
+              "description": "Font color in `#RRGGBBAA` format. Defaults to `\"#FFFFFFFF\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/RGBAColor"
@@ -559,7 +559,7 @@
               ]
             },
             "background_color": {
-              "description": "(**default=`\"#00000000\"`**) Background color in `#RRGGBBAA` format.",
+              "description": "Background color in `#RRGGBBAA` format. Defaults to `\"#00000000\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/RGBAColor"
@@ -570,14 +570,14 @@
               ]
             },
             "font_family": {
-              "description": "(**default=`\"Verdana\"`**) Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific font. \"generic-family\" values like e.g. \"sans-serif\" will not work.",
+              "description": "Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific font. \"generic-family\" values like e.g. \"sans-serif\" will not work.\n\nDefaults to `\"Verdana\"`.",
               "type": [
                 "string",
                 "null"
               ]
             },
             "style": {
-              "description": "(**default=`\"normal\"`**) Font style. The selected font needs to support the specified style.",
+              "description": "Font style. The selected font needs to support the specified style. Defaults to `\"normal\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/TextStyle"
@@ -588,7 +588,7 @@
               ]
             },
             "align": {
-              "description": "(**default=`\"left\"`**) Text align.",
+              "description": "Text align. Defaults to `\"left\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/HorizontalAlign"
@@ -599,7 +599,7 @@
               ]
             },
             "wrap": {
-              "description": "(**default=`\"none\"`**) Text wrapping options.",
+              "description": "Text wrapping options. Defaults to `\"none\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/TextWrapMode"
@@ -610,7 +610,7 @@
               ]
             },
             "weight": {
-              "description": "(**default=`\"normal\"`**) Font weight. The selected font needs to support the specified weight.",
+              "description": "Font weight. The selected font needs to support the specified weight.\n\nDefaults to `\"normal\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/TextWeight"
@@ -673,7 +673,7 @@
               "format": "float"
             },
             "background_color": {
-              "description": "(**default=`\"#00000000\"`**) Background color in a `\"#RRGGBBAA\"` format.",
+              "description": "Background color in a `\"#RRGGBBAA\"` format. Defaults to `\"#00000000\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/RGBAColor"
@@ -684,7 +684,7 @@
               ]
             },
             "tile_aspect_ratio": {
-              "description": "(**default=`\"16:9\"`**) Aspect ratio of a tile in `\"W:H\"` format, where W and H are integers.",
+              "description": "Aspect ratio of a tile in `\"W:H\"` format, where W and H are integers. Defaults to `\"16:9\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/AspectRatio"
@@ -695,7 +695,7 @@
               ]
             },
             "margin": {
-              "description": "(**default=`0`**) Margin of each tile in pixels.",
+              "description": "Margin of each tile in pixels. Defaults to `0`.",
               "type": [
                 "number",
                 "null"
@@ -703,7 +703,7 @@
               "format": "float"
             },
             "padding": {
-              "description": "(**default=`0`**) Padding on each tile in pixels.",
+              "description": "Padding on each tile in pixels. Defaults to `0`.",
               "type": [
                 "number",
                 "null"
@@ -711,7 +711,7 @@
               "format": "float"
             },
             "horizontal_align": {
-              "description": "(**default=`\"center\"`**) Horizontal alignment of tiles.",
+              "description": "Horizontal alignment of tiles. Defaults to `\"center\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/HorizontalAlign"
@@ -722,7 +722,7 @@
               ]
             },
             "vertical_align": {
-              "description": "(**default=`\"center\"`**) Vertical alignment of tiles.",
+              "description": "Vertical alignment of tiles. Defaults to `\"center\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/VerticalAlign"
@@ -779,7 +779,7 @@
               ]
             },
             "mode": {
-              "description": "(**default=`\"fit\"`**) Resize mode:",
+              "description": "Resize mode. Defaults to `\"fit\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/RescaleMode"
@@ -790,7 +790,7 @@
               ]
             },
             "horizontal_align": {
-              "description": "(**default=`\"center\"`**) Horizontal alignment.",
+              "description": "Horizontal alignment. Defaults to `\"center\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/HorizontalAlign"
@@ -801,7 +801,7 @@
               ]
             },
             "vertical_align": {
-              "description": "(**default=`\"center\"`**) Vertical alignment.",
+              "description": "Vertical alignment. Defaults to `\"center\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/VerticalAlign"
@@ -879,7 +879,7 @@
               ]
             },
             "border_radius": {
-              "description": "(**default=`0.0`**) Radius of a rounded corner.",
+              "description": "Radius of a rounded corner. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -887,7 +887,7 @@
               "format": "float"
             },
             "border_width": {
-              "description": "(**default=`0.0`**) Border width.",
+              "description": "Border width. Defaults to `0.0`.",
               "type": [
                 "number",
                 "null"
@@ -895,7 +895,7 @@
               "format": "float"
             },
             "border_color": {
-              "description": "(**default=`\"#00000000\"`**) Border color in a `\"#RRGGBBAA\"` format.",
+              "description": "Border color in a `\"#RRGGBBAA\"` format. Defaults to `\"#00000000\"`.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/RGBAColor"
@@ -956,7 +956,7 @@
           "format": "double"
         },
         "easing_function": {
-          "description": "(**default=`\"linear\"`**) Easing function to be used for the transition.",
+          "description": "Easing function to be used for the transition. Defaults to `\"linear\"`.",
           "anyOf": [
             {
               "$ref": "#/definitions/EasingFunction"
@@ -967,7 +967,7 @@
           ]
         },
         "should_interrupt": {
-          "description": "(**default=`false`**) On scene update, if there is already a transition in progress, it will be interrupted and the new transition will start from the current state.",
+          "description": "On scene update, if there is already a transition in progress, it will be interrupted and the new transition will start from the current state.\n\nDefaults to `false`.",
           "type": [
             "boolean",
             "null"
@@ -1528,7 +1528,7 @@
           "$ref": "#/definitions/InputId"
         },
         "volume": {
-          "description": "(**default=`1.0`**) float in `[0, 2]` range representing input volume",
+          "description": "float in `[0, 2]` range representing input volume. Defaults to `1.0`.",
           "type": [
             "number",
             "null"

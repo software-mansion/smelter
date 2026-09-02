@@ -29,11 +29,14 @@ pub struct Mp4Output {
 pub struct OutputMp4VideoOptions {
     /// Output resolution in pixels.
     pub resolution: Resolution,
-    /// Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+    /// Condition for termination of the output stream based on the input streams states. If output
+    /// includes both audio and video streams, then EOS needs to be sent for every type.
     pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.
     pub encoder: Mp4VideoEncoderOptions,
-    /// Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+    /// Root of a component tree/scene that should be rendered for the output. Use
+    /// [`update_output` request](../routes.md#update-output) to update this value after
+    /// registration. [Learn more](../../concept/component.md).
     pub initial: VideoScene,
 }
 
@@ -42,16 +45,19 @@ pub struct OutputMp4VideoOptions {
 pub enum Mp4VideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
-        /// (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        /// Video output encoder preset. Visit `FFmpeg`
+        /// [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        ///
+        /// Defaults to `"fast"`.
         preset: Option<H264EncoderPreset>,
 
         /// Encoding bitrate. Default value depends on chosen encoder.
         bitrate: Option<VideoEncoderBitrate>,
 
-        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        /// Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
         keyframe_interval_ms: Option<f64>,
 
-        /// (**default=`"yuv420p"`**) Encoder pixel format.
+        /// Encoder pixel format. Defaults to `"yuv420p"`.
         pixel_format: Option<PixelFormat>,
 
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
@@ -59,11 +65,12 @@ pub enum Mp4VideoEncoderOptions {
     },
     #[serde(rename = "vulkan_h264")]
     VulkanH264 {
-        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
-        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and
+        /// framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max
+        /// bitrate is 6250 kbit/s.
         bitrate: Option<VideoEncoderBitrate>,
 
-        /// (**default=`5000`**) Interval between keyframes, in milliseconds.
+        /// Interval between keyframes, in milliseconds. Defaults to `5000`.
         keyframe_interval_ms: Option<f64>,
     },
 }
@@ -71,7 +78,7 @@ pub enum Mp4VideoEncoderOptions {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputMp4AudioOptions {
-    /// (**default="sum_clip"**) Specifies how audio should be mixed.
+    /// Specifies how audio should be mixed. Defaults to `"sum_clip"`.
     pub mixing_strategy: Option<AudioMixingStrategy>,
     /// Condition for termination of output stream based on the input streams states.
     pub send_eos_when: Option<OutputEndCondition>,
@@ -87,7 +94,7 @@ pub struct OutputMp4AudioOptions {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Mp4AudioEncoderOptions {
     Aac {
-        /// (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+        /// Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.
         sample_rate: Option<u32>,
     },
 }

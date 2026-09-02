@@ -1126,7 +1126,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`1.0`**) float in `[0, 2]` range representing input volume"
+            "description": "float in `[0, 2]` range representing input volume. Defaults to `1.0`."
           }
         },
         "additionalProperties": false
@@ -1353,7 +1353,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "Single DeckLink device can consist of multiple sub-devices. This field defines\nindex of sub-device that should be used.\n\nThe input device is selected based on fields `subdevice_index`, `persistent_id` **AND** `display_name`.\nAll of them need to match the device if they are specified. If nothing is matched, the error response\nwill list available devices.",
+            "description": "Single DeckLink device can consist of multiple sub-devices. This field defines\nindex of sub-device that should be used.\n\nThe input device is selected based on fields `subdevice_index`, `persistent_id` **AND**\n`display_name`. All of them need to match the device if they are specified. If nothing is\nmatched, the error response will list available devices.",
             "minimum": 0
           },
           "display_name": {
@@ -1361,28 +1361,28 @@
               "string",
               "null"
             ],
-            "description": "Select sub-device to use based on the display name. This is the value you see in e.g.\nBlackmagic Media Express app. like \"DeckLink Quad HDMI Recorder (3)\"\n\nThe input device is selected based on fields `subdevice_index`, `persistent_id` **AND** `display_name`.\nAll of them need to match the device if they are specified. If nothing is matched, the error response\nwill list available devices."
+            "description": "Select sub-device to use based on the display name. This is the value you see in e.g.\nBlackmagic Media Express app. like \"DeckLink Quad HDMI Recorder (3)\"\n\nThe input device is selected based on fields `subdevice_index`, `persistent_id` **AND**\n`display_name`. All of them need to match the device if they are specified. If nothing is\nmatched, the error response will list available devices."
           },
           "persistent_id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Persistent ID of a device represented by 32-bit hex number. Each DeckLink sub-device has a separate id.\n\nThe input device is selected based on fields `subdevice_index`, `persistent_id` **AND** `display_name`.\nAll of them need to match the device if they are specified. If nothing is matched, the error response\nwill list available devices."
+            "description": "Persistent ID of a device represented by 32-bit hex number. Each DeckLink sub-device has a\nseparate id.\n\nThe input device is selected based on fields `subdevice_index`, `persistent_id` **AND**\n`display_name`. All of them need to match the device if they are specified. If nothing is\nmatched, the error response will list available devices."
           },
           "enable_audio": {
             "type": [
               "boolean",
               "null"
             ],
-            "description": "(**default=`true`**) Enable audio support."
+            "description": "Enable audio support. Defaults to `true`."
           },
           "required": {
             "type": [
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and frames are not processed\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and frames are not processed on time, then Smelter will delay producing\noutput frames.\n\nDefaults to `false`."
           },
           "side_channel": {
             "oneOf": [
@@ -1451,7 +1451,7 @@
             }
           }
         ],
-        "description": "Easing functions are used to interpolate between two values over time.\n\nCustom easing functions can be implemented with cubic Bézier.\nThe control points are defined with `points` field by providing four numerical values: `x1`, `y1`, `x2` and `y2`. The `x1` and `x2` values have to be in the range `[0; 1]`. The cubic Bézier result is clamped to the range `[0; 1]`.\nYou can find example control point configurations [here](https://easings.net/)."
+        "description": "Easing functions are used to interpolate between two values over time.\n\nCustom easing functions can be implemented with cubic Bézier. The control points are defined\nwith `points` field by providing four numerical values: `x1`, `y1`, `x2` and `y2`. The `x1` and\n`x2` values have to be in the range `[0; 1]`. The cubic Bézier result is clamped to the range\n`[0; 1]`. You can find example control point configurations [here](https://easings.net/)."
       },
       "Framerate": {
         "oneOf": [
@@ -1494,7 +1494,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].",
+                "description": "Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.",
                 "minimum": 0
               },
               "type": {
@@ -1523,7 +1523,7 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and the stream is not delivered on time, then Smelter will delay\nproducing output frames.\n\nDefaults to `false`."
           },
           "offset_ms": {
             "type": [
@@ -1695,7 +1695,7 @@
               "integer",
               "null"
             ],
-            "description": "Number of segments kept in the playlist. When the limit is reached the oldest segment is removed.\nIf not specified, no segments will removed.",
+            "description": "Number of segments kept in the playlist. When the limit is reached the oldest segment is\nremoved. If not specified, no segments will removed.",
             "minimum": 0
           },
           "video": {
@@ -1725,7 +1725,7 @@
               "object",
               "null"
             ],
-            "description": "Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.\nNote: keys here may override defaults, including `hls_list_size` derived from `max_playlist_size`.",
+            "description": "Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more. Note:\nkeys here may override defaults, including `hls_list_size` derived from `max_playlist_size`.",
             "additionalProperties": {
               "type": "string"
             },
@@ -1806,7 +1806,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "(**default=`\"fast\"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more."
+                    "description": "Video output encoder preset. Visit `FFmpeg`\n[docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.\n\nDefaults to `\"fast\"`."
                   }
                 ]
               },
@@ -1827,7 +1827,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -1836,7 +1836,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format"
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -1874,7 +1874,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -1884,7 +1884,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Interval between keyframes, in milliseconds."
+                "description": "Interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "type": {
                 "type": "string",
@@ -1924,7 +1924,7 @@
           },
           "image_id": {
             "$ref": "#/components/schemas/RendererId",
-            "description": "Id of an image. It identifies an image registered using a [`register image`](../routes.md#register-image) request."
+            "description": "Id of an image. It identifies an image registered using a\n[`register image`](../routes.md#register-image) request."
           },
           "width": {
             "type": [
@@ -1932,7 +1932,7 @@
               "null"
             ],
             "format": "float",
-            "description": "Width of the image in pixels.\nIf `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width."
+            "description": "Width of the image in pixels. If `height` is not explicitly provided, the image will\nautomatically adjust its height to maintain its original aspect ratio relative to the width."
           },
           "height": {
             "type": [
@@ -1940,7 +1940,7 @@
               "null"
             ],
             "format": "float",
-            "description": "Height of the image in pixels.\nIf `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height."
+            "description": "Height of the image in pixels. If `width` is not explicitly provided, the image will\nautomatically adjust its width to maintain its original aspect ratio relative to the height."
           }
         },
         "additionalProperties": false
@@ -2132,7 +2132,7 @@
             "properties": {
               "audio_specific_config": {
                 "type": "string",
-                "description": "AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1\nThe config should be encoded as described in [RFC 3640](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).\n\nThe simplest way to obtain this value when using ffmpeg to stream to the compositor is\nto pass the additional `-sdp_file FILENAME` option to ffmpeg. This will cause it to\nwrite out an sdp file, which will contain this field. Programs which have the ability\nto stream AAC to the compositor should provide this information.\n\nIn MP4 files, the ASC is embedded inside the esds box (note that it is not the whole\nbox, only a part of it). This also applies to fragmented MP4s downloaded over HLS, if\nthe playlist uses MP4s instead of MPEG Transport Streams\n\nIn FLV files and the RTMP protocol, the ASC can be found in the `AACAUDIODATA` tag."
+                "description": "AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1\nThe config should be encoded as described in\n[RFC 3640](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).\n\nThe simplest way to obtain this value when using ffmpeg to stream to the compositor is\nto pass the additional `-sdp_file FILENAME` option to ffmpeg. This will cause it to\nwrite out an sdp file, which will contain this field. Programs which have the ability\nto stream AAC to the compositor should provide this information.\n\nIn MP4 files, the ASC is embedded inside the esds box (note that it is not the whole\nbox, only a part of it). This also applies to fragmented MP4s downloaded over HLS, if\nthe playlist uses MP4s instead of MPEG Transport Streams\n\nIn FLV files and the RTMP protocol, the ASC can be found in the `AACAUDIODATA` tag."
               },
               "rtp_mode": {
                 "oneOf": [
@@ -2141,7 +2141,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/AacRtpMode",
-                    "description": "(**default=`\"high_bitrate\"`**)\nSpecifies the [RFC 3640 mode](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1)\nthat should be used when depacketizing this stream."
+                    "description": "Specifies the\n[RFC 3640 mode](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that should\nbe used when depacketizing this stream.\n\nDefaults to `\"high_bitrate\"`."
                   }
                 ]
               },
@@ -2359,7 +2359,7 @@
           },
           "input_id": {
             "$ref": "#/components/schemas/InputId",
-            "description": "Id of an input. It identifies a stream registered using a [`RegisterInputStream`](../routes.md#register-input) request."
+            "description": "Id of an input. It identifies a stream registered using a\n[`RegisterInputStream`](../routes.md#register-input) request."
           }
         },
         "additionalProperties": false
@@ -2506,7 +2506,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].",
+                "description": "Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.",
                 "minimum": 0
               },
               "type": {
@@ -2530,7 +2530,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/OpusEncoderPreset",
-                    "description": "(**default=\"voip\"**) Audio output encoder preset."
+                    "description": "Audio output encoder preset. Defaults to `\"voip\"`."
                   }
                 ]
               },
@@ -2540,7 +2540,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].",
+                "description": "Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.",
                 "minimum": 0
               },
               "forward_error_correction": {
@@ -2548,7 +2548,7 @@
                   "boolean",
                   "null"
                 ],
-                "description": "(**default=`false`**) Specifies if forward error correction (FEC) should be used."
+                "description": "Specifies if forward error correction (FEC) should be used. Defaults to `false`."
               },
               "expected_packet_loss": {
                 "type": [
@@ -2556,7 +2556,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`,\nthen this value should be greater than `0`. Allowed values: [0, 100];",
+                "description": "Expected packet loss. When `forward_error_correction` is set to `true`, then this value\nshould be greater than `0`. Allowed values: [0, 100];\n\nDefaults to `0`.",
                 "minimum": 0
               },
               "type": {
@@ -2589,7 +2589,7 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and the stream is not delivered on time, then Smelter will delay\nproducing output frames.\n\nDefaults to `false`."
           },
           "decoder_map": {
             "type": [
@@ -2683,7 +2683,7 @@
               },
               {
                 "$ref": "#/components/schemas/MoqOutputContainer",
-                "description": "(**default=`\"cmaf\"`**) Container used to frame encoded media."
+                "description": "Container used to frame encoded media. Defaults to `\"cmaf\"`."
               }
             ]
           },
@@ -2774,7 +2774,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "(**default=`\"fast\"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more."
+                    "description": "Video output encoder preset. Visit `FFmpeg`\n[docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.\n\nDefaults to `\"fast\"`."
                   }
                 ]
               },
@@ -2795,7 +2795,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -2804,7 +2804,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format."
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -2813,7 +2813,7 @@
                   "object",
                   "null"
                 ],
-                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.",
+                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn\nmore.",
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -2842,7 +2842,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -2852,14 +2852,14 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "ffmpeg_options": {
                 "type": [
                   "object",
                   "null"
                 ],
-                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.",
+                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn\nmore.",
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -2888,7 +2888,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -2898,7 +2898,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -2907,7 +2907,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format."
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -2916,7 +2916,7 @@
                   "object",
                   "null"
                 ],
-                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.",
+                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn\nmore.",
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -2945,7 +2945,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -2955,7 +2955,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Interval between keyframes, in milliseconds."
+                "description": "Interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "type": {
                 "type": "string",
@@ -2990,7 +2990,7 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and the stream is not delivered on time, then Smelter will delay\nproducing output frames.\n\nDefaults to `false`."
           },
           "decoder_map": {
             "type": [
@@ -3083,7 +3083,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].",
+                "description": "Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.",
                 "minimum": 0
               },
               "type": {
@@ -3119,14 +3119,14 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input should be played in the loop. <span class=\"badge badge--primary\">Added in v0.4.0</span>"
+            "description": "If input should be played in the loop. Defaults to `false`."
           },
           "required": {
             "type": [
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and frames are not processed\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and frames are not processed on time, then Smelter will delay producing\noutput frames.\n\nDefaults to `false`."
           },
           "offset_ms": {
             "type": [
@@ -3332,7 +3332,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "(**default=`\"fast\"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more."
+                    "description": "Video output encoder preset. Visit `FFmpeg`\n[docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.\n\nDefaults to `\"fast\"`."
                   }
                 ]
               },
@@ -3353,7 +3353,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -3362,7 +3362,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format."
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -3400,7 +3400,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -3410,7 +3410,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Interval between keyframes, in milliseconds."
+                "description": "Interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "type": {
                 "type": "string",
@@ -3432,7 +3432,7 @@
       },
       "OutputEndCondition": {
         "type": "object",
-        "description": "This type defines when end of an input stream should trigger end of the output stream. Only one of those fields can be set at the time.\nUnless specified otherwise the input stream is considered finished/ended when:\n- TCP connection was dropped/closed.\n- RTCP Goodbye packet (`BYE`) was received.\n- Mp4 track has ended.\n- Input was unregistered already (or never registered).",
+        "description": "This type defines when end of an input stream should trigger end of the output stream. Only one\nof those fields can be set at the time. Unless specified otherwise the input stream is\nconsidered finished/ended when:\n- TCP connection was dropped/closed.\n- RTCP Goodbye packet (`BYE`) was received.\n- Mp4 track has ended.\n- Input was unregistered already (or never registered).",
         "properties": {
           "any_of": {
             "type": [
@@ -3459,14 +3459,14 @@
               "boolean",
               "null"
             ],
-            "description": "Terminate output stream if any of the input streams ends. This includes streams added after the output was registered. In particular, output stream will **not be** terminated if no inputs were ever connected."
+            "description": "Terminate output stream if any of the input streams ends. This includes streams added after\nthe output was registered. In particular, output stream will **not be** terminated if no\ninputs were ever connected."
           },
           "all_inputs": {
             "type": [
               "boolean",
               "null"
             ],
-            "description": "Terminate output stream if all the input streams finish. In particular, output stream will **be** terminated if no inputs were ever connected."
+            "description": "Terminate output stream if all the input streams finish. In particular, output stream will\n**be** terminated if no inputs were ever connected."
           }
         },
         "additionalProperties": false
@@ -3485,7 +3485,7 @@
               },
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
-                "description": "(**default=\"sum_clip\"**) Specifies how audio should be mixed."
+                "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
               }
             ]
           },
@@ -3541,7 +3541,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -3551,7 +3551,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
           }
         },
         "additionalProperties": false
@@ -3585,7 +3585,7 @@
               },
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
-                "description": "(**default=\"sum_clip\"**) Specifies how audio should be mixed."
+                "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
               }
             ]
           },
@@ -3596,7 +3596,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+                "description": "Condition for termination of output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -3641,7 +3641,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -3651,7 +3651,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
           }
         },
         "additionalProperties": false
@@ -3670,7 +3670,7 @@
               },
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
-                "description": "(**default=\"sum_clip\"**) Specifies how audio should be mixed."
+                "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
               }
             ]
           },
@@ -3726,7 +3726,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -3736,7 +3736,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
           }
         },
         "additionalProperties": false
@@ -3755,7 +3755,7 @@
               },
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
-                "description": "(**default=\"sum_clip\"**) Specifies how audio should be mixed."
+                "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
               }
             ]
           },
@@ -3766,7 +3766,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -3811,7 +3811,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -3821,7 +3821,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
           }
         },
         "additionalProperties": false
@@ -3840,7 +3840,7 @@
               },
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
-                "description": "(**default=\"sum_clip\"**) Specifies how audio should be mixed."
+                "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
               }
             ]
           },
@@ -3851,7 +3851,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+                "description": "Condition for termination of output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -3896,7 +3896,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -3906,7 +3906,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
           }
         },
         "additionalProperties": false
@@ -4077,7 +4077,7 @@
               },
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
-                "description": "(**default=\"sum_clip\"**) Specifies how audio should be mixed."
+                "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
               }
             ]
           },
@@ -4133,7 +4133,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type."
+                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -4143,7 +4143,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
           }
         },
         "additionalProperties": false
@@ -4161,7 +4161,7 @@
               },
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
-                "description": "(**default=\"sum_clip\"**) Specifies how audio should be mixed."
+                "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
               }
             ]
           },
@@ -4222,7 +4222,7 @@
               },
               {
                 "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both."
+                "description": "Defines when output stream should end if some of the input streams are finished. If output\nincludes both audio and video streams, then EOS needs to be sent on both."
               }
             ]
           },
@@ -4690,7 +4690,7 @@
               },
               {
                 "$ref": "#/components/schemas/RescaleMode",
-                "description": "(**default=`\"fit\"`**) Resize mode:"
+                "description": "Resize mode. Defaults to `\"fit\"`."
               }
             ]
           },
@@ -4701,7 +4701,7 @@
               },
               {
                 "$ref": "#/components/schemas/HorizontalAlign",
-                "description": "(**default=`\"center\"`**) Horizontal alignment."
+                "description": "Horizontal alignment. Defaults to `\"center\"`."
               }
             ]
           },
@@ -4712,7 +4712,7 @@
               },
               {
                 "$ref": "#/components/schemas/VerticalAlign",
-                "description": "(**default=`\"center\"`**) Vertical alignment."
+                "description": "Vertical alignment. Defaults to `\"center\"`."
               }
             ]
           },
@@ -4738,7 +4738,7 @@
               "null"
             ],
             "format": "float",
-            "description": "Distance in pixels between this component's top edge and its parent's top edge (including a border).\nIf this field is defined, then the component will ignore a layout defined by its parent."
+            "description": "Distance in pixels between this component's top edge and its parent's top edge (including a\nborder). If this field is defined, then the component will ignore a layout defined by its\nparent."
           },
           "left": {
             "type": [
@@ -4746,7 +4746,7 @@
               "null"
             ],
             "format": "float",
-            "description": "Distance in pixels between this component's left edge and its parent's left edge (including a border).\nIf this field is defined, this element will be absolutely positioned, instead of being\nlaid out by its parent."
+            "description": "Distance in pixels between this component's left edge and its parent's left edge (including\na border). If this field is defined, this element will be absolutely positioned, instead of\nbeing laid out by its parent."
           },
           "bottom": {
             "type": [
@@ -4789,7 +4789,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Radius of a rounded corner."
+            "description": "Radius of a rounded corner. Defaults to `0.0`."
           },
           "border_width": {
             "type": [
@@ -4797,7 +4797,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Border width."
+            "description": "Border width. Defaults to `0.0`."
           },
           "border_color": {
             "oneOf": [
@@ -4806,7 +4806,7 @@
               },
               {
                 "$ref": "#/components/schemas/RGBAColor",
-                "description": "(**default=`\"#00000000\"`**) Border color in a `\"#RRGGBBAA\"` format."
+                "description": "Border color in a `\"#RRGGBBAA\"` format. Defaults to `\"#00000000\"`."
               }
             ]
           },
@@ -4912,7 +4912,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].",
+                "description": "Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.",
                 "minimum": 0
               },
               "type": {
@@ -4937,7 +4937,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/OpusEncoderPreset",
-                    "description": "(**default=`\"voip\"`**) Audio output encoder preset."
+                    "description": "Audio output encoder preset. Defaults to `\"voip\"`."
                   }
                 ]
               },
@@ -4947,7 +4947,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].",
+                "description": "Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.",
                 "minimum": 0
               },
               "type": {
@@ -4975,7 +4975,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "(**default=`\"fast\"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more."
+                    "description": "Video output encoder preset. Visit `FFmpeg`\n[docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.\n\nDefaults to `\"fast\"`."
                   }
                 ]
               },
@@ -4996,7 +4996,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -5005,7 +5005,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format"
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -5044,7 +5044,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -5054,7 +5054,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "ffmpeg_options": {
                 "type": [
@@ -5091,7 +5091,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -5101,7 +5101,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -5110,7 +5110,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format."
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -5148,7 +5148,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -5158,7 +5158,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Interval between keyframes, in milliseconds."
+                "description": "Interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "type": {
                 "type": "string",
@@ -5185,7 +5185,7 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and the stream is not delivered on time, then Smelter will delay\nproducing output frames.\n\nDefaults to `false`."
           },
           "decoder_map": {
             "type": [
@@ -5354,7 +5354,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/OpusEncoderPreset",
-                    "description": "(**default=\"voip\"**) Audio output encoder preset."
+                    "description": "Audio output encoder preset. Defaults to `\"voip\"`."
                   }
                 ]
               },
@@ -5364,7 +5364,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].",
+                "description": "Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.",
                 "minimum": 0
               },
               "forward_error_correction": {
@@ -5372,7 +5372,7 @@
                   "boolean",
                   "null"
                 ],
-                "description": "(**default=`false`**) Specifies if forward error correction (FEC) should be used."
+                "description": "Specifies if forward error correction (FEC) should be used. Defaults to `false`."
               },
               "expected_packet_loss": {
                 "type": [
@@ -5380,7 +5380,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`,\nthen this value should be greater than `0`. Allowed values: [0, 100];",
+                "description": "Expected packet loss. When `forward_error_correction` is set to `true`, then this value\nshould be greater than `0`. Allowed values: [0, 100];\n\nDefaults to `0`.",
                 "minimum": 0
               },
               "type": {
@@ -5442,7 +5442,7 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and the stream is not delivered on time, then Smelter will delay\nproducing output frames.\n\nDefaults to `false`."
           },
           "offset_ms": {
             "type": [
@@ -5617,14 +5617,14 @@
         "properties": {
           "port": {
             "$ref": "#/components/schemas/PortOrPortRange",
-            "description": "Depends on the value of the `transport_protocol` field:\n  - `udp` - An UDP port number that RTP packets will be sent to.\n  - `tcp_server` - A local TCP port number or a port range that Smelter will listen for incoming connections."
+            "description": "Depends on the value of the `transport_protocol` field:\n  - `udp` - An UDP port number that RTP packets will be sent to.\n  - `tcp_server` - A local TCP port number or a port range that Smelter will listen for\n    incoming connections."
           },
           "ip": {
             "type": [
               "string",
               "null"
             ],
-            "description": "IP address to which RTP packets should be sent. This field is only valid if `transport_protocol` field is set to `udp`."
+            "description": "IP address to which RTP packets should be sent. This field is only valid if\n`transport_protocol` field is set to `udp`."
           },
           "transport_protocol": {
             "oneOf": [
@@ -5633,7 +5633,7 @@
               },
               {
                 "$ref": "#/components/schemas/TransportProtocol",
-                "description": "(**default=`\"udp\"`**) Transport layer protocol that will be used to send RTP packets."
+                "description": "Transport layer protocol that will be used to send RTP packets. Defaults to `\"udp\"`."
               }
             ]
           },
@@ -5726,7 +5726,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "(**default=`\"fast\"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more."
+                    "description": "Video output encoder preset. Visit `FFmpeg`\n[docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.\n\nDefaults to `\"fast\"`."
                   }
                 ]
               },
@@ -5747,7 +5747,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -5756,7 +5756,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format."
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -5765,7 +5765,7 @@
                   "object",
                   "null"
                 ],
-                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.",
+                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn\nmore.",
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -5794,7 +5794,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -5804,14 +5804,14 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "ffmpeg_options": {
                 "type": [
                   "object",
                   "null"
                 ],
-                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.",
+                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn\nmore.",
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -5840,7 +5840,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -5850,7 +5850,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -5859,7 +5859,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format."
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -5868,7 +5868,7 @@
                   "object",
                   "null"
                 ],
-                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.",
+                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn\nmore.",
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -5897,7 +5897,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -5907,7 +5907,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Interval between keyframes, in milliseconds."
+                "description": "Interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "type": {
                 "type": "string",
@@ -5949,7 +5949,7 @@
           },
           "shader_id": {
             "$ref": "#/components/schemas/RendererId",
-            "description": "Id of a shader. It identifies a shader registered using a [`register shader`](../routes.md#register-shader) request."
+            "description": "Id of a shader. It identifies a shader registered using a\n[`register shader`](../routes.md#register-shader) request."
           },
           "shader_param": {
             "oneOf": [
@@ -6205,7 +6205,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`7682`**) Maximal `width`. Limits the width of the texture that the text will be rendered on.\nValue is ignored if `width` is defined."
+            "description": "Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is\nignored if `width` is defined.\n\nDefaults to `7682`."
           },
           "max_height": {
             "type": [
@@ -6213,7 +6213,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`4320`**) Maximal `height`. Limits the height of the texture that the text will be rendered on.\nValue is ignored if height is defined."
+            "description": "Maximal `height`. Limits the height of the texture that the text will be rendered on. Value\nis ignored if height is defined.\n\nDefaults to `4320`."
           },
           "font_size": {
             "type": "number",
@@ -6235,7 +6235,7 @@
               },
               {
                 "$ref": "#/components/schemas/RGBAColor",
-                "description": "(**default=`\"#FFFFFFFF\"`**) Font color in `#RRGGBBAA` format."
+                "description": "Font color in `#RRGGBBAA` format. Defaults to `\"#FFFFFFFF\"`."
               }
             ]
           },
@@ -6246,7 +6246,7 @@
               },
               {
                 "$ref": "#/components/schemas/RGBAColor",
-                "description": "(**default=`\"#00000000\"`**) Background color in `#RRGGBBAA` format."
+                "description": "Background color in `#RRGGBBAA` format. Defaults to `\"#00000000\"`."
               }
             ]
           },
@@ -6255,7 +6255,7 @@
               "string",
               "null"
             ],
-            "description": "(**default=`\"Verdana\"`**) Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value)\nfor a specific font. \"generic-family\" values like e.g. \"sans-serif\" will not work."
+            "description": "Font family. Provide\n[family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a\nspecific font. \"generic-family\" values like e.g. \"sans-serif\" will not work.\n\nDefaults to `\"Verdana\"`."
           },
           "style": {
             "oneOf": [
@@ -6264,7 +6264,7 @@
               },
               {
                 "$ref": "#/components/schemas/TextStyle",
-                "description": "(**default=`\"normal\"`**) Font style. The selected font needs to support the specified style."
+                "description": "Font style. The selected font needs to support the specified style. Defaults to `\"normal\"`."
               }
             ]
           },
@@ -6275,7 +6275,7 @@
               },
               {
                 "$ref": "#/components/schemas/HorizontalAlign",
-                "description": "(**default=`\"left\"`**) Text align."
+                "description": "Text align. Defaults to `\"left\"`."
               }
             ]
           },
@@ -6286,7 +6286,7 @@
               },
               {
                 "$ref": "#/components/schemas/TextWrapMode",
-                "description": "(**default=`\"none\"`**) Text wrapping options."
+                "description": "Text wrapping options. Defaults to `\"none\"`."
               }
             ]
           },
@@ -6297,7 +6297,7 @@
               },
               {
                 "$ref": "#/components/schemas/TextWeight",
-                "description": "(**default=`\"normal\"`**) Font weight. The selected font needs to support the specified weight."
+                "description": "Font weight. The selected font needs to support the specified weight.\n\nDefaults to `\"normal\"`."
               }
             ]
           }
@@ -6314,7 +6314,7 @@
       },
       "TextWeight": {
         "type": "string",
-        "description": "Font weight, based on the [OpenType specification](https://learn.microsoft.com/en-gb/typography/opentype/spec/os2#usweightclass).",
+        "description": "Font weight, based on the\n[OpenType specification](https://learn.microsoft.com/en-gb/typography/opentype/spec/os2#usweightclass).",
         "enum": [
           "thin",
           "extra_light",
@@ -6382,7 +6382,7 @@
               },
               {
                 "$ref": "#/components/schemas/RGBAColor",
-                "description": "(**default=`\"#00000000\"`**) Background color in a `\"#RRGGBBAA\"` format."
+                "description": "Background color in a `\"#RRGGBBAA\"` format. Defaults to `\"#00000000\"`."
               }
             ]
           },
@@ -6393,7 +6393,7 @@
               },
               {
                 "$ref": "#/components/schemas/AspectRatio",
-                "description": "(**default=`\"16:9\"`**) Aspect ratio of a tile in `\"W:H\"` format, where W and H are integers."
+                "description": "Aspect ratio of a tile in `\"W:H\"` format, where W and H are integers. Defaults to `\"16:9\"`."
               }
             ]
           },
@@ -6403,7 +6403,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0`**) Margin of each tile in pixels."
+            "description": "Margin of each tile in pixels. Defaults to `0`."
           },
           "padding": {
             "type": [
@@ -6411,7 +6411,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0`**) Padding on each tile in pixels."
+            "description": "Padding on each tile in pixels. Defaults to `0`."
           },
           "horizontal_align": {
             "oneOf": [
@@ -6420,7 +6420,7 @@
               },
               {
                 "$ref": "#/components/schemas/HorizontalAlign",
-                "description": "(**default=`\"center\"`**) Horizontal alignment of tiles."
+                "description": "Horizontal alignment of tiles. Defaults to `\"center\"`."
               }
             ]
           },
@@ -6431,7 +6431,7 @@
               },
               {
                 "$ref": "#/components/schemas/VerticalAlign",
-                "description": "(**default=`\"center\"`**) Vertical alignment of tiles."
+                "description": "Vertical alignment of tiles. Defaults to `\"center\"`."
               }
             ]
           },
@@ -6467,7 +6467,7 @@
               },
               {
                 "$ref": "#/components/schemas/EasingFunction",
-                "description": "(**default=`\"linear\"`**) Easing function to be used for the transition."
+                "description": "Easing function to be used for the transition. Defaults to `\"linear\"`."
               }
             ]
           },
@@ -6476,7 +6476,7 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) On scene update, if there is already a transition in progress,\nit will be interrupted and the new transition will start from the current state."
+            "description": "On scene update, if there is already a transition in progress, it will be interrupted and\nthe new transition will start from the current state.\n\nDefaults to `false`."
           }
         }
       },
@@ -6621,7 +6621,7 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and frames are not processed\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and frames are not processed on time, then Smelter will delay producing\noutput frames.\n\nDefaults to `false`."
           },
           "side_channel": {
             "oneOf": [
@@ -6658,7 +6658,7 @@
           {
             "type": "integer",
             "format": "int64",
-            "description": "Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,\nbut may temporarily increase it by 25%.",
+            "description": "Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the\nprovided average, but may temporarily increase it by 25%.",
             "minimum": 0
           },
           {
@@ -6671,7 +6671,7 @@
               "average_bitrate": {
                 "type": "integer",
                 "format": "int64",
-                "description": "Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,\nbut may temporarily increase it to the provided max bitrate.",
+                "description": "Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the\nprovided average, but may temporarily increase it to the provided max bitrate.",
                 "minimum": 0
               },
               "max_bitrate": {
@@ -6753,7 +6753,7 @@
               "null"
             ],
             "format": "float",
-            "description": "Distance in pixels between this component's top edge and its parent's top edge (including a border).\nIf this field is defined, then the component will ignore a layout defined by its parent."
+            "description": "Distance in pixels between this component's top edge and its parent's top edge (including a\nborder). If this field is defined, then the component will ignore a layout defined by its\nparent."
           },
           "left": {
             "type": [
@@ -6761,7 +6761,7 @@
               "null"
             ],
             "format": "float",
-            "description": "Distance in pixels between this component's left edge and its parent's left edge (including a border).\nIf this field is defined, this element will be absolutely positioned, instead of being\nlaid out by its parent."
+            "description": "Distance in pixels between this component's left edge and its parent's left edge (including\na border). If this field is defined, this element will be absolutely positioned, instead of\nbeing laid out by its parent."
           },
           "bottom": {
             "type": [
@@ -6805,7 +6805,7 @@
               },
               {
                 "$ref": "#/components/schemas/Overflow",
-                "description": "(**default=`\"hidden\"`**) Controls what happens to content that is too big to fit into an area."
+                "description": "Controls what happens to content that is too big to fit into an area.\n\nDefaults to `\"hidden\"`."
               }
             ]
           },
@@ -6816,7 +6816,7 @@
               },
               {
                 "$ref": "#/components/schemas/RGBAColor",
-                "description": "(**default=`\"#00000000\"`**) Background color in a `\"#RRGGBBAA\"` format."
+                "description": "Background color in a `\"#RRGGBBAA\"` format. Defaults to `\"#00000000\"`."
               }
             ]
           },
@@ -6826,7 +6826,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Radius of a rounded corner."
+            "description": "Radius of a rounded corner. Defaults to `0.0`."
           },
           "border_width": {
             "type": [
@@ -6834,7 +6834,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Border width."
+            "description": "Border width. Defaults to `0.0`."
           },
           "border_color": {
             "oneOf": [
@@ -6843,7 +6843,7 @@
               },
               {
                 "$ref": "#/components/schemas/RGBAColor",
-                "description": "(**default=`\"#00000000\"`**) Border color in a `\"#RRGGBBAA\"` format."
+                "description": "Border color in a `\"#RRGGBBAA\"` format. Defaults to `\"#00000000\"`."
               }
             ]
           },
@@ -6863,7 +6863,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Padding for all sides of the component."
+            "description": "Padding for all sides of the component. Defaults to `0.0`."
           },
           "padding_vertical": {
             "type": [
@@ -6871,7 +6871,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Padding for the top and bottom of the component."
+            "description": "Padding for the top and bottom of the component. Defaults to `0.0`."
           },
           "padding_horizontal": {
             "type": [
@@ -6879,7 +6879,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Padding for the left and right of the component."
+            "description": "Padding for the left and right of the component. Defaults to `0.0`."
           },
           "padding_top": {
             "type": [
@@ -6887,7 +6887,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Padding on top side in pixels."
+            "description": "Padding on top side in pixels. Defaults to `0.0`."
           },
           "padding_right": {
             "type": [
@@ -6895,7 +6895,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Padding on right side in pixels."
+            "description": "Padding on right side in pixels. Defaults to `0.0`."
           },
           "padding_bottom": {
             "type": [
@@ -6903,7 +6903,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Padding on bottom side in pixels."
+            "description": "Padding on bottom side in pixels. Defaults to `0.0`."
           },
           "padding_left": {
             "type": [
@@ -6911,7 +6911,7 @@
               "null"
             ],
             "format": "float",
-            "description": "(**default=`0.0`**) Padding on left side in pixels."
+            "description": "Padding on left side in pixels. Defaults to `0.0`."
           }
         },
         "additionalProperties": false
@@ -7010,7 +7010,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/OpusEncoderPreset",
-                    "description": "(**default=\"voip\"**) Specifies preset for audio output encoder."
+                    "description": "Specifies preset for audio output encoder. Defaults to `\"voip\"`."
                   }
                 ]
               },
@@ -7020,7 +7020,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].",
+                "description": "Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.",
                 "minimum": 0
               },
               "forward_error_correction": {
@@ -7028,7 +7028,7 @@
                   "boolean",
                   "null"
                 ],
-                "description": "(**default=`false`**) Specifies if forward error correction (FEC) should be used."
+                "description": "Specifies if forward error correction (FEC) should be used. Defaults to `false`."
               },
               "expected_packet_loss": {
                 "type": [
@@ -7036,7 +7036,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`,\nthen this value should be greater than `0`. Allowed values: [0, 100];",
+                "description": "Expected packet loss. When `forward_error_correction` is set to `true`, then this value\nshould be greater than `0`. Allowed values: [0, 100];\n\nDefaults to `0`.",
                 "minimum": 0
               },
               "type": {
@@ -7082,7 +7082,7 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and the stream is not delivered on time, then Smelter will delay\nproducing output frames.\n\nDefaults to `false`."
           },
           "buffer_size_ms": {
             "type": [
@@ -7231,7 +7231,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "(**default=`\"fast\"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more."
+                    "description": "Video output encoder preset. Visit `FFmpeg`\n[docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.\n\nDefaults to `\"fast\"`."
                   }
                 ]
               },
@@ -7252,7 +7252,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -7261,7 +7261,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format."
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -7270,7 +7270,7 @@
                   "object",
                   "null"
                 ],
-                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.",
+                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn\nmore.",
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -7299,7 +7299,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -7309,14 +7309,14 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "ffmpeg_options": {
                 "type": [
                   "object",
                   "null"
                 ],
-                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.",
+                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn\nmore.",
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -7345,7 +7345,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -7355,7 +7355,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -7364,7 +7364,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format."
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -7373,7 +7373,7 @@
                   "object",
                   "null"
                 ],
-                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.",
+                "description": "Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn\nmore.",
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -7402,7 +7402,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -7412,7 +7412,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Interval between keyframes, in milliseconds."
+                "description": "Interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "type": {
                 "type": "string",
@@ -7439,7 +7439,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/OpusEncoderPreset",
-                    "description": "(**default=\"voip\"**) Specifies preset for audio output encoder."
+                    "description": "Specifies preset for audio output encoder. Defaults to `\"voip\"`."
                   }
                 ]
               },
@@ -7449,7 +7449,7 @@
                   "null"
                 ],
                 "format": "int32",
-                "description": "(**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].",
+                "description": "Sample rate. Allowed values: [8000, 16000, 24000, 48000]. Defaults to `48000`.",
                 "minimum": 0
               },
               "forward_error_correction": {
@@ -7457,7 +7457,7 @@
                   "boolean",
                   "null"
                 ],
-                "description": "(**default=`false`**) Specifies if forward error correction (FEC) should be used."
+                "description": "Specifies if forward error correction (FEC) should be used. Defaults to `false`."
               },
               "type": {
                 "type": "string",
@@ -7510,7 +7510,7 @@
               "boolean",
               "null"
             ],
-            "description": "(**default=`false`**) If input is required and the stream is not delivered\non time, then Smelter will delay producing output frames."
+            "description": "If input is required and the stream is not delivered on time, then Smelter will delay\nproducing output frames.\n\nDefaults to `false`."
           },
           "buffer_size_ms": {
             "type": [
@@ -7663,7 +7663,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "(**default=`\"fast\"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more."
+                    "description": "Preset for an encoder. See `FFmpeg`\n[docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.\n\nDefaults to `\"fast\"`."
                   }
                 ]
               },
@@ -7684,7 +7684,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -7693,7 +7693,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format"
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -7731,7 +7731,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -7741,7 +7741,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "ffmpeg_options": {
                 "type": [
@@ -7777,7 +7777,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -7787,7 +7787,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Maximal interval between keyframes, in milliseconds."
+                "description": "Maximal interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "pixel_format": {
                 "oneOf": [
@@ -7796,7 +7796,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/PixelFormat",
-                    "description": "(**default=`\"yuv420p\"`**) Encoder pixel format"
+                    "description": "Encoder pixel format. Defaults to `\"yuv420p\"`."
                   }
                 ]
               },
@@ -7834,7 +7834,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/VideoEncoderBitrate",
-                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.\nFor example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s."
+                    "description": "Encoding bitrate. If not provided, bitrate is calculated based on resolution and\nframerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max\nbitrate is 6250 kbit/s."
                   }
                 ]
               },
@@ -7844,7 +7844,7 @@
                   "null"
                 ],
                 "format": "double",
-                "description": "(**default=`5000`**) Interval between keyframes, in milliseconds."
+                "description": "Interval between keyframes, in milliseconds. Defaults to `5000`."
               },
               "type": {
                 "type": "string",

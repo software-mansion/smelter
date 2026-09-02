@@ -17,11 +17,13 @@ pub struct Mp4Input {
     /// Path to the MP4 file.
     #[schema(value_type = Option<str>)]
     pub path: Option<Arc<Path>>,
-    /// (**default=`false`**) If input should be played in the loop. <span class="badge badge--primary">Added in v0.4.0</span>
+    /// If input should be played in the loop. Defaults to `false`.
     #[serde(rename = "loop")]
     pub should_loop: Option<bool>,
-    /// (**default=`false`**) If input is required and frames are not processed
-    /// on time, then Smelter will delay producing output frames.
+    /// If input is required and frames are not processed on time, then Smelter will delay producing
+    /// output frames.
+    ///
+    /// Defaults to `false`.
     pub required: Option<bool>,
     /// Offset in milliseconds relative to the pipeline start (start request). If offset is
     /// not defined then stream is synchronized based on the first frames delivery time.
