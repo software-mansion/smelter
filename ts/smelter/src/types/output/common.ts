@@ -15,13 +15,16 @@ export type OutputEndCondition =
     }
   | {
       /**
-       * Terminate output stream if any of the input streams ends. This includes streams added after the output was registered. In particular, output stream will **not be** terminated if no inputs were ever connected.
+       * Terminate output stream if any of the input streams ends. This includes streams added after
+       * the output was registered. In particular, output stream will **not be** terminated if no
+       * inputs were ever connected.
        */
       anyInput: boolean;
     }
   | {
       /**
-       * Terminate output stream if all the input streams finish. In particular, output stream will **be** terminated if no inputs were ever connected.
+       * Terminate output stream if all the input streams finish. In particular, output stream will
+       * **be** terminated if no inputs were ever connected.
        */
       allInputs: boolean;
     };
@@ -30,8 +33,8 @@ export type VideoEncoderBitrate =
   | number
   | {
       /**
-       * Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
-       * but may temporarily increase it to the provided max bitrate.
+       * Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the
+       * provided average, but may temporarily increase it to the provided max bitrate.
        */
       averageBitrate: number;
       /**

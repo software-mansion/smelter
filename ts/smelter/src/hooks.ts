@@ -76,7 +76,8 @@ export function useAfterTimestamp(timestamp: number): boolean {
 /**
  * Create task that will stop rendering when smelter runs in offline mode.
  *
- * `task.done()` needs to be called when async action is finished, otherwise rendering will block indefinitely.
+ * `task.done()` needs to be called when async action is finished, otherwise rendering will block
+ * indefinitely.
  */
 export function newBlockingTask(ctx: SmelterOutputContext): BlockingTask {
   if (ctx.timeContext instanceof OfflineTimeContext) {

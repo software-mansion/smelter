@@ -27,8 +27,8 @@ export type Mp4Props = Omit<ComponentBaseProps, 'children'> & {
   loop?: boolean;
 
   /**
-   *  Url, path to the mp4 file or `Blob` of the mp4 file. File path refers to the filesystem where Smelter server is deployed.
-   *  `Blob` is only supported on `@swmansion/smelter-web-wasm`.
+   * Url, path to the mp4 file or `Blob` of the mp4 file. File path refers to the filesystem where
+   * Smelter server is deployed. `Blob` is only supported on `@swmansion/smelter-web-wasm`.
    */
   source: string | Blob;
 };

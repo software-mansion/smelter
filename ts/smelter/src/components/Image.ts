@@ -27,11 +27,13 @@ export type ImageProps = Omit<ComponentBaseProps, 'children'> &
 
 type ImageStyleProps = {
   /**
-   * Width of the image in pixels. If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.
+   * Width of the image in pixels. If `height` is not explicitly provided, the image will
+   * automatically adjust its height to maintain its original aspect ratio relative to the width.
    */
   width?: number;
   /**
-   * Height of the image in pixels. If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.
+   * Height of the image in pixels. If `width` is not explicitly provided, the image will
+   * automatically adjust its width to maintain its original aspect ratio relative to the height.
    */
   height?: number;
 };
