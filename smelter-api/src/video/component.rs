@@ -24,7 +24,8 @@ pub enum Component {
 pub struct InputStream {
     /// Id of a component.
     pub id: Option<ComponentId>,
-    /// Id of an input. It identifies a stream registered using a [`RegisterInputStream`](../routes.md#register-input) request.
+    /// Id of an input. It identifies a stream registered using the
+    /// `POST /api/input/{input_id}/register` request.
     pub input_id: InputId,
 }
 
@@ -54,12 +55,13 @@ pub struct View {
     /// Direction defines how static children are positioned inside a View component.
     pub direction: Option<ViewDirection>,
 
-    /// Distance in pixels between this component's top edge and its parent's top edge (including a border).
-    /// If this field is defined, then the component will ignore a layout defined by its parent.
+    /// Distance in pixels between this component's top edge and its parent's top edge (including a
+    /// border). If this field is defined, then the component will ignore a layout defined by its
+    /// parent.
     pub top: Option<f32>,
-    /// Distance in pixels between this component's left edge and its parent's left edge (including a border).
-    /// If this field is defined, this element will be absolutely positioned, instead of being
-    /// laid out by its parent.
+    /// Distance in pixels between this component's left edge and its parent's left edge (including
+    /// a border). If this field is defined, this element will be absolutely positioned, instead of
+    /// being laid out by its parent.
     pub left: Option<f32>,
     /// Distance in pixels between the bottom edge of this component and the bottom edge of its
     /// parent (including a border). If this field is defined, this element will be absolutely
@@ -77,43 +79,45 @@ pub struct View {
     /// effect if the previous scene already contained a `View` component with the same id.
     pub transition: Option<Transition>,
 
-    /// (**default=`"hidden"`**) Controls what happens to content that is too big to fit into an area.
+    /// Controls what happens to content that is too big to fit into an area.
+    ///
+    /// Defaults to `"hidden"`.
     pub overflow: Option<Overflow>,
 
-    /// (**default=`"#00000000"`**) Background color in a `"#RRGGBBAA"` format.
+    /// Background color in a `"#RRGGBBAA"` format. Defaults to `"#00000000"`.
     pub background_color: Option<RGBAColor>,
 
-    /// (**default=`0.0`**) Radius of a rounded corner.
+    /// Radius of a rounded corner. Defaults to `0.0`.
     pub border_radius: Option<f32>,
 
-    /// (**default=`0.0`**) Border width.
+    /// Border width. Defaults to `0.0`.
     pub border_width: Option<f32>,
 
-    /// (**default=`"#00000000"`**) Border color in a `"#RRGGBBAA"` format.
+    /// Border color in a `"#RRGGBBAA"` format. Defaults to `"#00000000"`.
     pub border_color: Option<RGBAColor>,
 
     /// List of box shadows.
     pub box_shadow: Option<Vec<BoxShadow>>,
 
-    /// (**default=`0.0`**) Padding for all sides of the component.
+    /// Padding for all sides of the component. Defaults to `0.0`.
     pub padding: Option<f32>,
 
-    /// (**default=`0.0`**) Padding for the top and bottom of the component.
+    /// Padding for the top and bottom of the component. Defaults to `0.0`.
     pub padding_vertical: Option<f32>,
 
-    /// (**default=`0.0`**) Padding for the left and right of the component.
+    /// Padding for the left and right of the component. Defaults to `0.0`.
     pub padding_horizontal: Option<f32>,
 
-    /// (**default=`0.0`**) Padding on top side in pixels.
+    /// Padding on top side in pixels. Defaults to `0.0`.
     pub padding_top: Option<f32>,
 
-    /// (**default=`0.0`**) Padding on right side in pixels.
+    /// Padding on right side in pixels. Defaults to `0.0`.
     pub padding_right: Option<f32>,
 
-    /// (**default=`0.0`**) Padding on bottom side in pixels.
+    /// Padding on bottom side in pixels. Defaults to `0.0`.
     pub padding_bottom: Option<f32>,
 
-    /// (**default=`0.0`**) Padding on left side in pixels.
+    /// Padding on left side in pixels. Defaults to `0.0`.
     pub padding_left: Option<f32>,
 }
 
@@ -133,16 +137,15 @@ pub enum Overflow {
     Visible,
     /// Render only parts of the children that are inside their parent area.
     Hidden,
-    /// If children components are too big to fit inside the parent, resize everything inside to fit.
+    /// If children components are too big to fit inside the parent, resize everything inside to
+    /// fit.
     ///
     /// Components that have unknown sizes will be treated as if they had a size 0 when calculating
     /// scaling factor.
     ///
-    /// :::warning
-    /// This will resize everything inside, even absolutely positioned elements. For example, if
-    /// you have an element in the bottom right corner and the content will be rescaled by a factor 0.5x,
-    /// then that component will end up in the middle of its parent
-    /// :::
+    /// Warning: this will resize everything inside, even absolutely positioned elements. For
+    /// example, if you have an element in the bottom right corner and the content will be rescaled
+    /// by a factor 0.5x, then that component will end up in the middle of its parent
     Fit,
 }
 
@@ -165,11 +168,11 @@ pub struct Rescaler {
     #[schema(no_recursion)]
     pub child: Box<Component>,
 
-    /// (**default=`"fit"`**) Resize mode:
+    /// Resize mode. Defaults to `"fit"`.
     pub mode: Option<RescaleMode>,
-    /// (**default=`"center"`**) Horizontal alignment.
+    /// Horizontal alignment. Defaults to `"center"`.
     pub horizontal_align: Option<HorizontalAlign>,
-    /// (**default=`"center"`**) Vertical alignment.
+    /// Vertical alignment. Defaults to `"center"`.
     pub vertical_align: Option<VerticalAlign>,
 
     /// Width of a component in pixels (without a border). Exact behavior might be different
@@ -185,12 +188,13 @@ pub struct Rescaler {
     /// - If the parent component is not a layout, then this field is required.
     pub height: Option<f32>,
 
-    /// Distance in pixels between this component's top edge and its parent's top edge (including a border).
-    /// If this field is defined, then the component will ignore a layout defined by its parent.
+    /// Distance in pixels between this component's top edge and its parent's top edge (including a
+    /// border). If this field is defined, then the component will ignore a layout defined by its
+    /// parent.
     pub top: Option<f32>,
-    /// Distance in pixels between this component's left edge and its parent's left edge (including a border).
-    /// If this field is defined, this element will be absolutely positioned, instead of being
-    /// laid out by its parent.
+    /// Distance in pixels between this component's left edge and its parent's left edge (including
+    /// a border). If this field is defined, this element will be absolutely positioned, instead of
+    /// being laid out by its parent.
     pub left: Option<f32>,
     /// Distance in pixels between the bottom edge of this component and the bottom edge of its
     /// parent (including a border). If this field is defined, this element will be absolutely
@@ -208,13 +212,13 @@ pub struct Rescaler {
     /// effect if the previous scene already contained a `Rescaler` component with the same id.
     pub transition: Option<Transition>,
 
-    /// (**default=`0.0`**) Radius of a rounded corner.
+    /// Radius of a rounded corner. Defaults to `0.0`.
     pub border_radius: Option<f32>,
 
-    /// (**default=`0.0`**) Border width.
+    /// Border width. Defaults to `0.0`.
     pub border_width: Option<f32>,
 
-    /// (**default=`"#00000000"`**) Border color in a `"#RRGGBBAA"` format.
+    /// Border color in a `"#RRGGBBAA"` format. Defaults to `"#00000000"`.
     pub border_color: Option<RGBAColor>,
 
     /// List of box shadows.
@@ -227,8 +231,9 @@ pub enum RescaleMode {
     /// Resize the component proportionally, so one of the dimensions is the same as its parent,
     /// but it still fits inside it.
     Fit,
-    /// Resize the component proportionally, so one of the dimensions is the same as its parent
-    /// and the entire area of the parent is covered. Parts of a child that do not fit inside the parent are not rendered.
+    /// Resize the component proportionally, so one of the dimensions is the same as its parent and
+    /// the entire area of the parent is covered. Parts of a child that do not fit inside the parent
+    /// are not rendered.
     Fill,
 }
 
@@ -243,12 +248,10 @@ pub struct WebView {
     #[schema(no_recursion)]
     pub children: Option<Vec<Component>>,
 
-    /// Id of a web renderer instance. It identifies an instance registered using a
-    /// [`register web renderer`](../routes.md#register-web-renderer-instance) request.
+    /// Id of a web renderer instance. It identifies an instance registered using the
+    /// `POST /api/web-renderer/{instance_id}/register` request.
     ///
-    /// :::warning
-    /// You can only refer to specific instances in one Component at a time.
-    /// :::
+    /// Warning: you can only refer to specific instances in one Component at a time.
     pub instance_id: RendererId,
 }
 
@@ -258,15 +261,16 @@ pub struct Image {
     /// Id of a component.
     pub id: Option<ComponentId>,
 
-    /// Id of an image. It identifies an image registered using a [`register image`](../routes.md#register-image) request.
+    /// Id of an image. It identifies an image registered using the
+    /// `POST /api/image/{image_id}/register` request.
     pub image_id: RendererId,
 
-    /// Width of the image in pixels.
-    /// If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.
+    /// Width of the image in pixels. If `height` is not explicitly provided, the image will
+    /// automatically adjust its height to maintain its original aspect ratio relative to the width.
     pub width: Option<f32>,
 
-    /// Height of the image in pixels.
-    /// If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.
+    /// Height of the image in pixels. If `width` is not explicitly provided, the image will
+    /// automatically adjust its width to maintain its original aspect ratio relative to the height.
     pub height: Option<f32>,
 }
 
@@ -280,19 +284,19 @@ pub struct Shader {
     #[schema(no_recursion)]
     pub children: Option<Vec<Component>>,
 
-    /// Id of a shader. It identifies a shader registered using a [`register shader`](../routes.md#register-shader) request.
+    /// Id of a shader. It identifies a shader registered using the
+    /// `POST /api/shader/{shader_id}/register` request.
     pub shader_id: RendererId,
     /// Object that will be serialized into a `struct` and passed inside the shader as:
     ///
     /// ```wgsl
     /// @group(1) @binding(0) var<uniform>
     /// ```
-    /// :::note
-    ///   This object's structure must match the structure defined in a shader source code.
-    ///   Currently, we do not handle memory layout automatically. To achieve the correct memory
-    ///   alignment, you might need to pad your data with additional fields. See
-    ///   [WGSL documentation](https://www.w3.org/TR/WGSL/#alignment-and-size) for more details.
-    /// :::
+    ///
+    /// Note: this object's structure must match the structure defined in a shader source code.
+    /// Currently, we do not handle memory layout automatically. To achieve the correct memory
+    /// alignment, you might need to pad your data with additional fields. See
+    /// https://www.w3.org/TR/WGSL/#alignment-and-size for more details.
     pub shader_param: Option<ShaderParam>,
     /// Resolution of a texture where shader will be executed.
     pub resolution: Resolution,
@@ -339,31 +343,40 @@ pub struct Text {
     /// will be sized based on the defined text but limited to `max_height` value.
     /// It's an error to provide `height` if `width` is not defined.
     pub height: Option<f32>,
-    /// (**default=`7682`**) Maximal `width`. Limits the width of the texture that the text will be rendered on.
-    /// Value is ignored if `width` is defined.
+    /// Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is
+    /// ignored if `width` is defined.
+    ///
+    /// Defaults to `7682`.
     pub max_width: Option<f32>,
-    /// (**default=`4320`**) Maximal `height`. Limits the height of the texture that the text will be rendered on.
-    /// Value is ignored if height is defined.
+    /// Maximal `height`. Limits the height of the texture that the text will be rendered on. Value
+    /// is ignored if height is defined.
+    ///
+    /// Defaults to `4320`.
     pub max_height: Option<f32>,
 
     /// Font size in pixels.
     pub font_size: f32,
     /// Distance between lines in pixels. Defaults to the value of the `font_size` property.
     pub line_height: Option<f32>,
-    /// (**default=`"#FFFFFFFF"`**) Font color in `#RRGGBBAA` format.
+    /// Font color in `#RRGGBBAA` format. Defaults to `"#FFFFFFFF"`.
     pub color: Option<RGBAColor>,
-    /// (**default=`"#00000000"`**) Background color in `#RRGGBBAA` format.
+    /// Background color in `#RRGGBBAA` format. Defaults to `"#00000000"`.
     pub background_color: Option<RGBAColor>,
-    /// (**default=`"Verdana"`**) Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value)
-    /// for a specific font. "generic-family" values like e.g. "sans-serif" will not work.
+    /// Font family. Provide family-name (see
+    /// https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific
+    /// font. "generic-family" values like e.g. "sans-serif" will not work.
+    ///
+    /// Defaults to `"Verdana"`.
     pub font_family: Option<Arc<str>>,
-    /// (**default=`"normal"`**) Font style. The selected font needs to support the specified style.
+    /// Font style. The selected font needs to support the specified style. Defaults to `"normal"`.
     pub style: Option<TextStyle>,
-    /// (**default=`"left"`**) Text align.
+    /// Text align. Defaults to `"left"`.
     pub align: Option<HorizontalAlign>,
-    /// (**default=`"none"`**) Text wrapping options.
+    /// Text wrapping options. Defaults to `"none"`.
     pub wrap: Option<TextWrapMode>,
-    /// (**default=`"normal"`**) Font weight. The selected font needs to support the specified weight.
+    /// Font weight. The selected font needs to support the specified weight.
+    ///
+    /// Defaults to `"normal"`.
     pub weight: Option<TextWeight>,
 }
 
@@ -386,7 +399,8 @@ pub enum TextWrapMode {
     Word,
 }
 
-/// Font weight, based on the [OpenType specification](https://learn.microsoft.com/en-gb/typography/opentype/spec/os2#usweightclass).
+/// Font weight, based on the OpenType specification
+/// (https://learn.microsoft.com/en-gb/typography/opentype/spec/os2#usweightclass).
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TextWeight {
@@ -440,17 +454,17 @@ pub struct Tiles {
     /// - If the parent component is not a layout, then this field is required.
     pub height: Option<f32>,
 
-    /// (**default=`"#00000000"`**) Background color in a `"#RRGGBBAA"` format.
+    /// Background color in a `"#RRGGBBAA"` format. Defaults to `"#00000000"`.
     pub background_color: Option<RGBAColor>,
-    /// (**default=`"16:9"`**) Aspect ratio of a tile in `"W:H"` format, where W and H are integers.
+    /// Aspect ratio of a tile in `"W:H"` format, where W and H are integers. Defaults to `"16:9"`.
     pub tile_aspect_ratio: Option<AspectRatio>,
-    /// (**default=`0`**) Margin of each tile in pixels.
+    /// Margin of each tile in pixels. Defaults to `0`.
     pub margin: Option<f32>,
-    /// (**default=`0`**) Padding on each tile in pixels.
+    /// Padding on each tile in pixels. Defaults to `0`.
     pub padding: Option<f32>,
-    /// (**default=`"center"`**) Horizontal alignment of tiles.
+    /// Horizontal alignment of tiles. Defaults to `"center"`.
     pub horizontal_align: Option<HorizontalAlign>,
-    /// (**default=`"center"`**) Vertical alignment of tiles.
+    /// Vertical alignment of tiles. Defaults to `"center"`.
     pub vertical_align: Option<VerticalAlign>,
 
     /// Defines how this component will behave during a scene update. This will only have an

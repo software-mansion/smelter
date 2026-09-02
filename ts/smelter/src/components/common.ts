@@ -6,12 +6,14 @@ export interface Transition {
    */
   durationMs: number;
   /**
-   * (**default=`"linear"`**) Easing function to be used for the transition.
+   * Easing function to be used for the transition. Defaults to `"linear"`.
    */
   easingFunction?: EasingFunction | null;
   /**
-   * (**default=`false`**) On scene update, if there is already a transition in progress,
-   * it will be interrupted and the new transition will start from the current state.
+   * On scene update, if there is already a transition in progress, it will be interrupted and the
+   * new transition will start from the current state.
+   *
+   * Defaults to `false`.
    */
   shouldInterrupt?: boolean;
 }

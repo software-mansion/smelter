@@ -107,7 +107,8 @@ impl TryFrom<InputRtpAudioOptions> for core::RtpAudioOptions {
     }
 }
 
-/// [RFC 3640, section 4.1. MIME Type Registration (`config` subsection)](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1)
+/// RFC 3640, section 4.1. MIME Type Registration (`config` subsection):
+/// https://datatracker.ietf.org/doc/html/rfc3640#section-4.1
 fn parse_hexadecimal_octet_string(s: &str) -> Result<Bytes, TypeError> {
     const NOT_ALL_HEX: &str = "Not all of the provided string are hex digits.";
     if !s.chars().all(|c| char::is_ascii_hexdigit(&c)) {

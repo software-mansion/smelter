@@ -4,7 +4,8 @@ import { createSmelterComponent, sceneComponentIntoApi } from '../component.js';
 
 export type WebViewProps = ComponentBaseProps & {
   /**
-   * Id of a web renderer instance. It identifies an instance registered using `Smelter.registerWebRenderer`.
+   * Id of a web renderer instance. It identifies an instance registered using
+   * `Smelter.registerWebRenderer`.
    *
    * You can only refer to specific instances in one Component at a time.
    */

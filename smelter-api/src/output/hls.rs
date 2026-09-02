@@ -12,15 +12,16 @@ pub struct HlsOutput {
     /// Path to output HLS playlist.
     #[schema(value_type = str)]
     pub path: Arc<Path>,
-    /// Number of segments kept in the playlist. When the limit is reached the oldest segment is removed.
-    /// If not specified, no segments will removed.
+    /// Number of segments kept in the playlist. When the limit is reached the oldest segment is
+    /// removed. If not specified, no segments will removed.
     pub max_playlist_size: Option<usize>,
     /// Video track configuration.
     pub video: Option<OutputHlsVideoOptions>,
     /// Audio track configuration.
     pub audio: Option<OutputHlsAudioOptions>,
-    /// Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
-    /// Note: keys here may override defaults, including `hls_list_size` derived from `max_playlist_size`.
+    /// Raw FFmpeg muxer options. See https://ffmpeg.org/ffmpeg-formats.html for more.
+    /// Note: keys here may override defaults, including `hls_list_size` derived from
+    /// `max_playlist_size`.
     pub ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     /// Time in milliseconds when this output should start producing data. Value `0` represents
     /// time of the start request. Output is always created when this request is handled (e.g.
@@ -33,11 +34,13 @@ pub struct HlsOutput {
 pub struct OutputHlsVideoOptions {
     /// Output resolution in pixels.
     pub resolution: Resolution,
-    /// Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+    /// Condition for termination of the output stream based on the input streams states. If output
+    /// includes both audio and video streams, then EOS needs to be sent for every type.
     pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.
     pub encoder: HlsVideoEncoderOptions,
-    /// Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+    /// Root of a component tree/scene that should be rendered for the output. Use the
+    /// `POST /api/output/{output_id}/update` request to update this value after registration.
     pub initial: VideoScene,
 }
 
@@ -46,28 +49,31 @@ pub struct OutputHlsVideoOptions {
 pub enum HlsVideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
-        /// (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        /// Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+        ///
+        /// Defaults to `"fast"`.
         preset: Option<H264EncoderPreset>,
 
         /// Encoding bitrate. Default value depends on chosen encoder.
         bitrate: Option<VideoEncoderBitrate>,
 
-        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        /// Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
         keyframe_interval_ms: Option<f64>,
 
-        /// (**default=`"yuv420p"`**) Encoder pixel format
+        /// Encoder pixel format. Defaults to `"yuv420p"`.
         pixel_format: Option<PixelFormat>,
 
-        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        /// Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "vulkan_h264")]
     VulkanH264 {
-        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
-        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and
+        /// framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max
+        /// bitrate is 6250 kbit/s.
         bitrate: Option<VideoEncoderBitrate>,
 
-        /// (**default=`5000`**) Interval between keyframes, in milliseconds.
+        /// Interval between keyframes, in milliseconds. Defaults to `5000`.
         keyframe_interval_ms: Option<f64>,
     },
 }
@@ -75,7 +81,7 @@ pub enum HlsVideoEncoderOptions {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputHlsAudioOptions {
-    /// (**default="sum_clip"**) Specifies how audio should be mixed.
+    /// Specifies how audio should be mixed. Defaults to `"sum_clip"`.
     pub mixing_strategy: Option<AudioMixingStrategy>,
     /// Condition for termination of output stream based on the input streams states.
     pub send_eos_when: Option<OutputEndCondition>,
@@ -91,7 +97,7 @@ pub struct OutputHlsAudioOptions {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum HlsAudioEncoderOptions {
     Aac {
-        /// (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+        /// Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000]. Defaults to `44100`.
         sample_rate: Option<u32>,
     },
 }

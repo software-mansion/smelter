@@ -13,10 +13,11 @@ export type ShaderProps = ComponentBaseProps & {
    * ```wgsl
    * @group(1) @binding(0) var<uniform>
    * ```
-   * :::note
-   * This object's structure must match the structure defined in a shader source code. Currently, we do not handle memory layout automatically.
-   * To achieve the correct memory alignment, you might need to pad your data with additional fields. See [WGSL documentation](https://www.w3.org/TR/WGSL/#alignment-and-size) for more details.
-   * :::
+   *
+   * Note: this object's structure must match the structure defined in a shader source code.
+   * Currently, we do not handle memory layout automatically. To achieve the correct memory
+   * alignment, you might need to pad your data with additional fields. See
+   * https://www.w3.org/TR/WGSL/#alignment-and-size for more details.
    */
   shaderParam?: ShaderParam;
   /**

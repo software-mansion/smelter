@@ -15,13 +15,17 @@ export type TextStyleProps = {
    */
   height?: number;
   /**
-   * (**default=`7682`**) Maximal `width`. Limits the width of the texture that the text will be rendered on.
-   * Value is ignored if `width` is defined.
+   * Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is
+   * ignored if `width` is defined.
+   *
+   * Defaults to `7682`.
    */
   maxWidth?: number;
   /**
-   * (**default=`4320`**) Maximal `height`. Limits the height of the texture that the text will be rendered on.
-   * Value is ignored if height is defined.
+   * Maximal `height`. Limits the height of the texture that the text will be rendered on. Value is
+   * ignored if height is defined.
+   *
+   * Defaults to `4320`.
    */
   maxHeight?: number;
   /**
@@ -33,32 +37,35 @@ export type TextStyleProps = {
    */
   lineHeight?: number;
   /**
-   * (**default=`"#FFFFFFFF"`**) Font color in `RGB` or `RGBA` format.
+   * Font color in `RGB` or `RGBA` format. Defaults to `"#FFFFFFFF"`.
    */
   color?: string;
   /**
-   * (**default=`"#00000000"`**) Background color in `RGB` or `RGBA` format.
+   * Background color in `RGB` or `RGBA` format. Defaults to `"#00000000"`.
    */
   backgroundColor?: string;
   /**
-   * (**default=`"Verdana"`**) Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value)
-   * for a specific font. "generic-family" values like e.g. "sans-serif" will not work.
+   * Font family. Provide family-name (see
+   * https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific
+   * font. "generic-family" values like e.g. "sans-serif" will not work.
+   *
+   * Defaults to `"Verdana"`.
    */
   fontFamily?: string;
   /**
-   * (**default=`"normal"`**) Font style. The selected font needs to support the specified style.
+   * Font style. The selected font needs to support the specified style. Defaults to `"normal"`.
    */
   fontStyle?: Api.TextStyle;
   /**
-   * (**default=`"left"`**) Text align.
+   * Text align. Defaults to `"left"`.
    */
   align?: Api.HorizontalAlign;
   /**
-   * (**default=`"none"`**) Text wrapping options.
+   * Text wrapping options. Defaults to `"none"`.
    */
   wrap?: Api.TextWrapMode;
   /**
-   * (**default=`"normal"`**) Font weight. The selected font needs to support the specified weight.
+   * Font weight. The selected font needs to support the specified weight. Defaults to `"normal"`.
    */
   fontWeight?: Api.TextWeight;
 };

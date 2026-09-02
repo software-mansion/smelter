@@ -8,7 +8,7 @@ use crate::*;
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ShaderSpec {
-    /// Shader source code. [Learn more.](../../concept/shaders)
+    /// Shader source code.
     pub source: String,
 }
 

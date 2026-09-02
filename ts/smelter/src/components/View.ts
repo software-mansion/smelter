@@ -54,23 +54,23 @@ export type ViewStyleProps = {
    */
   rotation?: number;
   /**
-   * (**default=`"hidden"`**) Controls what happens to content that is too big to fit into an area.
+   * Controls what happens to content that is too big to fit into an area. Defaults to `"hidden"`.
    */
   overflow?: Api.Overflow;
   /**
-   * (**default=`"#00000000"`**) Background color in `RGB` or `RGBA` format.
+   * Background color in `RGB` or `RGBA` format. Defaults to `"#00000000"`.
    */
   backgroundColor?: string;
   /**
-   * (**default=`0.0`**) Radius of a rounded corner.
+   * Radius of a rounded corner. Defaults to `0.0`.
    */
   borderRadius?: number;
   /**
-   * (**default=`0.0`**) Border width.
+   * Border width. Defaults to `0.0`.
    */
   borderWidth?: number;
   /**
-   * (**default=`"#00000000"`**) Border color in `RGB` or `RGBA` format.
+   * Border color in `RGB` or `RGBA` format. Defaults to `"#00000000"`.
    */
   borderColor?: string;
   /**
@@ -78,31 +78,31 @@ export type ViewStyleProps = {
    */
   boxShadow?: BoxShadow[];
   /**
-   * (**default=`0.0`**) Sets padding for all sides of the component.
+   * Sets padding for all sides of the component. Defaults to `0.0`.
    */
   padding?: number;
   /**
-   * (**default=`0.0`**) Sets padding for the top and bottom of the component.
+   * Sets padding for the top and bottom of the component. Defaults to `0.0`.
    */
   paddingVertical?: number;
   /**
-   * (**default=`0.0`**) Sets padding for the left and right of the component.
+   * Sets padding for the left and right of the component. Defaults to `0.0`.
    */
   paddingHorizontal?: number;
   /**
-   * (**default=`0.0`**) Sets padding for the top of the component.
+   * Sets padding for the top of the component. Defaults to `0.0`.
    */
   paddingTop?: number;
   /**
-   * (**default=`0.0`**) Sets padding for the right of the component.
+   * Sets padding for the right of the component. Defaults to `0.0`.
    */
   paddingRight?: number;
   /**
-   * (**default=`0.0`**) Sets padding for the bottom of the component.
+   * Sets padding for the bottom of the component. Defaults to `0.0`.
    */
   paddingBottom?: number;
   /**
-   * (**default=`0.0`**) Sets padding for the left of the component.
+   * Sets padding for the left of the component. Defaults to `0.0`.
    */
   paddingLeft?: number;
 };

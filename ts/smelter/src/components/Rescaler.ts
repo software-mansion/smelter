@@ -7,15 +7,15 @@ import { createSmelterComponent, sceneComponentIntoApi } from '../component.js';
 
 export type RescalerStyleProps = {
   /**
-   * (**default=`"fit"`**) Rescale mode:
+   * Rescale mode. Defaults to `"fit"`.
    */
   rescaleMode?: Api.RescaleMode;
   /**
-   * (**default=`"center"`**) Horizontal alignment.
+   * Horizontal alignment. Defaults to `"center"`.
    */
   horizontalAlign?: Api.HorizontalAlign;
   /**
-   * (**default=`"center"`**) Vertical alignment.
+   * Vertical alignment. Defaults to `"center"`.
    */
   verticalAlign?: Api.VerticalAlign;
   /**
@@ -63,15 +63,15 @@ export type RescalerStyleProps = {
    */
   rotation?: number;
   /**
-   * (**default=`0.0`**) Radius of a rounded corner.
+   * Radius of a rounded corner. Defaults to `0.0`.
    */
   borderRadius?: number;
   /**
-   * (**default=`0.0`**) Border width.
+   * Border width. Defaults to `0.0`.
    */
   borderWidth?: number;
   /**
-   * (**default=`"#00000000"`**) Border color in `RGB` or `RGBA` format.
+   * Border color in `RGB` or `RGBA` format. Defaults to `"#00000000"`.
    */
   borderColor?: string;
   /**

@@ -22,27 +22,27 @@ export type TilesStyleProps = {
    */
   height?: number;
   /**
-   * (**default=`"#00000000"`**) Background color in `RGB` or `RGBA` format.
+   * Background color in `RGB` or `RGBA` format. Defaults to `"#00000000"`.
    */
   backgroundColor?: string;
   /**
-   * (**default=`"16:9"`**) Aspect ratio of a tile in `"W:H"` format, where W and H are integers.
+   * Aspect ratio of a tile in `"W:H"` format, where W and H are integers. Defaults to `"16:9"`.
    */
   tileAspectRatio?: Api.AspectRatio | null;
   /**
-   * (**default=`0`**) Margin of each tile in pixels.
+   * Margin of each tile in pixels. Defaults to `0`.
    */
   margin?: number;
   /**
-   * (**default=`0`**) Padding on each tile in pixels.
+   * Padding on each tile in pixels. Defaults to `0`.
    */
   padding?: number;
   /**
-   * (**default=`"center"`**) Horizontal alignment of tiles.
+   * Horizontal alignment of tiles. Defaults to `"center"`.
    */
   horizontalAlign?: Api.HorizontalAlign;
   /**
-   * (**default=`"center"`**) Vertical alignment of tiles.
+   * Vertical alignment of tiles. Defaults to `"center"`.
    */
   verticalAlign?: Api.VerticalAlign;
 };

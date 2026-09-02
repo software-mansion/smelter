@@ -24,7 +24,8 @@ export type RegisterRtpOutput = {
   /**
    * Depends on the value of the `transport_protocol` field:
    * - `udp` - An UDP port number that RTP packets will be sent to.
-   * - `tcp_server` - A local TCP port number or a port range that Smelter will listen for incoming connections.
+   * - `tcp_server` - A local TCP port number or a port range that Smelter will listen for incoming
+   *   connections.
    */
   port: Api.PortOrPortRange;
   /**
@@ -32,7 +33,7 @@ export type RegisterRtpOutput = {
    */
   ip?: string | null;
   /**
-   * (**default=`"udp"`**) Transport layer protocol that will be used to send RTP packets.
+   * Transport layer protocol that will be used to send RTP packets. Defaults to `"udp"`.
    */
   transportProtocol?: Api.TransportProtocol;
   video?: RtpVideoOptions;
@@ -53,13 +54,13 @@ export type RegisterMp4Output = {
    */
   audio?: Mp4AudioOptions;
   /**
-   * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+   * Raw FFmpeg muxer options. See https://ffmpeg.org/ffmpeg-formats.html for more.
    */
   ffmpegOptions?: Record<string, string>;
   /**
-   * Time in milliseconds when this output should start producing data. Value `0` represents
-   * time of the start request. Output is always created when this request is handled
-   * (e.g. file is created), only the moment it starts receiving frames/samples is delayed.
+   * Time in milliseconds when this output should start producing data. Value `0` represents the
+   * time of the `Smelter.start()` call. Output is always created when it is registered (e.g. file
+   * is created), only the moment it starts receiving frames/samples is delayed.
    */
   startAtMs?: number | null;
 };
@@ -70,8 +71,8 @@ export type RegisterHlsOutput = {
    */
   serverPath: string;
   /**
-   * Number of segments kept in the playlist. When the limit is reached the oldest segment is removed.
-   * If not specified, no segments will removed.
+   * Number of segments kept in the playlist. When the limit is reached the oldest segment is
+   * removed. If not specified, no segments will removed.
    */
   maxPlaylistSize?: number | null;
   /**
@@ -83,14 +84,15 @@ export type RegisterHlsOutput = {
    */
   audio?: HlsAudioOptions;
   /**
-   * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
-   * Note: keys here may override defaults, including `hls_list_size` derived from `maxPlaylistSize`.
+   * Raw FFmpeg muxer options. See https://ffmpeg.org/ffmpeg-formats.html for more.
+   * Note: keys here may override defaults, including `hls_list_size` derived from
+   * `maxPlaylistSize`.
    */
   ffmpegOptions?: Record<string, string>;
   /**
-   * Time in milliseconds when this output should start producing data. Value `0` represents
-   * time of the start request. Output is always created when this request is handled
-   * (e.g. playlist is created), only the moment it starts receiving frames/samples is delayed.
+   * Time in milliseconds when this output should start producing data. Value `0` represents the
+   * time of the `Smelter.start()` call. Output is always created when it is registered (e.g.
+   * playlist is created), only the moment it starts receiving frames/samples is delayed.
    */
   startAtMs?: number | null;
 };
@@ -154,7 +156,7 @@ export type RegisterMoqClientOutput = {
    */
   broadcastPath: string;
   /**
-   * (**default=`"cmaf"`**) Container used to frame encoded media.
+   * Container used to frame encoded media. Defaults to `"cmaf"`.
    */
   container?: MoqOutputContainer | null;
   /**

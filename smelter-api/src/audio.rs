@@ -15,17 +15,18 @@ pub struct AudioScene {
 #[serde(deny_unknown_fields)]
 pub struct AudioSceneInput {
     pub input_id: InputId,
-    /// (**default=`1.0`**) float in `[0, 2]` range representing input volume
+    /// float in `[0, 2]` range representing input volume. Defaults to `1.0`.
     pub volume: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AudioMixingStrategy {
-    /// Firstly, input samples are summed. If the result is outside the i16 PCM range, it gets clipped.
+    /// Firstly, input samples are summed. If the result is outside the i16 PCM range, it gets
+    /// clipped.
     SumClip,
-    /// Firstly, input samples are summed. If the result is outside the i16 PCM range,
-    /// nearby summed samples are scaled down by factor, such that the summed wave is in the i16 PCM range.
+    /// Firstly, input samples are summed. If the result is outside the i16 PCM range, nearby summed
+    /// samples are scaled down by factor, such that the summed wave is in the i16 PCM range.
     SumScale,
 }
 
