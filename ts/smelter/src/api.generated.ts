@@ -613,7 +613,7 @@ export type Component =
        */
       id?: ComponentId | null;
       /**
-       * Id of an input. It identifies a stream registered using a [`RegisterInputStream`](../routes.md#register-input) request.
+       * Id of an input. It identifies a stream registered using the `POST /api/input/{input_id}/register` request.
        */
       input_id: InputId;
     }
@@ -729,7 +729,7 @@ export type Component =
        */
       children?: Component[] | null;
       /**
-       * Id of a web renderer instance. It identifies an instance registered using a [`register web renderer`](../routes.md#register-web-renderer-instance) request.
+       * Id of a web renderer instance. It identifies an instance registered using the `POST /api/web-renderer/{instance_id}/register` request.
        *
        * :::warning You can only refer to specific instances in one Component at a time. :::
        */
@@ -746,7 +746,7 @@ export type Component =
        */
       children?: Component[] | null;
       /**
-       * Id of a shader. It identifies a shader registered using a [`register shader`](../routes.md#register-shader) request.
+       * Id of a shader. It identifies a shader registered using the `POST /api/shader/{shader_id}/register` request.
        */
       shader_id: RendererId;
       /**
@@ -767,7 +767,7 @@ export type Component =
        */
       id?: ComponentId | null;
       /**
-       * Id of an image. It identifies an image registered using a [`register image`](../routes.md#register-image) request.
+       * Id of an image. It identifies an image registered using the `POST /api/image/{image_id}/register` request.
        */
       image_id: RendererId;
       /**
@@ -1838,7 +1838,7 @@ export interface OutputRtpVideoOptions {
    */
   encoder: RtpVideoEncoderOptions;
   /**
-   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   * Root of a component tree/scene that should be rendered for the output. Use the `POST /api/output/{output_id}/update` request to update this value after registration.
    */
   initial: VideoScene;
 }
@@ -1934,7 +1934,7 @@ export interface OutputRtmpClientVideoOptions {
    */
   encoder: RtmpClientVideoEncoderOptions;
   /**
-   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   * Root of a component tree/scene that should be rendered for the output. Use the `POST /api/output/{output_id}/update` request to update this value after registration.
    */
   initial: VideoScene;
 }
@@ -1974,7 +1974,7 @@ export interface OutputMoqClientVideoOptions {
    */
   encoder: MoqClientVideoEncoderOptions;
   /**
-   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   * Root of a component tree/scene that should be rendered for the output. Use the `POST /api/output/{output_id}/update` request to update this value after registration.
    */
   initial: VideoScene;
 }
@@ -2014,7 +2014,7 @@ export interface OutputMp4VideoOptions {
    */
   encoder: Mp4VideoEncoderOptions;
   /**
-   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   * Root of a component tree/scene that should be rendered for the output. Use the `POST /api/output/{output_id}/update` request to update this value after registration.
    */
   initial: VideoScene;
 }
@@ -2094,7 +2094,7 @@ export interface OutputWhepVideoOptions {
    */
   encoder: WhepVideoEncoderOptions;
   /**
-   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   * Root of a component tree/scene that should be rendered for the output. Use the `POST /api/output/{output_id}/update` request to update this value after registration.
    */
   initial: VideoScene;
 }
@@ -2134,7 +2134,7 @@ export interface OutputHlsVideoOptions {
    */
   encoder: HlsVideoEncoderOptions;
   /**
-   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   * Root of a component tree/scene that should be rendered for the output. Use the `POST /api/output/{output_id}/update` request to update this value after registration.
    */
   initial: VideoScene;
 }
@@ -2176,7 +2176,7 @@ export interface WebRendererSpec {
 }
 export interface ShaderSpec {
   /**
-   * Shader source code. [Learn more.](../../concept/shaders)
+   * Shader source code.
    */
   source: string;
 }

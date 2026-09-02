@@ -1924,7 +1924,7 @@
           },
           "image_id": {
             "$ref": "#/components/schemas/RendererId",
-            "description": "Id of an image. It identifies an image registered using a\n[`register image`](../routes.md#register-image) request."
+            "description": "Id of an image. It identifies an image registered using the\n`POST /api/image/{image_id}/register` request."
           },
           "width": {
             "type": [
@@ -2359,7 +2359,7 @@
           },
           "input_id": {
             "$ref": "#/components/schemas/InputId",
-            "description": "Id of an input. It identifies a stream registered using a\n[`RegisterInputStream`](../routes.md#register-input) request."
+            "description": "Id of an input. It identifies a stream registered using the\n`POST /api/input/{input_id}/register` request."
           }
         },
         "additionalProperties": false
@@ -3551,7 +3551,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use the\n`POST /api/output/{output_id}/update` request to update this value after registration."
           }
         },
         "additionalProperties": false
@@ -3651,7 +3651,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use the\n`POST /api/output/{output_id}/update` request to update this value after registration."
           }
         },
         "additionalProperties": false
@@ -3736,7 +3736,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use the\n`POST /api/output/{output_id}/update` request to update this value after registration."
           }
         },
         "additionalProperties": false
@@ -3821,7 +3821,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use the\n`POST /api/output/{output_id}/update` request to update this value after registration."
           }
         },
         "additionalProperties": false
@@ -3906,7 +3906,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use the\n`POST /api/output/{output_id}/update` request to update this value after registration."
           }
         },
         "additionalProperties": false
@@ -4143,7 +4143,7 @@
           },
           "initial": {
             "$ref": "#/components/schemas/VideoScene",
-            "description": "Root of a component tree/scene that should be rendered for the output. Use\n[`update_output` request](../routes.md#update-output) to update this value after\nregistration. [Learn more](../../concept/component.md)."
+            "description": "Root of a component tree/scene that should be rendered for the output. Use the\n`POST /api/output/{output_id}/update` request to update this value after registration."
           }
         },
         "additionalProperties": false
@@ -5949,7 +5949,7 @@
           },
           "shader_id": {
             "$ref": "#/components/schemas/RendererId",
-            "description": "Id of a shader. It identifies a shader registered using a\n[`register shader`](../routes.md#register-shader) request."
+            "description": "Id of a shader. It identifies a shader registered using the\n`POST /api/shader/{shader_id}/register` request."
           },
           "shader_param": {
             "oneOf": [
@@ -6099,7 +6099,7 @@
         "properties": {
           "source": {
             "type": "string",
-            "description": "Shader source code. [Learn more.](../../concept/shaders)"
+            "description": "Shader source code."
           }
         },
         "additionalProperties": false
@@ -6990,7 +6990,7 @@
           },
           "instance_id": {
             "$ref": "#/components/schemas/RendererId",
-            "description": "Id of a web renderer instance. It identifies an instance registered using a\n[`register web renderer`](../routes.md#register-web-renderer-instance) request.\n\n:::warning\nYou can only refer to specific instances in one Component at a time.\n:::"
+            "description": "Id of a web renderer instance. It identifies an instance registered using the\n`POST /api/web-renderer/{instance_id}/register` request.\n\n:::warning\nYou can only refer to specific instances in one Component at a time.\n:::"
           }
         },
         "additionalProperties": false

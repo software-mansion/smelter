@@ -24,8 +24,8 @@ pub enum Component {
 pub struct InputStream {
     /// Id of a component.
     pub id: Option<ComponentId>,
-    /// Id of an input. It identifies a stream registered using a
-    /// [`RegisterInputStream`](../routes.md#register-input) request.
+    /// Id of an input. It identifies a stream registered using the
+    /// `POST /api/input/{input_id}/register` request.
     pub input_id: InputId,
 }
 
@@ -250,8 +250,8 @@ pub struct WebView {
     #[schema(no_recursion)]
     pub children: Option<Vec<Component>>,
 
-    /// Id of a web renderer instance. It identifies an instance registered using a
-    /// [`register web renderer`](../routes.md#register-web-renderer-instance) request.
+    /// Id of a web renderer instance. It identifies an instance registered using the
+    /// `POST /api/web-renderer/{instance_id}/register` request.
     ///
     /// :::warning
     /// You can only refer to specific instances in one Component at a time.
@@ -265,8 +265,8 @@ pub struct Image {
     /// Id of a component.
     pub id: Option<ComponentId>,
 
-    /// Id of an image. It identifies an image registered using a
-    /// [`register image`](../routes.md#register-image) request.
+    /// Id of an image. It identifies an image registered using the
+    /// `POST /api/image/{image_id}/register` request.
     pub image_id: RendererId,
 
     /// Width of the image in pixels. If `height` is not explicitly provided, the image will
@@ -288,8 +288,8 @@ pub struct Shader {
     #[schema(no_recursion)]
     pub children: Option<Vec<Component>>,
 
-    /// Id of a shader. It identifies a shader registered using a
-    /// [`register shader`](../routes.md#register-shader) request.
+    /// Id of a shader. It identifies a shader registered using the
+    /// `POST /api/shader/{shader_id}/register` request.
     pub shader_id: RendererId,
     /// Object that will be serialized into a `struct` and passed inside the shader as:
     ///

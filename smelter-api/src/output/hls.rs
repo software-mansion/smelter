@@ -38,9 +38,8 @@ pub struct OutputHlsVideoOptions {
     pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.
     pub encoder: HlsVideoEncoderOptions,
-    /// Root of a component tree/scene that should be rendered for the output. Use
-    /// [`update_output` request](../routes.md#update-output) to update this value after
-    /// registration. [Learn more](../../concept/component.md).
+    /// Root of a component tree/scene that should be rendered for the output. Use the
+    /// `POST /api/output/{output_id}/update` request to update this value after registration.
     pub initial: VideoScene,
 }
 
