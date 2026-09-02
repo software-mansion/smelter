@@ -84,8 +84,9 @@ export type RegisterHlsOutput = {
    */
   audio?: HlsAudioOptions;
   /**
-   * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more. Note:
-   * keys here may override defaults, including `hls_list_size` derived from `maxPlaylistSize`.
+   * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+   * Note: keys here may override defaults, including `hls_list_size` derived from
+   * `maxPlaylistSize`.
    */
   ffmpegOptions?: Record<string, string>;
   /**
