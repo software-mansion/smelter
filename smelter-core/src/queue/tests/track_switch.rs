@@ -28,7 +28,10 @@
 
 use std::{thread::sleep, time::Duration};
 
-use crate::queue::{QueueInputOptions, QueueTrackOffset, QueueTrackOptions};
+use crate::{
+    Timestamp,
+    queue::{QueueInputOptions, QueueTrackOffset, QueueTrackOptions},
+};
 
 use super::harness::{
     AudioBatch, BATCH_DURATION, INPUT_BATCH_DURATION, InputFrame, InputSamples, TestInput,
@@ -36,16 +39,16 @@ use super::harness::{
     assert_empty_video_batch, assert_video_batch_eq, frames, ms, samples,
 };
 
-fn frame(id: u32, pts: Duration) -> InputFrame {
+fn frame(id: u32, pts: Timestamp) -> InputFrame {
     InputFrame::frame(id, pts)
 }
 
-fn frame_eos(id: u32, pts: Duration) -> InputFrame {
+fn frame_eos(id: u32, pts: Timestamp) -> InputFrame {
     InputFrame::frame_eos(id, pts)
 }
 
 /// A batch with a single frame from the required "input_1".
-fn batch(pts: Duration, frame: InputFrame) -> VideoBatch {
+fn batch(pts: Timestamp, frame: InputFrame) -> VideoBatch {
     VideoBatch {
         pts,
         required: true,
@@ -54,7 +57,7 @@ fn batch(pts: Duration, frame: InputFrame) -> VideoBatch {
 }
 
 /// A chunk with sample batches from the required "input_1".
-fn chunk(start_pts: Duration, batches: Vec<(u32, Duration, Duration)>) -> AudioBatch {
+fn chunk(start_pts: Timestamp, batches: Vec<(u32, Timestamp, Timestamp)>) -> AudioBatch {
     AudioBatch {
         start_pts,
         end_pts: start_pts + BATCH_DURATION,
@@ -64,7 +67,7 @@ fn chunk(start_pts: Duration, batches: Vec<(u32, Duration, Duration)>) -> AudioB
 }
 
 /// Like [`chunk`], but the track ended and EOS is delivered with these batches.
-fn chunk_eos(start_pts: Duration, batches: Vec<(u32, Duration, Duration)>) -> AudioBatch {
+fn chunk_eos(start_pts: Timestamp, batches: Vec<(u32, Timestamp, Timestamp)>) -> AudioBatch {
     AudioBatch {
         start_pts,
         end_pts: start_pts + BATCH_DURATION,
@@ -103,7 +106,7 @@ fn next_track_equal_fps_keeps_first_frame() {
     queue.start();
 
     // nothing until 50ms, so track 1's `None` offset resolves to the 60ms slot
-    sleep(ms(50));
+    sleep(Duration::from_millis(50));
     input.send_samples(ms(0), INPUT_BATCH_DURATION);
     input.send_samples(ms(15), INPUT_BATCH_DURATION);
     input.send_samples(ms(30), INPUT_BATCH_DURATION);
@@ -120,13 +123,16 @@ fn next_track_equal_fps_keeps_first_frame() {
         offset: QueueTrackOffset::None,
     });
     for index in 0..10 {
-        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+        input.send_samples(
+            Timestamp::ZERO + INPUT_BATCH_DURATION * index,
+            INPUT_BATCH_DURATION,
+        );
     }
     for index in 0..12 {
         input.send_frame(ms(20) * index);
     }
 
-    sleep(ms(120));
+    sleep(Duration::from_millis(120));
 
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
@@ -196,7 +202,7 @@ fn next_track_lower_fps_keeps_first_frame() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
-    sleep(ms(50));
+    sleep(Duration::from_millis(50));
     input.send_samples(ms(0), INPUT_BATCH_DURATION);
     input.send_samples(ms(15), INPUT_BATCH_DURATION);
     input.send_samples(ms(30), INPUT_BATCH_DURATION);
@@ -211,13 +217,16 @@ fn next_track_lower_fps_keeps_first_frame() {
         offset: QueueTrackOffset::None,
     });
     for index in 0..10 {
-        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+        input.send_samples(
+            Timestamp::ZERO + INPUT_BATCH_DURATION * index,
+            INPUT_BATCH_DURATION,
+        );
     }
     for index in 0..12 {
         input.send_frame(ms(25) * index);
     }
 
-    sleep(ms(120));
+    sleep(Duration::from_millis(120));
 
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
@@ -287,7 +296,7 @@ fn next_track_higher_fps_keeps_first_frame() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
-    sleep(ms(50));
+    sleep(Duration::from_millis(50));
     input.send_samples(ms(0), INPUT_BATCH_DURATION);
     input.send_samples(ms(15), INPUT_BATCH_DURATION);
     input.send_samples(ms(30), INPUT_BATCH_DURATION);
@@ -302,13 +311,16 @@ fn next_track_higher_fps_keeps_first_frame() {
         offset: QueueTrackOffset::None,
     });
     for index in 0..10 {
-        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+        input.send_samples(
+            Timestamp::ZERO + INPUT_BATCH_DURATION * index,
+            INPUT_BATCH_DURATION,
+        );
     }
     for index in 0..24 {
         input.send_frame(ms(10) * index);
     }
 
-    sleep(ms(120));
+    sleep(Duration::from_millis(120));
 
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
@@ -381,7 +393,7 @@ fn next_track_audio_starting_later_keeps_first_frame() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
-    sleep(ms(50));
+    sleep(Duration::from_millis(50));
     input.send_samples(ms(0), INPUT_BATCH_DURATION);
     input.send_samples(ms(15), INPUT_BATCH_DURATION);
     input.send_samples(ms(30), INPUT_BATCH_DURATION);
@@ -402,7 +414,7 @@ fn next_track_audio_starting_later_keeps_first_frame() {
         input.send_frame(ms(20) * index);
     }
 
-    sleep(ms(120));
+    sleep(Duration::from_millis(120));
 
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
@@ -474,7 +486,7 @@ fn next_track_video_starting_later_renders_empty_batch() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
-    sleep(ms(50));
+    sleep(Duration::from_millis(50));
     input.send_samples(ms(0), INPUT_BATCH_DURATION);
     input.send_samples(ms(15), INPUT_BATCH_DURATION);
     input.send_samples(ms(30), INPUT_BATCH_DURATION);
@@ -489,13 +501,16 @@ fn next_track_video_starting_later_renders_empty_batch() {
         offset: QueueTrackOffset::None,
     });
     for index in 0..10 {
-        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+        input.send_samples(
+            Timestamp::ZERO + INPUT_BATCH_DURATION * index,
+            INPUT_BATCH_DURATION,
+        );
     }
     for index in 0..12 {
         input.send_frame(ms(20) + ms(20) * index);
     }
 
-    sleep(ms(120));
+    sleep(Duration::from_millis(120));
 
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
@@ -562,7 +577,7 @@ fn next_track_video_starting_much_later_renders_empty_batches() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
-    sleep(ms(50));
+    sleep(Duration::from_millis(50));
     input.send_samples(ms(0), INPUT_BATCH_DURATION);
     input.send_samples(ms(15), INPUT_BATCH_DURATION);
     input.send_samples(ms(30), INPUT_BATCH_DURATION);
@@ -577,13 +592,16 @@ fn next_track_video_starting_much_later_renders_empty_batches() {
         offset: QueueTrackOffset::None,
     });
     for index in 0..10 {
-        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+        input.send_samples(
+            Timestamp::ZERO + INPUT_BATCH_DURATION * index,
+            INPUT_BATCH_DURATION,
+        );
     }
     for index in 0..12 {
         input.send_frame(ms(40) + ms(20) * index);
     }
 
-    sleep(ms(140));
+    sleep(Duration::from_millis(140));
 
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);
@@ -656,10 +674,13 @@ fn next_track_after_audio_ends_last_keeps_first_frame() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
-    sleep(ms(50));
+    sleep(Duration::from_millis(50));
     // 300ms of audio: the buffer only empties on the chunk at 260ms
     for index in 0..20 {
-        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+        input.send_samples(
+            Timestamp::ZERO + INPUT_BATCH_DURATION * index,
+            INPUT_BATCH_DURATION,
+        );
     }
     input.send_frame(ms(0));
     input.send_frame(ms(20));
@@ -672,13 +693,16 @@ fn next_track_after_audio_ends_last_keeps_first_frame() {
         offset: QueueTrackOffset::None,
     });
     for index in 0..10 {
-        input.send_samples(INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
+        input.send_samples(
+            Timestamp::ZERO + INPUT_BATCH_DURATION * index,
+            INPUT_BATCH_DURATION,
+        );
     }
     for index in 0..12 {
         input.send_frame(ms(20) * index);
     }
 
-    sleep(ms(290));
+    sleep(Duration::from_millis(290));
 
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), true);
     assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(20), true);

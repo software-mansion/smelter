@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use serde_json::json;
 use smelter_api::*;
+use smelter_core::Timestamp;
 
 type CoreOutput = smelter_core::RegisterOutputOptions;
 
@@ -1233,7 +1234,7 @@ fn mp4_start_at() {
                         },
                     )),
                     raw_options: vec![],
-                    start_at: Some(Duration::from_millis(2500)),
+                    start_at: Some(Timestamp::from_millis(2500)),
                 },
             ),
             video: None,
@@ -1958,7 +1959,7 @@ fn hls_start_at() {
                         },
                     )),
                     raw_options: vec![],
-                    start_at: Some(Duration::ZERO),
+                    start_at: Some(Timestamp::ZERO),
                 },
             ),
             video: None,

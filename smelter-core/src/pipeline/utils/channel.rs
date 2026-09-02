@@ -26,7 +26,7 @@ impl<T: TimedValue> Inner<T> {
         let first_ts = self.buffer.iter().find_map(|i| i.timestamp_range());
         let last_ts = self.buffer.iter().rev().find_map(|i| i.timestamp_range());
         match (first_ts, last_ts) {
-            (Some(first), Some(last)) => last.1.saturating_sub(first.0),
+            (Some(first), Some(last)) => (last.1 - first.0).abs_duration(),
             _ => Duration::ZERO,
         }
     }
@@ -264,24 +264,25 @@ pub enum TryRecvError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
 
     #[derive(Debug, PartialEq)]
     struct TestItem {
-        start: Duration,
-        end: Duration,
+        start: Timestamp,
+        end: Timestamp,
         value: u32,
     }
 
     impl TimedValue for TestItem {
-        fn timestamp_range(&self) -> Option<(Duration, Duration)> {
+        fn timestamp_range(&self) -> Option<(Timestamp, Timestamp)> {
             Some((self.start, self.end))
         }
     }
 
-    fn item(start_ms: u64, end_ms: u64, value: u32) -> TestItem {
+    fn item(start_ms: i64, end_ms: i64, value: u32) -> TestItem {
         TestItem {
-            start: Duration::from_millis(start_ms),
-            end: Duration::from_millis(end_ms),
+            start: Timestamp::from_millis(start_ms),
+            end: Timestamp::from_millis(end_ms),
             value,
         }
     }

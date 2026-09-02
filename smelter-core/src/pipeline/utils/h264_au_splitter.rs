@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use bytes::BytesMut;
 use gpu_video::parser::h264::{
     AccessUnit, H264Parser, ParsedNalu, nal_types::slice::DecRefPicMarking,
@@ -60,7 +58,7 @@ impl H264AuSplitter {
 
             chunks.push(EncodedInputChunk {
                 data: data.freeze(),
-                pts: Duration::from_micros(pts),
+                pts: Timestamp::from_micros(pts as i64),
                 dts: None,
                 kind: MediaKind::Video(VideoCodec::H264),
                 decode_only,

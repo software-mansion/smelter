@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 mod input;
 mod mix;
@@ -11,8 +11,8 @@ use crate::prelude::*;
 #[derive(Debug, Clone)]
 pub struct InputSamplesSet {
     pub samples: HashMap<InputId, Vec<InputAudioSamples>>,
-    pub start_pts: Duration,
-    pub end_pts: Duration,
+    pub start_pts: Timestamp,
+    pub end_pts: Timestamp,
 }
 
 #[derive(Debug)]

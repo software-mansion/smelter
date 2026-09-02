@@ -1,7 +1,7 @@
 use std::sync::OnceLock;
 
 use crossbeam_channel::{Sender, bounded};
-use smelter_render::{Frame, OutputFrameFormat, Resolution};
+use smelter_render::{OutputFrameFormat, Resolution};
 
 use crate::pipeline::output::{Output, OutputAudio, OutputVideo};
 

@@ -1,8 +1,10 @@
-use std::thread::sleep;
+use std::{thread::sleep, time::Duration};
 
 use crate::queue::{QueueInputOptions, QueueTrackOffset, QueueTrackOptions};
 
-use super::harness::{BATCH_DURATION, OFFSET, TestInput, TestQueue, TestQueueOptions, ms};
+use super::harness::{
+    BATCH_DURATION, OFFSET, OFFSET_PTS, TestInput, TestQueue, TestQueueOptions, ms,
+};
 
 // Event tests cover each offset configuration, asserting the
 // delivered/playing/eos lifecycle:
@@ -60,80 +62,85 @@ mod required_input {
 
     #[test]
     fn offset_from_start_event_delivered_early() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_delivered_on_time() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
-        sleep(ms(58)); // a bit less
+        sleep(Duration::from_millis(58)); // a bit less
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_delivered_late() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
-        sleep(ms(100));
+        sleep(Duration::from_millis(100));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_playing() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // batches before the 60ms offset don't include the input
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[]);
 
         // playing is emitted when the first frame reaches the output (60ms batch)
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
     #[test]
     fn offset_from_start_event_eos() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // frames play in the 60ms and 80ms batches; the 80ms batch drains the
         // stream, so EOS is emitted together with the last frame
-        sleep(ms(80));
+        sleep(Duration::from_millis(80));
         queue.expect_events(&[input.video_playing_event(), input.video_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
     #[test]
     fn offset_from_start_event_eos_without_frames() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+            create_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -141,13 +148,13 @@ mod required_input {
         // the track ends before the queue starts, without a single frame; the
         // pre-start cleanup tick observes the closed track
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // EOS is emitted with the first batch even though the offset never
         // resolved and no frame was ever delivered
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_eos_event()]);
     }
 
@@ -159,77 +166,77 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_event_delivered_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
-        sleep(ms(100));
+        sleep(Duration::from_millis(100));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_playing() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // empty batches before the 60ms offset don't include the input
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[]);
 
         // playing is emitted when the first frame reaches the output (60ms batch)
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_eos() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // frames play in the 60ms and 80ms batches; the 80ms batch drains the
         // stream, so EOS is emitted together with the last frame
-        sleep(ms(80));
+        sleep(Duration::from_millis(80));
         queue.expect_events(&[input.video_playing_event(), input.video_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -241,7 +248,8 @@ mod required_input {
 
     #[test]
     fn offset_pts_before_start_event_delivered() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -249,36 +257,38 @@ mod required_input {
         // single frame: delivered fires during pre-start cleanup, but the frame
         // never reaches output (needs a newer frame)
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         // no playing because we don't have second send_frame
         queue.expect_events(&[]);
     }
 
     #[test]
     fn offset_pts_before_start_event_playing() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // frames play aligned from the start (0ms batch)
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
     #[test]
     fn offset_pts_before_start_event_eos() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -286,16 +296,16 @@ mod required_input {
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // frames play in the 0ms and 20ms batches
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_playing_event()]);
 
         // EOS is emitted together with the last frame (20ms batch)
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[input.video_eos_event()]);
     }
 
@@ -308,12 +318,12 @@ mod required_input {
     fn offset_none_after_start_event_delivered() {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         // a required None input reports ready (empty batches), no events yet
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
@@ -321,17 +331,17 @@ mod required_input {
     fn offset_none_after_start_event_playing() {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         // offset locks to the batch that first observed a frame (60ms)
         queue.expect_events(&[input.video_delivered_event()]);
 
         // playing is emitted when the first frame reaches the output (60ms batch)
-        sleep(ms(4));
+        sleep(Duration::from_millis(4));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
@@ -339,25 +349,25 @@ mod required_input {
     fn offset_none_after_start_event_eos() {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // first frame plays in the 60ms batch
-        sleep(ms(4));
+        sleep(Duration::from_millis(4));
         queue.expect_events(&[input.video_playing_event()]);
 
         // the second frame plays in the 80ms batch, which drains the stream:
         // EOS is emitted together with the last frame
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[input.video_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -374,11 +384,11 @@ mod required_input {
         sleep(OFFSET);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         // no second send_frame so no playing event
         queue.expect_events(&[]);
     }
@@ -392,11 +402,11 @@ mod required_input {
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
@@ -410,15 +420,15 @@ mod required_input {
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_playing_event()]);
 
         // EOS is emitted together with the last frame (20ms batch)
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[input.video_eos_event()]);
     }
 }
@@ -468,71 +478,76 @@ mod optional_input {
 
     #[test]
     fn offset_from_start_event_delivered_early() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_delivered_on_time() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_delivered_late() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
-        sleep(ms(101));
+        sleep(Duration::from_millis(101));
         // +1ms to go out of sync with output frames, so playing event is not sent
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(2));
+        sleep(Duration::from_millis(2));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_playing() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
     #[test]
     fn offset_from_start_event_eos() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // the 80ms batch drains the stream: EOS together with the last frame
-        sleep(ms(80));
+        sleep(Duration::from_millis(80));
         queue.expect_events(&[input.video_playing_event(), input.video_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -543,75 +558,75 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_event_delivered_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
-        sleep(ms(101));
+        sleep(Duration::from_millis(101));
         // +1 to go out of sync with output batches, so playing even is not sent
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_playing() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_eos() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         // the 80ms batch drains the stream: EOS together with the last frame
-        sleep(ms(80));
+        sleep(Duration::from_millis(80));
         queue.expect_events(&[input.video_playing_event(), input.video_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -621,40 +636,43 @@ mod optional_input {
 
     #[test]
     fn offset_pts_before_start_event_delivered() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
 
         input.send_frame(ms(5)); // shift into the future to avoid playing event
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[]);
     }
 
     #[test]
     fn offset_pts_before_start_event_playing() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
     #[test]
     fn offset_pts_before_start_event_eos() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -662,15 +680,15 @@ mod optional_input {
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_playing_event()]);
 
         // EOS is emitted together with the last frame (20ms batch)
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[input.video_eos_event()]);
     }
 
@@ -682,11 +700,11 @@ mod optional_input {
     fn offset_none_after_start_event_delivered() {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
     }
 
@@ -694,15 +712,15 @@ mod optional_input {
     fn offset_none_after_start_event_playing() {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
-        sleep(ms(3));
+        sleep(Duration::from_millis(3));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
@@ -710,24 +728,24 @@ mod optional_input {
     fn offset_none_after_start_event_eos() {
         let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
-        sleep(ms(3));
+        sleep(Duration::from_millis(3));
         queue.expect_events(&[input.video_playing_event()]);
 
         // the second frame plays in the 80ms batch, which drains the stream:
         // EOS is emitted together with the last frame
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[input.video_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -743,11 +761,11 @@ mod optional_input {
         sleep(OFFSET);
 
         input.send_frame(ms(0));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         // input optional, so event is sent on first output frame
         queue.expect_events(&[input.video_playing_event()]);
     }
@@ -761,11 +779,11 @@ mod optional_input {
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_playing_event()]);
     }
 
@@ -779,15 +797,15 @@ mod optional_input {
         input.send_frame(ms(0));
         input.send_frame(ms(20));
         input.end_video();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.video_playing_event()]);
 
         // EOS is emitted together with the last frame (20ms batch)
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[input.video_eos_event()]);
     }
 }
@@ -845,85 +863,90 @@ mod required_audio_input {
 
     #[test]
     fn offset_from_start_event_delivered_early() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_delivered_on_time() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
-        sleep(ms(58)); // a bit less
+        sleep(Duration::from_millis(58)); // a bit less
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_delivered_late() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
-        sleep(ms(100));
+        sleep(Duration::from_millis(100));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_playing() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         // enough data for the required input to report ready (80ms)
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.send_samples(ms(40), BATCH_DURATION);
         input.send_samples(ms(60), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // chunks entirely before the 60ms offset don't include the input
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
 
         // playing fires with the [40, 60) chunk: the first chunk not entirely
         // before the offset point pops everything in the stretch window
         // (video plays at 60ms)
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
     #[test]
     fn offset_from_start_event_eos() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // after EOS the input is always ready; both batches are popped by the
         // [40, 60) chunk, which drains the stream: EOS on the same chunk
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
     #[test]
     fn offset_from_start_event_eos_without_samples() {
         let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+            create_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -931,13 +954,13 @@ mod required_audio_input {
         // the track ends before the queue starts, without a single batch; the
         // pre-start cleanup tick observes the closed track
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // EOS is emitted with the first chunk even though the offset never
         // resolved and no samples were ever delivered
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_eos_event()]);
     }
 
@@ -949,45 +972,45 @@ mod required_audio_input {
     #[test]
     fn offset_pts_after_start_event_delivered_early() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
-        sleep(ms(100));
+        sleep(Duration::from_millis(100));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_playing() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
@@ -997,14 +1020,14 @@ mod required_audio_input {
         // the first chunk pops everything below queue PTS 100ms (the batches
         // at input 0ms and 20ms): unlike video, playing fires right away
         // instead of at the 60ms offset point
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event(), input.audio_playing_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_eos() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
@@ -1012,14 +1035,14 @@ mod required_audio_input {
 
         // after EOS the input is always ready, the first chunk pops both
         // batches immediately, draining the stream: EOS on the same chunk
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[
             input.audio_delivered_event(),
             input.audio_playing_event(),
             input.audio_eos_event(),
         ]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -1032,7 +1055,8 @@ mod required_audio_input {
 
     #[test]
     fn offset_pts_before_start_event_delivered() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1041,17 +1065,18 @@ mod required_audio_input {
         // batch is dropped on the same tick (its start PTS is already in the
         // past), so nothing can play after start
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[]);
     }
 
     #[test]
     fn offset_pts_before_start_event_playing() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1064,18 +1089,19 @@ mod required_audio_input {
         input.send_samples(ms(60), BATCH_DURATION);
         input.send_samples(ms(80), BATCH_DURATION);
         input.send_samples(ms(100), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // batches play with the first chunk
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
     #[test]
     fn offset_pts_before_start_event_eos() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1083,17 +1109,17 @@ mod required_audio_input {
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // batch 0ms was dropped before start, batch 20ms plays with the first
         // chunk (after EOS readiness doesn't need the 100ms of coverage),
         // which drains the stream: EOS on the same chunk
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -1106,12 +1132,12 @@ mod required_audio_input {
     fn offset_none_after_start_event_delivered() {
         let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         // a required None input reports ready (empty chunks), no events yet
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
@@ -1119,7 +1145,7 @@ mod required_audio_input {
     fn offset_none_after_start_event_playing() {
         let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         // offset locks to the [60, 80) chunk, which needs the input buffered
@@ -1129,11 +1155,11 @@ mod required_audio_input {
         input.send_samples(ms(40), BATCH_DURATION);
         input.send_samples(ms(60), BATCH_DURATION);
         input.send_samples(ms(80), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // playing is emitted when the [60, 80) chunk becomes due
-        sleep(ms(4));
+        sleep(Duration::from_millis(4));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
@@ -1141,21 +1167,21 @@ mod required_audio_input {
     fn offset_none_after_start_event_eos() {
         let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // both batches are popped by the [60, 80) chunk, which drains the
         // stream: EOS on the same chunk
-        sleep(ms(4));
+        sleep(Duration::from_millis(4));
         queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -1175,11 +1201,11 @@ mod required_audio_input {
         // the batch is dropped right after the offset locks, so nothing can
         // play after start
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[]);
     }
 
@@ -1198,11 +1224,11 @@ mod required_audio_input {
         input.send_samples(ms(60), BATCH_DURATION);
         input.send_samples(ms(80), BATCH_DURATION);
         input.send_samples(ms(100), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
@@ -1216,16 +1242,16 @@ mod required_audio_input {
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // batch 0ms was dropped before start, batch 20ms plays with the first
         // chunk, which drains the stream: EOS on the same chunk
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 }
@@ -1278,76 +1304,81 @@ mod optional_audio_input {
 
     #[test]
     fn offset_from_start_event_delivered_early() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_delivered_on_time() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_delivered_late() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
-        sleep(ms(101));
+        sleep(Duration::from_millis(101));
         // +1ms so the chunk covering 100ms is produced before the batch
         // arrives; the batch is then delivered with the 120ms chunk, after
         // the assert below
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(2));
+        sleep(Duration::from_millis(2));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_from_start_event_playing() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         // one batch is enough: an optional input doesn't wait for coverage
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // chunks entirely before the 60ms offset don't include the input
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
 
         // playing fires with the [40, 60) chunk (video plays at 60ms)
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
     #[test]
     fn offset_from_start_event_eos() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::FromStart(ms(60)));
+        let (queue, mut input) =
+            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // both batches are popped by the [40, 60) chunk, which drains the
         // stream: EOS on the same chunk
-        sleep(ms(40));
+        sleep(Duration::from_millis(40));
         queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -1360,13 +1391,13 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_after_start_event_delivered_early() {
         let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         // the batch arrives before start: delivered fires during the
         // pre-start cleanup tick (the offset is in the future, nothing is
         // dropped)
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // desync regular clock from queue clock
@@ -1374,20 +1405,20 @@ mod optional_audio_input {
         queue.start();
 
         // the first chunk pops the batch right away
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         // the batch will be popped by the [60, 80) chunk, after this assert
         queue.expect_events(&[input.audio_delivered_event()]);
     }
@@ -1395,57 +1426,57 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
-        sleep(ms(101));
+        sleep(Duration::from_millis(101));
         // +1ms so the chunk covering 100ms is produced before the batch
         // arrives; the batch is then delivered with the 120ms chunk, after
         // the assert below
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(2));
+        sleep(Duration::from_millis(2));
         queue.expect_events(&[input.audio_delivered_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_playing() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
         // send mid-chunk so the pop timing is deterministic
-        sleep(ms(30));
+        sleep(Duration::from_millis(30));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // the [40, 60) chunk pops the batch ~20ms before its PTS (60ms)
-        sleep(ms(12));
+        sleep(Duration::from_millis(12));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
     #[test]
     fn offset_pts_after_start_event_eos() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET + ms(60)));
+            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
 
-        sleep(ms(30));
+        sleep(Duration::from_millis(30));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // both batches are popped by the [40, 60) chunk, which drains the
         // stream: EOS on the same chunk
-        sleep(ms(12));
+        sleep(Duration::from_millis(12));
         queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -1455,7 +1486,8 @@ mod optional_audio_input {
 
     #[test]
     fn offset_pts_before_start_event_delivered() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1463,17 +1495,18 @@ mod optional_audio_input {
         // the batch is dropped by the pre-start cleanup right after delivery
         // (video keeps the frame and needs a PTS shift to avoid playing)
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[]);
     }
 
     #[test]
     fn offset_pts_before_start_event_playing() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1482,17 +1515,18 @@ mod optional_audio_input {
         // with the first chunk
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
     #[test]
     fn offset_pts_before_start_event_eos() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET));
+        let (mut queue, mut input) =
+            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1500,16 +1534,16 @@ mod optional_audio_input {
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // the remaining batch plays with the first chunk, which drains the
         // stream: EOS on the same chunk
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -1521,11 +1555,11 @@ mod optional_audio_input {
     fn offset_none_after_start_event_delivered() {
         let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         // the offset locks to the [60, 80) chunk, which pops the batch after
         // this assert
         queue.expect_events(&[input.audio_delivered_event()]);
@@ -1535,16 +1569,16 @@ mod optional_audio_input {
     fn offset_none_after_start_event_playing() {
         let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // playing is emitted when the [60, 80) chunk (which the offset locked
         // to) becomes due
-        sleep(ms(4));
+        sleep(Duration::from_millis(4));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
@@ -1552,21 +1586,21 @@ mod optional_audio_input {
     fn offset_none_after_start_event_eos() {
         let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
 
-        sleep(ms(58));
+        sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // both batches are popped by the [60, 80) chunk, which drains the
         // stream: EOS on the same chunk
-        sleep(ms(4));
+        sleep(Duration::from_millis(4));
         queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 
@@ -1582,11 +1616,11 @@ mod optional_audio_input {
         sleep(OFFSET);
 
         input.send_samples(ms(0), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         // unlike video (where the frame plays on the first output), the batch
         // was already dropped by the pre-start cleanup
         queue.expect_events(&[]);
@@ -1603,11 +1637,11 @@ mod optional_audio_input {
         // with the first chunk
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_playing_event()]);
     }
 
@@ -1621,16 +1655,16 @@ mod optional_audio_input {
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
         input.end_audio();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_delivered_event()]);
 
         // the remaining batch plays with the first chunk, which drains the
         // stream: EOS on the same chunk
         queue.start();
-        sleep(ms(1));
+        sleep(Duration::from_millis(1));
         queue.expect_events(&[input.audio_playing_event(), input.audio_eos_event()]);
 
-        sleep(ms(20));
+        sleep(Duration::from_millis(20));
         queue.expect_events(&[]);
     }
 }

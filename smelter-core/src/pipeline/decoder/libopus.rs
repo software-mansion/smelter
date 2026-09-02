@@ -169,7 +169,7 @@ impl OpusDecoder {
         // and ends immediately before the current chunk. Older dropped packets
         // stay as a gap in the timeline.
         let recovered_duration = packet_duration * recovered_packets;
-        let start_pts = encoded_chunk.pts.saturating_sub(recovered_duration);
+        let start_pts = encoded_chunk.pts - recovered_duration;
 
         let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
         Ok(Some(InputAudioSamples {

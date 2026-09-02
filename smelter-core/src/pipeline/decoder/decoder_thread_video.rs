@@ -1,10 +1,9 @@
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
-use smelter_render::Frame;
 use tracing::warn;
 
 use crate::{
-    PipelineCtx,
+    Frame, PipelineCtx,
     error::DecoderInitError,
     pipeline::decoder::{
         BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, VideoDecoderStream,

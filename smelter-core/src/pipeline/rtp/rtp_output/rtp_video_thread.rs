@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use crossbeam_channel::Sender;
-use smelter_render::Frame;
 use tracing::warn;
 use webrtc::rtcp;
 

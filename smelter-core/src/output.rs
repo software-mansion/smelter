@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use bytes::Bytes;
 use crossbeam_channel::Receiver;
 use smelter_render::scene::Component;
@@ -42,7 +40,7 @@ impl ProtocolOutputOptions {
     /// Timestamp (relative to the queue start) the output should start producing data
     /// at. Only supported by protocols that write to a file/playlist, where delaying the
     /// start does not mean stalling a live connection.
-    pub fn start_at(&self) -> Option<Duration> {
+    pub fn start_at(&self) -> Option<Timestamp> {
         match self {
             ProtocolOutputOptions::Mp4(options) => options.start_at,
             ProtocolOutputOptions::Hls(options) => options.start_at,

@@ -1,12 +1,11 @@
 use core::fmt;
-use std::time::Duration;
 
 use crate::prelude::*;
 
 pub struct EncodedInputChunk {
     pub data: bytes::Bytes,
-    pub pts: Duration,
-    pub dts: Option<Duration>,
+    pub pts: Timestamp,
+    pub dts: Option<Timestamp>,
     pub kind: MediaKind,
 
     /// Sometimes we need to send data to the decoder, so the next chunks can

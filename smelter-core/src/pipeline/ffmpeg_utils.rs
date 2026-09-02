@@ -20,16 +20,16 @@ const OFFSET_RESOLUTION_TIMEOUT: Duration = Duration::from_millis(500);
 pub(crate) struct TimestampOffset {
     queue_ctx: QueueContext,
     /// Relative to the queue start, not to the sync point the chunk PTS use.
-    start_at: Option<Duration>,
+    start_at: Option<Timestamp>,
     state: State,
 }
 
 enum State {
-    Resolved(Duration),
+    Resolved(Timestamp),
     Pending {
         waiting_for_video: bool,
         waiting_for_audio: bool,
-        lowest_pts: Option<Duration>,
+        lowest_pts: Option<Timestamp>,
         buffered: Vec<EncodedOutputChunk>,
     },
 }
@@ -37,7 +37,7 @@ enum State {
 impl TimestampOffset {
     pub fn new(
         queue_ctx: QueueContext,
-        start_at: Option<Duration>,
+        start_at: Option<Timestamp>,
         has_video: bool,
         has_audio: bool,
     ) -> Self {
@@ -56,7 +56,7 @@ impl TimestampOffset {
 
     /// Chunks ready to be written, each with the offset to apply. Empty while the offset
     /// is still pending, in which case the chunk is buffered until it resolves.
-    pub fn resolve(&mut self, chunk: EncodedOutputChunk) -> Vec<(Duration, EncodedOutputChunk)> {
+    pub fn resolve(&mut self, chunk: EncodedOutputChunk) -> Vec<(Timestamp, EncodedOutputChunk)> {
         let (waiting_for_video, waiting_for_audio, lowest_pts, buffered) = match &mut self.state {
             State::Resolved(offset) => return vec![(*offset, chunk)],
             State::Pending {
@@ -72,12 +72,12 @@ impl TimestampOffset {
             MediaKind::Audio(_) => *waiting_for_audio = false,
         }
         let lowest = match *lowest_pts {
-            Some(lowest) => Duration::min(lowest, chunk.pts),
+            Some(lowest) => Timestamp::min(lowest, chunk.pts),
             None => chunk.pts,
         };
         *lowest_pts = Some(lowest);
 
-        let timed_out = chunk.pts.saturating_sub(lowest) > OFFSET_RESOLUTION_TIMEOUT;
+        let timed_out = chunk.pts > lowest + OFFSET_RESOLUTION_TIMEOUT;
         if timed_out {
             warn!(
                 ?lowest,
@@ -98,7 +98,7 @@ impl TimestampOffset {
 
     /// A track ended; stop waiting for a first chunk it is never going to produce. Returns
     /// the buffered chunks if this was the last track the offset was waiting on.
-    pub fn on_track_eos(&mut self, kind: MediaKind) -> Vec<(Duration, EncodedOutputChunk)> {
+    pub fn on_track_eos(&mut self, kind: MediaKind) -> Vec<(Timestamp, EncodedOutputChunk)> {
         let (waiting_for_video, waiting_for_audio, lowest_pts) = match &mut self.state {
             // Already anchored, so nothing was buffered.
             State::Resolved(_) => return Vec::new(),
@@ -126,7 +126,7 @@ impl TimestampOffset {
 
     /// The packet stream ended before the offset resolved on its own. Anchor on whatever
     /// arrived so far, so buffered chunks are not lost.
-    pub fn flush(&mut self) -> Vec<(Duration, EncodedOutputChunk)> {
+    pub fn flush(&mut self) -> Vec<(Timestamp, EncodedOutputChunk)> {
         let lowest_pts = match &self.state {
             State::Resolved(_) => return Vec::new(),
             State::Pending { lowest_pts, .. } => *lowest_pts,
@@ -138,9 +138,9 @@ impl TimestampOffset {
         self.force_resolve(lowest)
     }
 
-    fn force_resolve(&mut self, lowest_pts: Duration) -> Vec<(Duration, EncodedOutputChunk)> {
+    fn force_resolve(&mut self, lowest_pts: Timestamp) -> Vec<(Timestamp, EncodedOutputChunk)> {
         let offset = match (self.start_at, self.queue_ctx.start_pts()) {
-            (Some(start_at), Some(queue_start_pts)) => start_at + queue_start_pts,
+            (Some(start_at), Some(queue_start_pts)) => queue_start_pts + start_at,
             _ => lowest_pts,
         };
 

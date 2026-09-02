@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use smelter_render::{OutputId, error::UpdateSceneError};
@@ -106,7 +105,7 @@ pub(super) struct InternalAudioMixer {
     inputs: HashMap<InputId, AudioMixerInput>,
     mixing_sample_rate: u32,
     sample_mixer: SampleMixer,
-    last_processed_batch_end: Option<Duration>,
+    last_processed_batch_end: Option<Timestamp>,
 }
 
 impl InternalAudioMixer {
@@ -150,9 +149,7 @@ impl InternalAudioMixer {
             .get_or_insert(samples_set.start_pts);
 
         let maybe_zero_samples = if last_processed_batch_end < samples_set.start_pts {
-            let missing_range = samples_set
-                .start_pts
-                .saturating_sub(last_processed_batch_end);
+            let missing_range = samples_set.start_pts - last_processed_batch_end;
             let missing_samples =
                 f64::floor(missing_range.as_secs_f64() * self.mixing_sample_rate as f64) as usize;
             debug!(?missing_samples, "Detected gap, filling with zeros");
@@ -202,7 +199,7 @@ impl InternalAudioMixer {
         &mut self,
         input_samples: HashMap<InputId, Vec<(f64, f64)>>,
         samples_count: usize,
-        start_pts: Duration,
+        start_pts: Timestamp,
     ) -> OutputSamplesSet {
         OutputSamplesSet(
             self.outputs
@@ -218,6 +215,7 @@ impl InternalAudioMixer {
     }
 }
 
-fn expected_samples_count(start: Duration, end: Duration, sample_rate: u32) -> usize {
-    (end.saturating_sub(start).as_nanos() * sample_rate as u128 / 1_000_000_000) as usize
+fn expected_samples_count(start: Timestamp, end: Timestamp, sample_rate: u32) -> usize {
+    let nanos = Timestamp::max(Timestamp::ZERO, end - start).as_nanos() as u128;
+    (nanos * sample_rate as u128 / 1_000_000_000) as usize
 }

@@ -5,7 +5,7 @@ use std::{
 
 use tracing::{debug, warn};
 
-use crate::pipeline::rtp::rtp_input::rollover_state::TimestampRolloverState;
+use crate::{Timestamp, pipeline::rtp::rtp_input::rollover_state::TimestampRolloverState};
 
 #[cfg(test)]
 mod sync_test;
@@ -166,7 +166,7 @@ impl RtpTimestampSync {
         }
     }
 
-    pub fn pts_from_timestamp(&mut self, rtp_timestamp: u32) -> Duration {
+    pub fn pts_from_timestamp(&mut self, rtp_timestamp: u32) -> Timestamp {
         let rolled_timestamp = self.rollover_state.timestamp(rtp_timestamp);
 
         // Detect sender-side resume after a wall-clock gap the sender did not
@@ -218,10 +218,8 @@ impl RtpTimestampSync {
 
         if pts_secs < 0.0 {
             warn!(pts_secs, "PTS from before queue start");
-            Duration::ZERO
-        } else {
-            Duration::from_secs_f64(pts_secs)
         }
+        Timestamp::from_secs_f64(pts_secs)
     }
 
     /// Implementation of the slew toward `target_offset_secs`. Mutates
