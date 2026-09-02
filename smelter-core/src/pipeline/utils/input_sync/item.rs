@@ -42,6 +42,6 @@ impl InputSyncItem for EncodedInputChunk {
     }
 
     fn mark_decode_only(&mut self) {
-        self.present = false;
+        self.decode_only = true;
     }
 }

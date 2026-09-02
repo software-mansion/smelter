@@ -116,7 +116,7 @@ impl<T: Depacketizer + Default + 'static> Depayloader for BufferedDepayloader<T>
             pts: packet.timestamp,
             dts: None,
             kind: self.kind,
-            present: true,
+            decode_only: false,
         });
 
         trace!(chunk=?new_chunk, "RTP depayloader produced a new chunk");
@@ -154,7 +154,7 @@ impl<T: Depacketizer + Default + 'static> Depayloader for SimpleDepayloader<T> {
             pts: packet.timestamp,
             dts: None,
             kind: self.kind,
-            present: true,
+            decode_only: false,
         });
 
         if packet.packet.header.marker {

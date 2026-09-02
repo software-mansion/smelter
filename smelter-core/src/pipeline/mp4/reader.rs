@@ -337,7 +337,7 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
         // sample before the seek point so the decoder can build up its reference
         // frames. Samples before `present_from_sample` are only needed for decoding
         // and should not be presented.
-        let present = sample_index >= self.present_from_index;
+        let decode_only = sample_index < self.present_from_index;
 
         let chunk = EncodedInputChunk {
             data: sample.bytes,
@@ -347,7 +347,7 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
                 DecoderOptions::H264(_) => MediaKind::Video(VideoCodec::H264),
                 DecoderOptions::Aac(_) => MediaKind::Audio(AudioCodec::Aac),
             },
-            present,
+            decode_only,
         };
         (chunk, sample_duration)
     }

@@ -28,18 +28,18 @@ impl H264AuSplitter {
             .parser
             .parse(&chunk.data, Some(chunk.pts.as_micros() as u64))?;
 
-        self.process_au(access_units, chunk.present)
+        self.process_au(access_units, chunk.decode_only)
     }
 
     pub fn flush(&mut self) -> Result<Vec<EncodedInputChunk>, AuSplitterError> {
         let access_units = self.parser.flush()?;
-        self.process_au(access_units, true)
+        self.process_au(access_units, false)
     }
 
     fn process_au(
         &mut self,
         access_units: Vec<AccessUnit>,
-        present: bool,
+        decode_only: bool,
     ) -> Result<Vec<EncodedInputChunk>, AuSplitterError> {
         let mut chunks = Vec::new();
         for au in access_units {
@@ -63,7 +63,7 @@ impl H264AuSplitter {
                 pts: Duration::from_micros(pts),
                 dts: None,
                 kind: MediaKind::Video(VideoCodec::H264),
-                present,
+                decode_only,
             });
         }
 

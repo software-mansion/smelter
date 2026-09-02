@@ -206,7 +206,7 @@ impl RtmpConnectionState {
             pts: video.pts,
             dts: Some(video.dts),
             kind: MediaKind::Video(video.codec.into()),
-            present: true,
+            decode_only: false,
         };
 
         track_sync
@@ -226,7 +226,7 @@ impl RtmpConnectionState {
             pts: audio.pts,
             dts: None,
             kind: MediaKind::Audio(audio.codec.into()),
-            present: true,
+            decode_only: false,
         };
 
         track_sync
