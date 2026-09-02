@@ -38,8 +38,7 @@ pub struct OutputWhipVideoOptions {
 pub enum WhipVideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
-        /// Preset for an encoder. See `FFmpeg`
-        /// [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        /// Preset for an encoder. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
         ///
         /// Defaults to `"fast"`.
         preset: Option<H264EncoderPreset>,
@@ -53,7 +52,7 @@ pub enum WhipVideoEncoderOptions {
         /// Encoder pixel format. Defaults to `"yuv420p"`.
         pixel_format: Option<PixelFormat>,
 
-        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        /// Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "ffmpeg_vp8")]
@@ -66,7 +65,7 @@ pub enum WhipVideoEncoderOptions {
         /// Maximal interval between keyframes, in milliseconds. Defaults to `5000`.
         keyframe_interval_ms: Option<f64>,
 
-        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        /// Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "ffmpeg_vp9")]
@@ -82,7 +81,7 @@ pub enum WhipVideoEncoderOptions {
         /// Encoder pixel format. Defaults to `"yuv420p"`.
         pixel_format: Option<PixelFormat>,
 
-        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        /// Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "vulkan_h264")]

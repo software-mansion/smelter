@@ -29,8 +29,7 @@ export type RtmpClientVideoEncoderOptions =
        */
       keyframeIntervalMs?: number;
       /**
-       * Preset for an encoder. See `FFmpeg`
-       * [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Preset for an encoder. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
        *
        * Defaults to `"fast"`.
        */
@@ -40,7 +39,7 @@ export type RtmpClientVideoEncoderOptions =
        */
       pixelFormat?: Api.PixelFormat;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpegOptions?: Record<string, string>;
     }
@@ -60,7 +59,7 @@ export type RtmpClientVideoEncoderOptions =
        */
       keyframeIntervalMs?: number;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpegOptions?: Record<string, string>;
     }
@@ -84,7 +83,7 @@ export type RtmpClientVideoEncoderOptions =
        */
       pixelFormat?: Api.PixelFormat;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpegOptions?: Record<string, string>;
     }

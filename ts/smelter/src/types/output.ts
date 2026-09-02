@@ -54,7 +54,7 @@ export type RegisterMp4Output = {
    */
   audio?: Mp4AudioOptions;
   /**
-   * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+   * Raw FFmpeg muxer options. See https://ffmpeg.org/ffmpeg-formats.html for more.
    */
   ffmpegOptions?: Record<string, string>;
   /**
@@ -84,7 +84,7 @@ export type RegisterHlsOutput = {
    */
   audio?: HlsAudioOptions;
   /**
-   * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+   * Raw FFmpeg muxer options. See https://ffmpeg.org/ffmpeg-formats.html for more.
    * Note: keys here may override defaults, including `hls_list_size` derived from
    * `maxPlaylistSize`.
    */

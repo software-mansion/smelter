@@ -25,7 +25,7 @@ pub struct Transition {
 /// Custom easing functions can be implemented with cubic Bézier. The control points are defined
 /// with `points` field by providing four numerical values: `x1`, `y1`, `x2` and `y2`. The `x1` and
 /// `x2` values have to be in the range `[0; 1]`. The cubic Bézier result is clamped to the range
-/// `[0; 1]`. You can find example control point configurations [here](https://easings.net/).
+/// `[0; 1]`. You can find example control point configurations at https://easings.net/.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(tag = "function_name", rename_all = "snake_case")]
 pub enum EasingFunction {

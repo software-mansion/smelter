@@ -23,10 +23,9 @@ pub struct WebRendererSpec {
 pub enum WebEmbeddingMethod {
     /// Pass raw input frames as JS buffers so they can be rendered, for example, using a `<canvas>`
     /// component.
-    /// :::warning
-    /// This method might have a significant performance impact, especially for a large number of
-    /// inputs.
-    /// :::
+    ///
+    /// Warning: this method might have a significant performance impact, especially for a large
+    /// number of inputs.
     ChromiumEmbedding,
 
     /// Render a website without any inputs and overlay them over the website content.

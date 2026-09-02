@@ -45,9 +45,9 @@ export type TextStyleProps = {
    */
   backgroundColor?: string;
   /**
-   * Font family. Provide
-   * [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a
-   * specific font. "generic-family" values like e.g. "sans-serif" will not work.
+   * Font family. Provide family-name (see
+   * https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific
+   * font. "generic-family" values like e.g. "sans-serif" will not work.
    *
    * Defaults to `"Verdana"`.
    */

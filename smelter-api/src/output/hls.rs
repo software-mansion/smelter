@@ -19,7 +19,7 @@ pub struct HlsOutput {
     pub video: Option<OutputHlsVideoOptions>,
     /// Audio track configuration.
     pub audio: Option<OutputHlsAudioOptions>,
-    /// Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+    /// Raw FFmpeg muxer options. See https://ffmpeg.org/ffmpeg-formats.html for more.
     /// Note: keys here may override defaults, including `hls_list_size` derived from
     /// `max_playlist_size`.
     pub ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
@@ -49,8 +49,7 @@ pub struct OutputHlsVideoOptions {
 pub enum HlsVideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
-        /// Video output encoder preset. Visit `FFmpeg`
-        /// [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        /// Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
         ///
         /// Defaults to `"fast"`.
         preset: Option<H264EncoderPreset>,
@@ -64,7 +63,7 @@ pub enum HlsVideoEncoderOptions {
         /// Encoder pixel format. Defaults to `"yuv420p"`.
         pixel_format: Option<PixelFormat>,
 
-        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        /// Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "vulkan_h264")]

@@ -13,8 +13,8 @@ export type InputRtpAudioOptions =
 export type InputRtpAudioAacOptions = {
   /**
    * AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1
-   * The config should be encoded as described in
-   * [RFC 3640](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).
+   * The config should be encoded as described in RFC 3640
+   * (https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).
    *
    * The simplest way to obtain this value when using ffmpeg to stream to the smelter is
    * to pass the additional `-sdp_file FILENAME` option to ffmpeg. This will cause it to
@@ -29,7 +29,7 @@ export type InputRtpAudioAacOptions = {
    */
   audioSpecificConfig: string;
   /**
-   * Specifies the [RFC 3640 mode](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that
+   * Specifies the RFC 3640 mode (https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that
    * should be used when depacketizing this stream.
    *
    * Defaults to `"high_bitrate"`.

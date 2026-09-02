@@ -143,11 +143,9 @@ pub enum Overflow {
     /// Components that have unknown sizes will be treated as if they had a size 0 when calculating
     /// scaling factor.
     ///
-    /// :::warning
-    /// This will resize everything inside, even absolutely positioned elements. For example, if you
-    /// have an element in the bottom right corner and the content will be rescaled by a factor
-    /// 0.5x, then that component will end up in the middle of its parent
-    /// :::
+    /// Warning: this will resize everything inside, even absolutely positioned elements. For
+    /// example, if you have an element in the bottom right corner and the content will be rescaled
+    /// by a factor 0.5x, then that component will end up in the middle of its parent
     Fit,
 }
 
@@ -253,9 +251,7 @@ pub struct WebView {
     /// Id of a web renderer instance. It identifies an instance registered using the
     /// `POST /api/web-renderer/{instance_id}/register` request.
     ///
-    /// :::warning
-    /// You can only refer to specific instances in one Component at a time.
-    /// :::
+    /// Warning: you can only refer to specific instances in one Component at a time.
     pub instance_id: RendererId,
 }
 
@@ -296,12 +292,11 @@ pub struct Shader {
     /// ```wgsl
     /// @group(1) @binding(0) var<uniform>
     /// ```
-    /// :::note
-    ///   This object's structure must match the structure defined in a shader source code.
-    ///   Currently, we do not handle memory layout automatically. To achieve the correct memory
-    ///   alignment, you might need to pad your data with additional fields. See
-    ///   [WGSL documentation](https://www.w3.org/TR/WGSL/#alignment-and-size) for more details.
-    /// :::
+    ///
+    /// Note: this object's structure must match the structure defined in a shader source code.
+    /// Currently, we do not handle memory layout automatically. To achieve the correct memory
+    /// alignment, you might need to pad your data with additional fields. See
+    /// https://www.w3.org/TR/WGSL/#alignment-and-size for more details.
     pub shader_param: Option<ShaderParam>,
     /// Resolution of a texture where shader will be executed.
     pub resolution: Resolution,
@@ -367,9 +362,9 @@ pub struct Text {
     pub color: Option<RGBAColor>,
     /// Background color in `#RRGGBBAA` format. Defaults to `"#00000000"`.
     pub background_color: Option<RGBAColor>,
-    /// Font family. Provide
-    /// [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a
-    /// specific font. "generic-family" values like e.g. "sans-serif" will not work.
+    /// Font family. Provide family-name (see
+    /// https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific
+    /// font. "generic-family" values like e.g. "sans-serif" will not work.
     ///
     /// Defaults to `"Verdana"`.
     pub font_family: Option<Arc<str>>,
@@ -404,8 +399,8 @@ pub enum TextWrapMode {
     Word,
 }
 
-/// Font weight, based on the
-/// [OpenType specification](https://learn.microsoft.com/en-gb/typography/opentype/spec/os2#usweightclass).
+/// Font weight, based on the OpenType specification
+/// (https://learn.microsoft.com/en-gb/typography/opentype/spec/os2#usweightclass).
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TextWeight {

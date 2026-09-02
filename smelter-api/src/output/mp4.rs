@@ -16,7 +16,7 @@ pub struct Mp4Output {
     pub video: Option<OutputMp4VideoOptions>,
     /// Audio stream configuration.
     pub audio: Option<OutputMp4AudioOptions>,
-    /// Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+    /// Raw FFmpeg muxer options. See https://ffmpeg.org/ffmpeg-formats.html for more.
     pub ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     /// Time in milliseconds when this output should start producing data. Value `0` represents
     /// time of the start request. Output is always created when this request is handled (e.g.
@@ -44,8 +44,7 @@ pub struct OutputMp4VideoOptions {
 pub enum Mp4VideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
-        /// Video output encoder preset. Visit `FFmpeg`
-        /// [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        /// Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
         ///
         /// Defaults to `"fast"`.
         preset: Option<H264EncoderPreset>,
@@ -59,7 +58,7 @@ pub enum Mp4VideoEncoderOptions {
         /// Encoder pixel format. Defaults to `"yuv420p"`.
         pixel_format: Option<PixelFormat>,
 
-        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        /// Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "vulkan_h264")]

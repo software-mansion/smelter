@@ -49,8 +49,8 @@ pub enum InputRtpAudioOptions {
     Opus,
     Aac {
         /// AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1
-        /// The config should be encoded as described in
-        /// [RFC 3640](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).
+        /// The config should be encoded as described in RFC 3640
+        /// (https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).
         ///
         /// The simplest way to obtain this value when using ffmpeg to stream to the compositor is
         /// to pass the additional `-sdp_file FILENAME` option to ffmpeg. This will cause it to
@@ -63,9 +63,8 @@ pub enum InputRtpAudioOptions {
         ///
         /// In FLV files and the RTMP protocol, the ASC can be found in the `AACAUDIODATA` tag.
         audio_specific_config: String,
-        /// Specifies the
-        /// [RFC 3640 mode](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that should
-        /// be used when depacketizing this stream.
+        /// Specifies the RFC 3640 mode (https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1)
+        /// that should be used when depacketizing this stream.
         ///
         /// Defaults to `"high_bitrate"`.
         rtp_mode: Option<AacRtpMode>,

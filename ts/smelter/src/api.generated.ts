@@ -330,7 +330,7 @@ export type InputRtpAudioOptions =
   | {
       decoder: "aac";
       /**
-       * AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1 The config should be encoded as described in [RFC 3640](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).
+       * AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1 The config should be encoded as described in RFC 3640 (https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).
        *
        * The simplest way to obtain this value when using ffmpeg to stream to the compositor is to pass the additional `-sdp_file FILENAME` option to ffmpeg. This will cause it to write out an sdp file, which will contain this field. Programs which have the ability to stream AAC to the compositor should provide this information.
        *
@@ -340,7 +340,7 @@ export type InputRtpAudioOptions =
        */
       audio_specific_config: string;
       /**
-       * Specifies the [RFC 3640 mode](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that should be used when depacketizing this stream.
+       * Specifies the RFC 3640 mode (https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.1) that should be used when depacketizing this stream.
        *
        * Defaults to `"high_bitrate"`.
        */
@@ -433,7 +433,7 @@ export type RegisterOutput =
        */
       audio?: OutputMp4AudioOptions | null;
       /**
-       * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+       * Raw FFmpeg muxer options. See https://ffmpeg.org/ffmpeg-formats.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -493,7 +493,7 @@ export type RegisterOutput =
        */
       audio?: OutputHlsAudioOptions | null;
       /**
-       * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more. Note: keys here may override defaults, including `hls_list_size` derived from `max_playlist_size`.
+       * Raw FFmpeg muxer options. See https://ffmpeg.org/ffmpeg-formats.html for more. Note: keys here may override defaults, including `hls_list_size` derived from `max_playlist_size`.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -508,7 +508,7 @@ export type RtpVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
        *
        * Defaults to `"fast"`.
        */
@@ -526,7 +526,7 @@ export type RtpVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -543,7 +543,7 @@ export type RtpVideoEncoderOptions =
        */
       keyframe_interval_ms?: number | null;
       /**
-       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -564,7 +564,7 @@ export type RtpVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -731,7 +731,7 @@ export type Component =
       /**
        * Id of a web renderer instance. It identifies an instance registered using the `POST /api/web-renderer/{instance_id}/register` request.
        *
-       * :::warning You can only refer to specific instances in one Component at a time. :::
+       * Warning: you can only refer to specific instances in one Component at a time.
        */
       instance_id: RendererId;
     }
@@ -752,7 +752,9 @@ export type Component =
       /**
        * Object that will be serialized into a `struct` and passed inside the shader as:
        *
-       * ```wgsl @group(1) @binding(0) var<uniform> ``` :::note This object's structure must match the structure defined in a shader source code. Currently, we do not handle memory layout automatically. To achieve the correct memory alignment, you might need to pad your data with additional fields. See [WGSL documentation](https://www.w3.org/TR/WGSL/#alignment-and-size) for more details. :::
+       * ```wgsl @group(1) @binding(0) var<uniform> ```
+       *
+       * Note: this object's structure must match the structure defined in a shader source code. Currently, we do not handle memory layout automatically. To achieve the correct memory alignment, you might need to pad your data with additional fields. See https://www.w3.org/TR/WGSL/#alignment-and-size for more details.
        */
       shader_param?: ShaderParam | null;
       /**
@@ -826,7 +828,7 @@ export type Component =
        */
       background_color?: RGBAColor | null;
       /**
-       * Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific font. "generic-family" values like e.g. "sans-serif" will not work.
+       * Font family. Provide family-name (see https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific font. "generic-family" values like e.g. "sans-serif" will not work.
        *
        * Defaults to `"Verdana"`.
        */
@@ -973,7 +975,7 @@ export type ViewDirection = "row" | "column";
 /**
  * Easing functions are used to interpolate between two values over time.
  *
- * Custom easing functions can be implemented with cubic Bézier. The control points are defined with `points` field by providing four numerical values: `x1`, `y1`, `x2` and `y2`. The `x1` and `x2` values have to be in the range `[0; 1]`. The cubic Bézier result is clamped to the range `[0; 1]`. You can find example control point configurations [here](https://easings.net/).
+ * Custom easing functions can be implemented with cubic Bézier. The control points are defined with `points` field by providing four numerical values: `x1`, `y1`, `x2` and `y2`. The `x1` and `x2` values have to be in the range `[0; 1]`. The cubic Bézier result is clamped to the range `[0; 1]`. You can find example control point configurations at https://easings.net/.
  */
 export type EasingFunction =
   | {
@@ -1047,7 +1049,7 @@ export type TextStyle = "normal" | "italic" | "oblique";
 export type HorizontalAlign = "left" | "right" | "justified" | "center";
 export type TextWrapMode = "none" | "glyph" | "word";
 /**
- * Font weight, based on the [OpenType specification](https://learn.microsoft.com/en-gb/typography/opentype/spec/os2#usweightclass).
+ * Font weight, based on the OpenType specification (https://learn.microsoft.com/en-gb/typography/opentype/spec/os2#usweightclass).
  */
 export type TextWeight =
   | "thin"
@@ -1090,7 +1092,7 @@ export type RtmpClientVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
        *
        * Defaults to `"fast"`.
        */
@@ -1108,7 +1110,7 @@ export type RtmpClientVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1125,7 +1127,7 @@ export type RtmpClientVideoEncoderOptions =
        */
       keyframe_interval_ms?: number | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1146,7 +1148,7 @@ export type RtmpClientVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1187,7 +1189,7 @@ export type MoqClientVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
        *
        * Defaults to `"fast"`.
        */
@@ -1205,7 +1207,7 @@ export type MoqClientVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1222,7 +1224,7 @@ export type MoqClientVideoEncoderOptions =
        */
       keyframe_interval_ms?: number | null;
       /**
-       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1243,7 +1245,7 @@ export type MoqClientVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1293,7 +1295,7 @@ export type Mp4VideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
        *
        * Defaults to `"fast"`.
        */
@@ -1311,7 +1313,7 @@ export type Mp4VideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1339,7 +1341,7 @@ export type WhipVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Preset for an encoder. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
        *
        * Defaults to `"fast"`.
        */
@@ -1357,7 +1359,7 @@ export type WhipVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1374,7 +1376,7 @@ export type WhipVideoEncoderOptions =
        */
       keyframe_interval_ms?: number | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1395,7 +1397,7 @@ export type WhipVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1438,7 +1440,7 @@ export type WhepVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
        *
        * Defaults to `"fast"`.
        */
@@ -1456,7 +1458,7 @@ export type WhepVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1473,7 +1475,7 @@ export type WhepVideoEncoderOptions =
        */
       keyframe_interval_ms?: number | null;
       /**
-       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1494,7 +1496,7 @@ export type WhepVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -1536,7 +1538,7 @@ export type HlsVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
        *
        * Defaults to `"fast"`.
        */
@@ -1554,7 +1556,7 @@ export type HlsVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. See https://ffmpeg.org/ffmpeg-codecs.html for more.
        */
       ffmpeg_options?: {
         [k: string]: string;
