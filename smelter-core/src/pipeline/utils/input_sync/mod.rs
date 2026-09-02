@@ -18,7 +18,7 @@ use smelter_render::InputId;
 use super::live_sync::{LiveSync, LiveSyncBuffer, LiveSyncTrack};
 use crate::{
     Ref,
-    stats::{InputStatsEvent, InputSyncStatsEvent, StatsEvent, StatsSender},
+    stats::{InputStatsEvent, InputSyncTrackStatsEvent, StatsEvent, StatsSender},
 };
 
 mod anchor;
@@ -52,7 +52,7 @@ impl InputSyncStatsSender {
         }
     }
 
-    pub(super) fn send(&self, track: TrackKind, event: InputSyncStatsEvent) {
+    pub(super) fn send(&self, track: TrackKind, event: InputSyncTrackStatsEvent) {
         self.stats_sender.send(StatsEvent::Input {
             input_ref: self.input_ref.clone(),
             event: InputStatsEvent::Sync { track, event },

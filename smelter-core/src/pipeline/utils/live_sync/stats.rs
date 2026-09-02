@@ -4,8 +4,8 @@ use super::{buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator, state::St
 use crate::{
     pipeline::utils::input_sync::{InputSyncStatsSender, TimestampAnchor, TrackKind},
     stats::{
-        InputSyncMode, InputSyncStatsEvent, LiveSyncSnapshot, LiveSyncStatsEvent,
-        LiveSyncTrackState,
+        InputSyncMode, InputSyncTrackStatsEvent, LiveSyncStatsEvent, LiveSyncTrackState,
+        LiveSyncTrackStateSnapshot,
     },
 };
 
@@ -22,7 +22,10 @@ pub(super) struct LiveSyncTrackStats {
 
 impl LiveSyncTrackStats {
     pub fn new(sender: &InputSyncStatsSender, kind: TrackKind, sync_point: Instant) -> Self {
-        sender.send(kind, InputSyncStatsEvent::TrackAdded(InputSyncMode::Live));
+        sender.send(
+            kind,
+            InputSyncTrackStatsEvent::TrackAdded(InputSyncMode::Live),
+        );
         Self {
             sender: sender.clone(),
             kind,
@@ -33,7 +36,7 @@ impl LiveSyncTrackStats {
 
     pub fn report_bytes_received(&self, size: usize) {
         self.sender
-            .send(self.kind, InputSyncStatsEvent::BytesReceived(size));
+            .send(self.kind, InputSyncTrackStatsEvent::BytesReceived(size));
     }
 
     pub fn report_state_change(&self, start: &StartState) {
@@ -70,7 +73,7 @@ impl LiveSyncTrackStats {
     /// Throttled to [`SNAPSHOT_INTERVAL`]. `anchors` is `(current, target)`
     /// of the mapping the track applies and `estimator` the live edge
     /// estimator it is corrected against, both `None` before it started.
-    pub fn report_track_snapshot(
+    pub fn report_state_snapshot(
         &mut self,
         buffer: &impl LiveSyncBuffer,
         anchors: Option<(TimestampAnchor, TimestampAnchor)>,
@@ -98,25 +101,27 @@ impl LiveSyncTrackStats {
             let (current, _) = anchors?;
             Some(self.effective_buffer_ns(current.to_output_pts(bound_pts)))
         };
-        self.send(LiveSyncStatsEvent::Snapshot(LiveSyncSnapshot {
-            buffer: buffer.stats(),
-            target_offset_distance_ns,
-            live_edge_lower_bound_distance_ns: estimate
-                .and_then(|estimate| live_edge_distance_ns(estimate.lower_bound.pts)),
-            live_edge_upper_bound_distance_ns: estimate
-                .and_then(|estimate| live_edge_distance_ns(estimate.upper_bound.pts)),
-        }));
+        self.send(LiveSyncStatsEvent::StateSnapshot(
+            LiveSyncTrackStateSnapshot {
+                buffer: buffer.stats(),
+                target_offset_distance_ns,
+                live_edge_lower_bound_distance_ns: estimate
+                    .and_then(|estimate| live_edge_distance_ns(estimate.lower_bound.pts)),
+                live_edge_upper_bound_distance_ns: estimate
+                    .and_then(|estimate| live_edge_distance_ns(estimate.upper_bound.pts)),
+            },
+        ));
     }
 
     fn send(&self, event: LiveSyncStatsEvent) {
         self.sender
-            .send(self.kind, InputSyncStatsEvent::Live(event));
+            .send(self.kind, InputSyncTrackStatsEvent::Live(event));
     }
 }
 
 impl Drop for LiveSyncTrackStats {
     fn drop(&mut self) {
         self.sender
-            .send(self.kind, InputSyncStatsEvent::TrackRemoved);
+            .send(self.kind, InputSyncTrackStatsEvent::TrackRemoved);
     }
 }

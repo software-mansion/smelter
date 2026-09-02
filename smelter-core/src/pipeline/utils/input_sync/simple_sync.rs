@@ -8,7 +8,7 @@ use super::{
     TrackEvent, TrackKind,
 };
 use crate::stats::{
-    InputSyncMode, InputSyncStatsEvent, SimpleSyncStatsEvent, SimpleSyncTrackState,
+    InputSyncMode, InputSyncTrackStatsEvent, SimpleSyncStatsEvent, SimpleSyncTrackState,
 };
 
 /// The most basic sync mechanism.
@@ -75,8 +75,10 @@ impl SimpleSync {
         kind: TrackKind,
         sink: BoxedTrackSink<T>,
     ) -> SimpleSyncTrack<T> {
-        self.stats
-            .send(kind, InputSyncStatsEvent::TrackAdded(InputSyncMode::Simple));
+        self.stats.send(
+            kind,
+            InputSyncTrackStatsEvent::TrackAdded(InputSyncMode::Simple),
+        );
         SimpleSyncTrack {
             state: self.state.clone(),
             kind,
@@ -111,8 +113,10 @@ impl<T: InputSyncItem> SimpleSyncTrack<T> {
         if self.sink.is_closed() {
             return Err(TrackClosedError);
         }
-        self.stats
-            .send(self.kind, InputSyncStatsEvent::BytesReceived(chunk.size()));
+        self.stats.send(
+            self.kind,
+            InputSyncTrackStatsEvent::BytesReceived(chunk.size()),
+        );
         let anchor = match self.anchor {
             Some(anchor) => anchor,
             None => match self.state.lock().unwrap().register_pts(chunk.pts()) {
@@ -120,7 +124,7 @@ impl<T: InputSyncItem> SimpleSyncTrack<T> {
                     self.anchor = Some(anchor);
                     self.stats.send(
                         self.kind,
-                        InputSyncStatsEvent::Simple(SimpleSyncStatsEvent::StateChanged(
+                        InputSyncTrackStatsEvent::Simple(SimpleSyncStatsEvent::StateChanged(
                             SimpleSyncTrackState::Running,
                         )),
                     );
@@ -145,7 +149,7 @@ impl<T: InputSyncItem> SimpleSyncTrack<T> {
 impl<T: InputSyncItem> Drop for SimpleSyncTrack<T> {
     fn drop(&mut self) {
         self.stats
-            .send(self.kind, InputSyncStatsEvent::TrackRemoved);
+            .send(self.kind, InputSyncTrackStatsEvent::TrackRemoved);
         // the stream can end before the desired buffer is collected
         if self.sink.is_closed() {
             return;

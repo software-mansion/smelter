@@ -27,8 +27,8 @@ pub(crate) use mp4::{Mp4InputStatsEvent, Mp4InputTrackStatsEvent};
 pub(crate) use rtmp::RtmpInputStatsEvent;
 pub(crate) use rtp::{RtpInputStatsEvent, RtpJitterBufferStatsEvent};
 pub(crate) use sync::{
-    InputSyncMode, InputSyncStatsEvent, LiveSyncBufferStats, LiveSyncSnapshot, LiveSyncStatsEvent,
-    SimpleSyncStatsEvent,
+    InputSyncMode, InputSyncTrackStatsEvent, LiveSyncBufferStats, LiveSyncStatsEvent,
+    LiveSyncTrackStateSnapshot, SimpleSyncStatsEvent,
 };
 pub(crate) use whep::WhepInputStatsEvent;
 pub(crate) use whip::WhipInputStatsEvent;
@@ -41,7 +41,7 @@ pub(crate) enum InputStatsEvent {
     /// Sent by the input sync of `HLS` and `RTMP` inputs.
     Sync {
         track: TrackKind,
-        event: InputSyncStatsEvent,
+        event: InputSyncTrackStatsEvent,
     },
     Rtmp(RtmpInputStatsEvent),
     MoqServer(MoqServerInputStatsEvent),

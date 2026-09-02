@@ -12,9 +12,15 @@ use crate::{
     },
 };
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum InputSyncMode {
+    Simple,
+    Live,
+}
+
 /// Events sent by the input sync itself for a single track.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum InputSyncStatsEvent {
+pub(crate) enum InputSyncTrackStatsEvent {
     /// Track registered on the sync of the given mode.
     TrackAdded(InputSyncMode),
     /// Track dropped; its stats are no longer reported.
@@ -23,12 +29,6 @@ pub(crate) enum InputSyncStatsEvent {
     BytesReceived(usize),
     Simple(SimpleSyncStatsEvent),
     Live(LiveSyncStatsEvent),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum InputSyncMode {
-    Simple,
-    Live,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -52,18 +52,20 @@ pub(crate) enum LiveSyncStatsEvent {
         effective_buffer_ns: i64,
     },
     /// Periodic snapshot of the sync state.
-    Snapshot(LiveSyncSnapshot),
+    StateSnapshot(LiveSyncTrackStateSnapshot),
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct LiveSyncSnapshot {
+pub(crate) struct LiveSyncTrackStateSnapshot {
     pub buffer: LiveSyncBufferStats,
     /// Signed distance between the current and the target anchor; positive
     /// when the buffer is being shrunk.
     pub target_offset_distance_ns: i64,
-    /// How far the playback position is behind the live edge estimate
+    /// How far the playback position is behind the pessimistic live edge estimate
     /// bounds; `None` before the track starts.
     pub live_edge_lower_bound_distance_ns: Option<i64>,
+    /// How far the playback position is behind the optimistic live edge estimate
+    /// bounds; `None` before the track starts.
     pub live_edge_upper_bound_distance_ns: Option<i64>,
 }
 
@@ -73,12 +75,19 @@ pub(crate) enum LiveSyncBufferStats {
     Fifo { duration: Duration },
 }
 
+/// Per-input pair of track states, shared by every protocol using the input sync.
+#[derive(Debug)]
+pub struct InputSyncState {
+    pub video: InputSyncTrackState,
+    pub audio: InputSyncTrackState,
+}
+
 /// Stats of a single synchronized track; `None` until the track is added.
 #[derive(Debug)]
-pub struct InputSyncTrackState(Option<InputSyncTrackModeState>);
+pub struct InputSyncTrackState(Option<InnerInputSyncTrackState>);
 
 #[derive(Debug)]
-struct InputSyncTrackModeState {
+struct InnerInputSyncTrackState {
     bitrate_1_sec: SlidingWindowValue<u64>,
     bitrate_1_min: SlidingWindowValue<u64>,
     mode: InputSyncModeState,
@@ -87,24 +96,17 @@ struct InputSyncTrackModeState {
 #[derive(Debug)]
 enum InputSyncModeState {
     Simple { state: SimpleSyncTrackState },
-    Live(Box<LiveSyncModeState>),
+    Live(Box<InputSyncLiveTrackState>),
 }
 
 #[derive(Debug)]
-struct LiveSyncModeState {
+struct InputSyncLiveTrackState {
     state: LiveSyncTrackState,
     discontinuities_detected: u32,
     discontinuities_detected_10_secs: SlidingWindowValue<u32>,
     effective_buffer_on_receive_10_secs: SlidingWindowValue<i64>,
     effective_buffer_on_output_10_secs: SlidingWindowValue<i64>,
-    snapshot: LiveSyncSnapshot,
-}
-
-/// Per-input pair of track states, shared by every protocol using the input sync.
-#[derive(Debug)]
-pub struct InputSyncState {
-    pub video: InputSyncTrackState,
-    pub audio: InputSyncTrackState,
+    snapshot: LiveSyncTrackStateSnapshot,
 }
 
 impl InputSyncState {
@@ -115,7 +117,7 @@ impl InputSyncState {
         }
     }
 
-    pub fn handle_event(&mut self, track: TrackKind, event: InputSyncStatsEvent) {
+    pub fn handle_event(&mut self, track: TrackKind, event: InputSyncTrackStatsEvent) {
         match track {
             TrackKind::Video => self.video.handle_event(event),
             TrackKind::Audio => self.audio.handle_event(event),
@@ -194,58 +196,66 @@ impl InputSyncTrackState {
         Some(report)
     }
 
-    fn handle_event(&mut self, event: InputSyncStatsEvent) {
+    fn handle_event(&mut self, event: InputSyncTrackStatsEvent) {
         match event {
-            InputSyncStatsEvent::TrackAdded(mode) => {
-                self.0 = Some(InputSyncTrackModeState::new(mode));
-                return;
+            InputSyncTrackStatsEvent::TrackAdded(mode) => {
+                self.0 = Some(InnerInputSyncTrackState::new(mode));
             }
-            InputSyncStatsEvent::TrackRemoved => {
+            InputSyncTrackStatsEvent::TrackRemoved => {
                 self.0 = None;
-                return;
             }
-            _ => {}
-        }
-        let Some(state) = self.0.as_mut() else {
-            return;
-        };
-        match (event, &mut state.mode) {
-            (InputSyncStatsEvent::TrackAdded(_) | InputSyncStatsEvent::TrackRemoved, _) => {
-                unreachable!()
-            }
-            (InputSyncStatsEvent::BytesReceived(chunk_size_bytes), _) => {
+            InputSyncTrackStatsEvent::BytesReceived(chunk_size_bytes) => {
+                let Some(state) = self.0.as_mut() else {
+                    return;
+                };
                 let chunk_size_bits = 8 * chunk_size_bytes as u64;
                 state.bitrate_1_sec.push(chunk_size_bits);
                 state.bitrate_1_min.push(chunk_size_bits);
             }
-            (
-                InputSyncStatsEvent::Simple(SimpleSyncStatsEvent::StateChanged(new_state)),
-                InputSyncModeState::Simple { state },
-            ) => *state = new_state,
-            (InputSyncStatsEvent::Live(event), InputSyncModeState::Live(live)) => match event {
-                LiveSyncStatsEvent::StateChanged(new_state) => live.state = new_state,
-                LiveSyncStatsEvent::Discontinuity => {
-                    live.discontinuities_detected += 1;
-                    live.discontinuities_detected_10_secs.push(1);
+            InputSyncTrackStatsEvent::Simple(event) => {
+                let Some(state) = self.0.as_mut() else {
+                    return;
+                };
+                let InputSyncModeState::Simple { state } = &mut state.mode else {
+                    tracing::error!(?event, "Simple sync event on live sync track");
+                    return;
+                };
+                match event {
+                    SimpleSyncStatsEvent::StateChanged(new_state) => *state = new_state,
                 }
-                LiveSyncStatsEvent::ChunkReceived {
-                    effective_buffer_ns,
-                } => live
-                    .effective_buffer_on_receive_10_secs
-                    .push(effective_buffer_ns),
-                LiveSyncStatsEvent::ChunkReleased {
-                    effective_buffer_ns,
-                } => live
-                    .effective_buffer_on_output_10_secs
-                    .push(effective_buffer_ns),
-                LiveSyncStatsEvent::Snapshot(new_snapshot) => live.snapshot = new_snapshot,
-            },
-            (event, mode) => tracing::error!(?event, ?mode, "Wrong event type for sync mode"),
+            }
+            InputSyncTrackStatsEvent::Live(event) => {
+                let Some(state) = self.0.as_mut() else {
+                    return;
+                };
+                let InputSyncModeState::Live(live) = &mut state.mode else {
+                    tracing::error!(?event, "Live sync event on simple sync track");
+                    return;
+                };
+                match event {
+                    LiveSyncStatsEvent::StateChanged(new_state) => live.state = new_state,
+                    LiveSyncStatsEvent::Discontinuity => {
+                        live.discontinuities_detected += 1;
+                        live.discontinuities_detected_10_secs.push(1);
+                    }
+                    LiveSyncStatsEvent::ChunkReceived {
+                        effective_buffer_ns,
+                    } => live
+                        .effective_buffer_on_receive_10_secs
+                        .push(effective_buffer_ns),
+                    LiveSyncStatsEvent::ChunkReleased {
+                        effective_buffer_ns,
+                    } => live
+                        .effective_buffer_on_output_10_secs
+                        .push(effective_buffer_ns),
+                    LiveSyncStatsEvent::StateSnapshot(new_snapshot) => live.snapshot = new_snapshot,
+                }
+            }
         }
     }
 }
 
-impl InputSyncTrackModeState {
+impl InnerInputSyncTrackState {
     fn new(mode: InputSyncMode) -> Self {
         Self {
             bitrate_1_sec: SlidingWindowValue::new(Duration::from_secs(1)),
@@ -254,27 +264,29 @@ impl InputSyncTrackModeState {
                 InputSyncMode::Simple => InputSyncModeState::Simple {
                     state: SimpleSyncTrackState::InitialBuffering,
                 },
-                InputSyncMode::Live => InputSyncModeState::Live(Box::new(LiveSyncModeState {
-                    state: LiveSyncTrackState::WaitingForStart,
-                    discontinuities_detected: 0,
-                    discontinuities_detected_10_secs: SlidingWindowValue::new(Duration::from_secs(
-                        10,
-                    )),
-                    effective_buffer_on_receive_10_secs: SlidingWindowValue::new(
-                        Duration::from_secs(10),
-                    ),
-                    effective_buffer_on_output_10_secs: SlidingWindowValue::new(
-                        Duration::from_secs(10),
-                    ),
-                    snapshot: LiveSyncSnapshot {
-                        buffer: LiveSyncBufferStats::Fifo {
-                            duration: Duration::ZERO,
+                InputSyncMode::Live => {
+                    InputSyncModeState::Live(Box::new(InputSyncLiveTrackState {
+                        state: LiveSyncTrackState::WaitingForStart,
+                        discontinuities_detected: 0,
+                        discontinuities_detected_10_secs: SlidingWindowValue::new(
+                            Duration::from_secs(10),
+                        ),
+                        effective_buffer_on_receive_10_secs: SlidingWindowValue::new(
+                            Duration::from_secs(10),
+                        ),
+                        effective_buffer_on_output_10_secs: SlidingWindowValue::new(
+                            Duration::from_secs(10),
+                        ),
+                        snapshot: LiveSyncTrackStateSnapshot {
+                            buffer: LiveSyncBufferStats::Fifo {
+                                duration: Duration::ZERO,
+                            },
+                            target_offset_distance_ns: 0,
+                            live_edge_lower_bound_distance_ns: None,
+                            live_edge_upper_bound_distance_ns: None,
                         },
-                        target_offset_distance_ns: 0,
-                        live_edge_lower_bound_distance_ns: None,
-                        live_edge_upper_bound_distance_ns: None,
-                    },
-                })),
+                    }))
+                }
             },
         }
     }

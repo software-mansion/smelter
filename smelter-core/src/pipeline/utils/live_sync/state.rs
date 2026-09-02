@@ -490,7 +490,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             } => (Some((current_anchor, target_anchor)), Some(&self.estimator)),
         };
         self.stats
-            .report_track_snapshot(&self.buffer, anchors, estimator);
+            .report_state_snapshot(&self.buffer, anchors, estimator);
     }
 
     /// Mainly detects tracks that stopped sending data, but it can also trigger
