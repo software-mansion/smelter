@@ -38,3 +38,8 @@ Pipeline orchestration: `Pipeline` in `./src/pipeline/instance.rs`. Shared state
 Input (demuxer) → Decoder → Queue → Rendering/AudioMixer → Encoder → Output (muxer) 
 
 In most cases, each element spawns at least one thread and communicates with other elements via channels.
+
+## Code Style
+
+- Merge all `crate` imports into a single `use crate::{...}`, except the prelude.
+- When importing the prelude, use a separate `use crate::prelude::*;` statement after the other `crate` imports, separated from them by a blank line.
