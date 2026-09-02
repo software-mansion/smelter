@@ -105,21 +105,14 @@ pub struct RtpJitterBufferSlidingWindowStatsReport {
 /// Stats report for `RTMP` input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct RtmpInputStatsReport {
-    /// Stats for the video track.
-    pub video: RtmpInputTrackStatsReport,
+    /// Whether a client is currently connected.
+    pub is_connected: bool,
 
-    /// Stats for the audio track.
-    pub audio: RtmpInputTrackStatsReport,
-}
+    /// Stats for the video track. `None` when the track is not active.
+    pub video: Option<InputSyncTrackStatsReport>,
 
-/// Stats report for a track in `RTMP` input.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
-pub struct RtmpInputTrackStatsReport {
-    /// Bitrate in the 1-second window.
-    pub bitrate_1_second: u64,
-
-    /// Bitrate in the 1-minute window.
-    pub bitrate_1_minute: u64,
+    /// Stats for the audio track. `None` when the track is not active.
+    pub audio: Option<InputSyncTrackStatsReport>,
 }
 
 /// Stats report for `MoQ` server input.
@@ -185,54 +178,143 @@ pub struct Mp4InputTrackStatsReport {
 /// Stats report for `HLS` input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct HlsInputStatsReport {
-    /// Stats for the video track.
-    pub video: HlsInputTrackStatsReport,
+    /// Stats for the video track. `None` when the track is not active.
+    pub video: Option<InputSyncTrackStatsReport>,
 
-    /// Stats for the audio track.
-    pub audio: HlsInputTrackStatsReport,
+    /// Stats for the audio track. `None` when the track is not active.
+    pub audio: Option<InputSyncTrackStatsReport>,
 }
 
-/// Stats report for a track in the `HLS` input.
+/// Stats report for a track synchronized by the input sync (`RTMP`, `HLS`).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
-pub struct HlsInputTrackStatsReport {
-    /// Total count of the packets received.
-    pub packets_received: u64,
-    /// Total count of discontinuities between packet timestamps.
-    pub discontinuities_detected: u32,
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum InputSyncTrackStatsReport {
+    /// Non-live stream, timestamps are normalized to start at zero.
+    Simple(SimpleSyncTrackStatsReport),
+    /// Live stream, synchronized to the estimated live edge.
+    Live(LiveSyncTrackStatsReport),
+}
 
+/// Stats report for a track of a non-live stream.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct SimpleSyncTrackStatsReport {
     /// Bitrate in the 1-second window.
     pub bitrate_1_second: u64,
     /// Bitrate in the 1-minute window.
     pub bitrate_1_minute: u64,
 
-    /// Track stats in the 10-second window.
-    pub last_10_seconds: HlsInputTrackSlidingWindowStatsReport,
+    /// State of the synchronization.
+    pub state: SimpleSyncTrackState,
 }
 
-/// Stats report for the given time window in the `HLS` input track.
+/// State of the synchronization of a non-live track.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
-pub struct HlsInputTrackSlidingWindowStatsReport {
-    /// Count of packets received during the given time window.
-    pub packets_received: u64,
+#[serde(rename_all = "snake_case")]
+pub enum SimpleSyncTrackState {
+    /// Chunks are held back until the initial buffer is collected.
+    InitialBuffering,
+    Running,
+}
 
-    /// Count of discontinuities between packet timestamps
-    /// during the given time window.
+/// Stats report for a track of a live stream.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct LiveSyncTrackStatsReport {
+    /// Bitrate in the 1-second window.
+    pub bitrate_1_second: u64,
+    /// Bitrate in the 1-minute window.
+    pub bitrate_1_minute: u64,
+
+    /// State of the live edge synchronization.
+    pub state: LiveSyncTrackState,
+
+    /// Total count of timestamp discontinuities detected.
     pub discontinuities_detected: u32,
 
-    /// Measured when packet leaves jitter buffer. This value represents
-    /// how much time packet has to reach the queue to be processed.
-    pub effective_buffer_avg_seconds: f64,
-    /// Measured when packet leaves jitter buffer. This value represents
-    /// how much time packet has to reach the queue to be processed.
-    pub effective_buffer_max_seconds: f64,
-    /// Measured when packet leaves jitter buffer. This value represents
-    /// how much time packet has to reach the queue to be processed.
-    pub effective_buffer_min_seconds: f64,
+    /// Remaining shift of the playback position to reach the target buffer.
+    /// Positive when the buffer is being shrunk, negative when it is being
+    /// grown, zero when converged.
+    pub target_offset_distance_seconds: f64,
 
-    /// Size of the input buffer.
-    pub input_buffer_avg_seconds: f64,
-    /// Size of the input buffer.
-    pub input_buffer_max_seconds: f64,
-    /// Size of the input buffer.
-    pub input_buffer_min_seconds: f64,
+    /// How far the playback position is behind the pessimistic live edge
+    /// estimate (content arriving as slow as the slowest recent chunk).
+    /// Margin before the playback runs out of content. `None` before the
+    /// track starts.
+    pub live_edge_lower_bound_distance_seconds: Option<f64>,
+
+    /// How far the playback position is behind the optimistic live edge
+    /// estimate (content arriving as fast as the fastest recent chunk).
+    /// Total latency introduced by the synchronization. `None` before the
+    /// track starts.
+    pub live_edge_upper_bound_distance_seconds: Option<f64>,
+
+    /// Content currently held back by the sync.
+    pub buffer: LiveSyncBufferStatsReport,
+
+    /// Track stats in the 10-second window.
+    pub last_10_seconds: LiveSyncTrackSlidingWindowStatsReport,
+}
+
+/// State of the live edge synchronization of a track.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LiveSyncTrackState {
+    /// Chunks are held back until the live edge is estimated.
+    WaitingForStart,
+    /// Started, aligned to the live edge shared with the other track.
+    StartedShared,
+    /// Started with its own live edge, timestamps are unrelated to the other track.
+    StartedTrack,
+}
+
+/// Stats report for the content currently held in the sync buffer.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum LiveSyncBufferStatsReport {
+    Fifo(FifoBufferStatsReport),
+}
+
+/// Stats report for a FIFO sync buffer.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct FifoBufferStatsReport {
+    /// Duration of the buffered content.
+    pub duration_seconds: f64,
+}
+
+/// Stats report for the given time window in a live stream track.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct LiveSyncTrackSlidingWindowStatsReport {
+    /// Count of timestamp discontinuities detected during the given time window.
+    pub discontinuities_detected: u32,
+
+    /// Measured when chunk enters the sync buffer, using the current
+    /// timestamp mapping. This value represents how much time chunk has to
+    /// reach the queue to be processed, before any waiting in the sync buffer.
+    /// Negative when the chunk is already late. Not measured before the
+    /// track starts.
+    pub effective_buffer_on_receive_avg_seconds: f64,
+    /// Measured when chunk enters the sync buffer, using the current
+    /// timestamp mapping. This value represents how much time chunk has to
+    /// reach the queue to be processed, before any waiting in the sync buffer.
+    /// Negative when the chunk is already late. Not measured before the
+    /// track starts.
+    pub effective_buffer_on_receive_max_seconds: f64,
+    /// Measured when chunk enters the sync buffer, using the current
+    /// timestamp mapping. This value represents how much time chunk has to
+    /// reach the queue to be processed, before any waiting in the sync buffer.
+    /// Negative when the chunk is already late. Not measured before the
+    /// track starts.
+    pub effective_buffer_on_receive_min_seconds: f64,
+
+    /// Measured when chunk leaves the sync buffer. This value represents
+    /// how much time chunk has to reach the queue to be processed.
+    /// Negative when the chunk is already late.
+    pub effective_buffer_on_output_avg_seconds: f64,
+    /// Measured when chunk leaves the sync buffer. This value represents
+    /// how much time chunk has to reach the queue to be processed.
+    /// Negative when the chunk is already late.
+    pub effective_buffer_on_output_max_seconds: f64,
+    /// Measured when chunk leaves the sync buffer. This value represents
+    /// how much time chunk has to reach the queue to be processed.
+    /// Negative when the chunk is already late.
+    pub effective_buffer_on_output_min_seconds: f64,
 }

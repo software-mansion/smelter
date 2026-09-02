@@ -13,6 +13,9 @@ pub(crate) trait InputSyncItem {
     /// is read from a track ([`InputSyncItem::apply_anchor`]).
     fn pts(&self) -> Duration;
 
+    /// Size of the payload in bytes, for bitrate stats.
+    fn size(&self) -> usize;
+
     /// Maps all timestamps of the item (pts, and dts if present) onto the
     /// output timeline `anchor` describes. Called by the track when the item
     /// is read.
@@ -27,6 +30,10 @@ pub(crate) trait InputSyncItem {
 impl InputSyncItem for EncodedInputChunk {
     fn pts(&self) -> Duration {
         self.pts
+    }
+
+    fn size(&self) -> usize {
+        self.data.len()
     }
 
     fn apply_anchor(&mut self, anchor: TimestampAnchor) {

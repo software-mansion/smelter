@@ -49,12 +49,13 @@ use std::{
 mod buffer;
 mod edge_estimator;
 mod state;
+mod stats;
 mod track;
 
 pub(crate) use buffer::{BufferingStrategy, ChunkBuffer, FifoBuffer, LiveSyncBuffer};
 pub(crate) use track::LiveSyncTrack;
 
-use crate::pipeline::utils::input_sync::{BoxedTrackSink, TrackKind};
+use crate::pipeline::utils::input_sync::{BoxedTrackSink, InputSyncStatsSender, TrackKind};
 use state::SharedState;
 
 #[derive(Debug, Clone, Copy)]
@@ -84,8 +85,8 @@ pub(crate) struct LiveSync<B: LiveSyncBuffer> {
 const TICK_INTERVAL: Duration = Duration::from_millis(20);
 
 impl<B: LiveSyncBuffer> LiveSync<B> {
-    pub fn new(options: LiveSyncOptions, sync_point: Instant) -> Self {
-        let shared = Arc::new(Mutex::new(SharedState::new(options, sync_point)));
+    pub fn new(options: LiveSyncOptions, sync_point: Instant, stats: InputSyncStatsSender) -> Self {
+        let shared = Arc::new(Mutex::new(SharedState::new(options, sync_point, stats)));
         spawn_tick_thread(Arc::downgrade(&shared));
         Self { shared }
     }

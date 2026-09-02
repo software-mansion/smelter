@@ -29,6 +29,11 @@ impl<Value: Copy> SlidingWindowValue<Value> {
         self.window_size
     }
 
+    pub fn count(&mut self) -> usize {
+        self.drop_older(Instant::now());
+        self.buffer.len()
+    }
+
     fn drop_older(&mut self, instant: Instant) {
         while let Some((first, _)) = self.buffer.front()
             && *first + self.window_size < instant

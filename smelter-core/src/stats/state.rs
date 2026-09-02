@@ -53,8 +53,9 @@ impl StatsState {
         let now = Instant::now();
         match event {
             StatsEvent::Input { input_ref, event } => {
-                if !self.inputs.contains_key(&input_ref) {
-                    let kind = InputProtocolKind::from(&event);
+                if !self.inputs.contains_key(&input_ref)
+                    && let Some(kind) = event.protocol_kind()
+                {
                     self.inputs
                         .insert(input_ref.clone(), (now, InputStatsState::new(kind)));
                 }

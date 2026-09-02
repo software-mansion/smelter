@@ -13,7 +13,13 @@
 //! [`InputSync::add_track`], with timestamps already mapped onto the output
 //! timeline ([`InputSyncItem::apply_anchor`]).
 
+use smelter_render::InputId;
+
 use super::live_sync::{LiveSync, LiveSyncBuffer, LiveSyncTrack};
+use crate::{
+    Ref,
+    stats::{InputStatsEvent, InputSyncTrackStatsEvent, StatsEvent, StatsSender},
+};
 
 mod anchor;
 mod item;
@@ -29,6 +35,29 @@ pub(crate) use simple_sync::{SimpleSync, SimpleSyncTrack};
 pub(crate) enum TrackKind {
     Audio,
     Video,
+}
+
+/// Reports the sync state of an input to the stats module.
+#[derive(Debug, Clone)]
+pub(crate) struct InputSyncStatsSender {
+    input_ref: Ref<InputId>,
+    stats_sender: StatsSender,
+}
+
+impl InputSyncStatsSender {
+    pub fn new(input_ref: &Ref<InputId>, stats_sender: &StatsSender) -> Self {
+        Self {
+            input_ref: input_ref.clone(),
+            stats_sender: stats_sender.clone(),
+        }
+    }
+
+    pub(super) fn send(&self, track: TrackKind, event: InputSyncTrackStatsEvent) {
+        self.stats_sender.send(StatsEvent::Input {
+            input_ref: self.input_ref.clone(),
+            event: InputStatsEvent::Sync { track, event },
+        });
+    }
 }
 
 /// What a track releases.
@@ -78,7 +107,7 @@ impl<B: LiveSyncBuffer> InputSync<B> {
     pub fn add_track(&self, kind: TrackKind, sink: BoxedTrackSink<B::Chunk>) -> InputSyncTrack<B> {
         match self {
             InputSync::Live(sync) => InputSyncTrack::Live(sync.add_track(kind, sink)),
-            InputSync::Simple(sync) => InputSyncTrack::Simple(sync.add_track(sink)),
+            InputSync::Simple(sync) => InputSyncTrack::Simple(sync.add_track(kind, sink)),
         }
     }
 

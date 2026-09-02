@@ -3,7 +3,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use bytes::Bytes;
@@ -22,8 +22,8 @@ use crate::{
         utils::{
             channel::TrySendError,
             input_sync::{
-                InputSync, InputSyncItem, InputSyncTrack, SimpleSync, TimestampAnchor,
-                TrackClosedError, TrackEvent, TrackKind, TrackSink,
+                InputSync, InputSyncItem, InputSyncStatsSender, InputSyncTrack, SimpleSync,
+                TimestampAnchor, TrackEvent, TrackKind, TrackSink,
             },
             live_sync::{BufferingStrategy, FifoBuffer, LiveSync, LiveSyncOptions},
         },
@@ -159,6 +159,7 @@ impl HlsDemuxerThread {
 
         let buffer_opts = input_ctx.opts.buffer;
         let (min, desired, max) = resolve_buffer_options(buffer_opts);
+        let stats = InputSyncStatsSender::new(&input_ctx.input_ref, &input_ctx.ctx.stats_sender);
         let input_sync = match is_live {
             true => InputSync::Live(LiveSync::new(
                 LiveSyncOptions {
@@ -171,9 +172,11 @@ impl HlsDemuxerThread {
                     max_wait: Duration::from_secs(10),
                 },
                 input_ctx.ctx.queue_ctx.sync_point,
+                stats,
             )),
             false => InputSync::Simple(SimpleSync::new(
                 buffer_opts.desired.unwrap_or(NON_LIVE_DEFAULT_BUFFER),
+                stats,
             )),
         };
         let decoder_buffer_size = Duration::max(Duration::from_secs(60), max * 2);
@@ -239,7 +242,9 @@ impl HlsDemuxerThread {
                 continue;
             }
 
-            if track.write_packet(packet).is_err() {
+            let chunk = HlsPacket::new(packet, track.time_base);
+            trace!(stream_id, pts=?chunk.pts(), key=chunk.is_key(), "Received packet");
+            if track.track_sync.write_chunk(chunk).is_err() {
                 break;
             }
         }
@@ -270,7 +275,6 @@ impl HlsStream {
         samples_sender: QueueSender<InputAudioSamples>,
         decoder_buffer_size: Duration,
     ) -> Result<BufferTrackWriter, InputInitError> {
-        let stats_sender = HlsInputTrackStatsSender::new(input_ctx, TrackKind::Audio);
         let decoder_handle = spawn_audio_decoder(
             input_ctx,
             self.extradata,
@@ -280,10 +284,8 @@ impl HlsStream {
         let track_sync = input_sync.add_track(
             TrackKind::Audio,
             Box::new(DecoderTrackWriter::new(
-                input_ctx,
                 decoder_handle,
                 MediaKind::Audio(AudioCodec::Aac),
-                stats_sender.clone(),
                 input_sync.is_live(),
             )),
         );
@@ -292,7 +294,6 @@ impl HlsStream {
             index: self.index,
             time_base: self.time_base,
             track_sync,
-            stats_sender,
         })
     }
 
@@ -303,16 +304,13 @@ impl HlsStream {
         frame_sender: QueueSender<Frame>,
         decoder_buffer_size: Duration,
     ) -> Result<BufferTrackWriter, InputInitError> {
-        let stats_sender = HlsInputTrackStatsSender::new(input_ctx, TrackKind::Video);
         let decoder_handle =
             spawn_video_decoder(input_ctx, self.extradata, frame_sender, decoder_buffer_size)?;
         let track_sync = input_sync.add_track(
             TrackKind::Video,
             Box::new(DecoderTrackWriter::new(
-                input_ctx,
                 decoder_handle,
                 MediaKind::Video(VideoCodec::H264),
-                stats_sender.clone(),
                 input_sync.is_live(),
             )),
         );
@@ -321,7 +319,6 @@ impl HlsStream {
             index: self.index,
             time_base: self.time_base,
             track_sync,
-            stats_sender,
         })
     }
 }
@@ -330,23 +327,6 @@ struct BufferTrackWriter {
     index: usize,
     time_base: Rational,
     track_sync: InputSyncTrack<HlsBuffer>,
-    stats_sender: HlsInputTrackStatsSender,
-}
-
-impl BufferTrackWriter {
-    /// Fails once the consumer of the track is gone.
-    fn write_packet(&mut self, packet: Packet) -> Result<(), TrackClosedError> {
-        self.stats_sender.send_on_packet_received(&packet);
-
-        trace!(
-            stream_id = self.index,
-            pts = packet.pts(),
-            key = packet.is_key(),
-            "Received packet"
-        );
-        self.track_sync
-            .write_chunk(HlsPacket::new(packet, self.time_base))
-    }
 }
 
 /// Demuxed packet of one track, buffered by the sync as it was read.
@@ -403,6 +383,10 @@ impl InputSyncItem for HlsPacket {
         self.timestamp(self.packet.pts().unwrap_or(0))
     }
 
+    fn size(&self) -> usize {
+        self.packet.size()
+    }
+
     fn apply_anchor(&mut self, anchor: TimestampAnchor) {
         self.anchor = anchor;
     }
@@ -413,51 +397,27 @@ impl InputSyncItem for HlsPacket {
 }
 
 /// Consumer of one HLS track: turns the packets the track releases into
-/// chunks for its decoder thread and reports the buffer measured at that
-/// moment.
+/// chunks for its decoder thread.
 struct DecoderTrackWriter {
     decoder_handle: DecoderThreadHandle,
     kind: MediaKind,
-    stats_sender: HlsInputTrackStatsSender,
     waiting_for_keyframe: bool,
     pending_discontinuity: bool,
     closed: bool,
 
     is_live: bool,
-
-    // Used to calculate stats
-    sync_point: Instant,
 }
 
 impl DecoderTrackWriter {
-    fn new(
-        input: &HlsInputContext,
-        decoder_handle: DecoderThreadHandle,
-        kind: MediaKind,
-        stats_sender: HlsInputTrackStatsSender,
-        is_live: bool,
-    ) -> Self {
+    fn new(decoder_handle: DecoderThreadHandle, kind: MediaKind, is_live: bool) -> Self {
         Self {
             kind,
             decoder_handle,
-            stats_sender,
-            sync_point: input.ctx.queue_ctx.sync_point,
             is_live,
             waiting_for_keyframe: true,
             pending_discontinuity: false,
             closed: false,
         }
-    }
-
-    /// The input timeline broke. The decoder keeps running - it decodes
-    /// everything it still holds from the old timeline first, and drops the
-    /// state built from it when the marker reaches it.
-    fn on_discontinuity(&mut self) {
-        self.stats_sender
-            .send(HlsInputTrackStatsEvent::DiscontinuityDetected);
-        self.pending_discontinuity = true;
-        self.waiting_for_keyframe = true;
-        self.maybe_handle_discontinuity();
     }
 
     fn send_chunk(&mut self, packet: HlsPacket) {
@@ -476,13 +436,6 @@ impl DecoderTrackWriter {
         }
 
         let chunk = packet.into_chunk(self.kind);
-        self.stats_sender.send_on_chunk_released(
-            self.decoder_handle.chunk_sender.buffered_duration(),
-            // only live timestamps are on the sync point timeline
-            self.is_live
-                .then(|| chunk.pts.saturating_sub(self.sync_point.elapsed())),
-        );
-
         self.send_to_decoder(EncodedInputEvent::Chunk(chunk));
     }
 
@@ -526,7 +479,11 @@ impl TrackSink<HlsPacket> for DecoderTrackWriter {
     fn on_event(&mut self, event: TrackEvent<HlsPacket>) {
         match event {
             TrackEvent::Chunk(packet) => self.send_chunk(packet),
-            TrackEvent::Discontinuity => self.on_discontinuity(),
+            TrackEvent::Discontinuity => {
+                self.pending_discontinuity = true;
+                self.waiting_for_keyframe = true;
+                self.maybe_handle_discontinuity();
+            }
         }
     }
 
@@ -576,56 +533,6 @@ impl FfmpegInputContext {
         let mut packet = Packet::empty();
         packet.read(&mut self.ctx)?;
         Ok(packet)
-    }
-}
-
-#[derive(Clone)]
-struct HlsInputTrackStatsSender {
-    input_ref: Ref<InputId>,
-    stats_sender: StatsSender,
-    track: TrackKind,
-}
-
-impl HlsInputTrackStatsSender {
-    fn new(input: &HlsInputContext, track: TrackKind) -> Self {
-        Self {
-            input_ref: input.input_ref.clone(),
-            stats_sender: input.ctx.stats_sender.clone(),
-            track,
-        }
-    }
-
-    fn send_on_packet_received(&self, packet: &Packet) {
-        self.send_all([
-            HlsInputTrackStatsEvent::PacketReceived,
-            HlsInputTrackStatsEvent::BytesReceived(packet.size()),
-        ]);
-    }
-
-    fn send_on_chunk_released(&self, input_buffer: Duration, effective_buffer: Option<Duration>) {
-        self.send_all(
-            [
-                Some(HlsInputTrackStatsEvent::InputBufferSize(input_buffer)),
-                effective_buffer.map(HlsInputTrackStatsEvent::EffectiveBuffer),
-            ]
-            .into_iter()
-            .flatten(),
-        );
-    }
-
-    fn send(&self, event: HlsInputTrackStatsEvent) {
-        self.send_all([event]);
-    }
-
-    fn send_all(&self, events: impl IntoIterator<Item = HlsInputTrackStatsEvent>) {
-        let events = events
-            .into_iter()
-            .map(|e| match self.track {
-                TrackKind::Video => HlsInputStatsEvent::Video(e).into_event(&self.input_ref),
-                TrackKind::Audio => HlsInputStatsEvent::Audio(e).into_event(&self.input_ref),
-            })
-            .collect::<Vec<_>>();
-        self.stats_sender.send(events);
     }
 }
 

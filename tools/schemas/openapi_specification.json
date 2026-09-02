@@ -1453,6 +1453,20 @@
         ],
         "description": "Easing functions are used to interpolate between two values over time.\n\nCustom easing functions can be implemented with cubic Bézier.\nThe control points are defined with `points` field by providing four numerical values: `x1`, `y1`, `x2` and `y2`. The `x1` and `x2` values have to be in the range `[0; 1]`. The cubic Bézier result is clamped to the range `[0; 1]`.\nYou can find example control point configurations [here](https://easings.net/)."
       },
+      "FifoBufferStatsReport": {
+        "type": "object",
+        "description": "Stats report for a FIFO sync buffer.",
+        "required": [
+          "duration_seconds"
+        ],
+        "properties": {
+          "duration_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Duration of the buffered content."
+          }
+        }
+      },
       "Framerate": {
         "oneOf": [
           {
@@ -1577,117 +1591,28 @@
       "HlsInputStatsReport": {
         "type": "object",
         "description": "Stats report for `HLS` input.",
-        "required": [
-          "video",
-          "audio"
-        ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/HlsInputTrackStatsReport",
-            "description": "Stats for the video track."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the video track. `None` when the track is not active."
+              }
+            ]
           },
           "audio": {
-            "$ref": "#/components/schemas/HlsInputTrackStatsReport",
-            "description": "Stats for the audio track."
-          }
-        }
-      },
-      "HlsInputTrackSlidingWindowStatsReport": {
-        "type": "object",
-        "description": "Stats report for the given time window in the `HLS` input track.",
-        "required": [
-          "packets_received",
-          "discontinuities_detected",
-          "effective_buffer_avg_seconds",
-          "effective_buffer_max_seconds",
-          "effective_buffer_min_seconds",
-          "input_buffer_avg_seconds",
-          "input_buffer_max_seconds",
-          "input_buffer_min_seconds"
-        ],
-        "properties": {
-          "packets_received": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Count of packets received during the given time window.",
-            "minimum": 0
-          },
-          "discontinuities_detected": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Count of discontinuities between packet timestamps\nduring the given time window.",
-            "minimum": 0
-          },
-          "effective_buffer_avg_seconds": {
-            "type": "number",
-            "format": "double",
-            "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
-          },
-          "effective_buffer_max_seconds": {
-            "type": "number",
-            "format": "double",
-            "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
-          },
-          "effective_buffer_min_seconds": {
-            "type": "number",
-            "format": "double",
-            "description": "Measured when packet leaves jitter buffer. This value represents\nhow much time packet has to reach the queue to be processed."
-          },
-          "input_buffer_avg_seconds": {
-            "type": "number",
-            "format": "double",
-            "description": "Size of the input buffer."
-          },
-          "input_buffer_max_seconds": {
-            "type": "number",
-            "format": "double",
-            "description": "Size of the input buffer."
-          },
-          "input_buffer_min_seconds": {
-            "type": "number",
-            "format": "double",
-            "description": "Size of the input buffer."
-          }
-        }
-      },
-      "HlsInputTrackStatsReport": {
-        "type": "object",
-        "description": "Stats report for a track in the `HLS` input.",
-        "required": [
-          "packets_received",
-          "discontinuities_detected",
-          "bitrate_1_second",
-          "bitrate_1_minute",
-          "last_10_seconds"
-        ],
-        "properties": {
-          "packets_received": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Total count of the packets received.",
-            "minimum": 0
-          },
-          "discontinuities_detected": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Total count of discontinuities between packet timestamps.",
-            "minimum": 0
-          },
-          "bitrate_1_second": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate in the 1-second window.",
-            "minimum": 0
-          },
-          "bitrate_1_minute": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate in the 1-minute window.",
-            "minimum": 0
-          },
-          "last_10_seconds": {
-            "$ref": "#/components/schemas/HlsInputTrackSlidingWindowStatsReport",
-            "description": "Track stats in the 10-second window."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the audio track. `None` when the track is not active."
+              }
+            ]
           }
         }
       },
@@ -2419,6 +2344,57 @@
         },
         "additionalProperties": false
       },
+      "InputSyncTrackStatsReport": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleSyncTrackStatsReport",
+                "description": "Non-live stream, timestamps are normalized to start at zero."
+              },
+              {
+                "type": "object",
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "simple"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "Non-live stream, timestamps are normalized to start at zero."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LiveSyncTrackStatsReport",
+                "description": "Live stream, synchronized to the estimated live edge."
+              },
+              {
+                "type": "object",
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "live"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "Live stream, synchronized to the estimated live edge."
+          }
+        ],
+        "description": "Stats report for a track synchronized by the input sync (`RTMP`, `HLS`)."
+      },
       "InputWhepVideoOptions": {
         "type": "object",
         "properties": {
@@ -2544,6 +2520,158 @@
             "items": {
               "$ref": "#/components/schemas/OutputInfo"
             }
+          }
+        }
+      },
+      "LiveSyncBufferStatsReport": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FifoBufferStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "fifo"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "description": "Stats report for the content currently held in the sync buffer."
+      },
+      "LiveSyncTrackSlidingWindowStatsReport": {
+        "type": "object",
+        "description": "Stats report for the given time window in a live stream track.",
+        "required": [
+          "discontinuities_detected",
+          "effective_buffer_on_receive_avg_seconds",
+          "effective_buffer_on_receive_max_seconds",
+          "effective_buffer_on_receive_min_seconds",
+          "effective_buffer_on_output_avg_seconds",
+          "effective_buffer_on_output_max_seconds",
+          "effective_buffer_on_output_min_seconds"
+        ],
+        "properties": {
+          "discontinuities_detected": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of timestamp discontinuities detected during the given time window.",
+            "minimum": 0
+          },
+          "effective_buffer_on_receive_avg_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when chunk enters the sync buffer, using the current\ntimestamp mapping. This value represents how much time chunk has to\nreach the queue to be processed, before any waiting in the sync buffer.\nNegative when the chunk is already late. Not measured before the\ntrack starts."
+          },
+          "effective_buffer_on_receive_max_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when chunk enters the sync buffer, using the current\ntimestamp mapping. This value represents how much time chunk has to\nreach the queue to be processed, before any waiting in the sync buffer.\nNegative when the chunk is already late. Not measured before the\ntrack starts."
+          },
+          "effective_buffer_on_receive_min_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when chunk enters the sync buffer, using the current\ntimestamp mapping. This value represents how much time chunk has to\nreach the queue to be processed, before any waiting in the sync buffer.\nNegative when the chunk is already late. Not measured before the\ntrack starts."
+          },
+          "effective_buffer_on_output_avg_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when chunk leaves the sync buffer. This value represents\nhow much time chunk has to reach the queue to be processed.\nNegative when the chunk is already late."
+          },
+          "effective_buffer_on_output_max_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when chunk leaves the sync buffer. This value represents\nhow much time chunk has to reach the queue to be processed.\nNegative when the chunk is already late."
+          },
+          "effective_buffer_on_output_min_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Measured when chunk leaves the sync buffer. This value represents\nhow much time chunk has to reach the queue to be processed.\nNegative when the chunk is already late."
+          }
+        }
+      },
+      "LiveSyncTrackState": {
+        "type": "string",
+        "description": "State of the live edge synchronization of a track.",
+        "enum": [
+          "waiting_for_start",
+          "started_shared",
+          "started_track"
+        ]
+      },
+      "LiveSyncTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for a track of a live stream.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "state",
+          "discontinuities_detected",
+          "target_offset_distance_seconds",
+          "buffer",
+          "last_10_seconds"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate in the 1-second window.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate in the 1-minute window.",
+            "minimum": 0
+          },
+          "state": {
+            "$ref": "#/components/schemas/LiveSyncTrackState",
+            "description": "State of the live edge synchronization."
+          },
+          "discontinuities_detected": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of timestamp discontinuities detected.",
+            "minimum": 0
+          },
+          "target_offset_distance_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Remaining shift of the playback position to reach the target buffer.\nPositive when the buffer is being shrunk, negative when it is being\ngrown, zero when converged."
+          },
+          "live_edge_lower_bound_distance_seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "How far the playback position is behind the pessimistic live edge\nestimate (content arriving as slow as the slowest recent chunk).\nMargin before the playback runs out of content. `None` before the\ntrack starts."
+          },
+          "live_edge_upper_bound_distance_seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "How far the playback position is behind the optimistic live edge\nestimate (content arriving as fast as the fastest recent chunk).\nTotal latency introduced by the synchronization. `None` before the\ntrack starts."
+          },
+          "buffer": {
+            "$ref": "#/components/schemas/LiveSyncBufferStatsReport",
+            "description": "Content currently held back by the sync."
+          },
+          "last_10_seconds": {
+            "$ref": "#/components/schemas/LiveSyncTrackSlidingWindowStatsReport",
+            "description": "Track stats in the 10-second window."
           }
         }
       },
@@ -5305,39 +5433,34 @@
         "type": "object",
         "description": "Stats report for `RTMP` input.",
         "required": [
-          "video",
-          "audio"
+          "is_connected"
         ],
         "properties": {
+          "is_connected": {
+            "type": "boolean",
+            "description": "Whether a client is currently connected."
+          },
           "video": {
-            "$ref": "#/components/schemas/RtmpInputTrackStatsReport",
-            "description": "Stats for the video track."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the video track. `None` when the track is not active."
+              }
+            ]
           },
           "audio": {
-            "$ref": "#/components/schemas/RtmpInputTrackStatsReport",
-            "description": "Stats for the audio track."
-          }
-        }
-      },
-      "RtmpInputTrackStatsReport": {
-        "type": "object",
-        "description": "Stats report for a track in `RTMP` input.",
-        "required": [
-          "bitrate_1_second",
-          "bitrate_1_minute"
-        ],
-        "properties": {
-          "bitrate_1_second": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate in the 1-second window.",
-            "minimum": 0
-          },
-          "bitrate_1_minute": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate in the 1-minute window.",
-            "minimum": 0
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the audio track. `None` when the track is not active."
+              }
+            ]
           }
         }
       },
@@ -6215,6 +6338,41 @@
           }
         },
         "additionalProperties": false
+      },
+      "SimpleSyncTrackState": {
+        "type": "string",
+        "description": "State of the synchronization of a non-live track.",
+        "enum": [
+          "initial_buffering",
+          "running"
+        ]
+      },
+      "SimpleSyncTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for a track of a non-live stream.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "state"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate in the 1-second window.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate in the 1-minute window.",
+            "minimum": 0
+          },
+          "state": {
+            "$ref": "#/components/schemas/SimpleSyncTrackState",
+            "description": "State of the synchronization."
+          }
+        }
       },
       "StatsReport": {
         "type": "object",

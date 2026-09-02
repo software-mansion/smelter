@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use crate::{
     pipeline::utils::input_sync::{InputSyncItem, TimestampAnchor},
+    stats::LiveSyncBufferStats,
     utils::live_sync::edge_estimator::EdgeEstimate,
 };
 
@@ -133,6 +134,9 @@ pub(crate) trait LiveSyncBuffer: Default + Send + 'static {
     fn peek_pts(&self) -> Option<Duration> {
         self.pts_values().next()
     }
+
+    /// Snapshot of the buffered content for stats.
+    fn stats(&self) -> LiveSyncBufferStats;
 }
 
 /// Plain FIFO buffer: items come out in write order and nothing is ever held
@@ -167,6 +171,17 @@ impl<T: InputSyncItem + Send + 'static> LiveSyncBuffer for FifoBuffer<T> {
 
     fn pts_values(&self) -> impl Iterator<Item = Duration> {
         self.queue.iter().map(|chunk| chunk.pts())
+    }
+
+    fn stats(&self) -> LiveSyncBufferStats {
+        let min = self.pts_values().min();
+        let max = self.pts_values().max();
+        LiveSyncBufferStats::Fifo {
+            duration: match (min, max) {
+                (Some(min), Some(max)) => max - min,
+                _ => Duration::ZERO,
+            },
+        }
     }
 }
 
