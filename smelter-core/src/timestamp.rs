@@ -59,12 +59,6 @@ impl Timestamp {
         }
     }
 
-    /// Time elapsed since `start`; the current position on a timeline that
-    /// starts at `start` (e.g. the queue sync point).
-    pub fn since(start: Instant) -> Self {
-        Instant::now().timestamp_since(start)
-    }
-
     /// Returns `None` if the timestamp is negative.
     pub fn to_duration(self) -> Option<Duration> {
         u64::try_from(self.nanos).ok().map(Duration::from_nanos)
@@ -171,19 +165,26 @@ impl From<Duration> for Timestamp {
     }
 }
 
-/// Reading an [`Instant`] as a [`Timestamp`].
+/// Reading an [`Instant`] as the start of a [`Timestamp`] timeline.
 pub trait InstantExt {
-    /// Position of this instant on a timeline that starts at `since`;
-    /// negative when the instant is before `since`.
-    fn timestamp_since(&self, since: Instant) -> Timestamp;
+    /// Position of `until` on a timeline that starts at this instant;
+    /// negative when `until` is before it.
+    fn timestamp_at(&self, until: Instant) -> Timestamp;
+
+    /// Current position on a timeline that starts at this instant.
+    fn timestamp_now(&self) -> Timestamp;
 }
 
 impl InstantExt for Instant {
-    fn timestamp_since(&self, since: Instant) -> Timestamp {
-        match self.checked_duration_since(since) {
+    fn timestamp_at(&self, until: Instant) -> Timestamp {
+        match until.checked_duration_since(*self) {
             Some(elapsed) => Timestamp::from_duration(elapsed),
-            None => -Timestamp::from_duration(since.duration_since(*self)),
+            None => -Timestamp::from_duration(self.duration_since(until)),
         }
+    }
+
+    fn timestamp_now(&self) -> Timestamp {
+        self.timestamp_at(Instant::now())
     }
 }
 

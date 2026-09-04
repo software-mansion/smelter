@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::{buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator, state::StartState};
 use crate::{
-    Timestamp,
+    InstantExt, Timestamp,
     pipeline::utils::input_sync::{InputSyncStatsSender, TimestampAnchor, TrackKind},
     stats::{
         InputSyncMode, InputSyncTrackStatsEvent, LiveSyncStatsEvent, LiveSyncTrackState,
@@ -68,7 +68,7 @@ impl LiveSyncTrackStats {
     /// How much time content at `output_pts` has to reach the queue as of
     /// `observed_at`; negative when it is already late.
     fn effective_buffer_ns(&self, output_pts: Timestamp) -> i64 {
-        (output_pts - Timestamp::since(self.sync_point)).as_nanos()
+        (output_pts - self.sync_point.timestamp_now()).as_nanos()
     }
 
     /// Throttled to [`SNAPSHOT_INTERVAL`]. `anchors` is `(current, target)`

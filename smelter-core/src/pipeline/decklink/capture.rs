@@ -66,7 +66,7 @@ impl ChannelCallbackAdapter {
         let stream_time = video_frame.stream_time()?;
         let offset = {
             let mut guard = self.stream_offset.lock().unwrap();
-            *guard.get_or_insert_with(|| Timestamp::since(self.sync_point) - stream_time)
+            *guard.get_or_insert_with(|| self.sync_point.timestamp_now() - stream_time)
         };
         let presentation_delay =
             Duration::from_millis(if self.audio_sender.is_some() { 40 } else { 0 });
@@ -207,7 +207,7 @@ impl ChannelCallbackAdapter {
         let packet_time = audio_packet.packet_time()?;
         let offset = {
             let mut guard = self.stream_offset.lock().unwrap();
-            *guard.get_or_insert_with(|| Timestamp::since(self.sync_point) - packet_time)
+            *guard.get_or_insert_with(|| self.sync_point.timestamp_now() - packet_time)
         };
         let pts = offset + packet_time + Duration::from_millis(40);
 

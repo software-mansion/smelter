@@ -217,7 +217,7 @@ impl AudioQueueInput {
 
         self.event_delivered_guard.emit();
         if self.offset_from_start.is_none() {
-            let now = Timestamp::since(self.queue_ctx.sync_point);
+            let now = self.queue_ctx.sync_point.timestamp_now();
             let offset = self.track_offset.get_or_init(now);
             let _ = self.receiver.pop_before_pts(now - offset);
         }

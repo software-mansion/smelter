@@ -168,7 +168,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         trace!(
             ?kind,
             pts=?chunk.pts(),
-            now_pts=?now.timestamp_since(self.sync_point),
+            now_pts=?self.sync_point.timestamp_at(now),
             "Live sync: observed chunk"
         );
         track.buffer.write(chunk);
@@ -315,7 +315,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     }
 
     fn maybe_correct(&mut self, now: Instant) {
-        let now_pts = now.timestamp_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
 
         if let (Some(anchor), Some(estimation)) =
             (self.anchor.as_mut(), self.shared_estimator.estimate(now))
@@ -378,7 +378,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             return false;
         };
 
-        let now_pts = now.timestamp_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
         if anchor.current.to_output_pts(pts) <= now_pts + MIN_QUEUE_HEADROOM {
             // the chunk is about to miss the queue; release it now instead of
             // waiting for the other track
@@ -510,7 +510,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
 
         // Slightly late track can still recover; reset would cause a gap of at
         // least the stabilization period. 5s late is considered unrecoverable.
-        let now_pts = now.timestamp_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
         if last_pts + Duration::from_secs(5) > now_pts {
             return;
         }
@@ -537,7 +537,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             return;
         }
 
-        let now_pts = now.timestamp_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
         let Some(shared_estimation) = shared_estimator.estimate(now) else {
             return;
         };
@@ -679,7 +679,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         }
 
         let strategy = self.options.buffering_strategy;
-        let now_pts = now.timestamp_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
         if !strategy.buffer_in_range(track_estimation, *current_anchor, now_pts) {
             *target_anchor = strategy.desired_anchor(&track_estimation, now_pts);
             trace!(
@@ -711,7 +711,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             kind=?self.kind,
             ?input_pts,
             ?output_pts,
-            lead=?(output_pts - Timestamp::since(self.sync_point)),
+            lead=?(output_pts - self.sync_point.timestamp_now()),
             "Live sync: releasing chunk"
         );
         self.stats.report_chunk_released(output_pts);
@@ -780,7 +780,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             return Some(anchor);
         }
 
-        let now_pts = now.timestamp_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
 
         // Try to maintain continuity if there is still time to reach queue:
         // the oldest buffered chunk picks the timeline up where the released

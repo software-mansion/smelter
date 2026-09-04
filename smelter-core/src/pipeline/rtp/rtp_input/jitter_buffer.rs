@@ -183,7 +183,7 @@ impl RtpJitterBuffer {
         // PTS sits compared to wall clock the moment it lands. The pop-side
         // counterpart is emitted in `read_packet` after `apply_offset` runs.
         let reference_time = self.ntp_sync_point.reference_time;
-        let effective_buffer = pts + self.input_buffer.size() - Timestamp::since(reference_time);
+        let effective_buffer = pts + self.input_buffer.size() - reference_time.timestamp_now();
         (self.on_stats_event)(RtpJitterBufferStatsEvent::EffectiveBufferOnWrite(
             effective_buffer.to_duration_saturating(),
         ));
@@ -215,7 +215,7 @@ impl RtpJitterBuffer {
                 // case scenario this could be 16 frames that needs to decoded in that time
                 let next_pts = lowest_pts + self.input_buffer.size();
                 let reference_time = self.ntp_sync_point.reference_time;
-                next_pts > Timestamp::since(reference_time) + MIN_DECODE_TIME
+                next_pts > reference_time.timestamp_now() + MIN_DECODE_TIME
             }
         };
 
@@ -244,7 +244,7 @@ impl RtpJitterBuffer {
 
         let reference_time = self.ntp_sync_point.reference_time;
         (self.on_stats_event)(RtpJitterBufferStatsEvent::EffectiveBufferOnPop(
-            (timestamp - Timestamp::since(reference_time)).to_duration_saturating(),
+            (timestamp - reference_time.timestamp_now()).to_duration_saturating(),
         ));
         (self.on_stats_event)(RtpJitterBufferStatsEvent::InputBufferSize(
             self.input_buffer.size(),
@@ -521,7 +521,7 @@ impl InnerLatencyOptimizedBuffer {
     /// target separately in `apply_offset`.
     fn on_new_packet(&mut self, pts: Timestamp) {
         let next_pts = pts + self.target_size;
-        let effective_buffer = next_pts - Timestamp::since(self.reference_time);
+        let effective_buffer = next_pts - self.reference_time.timestamp_now();
         let observed = LatencyTrend::from_effective_buffer(
             effective_buffer.to_duration_saturating(),
             &self.thresholds,
