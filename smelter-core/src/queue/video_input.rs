@@ -5,7 +5,7 @@ use smelter_render::InputId;
 use tracing::{debug, trace, warn};
 
 use crate::{
-    Frame, Ref, Timestamp,
+    Frame, InstantExt, Ref, Timestamp,
     event::{Event, EventEmitter},
     queue::{
         QueueContext, QueueVideoFrame, queue_input::TrackOffset, side_channel::VideoSideChannel,
@@ -226,7 +226,7 @@ impl VideoQueueInput {
 
         self.event_delivered_guard.emit();
         if self.offset_from_start.is_none() {
-            let now = Timestamp::since(self.queue_ctx.sync_point);
+            let now = self.queue_ctx.sync_point.timestamp_now();
             let offset = self.track_offset.get_or_init(now);
             let _ = self.receiver.is_ready_for_pts(now - offset);
         }

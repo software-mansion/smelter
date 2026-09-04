@@ -364,7 +364,7 @@ impl SingleBenchmarkPass {
             };
 
             // First check after 6 second
-            while Timestamp::since(start_time) < FIRST_CHECK + warm_up_time {
+            while start_time.timestamp_now() < FIRST_CHECK + warm_up_time {
                 receive_fn(&mut min_pts, &mut max_pts)
             }
             let measured_time = max_pts - min_pts;
@@ -379,7 +379,7 @@ impl SingleBenchmarkPass {
             }
 
             // Second check after 12 second
-            while Timestamp::since(start_time) < SECOND_CHECK + warm_up_time {
+            while start_time.timestamp_now() < SECOND_CHECK + warm_up_time {
                 receive_fn(&mut min_pts, &mut max_pts)
             }
             let measured_time = max_pts - min_pts;
@@ -394,7 +394,7 @@ impl SingleBenchmarkPass {
             }
 
             // Last check
-            while Timestamp::since(start_time) < LAST_CHECK + warm_up_time {
+            while start_time.timestamp_now() < LAST_CHECK + warm_up_time {
                 receive_fn(&mut min_pts, &mut max_pts)
             }
             let measured_time = max_pts - min_pts;

@@ -159,7 +159,7 @@ impl QueueContext {
     pub(crate) fn effective_last_pts(&self) -> Timestamp {
         self.last_pts
             .value()
-            .unwrap_or_else(|| Timestamp::since(self.sync_point))
+            .unwrap_or_else(|| self.sync_point.timestamp_now())
     }
 
     // PTS of queue start time
@@ -347,7 +347,7 @@ impl Queue {
         audio_sender: Sender<QueueAudioOutput>,
     ) {
         if let Some(sender) = self.start_sender.lock().unwrap().take() {
-            let queue_start_pts = Timestamp::since(self.queue_ctx.sync_point);
+            let queue_start_pts = self.queue_ctx.sync_point.timestamp_now();
             self.queue_ctx.start_pts.update(queue_start_pts);
             sender
                 .send(QueueStartEvent {

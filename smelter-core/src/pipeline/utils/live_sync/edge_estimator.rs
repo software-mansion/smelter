@@ -183,7 +183,7 @@ impl LiveEdgeEstimator {
 
     /// Record a chunk with `pts` that arrived at `now`.
     pub fn observe(&mut self, now: Instant, pts: Timestamp) {
-        let arrival_ns = now.timestamp_since(self.sync_point).as_nanos();
+        let arrival_ns = self.sync_point.timestamp_at(now).as_nanos();
         let offset_ns = arrival_ns.saturating_sub(pts.as_nanos());
         let now_index = self.bucket_index(now);
 
@@ -221,7 +221,7 @@ impl LiveEdgeEstimator {
         let now_index = self.bucket_index(now);
         let max_gap = observations.max_arrival_gap(now, now_index);
         let (min_offset_ns, max_offset_ns) = observations.offset_bounds_ns(now_index, max_gap);
-        let now_ns = now.timestamp_since(self.sync_point).as_nanos();
+        let now_ns = self.sync_point.timestamp_at(now).as_nanos();
         // negative only when pts run ahead of the wall clock
         let bound_pts = |offset_ns: i64| Timestamp::from_nanos(now_ns.saturating_sub(offset_ns));
         let upper_bound = PtsBound {

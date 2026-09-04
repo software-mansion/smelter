@@ -349,7 +349,7 @@ impl InputState<'_> {
             };
 
             let frame = Frame {
-                pts: Timestamp::since(self.ctx.queue_ctx.sync_point),
+                pts: self.ctx.queue_ctx.sync_point.timestamp_now(),
                 resolution: self.config.resolution,
                 data,
             };
