@@ -1,12 +1,20 @@
-use std::sync::{
-    OnceLock,
-    atomic::{AtomicU32, Ordering},
+use std::{
+    fs,
+    sync::{
+        OnceLock,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use inquire::Text;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::{Digest, Sha256};
+use smelter::config::read_config;
+use tracing::warn;
+
+use crate::IP;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoqServerInput {
@@ -26,10 +34,38 @@ impl MoqServerInput {
     }
 
     pub fn on_after_registration(&self) -> Result<()> {
+        let moq_streamer_url = "https://smelter-labs.github.io/tools/#moq-streamer";
+        let config = read_config();
+        let mut url = format!(
+            "{moq_streamer_url}?url=https://{IP}:{}/{}&token={}",
+            config.moq_server_port, self.name, self.auth_token
+        );
+        if config.moq_tls_config.is_none() {
+            match self_signed_cert_fingerprint() {
+                Ok(fingerprint) => url.push_str(&format!("&cert={fingerprint}")),
+                Err(err) => warn!("Failed to read self-signed MoQ certificate: {err}"),
+            }
+        }
         println!("Open in browser to start streaming with MoQ streamer tool:");
-        println!("https://smelter-labs.github.io/tools/#moq-streamer");
+        println!("{url}");
         Ok(())
     }
+}
+
+/// SHA-256 fingerprint of the self-signed certificate the server generates in
+/// `~/.smelter` when no TLS config is provided.
+fn self_signed_cert_fingerprint() -> Result<String> {
+    let path = dirs::home_dir()
+        .context("home directory not found")?
+        .join(".smelter")
+        .join("moq_cert.pem");
+    let pem = fs::read_to_string(&path).with_context(|| format!("{}", path.display()))?;
+    let base64: String = pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+    let der = data_encoding::BASE64.decode(base64.as_bytes())?;
+    Ok(data_encoding::HEXLOWER.encode(&Sha256::digest(&der)))
 }
 
 pub struct MoqServerInputBuilder {

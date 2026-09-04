@@ -1,3 +1,4 @@
+mod buffer;
 mod client_input;
 pub(super) mod connection;
 mod server_input;
