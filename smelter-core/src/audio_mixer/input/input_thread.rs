@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crossbeam_channel::{Receiver, Sender};
 use tracing::trace;
 
@@ -69,7 +67,7 @@ impl InputProcessor {
         resampler.write_batch(batch);
     }
 
-    pub fn get_samples(&mut self, pts_range: (Duration, Duration)) -> Vec<(f64, f64)> {
+    pub fn get_samples(&mut self, pts_range: (Timestamp, Timestamp)) -> Vec<(f64, f64)> {
         match &mut self.resampler {
             Some(resampler) => match resampler.get_samples(pts_range) {
                 AudioSamples::Mono(items) => {

@@ -3,7 +3,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::pipeline::rtp::rtp_input::rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync};
+use crate::{
+    Timestamp,
+    pipeline::rtp::rtp_input::rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync},
+};
 
 const POW_2_32: u64 = 1u64 << 32;
 
@@ -23,8 +26,12 @@ fn test_rtcp_sync_pts_from_zero() {
     let stream_1_first_pts = stream_1.pts_from_timestamp(0);
     thread::sleep(Duration::from_millis(100));
     let stream_2_first_pts = stream_2.pts_from_timestamp(0);
-    assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
-    assert_duration_eq(stream_2_first_pts, Duration::from_millis(100), PREC_RUNTIME);
+    assert_duration_eq(stream_1_first_pts, Timestamp::ZERO, PREC_RUNTIME);
+    assert_duration_eq(
+        stream_2_first_pts,
+        Timestamp::from_millis(100),
+        PREC_RUNTIME,
+    );
 
     let stream_1_second_pts = stream_1.pts_from_timestamp(1_000);
     let stream_2_second_pts = stream_2.pts_from_timestamp(1_000);
@@ -84,8 +91,12 @@ fn test_rtcp_sync_pts_from_non_zero() {
     thread::sleep(Duration::from_millis(100));
     let stream_2_first_pts = stream_2.pts_from_timestamp(90_000);
 
-    assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
-    assert_duration_eq(stream_2_first_pts, Duration::from_millis(100), PREC_RUNTIME);
+    assert_duration_eq(stream_1_first_pts, Timestamp::ZERO, PREC_RUNTIME);
+    assert_duration_eq(
+        stream_2_first_pts,
+        Timestamp::from_millis(100),
+        PREC_RUNTIME,
+    );
 
     let stream_1_second_pts = stream_1.pts_from_timestamp(61_000);
     let stream_2_second_pts = stream_2.pts_from_timestamp(91_000);
@@ -146,8 +157,12 @@ fn test_rtcp_sync_pts_from_non_zero_different_clocks() {
     thread::sleep(Duration::from_millis(100));
     let stream_2_first_pts = stream_2.pts_from_timestamp(90_000 * 3);
 
-    assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
-    assert_duration_eq(stream_2_first_pts, Duration::from_millis(100), PREC_RUNTIME);
+    assert_duration_eq(stream_1_first_pts, Timestamp::ZERO, PREC_RUNTIME);
+    assert_duration_eq(
+        stream_2_first_pts,
+        Timestamp::from_millis(100),
+        PREC_RUNTIME,
+    );
 
     let stream_1_second_pts = stream_1.pts_from_timestamp(61_000);
     let stream_2_second_pts = stream_2.pts_from_timestamp(91_000 * 3);
@@ -211,8 +226,12 @@ fn test_rtcp_sync_pts_with_rollover_before_sender_report_first_stream() {
     thread::sleep(Duration::from_millis(100));
     let stream_2_first_pts = stream_2.pts_from_timestamp(stream_2_first_rtp_timestamp);
 
-    assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
-    assert_duration_eq(stream_2_first_pts, Duration::from_millis(100), PREC_RUNTIME);
+    assert_duration_eq(stream_1_first_pts, Timestamp::ZERO, PREC_RUNTIME);
+    assert_duration_eq(
+        stream_2_first_pts,
+        Timestamp::from_millis(100),
+        PREC_RUNTIME,
+    );
 
     // after 10 seconds
     let stream_1_second_pts = stream_1.pts_from_timestamp(5_000); // rolled over
@@ -279,8 +298,12 @@ fn test_rtcp_sync_pts_with_rollover_before_sender_report_second_stream() {
     thread::sleep(Duration::from_millis(100));
     let stream_2_first_pts = stream_2.pts_from_timestamp(stream_2_first_rtp_timestamp);
 
-    assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
-    assert_duration_eq(stream_2_first_pts, Duration::from_millis(100), PREC_RUNTIME);
+    assert_duration_eq(stream_1_first_pts, Timestamp::ZERO, PREC_RUNTIME);
+    assert_duration_eq(
+        stream_2_first_pts,
+        Timestamp::from_millis(100),
+        PREC_RUNTIME,
+    );
 
     // after 10 seconds
     let stream_1_second_pts = stream_1.pts_from_timestamp(stream_1_first_rtp_timestamp + 10_000);
@@ -347,8 +370,12 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_first_stream() {
     thread::sleep(Duration::from_millis(100));
     let stream_2_first_pts = stream_2.pts_from_timestamp(stream_2_first_rtp_timestamp);
 
-    assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
-    assert_duration_eq(stream_2_first_pts, Duration::from_millis(100), PREC_RUNTIME);
+    assert_duration_eq(stream_1_first_pts, Timestamp::ZERO, PREC_RUNTIME);
+    assert_duration_eq(
+        stream_2_first_pts,
+        Timestamp::from_millis(100),
+        PREC_RUNTIME,
+    );
 
     // after 10 seconds
     let stream_1_second_pts = stream_1.pts_from_timestamp(15_000);
@@ -415,8 +442,12 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_second_stream() {
     thread::sleep(Duration::from_millis(100));
     let stream_2_first_pts = stream_2.pts_from_timestamp(stream_2_first_rtp_timestamp);
 
-    assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
-    assert_duration_eq(stream_2_first_pts, Duration::from_millis(100), PREC_RUNTIME);
+    assert_duration_eq(stream_1_first_pts, Timestamp::ZERO, PREC_RUNTIME);
+    assert_duration_eq(
+        stream_2_first_pts,
+        Timestamp::from_millis(100),
+        PREC_RUNTIME,
+    );
 
     // after 10 seconds
     let stream_1_second_pts = stream_1.pts_from_timestamp(stream_1_first_rtp_timestamp + 10_000);
@@ -484,8 +515,8 @@ fn test_rtcp_sync_snaps_on_large_offset_diff() {
 
     let stream_1_first_pts = stream_1.pts_from_timestamp(100_000_000);
     let stream_2_first_pts = stream_2.pts_from_timestamp(200_000_000);
-    assert_duration_eq(stream_1_first_pts, Duration::ZERO, PREC_RUNTIME);
-    assert_duration_eq(stream_2_first_pts, Duration::ZERO, PREC_RUNTIME);
+    assert_duration_eq(stream_1_first_pts, Timestamp::ZERO, PREC_RUNTIME);
+    assert_duration_eq(stream_2_first_pts, Timestamp::ZERO, PREC_RUNTIME);
 
     // Stream 1 SR builds the shared NTP anchor — by construction the SR-derived
     // offset matches the current best-effort, so no snap happens here.
@@ -510,7 +541,7 @@ fn test_rtcp_sync_snaps_on_large_offset_diff() {
     );
     assert_duration_eq(
         stream_2_next_pts - stream_2_post_snap_pts,
-        Duration::from_secs(1),
+        Timestamp::from_secs(1),
         PREC_RUNTIME,
     );
 }
@@ -563,7 +594,7 @@ fn test_rtcp_sync_offset_slews_per_packet() {
     let pts_after_one = stream.pts_from_timestamp(2_010);
     assert_duration_eq(
         pts_after_one - pts_pre_sr - Duration::from_millis(10),
-        Duration::from_micros(100),
+        Timestamp::from_micros(100),
         Duration::from_micros(10),
     );
 
@@ -573,7 +604,7 @@ fn test_rtcp_sync_offset_slews_per_packet() {
     let pts_after_drain = stream.pts_from_timestamp(2_000);
     assert_duration_eq(
         pts_after_drain - pts_pre_sr,
-        Duration::from_millis(50),
+        Timestamp::from_millis(50),
         Duration::from_micros(200),
     );
 }
@@ -589,7 +620,7 @@ fn test_rtcp_sync_snaps_on_sender_resume_without_rtp_gap() {
     let mut stream = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
 
     let pts_first = stream.pts_from_timestamp(0);
-    assert_duration_eq(pts_first, Duration::ZERO, PREC_RUNTIME);
+    assert_duration_eq(pts_first, Timestamp::ZERO, PREC_RUNTIME);
 
     // Pause for 11s (above `RESUME_SKEW_SNAP_THRESHOLD` = 10s), then resume
     // with a continuous RTP timestamp (only +20 RTP units = 20ms of media).
@@ -601,7 +632,7 @@ fn test_rtcp_sync_snaps_on_sender_resume_without_rtp_gap() {
     // so PTS lands near the real elapsed time.
     assert_duration_eq(
         pts_after_resume,
-        Duration::from_secs(11),
+        Timestamp::from_secs(11),
         Duration::from_millis(20),
     );
 }
@@ -618,7 +649,7 @@ fn test_rtcp_sync_does_not_snap_when_not_real_time() {
     let mut stream = RtpTimestampSync::new(sync_point.clone(), 1_000, false);
 
     let pts_first = stream.pts_from_timestamp(0);
-    assert_duration_eq(pts_first, Duration::ZERO, PREC_RUNTIME);
+    assert_duration_eq(pts_first, Timestamp::ZERO, PREC_RUNTIME);
 
     // Simulate the receiver being blocked for 11s (queue offset, slow
     // consumer, etc.) while sender's RTP timestamps stayed continuous in
@@ -628,7 +659,7 @@ fn test_rtcp_sync_does_not_snap_when_not_real_time() {
     let pts_after_block = stream.pts_from_timestamp(20);
 
     // No snap: PTS reflects the 20ms RTP-time advance, not the 11s wall gap.
-    assert_duration_eq(pts_after_block, Duration::from_millis(20), PREC_RUNTIME);
+    assert_duration_eq(pts_after_block, Timestamp::from_millis(20), PREC_RUNTIME);
 }
 
 /// A well-behaved sender that *does* advance RTP timestamps to reflect a
@@ -639,7 +670,7 @@ fn test_rtcp_sync_does_not_snap_when_rtp_gap_matches_wall_gap() {
     let mut stream = RtpTimestampSync::new(sync_point.clone(), 1_000, true);
 
     let pts_first = stream.pts_from_timestamp(0);
-    assert_duration_eq(pts_first, Duration::ZERO, PREC_RUNTIME);
+    assert_duration_eq(pts_first, Timestamp::ZERO, PREC_RUNTIME);
 
     // Sender pauses 6s and advances RTP timestamps to match (6000 RTP
     // units at clock 1000 = 6s), so skew ≈ 0 — well below any threshold.
@@ -649,7 +680,7 @@ fn test_rtcp_sync_does_not_snap_when_rtp_gap_matches_wall_gap() {
     // No snap: PTS comes purely from RTP-time advance.
     assert_duration_eq(
         pts_after_resume,
-        Duration::from_secs(6),
+        Timestamp::from_secs(6),
         Duration::from_millis(20),
     );
 
@@ -658,12 +689,12 @@ fn test_rtcp_sync_does_not_snap_when_rtp_gap_matches_wall_gap() {
     let pts_next = stream.pts_from_timestamp(7_000);
     assert_duration_eq(
         pts_next - pts_after_resume,
-        Duration::from_secs(1),
+        Timestamp::from_secs(1),
         PREC_RUNTIME,
     );
 }
 
-fn assert_duration_eq(left: Duration, right: Duration, precision: Duration) {
+fn assert_duration_eq(left: Timestamp, right: Timestamp, precision: Duration) {
     if left > right + precision || right > left + precision {
         panic!("{left:?} != right {right:?} (precision: {precision:?})")
     }

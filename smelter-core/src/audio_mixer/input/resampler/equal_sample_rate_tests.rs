@@ -20,11 +20,11 @@ fn mono(samples: AudioSamples) -> Vec<f64> {
 #[test]
 fn dump_test_signal() {
     let source = SignalSource::new(RATE, test_signal());
-    let samples = source.samples(D, Duration::from_millis(300) + D);
+    let samples = source.samples(D, D + Duration::from_millis(300));
     dump_wav(&[&samples], RATE, "test_signal.wav");
 
     let source_5s = SignalSource::new(RATE, test_signal_5s());
-    let samples_5s = source_5s.samples(D, Duration::from_millis(2000) + D);
+    let samples_5s = source_5s.samples(D, D + Duration::from_millis(2000));
     dump_wav(&[&samples_5s], RATE, "test_signal_5s.wav");
 }
 
@@ -58,10 +58,10 @@ mod fresh {
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
         r.write_batch(source.batch(D, Duration::from_millis(10)));
-        r.write_batch(source.batch(Duration::from_millis(10) + D, Duration::from_millis(10)));
+        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(10)));
 
         let samples =
-            mono(r.get_samples((Duration::from_millis(40) + D, Duration::from_millis(60) + D)));
+            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
         assert_eq!(samples.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(40));
         dump_wav(&[&pad, &samples], RATE, "fresh_input_before_request.wav");
@@ -87,10 +87,10 @@ mod fresh {
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
         r.write_batch(source.batch(D, Duration::from_millis(10)));
-        r.write_batch(source.batch(Duration::from_millis(10) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(20)));
 
-        let out_start = Duration::from_millis(20) + D;
-        let samples = mono(r.get_samples((out_start, Duration::from_millis(40) + D)));
+        let out_start = D + Duration::from_millis(20);
+        let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
         assert_eq!(samples.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -121,11 +121,11 @@ mod fresh {
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(Duration::from_millis(10) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(30) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(30), Duration::from_millis(20)));
 
-        let out_start = Duration::from_millis(20) + D;
-        let samples = mono(r.get_samples((out_start, Duration::from_millis(40) + D)));
+        let out_start = D + Duration::from_millis(20);
+        let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
         assert_eq!(samples.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(&[&pad, &samples], RATE, "fresh_input_covers_request.wav");
@@ -147,11 +147,11 @@ mod fresh {
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
         r.write_batch(source.batch(D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(20) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(40) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(40), Duration::from_millis(20)));
 
-        let out_start = Duration::from_millis(20) + D;
-        let samples = mono(r.get_samples((out_start, Duration::from_millis(40) + D)));
+        let out_start = D + Duration::from_millis(20);
+        let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
         assert_eq!(samples.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -180,17 +180,17 @@ mod fresh {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let shift = Duration::from_micros(500);
-        let first_pts = Duration::from_millis(20) - shift + D;
+        let first_pts = D + Duration::from_millis(20) - shift;
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
         r.write_batch(source.batch(first_pts, Duration::from_millis(20)));
         r.write_batch(source.batch(
-            Duration::from_millis(40) - shift + D,
+            D + Duration::from_millis(40) - shift,
             Duration::from_millis(20),
         ));
 
-        let out_start = Duration::from_millis(20) + D;
-        let samples = mono(r.get_samples((out_start, Duration::from_millis(40) + D)));
+        let out_start = D + Duration::from_millis(20);
+        let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
         assert_eq!(samples.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -217,11 +217,11 @@ mod fresh {
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(Duration::from_millis(20) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(40) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(40), Duration::from_millis(20)));
 
-        let out_start = Duration::from_millis(20) + D;
-        let samples = mono(r.get_samples((out_start, Duration::from_millis(40) + D)));
+        let out_start = D + Duration::from_millis(20);
+        let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
         assert_eq!(samples.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -250,17 +250,17 @@ mod fresh {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let shift = Duration::from_micros(500);
-        let first_pts = Duration::from_millis(20) + shift + D;
+        let first_pts = D + Duration::from_millis(20) + shift;
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
         r.write_batch(source.batch(first_pts, Duration::from_millis(20)));
         r.write_batch(source.batch(
-            Duration::from_millis(40) + shift + D,
+            D + Duration::from_millis(40) + shift,
             Duration::from_millis(20),
         ));
 
-        let out_start = Duration::from_millis(20) + D;
-        let samples = mono(r.get_samples((out_start, Duration::from_millis(40) + D)));
+        let out_start = D + Duration::from_millis(20);
+        let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
         assert_eq!(samples.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -293,14 +293,14 @@ mod fresh {
     fn input_overlaps_request_end() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let first_pts = Duration::from_millis(30) + D;
+        let first_pts = D + Duration::from_millis(30);
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(Duration::from_millis(30) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(50) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(30), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(50), Duration::from_millis(20)));
 
-        let out_start = Duration::from_millis(20) + D;
-        let samples = mono(r.get_samples((out_start, Duration::from_millis(40) + D)));
+        let out_start = D + Duration::from_millis(20);
+        let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
         assert_eq!(samples.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -330,11 +330,11 @@ mod fresh {
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(Duration::from_millis(60) + D, Duration::from_millis(10)));
-        r.write_batch(source.batch(Duration::from_millis(70) + D, Duration::from_millis(10)));
+        r.write_batch(source.batch(D + Duration::from_millis(60), Duration::from_millis(10)));
+        r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(10)));
 
         let samples =
-            mono(r.get_samples((Duration::from_millis(20) + D, Duration::from_millis(40) + D)));
+            mono(r.get_samples((D + Duration::from_millis(20), D + Duration::from_millis(40))));
         assert_eq!(samples.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(&[&pad, &samples], RATE, "fresh_input_after_request.wav");
@@ -364,10 +364,10 @@ mod running {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
-        r.write_batch(source.batch(Duration::from_millis(10) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(30) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(30), Duration::from_millis(20)));
         let first =
-            mono(r.get_samples((Duration::from_millis(20) + D, Duration::from_millis(40) + D)));
+            mono(r.get_samples((D + Duration::from_millis(20), D + Duration::from_millis(40))));
         (source, r, first)
     }
 
@@ -380,7 +380,7 @@ mod running {
         let (source, mut r, out_chunk_1) = primed();
 
         let out_chunk_2 =
-            mono(r.get_samples((Duration::from_millis(40) + D, Duration::from_millis(60) + D)));
+            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
         assert_eq!(out_chunk_2.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -393,7 +393,7 @@ mod running {
         let boundary = 480;
         SignalAssertion {
             output: &out_chunk_2[0..(boundary - FIR_WINDOW)],
-            source: &source.shifted(Duration::from_millis(40) + D + SAMPLE48),
+            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
         }
         .assert();
         SignalAssertion {
@@ -408,10 +408,10 @@ mod running {
     #[test]
     fn input_covers_request() {
         let (source, mut r, out_chunk_1) = primed();
-        r.write_batch(source.batch(Duration::from_millis(50) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(50), Duration::from_millis(20)));
 
         let out_chunk_2 =
-            mono(r.get_samples((Duration::from_millis(40) + D, Duration::from_millis(60) + D)));
+            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
         assert_eq!(out_chunk_2.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -422,7 +422,7 @@ mod running {
 
         SignalAssertion {
             output: &out_chunk_2,
-            source: &source.shifted(Duration::from_millis(40) + D + SAMPLE48),
+            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
         }
         .assert();
     }
@@ -439,15 +439,15 @@ mod running {
     fn input_shifted_backward_within_threshold() {
         let (source, mut r, out_chunk_1) = primed();
         let shift = Duration::from_micros(500);
-        let samples = source.samples(Duration::from_millis(50) + D, Duration::from_millis(70) + D);
+        let samples = source.samples(D + Duration::from_millis(50), D + Duration::from_millis(70));
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples),
-            Duration::from_millis(50) - shift + D,
+            D + Duration::from_millis(50) - shift,
             RATE,
         ));
 
         let out_chunk_2 =
-            mono(r.get_samples((Duration::from_millis(40) + D, Duration::from_millis(60) + D)));
+            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
         assert_eq!(out_chunk_2.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -458,7 +458,7 @@ mod running {
 
         SignalAssertion {
             output: &out_chunk_2,
-            source: &source.shifted(Duration::from_millis(40) + D + SAMPLE48),
+            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
         }
         .assert();
     }
@@ -474,15 +474,15 @@ mod running {
     fn input_shifted_forward_within_threshold() {
         let (source, mut r, out_chunk_1) = primed();
         let shift = Duration::from_micros(500);
-        let samples = source.samples(Duration::from_millis(50) + D, Duration::from_millis(70) + D);
+        let samples = source.samples(D + Duration::from_millis(50), D + Duration::from_millis(70));
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples),
-            Duration::from_millis(50) + shift + D,
+            D + Duration::from_millis(50) + shift,
             RATE,
         ));
 
         let out_chunk_2 =
-            mono(r.get_samples((Duration::from_millis(40) + D, Duration::from_millis(60) + D)));
+            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
         assert_eq!(out_chunk_2.len(), 960);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
@@ -493,7 +493,7 @@ mod running {
 
         SignalAssertion {
             output: &out_chunk_2,
-            source: &source.shifted(Duration::from_millis(40) + D + SAMPLE48),
+            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
         }
         .assert();
     }
@@ -506,18 +506,18 @@ mod running {
         let (source, mut r, out_chunk_1) = primed();
         let shift = Duration::from_millis(5);
         let samples = source.samples(
-            Duration::from_millis(50) + D,
-            Duration::from_millis(250) + D,
+            D + Duration::from_millis(50),
+            D + Duration::from_millis(250),
         );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples),
-            Duration::from_millis(50) + shift + D,
+            D + Duration::from_millis(50) + shift,
             RATE,
         ));
 
         let mut all_output = out_chunk_1;
         for i in 0..9 {
-            let start = Duration::from_millis(40 + i * 20) + D;
+            let start = D + Duration::from_millis(40 + i * 20);
             let end = start + Duration::from_millis(20);
             let chunk = mono(r.get_samples((start, end)));
             assert_eq!(chunk.len(), 960);
@@ -531,7 +531,7 @@ mod running {
             "running_drift_shift_forward_5ms.wav",
         );
 
-        let base_pts = Duration::from_millis(20) + D + SAMPLE48;
+        let base_pts = D + Duration::from_millis(20) + SAMPLE48;
 
         // How much stretching already happened at mid and endpoint
         // For 5ms drift in 40ms (STRETCH_THRESHOLD) is 12.5%, so initial
@@ -626,18 +626,18 @@ mod running {
         let (source, mut r, out_chunk_1) = primed();
         let shift = Duration::from_millis(5);
         let samples = source.samples(
-            Duration::from_millis(50) + D,
-            Duration::from_millis(250) + D,
+            D + Duration::from_millis(50),
+            D + Duration::from_millis(250),
         );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples),
-            Duration::from_millis(50) - shift + D,
+            D + Duration::from_millis(50) - shift,
             RATE,
         ));
 
         let mut all_output = out_chunk_1;
         for i in 0..9 {
-            let start = Duration::from_millis(40 + i * 20) + D;
+            let start = D + Duration::from_millis(40 + i * 20);
             let end = start + Duration::from_millis(20);
             let chunk = mono(r.get_samples((start, end)));
             assert_eq!(chunk.len(), 960);
@@ -650,7 +650,7 @@ mod running {
             "running_drift_shift_backward_5ms.wav",
         );
 
-        let base_pts = Duration::from_millis(20) + D + SAMPLE48;
+        let base_pts = D + Duration::from_millis(20) + SAMPLE48;
 
         // How much squashing already happened at mid and endpoint
         // For -5ms drift in 500ms (SQUASH_THRESHOLD) is 1%, so initial
@@ -748,11 +748,11 @@ mod running {
     #[test]
     fn drift_no_shift() {
         let (source, mut r, out_chunk_1) = primed();
-        r.write_batch(source.batch(Duration::from_millis(50) + D, Duration::from_millis(200)));
+        r.write_batch(source.batch(D + Duration::from_millis(50), Duration::from_millis(200)));
 
         let mut all_output = out_chunk_1;
         for i in 0..9 {
-            let start = Duration::from_millis(40 + i * 20) + D;
+            let start = D + Duration::from_millis(40 + i * 20);
             let end = start + Duration::from_millis(20);
             let chunk = mono(r.get_samples((start, end)));
             assert_eq!(chunk.len(), 960);
@@ -764,7 +764,7 @@ mod running {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..],
             source: &source
-                .shifted(Duration::from_millis(20) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -779,20 +779,20 @@ mod running {
 
         // First 100ms batch: PTS shifted forward by 5ms
         let samples_1 = source.samples(
-            Duration::from_millis(50) + D,
-            Duration::from_millis(150) + D,
+            D + Duration::from_millis(50),
+            D + Duration::from_millis(150),
         );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples_1),
-            Duration::from_millis(50) + shift + D,
+            D + Duration::from_millis(50) + shift,
             RATE,
         ));
         // Second 100ms batch: no offset (contiguous with first batch's real data)
-        r.write_batch(source.batch(Duration::from_millis(150) + D, Duration::from_millis(100)));
+        r.write_batch(source.batch(D + Duration::from_millis(150), Duration::from_millis(100)));
 
         let mut all_output = out_chunk_1;
         for i in 0..9 {
-            let start = Duration::from_millis(40 + i * 20) + D;
+            let start = D + Duration::from_millis(40 + i * 20);
             let end = start + Duration::from_millis(20);
             let chunk = mono(r.get_samples((start, end)));
             assert_eq!(chunk.len(), 960);
@@ -808,7 +808,7 @@ mod running {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..],
             source: &source
-                .shifted(Duration::from_millis(20) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -823,20 +823,20 @@ mod running {
 
         // First 100ms batch: PTS shifted backward by 5ms
         let samples_1 = source.samples(
-            Duration::from_millis(50) + D,
-            Duration::from_millis(150) + D,
+            D + Duration::from_millis(50),
+            D + Duration::from_millis(150),
         );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples_1),
-            Duration::from_millis(50) - shift + D,
+            D + Duration::from_millis(50) - shift,
             RATE,
         ));
         // Second 100ms batch: no offset (contiguous with first batch's real data)
-        r.write_batch(source.batch(Duration::from_millis(150) + D, Duration::from_millis(100)));
+        r.write_batch(source.batch(D + Duration::from_millis(150), Duration::from_millis(100)));
 
         let mut all_output = out_chunk_1;
         for i in 0..9 {
-            let start = Duration::from_millis(40 + i * 20) + D;
+            let start = D + Duration::from_millis(40 + i * 20);
             let end = start + Duration::from_millis(20);
             let chunk = mono(r.get_samples((start, end)));
             assert_eq!(chunk.len(), 960);
@@ -852,7 +852,7 @@ mod running {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..],
             source: &source
-                .shifted(Duration::from_millis(20) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -865,11 +865,11 @@ mod running {
     #[test]
     fn drift_shift_forward_50ms() {
         let (source, mut r, out_chunk_1) = primed();
-        r.write_batch(source.batch(Duration::from_millis(100) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(100), Duration::from_millis(20)));
 
         let mut all_output = out_chunk_1;
         for i in 0..4 {
-            let start = Duration::from_millis(40 + i * 20) + D;
+            let start = D + Duration::from_millis(40 + i * 20);
             let end = start + Duration::from_millis(20);
             let chunk = mono(r.get_samples((start, end)));
             assert_eq!(chunk.len(), 960);
@@ -897,13 +897,13 @@ mod running {
             output: &all_output
                 [(prime_batch_start + FIR_WINDOW)..(prime_batch_start + (480 - 64) - FIR_WINDOW)],
             source: &source
-                .shifted(Duration::from_millis(40) + D + SAMPLE48 * (FIR_WINDOW as u32 + 64)),
+                .shifted(D + Duration::from_millis(40) + SAMPLE48 * (FIR_WINDOW as u32 + 64)),
         }
         .assert();
         let batch_start = 960 * 4;
         SignalAssertion {
             output: &all_output[(batch_start + FIR_WINDOW)..(batch_start + 960 - FIR_WINDOW)],
-            source: &source.shifted(Duration::from_millis(100) + D + SAMPLE48 * FIR_WINDOW as u32),
+            source: &source.shifted(D + Duration::from_millis(100) + SAMPLE48 * FIR_WINDOW as u32),
         }
         .assert();
     }
@@ -923,18 +923,18 @@ mod running {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal_5s());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
-        r.write_batch(source.batch(Duration::from_millis(1010) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(1030) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(1010), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(1030), Duration::from_millis(20)));
         let out_chunk_1 = mono(r.get_samples((
-            Duration::from_millis(1020) + D,
-            Duration::from_millis(1040) + D,
+            D + Duration::from_millis(1020),
+            D + Duration::from_millis(1040),
         )));
 
         // Each 100ms batch has PTS shifted backward by (i+1)*50ms — would
         // require squashing by 50% to handle without drops.
         for i in 0..12u64 {
-            let content_start = Duration::from_millis(1050 + i * 100) + D;
-            let content_end = Duration::from_millis(1150 + i * 100) + D;
+            let content_start = D + Duration::from_millis(1050 + i * 100);
+            let content_end = D + Duration::from_millis(1150 + i * 100);
             let samples = source.samples(content_start, content_end);
             r.write_batch(InputAudioSamples::new(
                 AudioSamples::Mono(samples),
@@ -946,8 +946,8 @@ mod running {
         // total is 600ms — past SQUASH_THRESHOLD, triggering DROP.
 
         let chunk = mono(r.get_samples((
-            Duration::from_millis(1040) + D,
-            Duration::from_millis(1060) + D,
+            D + Duration::from_millis(1040),
+            D + Duration::from_millis(1060),
         )));
         assert_eq!(chunk.len(), 960);
         let mut all_output = out_chunk_1;
@@ -962,7 +962,7 @@ mod running {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..960],
             source: &source
-                .shifted(Duration::from_millis(1020) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .shifted(D + Duration::from_millis(1020) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
 
@@ -972,8 +972,7 @@ mod running {
         SignalAssertion {
             output: &chunk[(64 + FIR_WINDOW)..],
             source: &source.shifted(
-                Duration::from_millis(1040)
-                    + D
+                D + Duration::from_millis(1040)
                     + SAMPLE48 * (64 + FIR_WINDOW as u32 - 1)
                     + Duration::from_millis(600),
             ),
@@ -1006,12 +1005,12 @@ mod drained {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
-        r.write_batch(source.batch(Duration::from_millis(10) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(30) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(30), Duration::from_millis(20)));
         let first =
-            mono(r.get_samples((Duration::from_millis(20) + D, Duration::from_millis(40) + D)));
+            mono(r.get_samples((D + Duration::from_millis(20), D + Duration::from_millis(40))));
         let second =
-            mono(r.get_samples((Duration::from_millis(40) + D, Duration::from_millis(60) + D)));
+            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
         let mut prev = Vec::with_capacity(first.len() + second.len());
         prev.extend_from_slice(&first);
         prev.extend_from_slice(&second);
@@ -1033,13 +1032,13 @@ mod drained {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..960],
             source: &source
-                .shifted(Duration::from_millis(20) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
         // [40, 50)+D — last 10ms of input
         SignalAssertion {
             output: &all_output[960..(960 + 470)],
-            source: &source.shifted(Duration::from_millis(20) + D + SAMPLE48 * 961),
+            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * 961),
         }
         .assert();
         // [50, 60)+D — no input, should be silence
@@ -1057,7 +1056,7 @@ mod drained {
         let (_source, mut r, _prev) = primed();
 
         let chunk =
-            mono(r.get_samples((Duration::from_millis(60) + D, Duration::from_millis(80) + D)));
+            mono(r.get_samples((D + Duration::from_millis(60), D + Duration::from_millis(80))));
         assert_eq!(chunk.len(), 960);
 
         SignalAssertion {
@@ -1074,11 +1073,11 @@ mod drained {
     fn input_covers_request() {
         let (source, mut r, mut all_output) = primed();
 
-        r.write_batch(source.batch(Duration::from_millis(50) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(70) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(50), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(20)));
 
         let chunk =
-            mono(r.get_samples((Duration::from_millis(60) + D, Duration::from_millis(80) + D)));
+            mono(r.get_samples((D + Duration::from_millis(60), D + Duration::from_millis(80))));
         assert_eq!(chunk.len(), 960);
         all_output.extend_from_slice(&chunk);
 
@@ -1092,7 +1091,7 @@ mod drained {
         SignalAssertion {
             output: &chunk[FIR_WINDOW..],
             source: &source
-                .shifted(Duration::from_millis(60) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .shifted(D + Duration::from_millis(60) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -1105,11 +1104,11 @@ mod drained {
     fn input_covers_request_5ms_gap() {
         let (source, mut r, mut all_output) = primed();
 
-        r.write_batch(source.batch(Duration::from_millis(55) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(75) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(55), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(75), Duration::from_millis(20)));
 
         let chunk =
-            mono(r.get_samples((Duration::from_millis(60) + D, Duration::from_millis(80) + D)));
+            mono(r.get_samples((D + Duration::from_millis(60), D + Duration::from_millis(80))));
         assert_eq!(chunk.len(), 960);
         all_output.extend_from_slice(&chunk);
 
@@ -1123,7 +1122,7 @@ mod drained {
         SignalAssertion {
             output: &chunk[FIR_WINDOW..],
             source: &source
-                .shifted(Duration::from_millis(60) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .shifted(D + Duration::from_millis(60) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -1136,11 +1135,11 @@ mod drained {
     fn input_covers_request_15ms_gap() {
         let (source, mut r, mut all_output) = primed();
 
-        r.write_batch(source.batch(Duration::from_millis(65) + D, Duration::from_millis(20)));
-        r.write_batch(source.batch(Duration::from_millis(85) + D, Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(65), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(85), Duration::from_millis(20)));
 
         let chunk =
-            mono(r.get_samples((Duration::from_millis(60) + D, Duration::from_millis(80) + D)));
+            mono(r.get_samples((D + Duration::from_millis(60), D + Duration::from_millis(80))));
         assert_eq!(chunk.len(), 960);
         all_output.extend_from_slice(&chunk);
 
@@ -1161,7 +1160,7 @@ mod drained {
         SignalAssertion {
             output: &chunk[(boundary + FIR_WINDOW)..960],
             source: &source
-                .shifted(Duration::from_millis(65) + D + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .shifted(D + Duration::from_millis(65) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }

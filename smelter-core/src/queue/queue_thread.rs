@@ -10,18 +10,19 @@ use crossbeam_channel::{Receiver, Sender, select, tick};
 use tracing::{debug, info, info_span, trace, warn};
 
 use super::{LateEventPolicy, Queue, QueueAudioOutput, QueueVideoOutput, ScheduledEvent};
+use crate::Timestamp;
 
 pub(super) struct QueueThread {
     queue: Arc<Queue>,
     start_receiver: Receiver<QueueStartEvent>,
     scheduled_event_receiver: Receiver<ScheduledEvent>,
-    scheduled_events: BTreeMap<Duration, Vec<Box<dyn FnOnce() + Send>>>,
+    scheduled_events: BTreeMap<Timestamp, Vec<Box<dyn FnOnce() + Send>>>,
 }
 
 pub(super) struct QueueStartEvent {
     pub video_sender: Sender<QueueVideoOutput>,
     pub audio_sender: Sender<QueueAudioOutput>,
-    pub queue_start_pts: Duration,
+    pub queue_start_pts: Timestamp,
 }
 
 impl QueueThread {
@@ -89,11 +90,11 @@ impl QueueThread {
 
 struct QueueThreadAfterStart {
     queue: Arc<Queue>,
-    queue_start_pts: Duration,
+    queue_start_pts: Timestamp,
     audio_processor: AudioQueueProcessor,
     video_processor: VideoQueueProcessor,
     scheduled_event_receiver: Receiver<ScheduledEvent>,
-    scheduled_events: BTreeMap<Duration, Vec<Box<dyn FnOnce() + Send>>>,
+    scheduled_events: BTreeMap<Timestamp, Vec<Box<dyn FnOnce() + Send>>>,
 }
 
 impl QueueThreadAfterStart {
@@ -201,7 +202,7 @@ impl QueueThreadAfterStart {
 
         let min_pts = video_pts
             .min(audio_pts_range.0)
-            .min(event_pts.unwrap_or(Duration::MAX));
+            .min(event_pts.unwrap_or(Timestamp::MAX));
 
         let new_event_pts = scheduled_event.pts + self.queue_start_pts;
 
@@ -237,21 +238,22 @@ impl QueueThreadAfterStart {
 struct VideoQueueProcessor {
     queue: Arc<Queue>,
     sent_batches_counter: u32,
-    queue_start_pts: Duration,
+    queue_start_pts: Timestamp,
     sender: Sender<QueueVideoOutput>,
 }
 
 impl VideoQueueProcessor {
-    fn next_buffer_pts(&self) -> Duration {
-        Duration::from_secs_f64(
-            self.sent_batches_counter as f64 * self.queue.output_framerate.den as f64
-                / self.queue.output_framerate.num as f64,
-        ) + self.queue_start_pts
+    fn next_buffer_pts(&self) -> Timestamp {
+        self.queue_start_pts
+            + Duration::from_secs_f64(
+                self.sent_batches_counter as f64 * self.queue.output_framerate.den as f64
+                    / self.queue.output_framerate.num as f64,
+            )
     }
 
     /// Some(()) - Successfully pushed new frame (or dropped it).
     /// None - Nothing to push.
-    fn try_push_next_frame_set(&mut self, next_buffer_pts: Duration) -> Option<()> {
+    fn try_push_next_frame_set(&mut self, next_buffer_pts: Timestamp) -> Option<()> {
         let mut internal_queue = self.queue.video_queue.lock().unwrap();
 
         let should_push_next_frame =
@@ -294,12 +296,12 @@ impl VideoQueueProcessor {
 struct AudioQueueProcessor {
     queue: Arc<Queue>,
     chunks_counter: u32,
-    queue_start_pts: Duration,
+    queue_start_pts: Timestamp,
     sender: Sender<QueueAudioOutput>,
 }
 
 impl AudioQueueProcessor {
-    fn next_buffer_pts_range(&self) -> (Duration, Duration) {
+    fn next_buffer_pts_range(&self) -> (Timestamp, Timestamp) {
         (
             self.queue_start_pts + (self.queue.audio_chunk_duration * self.chunks_counter),
             self.queue_start_pts + (self.queue.audio_chunk_duration * (self.chunks_counter + 1)),
@@ -310,7 +312,7 @@ impl AudioQueueProcessor {
     /// None - Nothing to push.
     fn try_push_next_sample_batch(
         &mut self,
-        next_buffer_pts_range: (Duration, Duration),
+        next_buffer_pts_range: (Timestamp, Timestamp),
     ) -> Option<()> {
         let mut internal_queue = self.queue.audio_queue.lock().unwrap();
 

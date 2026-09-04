@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crossbeam_channel::Receiver;
 
 use crate::prelude::*;
@@ -35,5 +33,5 @@ pub struct RawDataOutputReceiver {
 #[derive(Debug)]
 pub struct OutputAudioSamples {
     pub samples: AudioSamples,
-    pub start_pts: Duration,
+    pub start_pts: Timestamp,
 }

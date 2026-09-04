@@ -1,7 +1,5 @@
-use std::time::Duration;
-
 use ffmpeg_next::format::Pixel;
-use smelter_render::{Frame, FrameData, Resolution, YuvPlanes};
+use smelter_render::{FrameData, Resolution, YuvPlanes};
 use tracing::error;
 
 use crate::prelude::*;
@@ -29,7 +27,7 @@ pub(super) fn from_av_frame(
             "Received negative PTS. PTS values of the decoder output are not monotonically increasing."
         )
     }
-    let pts = Duration::from_secs_f64(f64::max(pts as f64 / time_base as f64, 0.0));
+    let pts = Timestamp::from_secs_f64(pts as f64 / time_base as f64);
 
     let data = match decoded.format() {
         Pixel::YUV420P => FrameData::PlanarYuv420(YuvPlanes {

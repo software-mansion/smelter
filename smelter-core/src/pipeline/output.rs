@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use crossbeam_channel::Sender;
@@ -180,7 +179,7 @@ pub(super) fn register_pipeline_output<BuildFn, NewOutputResult>(
     output_id: OutputId,
     video: Option<RegisterOutputVideoOptions>,
     audio: Option<RegisterOutputAudioOptions>,
-    start_at: Option<Duration>,
+    start_at: Option<Timestamp>,
     build_output: BuildFn,
 ) -> Result<NewOutputResult, RegisterOutputError>
 where

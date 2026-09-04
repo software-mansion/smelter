@@ -1,11 +1,11 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use gpu_video::{
     H264DecoderEvent, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
     WgpuTexturesDecoder,
     parameters::{DecoderParameters, DecoderUsage, MissedFrameHandling},
 };
-use smelter_render::{Frame, FrameData, Resolution};
+use smelter_render::{FrameData, Resolution};
 use tracing::{debug, info, trace, warn};
 
 use crate::pipeline::decoder::{
@@ -110,7 +110,7 @@ fn from_vk_frame(frame: gpu_video::OutputFrame<wgpu::Texture>) -> Frame {
         width: data.width() as usize,
         height: data.height() as usize,
     };
-    let pts = Duration::from_micros(metadata.pts.unwrap());
+    let pts = Timestamp::from_micros(metadata.pts.unwrap() as i64);
 
     trace!(?pts, "H264 Vulkan decoder produced a frame.");
     Frame {

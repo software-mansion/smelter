@@ -19,7 +19,7 @@ use smelter_core::{
     codecs::VideoDecoderOptions, graphics_context::GraphicsContext, protocols::*, *,
 };
 use smelter_render::{
-    Frame, FrameData, InputId, OutputId, Resolution,
+    FrameData, InputId, OutputId, Resolution,
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
 };

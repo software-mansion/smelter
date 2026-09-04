@@ -1,6 +1,5 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use smelter_render::Frame;
 use tokio::sync::mpsc;
 use tracing::warn;
 

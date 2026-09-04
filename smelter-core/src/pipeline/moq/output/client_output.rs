@@ -514,9 +514,9 @@ impl InterleavedPacketResolver {
 fn send_chunk(
     state: &mut BroadcastState,
     chunk: EncodedOutputChunk,
-    timestamp_offset: std::time::Duration,
+    timestamp_offset: crate::Timestamp,
 ) -> Result<(), BroadcastError> {
-    let pts = chunk.pts.saturating_sub(timestamp_offset);
+    let pts = chunk.pts - timestamp_offset;
 
     match chunk.kind {
         MediaKind::Video(_) => {

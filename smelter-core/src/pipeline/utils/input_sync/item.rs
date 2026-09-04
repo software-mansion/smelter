@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::prelude::*;
 
 use super::TimestampAnchor;
@@ -11,7 +9,7 @@ pub(crate) trait InputSyncItem {
     /// Presentation timestamp in the input time base. Does not have to start
     /// at zero; timestamps are mapped onto the output timeline when the item
     /// is read from a track ([`InputSyncItem::apply_anchor`]).
-    fn pts(&self) -> Duration;
+    fn pts(&self) -> Timestamp;
 
     /// Size of the payload in bytes, for bitrate stats.
     fn size(&self) -> usize;
@@ -28,7 +26,7 @@ pub(crate) trait InputSyncItem {
 }
 
 impl InputSyncItem for EncodedInputChunk {
-    fn pts(&self) -> Duration {
+    fn pts(&self) -> Timestamp {
         self.pts
     }
 

@@ -18,13 +18,13 @@ pub(super) struct AudioMixerInput {
 #[derive(Debug)]
 struct AudioMixerInputEvent {
     batches: Vec<InputAudioSamples>,
-    pts_range: (Duration, Duration),
+    pts_range: (Timestamp, Timestamp),
 }
 
 #[derive(Debug)]
 struct AudioMixerInputResult {
     samples: Vec<(f64, f64)>,
-    pts_range: (Duration, Duration),
+    pts_range: (Timestamp, Timestamp),
 }
 
 impl AudioMixerInput {
@@ -39,7 +39,11 @@ impl AudioMixerInput {
         }
     }
 
-    pub fn process_batch(&self, batches: Vec<InputAudioSamples>, pts_range: (Duration, Duration)) {
+    pub fn process_batch(
+        &self,
+        batches: Vec<InputAudioSamples>,
+        pts_range: (Timestamp, Timestamp),
+    ) {
         let result = self
             .input_sender
             .send(AudioMixerInputEvent { batches, pts_range });
@@ -48,7 +52,7 @@ impl AudioMixerInput {
         }
     }
 
-    pub fn get_samples(&mut self, pts_range: (Duration, Duration)) -> Option<Vec<(f64, f64)>> {
+    pub fn get_samples(&mut self, pts_range: (Timestamp, Timestamp)) -> Option<Vec<(f64, f64)>> {
         loop {
             if self.next_chunk.is_none() {
                 let Ok(result) = self

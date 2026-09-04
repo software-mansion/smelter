@@ -362,7 +362,7 @@ fn write_chunk(
     audio_stream: &mut Option<StreamState>,
     output_ctx: &mut ffmpeg::format::context::Output,
     frame_duration: Duration,
-    timestamp_offset: Duration,
+    timestamp_offset: Timestamp,
 ) {
     let stream = match chunk.kind {
         MediaKind::Video(_) => match video_stream {

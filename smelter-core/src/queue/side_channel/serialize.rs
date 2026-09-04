@@ -1,9 +1,7 @@
-use std::time::Duration;
-
 use bytes::Bytes;
 use smelter_render::Resolution;
 
-use crate::{prelude::InputAudioSamples, types::AudioSamples};
+use crate::{Timestamp, prelude::InputAudioSamples, types::AudioSamples};
 
 // Binary format for audio batches:
 //   u64 start_pts_nanos
@@ -22,7 +20,7 @@ use crate::{prelude::InputAudioSamples, types::AudioSamples};
 
 pub(super) fn serialize_rgba_frame(
     resolution: Resolution,
-    pts: Duration,
+    pts: Timestamp,
     rgba_data: Bytes,
 ) -> Bytes {
     // header: u32 + u32 + u64 = 16 bytes

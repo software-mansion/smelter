@@ -12,10 +12,10 @@ use std::{
 
 use bytes::Bytes;
 use crossbeam_channel::{Sender, TrySendError};
-use smelter_render::{Frame, FramePreProcessor, InputId, WgpuCtx};
+use smelter_render::{FramePreProcessor, InputId, WgpuCtx};
 use tracing::{Span, debug, error, info_span};
 
-use crate::prelude::InputAudioSamples;
+use crate::prelude::{Frame, InputAudioSamples};
 
 use super::serialize::{serialize_audio_batch, serialize_rgba_frame};
 
@@ -70,7 +70,7 @@ impl SideChannelServer<Frame> {
                 while let Ok(frame) = receiver.recv() {
                     let resolution = frame.resolution;
                     let pts = frame.pts;
-                    let rgba_bytes = pre_processor.process_to_bytes(frame, None);
+                    let rgba_bytes = pre_processor.process_to_bytes(frame.into(), None);
                     let data = serialize_rgba_frame(resolution, pts, rgba_bytes);
                     broadcast_to_client_threads(&clients, data);
                 }

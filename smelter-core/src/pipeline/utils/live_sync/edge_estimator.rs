@@ -3,6 +3,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::prelude::*;
+
 /// Width of one bucket; the granularity at which old observations expire.
 const BUCKET: Duration = Duration::from_secs(2);
 
@@ -67,7 +69,7 @@ pub(crate) struct LiveEdgeEstimator {
 struct Observations {
     first_observation: Instant,
     last_observation: Instant,
-    last_pts: Duration,
+    last_pts: Timestamp,
     /// Per-bucket aggregates, oldest first; never empty. Offsets are
     /// `arrival - pts` in nanoseconds relative to the sync point, negative
     /// when pts run ahead of the wall clock.
@@ -124,10 +126,10 @@ impl EdgeEstimate {
     /// Distance between the bounds; how much of a buffer the delivery pattern
     /// itself (jitter, batch size) takes up. Zero while the lower bound is
     /// not stable.
-    pub fn spread(&self) -> Duration {
+    pub fn spread(&self) -> Timestamp {
         match self.lower_bound.stable {
-            true => self.upper_bound.pts.saturating_sub(self.lower_bound.pts),
-            false => Duration::ZERO,
+            true => self.upper_bound.pts - self.lower_bound.pts,
+            false => Timestamp::ZERO,
         }
     }
 }
@@ -135,7 +137,7 @@ impl EdgeEstimate {
 /// One side of the live edge estimate.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PtsBound {
-    pub pts: Duration,
+    pub pts: Timestamp,
     /// Upper bound: not pushed outward (beyond the jitter tolerance) by an
     /// observed chunk for at least the stabilization period. The bound
     /// tightening as old extremes rotate out of the window does not reset it.
@@ -155,7 +157,7 @@ pub(crate) struct DeliveryStats {
     /// Largest observed pts (not the last received one, so decode order does
     /// not matter); the newest delivered content.
     #[allow(dead_code)]
-    pub last_pts: Duration,
+    pub last_pts: Timestamp,
     /// Time since the first observed chunk.
     pub observed_for: Duration,
     /// Largest recent gap between consecutive chunk arrivals (including the
@@ -180,9 +182,9 @@ impl LiveEdgeEstimator {
     }
 
     /// Record a chunk with `pts` that arrived at `now`.
-    pub fn observe(&mut self, now: Instant, pts: Duration) {
-        let arrival_ns = signed_ns(now.saturating_duration_since(self.sync_point));
-        let offset_ns = arrival_ns.saturating_sub(signed_ns(pts));
+    pub fn observe(&mut self, now: Instant, pts: Timestamp) {
+        let arrival_ns = self.sync_point.timestamp_at(now).as_nanos();
+        let offset_ns = arrival_ns.saturating_sub(pts.as_nanos());
         let now_index = self.bucket_index(now);
 
         let Some(observations) = &mut self.observations else {
@@ -219,13 +221,9 @@ impl LiveEdgeEstimator {
         let now_index = self.bucket_index(now);
         let max_gap = observations.max_arrival_gap(now, now_index);
         let (min_offset_ns, max_offset_ns) = observations.offset_bounds_ns(now_index, max_gap);
-        let now_ns = signed_ns(now.saturating_duration_since(self.sync_point));
-        // pts saturate at zero: negative only when pts run ahead of the
-        // wall clock, and the estimate is meaningless for such streams
-        // anyway
-        let bound_pts = |offset_ns: i64| {
-            Duration::from_nanos(i64::max(now_ns.saturating_sub(offset_ns), 0) as u64)
-        };
+        let now_ns = self.sync_point.timestamp_at(now).as_nanos();
+        // negative only when pts run ahead of the wall clock
+        let bound_pts = |offset_ns: i64| Timestamp::from_nanos(now_ns.saturating_sub(offset_ns));
         let upper_bound = PtsBound {
             pts: bound_pts(min_offset_ns),
             stable: observations.upper_stable(now, self.stabilization_period),
@@ -322,12 +320,12 @@ impl Observations {
         now: Instant,
         now_index: u64,
         offset_ns: i64,
-        pts: Duration,
+        pts: Timestamp,
         upper_stable: bool,
     ) {
         let gap = now.saturating_duration_since(self.last_observation);
         self.last_observation = now;
-        self.last_pts = Duration::max(self.last_pts, pts);
+        self.last_pts = Timestamp::max(self.last_pts, pts);
 
         let max_offset_ns = upper_stable.then_some(offset_ns);
         match self.buckets.back_mut() {

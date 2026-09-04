@@ -1,7 +1,6 @@
 use std::{
     sync::{Arc, Mutex},
     thread,
-    time::Duration,
 };
 
 use crossbeam_channel::{Sender, bounded};
@@ -98,7 +97,7 @@ impl RawDataInput {
 
 fn spawn_video_repacking_thread(
     input_ref: &Ref<InputId>,
-    first_pts: Arc<Mutex<Option<Duration>>>,
+    first_pts: Arc<Mutex<Option<Timestamp>>>,
     mut buffer: InputDelayBuffer<Frame>,
     frame_sender: QueueSender<Frame>,
 ) -> Sender<PipelineEvent<Frame>> {
@@ -117,7 +116,7 @@ fn spawn_video_repacking_thread(
 
                 while let Some(mut frame) = buffer.read() {
                     let first_pts = *first_pts.lock().unwrap().get_or_insert(frame.pts);
-                    frame.pts = frame.pts.saturating_sub(first_pts);
+                    frame.pts -= first_pts;
 
                     trace!(?frame, "Sending raw frame");
                     if frame_sender.send(frame).is_err() {
@@ -137,7 +136,7 @@ fn spawn_video_repacking_thread(
 
 fn spawn_audio_repacking_thread(
     input_ref: &Ref<InputId>,
-    first_pts: Arc<Mutex<Option<Duration>>>,
+    first_pts: Arc<Mutex<Option<Timestamp>>>,
     mut buffer: InputDelayBuffer<InputAudioSamples>,
     samples_sender: QueueSender<InputAudioSamples>,
 ) -> Sender<PipelineEvent<InputAudioSamples>> {
@@ -156,7 +155,7 @@ fn spawn_audio_repacking_thread(
 
                 while let Some(mut batch) = buffer.read() {
                     let first_pts = *first_pts.lock().unwrap().get_or_insert(batch.start_pts);
-                    batch.start_pts = batch.start_pts.saturating_sub(first_pts);
+                    batch.start_pts -= first_pts;
 
                     trace!(?batch, "Sending raw frame");
                     if samples_sender.send(batch).is_err() {

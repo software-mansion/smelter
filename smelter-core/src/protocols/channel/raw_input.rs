@@ -31,12 +31,12 @@ pub struct RawDataInputOptions {
 #[derive(Debug, Clone)]
 pub struct InputAudioSamples {
     pub samples: AudioSamples,
-    pub start_pts: Duration,
+    pub start_pts: Timestamp,
     pub sample_rate: u32,
 }
 
 impl InputAudioSamples {
-    pub fn new(samples: AudioSamples, start_pts: Duration, sample_rate: u32) -> Self {
+    pub fn new(samples: AudioSamples, start_pts: Timestamp, sample_rate: u32) -> Self {
         Self {
             samples,
             start_pts,
@@ -44,11 +44,11 @@ impl InputAudioSamples {
         }
     }
 
-    pub fn pts_range(&self) -> (Duration, Duration) {
+    pub fn pts_range(&self) -> (Timestamp, Timestamp) {
         (self.start_pts, self.end_pts())
     }
 
-    pub fn end_pts(&self) -> Duration {
+    pub fn end_pts(&self) -> Timestamp {
         self.start_pts
             + Duration::from_secs_f64(self.samples.len() as f64 / self.sample_rate as f64)
     }

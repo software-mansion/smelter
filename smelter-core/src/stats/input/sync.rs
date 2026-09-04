@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::{
+    Timestamp,
     pipeline::utils::input_sync::TrackKind,
     stats::{
         input_reports::{
@@ -72,7 +73,7 @@ pub(crate) struct LiveSyncTrackStateSnapshot {
 /// Snapshot of the content held in a sync buffer.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum LiveSyncBufferStats {
-    Fifo { duration: Duration },
+    Fifo { duration: Timestamp },
 }
 
 /// Per-input pair of track states, shared by every protocol using the input sync.
@@ -279,7 +280,7 @@ impl InnerInputSyncTrackState {
                         ),
                         snapshot: LiveSyncTrackStateSnapshot {
                             buffer: LiveSyncBufferStats::Fifo {
-                                duration: Duration::ZERO,
+                                duration: Timestamp::ZERO,
                             },
                             target_offset_distance_ns: 0,
                             live_edge_lower_bound_distance_ns: None,
