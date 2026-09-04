@@ -1,4 +1,4 @@
-mod rtmp_input;
+pub(crate) mod rtmp_input;
 mod rtmp_output;
 mod server;
 

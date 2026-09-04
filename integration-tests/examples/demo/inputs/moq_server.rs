@@ -1,17 +1,27 @@
-use std::sync::{
-    OnceLock,
-    atomic::{AtomicU32, Ordering},
+use std::{
+    fs,
+    sync::{
+        OnceLock,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use inquire::Text;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::{Digest, Sha256};
+use smelter::config::read_config;
+use tracing::warn;
+
+use crate::{IP, inputs::InputBufferOption};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoqServerInput {
     pub name: String,
     pub auth_token: String,
+    #[serde(default)]
+    pub buffer: InputBufferOption,
 }
 
 impl MoqServerInput {
@@ -22,26 +32,60 @@ impl MoqServerInput {
                 "h264": "ffmpeg_h264",
             },
             "auth_token": self.auth_token,
+            "buffer": self.buffer.serialize_register(),
         })
     }
 
     pub fn on_after_registration(&self) -> Result<()> {
+        let moq_streamer_url = "https://smelter-labs.github.io/tools/#moq-publish";
+        let config = read_config();
+        let mut url = format!(
+            "{moq_streamer_url}?url=https://{IP}:{}/{}&token={}",
+            config.moq_server_port, self.name, self.auth_token
+        );
+        if config.moq_tls_config.is_none() {
+            match self_signed_cert_fingerprint() {
+                Ok(fingerprint) => url.push_str(&format!("&cert={fingerprint}")),
+                Err(err) => warn!("Failed to read self-signed MoQ certificate: {err}"),
+            }
+        }
         println!("Open in browser to start streaming with MoQ streamer tool:");
-        println!("https://smelter-labs.github.io/tools/#moq-streamer");
+        println!("{url}");
         Ok(())
     }
+}
+
+/// SHA-256 fingerprint of the self-signed certificate the server generates in
+/// `~/.smelter` when no TLS config is provided.
+fn self_signed_cert_fingerprint() -> Result<String> {
+    let path = dirs::home_dir()
+        .context("home directory not found")?
+        .join(".smelter")
+        .join("moq_cert.pem");
+    let pem = fs::read_to_string(&path).with_context(|| format!("{}", path.display()))?;
+    let base64: String = pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+    let der = data_encoding::BASE64.decode(base64.as_bytes())?;
+    Ok(data_encoding::HEXLOWER.encode(&Sha256::digest(&der)))
 }
 
 pub struct MoqServerInputBuilder {
     name: String,
     auth_token: String,
+    buffer: InputBufferOption,
 }
 
 impl MoqServerInputBuilder {
     pub fn new() -> Self {
         let name = Self::generate_name();
         let auth_token = "example".to_string();
-        Self { name, auth_token }
+        Self {
+            name,
+            auth_token,
+            buffer: InputBufferOption::default(),
+        }
     }
 
     fn generate_name() -> String {
@@ -52,7 +96,7 @@ impl MoqServerInputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_name()?.prompt_token()
+        self.prompt_name()?.prompt_token()?.prompt_buffer()
     }
 
     fn prompt_name(self) -> Result<Self> {
@@ -73,6 +117,11 @@ impl MoqServerInputBuilder {
         }
     }
 
+    fn prompt_buffer(mut self) -> Result<Self> {
+        self.buffer = InputBufferOption::prompt()?;
+        Ok(self)
+    }
+
     pub fn with_name(mut self, name: String) -> Self {
         self.name = name;
         self
@@ -87,6 +136,7 @@ impl MoqServerInputBuilder {
         MoqServerInput {
             name: self.name,
             auth_token: self.auth_token,
+            buffer: self.buffer,
         }
     }
 }

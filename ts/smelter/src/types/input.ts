@@ -261,6 +261,12 @@ export type RegisterMoqServerInput = {
    * Enable side channel for video and/or audio track.
    */
   sideChannel?: SideChannel;
+  /**
+   * Input buffer configuration.
+   *
+   * Defaults: `desiredMs=2000`, `minMs=1000`, `maxMs=5000`.
+   */
+  buffer?: InputBuffer | null;
 };
 
 export type RegisterMoqClientInput = {
@@ -288,6 +294,12 @@ export type RegisterMoqClientInput = {
    * Enable side channel for video and/or audio track.
    */
   sideChannel?: SideChannel;
+  /**
+   * Input buffer configuration.
+   *
+   * Defaults: `desiredMs=2000`, `minMs=1000`, `maxMs=5000`.
+   */
+  buffer?: InputBuffer | null;
 };
 
 export type RegisterV4l2Input = {
