@@ -5,7 +5,6 @@ use moq_mux::{
     catalog::hang::Container,
     container::{Frame, Producer as ContainerProducer, Timestamp},
 };
-use moq_native::ClientConfig;
 use smelter_render::error::ErrorStack;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tracing::{Instrument, Level, Span, error, info, span, trace, warn};
@@ -19,7 +18,7 @@ use crate::{
             ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vulkan_h264::VulkanH264Encoder,
         },
         moq::{
-            MoqSession,
+            MoqSession, client_config,
             output::{
                 audio_encoder_thread::{
                     AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
@@ -157,9 +156,7 @@ impl MoqClientOutput {
             return Err(MoqClientError::InvalidScheme(url.scheme().to_string()));
         }
 
-        let mut config = ClientConfig::default();
-        config.tls.disable_verify = Some(ctx.moq_disable_tls_verification);
-        let client = config
+        let client = client_config(&url, ctx.moq_disable_tls_verification)
             .init()
             .map_err(|err| MoqClientError::ClientInitFailed(format!("{err}")))?;
 
