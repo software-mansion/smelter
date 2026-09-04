@@ -87,6 +87,17 @@ impl MoqClientOutput {
             }
         }
     }
+
+    pub fn on_after_registration(&mut self) -> Result<()> {
+        let moq_player_url = "https://smelter-labs.github.io/tools/#moq-player";
+        let url = format!(
+            "{moq_player_url}?url={}&path={}",
+            self.endpoint_url, self.broadcast_path
+        );
+        println!("Open in browser to receive stream:");
+        println!("{url}");
+        Ok(())
+    }
 }
 
 pub struct MoqClientOutputBuilder {

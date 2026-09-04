@@ -4,14 +4,13 @@ use crate::{
     pipeline::{
         input::Input,
         moq::{
-            MoqSession,
+            MoqSession, client_config,
             input::connection::{BroadcastCtx, handle_broadcast},
         },
     },
     queue::{QueueInput, WeakQueueInput},
 };
 use hang::moq_net::{BroadcastConsumer, Origin, OriginConsumer};
-use moq_native::ClientConfig;
 use smelter_render::error::ErrorStack;
 use tracing::{Instrument, Level, Span, info, span, warn};
 use url::Url;
@@ -93,9 +92,7 @@ impl MoqClientInput {
             return Err(MoqClientError::InvalidScheme(url.scheme().to_string()));
         }
 
-        let mut config = ClientConfig::default();
-        config.tls.disable_verify = Some(ctx.moq_disable_tls_verification);
-        let client = config
+        let client = client_config(&url, ctx.moq_disable_tls_verification)
             .init()
             .map_err(|err| MoqClientError::ClientInitFailed(format!("{err}")))?;
 

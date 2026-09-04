@@ -10,19 +10,16 @@ use smelter_render::error::ErrorStack;
 use tracing::{Instrument, Span, debug, info, trace, warn};
 
 use crate::{
-    pipeline::{
-        decoder::{
-            DecoderThreadHandle, EncodedInputEvent,
-            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
-            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
-            fdk_aac::FdkAacDecoder,
-            ffmpeg_h264::FfmpegH264Decoder,
-            ffmpeg_vp8::FfmpegVp8Decoder,
-            ffmpeg_vp9::FfmpegVp9Decoder,
-            libopus::OpusDecoder,
-            vulkan_h264::VulkanH264Decoder,
-        },
-        rtmp::rtmp_input::buffer::resolve_buffer_options,
+    pipeline::decoder::{
+        DecoderThreadHandle, EncodedInputEvent,
+        decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
+        decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
+        fdk_aac::FdkAacDecoder,
+        ffmpeg_h264::FfmpegH264Decoder,
+        ffmpeg_vp8::FfmpegVp8Decoder,
+        ffmpeg_vp9::FfmpegVp9Decoder,
+        libopus::OpusDecoder,
+        vulkan_h264::VulkanH264Decoder,
     },
     queue::{QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
     utils::{
@@ -36,6 +33,7 @@ use crate::{
 use crate::prelude::*;
 
 use self::catalog::{MoqCatalogError, read_catalog};
+use super::buffer::resolve_buffer_options;
 
 mod catalog;
 
@@ -144,7 +142,7 @@ impl BroadcastHandler {
             ctx.queue_ctx.sync_point,
             sync_stats,
         ));
-        let decoder_buffer_size = Duration::max(Duration::from_secs(60), max * 2);
+        let decoder_buffer_size = Duration::max(Duration::from_secs(20), max * 2);
 
         let track_ctx = TrackCtx {
             ctx,
@@ -152,7 +150,10 @@ impl BroadcastHandler {
             broadcast,
             decoders,
             input_sync,
-            group_latency: desired,
+            // TODO: Temporary, we need to get read of that logic and handle reorder
+            // in LiveSync jitter buffer, waiting (or not) for the rest of the group
+            // should only depend on remaining time to queue
+            group_latency: Duration::max(desired.saturating_sub(min), min),
             decoder_buffer_size,
             should_close,
         };
