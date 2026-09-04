@@ -353,7 +353,7 @@ impl LatencyOptimizedBuffer {
     fn apply_offset(&mut self, pts: Timestamp) -> Timestamp {
         let target_size = self.inner.lock().unwrap().target_size;
 
-        let abs_delta = match self.max_pts {
+        let stream_delta = match self.max_pts {
             Some(prev_max_pts) => {
                 self.max_pts = Some(Timestamp::max(prev_max_pts, pts));
                 (pts - prev_max_pts).to_duration_saturating()
@@ -372,7 +372,7 @@ impl LatencyOptimizedBuffer {
                     1.0,
                     diff.as_secs_f64() / Self::LINEAR_THRESHOLD.as_secs_f64(),
                 );
-            let max_step = abs_delta.mul_f64(rate);
+            let max_step = stream_delta.mul_f64(rate);
             self.size = target_size.clamp(
                 self.size.saturating_sub(max_step),
                 self.size.saturating_add(max_step),
