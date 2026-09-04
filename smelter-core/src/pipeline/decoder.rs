@@ -7,9 +7,11 @@ use crate::prelude::*;
 pub(super) mod decoder_thread_audio;
 pub(super) mod decoder_thread_video;
 
+mod decode_only_filter;
 mod dynamic_stream;
 mod static_stream;
 
+use decode_only_filter::DecodeOnlyFilter;
 pub(super) use dynamic_stream::{
     DynamicVideoDecoderStream, KeyframeRequestSender, VideoDecoderMapping,
 };
