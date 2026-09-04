@@ -11,6 +11,7 @@ impl TryFrom<MoqClientInput> for core::RegisterInputOptions {
             required,
             decoder_map,
             side_channel,
+            buffer,
         } = value;
 
         let side_channel = side_channel.unwrap_or_default();
@@ -39,6 +40,10 @@ impl TryFrom<MoqClientInput> for core::RegisterInputOptions {
                 audio_side_channel: side_channel.audio.unwrap_or(false).into(),
                 side_channel_delay,
             },
+            buffer: buffer
+                .map(TryInto::try_into)
+                .transpose()?
+                .unwrap_or_default(),
         };
 
         Ok(core::RegisterInputOptions::MoqClient(input_options))

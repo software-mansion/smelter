@@ -6,11 +6,14 @@ use smelter_render::InputId;
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 use crate::queue::QueueInputOptions;
 
+use super::LiveInputBufferOptions;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoqServerInputOptions {
     pub decoders: MoqInputDecoders,
     pub auth_token: Arc<str>,
     pub queue_options: QueueInputOptions,
+    pub buffer: LiveInputBufferOptions,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -19,6 +22,7 @@ pub struct MoqClientInputOptions {
     pub broadcast_path: Arc<str>,
     pub decoders: MoqInputDecoders,
     pub queue_options: QueueInputOptions,
+    pub buffer: LiveInputBufferOptions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

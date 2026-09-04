@@ -112,6 +112,10 @@ export type RegisterInput =
        * Enable side channel for video and/or audio track.
        */
       side_channel?: SideChannel | null;
+      /**
+       * (default=2000) Buffer kept between the live edge of the stream and playback. A number value represents `buffer.desired_ms` option
+       */
+      buffer?: InputBuffer | null;
     }
   | {
       type: "moq_client";
@@ -139,6 +143,10 @@ export type RegisterInput =
        * Enable side channel for video and/or audio track.
        */
       side_channel?: SideChannel | null;
+      /**
+       * (default=2000) Buffer kept between the live edge of the stream and playback. A number value represents `buffer.desired_ms` option
+       */
+      buffer?: InputBuffer | null;
     }
   | {
       type: "mp4";

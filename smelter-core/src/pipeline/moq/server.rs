@@ -184,6 +184,7 @@ async fn handle_session(
         let broadcast_ctx = BroadcastCtx {
             broadcast,
             decoders: input.decoders,
+            buffer: input.buffer,
             should_close: input.should_close.clone(),
             endpoint_kind: MoqEndpointKind::Server,
         };
