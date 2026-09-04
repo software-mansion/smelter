@@ -21,8 +21,6 @@ use crate::{
     },
 };
 
-pub(crate) use moq_client::{MoqClientInputStatsEvent, MoqClientInputTrackStatsEvent};
-pub(crate) use moq_server::{MoqServerInputStatsEvent, MoqServerInputTrackStatsEvent};
 pub(crate) use mp4::{Mp4InputStatsEvent, Mp4InputTrackStatsEvent};
 pub(crate) use rtmp::RtmpInputStatsEvent;
 pub(crate) use rtp::{RtpInputStatsEvent, RtpJitterBufferStatsEvent};
@@ -38,14 +36,12 @@ pub(crate) enum InputStatsEvent {
     Rtp(RtpInputStatsEvent),
     Whip(WhipInputStatsEvent),
     Whep(WhepInputStatsEvent),
-    /// Sent by the input sync of `HLS` and `RTMP` inputs.
+    /// Sent by the input sync of `HLS`, `RTMP` and `MoQ` inputs.
     Sync {
         track: TrackKind,
         event: InputSyncTrackStatsEvent,
     },
     Rtmp(RtmpInputStatsEvent),
-    MoqServer(MoqServerInputStatsEvent),
-    MoqClient(MoqClientInputStatsEvent),
     Mp4(Mp4InputStatsEvent),
 }
 
@@ -58,8 +54,6 @@ impl InputStatsEvent {
             InputStatsEvent::Whep(_) => Some(InputProtocolKind::Whep),
             InputStatsEvent::Sync { .. } => None,
             InputStatsEvent::Rtmp(_) => Some(InputProtocolKind::Rtmp),
-            InputStatsEvent::MoqServer(_) => Some(InputProtocolKind::MoqServer),
-            InputStatsEvent::MoqClient(_) => Some(InputProtocolKind::MoqClient),
             InputStatsEvent::Mp4(_) => Some(InputProtocolKind::Mp4),
         }
     }
@@ -112,11 +106,11 @@ impl InputStatsState {
             (InputStatsState::Rtmp(state), InputStatsEvent::Rtmp(event)) => {
                 state.handle_event(event);
             }
-            (InputStatsState::MoqServer(state), InputStatsEvent::MoqServer(event)) => {
-                state.handle_event(event);
+            (InputStatsState::MoqServer(state), InputStatsEvent::Sync { track, event }) => {
+                state.sync.handle_event(track, event);
             }
-            (InputStatsState::MoqClient(state), InputStatsEvent::MoqClient(event)) => {
-                state.handle_event(event);
+            (InputStatsState::MoqClient(state), InputStatsEvent::Sync { track, event }) => {
+                state.sync.handle_event(track, event);
             }
             (InputStatsState::Mp4(state), InputStatsEvent::Mp4(event)) => {
                 state.handle_event(event);

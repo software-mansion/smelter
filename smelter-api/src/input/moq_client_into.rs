@@ -11,6 +11,7 @@ impl TryFrom<MoqClientInput> for core::RegisterInputOptions {
             required,
             decoder_map,
             side_channel,
+            buffer,
         } = value;
 
         let side_channel = side_channel.unwrap_or_default();
@@ -32,13 +33,17 @@ impl TryFrom<MoqClientInput> for core::RegisterInputOptions {
         let input_options = core::MoqClientInputOptions {
             endpoint_url,
             broadcast_path,
-            decoders: core::MoqInputDecoders { h264 },
+            decoder_options: core::MoqInputDecoders { h264 },
             queue_options: core::QueueInputOptions {
                 required: required.unwrap_or(false),
                 video_side_channel: side_channel.video.unwrap_or(false).into(),
                 audio_side_channel: side_channel.audio.unwrap_or(false).into(),
                 side_channel_delay,
             },
+            buffer: buffer
+                .map(TryInto::try_into)
+                .transpose()?
+                .unwrap_or_default(),
         };
 
         Ok(core::RegisterInputOptions::MoqClient(input_options))
