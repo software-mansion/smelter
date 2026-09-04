@@ -10,12 +10,11 @@ use objc2_core_media as cm;
 use objc2_core_video as cv;
 use objc2_video_toolbox as vt;
 use rustc_hash::FxHashMap;
-use tracing::warn;
 
 use crate::{
     RawFrameData,
     backends::video_toolbox::{
-        OSStatusError, allocate_retained,
+        CVBufferExt, OSStatusError, allocate_retained,
         error::{OSStatusExt, VTDecoderError},
     },
     decoders::VideoDecoderBackend,
@@ -34,7 +33,7 @@ pub(crate) struct VTDecoder {
     pps: FxHashMap<(u8, u8), Pps>,
     needs_session_update: bool,
     #[cfg(feature = "wgpu")]
-    texture_cache: Option<wgpu_api::SyncCache>,
+    texture_cache: Option<super::wgpu_api::SyncCache>,
     session_color_range: Option<ColorRange>,
     usage: DecoderUsage,
 }
@@ -139,32 +138,12 @@ impl VTDecoder {
         let width = cv::CVPixelBufferGetWidth(buffer);
         let height = cv::CVPixelBufferGetHeight(buffer);
         let locked = unsafe { buffer.lock(cv::CVPixelBufferLockFlags::ReadOnly)? };
-        let mut result = Vec::with_capacity(width * height * 3 / 2);
 
-        // NV12: plane 0 is Y (1 byte/pixel), plane 1 is CbCr (2 bytes/pixel)
-        for plane in 0..2usize {
-            let plane_width = cv::CVPixelBufferGetWidthOfPlane(buffer, plane);
-            let plane_height = cv::CVPixelBufferGetHeightOfPlane(buffer, plane);
-            let stride = cv::CVPixelBufferGetBytesPerRowOfPlane(buffer, plane) as isize;
-            let base_address = locked.plane_address(plane);
-            let row_data_bytes = plane_width * if plane == 0 { 1 } else { 2 };
-            for line in 0..plane_height as isize {
-                let data = unsafe {
-                    std::slice::from_raw_parts(base_address.offset(line * stride), row_data_bytes)
-                };
-                result.extend_from_slice(data);
-            }
-        }
-
-        drop(locked);
-
-        let data = RawFrameData {
-            frame: result,
+        Ok(RawFrameData {
+            frame: locked.download_nv12(),
             width: width as u32,
             height: height as u32,
-        };
-
-        Ok(data)
+        })
     }
 
     fn upload_and_decode_au(
@@ -490,49 +469,4 @@ struct Sps {
 struct Pps {
     raw: Box<[u8]>,
     pps: PicParameterSet,
-}
-
-trait CVBufferExt {
-    unsafe fn lock(
-        &self,
-        flags: cv::CVPixelBufferLockFlags,
-    ) -> Result<LockedCvBuffer, OSStatusError>;
-}
-
-impl CVBufferExt for cf::CFRetained<cv::CVBuffer> {
-    unsafe fn lock(
-        &self,
-        flags: cv::CVPixelBufferLockFlags,
-    ) -> Result<LockedCvBuffer, OSStatusError> {
-        unsafe {
-            cv::CVPixelBufferLockBaseAddress(self, flags).osstatus()?;
-        }
-
-        Ok(LockedCvBuffer {
-            buffer: self.clone(),
-            flags,
-        })
-    }
-}
-
-struct LockedCvBuffer {
-    buffer: cf::CFRetained<cv::CVBuffer>,
-    flags: cv::CVPixelBufferLockFlags,
-}
-
-impl LockedCvBuffer {
-    fn plane_address(&self, plane: usize) -> *const u8 {
-        cv::CVPixelBufferGetBaseAddressOfPlane(&self.buffer, plane) as *const u8
-    }
-}
-
-impl Drop for LockedCvBuffer {
-    fn drop(&mut self) {
-        unsafe {
-            if let Err(e) = cv::CVPixelBufferUnlockBaseAddress(&self.buffer, self.flags).osstatus()
-            {
-                warn!("error {e} while unlocking a CVBuffer");
-            }
-        }
-    }
 }

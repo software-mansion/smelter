@@ -175,7 +175,7 @@ fn require_hardware_encoder_specification() -> CFRetained<CFDictionary> {
     .expect("creating a single-entry CFDictionary cannot fail")
 }
 
-fn supports_property(dictionary: &CFDictionary, key: &CFString) -> bool {
+pub(crate) fn supports_property(dictionary: &CFDictionary, key: &CFString) -> bool {
     // SAFETY: `key` is a valid `CFString` pointer for the lifetime of the call.
     unsafe { dictionary.contains_ptr_key((key as *const CFString).cast()) }
 }
