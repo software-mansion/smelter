@@ -5,7 +5,7 @@ use crate::{
         input::Input,
         moq::{
             MoqSession,
-            input::connection::{BroadcastCtx, MoqEndpointKind, handle_broadcast},
+            input::connection::{BroadcastCtx, handle_broadcast},
         },
     },
     queue::{QueueInput, WeakQueueInput},
@@ -17,6 +17,12 @@ use tracing::{Instrument, Level, Span, info, span, warn};
 use url::Url;
 
 use crate::prelude::*;
+
+struct BroadcastOptions {
+    broadcast_path: Arc<str>,
+    decoder_options: MoqInputDecoders,
+    buffer: LiveInputBufferOptions,
+}
 
 pub struct MoqClientInput {
     should_close: Arc<AtomicBool>,
@@ -41,18 +47,29 @@ impl MoqClientInput {
             kind: InputProtocolKind::MoqClient,
         });
 
-        let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
+        let MoqClientInputOptions {
+            endpoint_url,
+            broadcast_path,
+            decoder_options,
+            queue_options,
+            buffer,
+        } = options;
+        let queue_input = QueueInput::new(&ctx, &input_ref, queue_options);
 
-        let (session, consumer) = Self::connect(&ctx, &options.endpoint_url)?;
+        let (session, consumer) = Self::connect(&ctx, &endpoint_url)?;
         let should_close = Arc::new(AtomicBool::new(false));
 
+        let broadcast_options = BroadcastOptions {
+            broadcast_path,
+            decoder_options,
+            buffer,
+        };
         Self::start_broadcast_handler_task(
             ctx,
             input_ref,
             consumer,
-            options.broadcast_path,
+            broadcast_options,
             should_close.clone(),
-            options.decoders,
             queue_input.downgrade(),
         );
 
@@ -99,12 +116,16 @@ impl MoqClientInput {
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         consumer: OriginConsumer,
-        broadcast_path: Arc<str>,
+        options: BroadcastOptions,
         should_close: Arc<AtomicBool>,
-        decoders: MoqInputDecoders,
         queue_input: WeakQueueInput,
     ) {
         let rt = ctx.tokio_rt.clone();
+        let BroadcastOptions {
+            broadcast_path,
+            decoder_options,
+            buffer,
+        } = options;
 
         rt.spawn(
             async move {
@@ -116,9 +137,9 @@ impl MoqClientInput {
 
                 let broadcast_ctx = BroadcastCtx {
                     broadcast,
-                    decoders,
+                    decoder_options,
+                    buffer,
                     should_close,
-                    endpoint_kind: MoqEndpointKind::Client,
                 };
                 let broadcast_result =
                     handle_broadcast(ctx, input_ref, queue_input, broadcast_ctx).await;
