@@ -200,12 +200,11 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         // equal to the remaining black screen, which the pipeline fills with black.
         let track_seek = self.track_start_offset + user_seek;
 
-        let (start_index, present_index) = self.find_seek_start_sample(media_seek);
+        let start_index = self.find_seek_start_sample(media_seek);
         TrackChunks {
             track: self,
             track_seek,
             next_sample_index: start_index,
-            present_from_index: present_index,
         }
     }
 
@@ -221,11 +220,9 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         }
     }
 
-    /// Returns `(start_index, present_from_index)` for the given seek position.
-    /// `start_index` is the last sync sample before seek (for decoder warmup).
-    /// `present_from_index` is the first sample at or after seek.
-    /// If seek is past the end returns index of last_sample_idx + 1 for both values.
-    fn find_seek_start_sample(&self, seek: Duration) -> (u32, u32) {
+    /// Returns the index of the last sync sample before the given seek position
+    /// (for decoder warmup). If seek is past the end returns last_sample_idx + 1.
+    fn find_seek_start_sample(&self, seek: Duration) -> u32 {
         let seek_timestamp = (seek.as_secs_f64() * self.timescale as f64) as u64;
         let track = &self.reader.tracks()[&self.track_id];
 
@@ -259,10 +256,10 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
 
         let present_from_index = match present_from_index {
             Some(pfi) => u32::max(pfi, 1),
-            None => return (samples_skipped + 1, samples_skipped + 1),
+            None => return samples_skipped + 1,
         };
 
-        let sync_index = match &stss {
+        match &stss {
             Some(stss) => {
                 let pos = stss.entries.partition_point(|&s| s <= present_from_index);
 
@@ -272,9 +269,7 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
                 }
             }
             None => present_from_index,
-        };
-
-        (sync_index, present_from_index)
+        }
     }
 }
 
@@ -286,7 +281,6 @@ pub(crate) struct TrackChunks<'a, Reader: Read + Seek + Send + 'static> {
     /// by the `elst` box).
     track_seek: Duration,
     next_sample_index: u32,
-    present_from_index: u32,
 }
 
 impl<Reader: Read + Seek + Send + 'static> Iterator for TrackChunks<'_, Reader> {
@@ -302,7 +296,7 @@ impl<Reader: Read + Seek + Send + 'static> Iterator for TrackChunks<'_, Reader> 
             self.next_sample_index += 1;
             match sample {
                 Ok(Some(sample)) => {
-                    return Some(self.sample_into_chunk(sample, sample_index));
+                    return Some(self.sample_into_chunk(sample));
                 }
                 Ok(None) => {}
                 Err(err) => {
@@ -315,11 +309,7 @@ impl<Reader: Read + Seek + Send + 'static> Iterator for TrackChunks<'_, Reader> 
 }
 
 impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
-    fn sample_into_chunk(
-        &mut self,
-        sample: Mp4Sample,
-        sample_index: u32,
-    ) -> (EncodedInputChunk, Duration) {
+    fn sample_into_chunk(&mut self, sample: Mp4Sample) -> (EncodedInputChunk, Duration) {
         let rendering_offset = sample.rendering_offset;
         let start_time = sample.start_time;
         let sample_duration =
@@ -335,9 +325,9 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
 
         // When seeking in video, we start reading from the nearest sync (keyframe)
         // sample before the seek point so the decoder can build up its reference
-        // frames. Samples before `present_from_sample` are only needed for decoding
-        // and should not be presented.
-        let decode_only = sample_index < self.present_from_index;
+        // frames. Samples presented before the seek point are only needed for
+        // decoding and should not be presented.
+        let decode_only = pts.is_negative();
 
         let chunk = EncodedInputChunk {
             data: sample.bytes,
