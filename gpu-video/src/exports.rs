@@ -1,8 +1,8 @@
 pub mod parameters {
     pub use crate::adapter::VideoAdapterDescriptor;
     pub use crate::device::{
-        ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
-        EncoderParametersH265, MissedFrameHandling, Rational, VideoDeviceDescriptor,
+        ColorRange, ColorSpace, CorruptedStateHandling, DecoderParameters, EncoderOutputParameters,
+        EncoderParametersH264, EncoderParametersH265, Rational, VideoDeviceDescriptor,
         VideoParameters,
     };
     pub use crate::instance::VideoInstanceDescriptor;
@@ -130,8 +130,8 @@ pub use crate::{
 
 pub use crate::adapter::VideoAdapter;
 #[cfg(feature = "wgpu")]
-pub use crate::decoders::WgpuTexturesDecoder;
-pub use crate::decoders::{BytesDecoder, VideoDecoderError};
+pub use crate::decoders::WgpuTexturesDecoderH264;
+pub use crate::decoders::{BytesDecoderH264, VideoDecoderError};
 pub use crate::encoders::{BytesEncoderH264, BytesEncoderH265, VideoEncoderError};
 #[cfg(feature = "wgpu")]
 pub use crate::encoders::{WgpuTexturesEncoderH264, WgpuTexturesEncoderH265};
@@ -182,25 +182,42 @@ impl std::fmt::Debug for VideoDevice {
 }
 
 impl VideoDevice {
+    /// Creates an H.264 decoder that sends each decoded frame via callback.
+    ///
+    /// The `on_frame` callback receives each decoded frame as an [`OutputFrame`] struct,
+    /// where the frame is represented as a [`Vec<u8>`] in the [NV12 format](https://en.wikipedia.org/wiki/YCbCr#4:2:0).
+    ///
+    /// Heavy work in the callback can delay the delivery of frames and block [`BytesDecoderH264::decode`].
+    /// On vulkan, the delivery is done on one thread that's shared between all decoders and
+    /// encoders, so a slow callback would affect them all.
+    ///
+    /// Prefer to use the callback only to pass the frame (e.g. through a channel) to another thread and do the heavy work there.
     pub fn create_bytes_decoder_h264(
         &self,
         parameters: DecoderParameters,
-    ) -> Result<BytesDecoder, VideoDecoderError> {
-        self.inner.clone().create_bytes_decoder_h264(parameters)
+        on_frame: impl FnMut(OutputFrame<RawFrameData>) + Send + 'static,
+    ) -> Result<BytesDecoderH264, VideoDecoderError> {
+        self.inner
+            .clone()
+            .create_bytes_decoder_h264(parameters, Box::new(on_frame))
     }
 
+    /// Creates an H.264 decoder that returns each decoded frame as a [`wgpu::Texture`].
     #[cfg(feature = "wgpu")]
     pub fn create_wgpu_textures_decoder_h264(
         &self,
+        wgpu_queue: &wgpu::Queue,
         parameters: DecoderParameters,
-    ) -> Result<WgpuTexturesDecoder, VideoDecoderError> {
+    ) -> Result<WgpuTexturesDecoderH264, VideoDecoderError> {
         let Some(wgpu_device) = self.wgpu_device.clone() else {
             return Err(VideoDecoderError::VideoDeviceWithoutWgpu);
         };
 
-        self.inner
-            .clone()
-            .create_wgpu_textures_decoder_h264(wgpu_device, parameters)
+        self.inner.clone().create_wgpu_textures_decoder_h264(
+            wgpu_device,
+            wgpu_queue.clone(),
+            parameters,
+        )
     }
 
     /// Create a single-input multiple-output transcoder.
@@ -401,7 +418,7 @@ pub enum DecoderEvent<'a, ParsedFrame> {
 
     /// Signal the decoder that a chunk of the bitstream was lost.
     ///
-    /// What the decoder will do depends on the set [`parameters::MissedFrameHandling`]
+    /// What the decoder will do depends on the set [`parameters::CorruptedStateHandling`]
     SignalDataLoss,
 
     /// Flush all frames from the decoder.

@@ -5,6 +5,7 @@ use crate::{
     device::{ColorRange, ColorSpace},
 };
 
+#[derive(Clone)]
 pub(crate) struct DecodeResultMetadata {
     pub(crate) pts: Option<u64>,
     pub(crate) pic_order_cnt: i32,
@@ -12,6 +13,8 @@ pub(crate) struct DecodeResultMetadata {
     pub(crate) is_idr: bool,
     pub(crate) color_space: ColorSpace,
     pub(crate) color_range: ColorRange,
+    pub(crate) cropped_width: u32,
+    pub(crate) cropped_height: u32,
 }
 
 pub(crate) struct DecodeResult<T> {
@@ -92,6 +95,7 @@ impl<T> FrameSorter<T> {
         result
     }
 
+    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
     pub(crate) fn put_frames(&mut self, frames: Vec<DecodeResult<T>>) -> Vec<OutputFrame<T>> {
         let mut result = Vec::new();
         for unsorted_frame in frames {

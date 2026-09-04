@@ -1,12 +1,8 @@
+use std::time::Duration;
+
 use crate::{
-    DecoderEvent, EncodedInputChunk, H264ParserError, OutputFrame, RawFrameData,
-    ReferenceManagementError, VideoBackendError,
-    frame_sorter::{DecodeResult, FrameSorter},
-    parser::{
-        decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
-        h264::{AccessUnit, H264Parser},
-        reference_manager::ReferenceContext,
-    },
+    DecoderEvent, EncodedInputChunk, H264ParserError, ReferenceManagementError, VideoBackendError,
+    parser::h264::AccessUnit,
 };
 
 #[cfg(feature = "wgpu")]
@@ -15,76 +11,54 @@ mod wgpu_api;
 pub use wgpu_api::*;
 
 pub(crate) trait VideoDecoderBackend: Send {
-    fn decode_to_bytes(
+    fn process_event_bytes(
         &mut self,
-        decoder_instructions: Vec<DecoderInstruction>,
-    ) -> Result<Vec<DecodeResult<RawFrameData>>, VideoDecoderError>;
+        event: DecoderEvent<'_, AccessUnit>,
+        timeout: Duration,
+    ) -> Result<(), VideoDecoderError>;
 }
 
 /// A decoder that outputs frames stored as [`Vec<u8>`] with the raw pixel data.
-pub struct BytesDecoder {
-    pub(crate) decoder: Box<dyn VideoDecoderBackend>,
-    pub(crate) parser: H264Parser,
-    pub(crate) reference_ctx: ReferenceContext,
-    pub(crate) frame_sorter: FrameSorter<RawFrameData>,
+pub struct BytesDecoderH264 {
+    pub(crate) backend: Box<dyn VideoDecoderBackend>,
 }
 
-impl BytesDecoder {
-    /// The result is a sequence of frames. The payload of each [`OutputFrame`] struct is a [`Vec<u8>`]. Each [`Vec<u8>`] contains a single
-    /// decoded frame in the [NV12 format](https://en.wikipedia.org/wiki/YCbCr#4:2:0).
-    pub fn decode(
-        &mut self,
-        frame: EncodedInputChunk<'_>,
-    ) -> Result<Vec<OutputFrame<RawFrameData>>, VideoDecoderError> {
-        self.process_event(DecoderEvent::DecodeChunk(frame))
+impl BytesDecoderH264 {
+    /// The decoded frames are sent via the callback provided at creation.
+    ///
+    /// If [`DecoderParameters::max_in_flight_submissions`](crate::parameters::DecoderParameters::max_in_flight_submissions)
+    /// decode submissions are already in flight, this blocks until all submissions above the limit finish.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
+    pub fn decode(&mut self, frame: EncodedInputChunk<'_>) -> Result<(), VideoDecoderError> {
+        self.process_event(DecoderEvent::DecodeChunk(frame), None)
     }
 
     /// Flush all frames from the decoder.
+    /// This blocks until all frames have been sent via the provided callback.
     ///
     /// Make sure that this is done when you have the knowledge that no more frames will be coming
     /// that need to be presented before the already decoded frames.
-    pub fn flush(&mut self) -> Result<Vec<OutputFrame<RawFrameData>>, VideoDecoderError> {
-        self.process_event(DecoderEvent::Flush)
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
+    pub fn flush(&mut self) -> Result<(), VideoDecoderError> {
+        self.process_event(DecoderEvent::Flush, None)
     }
 
     /// Process a [`DecoderEvent`]. For most use cases, using [`Self::decode`] and [`Self::flush`] is enough.
     /// Use this only when you need more fine-grained control.
-    /// May return a sequence of decoded frames in the [NV12 format](https://en.wikipedia.org/wiki/YCbCr#4:2:0).
+    ///
+    /// If the provided event does any decoding operation and [`DecoderParameters::max_in_flight_submissions`](crate::parameters::DecoderParameters::max_in_flight_submissions)
+    /// decode submissions are already in flight, this blocks until all submissions above the limit finish, or times out after `timeout`.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn process_event(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
-    ) -> Result<Vec<OutputFrame<RawFrameData>>, VideoDecoderError> {
-        match event {
-            DecoderEvent::DecodeChunk(chunk) => {
-                let nalus = self.parser.parse(chunk.data, chunk.pts)?;
-                self.decode_access_units(nalus)
-            }
-            DecoderEvent::DecodeParsedFrame(au) => self.decode_access_units(vec![au]),
-            DecoderEvent::SignalFrameEnd => {
-                let access_units = self.parser.flush()?;
-                self.decode_access_units(access_units)
-            }
-            DecoderEvent::SignalDataLoss => {
-                self.reference_ctx.mark_missed_frames();
-                Ok(Vec::new())
-            }
-            DecoderEvent::Flush => {
-                let access_units = self.parser.flush()?;
-                let mut frames = self.decode_access_units(access_units)?;
-                frames.append(&mut self.frame_sorter.flush());
-                Ok(frames)
-            }
-        }
-    }
-
-    fn decode_access_units(
-        &mut self,
-        access_units: Vec<AccessUnit>,
-    ) -> Result<Vec<OutputFrame<RawFrameData>>, VideoDecoderError> {
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
-        let unsorted_frames = self.decoder.decode_to_bytes(instructions)?;
-        let sorted_frames = self.frame_sorter.put_frames(unsorted_frames);
-        Ok(sorted_frames)
+        timeout: Option<Duration>,
+    ) -> Result<(), VideoDecoderError> {
+        self.backend
+            .process_event_bytes(event, timeout.unwrap_or(Duration::MAX))
     }
 }
 
@@ -108,6 +82,9 @@ pub enum VideoDecoderError {
     )]
     VideoDeviceWithoutWgpu,
 
-    #[error("Encoder error: {0}")]
+    #[error("Decode submission timed out")]
+    DecodeSubmissionTimeout,
+
+    #[error("Decoder error: {0}")]
     BackendError(VideoBackendError),
 }

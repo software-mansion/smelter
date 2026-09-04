@@ -29,7 +29,7 @@ pub(super) struct VideoSessionResources<'a> {
     pub(crate) decoding_images: DecodingImages<'a>,
     pub(crate) sps: FxHashMap<u8, SeqParameterSet>,
     pub(crate) pps: FxHashMap<(u8, u8), PicParameterSet>,
-    pub(crate) decode_query_pool: Option<Arc<DecodingQueryPool>>,
+    pub(crate) decode_query_pool: Option<DecodingQueryPool>,
     pub(crate) decode_buffer_pool: DecodeInputBufferPool<'a>,
     parameters_scheduled_for_reset: Option<SessionParams<'a>>,
     image_modifiers: ImageModifiers,
@@ -68,6 +68,7 @@ impl<'a> VideoSessionResources<'a> {
         usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
         tracker: &mut DecoderTracker,
         image_modifiers: ImageModifiers,
+        decode_query_pool_size: u32,
     ) -> Result<Self, VulkanDecoderError> {
         let profile_info = Arc::new(H264DecodeProfileInfo::from_sps_decode(&sps, usage_info)?);
 
@@ -125,10 +126,11 @@ impl<'a> VideoSessionResources<'a> {
             .h264_decode_queues
             .supports_result_status_queries()
         {
-            Some(Arc::new(DecodingQueryPool::new(
+            Some(DecodingQueryPool::new(
                 decoding_device.vulkan_device.device.clone(),
                 profile_info.profile_info.profile_info,
-            )?))
+                decode_query_pool_size,
+            )?)
         } else {
             None
         };
@@ -242,15 +244,13 @@ impl<'a> VideoSessionResources<'a> {
         }
 
         if self.parameters.profile_info != params.profile_info {
-            self.decode_query_pool = match decoding_device
-                .h264_decode_queues
-                .supports_result_status_queries()
-            {
-                true => Some(Arc::new(DecodingQueryPool::new(
+            self.decode_query_pool = match self.decode_query_pool.as_ref() {
+                Some(pool) => Some(DecodingQueryPool::new(
                     decoding_device.vulkan_device.device.clone(),
                     params.profile_info.profile_info.profile_info,
-                )?)),
-                false => None,
+                    pool.query_count(),
+                )?),
+                None => None,
             };
             self.decode_buffer_pool = DecodeInputBufferPool::new(
                 decoding_device.allocator.clone(),
