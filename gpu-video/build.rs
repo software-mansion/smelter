@@ -12,21 +12,26 @@ fn main() {
                 )
             )
         },
+        video_toolbox: { target_vendor = "apple" },
+        supported: { any(vulkan, video_toolbox) }
     }
 }
 
-// cfg vulkan && feature "transcoder"
-#[cfg(all(
-    any(
-        windows,
-        all(
-            unix,
-            not(any(target_os = "macos", target_os = "ios", target_os = "emscripten"))
-        )
-    ),
-    feature = "transcoder"
-))]
+// `#[cfg]` in a build script reflects the host, not the target, so gate on the
+// target via env vars instead.
+#[cfg(feature = "transcoder")]
 fn build_transcoding_shader() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let is_unix = std::env::var("CARGO_CFG_TARGET_FAMILY")
+        .unwrap_or_default()
+        .split(',')
+        .any(|family| family == "unix");
+    let is_vulkan_target = target_os == "windows"
+        || (is_unix && !matches!(target_os.as_str(), "macos" | "ios" | "emscripten"));
+    if !is_vulkan_target {
+        return;
+    }
+
     println!("cargo:rerun-if-changed=src/backends/vulkan/vulkan_transcoder/shader.wgsl");
 
     let mut front = naga::front::wgsl::Frontend::new();

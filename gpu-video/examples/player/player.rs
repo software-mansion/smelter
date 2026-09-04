@@ -64,7 +64,7 @@ impl AppState {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
             Box::new(event_loop.owned_display_handle()),
         ));
-        let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
+        let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::default()))
             .into_iter()
             .find(|a| {
                 a.video_adapter_info()
