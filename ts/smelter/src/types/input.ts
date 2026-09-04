@@ -261,6 +261,11 @@ export type RegisterMoqServerInput = {
    * Enable side channel for video and/or audio track.
    */
   sideChannel?: SideChannel;
+  /**
+   * (**default=`2000`**) Buffer kept between the live edge of the stream and playback.
+   * A number value represents `buffer.desiredMs` option
+   */
+  buffer?: InputBuffer | null;
 };
 
 export type RegisterMoqClientInput = {
@@ -288,6 +293,11 @@ export type RegisterMoqClientInput = {
    * Enable side channel for video and/or audio track.
    */
   sideChannel?: SideChannel;
+  /**
+   * (**default=`2000`**) Buffer kept between the live edge of the stream and playback.
+   * A number value represents `buffer.desiredMs` option
+   */
+  buffer?: InputBuffer | null;
 };
 
 export type RegisterV4l2Input = {

@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::prelude::*;
 
 /// Resolves the buffer options into concrete `(min, desired, max)` values.
-pub(super) fn resolve_buffer_options(
+pub(crate) fn resolve_buffer_options(
     options: LiveInputBufferOptions,
 ) -> (Duration, Duration, Duration) {
     // minimal delta between bounds
