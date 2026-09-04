@@ -476,11 +476,10 @@ mod required_input {
         queue.start();
 
         sleep(Duration::from_millis(1));
-        // frames 0 and 1 are dropped, frame 2 (input PTS 30ms) is due at start (would -10 ms but
-        // duration is positive)
+        // frames 0 and 1 are dropped, frame 2 (input PTS 30ms) is 10ms late at start
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(0), frame(2, ms(0))),
+            &batch(ms(0), frame(2, -ms(10))),
             Duration::from_millis(2),
         );
         assert!(queue.next_video_batch().is_none());
@@ -512,7 +511,7 @@ mod required_input {
         sleep(Duration::from_millis(1));
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(0), frame(0, ms(0))),
+            &batch(ms(0), frame(0, -ms(10))),
             Duration::from_millis(2),
         );
         assert!(queue.next_video_batch().is_none());
@@ -606,7 +605,7 @@ mod required_input {
         sleep(Duration::from_millis(1));
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(0), frame(3, ms(0))),
+            &batch(ms(0), frame(3, -ms(5))),
             Duration::from_millis(2),
         );
         assert!(queue.next_video_batch().is_none());
@@ -759,7 +758,7 @@ mod required_input {
         sleep(Duration::from_millis(1));
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(0), frame(1, ms(0))),
+            &batch(ms(0), frame(1, -ms(5))),
             Duration::from_millis(2),
         );
         assert!(queue.next_video_batch().is_none());
@@ -1225,11 +1224,10 @@ mod optional_input {
         queue.start();
 
         sleep(Duration::from_millis(1));
-        // frames 0 and 1 are dropped, frame 2 (input PTS 30ms) is due at start (would -10 ms but
-        // duration is positive)
+        // frames 0 and 1 are dropped, frame 2 (input PTS 30ms) is 10ms late at start
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(0), frame(2, ms(0))),
+            &batch(ms(0), frame(2, -ms(10))),
             Duration::from_millis(2),
         );
         assert!(queue.next_video_batch().is_none());
@@ -1261,7 +1259,7 @@ mod optional_input {
         sleep(Duration::from_millis(1));
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(0), frame(0, ms(0))),
+            &batch(ms(0), frame(0, -ms(10))),
             Duration::from_millis(2),
         );
         assert!(queue.next_video_batch().is_none());
@@ -1355,7 +1353,7 @@ mod optional_input {
         sleep(Duration::from_millis(1));
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(0), frame(3, ms(0))),
+            &batch(ms(0), frame(3, -ms(5))),
             Duration::from_millis(2),
         );
         assert!(queue.next_video_batch().is_none());
@@ -1519,7 +1517,7 @@ mod optional_input {
         sleep(Duration::from_millis(1));
         assert_video_batch_eq_with_tolerance(
             &queue.next_video_batch().unwrap(),
-            &batch(ms(0), frame(1, ms(0))),
+            &batch(ms(0), frame(1, -ms(5))),
             Duration::from_millis(2),
         );
         assert!(queue.next_video_batch().is_none());
