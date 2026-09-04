@@ -53,6 +53,9 @@ font8x8 = "0.3"
 integration-tests-macros = { path = "macros" }
 gpu-video = { workspace = true, features = ["expose-parsers"] }
 pollster = { workspace = true }
+sha2 = "0.10"
+data-encoding = "2"
+dirs = "5.0"
 
 [lints]
 workspace = true
