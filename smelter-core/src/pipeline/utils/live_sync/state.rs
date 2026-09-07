@@ -264,7 +264,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     }
 
     fn maybe_start(&mut self, now: Instant) {
-        let shared_timeline = self.tracks_share_timeline(now);
+        let shared_timeline = self.tracks_share_timeline(now, Duration::from_secs(10));
 
         if let Some(track) = self.audio.as_mut() {
             track.maybe_start(
@@ -284,33 +284,44 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
     }
 
-    /// Heuristic that decides if all tracks are on the same timeline
-    fn tracks_share_timeline(&self, now: Instant) -> bool {
+    /// Heuristic that decides if all tracks are on the same timeline. Live
+    /// edges closer than `threshold` are treated as the same timeline. `None`
+    /// when there is not enough information to decide either way.
+    fn tracks_share_timeline(&self, now: Instant, threshold: Duration) -> Option<bool> {
         let audio = self.audio.as_ref().and_then(|a| a.estimator.estimate(now));
         let video = self.video.as_ref().and_then(|v| v.estimator.estimate(now));
         let (Some(audio), Some(video)) = (audio, video) else {
-            return true;
+            return None;
         };
         let (audio, video) = (audio.upper_bound, video.upper_bound);
 
         let diff = (audio.pts - video.pts).abs();
-        // If diff is that large we ignore stability, timelines have to
-        // be diverged
+        // If diff is that large we ignore stability, timelines have to be diverged
         if diff >= Timestamp::from_secs(120) {
-            return false;
+            return Some(false);
         }
 
-        // If diff is over 10 second we check stability too before deciding
-        if diff < Timestamp::from_secs(10) {
-            return true;
+        // If diff is over the threshold we check stability too before deciding
+        if diff < Timestamp::from(threshold) {
+            return match audio.stable && video.stable {
+                true => Some(true),
+                false => None,
+            };
         }
 
         match (audio.stable, video.stable) {
-            (true, true) => false,
-            // unstable track behind the stable one: could be backlog
-            (true, false) => video.pts < audio.pts,
-            (false, true) => audio.pts < video.pts,
-            (false, false) => true,
+            (true, true) => Some(false),
+            // unstable track ahead of the stable one only diverges further;
+            // behind it could be backlog
+            (true, false) => match video.pts < audio.pts {
+                true => None,
+                false => Some(false),
+            },
+            (false, true) => match audio.pts < video.pts {
+                true => None,
+                false => Some(false),
+            },
+            (false, false) => None,
         }
     }
 
@@ -336,11 +347,15 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             anchor.current = anchor.target
         }
 
+        // stricter than the difference that splits the tracks on start, so
+        // they cannot flap between sharing an anchor and running their own
+        let shared_timeline = self.tracks_share_timeline(now, Duration::from_secs(3));
+
         if let Some(track) = self.audio.as_mut() {
-            track.maybe_correct(now, &self.shared_estimator, &mut self.anchor);
+            track.maybe_correct(now, &mut self.anchor, shared_timeline);
         }
         if let Some(track) = self.video.as_mut() {
-            track.maybe_correct(now, &self.shared_estimator, &mut self.anchor);
+            track.maybe_correct(now, &mut self.anchor, shared_timeline);
         }
     }
 
@@ -531,7 +546,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         now: Instant,
         shared_estimator: &LiveEdgeEstimator,
         shared_anchor: &mut Option<SharedAnchor>,
-        shared_timeline: bool,
+        shared_timeline: Option<bool>,
     ) {
         if !matches!(self.start, StartState::WaitingForStart) {
             return;
@@ -552,7 +567,8 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             return;
         }
 
-        let anchor = match shared_timeline {
+        // undecided tracks start on the shared timeline
+        let anchor = match shared_timeline.unwrap_or(true) {
             true => match shared_anchor {
                 Some(anchor) => {
                     debug!(
@@ -619,8 +635,8 @@ impl<B: LiveSyncBuffer> TrackState<B> {
     fn maybe_correct(
         &mut self,
         now: Instant,
-        shared_estimator: &LiveEdgeEstimator,
         shared_anchor: &mut Option<SharedAnchor>,
+        shared_timeline: Option<bool>,
     ) {
         let StartState::StartedTrack {
             target_anchor,
@@ -636,46 +652,36 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         };
 
         // The verdict that this track runs its own timeline can turn out to be wrong.
-        // If both estimators start to be relatively close then try to converge on shared
-        // target.
-        if let Some(shared_estimation) = shared_estimator.estimate(now) {
-            let upper_diff =
-                (track_estimation.upper_bound.pts - shared_estimation.upper_bound.pts).abs();
-
-            let lower_diff =
-                (track_estimation.lower_bound.pts - shared_estimation.lower_bound.pts).abs();
-
-            // stricter than the difference that splits the tracks, so they
-            // cannot flap between sharing an anchor and running their own
-            if upper_diff < Timestamp::from_secs(3) && lower_diff < Timestamp::from_secs(3) {
-                let Some(shared_anchor) = shared_anchor else {
-                    debug!(
-                        kind=?self.kind,
-                        offset=current_anchor.offset_string(),
-                        "Live sync: track anchor promoted to shared anchor"
-                    );
-                    *shared_anchor = Some(SharedAnchor {
-                        current: *current_anchor,
-                        target: *current_anchor,
-                        last_released_pts: None,
-                    });
-                    self.start = StartState::StartedShared;
-                    return;
-                };
-                // We no longer update target anchor based on estimator, but track
-                // estimator can still break this cycle if it diverges.
-                *target_anchor = shared_anchor.current;
-                let anchor_distance = shared_anchor.current.distance_to(*current_anchor);
-                if anchor_distance < Timestamp::from_millis(50) {
-                    debug!(
-                        kind=?self.kind,
-                        offset=shared_anchor.current.offset_string(),
-                        "Live sync: track converged, switching to shared anchor"
-                    );
-                    self.set_start(StartState::StartedShared);
-                }
+        // If the tracks turn out to be close then try to converge on shared target;
+        // undecided tracks stay where they are.
+        if shared_timeline == Some(true) {
+            let Some(shared_anchor) = shared_anchor else {
+                debug!(
+                    kind=?self.kind,
+                    offset=current_anchor.offset_string(),
+                    "Live sync: track anchor promoted to shared anchor"
+                );
+                *shared_anchor = Some(SharedAnchor {
+                    current: *current_anchor,
+                    target: *current_anchor,
+                    last_released_pts: None,
+                });
+                self.start = StartState::StartedShared;
                 return;
+            };
+            // We no longer update target anchor based on estimator, but track
+            // estimator can still break this cycle if it diverges.
+            *target_anchor = shared_anchor.current;
+            let anchor_distance = shared_anchor.current.distance_to(*current_anchor);
+            if anchor_distance < Timestamp::from_millis(50) {
+                debug!(
+                    kind=?self.kind,
+                    offset=shared_anchor.current.offset_string(),
+                    "Live sync: track converged, switching to shared anchor"
+                );
+                self.set_start(StartState::StartedShared);
             }
+            return;
         }
 
         let strategy = self.options.buffering_strategy;
