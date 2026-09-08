@@ -83,6 +83,7 @@ impl V4l2Input {
         };
 
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
+        queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
         let (Some(video_sender), _) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
             audio: false,

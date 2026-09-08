@@ -84,6 +84,9 @@ impl HlsInput {
 
         let ffmpeg_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options.clone());
+        if ffmpeg_ctx.is_live() {
+            queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
+        }
 
         let input_ctx = HlsInputContext {
             ctx,

@@ -20,7 +20,7 @@ pub struct Config {
 
     pub api_port: u16,
     pub download_root: Arc<Path>,
-    pub stream_fallback_timeout: Duration,
+    pub stale_frame_timeout: Duration,
     pub default_buffer_duration: Duration,
     pub side_channel_socket_dir: Option<Arc<Path>>,
 
@@ -149,7 +149,7 @@ fn try_read_config() -> Result<Config, String> {
     let gpu_driver_name = env::var("SMELTER_GPU_DEVICE_DRIVER").ok();
 
     const DEFAULT_STREAM_FALLBACK_TIMEOUT: Duration = Duration::from_millis(3000);
-    let stream_fallback_timeout = match env::var("SMELTER_STREAM_FALLBACK_TIMEOUT_MS") {
+    let stale_frame_timeout = match env::var("SMELTER_STREAM_FALLBACK_TIMEOUT_MS") {
         Ok(timeout_ms) => match timeout_ms.parse::<f64>() {
             Ok(timeout_ms) => Duration::from_secs_f64(timeout_ms / 1000.0),
             Err(_) => {
@@ -415,7 +415,7 @@ fn try_read_config() -> Result<Config, String> {
         output_framerate,
         run_late_scheduled_events,
         never_drop_output_frames,
-        stream_fallback_timeout,
+        stale_frame_timeout,
         web_renderer_enable,
         web_renderer_gpu_enable,
         download_root,

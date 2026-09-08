@@ -35,7 +35,7 @@ pub fn benchmark_pipeline_options(
         download_root: std::env::temp_dir().into(),
         load_system_fonts: false,
         mixing_sample_rate: 48_000,
-        stream_fallback_timeout: Duration::from_millis(500),
+        stale_frame_timeout: Duration::from_millis(500),
         tokio_rt: None,
         rendering_mode,
         max_layouts_count: DEFAULT_MAX_LAYOUTS_COUNT,

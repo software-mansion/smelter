@@ -26,11 +26,6 @@ pub(super) fn populate_inputs(
             input_textures.clear();
             continue;
         };
-        if Duration::saturating_sub(frame_set.pts, ctx.stream_fallback_timeout) > frame.pts {
-            input_textures.clear();
-            continue;
-        }
-
         input_textures.upload(ctx.wgpu_ctx, frame);
     }
 

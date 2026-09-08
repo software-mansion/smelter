@@ -1,5 +1,5 @@
 use core::panic;
-use std::{io::Write, sync::OnceLock, time::Duration};
+use std::{io::Write, sync::OnceLock};
 
 use bytes::BufMut;
 use crossbeam_channel::bounded;
@@ -88,7 +88,6 @@ pub(super) fn create_renderer(rendering_mode: RenderingMode) -> Renderer {
     Renderer::new(RendererOptions {
         chromium_context: None,
         framerate: Framerate { num: 30, den: 1 },
-        stream_fallback_timeout: Duration::from_secs(3),
         load_system_fonts: false,
         rendering_mode,
         max_layouts_count: DEFAULT_MAX_LAYOUTS_COUNT,

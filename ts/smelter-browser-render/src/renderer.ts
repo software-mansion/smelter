@@ -2,11 +2,6 @@ import { wasm } from './wasm';
 import type * as Api from './api';
 
 export type RendererOptions = {
-  /**
-   * A timeout that defines when the smelter should switch to fallback on the input stream that stopped sending frames.
-   */
-  streamFallbackTimeoutMs: number;
-
   loggerLevel?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
 };
 
@@ -39,7 +34,6 @@ export class Renderer {
 
   public static async create(options: RendererOptions): Promise<Renderer> {
     const renderer = await wasm.create_renderer({
-      stream_fallback_timeout_ms: options.streamFallbackTimeoutMs,
       logger_level: options.loggerLevel ?? 'warn',
       upload_frames_with_copy_external: self.navigator.userAgent.includes('Macintosh'),
     });

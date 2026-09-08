@@ -10,7 +10,6 @@ pub struct WgpuCtx {
 
 #[derive(Debug, Deserialize)]
 pub struct RendererOptions {
-    pub stream_fallback_timeout_ms: u64,
     pub logger_level: LoggerLevel,
     /// On most platforms it's more performant to copy input VideoFrame data to CPU
     /// and then upload it to texture. But on macOS using dedicated wgpu copy_external_image_to_texture function
@@ -85,7 +84,6 @@ impl From<FrameFormat> for smelter_render::OutputFrameFormat {
 }
 
 pub fn new_render_options(
-    value: RendererOptions,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
 ) -> smelter_render::RendererOptions {
@@ -93,7 +91,6 @@ pub fn new_render_options(
         chromium_context: None,
         // Framerate is only required by web renderer which is not used
         framerate: smelter_render::Framerate { num: 30, den: 1 },
-        stream_fallback_timeout: Duration::from_millis(value.stream_fallback_timeout_ms),
         load_system_fonts: true,
         rendering_mode: smelter_render::RenderingMode::WebGl,
         max_layouts_count: smelter_render::DEFAULT_MAX_LAYOUTS_COUNT,

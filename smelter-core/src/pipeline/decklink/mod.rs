@@ -88,6 +88,7 @@ impl DeckLink {
             opts.queue_options.video_side_channel != InputSideChannel::Disabled;
 
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
+        queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: true,
             audio: opts.enable_audio,

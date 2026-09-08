@@ -68,6 +68,7 @@ pub(super) struct InnerQueueInput {
     pending_sender: crossbeam_channel::Sender<PendingTrack>,
     pending_receiver: crossbeam_channel::Receiver<PendingTrack>,
     required: bool,
+    stale_frame_timeout: Option<Duration>,
     video_side_channel: Option<VideoSideChannel>,
     audio_side_channel: Option<AudioSideChannel>,
     side_channel_delay: Duration,
@@ -136,6 +137,7 @@ impl InnerQueueInput {
                 &self.event_emitter,
                 &self.input_ref,
                 self.required,
+                self.stale_frame_timeout,
                 offset_from_start,
                 track_offset.clone(),
                 side_channel,
@@ -333,6 +335,7 @@ impl QueueInput {
             pending_receiver,
 
             required: opts.required,
+            stale_frame_timeout: None,
             pause_state: PauseState::new(),
             video_side_channel,
             audio_side_channel,
@@ -364,6 +367,17 @@ impl QueueInput {
 
     pub fn abort_old_track(&self) {
         self.0.lock().unwrap().replace_track()
+    }
+
+    /// Stop rendering the last frame once it is older than `timeout`. Without
+    /// it the last frame is rendered until a newer one arrives. Applies to the
+    /// current track and to tracks created afterwards.
+    pub fn set_stale_frame_timeout(&self, timeout: Duration) {
+        let mut guard = self.0.lock().unwrap();
+        guard.stale_frame_timeout = Some(timeout);
+        if let Some(video) = guard.video.as_mut() {
+            video.set_stale_frame_timeout(timeout);
+        }
     }
 
     pub fn pause(&self) {
