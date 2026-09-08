@@ -327,9 +327,9 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
         // sample before the seek point so the decoder can build up its reference
         // frames.
         //
-        // There needs to at least one chunk which PTS <= 0, for most mp4 the first frame
-        // will have exactly 0, pts but if not we want to avoid empty frame at the start,
-        // especially when looping
+        // There needs to be at least one chunk whose PTS <= 0. For most MP4s the first frame
+        // has exactly 0 PTS, but if not we want to avoid an empty frame at the start,
+        // especially when looping.
         let decode_only = pts + sample_duration <= Timestamp::ZERO;
 
         let chunk = EncodedInputChunk {
