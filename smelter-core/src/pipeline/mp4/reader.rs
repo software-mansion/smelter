@@ -325,9 +325,12 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
 
         // When seeking in video, we start reading from the nearest sync (keyframe)
         // sample before the seek point so the decoder can build up its reference
-        // frames. Samples presented before the seek point are only needed for
-        // decoding and should not be presented.
-        let decode_only = pts.is_negative();
+        // frames.
+        //
+        // There needs to be at least one chunk whose PTS <= 0. For most MP4s the first frame
+        // has exactly 0 PTS, but if not we want to avoid an empty frame at the start,
+        // especially when looping.
+        let decode_only = pts + sample_duration <= Timestamp::ZERO;
 
         let chunk = EncodedInputChunk {
             data: sample.bytes,
