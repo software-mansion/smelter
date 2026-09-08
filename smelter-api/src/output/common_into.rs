@@ -126,14 +126,14 @@ fn duration_from_millis_f64(millis: f64) -> Duration {
     Duration::from_secs_f64(millis.clamp(0.0, MAX_DURATION_MS) / 1000.0)
 }
 
-pub(crate) fn duration_from_start_at(
+pub(crate) fn timestamp_from_start_at(
     start_at_ms: Option<f64>,
-) -> Result<Option<Duration>, TypeError> {
+) -> Result<Option<core::Timestamp>, TypeError> {
     match start_at_ms {
         Some(time) if time < 0.0 || time.is_nan() => {
             Err(TypeError::new("Start time cannot be negative."))
         }
-        Some(time) => Ok(Some(duration_from_millis_f64(time))),
+        Some(time) => Ok(Some(core::Timestamp::from_secs_f64(time / 1000.0))),
         None => Ok(None),
     }
 }

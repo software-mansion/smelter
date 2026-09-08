@@ -4,7 +4,7 @@ use ffmpeg_next::{
     Rational,
     codec::{Context, Id},
 };
-use smelter_render::{Frame, OutputFrameFormat};
+use smelter_render::OutputFrameFormat;
 use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{

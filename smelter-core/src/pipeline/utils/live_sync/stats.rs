@@ -2,6 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::{buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator, state::StartState};
 use crate::{
+    InstantExt, Timestamp,
     pipeline::utils::input_sync::{InputSyncStatsSender, TimestampAnchor, TrackKind},
     stats::{
         InputSyncMode, InputSyncTrackStatsEvent, LiveSyncStatsEvent, LiveSyncTrackState,
@@ -52,13 +53,13 @@ impl LiveSyncTrackStats {
         self.send(LiveSyncStatsEvent::Discontinuity);
     }
 
-    pub fn report_chunk_received(&self, output_pts: Duration) {
+    pub fn report_chunk_received(&self, output_pts: Timestamp) {
         self.send(LiveSyncStatsEvent::ChunkReceived {
             effective_buffer_ns: self.effective_buffer_ns(output_pts),
         });
     }
 
-    pub fn report_chunk_released(&self, output_pts: Duration) {
+    pub fn report_chunk_released(&self, output_pts: Timestamp) {
         self.send(LiveSyncStatsEvent::ChunkReleased {
             effective_buffer_ns: self.effective_buffer_ns(output_pts),
         });
@@ -66,8 +67,8 @@ impl LiveSyncTrackStats {
 
     /// How much time content at `output_pts` has to reach the queue as of
     /// `observed_at`; negative when it is already late.
-    fn effective_buffer_ns(&self, output_pts: Duration) -> i64 {
-        output_pts.as_nanos() as i64 - self.sync_point.elapsed().as_nanos() as i64
+    fn effective_buffer_ns(&self, output_pts: Timestamp) -> i64 {
+        (output_pts - self.sync_point.timestamp_now()).as_nanos()
     }
 
     /// Throttled to [`SNAPSHOT_INTERVAL`]. `anchors` is `(current, target)`
@@ -89,7 +90,7 @@ impl LiveSyncTrackStats {
         let estimate = estimator.and_then(|estimator| estimator.estimate(now));
         let target_offset_distance_ns = match anchors {
             Some((current, target)) => {
-                let distance = current.distance_to(target).as_nanos() as i64;
+                let distance = current.distance_to(target).as_nanos();
                 match current.presents_later_than(target) {
                     true => distance,
                     false => -distance,
@@ -97,7 +98,7 @@ impl LiveSyncTrackStats {
             }
             None => 0,
         };
-        let live_edge_distance_ns = |bound_pts: Duration| {
+        let live_edge_distance_ns = |bound_pts: Timestamp| {
             let (current, _) = anchors?;
             Some(self.effective_buffer_ns(current.to_output_pts(bound_pts)))
         };

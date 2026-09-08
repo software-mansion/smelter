@@ -14,7 +14,6 @@ use ffmpeg_next::{
     codec::{Context, Id},
     media::Type,
 };
-use smelter_render::Frame;
 use tracing::{debug, error, info, trace, warn};
 
 const TIME_BASE: i32 = 1_000_000;

@@ -1,9 +1,9 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use smelter_core::{LateEventPolicy, Pipeline};
+use smelter_core::{LateEventPolicy, Pipeline, Timestamp};
 use smelter_render::error::ErrorStack;
 use tracing::error;
 use utoipa::ToSchema;
@@ -51,7 +51,7 @@ pub async fn handle_output_update(
 
     match request.schedule_time_ms {
         Some(schedule_time_ms) => {
-            let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
+            let schedule_time = Timestamp::from_secs_f64(schedule_time_ms / 1000.0);
             Pipeline::schedule_event(
                 &api.pipeline()?,
                 schedule_time,

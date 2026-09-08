@@ -40,9 +40,9 @@ pub(super) fn try_init_logger() {
 /// Re-randomized at *compile time* via `const-random` — every fresh
 /// rebuild of this crate picks a new value in `[1µs, 1ms)`. To reproduce
 /// a specific failing run, replace the call with a hard-coded literal.
-pub(super) const D: Duration =
-    //   Duration::from_nanos(123456789 % 999_000 + 1_000);
-    Duration::from_nanos(const_random::const_random!(u64) % 999_000 + 1_000);
+pub(super) const D: Timestamp =
+    //   Timestamp::from_nanos(123456789 % 999_000 + 1_000);
+    Timestamp::from_nanos((const_random::const_random!(u64) % 999_000 + 1_000) as i64);
 
 // ============================ WAV dump ============================
 
@@ -112,19 +112,19 @@ pub(super) fn dump_wav(chunks: &[&[f64]], rate: u32, name: &str) {
 /// `&SignalSource` without leaking generic parameters through their
 /// signatures.
 pub(super) struct SignalSource {
-    func: Arc<dyn Fn(Duration) -> f64 + Send + Sync>,
+    func: Arc<dyn Fn(Timestamp) -> f64 + Send + Sync>,
     rate: u32,
 }
 
 impl SignalSource {
-    pub fn new<F: Fn(Duration) -> f64 + Send + Sync + 'static>(rate: u32, func: F) -> Self {
+    pub fn new<F: Fn(Timestamp) -> f64 + Send + Sync + 'static>(rate: u32, func: F) -> Self {
         Self {
             func: Arc::new(func),
             rate,
         }
     }
 
-    pub fn shifted(&self, offset: Duration) -> Self {
+    pub fn shifted(&self, offset: Timestamp) -> Self {
         let func = self.func.clone();
         Self {
             func: Arc::new(move |pts| func(pts + offset)),
@@ -132,22 +132,22 @@ impl SignalSource {
         }
     }
 
-    pub fn sample_at(&self, pts: Duration) -> f64 {
+    pub fn sample_at(&self, pts: Timestamp) -> f64 {
         (self.func)(pts)
     }
 
     /// Samples covering `[start, end)`. Frame count uses the same rounding
     /// rule as `InputResampler` (`((dur)*rate).round() as usize`).
-    pub fn samples(&self, start: Duration, end: Duration) -> Vec<f64> {
-        let frames =
-            ((end.saturating_sub(start)).as_secs_f64() * self.rate as f64).round() as usize;
+    pub fn samples(&self, start: Timestamp, end: Timestamp) -> Vec<f64> {
+        let frames = (Timestamp::max(Timestamp::ZERO, end - start).as_secs_f64() * self.rate as f64)
+            .round() as usize;
         (0..frames)
             .map(|i| self.sample_at(start + Duration::from_secs_f64(i as f64 / self.rate as f64)))
             .collect()
     }
 
     /// Build an `InputAudioSamples` batch covering `[start, start+duration)`.
-    pub fn batch(&self, start: Duration, duration: Duration) -> InputAudioSamples {
+    pub fn batch(&self, start: Timestamp, duration: Duration) -> InputAudioSamples {
         let samples = self.samples(start, start + duration);
         InputAudioSamples::new(AudioSamples::Mono(samples), start, self.rate)
     }
@@ -155,7 +155,7 @@ impl SignalSource {
 
 /// Constant-zero signal. Combine with `SignalAssertion` to assert that a
 /// given output window is silent.
-pub(super) fn silence() -> impl Fn(Duration) -> f64 + 'static {
+pub(super) fn silence() -> impl Fn(Timestamp) -> f64 + 'static {
     |_| 0.0
 }
 
@@ -175,7 +175,7 @@ pub(super) fn silence() -> impl Fn(Duration) -> f64 + 'static {
 /// - Any output sample rate ≥ 8kHz keeps the carrier well below Nyquist.
 /// - Don't use this for silence assertions; pair `silence()` with a
 ///   separate `SignalSource` for those windows.
-pub(super) fn test_signal() -> impl Fn(Duration) -> f64 + 'static {
+pub(super) fn test_signal() -> impl Fn(Timestamp) -> f64 + 'static {
     am_chirp(2000.0, -1800.0, Duration::from_millis(15), 0.5, 1.0)
 }
 
@@ -184,7 +184,7 @@ pub(super) fn test_signal() -> impl Fn(Duration) -> f64 + 'static {
 /// high so the most distinctive part of the signal lines up with early PTS
 /// values. Stays well below Nyquist at 48 kHz. Envelope cycles every 10ms
 /// between 0.2 and 1.0.
-pub(super) fn test_signal_5s() -> impl Fn(Duration) -> f64 + 'static {
+pub(super) fn test_signal_5s() -> impl Fn(Timestamp) -> f64 + 'static {
     am_chirp(2000.0, -360.0, Duration::from_millis(10), 0.2, 1.0)
 }
 
@@ -207,7 +207,7 @@ pub(super) fn am_chirp(
     am_period: Duration,
     amp_lo: f64,
     amp_hi: f64,
-) -> impl Fn(Duration) -> f64 + 'static {
+) -> impl Fn(Timestamp) -> f64 + 'static {
     let am_freq = 1.0 / am_period.as_secs_f64();
     let amp_mid = (amp_lo + amp_hi) * 0.5;
     let amp_swing = (amp_hi - amp_lo) * 0.5;
@@ -309,12 +309,12 @@ impl<'a> SignalAssertion<'a> {
         let stretch = params.stretch;
         let func = self.source.func.clone();
         let source = SignalSource {
-            func: Arc::new(move |pts| func(Duration::from_secs_f64(pts.as_secs_f64() / stretch))),
+            func: Arc::new(move |pts| func(Timestamp::from_secs_f64(pts.as_secs_f64() / stretch))),
             rate: self.source.rate,
         };
 
         let expected: Vec<f64> = (0..length)
-            .map(|i| source.sample_at(Duration::from_secs_f64(i as f64 / source.rate as f64)))
+            .map(|i| source.sample_at(Timestamp::from_secs_f64(i as f64 / source.rate as f64)))
             .collect();
 
         let (max_err, max_err_idx) = max_abs_error(actual, &expected);
@@ -419,7 +419,7 @@ fn rms_at_shift(actual: &[f64], source: &SignalSource, shift_secs: f64) -> f64 {
         if t_secs < 0.0 {
             continue;
         }
-        let err = y - source.sample_at(Duration::from_secs_f64(t_secs));
+        let err = y - source.sample_at(Timestamp::from_secs_f64(t_secs));
         sum_sq += err * err;
         count += 1;
     }
@@ -454,7 +454,7 @@ fn rms_at_stretch(actual: &[f64], source: &SignalSource, stretch: f64) -> f64 {
     let mut sum_sq = 0.0_f64;
     for (i, &y) in actual.iter().enumerate() {
         let t_secs = i as f64 / source.rate as f64 / stretch;
-        let err = y - source.sample_at(Duration::from_secs_f64(t_secs));
+        let err = y - source.sample_at(Timestamp::from_secs_f64(t_secs));
         sum_sq += err * err;
     }
     (sum_sq / actual.len() as f64).sqrt()

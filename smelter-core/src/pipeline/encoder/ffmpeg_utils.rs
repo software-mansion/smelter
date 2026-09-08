@@ -1,5 +1,4 @@
 use ffmpeg_next::{format::Pixel, frame};
-use std::time::Duration;
 
 use smelter_render::FrameData;
 
@@ -92,7 +91,7 @@ pub(super) fn encoded_chunk_from_av_packet(
         None => return Err(ChunkFromFfmpegError::NoData),
     };
 
-    let rescale = |v: i64| Duration::from_secs_f64((v as f64) * (1.0 / time_base as f64));
+    let rescale = |v: i64| Timestamp::from_secs_f64((v as f64) * (1.0 / time_base as f64));
 
     let Some(pts) = packet.pts().map(rescale) else {
         return Err(ChunkFromFfmpegError::NoPts);

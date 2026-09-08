@@ -7,7 +7,9 @@ use rubato::{
 };
 use tracing::{debug, error, trace, warn};
 
-use crate::{AudioChannels, AudioSamples, prelude::InputAudioSamples, utils::AudioSamplesBuffer};
+use crate::{
+    AudioChannels, AudioSamples, Timestamp, prelude::InputAudioSamples, utils::AudioSamplesBuffer,
+};
 
 // Maximum *relative* deviation from the nominal resample ratio that we are willing to apply
 // when stretching/squashing to correct drift. Rubato's `Async::new_sinc` is initialized with
@@ -96,7 +98,7 @@ pub(super) struct InputResampler {
     /// PTS just past the last sample currently held in `resampler_input_buffer`. Updated only in
     /// `write_batch`. Combined with the buffer's frame count, it lets us compute
     /// `input_buffer_start_pts()` on demand.
-    input_buffer_end_pts: Duration,
+    input_buffer_end_pts: Timestamp,
 
     /// Synchronization gate. While true, `get_samples` either serves any frames already in
     /// `output_buffer` (padded with zeros) when the input is entirely in the future, or aligns
@@ -211,7 +213,7 @@ impl InputResampler {
 
             original_output_delay: default_output_delay,
             original_resampler_ratio,
-            input_buffer_end_pts: Duration::ZERO,
+            input_buffer_end_pts: Timestamp::ZERO,
 
             needs_input_resync: true,
         })
@@ -236,11 +238,11 @@ impl InputResampler {
         self.input_sample_rate
     }
 
-    fn input_buffer_start_pts(&self) -> Duration {
+    fn input_buffer_start_pts(&self) -> Timestamp {
         self.input_buffer_end_pts
-            .saturating_sub(Duration::from_secs_f64(
+            - Duration::from_secs_f64(
                 self.resampler_input_buffer.frames() as f64 / self.input_sample_rate as f64,
-            ))
+            )
     }
 
     /// Adjust rubato's resample ratio by a multiplicative factor relative to
@@ -283,7 +285,7 @@ impl InputResampler {
     /// Produce exactly the number of output frames that fit `pts_range` at `output_sample_rate`.
     /// The decision-loop body runs once per `samples_in_batch` worth of output frames produced
     /// (because rubato emits a fixed-output-size batch per call).
-    pub fn get_samples(&mut self, pts_range: (Duration, Duration)) -> AudioSamples {
+    pub fn get_samples(&mut self, pts_range: (Timestamp, Timestamp)) -> AudioSamples {
         // Initial synchronization on init or after reset
         if let Some(batch) = self.maybe_prepare_before_resample(pts_range) {
             return batch; // zeros or flush `self.output_buffer`
@@ -304,9 +306,7 @@ impl InputResampler {
             // PTS of the first timestamp that would be produced from resampler if current input
             // buffer was resampled. It takes into account that something is already in the
             // internal buffer.
-            let input_start_pts = self
-                .input_buffer_start_pts()
-                .saturating_sub(self.original_output_delay);
+            let input_start_pts = self.input_buffer_start_pts() - self.original_output_delay;
 
             if input_start_pts > requested_start_pts + STRETCH_THRESHOLD {
                 // === GAP-FILL ===
@@ -316,7 +316,7 @@ impl InputResampler {
                 // NOTE: In current implementation this should never happen, because queue
                 // does not allow sending too much ahead. This case will be relevant if we
                 // move resampler to the queue.
-                let gap = input_start_pts.saturating_sub(requested_start_pts);
+                let gap = input_start_pts - requested_start_pts;
                 let sample_count = (gap.as_secs_f64() * self.input_sample_rate as f64) as usize;
                 let samples = match self.channels {
                     AudioChannels::Mono => AudioSamples::Mono(vec![0.0; sample_count]),
@@ -331,7 +331,7 @@ impl InputResampler {
                 )
             } else if input_start_pts > requested_start_pts + SHIFT_THRESHOLD {
                 // === STRETCH ===
-                let drift = input_start_pts.saturating_sub(requested_start_pts);
+                let drift = input_start_pts - requested_start_pts;
                 let drift_ratio = drift.as_secs_f64() / STRETCH_THRESHOLD.as_secs_f64();
                 // multiply by 2.0 so max resampling is reached at the half point
                 // of the stretch limit
@@ -346,7 +346,7 @@ impl InputResampler {
                 trace!("Input buffer on time");
             } else if input_start_pts + SQUASH_THRESHOLD > requested_start_pts {
                 // === SQUASH ===
-                let drift = requested_start_pts.saturating_sub(input_start_pts);
+                let drift = requested_start_pts - input_start_pts;
                 let drift_ratio = drift.as_secs_f64() / SQUASH_THRESHOLD.as_secs_f64();
                 // multiply by 2.0 so max resampling is reached at the half point
                 // of the squash limit
@@ -360,7 +360,7 @@ impl InputResampler {
 
                 // TODO: handle discontinuity (same caveat as gap-fill — the filter state is
                 // now stale relative to the post-drop signal).
-                let duration_to_drop = requested_start_pts.saturating_sub(input_start_pts);
+                let duration_to_drop = requested_start_pts - input_start_pts;
                 let samples_to_drop =
                     (duration_to_drop.as_secs_f64() * self.input_sample_rate as f64) as usize;
                 self.resampler_input_buffer.drain_samples(samples_to_drop);
@@ -390,7 +390,7 @@ impl InputResampler {
     /// so its earliest sample's PTS equals `pts_range.0`:
     fn maybe_prepare_before_resample(
         &mut self,
-        pts_range: (Duration, Duration),
+        pts_range: (Timestamp, Timestamp),
     ) -> Option<AudioSamples> {
         if !self.needs_input_resync {
             return None;
@@ -413,7 +413,7 @@ impl InputResampler {
         // If input buffer starts in the middle of requested ranges
         // Then pad with zeros at the front of input buffer
         if pts_range.0 < input_buffer_start_pts && input_buffer_start_pts < pts_range.1 {
-            let duration = input_buffer_start_pts.saturating_sub(pts_range.0);
+            let duration = input_buffer_start_pts - pts_range.0;
             let samples = (duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
             let batch = match self.channels {
                 AudioChannels::Mono => AudioSamples::Mono(vec![0.0; samples]),
@@ -432,7 +432,7 @@ impl InputResampler {
         // Then drop samples that are too older
         if pts_range.0 > input_buffer_start_pts {
             // Drop too-old samples so the buffer starts at `pts_range.0`.
-            let duration = pts_range.0.saturating_sub(input_buffer_start_pts);
+            let duration = pts_range.0 - input_buffer_start_pts;
             let samples = (duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
             trace!(samples, ?duration, "Drain samples before first resample");
             self.resampler_input_buffer.drain_samples(samples);

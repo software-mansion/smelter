@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, ptr, sync::Arc, time::Duration};
+use std::{fs, path::PathBuf, ptr, sync::Arc};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
@@ -388,7 +388,7 @@ fn write_chunk(
     chunk: EncodedOutputChunk,
     stream: &StreamState,
     output_ctx: &mut ffmpeg::format::context::Output,
-    timestamp_offset: Duration,
+    timestamp_offset: Timestamp,
 ) -> Result<(), OutputMp4RuntimeError> {
     let offset = timestamp_offset.as_nanos() as i128;
     let pts = (chunk.pts.as_nanos() as i128 - offset) as i64;

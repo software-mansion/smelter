@@ -9,7 +9,7 @@ use decklink::{
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
     VideoInputFrame,
 };
-use smelter_render::{Frame, FrameData, FramePreProcessor, Resolution, error::ErrorStack};
+use smelter_render::{FrameData, FramePreProcessor, Resolution, error::ErrorStack};
 use tracing::{Span, debug, info, trace, warn};
 
 use crate::pipeline::decklink::format::{BitDepth, Colorspace, Format};
@@ -30,7 +30,7 @@ pub(super) struct ChannelCallbackAdapter {
     // dependency
     input: Weak<decklink::Input>,
     sync_point: Instant,
-    stream_offset: Mutex<Option<Duration>>,
+    stream_offset: Mutex<Option<Timestamp>>,
     last_format: Mutex<Format>,
 }
 
@@ -66,11 +66,11 @@ impl ChannelCallbackAdapter {
         let stream_time = video_frame.stream_time()?;
         let offset = {
             let mut guard = self.stream_offset.lock().unwrap();
-            *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(stream_time))
+            *guard.get_or_insert_with(|| self.sync_point.timestamp_now() - stream_time)
         };
         let presentation_delay =
             Duration::from_millis(if self.audio_sender.is_some() { 40 } else { 0 });
-        let pts = stream_time + offset + presentation_delay;
+        let pts = offset + stream_time + presentation_delay;
 
         let width = video_frame.width();
         let height = video_frame.height();
@@ -99,7 +99,7 @@ impl ChannelCallbackAdapter {
                 let texture = pre_processor
                     .lock()
                     .unwrap()
-                    .process_to_texture(frame, None);
+                    .process_to_texture(frame.into(), None);
                 Frame {
                     data: FrameData::Rgba8UnormWgpuTexture(texture),
                     resolution: Resolution { width, height },
@@ -129,7 +129,7 @@ impl ChannelCallbackAdapter {
         height: usize,
         bytes_per_row: usize,
         data: bytes::Bytes,
-        pts: Duration,
+        pts: Timestamp,
     ) -> Frame {
         let data = if width * 2 != bytes_per_row {
             let mut output_buffer = bytes::BytesMut::with_capacity(width * 2 * height);
@@ -154,7 +154,7 @@ impl ChannelCallbackAdapter {
         height: usize,
         bytes_per_row: usize,
         data: bytes::Bytes,
-        pts: Duration,
+        pts: Timestamp,
     ) -> Frame {
         let data = if width * 4 != bytes_per_row {
             let mut output_buffer = bytes::BytesMut::with_capacity(width * 4 * height);
@@ -179,7 +179,7 @@ impl ChannelCallbackAdapter {
         height: usize,
         bytes_per_row: usize,
         data: bytes::Bytes,
-        pts: Duration,
+        pts: Timestamp,
     ) -> Frame {
         let data = if width * 4 != bytes_per_row {
             let mut output_buffer = bytes::BytesMut::with_capacity(width * 4 * height);
@@ -207,9 +207,9 @@ impl ChannelCallbackAdapter {
         let packet_time = audio_packet.packet_time()?;
         let offset = {
             let mut guard = self.stream_offset.lock().unwrap();
-            *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(packet_time))
+            *guard.get_or_insert_with(|| self.sync_point.timestamp_now() - packet_time)
         };
-        let pts = packet_time + offset + Duration::from_millis(40);
+        let pts = offset + packet_time + Duration::from_millis(40);
 
         let samples = audio_packet.as_32_bit_stereo()?;
         let samples = InputAudioSamples {

@@ -1,8 +1,7 @@
 use core::fmt;
-use std::time::Duration;
 
 use crate::{
-    MediaKind,
+    MediaKind, Timestamp,
     codecs::{AudioEncoderOptions, VideoEncoderOptions},
 };
 
@@ -27,8 +26,8 @@ pub enum EncodedOutputEvent {
 #[derive(Clone)]
 pub struct EncodedOutputChunk {
     pub data: bytes::Bytes,
-    pub pts: Duration,
-    pub dts: Option<Duration>,
+    pub pts: Timestamp,
+    pub dts: Option<Timestamp>,
     pub is_keyframe: bool,
     pub kind: MediaKind,
 }

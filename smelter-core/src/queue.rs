@@ -156,14 +156,14 @@ pub struct QueueContext {
 }
 
 impl QueueContext {
-    pub(crate) fn effective_last_pts(&self) -> Duration {
+    pub(crate) fn effective_last_pts(&self) -> Timestamp {
         self.last_pts
             .value()
-            .unwrap_or_else(|| self.sync_point.elapsed())
+            .unwrap_or_else(|| self.sync_point.timestamp_now())
     }
 
     // PTS of queue start time
-    pub fn start_pts(&self) -> Option<Duration> {
+    pub fn start_pts(&self) -> Option<Timestamp> {
         self.start_pts.value()
     }
 }
@@ -172,7 +172,7 @@ impl QueueContext {
 pub(super) struct QueueVideoOutput {
     // If required this batch can't be dropped even if processing is behind
     pub(super) required: bool,
-    pub(super) pts: Duration,
+    pub(super) pts: Timestamp,
     pub(super) frames: HashMap<InputId, QueueVideoFrame>,
 }
 
@@ -198,9 +198,9 @@ impl From<QueueVideoOutput> for FrameSet<InputId> {
             frames: value
                 .frames
                 .into_iter()
-                .filter_map(|(key, value)| Some((key, value.frame?)))
+                .filter_map(|(key, value)| Some((key, value.frame?.into())))
                 .collect(),
-            pts: value.pts,
+            pts: value.pts.to_duration_saturating(),
         }
     }
 }
@@ -208,8 +208,8 @@ impl From<QueueVideoOutput> for FrameSet<InputId> {
 #[derive(Debug)]
 pub(super) struct QueueAudioOutput {
     pub samples: HashMap<InputId, QueueAudioSamples>,
-    pub start_pts: Duration,
-    pub end_pts: Duration,
+    pub start_pts: Timestamp,
+    pub end_pts: Timestamp,
     pub required: bool,
 }
 
@@ -245,7 +245,7 @@ impl From<QueueAudioOutput> for InputSamplesSet {
 
 pub struct ScheduledEvent {
     /// Public PTS value (relative to start, not to the sync_point)
-    pts: Duration,
+    pts: Timestamp,
     callback: Box<dyn FnOnce() + Send>,
     late_policy: LateEventPolicy,
 }
@@ -347,7 +347,7 @@ impl Queue {
         audio_sender: Sender<QueueAudioOutput>,
     ) {
         if let Some(sender) = self.start_sender.lock().unwrap().take() {
-            let queue_start_pts = self.queue_ctx.sync_point.elapsed();
+            let queue_start_pts = self.queue_ctx.sync_point.timestamp_now();
             self.queue_ctx.start_pts.update(queue_start_pts);
             sender
                 .send(QueueStartEvent {
@@ -361,7 +361,7 @@ impl Queue {
 
     pub fn schedule_event(
         &self,
-        pts: Duration,
+        pts: Timestamp,
         late_policy: LateEventPolicy,
         callback: Box<dyn FnOnce() + Send>,
     ) {
@@ -385,18 +385,18 @@ impl Debug for ScheduledEvent {
 }
 
 #[derive(Debug, Default, Clone)]
-pub(super) struct SharedPts(Arc<RwLock<Option<Duration>>>);
+pub(super) struct SharedPts(Arc<RwLock<Option<Timestamp>>>);
 
 impl SharedPts {
     /// Monotonic, PTS never goes back (e.g. when a late scheduled event is handled).
-    fn update(&self, pts: Duration) {
+    fn update(&self, pts: Timestamp) {
         let mut guard = self.0.write().unwrap();
         if guard.is_none_or(|current| pts > current) {
             *guard = Some(pts);
         }
     }
 
-    fn value(&self) -> Option<Duration> {
+    fn value(&self) -> Option<Timestamp> {
         *self.0.read().unwrap()
     }
 }

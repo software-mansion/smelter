@@ -1,5 +1,6 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
+use crate::Timestamp;
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 use crate::queue::QueueInputOptions;
 
@@ -23,7 +24,7 @@ pub struct Mp4OutputOptions {
     /// the queue reaches this timestamp (relative to the queue start). It doubles as the
     /// timestamp offset of the produced file, so PTS 0 in the file is exactly this
     /// moment rather than whenever the first chunk happened to be encoded.
-    pub start_at: Option<Duration>,
+    pub start_at: Option<Timestamp>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

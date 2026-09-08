@@ -123,7 +123,7 @@ impl RtpInput {
             audio: opts.audio.is_some(),
             offset: match opts.offset {
                 Some(offset) => QueueTrackOffset::FromStart(offset),
-                None => QueueTrackOffset::Pts(Duration::ZERO),
+                None => QueueTrackOffset::Pts(Timestamp::ZERO),
             },
         });
 
@@ -234,7 +234,7 @@ impl Drop for RtpInput {
 struct RtpDemuxerThread {
     tracks: Vec<TrackState>,
     receiver: Receiver<bytes::Bytes>,
-    first_pts: Option<Duration>,
+    first_pts: Option<Timestamp>,
     has_offset: bool,
 }
 
@@ -452,13 +452,13 @@ impl TrackState {
     fn send_packet(
         &mut self,
         event: RtpInputEvent,
-        first_pts: &mut Option<Duration>,
+        first_pts: &mut Option<Timestamp>,
         has_offset: bool,
     ) {
         let event = match event {
             RtpInputEvent::Packet(mut packet) if has_offset => {
                 let first_pts = *first_pts.get_or_insert(packet.timestamp);
-                packet.timestamp = packet.timestamp.saturating_sub(first_pts);
+                packet.timestamp -= first_pts;
                 RtpInputEvent::Packet(packet)
             }
             event => event,

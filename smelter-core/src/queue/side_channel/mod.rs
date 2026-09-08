@@ -4,11 +4,14 @@ mod server;
 use std::{path::Path, sync::Arc};
 
 use crossbeam_channel::{Sender, TrySendError};
-use smelter_render::{Frame, InputId};
+use smelter_render::InputId;
 use tracing::{debug, info};
 
 use crate::{
-    pipeline::PipelineCtx, prelude::InputAudioSamples, queue::queue_input::TrackOffset, types::Ref,
+    pipeline::PipelineCtx,
+    prelude::{Frame, InputAudioSamples},
+    queue::queue_input::TrackOffset,
+    types::Ref,
 };
 
 use super::SharedPts;
@@ -77,7 +80,7 @@ impl VideoSideChannel {
             return;
         };
         let mut frame = frame.clone();
-        frame.pts = (frame.pts + offset).saturating_sub(start_pts);
+        frame.pts = frame.pts + offset - start_pts;
         if let Err(TrySendError::Full(_)) = self.sink.sender().try_send(frame) {
             debug!("Video side channel: dropping frame, channel full");
         }
@@ -129,7 +132,7 @@ impl AudioSideChannel {
             return;
         };
         let mut batch = batch.clone();
-        batch.start_pts = (batch.start_pts + offset).saturating_sub(start_pts);
+        batch.start_pts = batch.start_pts + offset - start_pts;
         if let Err(TrySendError::Full(_)) = self.sink.sender().try_send(batch) {
             debug!("Audio side channel: dropping samples, channel full");
         }

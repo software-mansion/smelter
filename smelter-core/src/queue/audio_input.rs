@@ -107,8 +107,8 @@ impl AudioQueueInput {
     /// Every batch is returned exactly once (always popped, never dropped).
     pub(super) fn pop_samples(
         &mut self,
-        pts_range: (Duration, Duration),
-        queue_start_pts: Duration,
+        pts_range: (Timestamp, Timestamp),
+        queue_start_pts: Timestamp,
     ) -> QueueAudioSamples {
         if self.paused {
             return QueueAudioSamples::empty();
@@ -130,7 +130,7 @@ impl AudioQueueInput {
             };
         }
 
-        let input_pts = (pts_range.1 + MIXER_STRETCH_BUFFER).saturating_sub(offset);
+        let input_pts = pts_range.1 + MIXER_STRETCH_BUFFER - offset;
         trace!(queue_pts=?pts_range, ?input_pts, "Try get samples batch");
 
         let mut samples = self.receiver.pop_before_pts(input_pts);
@@ -160,8 +160,8 @@ impl AudioQueueInput {
 
     pub(super) fn is_ready_for_pts(
         &mut self,
-        pts_range: (Duration, Duration),
-        queue_start_pts: Duration,
+        pts_range: (Timestamp, Timestamp),
+        queue_start_pts: Timestamp,
     ) -> bool {
         if self.paused {
             return true;
@@ -171,16 +171,14 @@ impl AudioQueueInput {
 
         if let Some(offset) = offset {
             // extra buffer offsets additional latency/delay from audio mixer resampler.
-            let input_pts = (pts_range.1 + MIXER_STRETCH_BUFFER).saturating_sub(offset);
+            let input_pts = pts_range.1 + MIXER_STRETCH_BUFFER - offset;
             trace!(queue_pts=?pts_range, ?input_pts, "Is next sample batch ready for PTS");
             return self.receiver.is_ready_for_pts(input_pts);
         }
 
         match self.receiver.state() {
             ReceiverState::New => match self.offset_from_start {
-                Some(offset_from_start) => {
-                    pts_range.1.saturating_sub(queue_start_pts) < offset_from_start
-                }
+                Some(offset_from_start) => pts_range.1 < queue_start_pts + offset_from_start,
                 None => true,
             },
             ReceiverState::Running => {
@@ -193,9 +191,9 @@ impl AudioQueueInput {
 
     fn resolve_offset(
         &mut self,
-        buffer_pts: Duration,
-        queue_start_pts: Duration,
-    ) -> Option<Duration> {
+        buffer_pts: Timestamp,
+        queue_start_pts: Timestamp,
+    ) -> Option<Timestamp> {
         if self.receiver.state() != ReceiverState::Running {
             return self.track_offset.get();
         }
@@ -204,7 +202,7 @@ impl AudioQueueInput {
         let offset = match self.offset_from_start {
             Some(offset_from_start) => self
                 .track_offset
-                .get_or_init(offset_from_start + queue_start_pts),
+                .get_or_init(queue_start_pts + offset_from_start),
             None => self.track_offset.get_or_init(buffer_pts),
         };
         Some(offset)
@@ -219,9 +217,9 @@ impl AudioQueueInput {
 
         self.event_delivered_guard.emit();
         if self.offset_from_start.is_none() {
-            let now = self.queue_ctx.sync_point.elapsed();
+            let now = self.queue_ctx.sync_point.timestamp_now();
             let offset = self.track_offset.get_or_init(now);
-            let _ = self.receiver.pop_before_pts(now.saturating_sub(offset));
+            let _ = self.receiver.pop_before_pts(now - offset);
         }
     }
 }
@@ -262,7 +260,7 @@ impl AudioInputReceiver {
     }
 
     /// Pop all batches with `start_pts < pts`. Every batch is returned exactly once.
-    fn pop_before_pts(&mut self, pts: Duration) -> Vec<InputAudioSamples> {
+    fn pop_before_pts(&mut self, pts: Timestamp) -> Vec<InputAudioSamples> {
         if self.state == ReceiverState::Done {
             return Vec::new();
         }
@@ -280,7 +278,7 @@ impl AudioInputReceiver {
         result
     }
 
-    fn is_ready_for_pts(&mut self, end_pts: Duration) -> bool {
+    fn is_ready_for_pts(&mut self, end_pts: Timestamp) -> bool {
         if self.state() == ReceiverState::Done || self.disconnected {
             return true;
         }
@@ -293,7 +291,7 @@ impl AudioInputReceiver {
 
     /// Enqueue batches from the channel, allowing exceeding `max_size`
     /// if the buffer doesn't yet cover `needed_pts`.
-    fn try_enqueue_until(&mut self, needed_pts: Duration) {
+    fn try_enqueue_until(&mut self, needed_pts: Timestamp) {
         let side_channel_size = match self.side_channel {
             Some(_) => self.delay,
             None => Duration::ZERO,
@@ -331,7 +329,7 @@ impl AudioInputReceiver {
     }
 
     fn state(&mut self) -> ReceiverState {
-        self.try_enqueue_until(Duration::ZERO);
+        self.try_enqueue_until(Timestamp::ZERO);
         self.state
     }
 
@@ -344,7 +342,9 @@ impl AudioInputReceiver {
 
     pub fn size(&self) -> Duration {
         match (self.buffer.front(), self.buffer.back()) {
-            (Some(front), Some(back)) => back.end_pts().saturating_sub(front.start_pts),
+            (Some(front), Some(back)) => {
+                (back.end_pts() - front.start_pts).to_duration_saturating()
+            }
             _ => Duration::ZERO,
         }
     }

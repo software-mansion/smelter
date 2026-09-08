@@ -2,7 +2,7 @@ use std::{iter, sync::Arc};
 
 use ffmpeg_next::codec::Id;
 use ffmpeg_next::{Rational, codec::Context};
-use smelter_render::{Frame, OutputFrameFormat};
+use smelter_render::OutputFrameFormat;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::pipeline::encoder::ffmpeg_utils::{

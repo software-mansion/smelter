@@ -16,7 +16,7 @@ use smelter_core::{
     *,
 };
 use smelter_render::{
-    Frame, InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes, scene::Component,
+    InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes, scene::Component,
 };
 use tracing::debug;
 
@@ -55,11 +55,11 @@ impl fmt::Debug for RawInputFile {
 }
 
 trait DurationReceiver {
-    fn try_receive(&self) -> Result<Duration, TryRecvError>;
+    fn try_receive(&self) -> Result<Timestamp, TryRecvError>;
 }
 
 impl DurationReceiver for Receiver<PipelineEvent<Frame>> {
-    fn try_receive(&self) -> Result<Duration, TryRecvError> {
+    fn try_receive(&self) -> Result<Timestamp, TryRecvError> {
         loop {
             match self.try_recv() {
                 Ok(PipelineEvent::EOS) => (),
@@ -71,7 +71,7 @@ impl DurationReceiver for Receiver<PipelineEvent<Frame>> {
 }
 
 impl DurationReceiver for Receiver<EncodedOutputEvent> {
-    fn try_receive(&self) -> Result<Duration, TryRecvError> {
+    fn try_receive(&self) -> Result<Timestamp, TryRecvError> {
         loop {
             match self.try_recv() {
                 Ok(EncodedOutputEvent::AudioEOS) => (),
@@ -343,14 +343,14 @@ impl SingleBenchmarkPass {
                 }
             }
 
-            const FIRST_CHECK: Duration = Duration::from_secs(6);
-            const SECOND_CHECK: Duration = Duration::from_secs(12);
-            const LAST_CHECK: Duration = Duration::from_secs(30);
+            const FIRST_CHECK: Timestamp = Timestamp::from_secs(6);
+            const SECOND_CHECK: Timestamp = Timestamp::from_secs(12);
+            const LAST_CHECK: Timestamp = Timestamp::from_secs(30);
 
             debug!("start drain in measure mode");
-            let mut max_pts: Duration = Duration::ZERO;
-            let mut min_pts: Duration = Duration::MAX;
-            let receive_fn = move |min_pts: &mut Duration, max_pts: &mut Duration| match receiver
+            let mut max_pts: Timestamp = Timestamp::ZERO;
+            let mut min_pts: Timestamp = Timestamp::MAX;
+            let receive_fn = move |min_pts: &mut Timestamp, max_pts: &mut Timestamp| match receiver
                 .try_receive()
             {
                 Err(TryRecvError::Empty) => {
@@ -364,10 +364,10 @@ impl SingleBenchmarkPass {
             };
 
             // First check after 6 second
-            while start_time.elapsed() < warm_up_time + FIRST_CHECK {
+            while start_time.timestamp_now() < FIRST_CHECK + warm_up_time {
                 receive_fn(&mut min_pts, &mut max_pts)
             }
-            let measured_time = max_pts.saturating_sub(min_pts);
+            let measured_time = max_pts - min_pts;
             if measured_time < FIRST_CHECK - Duration::from_millis(1200) {
                 debug!("FAIL first check - {:?}", measured_time);
                 return false;
@@ -379,10 +379,10 @@ impl SingleBenchmarkPass {
             }
 
             // Second check after 12 second
-            while start_time.elapsed() < warm_up_time + SECOND_CHECK {
+            while start_time.timestamp_now() < SECOND_CHECK + warm_up_time {
                 receive_fn(&mut min_pts, &mut max_pts)
             }
-            let measured_time = max_pts.saturating_sub(min_pts);
+            let measured_time = max_pts - min_pts;
             if measured_time < SECOND_CHECK - Duration::from_millis(800) {
                 debug!("FAIL second check - {:?}", measured_time);
                 return false;
@@ -394,10 +394,10 @@ impl SingleBenchmarkPass {
             }
 
             // Last check
-            while start_time.elapsed() < warm_up_time + LAST_CHECK {
+            while start_time.timestamp_now() < LAST_CHECK + warm_up_time {
                 receive_fn(&mut min_pts, &mut max_pts)
             }
-            let measured_time = max_pts.saturating_sub(min_pts);
+            let measured_time = max_pts - min_pts;
             if measured_time > LAST_CHECK - Duration::from_millis(800) {
                 debug!("PASS last check - {:?}", measured_time);
                 true
@@ -440,7 +440,7 @@ fn raw_data_sender(senders: Vec<Sender<PipelineEvent<Frame>>>, input: RawInputFi
                     width: input.resolution.width,
                     height: input.resolution.height,
                 },
-                pts: Duration::from_secs_f64(counter as f64 / input.framerate),
+                pts: Timestamp::from_secs_f64(counter as f64 / input.framerate),
             };
             counter += 1;
 

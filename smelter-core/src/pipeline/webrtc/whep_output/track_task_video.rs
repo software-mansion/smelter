@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use crossbeam_channel::Sender;
-use smelter_render::Frame;
 use tokio::sync::broadcast;
 use tracing::warn;
 

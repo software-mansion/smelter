@@ -149,7 +149,7 @@ impl HlsDemuxerThread {
             video: video_stream.is_some(),
             audio: audio_stream.is_some(),
             offset: match is_live {
-                true => QueueTrackOffset::Pts(Duration::ZERO),
+                true => QueueTrackOffset::Pts(Timestamp::ZERO),
                 false => match offset {
                     Some(offset) => QueueTrackOffset::FromStart(offset),
                     None => QueueTrackOffset::None,
@@ -347,8 +347,8 @@ impl HlsPacket {
             packet,
             time_base,
             anchor: TimestampAnchor {
-                input_pts: Duration::ZERO,
-                output_pts: Duration::ZERO,
+                input_pts: Timestamp::ZERO,
+                output_pts: Timestamp::ZERO,
             },
             decode_only: false,
         }
@@ -359,9 +359,9 @@ impl HlsPacket {
     }
 
     /// Timestamp of this packet on the output timeline.
-    fn timestamp(&self, timestamp: i64) -> Duration {
-        let timestamp = Duration::from_secs_f64(
-            f64::max(timestamp as f64, 0.0) * self.time_base.numerator() as f64
+    fn timestamp(&self, timestamp: i64) -> Timestamp {
+        let timestamp = Timestamp::from_secs_f64(
+            timestamp as f64 * self.time_base.numerator() as f64
                 / self.time_base.denominator() as f64,
         );
         self.anchor.to_output_pts(timestamp)
@@ -379,7 +379,7 @@ impl HlsPacket {
 }
 
 impl InputSyncItem for HlsPacket {
-    fn pts(&self) -> Duration {
+    fn pts(&self) -> Timestamp {
         self.timestamp(self.packet.pts().unwrap_or(0))
     }
 

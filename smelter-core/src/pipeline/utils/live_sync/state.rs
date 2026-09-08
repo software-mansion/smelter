@@ -11,6 +11,8 @@ use crate::pipeline::utils::input_sync::{
     TrackEvent, TrackKind,
 };
 
+use crate::prelude::*;
+
 /// pts jump (in either direction) treated as a discontinuity of the input
 /// timeline; the old edge estimate does not describe the new timeline.
 const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
@@ -49,7 +51,7 @@ struct SharedAnchor {
     ///
     /// Used to maintain interleaved (by pts) order on sync output between tracks.
     /// Reset (together with the entire anchor) on discontinuity.
-    last_released_pts: Option<Duration>,
+    last_released_pts: Option<Timestamp>,
 }
 
 impl<B: LiveSyncBuffer> SharedState<B> {
@@ -166,7 +168,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         trace!(
             ?kind,
             pts=?chunk.pts(),
-            now_pts=?now.saturating_duration_since(self.sync_point),
+            now_pts=?self.sync_point.timestamp_at(now),
             "Live sync: observed chunk"
         );
         track.buffer.write(chunk);
@@ -199,12 +201,12 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 };
 
                 let last_pts = anchor.last_released_pts.unwrap_or(chunk.pts());
-                anchor.last_released_pts = Some(Duration::max(last_pts, chunk.pts()));
+                anchor.last_released_pts = Some(Timestamp::max(last_pts, chunk.pts()));
 
                 let max_shift = self.options.buffering_strategy.max_shift(
                     anchor.current,
                     anchor.target,
-                    chunk.pts().saturating_sub(last_pts),
+                    Timestamp::max(Timestamp::ZERO, chunk.pts() - last_pts),
                 );
                 anchor.current.nudge_towards(anchor.target, max_shift);
 
@@ -221,12 +223,12 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 };
 
                 let last_pts = last_released_pts.unwrap_or(chunk.pts());
-                *last_released_pts = Some(Duration::max(last_pts, chunk.pts()));
+                *last_released_pts = Some(Timestamp::max(last_pts, chunk.pts()));
 
                 let max_shift = self.options.buffering_strategy.max_shift(
                     *current_anchor,
                     *target_anchor,
-                    chunk.pts().saturating_sub(last_pts),
+                    Timestamp::max(Timestamp::ZERO, chunk.pts() - last_pts),
                 );
                 current_anchor.nudge_towards(*target_anchor, max_shift);
 
@@ -291,15 +293,15 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         };
         let (audio, video) = (audio.upper_bound, video.upper_bound);
 
-        let diff = Duration::abs_diff(audio.pts, video.pts);
+        let diff = (audio.pts - video.pts).abs();
         // If diff is that large we ignore stability, timelines have to
         // be diverged
-        if diff >= Duration::from_secs(120) {
+        if diff >= Timestamp::from_secs(120) {
             return false;
         }
 
         // If diff is over 10 second we check stability too before deciding
-        if diff < Duration::from_secs(10) {
+        if diff < Timestamp::from_secs(10) {
             return true;
         }
 
@@ -313,7 +315,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     }
 
     fn maybe_correct(&mut self, now: Instant) {
-        let now_pts = now.saturating_duration_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
 
         if let (Some(anchor), Some(estimation)) =
             (self.anchor.as_mut(), self.shared_estimator.estimate(now))
@@ -376,7 +378,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             return false;
         };
 
-        let now_pts = now.saturating_duration_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
         if anchor.current.to_output_pts(pts) <= now_pts + MIN_QUEUE_HEADROOM {
             // the chunk is about to miss the queue; release it now instead of
             // waiting for the other track
@@ -390,7 +392,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
 
     /// Drops the live edge state built for the old timeline when `pts` does
     /// not belong to it anymore.
-    fn reset_on_discontinuity(&mut self, kind: TrackKind, now: Instant, pts: Duration) {
+    fn reset_on_discontinuity(&mut self, kind: TrackKind, now: Instant, pts: Timestamp) {
         let track = match kind {
             TrackKind::Audio => self.audio.as_ref(),
             TrackKind::Video => self.video.as_ref(),
@@ -446,10 +448,10 @@ struct TrackState<B: LiveSyncBuffer> {
     sink: BoxedTrackSink<B::Chunk>,
     /// Output pts the released content ends at. Used to maintain continuity after
     /// reset so it has to survive the reset itself.
-    last_released_pts: Option<Duration>,
+    last_released_pts: Option<Timestamp>,
     /// pts of the last written chunk and its arrival time. Deliberately not
     /// cleared on reset, so a discontinuity is detectable right after one.
-    last_written: Option<(Duration, Instant)>,
+    last_written: Option<(Timestamp, Instant)>,
     stats: LiveSyncTrackStats,
 }
 
@@ -508,7 +510,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
 
         // Slightly late track can still recover; reset would cause a gap of at
         // least the stabilization period. 5s late is considered unrecoverable.
-        let now_pts = now.saturating_duration_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
         if last_pts + Duration::from_secs(5) > now_pts {
             return;
         }
@@ -535,7 +537,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             return;
         }
 
-        let now_pts = now.saturating_duration_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
         let Some(shared_estimation) = shared_estimator.estimate(now) else {
             return;
         };
@@ -637,19 +639,15 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         // If both estimators start to be relatively close then try to converge on shared
         // target.
         if let Some(shared_estimation) = shared_estimator.estimate(now) {
-            let upper_diff = Duration::abs_diff(
-                track_estimation.upper_bound.pts,
-                shared_estimation.upper_bound.pts,
-            );
+            let upper_diff =
+                (track_estimation.upper_bound.pts - shared_estimation.upper_bound.pts).abs();
 
-            let lower_diff = Duration::abs_diff(
-                track_estimation.lower_bound.pts,
-                shared_estimation.lower_bound.pts,
-            );
+            let lower_diff =
+                (track_estimation.lower_bound.pts - shared_estimation.lower_bound.pts).abs();
 
             // stricter than the difference that splits the tracks, so they
             // cannot flap between sharing an anchor and running their own
-            if upper_diff < Duration::from_secs(3) && lower_diff < Duration::from_secs(3) {
+            if upper_diff < Timestamp::from_secs(3) && lower_diff < Timestamp::from_secs(3) {
                 let Some(shared_anchor) = shared_anchor else {
                     debug!(
                         kind=?self.kind,
@@ -668,7 +666,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                 // estimator can still break this cycle if it diverges.
                 *target_anchor = shared_anchor.current;
                 let anchor_distance = shared_anchor.current.distance_to(*current_anchor);
-                if anchor_distance < Duration::from_millis(50) {
+                if anchor_distance < Timestamp::from_millis(50) {
                     debug!(
                         kind=?self.kind,
                         offset=shared_anchor.current.offset_string(),
@@ -681,7 +679,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         }
 
         let strategy = self.options.buffering_strategy;
-        let now_pts = now.saturating_duration_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
         if !strategy.buffer_in_range(track_estimation, *current_anchor, now_pts) {
             *target_anchor = strategy.desired_anchor(&track_estimation, now_pts);
             trace!(
@@ -693,12 +691,12 @@ impl<B: LiveSyncBuffer> TrackState<B> {
     }
 
     /// pts span of the buffered content.
-    fn buffered_duration(&self) -> Duration {
+    fn buffered_duration(&self) -> Timestamp {
         let min = self.buffer.pts_values().min();
         let max = self.buffer.pts_values().max();
         match (min, max) {
             (Some(min), Some(max)) => max - min,
-            _ => Duration::ZERO,
+            _ => Timestamp::ZERO,
         }
     }
 
@@ -713,12 +711,12 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             kind=?self.kind,
             ?input_pts,
             ?output_pts,
-            lead=?output_pts.checked_sub(self.sync_point.elapsed()),
+            lead=?(output_pts - self.sync_point.timestamp_now()),
             "Live sync: releasing chunk"
         );
         self.stats.report_chunk_released(output_pts);
         self.last_released_pts = Some(match self.last_released_pts {
-            Some(previous) => Duration::max(previous, chunk.pts()),
+            Some(previous) => Timestamp::max(previous, chunk.pts()),
             None => chunk.pts(),
         });
         self.sink.on_event(TrackEvent::Chunk(chunk));
@@ -753,7 +751,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
 
     /// Whether `pts` belongs to a different timeline than the one this track
     /// has been observing.
-    fn is_discontinuity(&self, now: Instant, pts: Duration) -> bool {
+    fn is_discontinuity(&self, now: Instant, pts: Timestamp) -> bool {
         let Some((last_pts, arrived_at)) = self.last_written else {
             return false;
         };
@@ -782,7 +780,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
             return Some(anchor);
         }
 
-        let now_pts = now.saturating_duration_since(self.sync_point);
+        let now_pts = self.sync_point.timestamp_at(now);
 
         // Try to maintain continuity if there is still time to reach queue:
         // the oldest buffered chunk picks the timeline up where the released
@@ -823,6 +821,6 @@ pub(super) enum StartState {
         target_anchor: TimestampAnchor,
         current_anchor: TimestampAnchor,
         /// Largest pts released so far; sizes the slew steps.
-        last_released_pts: Option<Duration>,
+        last_released_pts: Option<Timestamp>,
     },
 }
