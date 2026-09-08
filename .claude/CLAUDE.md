@@ -37,4 +37,4 @@ After modifying types in `smelter-api` or types in `smelter-core::stats`, use `/
 
 ## Code Style
 
-- Wrap doc comments and JSDoc at 100 characters. No formatter enforces this.
+- Wrap comments at 100 characters. No formatter enforces this.
