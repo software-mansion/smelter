@@ -93,6 +93,9 @@ impl InnerQueueInput {
         self.video = pending.video;
         self.audio = pending.audio;
         self.track_offset = pending.track_offset;
+        if let (Some(video), Some(timeout)) = (self.video.as_mut(), self.stale_frame_timeout) {
+            video.set_stale_frame_timeout(timeout);
+        }
         if self.pause_state.is_paused() {
             let pts = self.queue_ctx.effective_last_pts();
             if let Some(v) = self.video.as_mut() {
@@ -137,7 +140,6 @@ impl InnerQueueInput {
                 &self.event_emitter,
                 &self.input_ref,
                 self.required,
-                self.stale_frame_timeout,
                 offset_from_start,
                 track_offset.clone(),
                 side_channel,
@@ -371,7 +373,7 @@ impl QueueInput {
 
     /// Stop rendering the last frame once it is older than `timeout`. Without
     /// it the last frame is rendered until a newer one arrives. Applies to the
-    /// current track and to tracks created afterwards.
+    /// current track and to pending tracks once they start.
     pub fn set_stale_frame_timeout(&self, timeout: Duration) {
         let mut guard = self.0.lock().unwrap();
         guard.stale_frame_timeout = Some(timeout);

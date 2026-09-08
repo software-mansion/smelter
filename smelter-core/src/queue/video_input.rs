@@ -47,7 +47,6 @@ impl VideoQueueInput {
         event_emitter: &Arc<EventEmitter>,
         input_ref: &Ref<InputId>,
         required: bool,
-        stale_frame_timeout: Option<Duration>,
         offset_from_start: Option<Duration>,
         track_offset: TrackOffset,
         side_channel: Option<VideoSideChannel>,
@@ -57,7 +56,7 @@ impl VideoQueueInput {
         let input = Self {
             queue_ctx: queue_ctx.clone(),
             required,
-            stale_frame_timeout,
+            stale_frame_timeout: None,
             offset_from_start,
             receiver,
             track_offset,
