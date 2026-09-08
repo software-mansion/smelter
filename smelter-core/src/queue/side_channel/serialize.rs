@@ -28,7 +28,7 @@ pub(super) fn serialize_rgba_frame(
 
     buf.extend_from_slice(&(resolution.width as u32).to_be_bytes());
     buf.extend_from_slice(&(resolution.height as u32).to_be_bytes());
-    buf.extend_from_slice(&(pts.as_nanos() as u64).to_be_bytes());
+    buf.extend_from_slice(&pts.as_nanos_saturating().to_be_bytes());
     buf.extend_from_slice(&rgba_data);
 
     Bytes::from(buf)
@@ -44,7 +44,7 @@ pub(super) fn serialize_audio_batch(batch: &InputAudioSamples) -> Bytes {
     let total_f64_count = sample_count * channel_count as usize;
     let mut buf = Vec::with_capacity(17 + total_f64_count * 8);
 
-    buf.extend_from_slice(&(batch.start_pts.as_nanos() as u64).to_be_bytes());
+    buf.extend_from_slice(&batch.start_pts.as_nanos_saturating().to_be_bytes());
     buf.extend_from_slice(&batch.sample_rate.to_be_bytes());
     buf.push(channel_count);
     buf.extend_from_slice(&(sample_count as u32).to_be_bytes());

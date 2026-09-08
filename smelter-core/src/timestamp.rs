@@ -85,6 +85,20 @@ impl Timestamp {
         self.nanos
     }
 
+    /// Microseconds as u64, negative values saturate to 0.
+    pub const fn as_micros_saturating(self) -> u64 {
+        if self.nanos < 0 {
+            0
+        } else {
+            (self.nanos / NANOS_PER_MICRO) as u64
+        }
+    }
+
+    /// Nanoseconds as u64, negative values saturate to 0.
+    pub const fn as_nanos_saturating(self) -> u64 {
+        if self.nanos < 0 { 0 } else { self.nanos as u64 }
+    }
+
     pub fn as_secs_f64(self) -> f64 {
         self.nanos as f64 / NANOS_PER_SEC as f64
     }

@@ -385,16 +385,20 @@ fn write_chunk(
         },
     };
 
-    let offset = timestamp_offset.as_nanos() as i128;
-    let pts = (chunk.pts.as_nanos() as i128 - offset) as i64;
-    let dts = chunk
-        .dts
-        .map(|dts| (dts.as_nanos() as i128 - offset) as i64)
-        .unwrap_or(pts);
+    let pts = chunk.pts - timestamp_offset;
+    let dts = chunk.dts.map_or(pts, |dts| dts - timestamp_offset);
 
     let mut packet = ffmpeg::Packet::copy(&chunk.data);
-    packet.set_pts(Some(Rescale::rescale(&pts, NS_TIME_BASE, stream.time_base)));
-    packet.set_dts(Some(Rescale::rescale(&dts, NS_TIME_BASE, stream.time_base)));
+    packet.set_pts(Some(Rescale::rescale(
+        &pts.as_nanos(),
+        NS_TIME_BASE,
+        stream.time_base,
+    )));
+    packet.set_dts(Some(Rescale::rescale(
+        &dts.as_nanos(),
+        NS_TIME_BASE,
+        stream.time_base,
+    )));
     packet.set_duration(Rescale::rescale(
         &(frame_duration.as_nanos() as i64),
         NS_TIME_BASE,

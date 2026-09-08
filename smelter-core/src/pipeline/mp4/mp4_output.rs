@@ -390,16 +390,20 @@ fn write_chunk(
     output_ctx: &mut ffmpeg::format::context::Output,
     timestamp_offset: Timestamp,
 ) -> Result<(), OutputMp4RuntimeError> {
-    let offset = timestamp_offset.as_nanos() as i128;
-    let pts = (chunk.pts.as_nanos() as i128 - offset) as i64;
-    let dts = chunk
-        .dts
-        .map(|dts| (dts.as_nanos() as i128 - offset) as i64)
-        .unwrap_or(pts);
+    let pts = chunk.pts - timestamp_offset;
+    let dts = chunk.dts.unwrap_or(chunk.pts) - timestamp_offset;
 
     let mut packet = ffmpeg::Packet::copy(&chunk.data);
-    packet.set_pts(Some(Rescale::rescale(&pts, NS_TIME_BASE, stream.time_base)));
-    packet.set_dts(Some(Rescale::rescale(&dts, NS_TIME_BASE, stream.time_base)));
+    packet.set_pts(Some(Rescale::rescale(
+        &pts.as_nanos(),
+        NS_TIME_BASE,
+        stream.time_base,
+    )));
+    packet.set_dts(Some(Rescale::rescale(
+        &dts.as_nanos(),
+        NS_TIME_BASE,
+        stream.time_base,
+    )));
     packet.set_time_base(stream.time_base);
     packet.set_stream(stream.index);
 
