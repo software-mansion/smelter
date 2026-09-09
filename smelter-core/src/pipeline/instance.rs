@@ -591,7 +591,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     let renderer = Renderer::new(RendererOptions {
         chromium_context: opts.chromium_context,
         framerate: opts.output_framerate,
-        stream_fallback_timeout: opts.stream_fallback_timeout,
         load_system_fonts: opts.load_system_fonts,
         device: graphics_context.device.clone(),
         queue: graphics_context.queue.clone(),
@@ -640,6 +639,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     let ctx = Arc::new(PipelineCtx {
         queue_ctx: queue.ctx(),
         default_buffer_duration: opts.default_buffer_duration,
+        stale_frame_timeout: opts.stale_frame_timeout,
 
         mixing_sample_rate: opts.mixing_sample_rate,
         output_framerate: opts.output_framerate,

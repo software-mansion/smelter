@@ -39,9 +39,7 @@
 
         function startRendering(imageData) {
             init().then(async () => {
-                const renderer = await create_renderer({
-                    stream_fallback_timeout_ms: 500,
-                });
+                const renderer = await create_renderer({});
                 renderer.register_input("input");
                 await renderer.register_image("img", {
                     url: IMAGE1_URL,

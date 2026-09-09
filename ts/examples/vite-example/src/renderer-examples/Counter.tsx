@@ -80,9 +80,7 @@ function useRenderer(): Renderer | null {
   useEffect(() => {
     const setupRenderer = async () => {
       await loadWasmModule('./assets/smelter.wasm');
-      const renderer = await Renderer.create({
-        streamFallbackTimeoutMs: 500,
-      });
+      const renderer = await Renderer.create({});
 
       await renderer.registerImage('img', {
         asset_type: 'gif',

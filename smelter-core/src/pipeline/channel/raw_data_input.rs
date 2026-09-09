@@ -56,6 +56,7 @@ impl RawDataInput {
                 ..Default::default()
             },
         );
+        queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
         let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
             video: options.video,
             audio: options.audio,

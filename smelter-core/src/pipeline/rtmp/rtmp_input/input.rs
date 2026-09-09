@@ -56,6 +56,9 @@ impl RtmpServerInput {
         });
 
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
+        if options.is_live {
+            queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
+        }
 
         state.inputs.add_input(
             &input_ref,

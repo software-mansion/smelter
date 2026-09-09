@@ -53,7 +53,7 @@ pub use v4l2::{V4l2DeviceInfo, V4l2FormatInfo, V4l2ResolutionInfo, list_v4l2_dev
 
 #[derive(Debug)]
 pub struct PipelineOptions {
-    pub stream_fallback_timeout: Duration,
+    pub stale_frame_timeout: Duration,
     pub default_buffer_duration: Duration,
 
     pub load_system_fonts: bool,
@@ -127,6 +127,7 @@ pub const DEFAULT_BUFFER_DURATION: Duration = Duration::from_millis(16 * 5); // 
 pub(crate) struct PipelineCtx {
     pub queue_ctx: QueueContext,
     pub default_buffer_duration: Duration,
+    pub stale_frame_timeout: Duration,
 
     pub mixing_sample_rate: u32,
     pub output_framerate: Framerate,

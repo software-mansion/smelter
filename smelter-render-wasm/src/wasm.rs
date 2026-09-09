@@ -44,7 +44,7 @@ pub async fn create_renderer(options: JsValue) -> Result<SmelterRenderer, JsValu
     let (device, queue) = create_wgpu_context().await?;
     let renderer = renderer::Renderer::new(
         options.upload_frames_with_copy_external,
-        new_render_options(options, device, queue),
+        new_render_options(device, queue),
     )?;
     Ok(SmelterRenderer(Mutex::new(renderer)))
 }

@@ -103,7 +103,7 @@ pub fn pipeline_options_from_config(
     chromium_context: &Option<Arc<ChromiumContext>>,
 ) -> PipelineOptions {
     PipelineOptions {
-        stream_fallback_timeout: opt.stream_fallback_timeout,
+        stale_frame_timeout: opt.stale_frame_timeout,
         download_root: opt.download_root.clone(),
         default_buffer_duration: opt.default_buffer_duration,
 

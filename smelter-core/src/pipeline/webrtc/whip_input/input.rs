@@ -63,6 +63,7 @@ impl WhipInput {
         });
 
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
+        queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
 
         let endpoint_route = Arc::from(format!("/whip/{}", urlencoding::encode(&input_ref.id().0)));
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);

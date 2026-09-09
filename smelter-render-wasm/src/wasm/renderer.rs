@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use glyphon::fontdb::Source;
 use smelter_api as api;
 use smelter_render::{
@@ -11,6 +13,9 @@ use super::{
     output::RendererOutputs,
     types::{self, OutputFrameSet, WgpuCtx},
 };
+
+/// Inputs that stopped sending frames are rendered as empty after this time.
+const STALE_FRAME_TIMEOUT: Duration = Duration::from_millis(500);
 
 pub(super) struct Renderer {
     renderer: smelter_render::Renderer,
@@ -37,7 +42,10 @@ impl Renderer {
     pub async fn render(&mut self, inputs: InputFrameSet) -> Result<OutputFrameSet, JsValue> {
         let ctx = self.wgpu_ctx();
         let pts = inputs.pts;
-        let frame_set = self.inputs.create_input_frames(&ctx, inputs).await?;
+        let mut frame_set = self.inputs.create_input_frames(&ctx, inputs).await?;
+        frame_set
+            .frames
+            .retain(|_, frame| pts.saturating_sub(frame.pts) <= STALE_FRAME_TIMEOUT);
 
         let outputs = self
             .renderer

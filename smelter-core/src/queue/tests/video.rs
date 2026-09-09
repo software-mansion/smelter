@@ -1541,3 +1541,111 @@ mod optional_input {
         assert!(queue.next_video_batch().is_none());
     }
 }
+
+mod stale_frame_timeout {
+    use super::*;
+
+    /// Optional "input_1" with `FromStart(0)` offset, started with desynced clocks.
+    fn start_queue_with_video_input(timeout: Option<Duration>) -> (TestQueue, TestInput) {
+        let mut queue = TestQueue::new(TestQueueOptions::default());
+        let input = queue.add_input(
+            "input_1",
+            QueueInputOptions {
+                required: false,
+                ..Default::default()
+            },
+            QueueTrackOptions {
+                video: true,
+                audio: false,
+                offset: QueueTrackOffset::FromStart(Duration::ZERO),
+            },
+        );
+        if let Some(timeout) = timeout {
+            input.queue_input.set_stale_frame_timeout(timeout);
+        }
+
+        // desync regular clock from queue clock
+        sleep(OFFSET);
+
+        queue.start();
+        (queue, input)
+    }
+
+    fn batch(pts: Timestamp, frame: InputFrame) -> VideoBatch {
+        VideoBatch {
+            pts,
+            required: false,
+            frames: frames([("input_1", frame)]),
+        }
+    }
+
+    /// The last frame is repeated only while it is not older than the timeout.
+    #[test]
+    fn timeout_drops_stale_frame() {
+        let (queue, mut input) = start_queue_with_video_input(Some(Duration::from_millis(30)));
+
+        input.send_frame(ms(0));
+        input.send_frame(ms(15));
+
+        sleep(Duration::from_millis(1));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(0), frame(0, ms(0))),
+        );
+
+        sleep(Duration::from_millis(20));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(20), frame(1, ms(15))),
+        );
+
+        // 25ms old, still within timeout
+        sleep(Duration::from_millis(20));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(40), frame(1, ms(15))),
+        );
+
+        // 45ms old, dropped
+        sleep(Duration::from_millis(20));
+        assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(60), false);
+
+        // new frame resumes the stream
+        input.send_frame(ms(70));
+        sleep(Duration::from_millis(20));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(80), frame(2, ms(70))),
+        );
+    }
+
+    #[test]
+    fn no_timeout_keeps_last_frame() {
+        let (queue, mut input) = start_queue_with_video_input(None);
+
+        input.send_frame(ms(0));
+        input.send_frame(ms(15));
+
+        sleep(Duration::from_millis(1));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(0), frame(0, ms(0))),
+        );
+
+        sleep(Duration::from_millis(20));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(20), frame(1, ms(15))),
+        );
+
+        sleep(Duration::from_millis(40));
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(40), frame(1, ms(15))),
+        );
+        assert_video_batch_eq(
+            &queue.next_video_batch().unwrap(),
+            &batch(ms(60), frame(1, ms(15))),
+        );
+    }
+}

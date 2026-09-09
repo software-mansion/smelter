@@ -21,6 +21,9 @@ pub(crate) struct VideoQueueInput {
     /// If stream is required the queue should wait for frames. For optional
     /// inputs a queue will wait only as long as a buffer allows.
     required: bool,
+    /// Frames older than this (relative to the requested PTS) are not returned
+    /// from `get_frame`. `None` means the last frame is returned indefinitely.
+    stale_frame_timeout: Option<Duration>,
     /// Offset of the stream relative to the start. If set to `None`
     /// offset will be resolved automatically on the stream start.
     offset_from_start: Option<Duration>,
@@ -53,6 +56,7 @@ impl VideoQueueInput {
         let input = Self {
             queue_ctx: queue_ctx.clone(),
             required,
+            stale_frame_timeout: None,
             offset_from_start,
             receiver,
             track_offset,
@@ -86,6 +90,10 @@ impl VideoQueueInput {
         self.required
     }
 
+    pub(super) fn set_stale_frame_timeout(&mut self, timeout: Duration) {
+        self.stale_frame_timeout = Some(timeout);
+    }
+
     pub(super) fn pause(&mut self) {
         if self.paused_pts.is_some() {
             return;
@@ -96,7 +104,7 @@ impl VideoQueueInput {
             // Partially duplicate get_frame logic, we can't call it directly
             // because we don't want to tiger eos event.
             let offset = self.resolve_offset(pts, queue_start_pts)?;
-            self.receiver.get_for_pts(pts - offset)
+            self.frame_for_pts(pts - offset)
         });
 
         self.paused_frame = frame;
@@ -151,7 +159,7 @@ impl VideoQueueInput {
         let input_pts = pts - offset;
         trace!(queue_pts=?pts, ?input_pts, "Try get frame");
 
-        let frame = self.receiver.get_for_pts(input_pts).map(|mut frame| {
+        let frame = self.frame_for_pts(input_pts).map(|mut frame| {
             self.event_playing_guard.emit();
             frame.pts += offset;
             frame
@@ -160,6 +168,15 @@ impl VideoQueueInput {
         QueueVideoFrame {
             frame,
             is_eos: self.check_eos(),
+        }
+    }
+
+    /// Frame for `input_pts` unless it is older than `stale_frame_timeout`.
+    fn frame_for_pts(&mut self, input_pts: Timestamp) -> Option<Frame> {
+        let frame = self.receiver.get_for_pts(input_pts)?;
+        match self.stale_frame_timeout {
+            Some(timeout) if input_pts - frame.pts > timeout.into() => None,
+            _ => Some(frame),
         }
     }
 

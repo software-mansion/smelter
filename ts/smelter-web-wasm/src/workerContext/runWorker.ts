@@ -14,10 +14,7 @@ async function initInstance(options: InitOptions) {
   const loggerLevel = (
     Object.values(LoggerLevel).includes(options.loggerLevel as any) ? options.loggerLevel : 'warn'
   ) as LoggerLevel;
-  const renderer = await Renderer.create({
-    streamFallbackTimeoutMs: 500,
-    loggerLevel,
-  });
+  const renderer = await Renderer.create({ loggerLevel });
   const logger = pino({ level: options.loggerLevel }).child({ runtime: 'worker' });
   onMessageLogger = logger.child({ element: 'onMessage' });
   instance = new Pipeline({ renderer, framerate: options.framerate, logger });
