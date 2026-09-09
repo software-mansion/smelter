@@ -1,33 +1,43 @@
+use std::{any::Any, ops::Deref};
+
 use crate::{
     InputFrame, VideoEncoderError,
     encoders::{VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
 };
 
-pub(crate) struct EncodeTexture {
-    wgpu_texture: wgpu::Texture, 
+pub(crate) trait EncodeTextureBackend: Any + Send {}
+
+// TODO: should this also be used by bytes decoders?
+pub struct EncodeTexture {
+    pub(crate) wgpu_texture: wgpu::Texture,
+    pub(crate) backend_texture: Box<dyn EncodeTextureBackend>,
 }
 
-impl EncodeTexture {
-    pub fn texture(&self) -> &wgpu::Texture {
+// TODO: should implement deref?
+impl Deref for EncodeTexture {
+    type Target = wgpu::Texture;
+
+    fn deref(&self) -> &Self::Target {
         &self.wgpu_texture
     }
 }
 
 pub(crate) trait WgpuVideoEncoderBackend: Send {
-    // TODO: maybe it would be better to have a separate struct for creating inputs?
-    // so that input creation is disjoint with encoder
-    fn new_input(&mut self, wgpu_device: &wgpu::Device)
-    -> Result<EncodeTexture, VideoEncoderError>;
-
     fn encode_texture(
         &mut self,
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
-        frame: InputFrame<wgpu::Texture>,
+        // TODO: Maybe the encode texture should return InputFrame?
+        frame: InputFrame<EncodeTexture>,
         force_idr: bool,
     ) -> Result<(), VideoEncoderError>;
 
     fn flush(&mut self) -> Result<(), VideoEncoderError>;
+
+    fn next_input_texture(
+        &mut self,
+        wgpu_device: &wgpu::Device,
+    ) -> Result<EncodeTexture, VideoEncoderError>;
 }
 
 pub(crate) trait WgpuVideoEncoderBackendH264:
@@ -52,7 +62,7 @@ impl<E: WgpuVideoEncoderBackend + VideoEncoderParametersInfoH265> WgpuVideoEncod
 pub struct WgpuTexturesEncoderH264 {
     pub(crate) wgpu_device: wgpu::Device,
     pub(crate) wgpu_queue: wgpu::Queue,
-    pub(crate) encoder: Box<dyn WgpuVideoEncoderBackendH264>,
+    pub(crate) backend: Box<dyn WgpuVideoEncoderBackendH264>,
 }
 
 impl WgpuTexturesEncoderH264 {
@@ -69,10 +79,10 @@ impl WgpuTexturesEncoderH264 {
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode(
         &mut self,
-        frame: InputFrame<wgpu::Texture>,
+        frame: InputFrame<EncodeTexture>,
         force_keyframe: bool,
     ) -> Result<(), VideoEncoderError> {
-        self.encoder
+        self.backend
             .encode_texture(&self.wgpu_device, &self.wgpu_queue, frame, force_keyframe)
     }
 
@@ -81,7 +91,7 @@ impl WgpuTexturesEncoderH264 {
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
-        self.encoder.flush()
+        self.backend.flush()
     }
 
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
@@ -89,7 +99,7 @@ impl WgpuTexturesEncoderH264 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.encoder.sps()
+        self.backend.sps()
     }
 
     /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
@@ -97,7 +107,12 @@ impl WgpuTexturesEncoderH264 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.encoder.pps()
+        self.backend.pps()
+    }
+
+    // TODO: docs
+    pub fn input_texture(&mut self) -> Result<EncodeTexture, VideoEncoderError> {
+        self.backend.next_input_texture(&self.wgpu_device)
     }
 }
 
@@ -105,7 +120,7 @@ impl WgpuTexturesEncoderH264 {
 pub struct WgpuTexturesEncoderH265 {
     pub(crate) wgpu_device: wgpu::Device,
     pub(crate) wgpu_queue: wgpu::Queue,
-    pub(crate) encoder: Box<dyn WgpuVideoEncoderBackendH265>,
+    pub(crate) backend: Box<dyn WgpuVideoEncoderBackendH265>,
 }
 
 impl WgpuTexturesEncoderH265 {
@@ -122,10 +137,10 @@ impl WgpuTexturesEncoderH265 {
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode(
         &mut self,
-        frame: InputFrame<wgpu::Texture>,
+        frame: InputFrame<EncodeTexture>,
         force_keyframe: bool,
     ) -> Result<(), VideoEncoderError> {
-        self.encoder
+        self.backend
             .encode_texture(&self.wgpu_device, &self.wgpu_queue, frame, force_keyframe)
     }
 
@@ -134,7 +149,7 @@ impl WgpuTexturesEncoderH265 {
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
-        self.encoder.flush()
+        self.backend.flush()
     }
 
     /// Retrieve encoded VPS NAL units from the video session parameters, in Annex B.
@@ -142,7 +157,7 @@ impl WgpuTexturesEncoderH265 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn vps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.encoder.vps()
+        self.backend.vps()
     }
 
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
@@ -150,7 +165,7 @@ impl WgpuTexturesEncoderH265 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.encoder.sps()
+        self.backend.sps()
     }
 
     /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
@@ -158,7 +173,12 @@ impl WgpuTexturesEncoderH265 {
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
     pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.encoder.pps()
+        self.backend.pps()
+    }
+
+    // TODO: docs
+    pub fn input_texture(&mut self) -> Result<EncodeTexture, VideoEncoderError> {
+        self.backend.next_input_texture(&self.wgpu_device)
     }
 }
 

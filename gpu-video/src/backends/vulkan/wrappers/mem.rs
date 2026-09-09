@@ -3,13 +3,17 @@ use std::sync::{Arc, Mutex, Weak};
 use ash::vk::{self, Handle};
 use vk_mem::Alloc;
 
-use crate::backends::vulkan::{
-    VulkanCommonError, VulkanDeviceInitError,
-    codec::h264::parameters::H264DecodeProfileInfo,
-    vulkan_decoder::VulkanDecoderError,
-    vulkan_device::EncodingDevice,
-    vulkan_encoder::VulkanEncoderError,
-    wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
+use crate::{
+    VideoEncoderError,
+    backends::vulkan::{
+        VulkanCommonError, VulkanDeviceInitError,
+        codec::h264::parameters::H264DecodeProfileInfo,
+        vulkan_decoder::VulkanDecoderError,
+        vulkan_device::EncodingDevice,
+        vulkan_encoder::VulkanEncoderError,
+        wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
+    },
+    encoders::EncodeTextureBackend,
 };
 
 use super::{Device, Instance};
@@ -269,7 +273,7 @@ impl<'a> EncodeInputImagePool<'a> {
     #[cfg(feature = "wgpu")]
     pub(crate) fn wgpu_texture(
         &mut self,
-        wgpu_device: wgpu::Device,
+        wgpu_device: &wgpu::Device,
     ) -> Result<EncodeInputImage, VulkanEncoderError> {
         use wgpu::hal::vulkan::Api as VkApi;
 
@@ -338,6 +342,8 @@ pub(crate) struct EncodeInputImage {
     pub(crate) wgpu_texture: Option<wgpu::Texture>,
     pool_freelist: Weak<Mutex<Vec<EncodeInputImage>>>,
 }
+
+impl EncodeTextureBackend for EncodeInputImage {}
 
 impl EncodeInputImage {
     pub(crate) fn release_to_pool(self) {

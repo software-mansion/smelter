@@ -123,12 +123,16 @@ fn main() {
 
     for i in 0..frame_count {
         let time = 1.0 / 30.0 * i as f32;
-        wgpu_state.render(time);
+        let h264_texture = encoder_h264.input_texture().unwrap();
+        let h265_texture = encoder_h265.input_texture().unwrap();
 
+        wgpu_state.render(time, &[&h264_texture, &h265_texture]);
+
+        // TODO: it should be verified that the input for the correct encoder was passed
         encoder_h264
             .encode(
                 InputFrame {
-                    data: wgpu_state.nv12_texture.clone(),
+                    data: h264_texture,
                     pts: None,
                 },
                 false,
@@ -138,7 +142,7 @@ fn main() {
         encoder_h265
             .encode(
                 InputFrame {
-                    data: wgpu_state.nv12_texture.clone(),
+                    data: h265_texture,
                     pts: None,
                 },
                 false,
@@ -160,9 +164,6 @@ struct WgpuState {
     pipeline: wgpu::RenderPipeline,
     rgba_view: wgpu::TextureView,
     rgba_bg: wgpu::BindGroup,
-    nv12_texture: wgpu::Texture,
-    y_plane_view: wgpu::TextureView,
-    uv_plane_view: wgpu::TextureView,
     rgba_to_nv12_converter: WgpuRgbaToNv12Converter,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -244,29 +245,6 @@ impl WgpuState {
             ..Default::default()
         });
 
-        let nv12_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("encoder input"),
-            format: wgpu::TextureFormat::NV12,
-            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            dimension: wgpu::TextureDimension::D2,
-            sample_count: 1,
-            view_formats: &[],
-            mip_level_count: 1,
-            size: wgpu::Extent3d {
-                width: width.get(),
-                height: height.get(),
-                depth_or_array_layers: 1,
-            },
-        });
-        let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
-            aspect: wgpu::TextureAspect::Plane0,
-            ..Default::default()
-        });
-        let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
-            aspect: wgpu::TextureAspect::Plane1,
-            ..Default::default()
-        });
-
         let rgba_to_nv12_converter = WgpuRgbaToNv12Converter::new(
             &device,
             WgpuConverterParameters {
@@ -281,24 +259,21 @@ impl WgpuState {
             pipeline,
             rgba_view,
             rgba_bg,
-            nv12_texture,
-            y_plane_view,
-            uv_plane_view,
             rgba_to_nv12_converter,
             device,
             queue,
         }
     }
 
-    fn render(&self, time: f32) {
-        let mut encoder = self
+    fn render(&self, time: f32, output_textures: &[&wgpu::Texture]) {
+        let mut cmd_encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("wgpu encoder"),
             });
 
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = cmd_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("wgpu render pass"),
                 timestamp_writes: None,
                 occlusion_query_set: None,
@@ -319,14 +294,25 @@ impl WgpuState {
             render_pass.set_immediates(0, &time.to_ne_bytes());
             render_pass.draw(0..3, 0..1);
         }
-        self.rgba_to_nv12_converter.convert(
-            &mut encoder,
-            &self.rgba_bg,
-            &self.y_plane_view,
-            &self.uv_plane_view,
-        );
 
-        let buffer = encoder.finish();
+        for nv12_texture in output_textures {
+            let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+                aspect: wgpu::TextureAspect::Plane0,
+                ..Default::default()
+            });
+            let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+                aspect: wgpu::TextureAspect::Plane1,
+                ..Default::default()
+            });
+            self.rgba_to_nv12_converter.convert(
+                &mut cmd_encoder,
+                &self.rgba_bg,
+                &y_plane_view,
+                &uv_plane_view,
+            );
+        }
+
+        let buffer = cmd_encoder.finish();
 
         self.queue.submit([buffer]);
     }

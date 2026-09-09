@@ -12,6 +12,7 @@ use crate::{
             VulkanAdapter, VulkanBackend, VulkanCallbackEncoder, VulkanDevice,
             VulkanDeviceInitError, VulkanEncoderError,
             vulkan_decoder::{VulkanDecoderError, decoders_h264::VulkanWgpuTexturesDecoderH264},
+            wrappers::EncodeInputImagePool,
         },
     },
     device::{
@@ -195,7 +196,7 @@ impl VulkanDevice {
         Ok(crate::WgpuTexturesEncoderH264 {
             wgpu_device,
             wgpu_queue,
-            encoder: Box::new(VulkanCallbackEncoder::new(
+            backend: Box::new(VulkanCallbackEncoder::new(
                 Arc::new(self.encoding_device()?),
                 parameters,
                 on_chunk_callback,
@@ -221,7 +222,7 @@ impl VulkanDevice {
         Ok(crate::WgpuTexturesEncoderH265 {
             wgpu_device,
             wgpu_queue,
-            encoder: Box::new(VulkanCallbackEncoder::new(
+            backend: Box::new(VulkanCallbackEncoder::new(
                 Arc::new(self.encoding_device()?),
                 parameters,
                 on_chunk_callback,

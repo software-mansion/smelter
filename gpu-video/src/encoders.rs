@@ -43,12 +43,6 @@ pub struct BytesEncoderH264 {
     pub(crate) encoder: Box<dyn VideoEncoderBackendH264>,
 }
 
-// TODO create EncodeInput (surface like api)
-//
-pub(crate) struct EncoderInputPool {
-
-}
-
 impl BytesEncoderH264 {
     /// Encode a frame. The resulting chunks of H264 bitstream are sent via the callback provided
     /// at encoder creation.
