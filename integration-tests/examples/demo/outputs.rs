@@ -87,6 +87,7 @@ impl OutputHandle {
             OutputHandle::Rtp(o) => o.on_after_registration(),
             OutputHandle::Whep(o) => o.on_after_registration(),
             OutputHandle::Hls(o) => o.on_after_registration(),
+            OutputHandle::MoqClient(o) => o.on_after_registration(),
             _ => Ok(()),
         }
     }

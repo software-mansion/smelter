@@ -112,6 +112,10 @@ export type RegisterInput =
        * Enable side channel for video and/or audio track.
        */
       side_channel?: SideChannel | null;
+      /**
+       * (default=2000) Buffer kept between the live edge of the stream and playback. A number value represents `buffer.desired_ms` option
+       */
+      buffer?: InputBuffer | null;
     }
   | {
       type: "moq_client";
@@ -139,6 +143,10 @@ export type RegisterInput =
        * Enable side channel for video and/or audio track.
        */
       side_channel?: SideChannel | null;
+      /**
+       * (default=2000) Buffer kept between the live edge of the stream and playback. A number value represents `buffer.desired_ms` option
+       */
+      buffer?: InputBuffer | null;
     }
   | {
       type: "mp4";
@@ -1698,24 +1706,24 @@ export type InputStatsReport =
   | {
       type: "moq_server";
       /**
-       * Stats for the video track.
+       * Stats for the video track. `None` when the track is not active.
        */
-      video: MoqServerInputTrackStatsReport;
+      video?: InputSyncTrackStatsReport | null;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track. `None` when the track is not active.
        */
-      audio: MoqServerInputTrackStatsReport;
+      audio?: InputSyncTrackStatsReport | null;
     }
   | {
       type: "moq_client";
       /**
-       * Stats for the video track.
+       * Stats for the video track. `None` when the track is not active.
        */
-      video: MoqClientInputTrackStatsReport;
+      video?: InputSyncTrackStatsReport | null;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track. `None` when the track is not active.
        */
-      audio: MoqClientInputTrackStatsReport;
+      audio?: InputSyncTrackStatsReport | null;
     }
   | {
       type: "mp4";
@@ -1729,7 +1737,7 @@ export type InputStatsReport =
       audio: Mp4InputTrackStatsReport;
     };
 /**
- * Stats report for a track synchronized by the input sync (`RTMP`, `HLS`).
+ * Stats report for a track synchronized by the input sync (`RTMP`, `HLS`, `MoQ`).
  */
 export type InputSyncTrackStatsReport =
   | {
@@ -2432,32 +2440,6 @@ export interface LiveSyncTrackSlidingWindowStatsReport {
    * Measured when chunk leaves the sync buffer. This value represents how much time chunk has to reach the queue to be processed. Negative when the chunk is already late.
    */
   effective_buffer_on_output_min_seconds: number;
-}
-/**
- * Stats report for a track in `MoQ` server input.
- */
-export interface MoqServerInputTrackStatsReport {
-  /**
-   * Bitrate in the 1-second window.
-   */
-  bitrate_1_second: number;
-  /**
-   * Bitrate in the 1-minute window.
-   */
-  bitrate_1_minute: number;
-}
-/**
- * Stats report for a track in `MoQ` client input.
- */
-export interface MoqClientInputTrackStatsReport {
-  /**
-   * Bitrate in the 1-second window.
-   */
-  bitrate_1_second: number;
-  /**
-   * Bitrate in the 1-minute window.
-   */
-  bitrate_1_minute: number;
 }
 /**
  * Stats report for a track in `MP4` input.

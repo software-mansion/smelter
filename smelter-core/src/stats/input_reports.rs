@@ -118,41 +118,21 @@ pub struct RtmpInputStatsReport {
 /// Stats report for `MoQ` server input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct MoqServerInputStatsReport {
-    /// Stats for the video track.
-    pub video: MoqServerInputTrackStatsReport,
+    /// Stats for the video track. `None` when the track is not active.
+    pub video: Option<InputSyncTrackStatsReport>,
 
-    /// Stats for the audio track.
-    pub audio: MoqServerInputTrackStatsReport,
-}
-
-/// Stats report for a track in `MoQ` server input.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
-pub struct MoqServerInputTrackStatsReport {
-    /// Bitrate in the 1-second window.
-    pub bitrate_1_second: u64,
-
-    /// Bitrate in the 1-minute window.
-    pub bitrate_1_minute: u64,
+    /// Stats for the audio track. `None` when the track is not active.
+    pub audio: Option<InputSyncTrackStatsReport>,
 }
 
 /// Stats report for `MoQ` client input.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct MoqClientInputStatsReport {
-    /// Stats for the video track.
-    pub video: MoqClientInputTrackStatsReport,
+    /// Stats for the video track. `None` when the track is not active.
+    pub video: Option<InputSyncTrackStatsReport>,
 
-    /// Stats for the audio track.
-    pub audio: MoqClientInputTrackStatsReport,
-}
-
-/// Stats report for a track in `MoQ` client input.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
-pub struct MoqClientInputTrackStatsReport {
-    /// Bitrate in the 1-second window.
-    pub bitrate_1_second: u64,
-
-    /// Bitrate in the 1-minute window.
-    pub bitrate_1_minute: u64,
+    /// Stats for the audio track. `None` when the track is not active.
+    pub audio: Option<InputSyncTrackStatsReport>,
 }
 
 /// Stats report for `MP4` input.
@@ -185,7 +165,7 @@ pub struct HlsInputStatsReport {
     pub audio: Option<InputSyncTrackStatsReport>,
 }
 
-/// Stats report for a track synchronized by the input sync (`RTMP`, `HLS`).
+/// Stats report for a track synchronized by the input sync (`RTMP`, `HLS`, `MoQ`).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum InputSyncTrackStatsReport {

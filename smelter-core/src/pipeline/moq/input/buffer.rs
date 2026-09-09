@@ -3,11 +3,11 @@ use std::time::Duration;
 use crate::prelude::*;
 
 /// Resolves the buffer options into concrete `(min, desired, max)` values.
-pub(crate) fn resolve_buffer_options(
+pub(super) fn resolve_buffer_options(
     options: LiveInputBufferOptions,
 ) -> (Duration, Duration, Duration) {
     // minimal delta between bounds
-    const D: Duration = Duration::from_millis(200);
+    const D: Duration = Duration::from_millis(100);
     const DEFAULT: Duration = Duration::from_secs(2);
 
     // provided values below the floors are raised instead of rejected
@@ -75,7 +75,7 @@ mod tests {
         // desired follows a larger min
         assert_eq!(
             resolve(Some(5000), None, None),
-            (ms(5000), ms(5200), ms(11400))
+            (ms(5000), ms(5100), ms(11200))
         );
         assert_eq!(
             resolve(Some(500), None, None),
@@ -88,7 +88,7 @@ mod tests {
         // desired follows a smaller max
         assert_eq!(
             resolve(None, None, Some(1000)),
-            (ms(400), ms(800), ms(1000))
+            (ms(450), ms(900), ms(1000))
         );
         assert_eq!(
             resolve(None, None, Some(20000)),
@@ -123,24 +123,24 @@ mod tests {
 
     #[test]
     fn degenerate_bands() {
-        // min == desired == max keeps only the 200ms guardrail margins
+        // min == desired == max keeps only the 100ms guardrail margins
         assert_eq!(
             resolve(Some(2000), Some(2000), Some(2000)),
-            (ms(1800), ms(2000), ms(2200))
+            (ms(1900), ms(2000), ms(2100))
         );
         assert_eq!(
             resolve(Some(500), Some(500), Some(500)),
-            (ms(300), ms(500), ms(700))
+            (ms(400), ms(500), ms(600))
         );
         // min == max without desired
         assert_eq!(
             resolve(Some(3000), None, Some(3000)),
-            (ms(2800), ms(3000), ms(3200))
+            (ms(2900), ms(3000), ms(3100))
         );
-        // band narrower than the 200ms margin
+        // band narrower than the 100ms margin
         assert_eq!(
             resolve(Some(550), Some(600), Some(700)),
-            (ms(400), ms(600), ms(800))
+            (ms(500), ms(600), ms(700))
         );
     }
 
@@ -150,13 +150,13 @@ mod tests {
         // the API validation of >= 500ms)
         assert_eq!(
             resolve(Some(0), Some(2), Some(4)),
-            (ms(200), ms(400), ms(600))
+            (ms(100), ms(200), ms(300))
         );
-        assert_eq!(resolve(None, Some(100), None), (ms(200), ms(400), ms(1800)));
+        assert_eq!(resolve(None, Some(100), None), (ms(100), ms(200), ms(1400)));
         assert_eq!(
             resolve(Some(50), Some(4000), None),
-            (ms(200), ms(4000), ms(9000))
+            (ms(100), ms(4000), ms(9000))
         );
-        assert_eq!(resolve(None, None, Some(100)), (ms(200), ms(400), ms(600)));
+        assert_eq!(resolve(None, None, Some(100)), (ms(100), ms(200), ms(300)));
     }
 }
