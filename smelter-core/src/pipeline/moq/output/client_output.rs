@@ -525,7 +525,7 @@ fn send_chunk(
                 return Ok(());
             };
             trace!(?pts, "MoQ video frame.");
-            let timestamp = Timestamp::from_micros(pts.as_micros() as u64)?;
+            let timestamp = Timestamp::from_micros(pts.as_micros_saturating())?;
             producer.write(Frame {
                 timestamp,
                 payload: chunk.data,
@@ -539,7 +539,7 @@ fn send_chunk(
             };
             // Audio has no keyframes, so every frame starts a group of its own.
             trace!(?pts, "MoQ audio frame.");
-            let timestamp = Timestamp::from_micros(pts.as_micros() as u64)?;
+            let timestamp = Timestamp::from_micros(pts.as_micros_saturating())?;
             producer.write(Frame {
                 timestamp,
                 payload: chunk.data,
