@@ -46,11 +46,11 @@ pub(super) struct SharedState<B: LiveSyncBuffer> {
 /// Anchor of the tracks aligned to the shared edge. Corrections move
 /// `target`; `current` slews towards it in small steps as chunks are read.
 #[derive(Debug, Clone, Copy)]
-struct SharedAnchor {
+pub(super) struct SharedAnchor {
     /// Mapping applied to every chunk read right now.
-    current: TimestampAnchor,
+    pub current: TimestampAnchor,
     /// Mapping the corrections aim for.
-    target: TimestampAnchor,
+    pub target: TimestampAnchor,
     /// Largest input pts released so far by any track applying this anchor.
     ///
     /// Used to maintain interleaved (by pts) order on sync output between tracks.
@@ -62,16 +62,16 @@ struct SharedAnchor {
 /// anchor aligns to it, so both tracks present their live edges at the same
 /// output pts even when their input timelines are unrelated.
 #[derive(Debug, Clone, Copy)]
-struct EdgeReference {
-    anchor: TimestampAnchor,
+pub(super) struct EdgeReference {
+    pub anchor: TimestampAnchor,
     /// Live edge (stable upper bound) of the track, in its input pts.
-    edge_pts: Timestamp,
+    pub edge_pts: Timestamp,
 }
 
 impl EdgeReference {
     /// Anchor presenting `edge_pts` of another track at the same output pts
     /// as this reference presents its own edge.
-    fn aligned_anchor(&self, edge_pts: Timestamp) -> TimestampAnchor {
+    pub fn aligned_anchor(&self, edge_pts: Timestamp) -> TimestampAnchor {
         TimestampAnchor {
             input_pts: edge_pts,
             output_pts: self.anchor.to_output_pts(self.edge_pts),
@@ -152,6 +152,73 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             track.report_stats_track_snapshot(shared_anchor, &self.shared_estimator);
         }
     }
+
+    // Same phases as `tick`, but every decision is read from a `StateView`
+    // and this function only applies it. The view is an owned snapshot,
+    // rebuilt only after something was applied, since that is the only way
+    // the state it was built from changes (a reset before a start, audio's
+    // start before video's).
+    //
+    // pub(super) fn tick(&mut self, now: Instant) {
+    //     self.drop_closed_tracks();
+    //     let mut view = self.view(now);
+    //
+    //     for kind in [TrackKind::Audio, TrackKind::Video] {
+    //         if view.should_reset(kind) {
+    //             self.reset_track(kind, view.flush_anchor(kind));
+    //             view = self.view(now);
+    //         }
+    //     }
+    //
+    //     // audio first, so video's decision can align to it
+    //     for kind in [TrackKind::Audio, TrackKind::Video] {
+    //         if let Some(decision) = view.start_decision(kind) {
+    //             self.start_track(kind, decision, now);
+    //             view = self.view(now);
+    //         }
+    //     }
+    //
+    //     self.apply_correction(view.correction());
+    //
+    //     // unchanged: release loop and stats snapshots
+    //     loop {
+    //         let released_audio = self.try_release_chunk(TrackKind::Audio, now);
+    //         let released_video = self.try_release_chunk(TrackKind::Video, now);
+    //         if !released_audio && !released_video {
+    //             break;
+    //         }
+    //     }
+    //     self.report_stats_snapshots();
+    // }
+    //
+    // fn view(&self, now: Instant) -> StateView {
+    //     StateView {
+    //         options: self.options,
+    //         now,
+    //         now_pts: self.sync_point.timestamp_at(now),
+    //         estimation: self.shared_estimator.estimate(now),
+    //         shared_anchor: self.anchor,
+    //         audio: self.audio.as_ref().map(|track| track.view(now)),
+    //         video: self.video.as_ref().map(|track| track.view(now)),
+    //     }
+    // }
+    //
+    // fn start_track(&mut self, kind: TrackKind, decision: StartDecision, now: Instant) {
+    //     let anchor = match decision {
+    //         StartDecision::Shared(anchor) => {
+    //             // adopt when it exists, establish otherwise
+    //             self.anchor.get_or_insert(SharedAnchor::new(anchor));
+    //             track.set_start(StartState::StartedShared);
+    //             anchor
+    //         }
+    //         StartDecision::Track(anchor) => {
+    //             track.set_start(StartState::StartedTrack { target: anchor, current: anchor, .. });
+    //             anchor
+    //         }
+    //     };
+    //     debug!(?kind, ?decision, "Live sync: track started");
+    //     track.release_backlog(anchor, now);   // today's tail of maybe_start
+    // }
 
     /// Give up on live edge detection; every track releases what it buffered
     /// through its callback. Shared live edge state stays intact.
