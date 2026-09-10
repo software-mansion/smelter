@@ -171,6 +171,10 @@ impl Timestamp {
     pub fn max(a: Timestamp, b: Timestamp) -> Timestamp {
         Ord::max(a, b)
     }
+
+    pub fn clamp(value: Timestamp, min: Timestamp, max: Timestamp) -> Timestamp {
+        Ord::clamp(value, min, max)
+    }
 }
 
 impl From<Duration> for Timestamp {

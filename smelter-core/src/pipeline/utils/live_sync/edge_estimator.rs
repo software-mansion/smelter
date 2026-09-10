@@ -132,6 +132,59 @@ impl EdgeEstimate {
             false => Timestamp::ZERO,
         }
     }
+
+    /// Whether the tracks are known to be on different timelines.
+    pub fn timelines_diverged(audio: Option<&EdgeEstimate>, video: Option<&EdgeEstimate>) -> bool {
+        // looser than the converge threshold, so a mode cannot flap between the two
+        const SPLIT_THRESHOLD: Duration = Duration::from_secs(5);
+        Self::is_timeline_shared(audio, video, SPLIT_THRESHOLD) == Some(false)
+    }
+
+    /// Whether the tracks are known to be on the same timeline.
+    pub fn timelines_converged(audio: Option<&EdgeEstimate>, video: Option<&EdgeEstimate>) -> bool {
+        const MERGE_THRESHOLD: Duration = Duration::from_secs(3);
+        Self::is_timeline_shared(audio, video, MERGE_THRESHOLD) == Some(true)
+    }
+
+    /// Heuristic that decides if two tracks are on the same timeline. Live
+    /// edges closer than `threshold` are treated as the same timeline. `None`
+    /// when there is not enough information to decide either way.
+    fn is_timeline_shared(
+        audio: Option<&EdgeEstimate>,
+        video: Option<&EdgeEstimate>,
+        threshold: Duration,
+    ) -> Option<bool> {
+        let (audio, video) = (audio?.upper_bound, video?.upper_bound);
+
+        let diff = (audio.pts - video.pts).abs();
+        // If diff is that large we ignore stability, timelines have to be diverged
+        if diff >= Timestamp::from_secs(120) {
+            return Some(false);
+        }
+
+        // If diff is over the threshold we check stability too before deciding
+        if diff < Timestamp::from(threshold) {
+            return match audio.stable && video.stable {
+                true => Some(true),
+                false => None,
+            };
+        }
+
+        match (audio.stable, video.stable) {
+            (true, true) => Some(false),
+            // unstable track ahead of the stable one only diverges further;
+            // behind it could be backlog
+            (true, false) => match video.pts < audio.pts {
+                true => None,
+                false => Some(false),
+            },
+            (false, true) => match audio.pts < video.pts {
+                true => None,
+                false => Some(false),
+            },
+            (false, false) => None,
+        }
+    }
 }
 
 /// One side of the live edge estimate.
