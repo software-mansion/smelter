@@ -49,6 +49,7 @@ use std::{
 mod buffer;
 mod edge_estimator;
 mod state;
+mod view;
 mod stats;
 mod track;
 
