@@ -49,9 +49,9 @@ use std::{
 mod buffer;
 mod edge_estimator;
 mod state;
-mod view;
 mod stats;
 mod track;
+mod view;
 
 pub(crate) use buffer::{BufferingStrategy, ChunkBuffer, FifoBuffer, LiveSyncBuffer};
 pub(crate) use track::LiveSyncTrack;

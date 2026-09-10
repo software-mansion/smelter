@@ -152,26 +152,126 @@ impl StateView {
                 }
             }
             TrackKind::Video => {
-                let audio_estimation = self.audio.as_ref().and_then(|audio| audio.estimation);
-                let anchor = match (other_track_anchor, audio_estimation) {
-                    (Some(audio_anchor), Some(estimation)) if estimation.upper_bound.stable => {
-                        let audio_pts = estimation.upper_bound.pts;
-                        let video_pts = track_estimation.upper_bound.pts;
-                        // anchor that will translate video pts so the live edge of the
-                        // video matches, produces the same output pts as live edge of the
-                        // audio
-                        TimestampAnchor {
-                            input_pts: video_pts,
-                            output_pts: audio_anchor.target.to_output_pts(audio_pts),
-                        }
-                    }
-                    _ => strategy.desired_anchor(&track_estimation, self.now_pts),
-                };
+                let video_anchor = other_track_anchor
+                    .and_then(|audio| self.video_anchor_following_audio_edge(audio))
+                    .unwrap_or_else(|| strategy.desired_anchor(&track_estimation, self.now_pts));
                 Mode::Independent {
                     audio: other_track_anchor,
-                    video: Some(Anchor::new(anchor)),
+                    video: Some(Anchor::new(video_anchor)),
                 }
             }
+        })
+    }
+
+    /// Mode after this tick's corrections; the current mode when nothing
+    /// changes.
+    fn correct_decision(&self) -> Mode {
+        let strategy = self.options.buffering_strategy;
+
+        // split threshold is looser than the converge one, so the mode cannot flap
+        let tracks_diverged = self.tracks_share_timeline(Duration::from_secs(10)) == Some(false);
+        let tracks_converged = self.tracks_share_timeline(Duration::from_secs(3)) == Some(true);
+
+        match self.mode {
+            Mode::Undecided => Mode::Undecided,
+            // Tracks turned out to be on different timelines. Every started track
+            // keeps the anchor value as its own, so the switch does not affect output.
+            Mode::Shared(anchor) if tracks_diverged => Mode::Independent {
+                audio: match &self.audio {
+                    Some(track) if track.state == TrackState::Started => Some(anchor),
+                    _ => None,
+                },
+                video: match &self.video {
+                    Some(track) if track.state == TrackState::Started => Some(anchor),
+                    _ => None,
+                },
+            },
+            // Tracks turned out to be on the same timeline.
+            Mode::Independent {
+                audio: Some(audio),
+                video: Some(mut video),
+            } if tracks_converged => {
+                video.target = audio.current;
+                match audio.current.distance_to(video.current) < Timestamp::from_millis(50) {
+                    true => Mode::Shared(audio),
+                    // keep independent mode, but slew towards new target when releasing chunks
+                    false => Mode::Independent {
+                        audio: Some(audio),
+                        video: Some(video),
+                    },
+                }
+            }
+            Mode::Shared(mut anchor) => {
+                if let Some(estimation) = self.shared_estimation
+                    && !strategy.buffer_in_range(estimation, anchor.current, self.now_pts)
+                {
+                    anchor.target = strategy.desired_anchor(&estimation, self.now_pts);
+                }
+                let mut tracks = [&self.audio, &self.video].into_iter().flatten();
+                if !tracks.any(|track| track.state == TrackState::Started) {
+                    // It is safe to do because it's first packet, or after reset or stall, no
+                    // continuity needs to be preserved.
+                    //
+                    // We need to do this, because nothing nudges it at this state, do different
+                    // track can converge from Independent to Shared and hit outdated value.
+                    anchor.current = anchor.target;
+                }
+                Mode::Shared(anchor)
+            }
+            Mode::Independent { audio, video } => self.correct_independent(audio, video),
+        }
+    }
+
+    /// Corrections of the own anchors in independent mode.
+    fn correct_independent(&self, mut audio: Option<Anchor>, mut video: Option<Anchor>) -> Mode {
+        let strategy = self.options.buffering_strategy;
+        let audio_estimation = self.audio.as_ref().and_then(|audio| audio.estimation);
+        let video_estimation = self.video.as_ref().and_then(|video| video.estimation);
+
+        // audio leads: its buffer is sized by the strategy
+        if let (Some(anchor), Some(estimation)) = (audio.as_mut(), audio_estimation)
+            && !strategy.buffer_in_range(estimation, anchor.current, self.now_pts)
+        {
+            anchor.target = strategy.desired_anchor(&estimation, self.now_pts);
+        }
+
+        // video follows audio's live edge; sizes its own buffer when audio is not
+        // running or its edge is not stable yet
+        if let (Some(anchor), Some(estimation)) = (video.as_mut(), video_estimation) {
+            let following_anchor =
+                audio.and_then(|audio| self.video_anchor_following_audio_edge(audio));
+            match following_anchor {
+                Some(following) => {
+                    let diff = following.distance_to(anchor.target);
+                    if estimation.upper_bound.stable && diff > Timestamp::from_millis(50) {
+                        anchor.target = following;
+                    }
+                }
+                None => {
+                    if !strategy.buffer_in_range(estimation, anchor.current, self.now_pts) {
+                        anchor.target = strategy.desired_anchor(&estimation, self.now_pts);
+                    }
+                }
+            }
+        }
+
+        Mode::Independent { audio, video }
+    }
+
+    /// Mapping that presents video's live edge at the output pts where `audio`
+    /// presents audio's; `None` while audio's edge is not stable.
+    fn video_anchor_following_audio_edge(&self, audio: Anchor) -> Option<TimestampAnchor> {
+        let audio_edge = self.audio.as_ref()?.estimation?.upper_bound;
+        let video_edge = self.video.as_ref()?.estimation?.upper_bound;
+        if !audio_edge.stable {
+            return None;
+        }
+
+        // This anchor will transform video pts, in a way that would transform
+        // current video edge to the same output pts as current audio edge
+        Some(TimestampAnchor {
+            input_pts: video_edge.pts,
+            output_pts: audio.target.to_output_pts(audio_edge.pts),
         })
     }
 
