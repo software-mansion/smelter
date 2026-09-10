@@ -20,6 +20,10 @@ const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
 /// Lead over the playback position below which chunks are force-released.
 const MIN_QUEUE_HEADROOM: Duration = Duration::from_millis(100);
 
+/// Smaller changes of the edge-aligned target are ignored, so estimator
+/// jitter does not keep nudging a following track.
+const FOLLOW_TOLERANCE: Timestamp = Timestamp::from_millis(50);
+
 /// The whole mutable state of an input, cross-track and per-track, kept
 /// behind one mutex; [`LiveSync`] and [`LiveSyncTrack`] are thin handles to
 /// it.
@@ -52,6 +56,27 @@ struct SharedAnchor {
     /// Used to maintain interleaved (by pts) order on sync output between tracks.
     /// Reset (together with the entire anchor) on discontinuity.
     last_released_pts: Option<Timestamp>,
+}
+
+/// Where a started track presents its live edge. A track running its own
+/// anchor aligns to it, so both tracks present their live edges at the same
+/// output pts even when their input timelines are unrelated.
+#[derive(Debug, Clone, Copy)]
+struct EdgeReference {
+    anchor: TimestampAnchor,
+    /// Live edge (stable upper bound) of the track, in its input pts.
+    edge_pts: Timestamp,
+}
+
+impl EdgeReference {
+    /// Anchor presenting `edge_pts` of another track at the same output pts
+    /// as this reference presents its own edge.
+    fn aligned_anchor(&self, edge_pts: Timestamp) -> TimestampAnchor {
+        TimestampAnchor {
+            input_pts: edge_pts,
+            output_pts: self.anchor.to_output_pts(self.edge_pts),
+        }
+    }
 }
 
 impl<B: LiveSyncBuffer> SharedState<B> {
@@ -272,15 +297,40 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 &self.shared_estimator,
                 &mut self.anchor,
                 shared_timeline,
+                None,
             );
         }
+        // video follows audio, so the audio reference is taken after audio
+        // had a chance to start in this tick
+        let leader = self.audio_edge_reference(now);
         if let Some(track) = self.video.as_mut() {
             track.maybe_start(
                 now,
                 &self.shared_estimator,
                 &mut self.anchor,
                 shared_timeline,
+                leader,
             );
+        }
+    }
+
+    /// Live edge of the started audio track and the anchor it presents it
+    /// with; `None` while audio is missing, waiting or its edge is not
+    /// stable yet.
+    fn audio_edge_reference(&self, now: Instant) -> Option<EdgeReference> {
+        let audio = self.audio.as_ref()?;
+        let anchor = match audio.start {
+            StartState::WaitingForStart => return None,
+            StartState::StartedShared => self.anchor?.target,
+            StartState::StartedTrack { target_anchor, .. } => target_anchor,
+        };
+        let upper_bound = audio.estimator.estimate(now)?.upper_bound;
+        match upper_bound.stable {
+            true => Some(EdgeReference {
+                anchor,
+                edge_pts: upper_bound.pts,
+            }),
+            false => None,
         }
     }
 
@@ -352,10 +402,11 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         let shared_timeline = self.tracks_share_timeline(now, Duration::from_secs(3));
 
         if let Some(track) = self.audio.as_mut() {
-            track.maybe_correct(now, &mut self.anchor, shared_timeline);
+            track.maybe_correct(now, &mut self.anchor, shared_timeline, None);
         }
+        let leader = self.audio_edge_reference(now);
         if let Some(track) = self.video.as_mut() {
-            track.maybe_correct(now, &mut self.anchor, shared_timeline);
+            track.maybe_correct(now, &mut self.anchor, shared_timeline, leader);
         }
     }
 
@@ -547,6 +598,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         shared_estimator: &LiveEdgeEstimator,
         shared_anchor: &mut Option<SharedAnchor>,
         shared_timeline: Option<bool>,
+        leader: Option<EdgeReference>,
     ) {
         if !matches!(self.start, StartState::WaitingForStart) {
             return;
@@ -601,14 +653,20 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                 }
             },
             false => {
-                let anchor = self
-                    .options
-                    .buffering_strategy
-                    .desired_anchor(&track_estimation, now_pts);
+                // aligned to the leader when there is one; converging on it
+                // later by slewing would take far longer
+                let anchor = match leader {
+                    Some(leader) => leader.aligned_anchor(track_estimation.upper_bound.pts),
+                    None => self
+                        .options
+                        .buffering_strategy
+                        .desired_anchor(&track_estimation, now_pts),
+                };
                 debug!(
                     kind=?self.kind,
                     offset=anchor.offset_string(),
                     buffered=?self.buffered_duration(),
+                    following=leader.is_some(),
                     ?track_estimation,
                     "Live sync: track started with its own anchor"
                 );
@@ -637,6 +695,7 @@ impl<B: LiveSyncBuffer> TrackState<B> {
         now: Instant,
         shared_anchor: &mut Option<SharedAnchor>,
         shared_timeline: Option<bool>,
+        leader: Option<EdgeReference>,
     ) {
         let StartState::StartedTrack {
             target_anchor,
@@ -680,6 +739,24 @@ impl<B: LiveSyncBuffer> TrackState<B> {
                     "Live sync: track converged, switching to shared anchor"
                 );
                 self.set_start(StartState::StartedShared);
+            }
+            return;
+        }
+
+        // With a leader the buffer size is not this track's decision; its
+        // live edge is kept where the leader presents its own.
+        if let Some(leader) = leader {
+            if !track_estimation.upper_bound.stable {
+                return;
+            }
+            let aligned = leader.aligned_anchor(track_estimation.upper_bound.pts);
+            if aligned.distance_to(*target_anchor) > FOLLOW_TOLERANCE {
+                *target_anchor = aligned;
+                trace!(
+                    kind=?self.kind,
+                    target_offset=target_anchor.offset_string(),
+                    "Live sync: track anchor drifted from the leader, correcting target"
+                );
             }
             return;
         }
