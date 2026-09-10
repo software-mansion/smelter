@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::{buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator, state::StartState};
+use super::{buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator, mode::Mode};
 use crate::{
     InstantExt, Timestamp,
     pipeline::utils::input_sync::{InputSyncStatsSender, TimestampAnchor, TrackKind},
@@ -19,6 +19,7 @@ pub(super) struct LiveSyncTrackStats {
     kind: TrackKind,
     sync_point: Instant,
     last_snapshot: Option<Instant>,
+    last_state: Option<LiveSyncTrackState>,
 }
 
 impl LiveSyncTrackStats {
@@ -32,6 +33,7 @@ impl LiveSyncTrackStats {
             kind,
             sync_point,
             last_snapshot: None,
+            last_state: None,
         }
     }
 
@@ -40,12 +42,22 @@ impl LiveSyncTrackStats {
             .send(self.kind, InputSyncTrackStatsEvent::BytesReceived(size));
     }
 
-    pub fn report_state_change(&self, start: &StartState) {
-        let state = match start {
-            StartState::WaitingForStart => LiveSyncTrackState::WaitingForStart,
-            StartState::StartedShared => LiveSyncTrackState::StartedShared,
-            StartState::StartedTrack { .. } => LiveSyncTrackState::StartedTrack,
+    /// Reports the state a track is in only when it differs from the last
+    /// report, so it can be called after every tick.
+    pub fn report_state_change(&mut self, kind: TrackKind, mode: Option<Mode>) {
+        let state = match mode {
+            Some(Mode::Shared(shared)) if shared.is_started(kind) => {
+                LiveSyncTrackState::StartedShared
+            }
+            Some(Mode::Independent(independent)) if independent.anchor(kind).is_some() => {
+                LiveSyncTrackState::StartedTrack
+            }
+            _ => LiveSyncTrackState::WaitingForStart,
         };
+        if self.last_state == Some(state) {
+            return;
+        }
+        self.last_state = Some(state);
         self.send(LiveSyncStatsEvent::StateChanged(state));
     }
 
@@ -55,25 +67,25 @@ impl LiveSyncTrackStats {
 
     pub fn report_chunk_received(&self, output_pts: Timestamp) {
         self.send(LiveSyncStatsEvent::ChunkReceived {
-            effective_buffer_ns: self.effective_buffer_ns(output_pts),
+            effective_buffer_ns: self.effective_buffer(output_pts).as_nanos(),
         });
     }
 
     pub fn report_chunk_released(&self, output_pts: Timestamp) {
         self.send(LiveSyncStatsEvent::ChunkReleased {
-            effective_buffer_ns: self.effective_buffer_ns(output_pts),
+            effective_buffer_ns: self.effective_buffer(output_pts).as_nanos(),
         });
     }
 
-    /// How much time content at `output_pts` has to reach the queue as of
-    /// `observed_at`; negative when it is already late.
-    fn effective_buffer_ns(&self, output_pts: Timestamp) -> i64 {
-        (output_pts - self.sync_point.timestamp_now()).as_nanos()
+    /// How much time content at `output_pts` has to reach the queue as of now; negative when it
+    /// is already late.
+    fn effective_buffer(&self, output_pts: Timestamp) -> Timestamp {
+        output_pts - self.sync_point.timestamp_now()
     }
 
-    /// Throttled to [`SNAPSHOT_INTERVAL`]. `anchors` is `(current, target)`
-    /// of the mapping the track applies and `estimator` the live edge
-    /// estimator it is corrected against, both `None` before it started.
+    /// Throttled to [`SNAPSHOT_INTERVAL`]. `anchors` is `(current, target)` of the anchor the
+    /// track applies and `estimator` the live edge estimator it is corrected against, both `None`
+    /// before it started.
     pub fn report_state_snapshot(
         &mut self,
         buffer: &impl LiveSyncBuffer,
@@ -88,28 +100,22 @@ impl LiveSyncTrackStats {
         }
         self.last_snapshot = Some(now);
         let estimate = estimator.and_then(|estimator| estimator.estimate(now));
-        let target_offset_distance_ns = match anchors {
-            Some((current, target)) => {
-                let distance = current.distance_to(target).as_nanos();
-                match current.presents_later_than(target) {
-                    true => distance,
-                    false => -distance,
-                }
-            }
-            None => 0,
+        let target_offset_distance = match anchors {
+            Some((current, target)) => current.as_offset() - target.as_offset(),
+            None => Timestamp::ZERO,
         };
-        let live_edge_distance_ns = |bound_pts: Timestamp| {
+        let live_edge_distance = |bound_pts: Timestamp| {
             let (current, _) = anchors?;
-            Some(self.effective_buffer_ns(current.to_output_pts(bound_pts)))
+            Some(self.effective_buffer(current.to_output_pts(bound_pts)))
         };
         self.send(LiveSyncStatsEvent::StateSnapshot(
             LiveSyncTrackStateSnapshot {
                 buffer: buffer.stats(),
-                target_offset_distance_ns,
-                live_edge_lower_bound_distance_ns: estimate
-                    .and_then(|estimate| live_edge_distance_ns(estimate.lower_bound.pts)),
-                live_edge_upper_bound_distance_ns: estimate
-                    .and_then(|estimate| live_edge_distance_ns(estimate.upper_bound.pts)),
+                target_offset_distance,
+                live_edge_lower_bound_distance: estimate
+                    .and_then(|estimate| live_edge_distance(estimate.lower_bound.pts)),
+                live_edge_upper_bound_distance: estimate
+                    .and_then(|estimate| live_edge_distance(estimate.upper_bound.pts)),
             },
         ));
     }

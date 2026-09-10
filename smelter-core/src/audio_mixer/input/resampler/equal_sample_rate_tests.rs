@@ -101,7 +101,7 @@ mod fresh {
 
         SignalAssertion {
             output: &samples[FIR_WINDOW..(480 - FIR_WINDOW)],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            source: &source.offset_by(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
         SignalAssertion {
@@ -132,7 +132,7 @@ mod fresh {
 
         SignalAssertion {
             output: &samples[FIR_WINDOW..],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            source: &source.offset_by(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -162,7 +162,7 @@ mod fresh {
 
         SignalAssertion {
             output: &samples[FIR_WINDOW..],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            source: &source.offset_by(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -201,7 +201,7 @@ mod fresh {
 
         SignalAssertion {
             output: &samples[FIR_WINDOW..960],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            source: &source.offset_by(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -232,7 +232,7 @@ mod fresh {
 
         SignalAssertion {
             output: &samples[FIR_WINDOW..],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            source: &source.offset_by(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -277,7 +277,7 @@ mod fresh {
         .assert();
         SignalAssertion {
             output: &samples[(24 + FIR_WINDOW)..960],
-            source: &source.shifted(first_pts + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            source: &source.offset_by(first_pts + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -316,7 +316,7 @@ mod fresh {
         .assert();
         SignalAssertion {
             output: &samples[(480 + FIR_WINDOW)..960],
-            source: &source.shifted(first_pts + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            source: &source.offset_by(first_pts + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -393,7 +393,7 @@ mod running {
         let boundary = 480;
         SignalAssertion {
             output: &out_chunk_2[0..(boundary - FIR_WINDOW)],
-            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
+            source: &source.offset_by(D + Duration::from_millis(40) + SAMPLE48),
         }
         .assert();
         SignalAssertion {
@@ -422,7 +422,7 @@ mod running {
 
         SignalAssertion {
             output: &out_chunk_2,
-            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
+            source: &source.offset_by(D + Duration::from_millis(40) + SAMPLE48),
         }
         .assert();
     }
@@ -458,7 +458,7 @@ mod running {
 
         SignalAssertion {
             output: &out_chunk_2,
-            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
+            source: &source.offset_by(D + Duration::from_millis(40) + SAMPLE48),
         }
         .assert();
     }
@@ -493,7 +493,7 @@ mod running {
 
         SignalAssertion {
             output: &out_chunk_2,
-            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
+            source: &source.offset_by(D + Duration::from_millis(40) + SAMPLE48),
         }
         .assert();
     }
@@ -542,7 +542,7 @@ mod running {
 
         SignalAssertion {
             output: &all_output[FIR_WINDOW..100],
-            source: &source.shifted(base_pts + SAMPLE48 * FIR_WINDOW as u32),
+            source: &source.offset_by(base_pts + SAMPLE48 * FIR_WINDOW as u32),
         }
         .assert();
         // resampler is processing 256 samples at the time, so sample 960..1024 was
@@ -550,7 +550,7 @@ mod running {
         SignalAssertion {
             output: &all_output[1024..(1024 + 100)],
             source: &source
-                .shifted(base_pts + SAMPLE48 * 1024 + Duration::from_secs_f64(0.0000012)),
+                .offset_by(base_pts + SAMPLE48 * 1024 + Duration::from_secs_f64(0.0000012)),
         }
         .tolerance(0.01) // larger error because of ramping (changes rate quickly)
         .stretch(1.00281) // ramping happens here so initial stretching might be lower than expected
@@ -563,7 +563,7 @@ mod running {
         let batch_2_start = 960 * 2;
         SignalAssertion {
             output: &all_output[batch_2_start..(batch_2_start + 100)],
-            source: &source.shifted(
+            source: &source.offset_by(
                 base_pts + Duration::from_secs_f64(batch_2_start as f64 / RATE as f64)
                     - Duration::from_secs_f64(0.0001666),
             ),
@@ -575,7 +575,7 @@ mod running {
         let batch_3_start = 960 * 3;
         SignalAssertion {
             output: &all_output[batch_3_start..(batch_3_start + 100)],
-            source: &source.shifted(
+            source: &source.offset_by(
                 base_pts + Duration::from_secs_f64(batch_3_start as f64 / RATE as f64)
                     - Duration::from_secs_f64(0.0003703),
             ),
@@ -591,7 +591,7 @@ mod running {
         let batch_5_start = 960 * 5;
         SignalAssertion {
             output: &all_output[batch_5_start..(batch_5_start + 100)],
-            source: &source.shifted(
+            source: &source.offset_by(
                 base_pts + Duration::from_secs_f64(batch_5_start as f64 / RATE as f64)
                     - Duration::from_secs_f64(0.0007778),
             ),
@@ -608,7 +608,7 @@ mod running {
         let batch_9_start = 960 * 9;
         SignalAssertion {
             output: &all_output[batch_9_start..(batch_9_start + 5)],
-            source: &source.shifted(
+            source: &source.offset_by(
                 base_pts + Duration::from_secs_f64(batch_9_start as f64 / RATE as f64)
                     - Duration::from_secs_f64(0.0015929),
             ),
@@ -661,7 +661,7 @@ mod running {
 
         SignalAssertion {
             output: &all_output[FIR_WINDOW..100],
-            source: &source.shifted(base_pts + SAMPLE48 * FIR_WINDOW as u32),
+            source: &source.offset_by(base_pts + SAMPLE48 * FIR_WINDOW as u32),
         }
         .assert();
         // resampler is processing 256 samples at the time, so sample 960..1024 was
@@ -669,7 +669,7 @@ mod running {
         SignalAssertion {
             output: &all_output[1024..(1024 + 100)],
             source: &source
-                .shifted(base_pts + SAMPLE48 * 1024 + Duration::from_secs_f64(0.0000003)),
+                .offset_by(base_pts + SAMPLE48 * 1024 + Duration::from_secs_f64(0.0000003)),
         }
         .tolerance(0.01) // larger error because of ramping (changes rate faster)
         .stretch(0.99967) // ramping happens here so initial squashing might be lower than expected
@@ -682,7 +682,7 @@ mod running {
         let batch_2_start = 960 * 2;
         SignalAssertion {
             output: &all_output[batch_2_start..(batch_2_start + 100)],
-            source: &source.shifted(
+            source: &source.offset_by(
                 base_pts
                     + Duration::from_secs_f64(batch_2_start as f64 / RATE as f64)
                     + Duration::from_secs_f64(0.0000135),
@@ -696,7 +696,7 @@ mod running {
         let batch_3_start = 960 * 3;
         SignalAssertion {
             output: &all_output[batch_3_start..(batch_3_start + 100)],
-            source: &source.shifted(
+            source: &source.offset_by(
                 base_pts
                     + Duration::from_secs_f64(batch_3_start as f64 / RATE as f64)
                     + Duration::from_secs_f64(0.0000299),
@@ -713,7 +713,7 @@ mod running {
         let batch_5_start = 960 * 5;
         SignalAssertion {
             output: &all_output[batch_5_start..(batch_5_start + 100)],
-            source: &source.shifted(
+            source: &source.offset_by(
                 base_pts
                     + Duration::from_secs_f64(batch_5_start as f64 / RATE as f64)
                     + Duration::from_secs_f64(0.0000626),
@@ -731,7 +731,7 @@ mod running {
         let batch_9_start = 960 * 9;
         SignalAssertion {
             output: &all_output[batch_9_start..(batch_9_start + 100)],
-            source: &source.shifted(
+            source: &source.offset_by(
                 base_pts
                     + Duration::from_secs_f64(batch_9_start as f64 / RATE as f64)
                     + Duration::from_secs_f64(0.000128),
@@ -764,7 +764,7 @@ mod running {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..],
             source: &source
-                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .offset_by(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -808,7 +808,7 @@ mod running {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..],
             source: &source
-                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .offset_by(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -852,7 +852,7 @@ mod running {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..],
             source: &source
-                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .offset_by(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -897,13 +897,14 @@ mod running {
             output: &all_output
                 [(prime_batch_start + FIR_WINDOW)..(prime_batch_start + (480 - 64) - FIR_WINDOW)],
             source: &source
-                .shifted(D + Duration::from_millis(40) + SAMPLE48 * (FIR_WINDOW as u32 + 64)),
+                .offset_by(D + Duration::from_millis(40) + SAMPLE48 * (FIR_WINDOW as u32 + 64)),
         }
         .assert();
         let batch_start = 960 * 4;
         SignalAssertion {
             output: &all_output[(batch_start + FIR_WINDOW)..(batch_start + 960 - FIR_WINDOW)],
-            source: &source.shifted(D + Duration::from_millis(100) + SAMPLE48 * FIR_WINDOW as u32),
+            source: &source
+                .offset_by(D + Duration::from_millis(100) + SAMPLE48 * FIR_WINDOW as u32),
         }
         .assert();
     }
@@ -962,7 +963,7 @@ mod running {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..960],
             source: &source
-                .shifted(D + Duration::from_millis(1020) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .offset_by(D + Duration::from_millis(1020) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
 
@@ -971,7 +972,7 @@ mod running {
         // by 600ms relative to the normal timeline.
         SignalAssertion {
             output: &chunk[(64 + FIR_WINDOW)..],
-            source: &source.shifted(
+            source: &source.offset_by(
                 D + Duration::from_millis(1040)
                     + SAMPLE48 * (64 + FIR_WINDOW as u32 - 1)
                     + Duration::from_millis(600),
@@ -1032,13 +1033,13 @@ mod drained {
         SignalAssertion {
             output: &all_output[FIR_WINDOW..960],
             source: &source
-                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .offset_by(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
         // [40, 50)+D — last 10ms of input
         SignalAssertion {
             output: &all_output[960..(960 + 470)],
-            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * 961),
+            source: &source.offset_by(D + Duration::from_millis(20) + SAMPLE48 * 961),
         }
         .assert();
         // [50, 60)+D — no input, should be silence
@@ -1091,7 +1092,7 @@ mod drained {
         SignalAssertion {
             output: &chunk[FIR_WINDOW..],
             source: &source
-                .shifted(D + Duration::from_millis(60) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .offset_by(D + Duration::from_millis(60) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -1122,7 +1123,7 @@ mod drained {
         SignalAssertion {
             output: &chunk[FIR_WINDOW..],
             source: &source
-                .shifted(D + Duration::from_millis(60) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .offset_by(D + Duration::from_millis(60) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }
@@ -1160,7 +1161,7 @@ mod drained {
         SignalAssertion {
             output: &chunk[(boundary + FIR_WINDOW)..960],
             source: &source
-                .shifted(D + Duration::from_millis(65) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .offset_by(D + Duration::from_millis(65) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
         }
         .assert();
     }

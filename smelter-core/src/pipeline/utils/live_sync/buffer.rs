@@ -83,7 +83,7 @@ impl BufferingStrategy {
     /// judged.
     pub(super) fn buffer_in_range(
         &self,
-        estimation: EdgeEstimate,
+        estimation: &EdgeEstimate,
         anchor: TimestampAnchor,
         now_pts: Timestamp,
     ) -> bool {

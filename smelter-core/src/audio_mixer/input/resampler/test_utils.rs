@@ -124,7 +124,7 @@ impl SignalSource {
         }
     }
 
-    pub fn shifted(&self, offset: Timestamp) -> Self {
+    pub fn offset_by(&self, offset: Timestamp) -> Self {
         let func = self.func.clone();
         Self {
             func: Arc::new(move |pts| func(pts + offset)),

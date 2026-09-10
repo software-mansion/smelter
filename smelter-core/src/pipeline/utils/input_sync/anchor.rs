@@ -15,12 +15,10 @@ pub(crate) struct TimestampAnchor {
 }
 
 impl TimestampAnchor {
-    /// The mapping as a single signed offset (`output_pts - input_pts`), for logs.
-    pub(crate) fn offset_string(&self) -> String {
-        match self.output_pts >= self.input_pts {
-            true => format!("+{:?}", self.output_pts - self.input_pts),
-            false => format!("-{:?}", self.input_pts - self.output_pts),
-        }
+    /// The mapping as a single signed offset: what has to be added to an
+    /// input pts to get its output pts.
+    pub(crate) fn as_offset(&self) -> Timestamp {
+        self.output_pts - self.input_pts
     }
 
     /// Maps a raw timestamp (pts or dts) onto the output timeline.
@@ -28,54 +26,46 @@ impl TimestampAnchor {
     /// point, possibly below zero; such content plays late or is dropped by
     /// the consumer.
     pub(crate) fn to_output_pts(self, pts: Timestamp) -> Timestamp {
-        self.output_pts + pts - self.input_pts
+        pts + self.as_offset()
     }
 
-    /// Output pts that `self` and `other` assign to the same input pts.
-    /// Absolute value does not have any special meaning just the difference
-    /// between them.
-    fn common_pts(&self, other: TimestampAnchor) -> (Timestamp, Timestamp) {
-        (
-            self.output_pts + other.input_pts,
-            other.output_pts + self.input_pts,
-        )
+    /// Mapping that presents every input pts `offset` later than this one.
+    pub(crate) fn offset_by(self, offset: Timestamp) -> Self {
+        Self {
+            input_pts: self.input_pts,
+            output_pts: self.output_pts + offset,
+        }
     }
 
     /// How far apart the two mappings present the same input pts; zero when
     /// both describe the same mapping.
     pub(crate) fn distance_to(&self, other: TimestampAnchor) -> Timestamp {
-        let (own, theirs) = self.common_pts(other);
-        (own - theirs).abs()
+        (self.as_offset() - other.as_offset()).abs()
     }
 
     /// Whether `self` presents the same input pts later than `other` does,
     /// i.e. holds content back for longer. `false` when both describe the
     /// same mapping.
     pub(crate) fn presents_later_than(&self, other: TimestampAnchor) -> bool {
-        let (own, theirs) = self.common_pts(other);
-        own > theirs
+        self.as_offset() > other.as_offset()
     }
 
-    /// Moves the mapping at most `step` towards `target`, i.e. towards
+    /// Moves the mapping at most `step` toward `target`, i.e. toward
     /// presenting the same input pts at the same output pts. A no-op once both
     /// describe the same mapping.
-    pub(crate) fn nudge_towards(&mut self, target: TimestampAnchor, step: Timestamp) {
-        let (own, wanted) = self.common_pts(target);
-        if own == wanted {
+    pub(crate) fn nudge_toward(&mut self, target: TimestampAnchor, step: Timestamp) {
+        let distance = target.as_offset() - self.as_offset();
+        if distance == Timestamp::ZERO {
             return;
         }
-        let before = *self;
-        match own > wanted {
-            // presenting later than the target, so shift earlier
-            true => self.input_pts += Timestamp::min(step, own - wanted),
-            false => self.output_pts += Timestamp::min(step, wanted - own),
-        }
+        let before = self.as_offset();
+        self.output_pts += Timestamp::clamp(distance, -step, step);
         tracing::trace!(
-            before_offset = before.offset_string(),
-            after_offset = self.offset_string(),
-            target_offset = target.offset_string(),
+            before_offset = ?before,
+            after_offset = ?self.as_offset(),
+            target_offset = ?target.as_offset(),
             ?step,
-            "Nudging anchor towards target"
+            "Nudging anchor toward target"
         );
     }
 }
