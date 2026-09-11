@@ -57,6 +57,10 @@ impl WgpuTexturesEncoderH264 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    ///
+    /// On macOS the parameters only become known once the encoder has produced its first encoded
+    /// chunk, so calling this earlier encodes a dummy frame on a throwaway session, which takes
+    /// tens of milliseconds. The result is cached.
     pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.encoder.sps()
     }
@@ -65,6 +69,10 @@ impl WgpuTexturesEncoderH264 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    ///
+    /// On macOS the parameters only become known once the encoder has produced its first encoded
+    /// chunk, so calling this earlier encodes a dummy frame on a throwaway session, which takes
+    /// tens of milliseconds. The result is cached.
     pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.encoder.pps()
     }
@@ -96,6 +104,10 @@ impl WgpuTexturesEncoderH265 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    ///
+    /// On macOS the parameters only become known once the encoder has produced its first encoded
+    /// chunk, so calling this earlier encodes a dummy frame on a throwaway session, which takes
+    /// tens of milliseconds. The result is cached.
     pub fn vps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.encoder.vps()
     }
@@ -104,6 +116,10 @@ impl WgpuTexturesEncoderH265 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    ///
+    /// On macOS the parameters only become known once the encoder has produced its first encoded
+    /// chunk, so calling this earlier encodes a dummy frame on a throwaway session, which takes
+    /// tens of milliseconds. The result is cached.
     pub fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.encoder.sps()
     }
@@ -112,6 +128,10 @@ impl WgpuTexturesEncoderH265 {
     ///
     /// Useful when `inline_stream_params` is `false` and the parameters need to be
     /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    ///
+    /// On macOS the parameters only become known once the encoder has produced its first encoded
+    /// chunk, so calling this earlier encodes a dummy frame on a throwaway session, which takes
+    /// tens of milliseconds. The result is cached.
     pub fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.encoder.pps()
     }
