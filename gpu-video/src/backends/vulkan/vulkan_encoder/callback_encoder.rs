@@ -6,20 +6,17 @@ use std::{
 use ash::vk;
 use tracing::error;
 
-#[cfg(feature = "wgpu")]
-use crate::backends::vulkan::wrappers::EncodeInputImage;
 use crate::{
     EncodedOutputChunk, InputFrame, RawFrameData,
     backends::vulkan::{
         VulkanEncoder, VulkanEncoderError,
         codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
         vulkan_device::EncodingDevice,
-        vulkan_encoder::{
-            DynVulkanEncoder, EncoderTrackerWaitState, FullEncoderParameters,
-            UnwaitedEncodeSubmission,
-        },
+        vulkan_encoder::{DynVulkanEncoder, EncoderTrackerWaitState, FullEncoderParameters},
         waiter_thread::{SubmissionTracker, WaiterThreadHandle},
-        wrappers::{Buffer, CommandBufferPoolStorage, EncodeInputImagePool, Image},
+        wrappers::{
+            Buffer, CommandBufferPoolStorage, EncodeInputImage, EncodeInputImagePool, Image,
+        },
     },
     encoders::{
         VideoEncoderBackend, VideoEncoderError, VideoEncoderParametersInfoH264,
@@ -191,6 +188,40 @@ impl<'a, C: EncodeCodec + 'a> VulkanCallbackEncoder<'a, C> {
 
         Ok(buffer)
     }
+
+    fn submit_encode(
+        &mut self,
+        encode_image: EncodeInputImage,
+        staging_buffer: Option<Buffer>,
+        force_idr: bool,
+        pts: Option<u64>,
+        timeout: Duration,
+    ) -> Result<(), VulkanEncoderError> {
+        let submission = self
+            .encoder
+            .encode(encode_image.image.clone(), force_idr, pts)?;
+
+        let on_chunk_callback = self.on_chunk_callback.clone();
+        let command_buffer_pools = self.encoder.tracker.command_buffer_pools.clone();
+        let wait_value = submission.0.wait_value;
+        self.submission_tracker
+            .add_wait_request(wait_value, timeout, move || {
+                command_buffer_pools.mark_submitted_as_free(wait_value);
+                encode_image.release_to_pool();
+                drop(staging_buffer);
+                match submission.0.download() {
+                    Ok(chunk) => (on_chunk_callback.lock().unwrap())(chunk),
+                    Err(err) => error!("Encoding a frame failed: {err}"),
+                }
+            })
+            .map_err(Into::into)
+    }
+
+    fn flush(&mut self, timeout: Duration) -> Result<(), VulkanEncoderError> {
+        self.submission_tracker
+            .wait_for_all(timeout)
+            .map_err(Into::into)
+    }
 }
 
 impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for VulkanCallbackEncoder<'a, C> {
@@ -207,35 +238,13 @@ impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for VulkanCallbackEncoder
 
         let encode_image = self.input_image_pool.vk_image()?;
         let buffer = self.transfer_buffer_to_image(frame, &encode_image.image)?;
-
-        let submission = self
-            .encoder
-            .encode(encode_image.image.clone(), force_idr, frame.pts)?;
-
-        let on_chunk_callback = self.on_chunk_callback.clone();
-        let command_buffer_pools = self.encoder.tracker.command_buffer_pools.clone();
-        let wait_value = submission.0.wait_value;
-        self.submission_tracker
-            .add_wait_request(wait_value, timeout, move || {
-                command_buffer_pools.mark_submitted_as_free(wait_value);
-                encode_image.release_to_pool();
-                drop(buffer);
-                match submission.0.download() {
-                    Ok(chunk) => (on_chunk_callback.lock().unwrap())(chunk),
-                    Err(err) => error!("Encoding a frame failed: {err}"),
-                }
-            })
-            .map_err(VulkanEncoderError::from)?;
+        self.submit_encode(encode_image, Some(buffer), force_idr, frame.pts, timeout)?;
 
         Ok(())
     }
 
     fn flush(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
-        self.submission_tracker
-            .wait_for_all(timeout)
-            .map_err(VulkanEncoderError::from)?;
-
-        Ok(())
+        Ok(VulkanCallbackEncoder::flush(self, timeout)?)
     }
 }
 

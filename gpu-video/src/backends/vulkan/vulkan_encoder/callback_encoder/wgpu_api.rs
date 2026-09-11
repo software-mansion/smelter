@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use ash::vk;
-use tracing::error;
 use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
 use crate::{
@@ -9,10 +8,8 @@ use crate::{
     backends::vulkan::{
         VulkanEncoderError,
         codec::EncodeCodec,
-        vulkan_encoder::{
-            DynVulkanEncoder, EncoderTrackerWaitState, callback_encoder::VulkanCallbackEncoder,
-        },
-        wrappers::{CommandBufferPoolStorage, EncodeInputImage},
+        vulkan_encoder::{EncoderTrackerWaitState, callback_encoder::VulkanCallbackEncoder},
+        wrappers::EncodeInputImage,
     },
     encoders::{
         EncodeTexture, VideoEncoderError, WgpuTextureEncoderError, WgpuVideoEncoderBackend,
@@ -118,33 +115,13 @@ impl<'a, C: EncodeCodec + 'a> WgpuVideoEncoderBackend for VulkanCallbackEncoder<
             .map_err(VulkanEncoderError::from)?;
 
         let encode_image = self.encode_image_from_texture(wgpu_device, wgpu_queue, frame.data)?;
-        let submission = self
-            .encoder
-            .encode(encode_image.image.clone(), force_idr, frame.pts)?;
-
-        let on_chunk_callback = self.on_chunk_callback.clone();
-        let command_buffer_pools = self.encoder.tracker.command_buffer_pools.clone();
-        let wait_value = submission.0.wait_value;
-        self.submission_tracker
-            .add_wait_request(wait_value, timeout, move || {
-                command_buffer_pools.mark_submitted_as_free(wait_value);
-                encode_image.release_to_pool();
-                match submission.0.download() {
-                    Ok(chunk) => (on_chunk_callback.lock().unwrap())(chunk),
-                    Err(err) => error!("Encoding a frame failed: {err}"),
-                }
-            })
-            .map_err(VulkanEncoderError::from)?;
+        self.submit_encode(encode_image, None, force_idr, frame.pts, timeout)?;
 
         Ok(())
     }
 
     fn flush(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
-        self.submission_tracker
-            .wait_for_all(timeout)
-            .map_err(VulkanEncoderError::from)?;
-
-        Ok(())
+        Ok(VulkanCallbackEncoder::flush(self, timeout)?)
     }
 
     fn next_input_texture(
