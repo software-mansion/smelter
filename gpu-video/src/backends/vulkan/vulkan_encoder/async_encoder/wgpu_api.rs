@@ -21,21 +21,22 @@ impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
         &mut self,
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
-        texture: EncodeTexture,
+        wgpu_texture: &wgpu::Texture,
     ) -> Result<EncodeInputImage, VulkanEncoderError> {
         let hal_queue = unsafe { wgpu_queue.as_hal::<VkApi>().unwrap() };
 
         let input_image = self
             .used_input_images
-            .remove(&texture.0)
+            .lock()
+            .unwrap()
+            .remove(wgpu_texture)
             .ok_or(WgpuTextureEncoderError::TextureNotFromEncoder)?;
-        let wgpu_texture = texture.0;
 
         let mut encoder = wgpu_device.create_command_encoder(&Default::default());
         encoder.transition_resources(
             [].into_iter(),
             [wgpu::TextureTransition {
-                texture: &wgpu_texture,
+                texture: wgpu_texture,
                 selector: None,
                 state: wgpu::TextureUses::RESOURCE,
             }]
@@ -84,7 +85,7 @@ impl<'a, C: EncodeCodec + 'a> WgpuVideoEncoderBackend for AsyncVulkanEncoder<'a,
             .map_err(VulkanEncoderError::from)?;
 
         let encode_image =
-            self.encode_image_from_wgpu_texture(wgpu_device, wgpu_queue, frame.data)?;
+            self.encode_image_from_wgpu_texture(wgpu_device, wgpu_queue, &frame.data.wgpu_texture)?;
         self.submit_encode(encode_image, None, force_idr, frame.pts, timeout)?;
 
         Ok(())

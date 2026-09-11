@@ -11,7 +11,7 @@ use crate::backends::vulkan::vulkan_decoder::decoders_h264::VulkanBytesDecoderH2
 use crate::backends::vulkan::vulkan_encoder::FullEncoderParameters;
 use crate::backends::vulkan::waiter_thread::{WaiterThread, WaiterThreadHandle};
 use crate::backends::vulkan::{
-    VulkanAdapter, VulkanAdapterInfo, AsyncVulkanEncoder, VulkanDecoderError, VulkanEncoderError,
+    AsyncVulkanEncoder, VulkanAdapter, VulkanAdapterInfo, VulkanDecoderError, VulkanEncoderError,
 };
 use crate::backends::vulkan::{VulkanCommonError, wrappers::*};
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};

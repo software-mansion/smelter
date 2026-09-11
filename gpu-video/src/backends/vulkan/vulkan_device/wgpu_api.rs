@@ -9,8 +9,8 @@ use crate::{
     backends::{
         WgpuBackend,
         vulkan::{
-            VulkanAdapter, VulkanBackend, AsyncVulkanEncoder, VulkanDevice,
-            VulkanDeviceInitError, VulkanEncoderError,
+            AsyncVulkanEncoder, VulkanAdapter, VulkanBackend, VulkanDevice, VulkanDeviceInitError,
+            VulkanEncoderError,
             vulkan_decoder::{VulkanDecoderError, decoders_h264::VulkanWgpuTexturesDecoderH264},
             wrappers::EncodeInputImagePool,
         },
