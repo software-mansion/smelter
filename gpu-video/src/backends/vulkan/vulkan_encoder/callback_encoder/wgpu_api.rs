@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use ash::vk;
+use tracing::error;
 use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
 use crate::{
@@ -11,32 +12,29 @@ use crate::{
         vulkan_encoder::{
             DynVulkanEncoder, EncoderTrackerWaitState, callback_encoder::VulkanCallbackEncoder,
         },
-        wrappers::EncodeInputImage,
+        wrappers::{CommandBufferPoolStorage, EncodeInputImage},
     },
     encoders::{
         EncodeTexture, VideoEncoderError, WgpuTextureEncoderError, WgpuVideoEncoderBackend,
     },
 };
 
-impl<C: EncodeCodec + 'static> VulkanCallbackEncoder<C> {
+impl<'a, C: EncodeCodec> VulkanCallbackEncoder<'a, C> {
     // TODO: rename
     fn encode_image_from_texture(
         &mut self,
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
         texture: EncodeTexture,
-    ) -> Result<Box<EncodeInputImage>, VulkanEncoderError> {
+    ) -> Result<EncodeInputImage, VulkanEncoderError> {
         let hal_device = unsafe { wgpu_device.as_hal::<VkApi>().unwrap() };
         let hal_queue = unsafe { wgpu_queue.as_hal::<VkApi>().unwrap() };
 
-        let key = unsafe { texture.as_hal::<VkApi>() }
-            .map(|hal_texture| unsafe { hal_texture.raw_handle() })
+        let image_handle = unsafe { texture.as_hal::<VkApi>().unwrap().raw_handle() };
+        let input_image = self
+            .used_input_images
+            .remove(&image_handle)
             .ok_or(WgpuTextureEncoderError::TextureNotFromEncoder)?;
-        let input_image = Box::new(
-            self.used_input_images
-                .remove(&key)
-                .ok_or(WgpuTextureEncoderError::TextureNotFromEncoder)?,
-        );
         let wgpu_texture = texture.0;
 
         // TODO: any way to skip this?
@@ -105,8 +103,7 @@ impl<C: EncodeCodec + 'static> VulkanCallbackEncoder<C> {
     }
 }
 
-impl<C: EncodeCodec + 'static> WgpuVideoEncoderBackend for VulkanCallbackEncoder<C> {
-    // TODO: timeout
+impl<'a, C: EncodeCodec + 'a> WgpuVideoEncoderBackend for VulkanCallbackEncoder<'a, C> {
     // TODO: handle in_flight equal 0
     fn encode_texture(
         &mut self,
@@ -114,27 +111,37 @@ impl<C: EncodeCodec + 'static> WgpuVideoEncoderBackend for VulkanCallbackEncoder
         wgpu_queue: &wgpu::Queue,
         frame: InputFrame<EncodeTexture>,
         force_idr: bool,
+        timeout: Duration,
     ) -> Result<(), VideoEncoderError> {
         self.submission_tracker
-            .wait_if_full(Duration::from_secs(1))
+            .wait_if_full(timeout)
             .map_err(VulkanEncoderError::from)?;
 
         let encode_image = self.encode_image_from_texture(wgpu_device, wgpu_queue, frame.data)?;
-        let mut submission =
-            self.encoder
-                .encode(encode_image.image.clone(), force_idr, frame.pts)?;
+        let submission = self
+            .encoder
+            .encode(encode_image.image.clone(), force_idr, frame.pts)?;
 
-        // TODO: i don't like it too
-        submission.0.in_flight_resources.input_image = Some(encode_image);
-        self.submit_for_waiting(submission)?;
+        let on_chunk_callback = self.on_chunk_callback.clone();
+        let command_buffer_pools = self.encoder.tracker.command_buffer_pools.clone();
+        let wait_value = submission.0.wait_value;
+        self.submission_tracker
+            .add_wait_request(wait_value, timeout, move || {
+                command_buffer_pools.mark_submitted_as_free(wait_value);
+                encode_image.release_to_pool();
+                match submission.0.download() {
+                    Ok(chunk) => (on_chunk_callback.lock().unwrap())(chunk),
+                    Err(err) => error!("Encoding a frame failed: {err}"),
+                }
+            })
+            .map_err(VulkanEncoderError::from)?;
 
         Ok(())
     }
 
-    // TODO: timeout
-    fn flush(&mut self) -> Result<(), VideoEncoderError> {
+    fn flush(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
         self.submission_tracker
-            .wait_for_all(Duration::from_secs(1))
+            .wait_for_all(timeout)
             .map_err(VulkanEncoderError::from)?;
 
         Ok(())
@@ -144,7 +151,7 @@ impl<C: EncodeCodec + 'static> WgpuVideoEncoderBackend for VulkanCallbackEncoder
         &mut self,
         wgpu_device: &wgpu::Device,
     ) -> Result<EncodeTexture, VideoEncoderError> {
-        let image = self.encoder.input_image_pool.wgpu_texture(wgpu_device)?;
+        let image = self.input_image_pool.wgpu_texture(wgpu_device)?;
         let wgpu_texture = image.wgpu_texture.clone().unwrap();
         self.used_input_images.insert(image.image.image, image);
         Ok(EncodeTexture(wgpu_texture))

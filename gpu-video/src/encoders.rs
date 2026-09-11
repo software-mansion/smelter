@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{InputFrame, RawFrameData, VideoBackendError};
 
 #[cfg(feature = "wgpu")]
@@ -10,9 +12,10 @@ pub(crate) trait VideoEncoderBackend: Send {
         &mut self,
         frame: &InputFrame<RawFrameData>,
         force_idr: bool,
+        timeout: Duration,
     ) -> Result<(), VideoEncoderError>;
 
-    fn flush(&mut self) -> Result<(), VideoEncoderError>;
+    fn flush(&mut self, timeout: Duration) -> Result<(), VideoEncoderError>;
 }
 
 pub(crate) trait VideoEncoderParametersInfoH264 {
@@ -60,7 +63,21 @@ impl BytesEncoderH264 {
         frame: &InputFrame<RawFrameData>,
         force_keyframe: bool,
     ) -> Result<(), VideoEncoderError> {
-        self.encoder.encode_bytes(frame, force_keyframe)
+        self.encode_with_timeout(frame, force_keyframe, Duration::MAX)
+    }
+
+    /// Same as [`Self::encode`], but if [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
+    /// encode submissions are already in flight, this blocks until all submissions above the limit finish,
+    /// or times out after `timeout`.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
+    pub fn encode_with_timeout(
+        &mut self,
+        frame: &InputFrame<RawFrameData>,
+        force_keyframe: bool,
+        timeout: Duration,
+    ) -> Result<(), VideoEncoderError> {
+        self.encoder.encode_bytes(frame, force_keyframe, timeout)
     }
 
     /// Flush all chunks from the encoder.
@@ -68,7 +85,15 @@ impl BytesEncoderH264 {
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
-        self.encoder.flush()
+        self.flush_with_timeout(Duration::MAX)
+    }
+
+    /// Flush all chunks from the encoder.
+    /// This blocks until all chunks have been sent via the provided callback, or times out after `timeout`.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
+    pub fn flush_with_timeout(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
+        self.encoder.flush(timeout)
     }
 
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
@@ -110,7 +135,21 @@ impl BytesEncoderH265 {
         frame: &InputFrame<RawFrameData>,
         force_keyframe: bool,
     ) -> Result<(), VideoEncoderError> {
-        self.encoder.encode_bytes(frame, force_keyframe)
+        self.encode_with_timeout(frame, force_keyframe, Duration::MAX)
+    }
+
+    /// Same as [`Self::encode`], but if [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
+    /// encode submissions are already in flight, this blocks until all submissions above the limit finish,
+    /// or times out after `timeout`.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
+    pub fn encode_with_timeout(
+        &mut self,
+        frame: &InputFrame<RawFrameData>,
+        force_keyframe: bool,
+        timeout: Duration,
+    ) -> Result<(), VideoEncoderError> {
+        self.encoder.encode_bytes(frame, force_keyframe, timeout)
     }
 
     /// Flush all chunks from the encoder.
@@ -118,7 +157,15 @@ impl BytesEncoderH265 {
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
-        self.encoder.flush()
+        self.flush_with_timeout(Duration::MAX)
+    }
+
+    /// Flush all chunks from the encoder.
+    /// This blocks until all chunks have been sent via the provided callback, or times out after `timeout`.
+    ///
+    /// Calling this from within the provided callback can lead to a deadlock.
+    pub fn flush_with_timeout(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
+        self.encoder.flush(timeout)
     }
 
     /// Retrieve encoded VPS NAL units from the video session parameters, in Annex B.
@@ -185,6 +232,9 @@ pub enum VideoEncoderError {
     #[cfg(feature = "wgpu")]
     #[error(transparent)]
     WgpuTextureEncoderError(#[from] WgpuTextureEncoderError),
+
+    #[error("Encode submission timed out")]
+    EncodeSubmissionTimeout,
 
     #[error("Encoder error: {0}")]
     BackendError(VideoBackendError),

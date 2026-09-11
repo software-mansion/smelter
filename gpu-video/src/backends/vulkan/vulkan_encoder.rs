@@ -20,8 +20,8 @@ use crate::{
         wrappers::{
             Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer,
             EncodeInputImage, EncodeInputImagePool, EncodeOutputBuffer, EncodeOutputBufferPool,
-            Image, ImageLayoutTracker, ImageView, ImageWithView, OpenCommandBuffer, QueryPool,
-            ResultQuery, ResultQueryData, SemaphoreWaitValue, Tracker, TrackerKind,
+            Image, ImageLayoutTracker, ImageView, ImageWithView, OpenCommandBuffer, ProfileInfo,
+            QueryPool, ResultQuery, ResultQueryData, SemaphoreWaitValue, Tracker, TrackerKind,
             VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters,
         },
     },
@@ -107,6 +107,9 @@ impl From<VulkanEncoderError> for VideoEncoderError {
             #[cfg(feature = "wgpu")]
             VulkanEncoderError::WgpuTextureEncoderError(err) => {
                 VideoEncoderError::WgpuTextureEncoderError(err)
+            }
+            VulkanEncoderError::VulkanCommonError(VulkanCommonError::SubmissionWaitTimeout) => {
+                VideoEncoderError::EncodeSubmissionTimeout
             }
             VulkanEncoderError::VkError(_)
             | VulkanEncoderError::NoMemory
@@ -338,16 +341,6 @@ pub(crate) struct InFlightEncodeResources {
     _dpb_image_with_view: Arc<ImageWithView>,
     _image: Arc<Image>,
     _view: ImageView,
-    _input_buffer: Option<Buffer>,
-    input_image: Option<Box<EncodeInputImage>>,
-}
-
-impl Drop for InFlightEncodeResources {
-    fn drop(&mut self) {
-        if let Some(input_image) = self.input_image.take() {
-            input_image.release_to_pool();
-        }
-    }
 }
 
 pub(crate) struct EncodeSubmission {
@@ -447,10 +440,10 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     pub(crate) tracker: EncoderTracker,
     query_pool: EncodingQueryPool,
     profile: C::Profile,
+    profile_info: Arc<ProfileInfo<'a>>,
     session_resources: VideoSessionResources<'a>,
     idr_period_counter: u32,
     idr_period: u32,
-    input_image_pool: EncodeInputImagePool<'a>,
     output_buffer_pool: EncodeOutputBufferPool<'a>,
     counters: C::EncodingCounters,
     active_reference_slots: VecDeque<(usize, C::ReferenceInfo)>,
@@ -529,10 +522,10 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             parameters.max_in_flight_submissions.get(),
         )?;
 
-        // TODO: the buffers in this pool should grow when necessary
         let output_buffer_pool = EncodeOutputBufferPool::new(
             encoding_device.allocator.clone(),
             profile_info.clone(),
+            // TODO: the buffers should grow when necessary
             Self::OUTPUT_BUFFER_LEN,
         );
 
@@ -554,26 +547,13 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             EncoderTrackerWaitState::InitializeEncoder,
         )?;
 
-        let input_image_queue_families = [
-            encoding_device.queues.transfer.family_index as u32,
-            encoding_device.queues.wgpu.family_index as u32,
-        ];
-
-        let input_image_pool = EncodeInputImagePool::new(
-            encoding_device.clone(),
-            profile_info,
-            session_resources.video_session.max_coded_extent.into(),
-            input_image_queue_families.into(),
-            tracker.image_layout_tracker.clone(),
-        );
-
         Ok(Self {
             idr_period_counter: 0,
             counters: C::EncodingCounters::default(),
             active_reference_slots: VecDeque::with_capacity(session_resources.dpb.len as usize),
             profile: parameters.profile,
+            profile_info,
             encoding_device,
-            input_image_pool,
             tracker,
             query_pool,
             session_resources,
@@ -682,105 +662,6 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         self.session_resources.rate_control = rate_control;
     }
 
-    // TODO: remove it
-    fn transfer_buffer_to_image(
-        &mut self,
-        frame: &InputFrame<RawFrameData>,
-        input_image: &Arc<Image>,
-    ) -> Result<Buffer, VulkanEncoderError> {
-        let extent = input_image.extent;
-
-        if frame.data.width != extent.width || frame.data.height != extent.height {
-            return Err(VulkanEncoderError::WrongFrameDimensions {
-                provided: (frame.data.width, frame.data.height),
-                expected: (extent.width, extent.height),
-            });
-        }
-
-        if frame.data.width as usize * frame.data.height as usize * 3 / 2 != frame.data.frame.len()
-        {
-            return Err(VulkanEncoderError::InconsistentPictureByteSize {
-                bytes: frame.data.frame.len(),
-                size_from_resolution: frame.data.width as usize * frame.data.height as usize * 3
-                    / 2,
-            });
-        }
-
-        let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
-
-        input_image.transition_layout_single_layer(
-            &mut cmd_buffer,
-            vk::PipelineStageFlags2::ALL_COMMANDS..vk::PipelineStageFlags2::COPY,
-            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            0,
-        )?;
-
-        let buffer = Buffer::new_transfer_with_data(
-            self.encoding_device.allocator.clone(),
-            &frame.data.frame,
-        )?;
-
-        unsafe {
-            self.encoding_device
-                .vulkan_device
-                .device
-                .cmd_copy_buffer_to_image(
-                    cmd_buffer.buffer(),
-                    *buffer,
-                    input_image.image,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    &[
-                        vk::BufferImageCopy::default()
-                            .buffer_offset(0)
-                            .buffer_row_length(0)
-                            .buffer_image_height(0)
-                            .image_subresource(vk::ImageSubresourceLayers {
-                                aspect_mask: vk::ImageAspectFlags::PLANE_0,
-                                layer_count: 1,
-                                base_array_layer: 0,
-                                mip_level: 0,
-                            })
-                            .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
-                            .image_extent(vk::Extent3D {
-                                width: extent.width,
-                                height: extent.height,
-                                depth: 1,
-                            }),
-                        vk::BufferImageCopy::default()
-                            .buffer_offset(extent.width as u64 * extent.height as u64)
-                            .buffer_row_length(0)
-                            .buffer_image_height(0)
-                            .image_subresource(vk::ImageSubresourceLayers {
-                                aspect_mask: vk::ImageAspectFlags::PLANE_1,
-                                layer_count: 1,
-                                base_array_layer: 0,
-                                mip_level: 0,
-                            })
-                            .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
-                            .image_extent(vk::Extent3D {
-                                width: extent.width / 2,
-                                height: extent.height / 2,
-                                depth: 1,
-                            }),
-                    ],
-                );
-        }
-
-        self.encoding_device
-            .queues
-            .transfer
-            .submit_chain_semaphore(
-                cmd_buffer.end()?,
-                &mut self.tracker,
-                vk::PipelineStageFlags2::COPY,
-                vk::PipelineStageFlags2::COPY,
-                EncoderTrackerWaitState::CopyBufferToImage,
-            )?;
-
-        Ok(buffer)
-    }
-
     pub fn stream_parameters(
         &self,
         info: C::CodecWriteParametersInfo,
@@ -800,24 +681,6 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         };
 
         Ok(data)
-    }
-
-    // TODO: remove it
-    pub fn encode_bytes(
-        &mut self,
-        frame: &InputFrame<RawFrameData>,
-        force_idr: bool,
-    ) -> Result<UnwaitedEncodeSubmission, VulkanEncoderError> {
-        let input_image = self.input_image_pool.vk_image()?;
-        let buffer = self.transfer_buffer_to_image(frame, &input_image.image)?;
-
-        let mut submission = self.encode(input_image.image.clone(), force_idr, frame.pts)?;
-        // TODO: i don't like it
-        submission.0.in_flight_resources._input_buffer = Some(buffer);
-        // ugh
-        submission.0.in_flight_resources.input_image = Some(Box::new(input_image));
-
-        Ok(submission)
     }
 
     fn encoder_rate_control_for<'b>(
@@ -1153,8 +1016,6 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
             _dpb_image_with_view: self.session_resources.dpb.image.image_with_view.clone(),
             _image: image,
             _view: view,
-            _input_buffer: None,
-            input_image: None,
         };
 
         Ok(UnwaitedEncodeSubmission(EncodeSubmission {
