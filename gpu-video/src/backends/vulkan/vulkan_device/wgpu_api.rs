@@ -162,7 +162,7 @@ impl VulkanDevice {
                 usage_flags: Default::default(),
             },
         )?;
-        let frame_sorter = FrameSorter::<wgpu::Texture>::new();
+        let frame_sorter = FrameSorter::<wgpu::Texture>::default();
 
         Ok(crate::WgpuTexturesDecoder {
             wgpu_device,

@@ -82,7 +82,7 @@ impl VulkanTranscoder {
 
         let parser = H264Parser::default();
         let reference_ctx = ReferenceContext::default();
-        let sorter = FrameSorter::new();
+        let sorter = FrameSorter::default();
 
         let scaling_algorithms: Vec<_> = config
             .output_parameters

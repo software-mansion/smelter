@@ -27,6 +27,7 @@ impl GlobalRegistry {
         }
     }
 
+    #[cfg_attr(video_toolbox, allow(unused))]
     pub(crate) fn unregister_device(key: &VideoDeviceKey) {
         let mut registry = REGISTRY.write().unwrap();
         if registry.devices.remove(key).is_none() {
@@ -52,6 +53,9 @@ pub(crate) enum VideoDeviceKey {
     Vulkan {
         device_handle: u64,
         queue_handle: u64,
+    },
+    Metal {
+        registry_id: u64,
     },
 }
 

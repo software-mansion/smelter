@@ -252,7 +252,7 @@ impl VulkanDevice {
                 usage_flags: Default::default(),
             },
         )?;
-        let frame_sorter = FrameSorter::<RawFrameData>::new();
+        let frame_sorter = FrameSorter::<RawFrameData>::default();
 
         Ok(BytesDecoder {
             parser,
