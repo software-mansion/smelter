@@ -24,17 +24,20 @@
 //! to the same decision on its own, so it has to earn its place on the
 //! shared timeline again when it comes back.
 //!
+//! Whether the tracks share an anchor is an input-wide [`Mode`], so both are
+//! either on the shared anchor or each on its own; a verdict that the
+//! timelines are unrelated splits the shared anchor into two, and a later
+//! verdict that they are the same slews them back together. Decisions are
+//! made on a read-only [`StateView`] and applied by the state.
+//!
 //! Known issues:
-//! - If the tracks do not share the timeline and one of them streams nothing
-//!   during the initial stabilization period, but starts after it, the first
-//!   track will be StartedShared while the other one is StartedTrack. The
-//!   second one will pollute the shared estimator.
-//! - If the tracks diverge from each other after the initial stabilization
-//!   they will never switch to StartedTrack, unless there is a discontinuity.
 //! - If the input stream clock drifts faster than the anchor slew rate (3%
-//!   when shrinking the buffer, 4% when growing it), the maybe_correct logic
+//!   when shrinking the buffer, 4% when growing it), the correction logic
 //!   will not keep up. Only drift below that rate or an immediate timestamp
 //!   discontinuity larger than 10s is handled.
+//!
+//! [`Mode`]: mode::Mode
+//! [`StateView`]: view::StateView
 //!
 //! Live edge detection itself is implemented by [`LiveEdgeEstimator`], usable
 //! on its own by inputs with different buffering logic.
@@ -48,6 +51,7 @@ use std::{
 
 mod buffer;
 mod edge_estimator;
+mod mode;
 mod state;
 mod stats;
 mod track;

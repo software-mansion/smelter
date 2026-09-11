@@ -15,6 +15,12 @@ pub(crate) struct TimestampAnchor {
 }
 
 impl TimestampAnchor {
+    /// The mapping as a single signed offset: what has to be added to an
+    /// input pts to get its output pts.
+    pub(crate) fn as_offset(&self) -> Timestamp {
+        self.output_pts - self.input_pts
+    }
+
     /// The mapping as a single signed offset (`output_pts - input_pts`), for logs.
     pub(crate) fn offset_string(&self) -> String {
         match self.output_pts >= self.input_pts {

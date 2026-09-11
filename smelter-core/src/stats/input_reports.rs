@@ -235,7 +235,7 @@ pub struct LiveSyncTrackStatsReport {
 }
 
 /// State of the live edge synchronization of a track.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LiveSyncTrackState {
     /// Chunks are held back until the live edge is estimated.

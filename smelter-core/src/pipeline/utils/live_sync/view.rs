@@ -1,93 +1,32 @@
 use std::time::Duration;
 
+use super::{
+    LiveSyncOptions,
+    edge_estimator::EdgeEstimate,
+    mode::{Anchor, Mode, TrackState},
+};
 use crate::{
     Timestamp,
-    pipeline::utils::input_sync::TimestampAnchor,
-    utils::{
-        input_sync::TrackKind,
-        live_sync::{LiveSyncOptions, edge_estimator::EdgeEstimate, state::MIN_QUEUE_HEADROOM},
-    },
+    pipeline::utils::input_sync::{TimestampAnchor, TrackKind},
 };
 
-/// Which anchors the started tracks apply. Tracks on the same timeline
-/// share one; tracks on unrelated timelines run their own, video aligned to
-/// audio's live edge.
-#[derive(Debug, Clone, Copy)]
-pub(super) enum Mode {
-    /// No track started yet.
-    Undecided,
-    /// Every started track applies this anchor, corrected against the
-    /// shared estimator.
-    Shared(Anchor),
-    /// Each started track applies its own anchor (`None` while waiting),
-    /// corrected against its own estimator.
-    Independent {
-        audio: Option<Anchor>,
-        video: Option<Anchor>,
-    },
-}
-
-/// Corrections move `target`; `current` slews towards it in small steps as
-/// chunks are read.
-#[derive(Debug, Clone, Copy)]
-pub(super) struct Anchor {
-    /// Mapping applied to every chunk read right now.
-    pub current: TimestampAnchor,
-    /// Mapping the corrections aim for.
-    pub target: TimestampAnchor,
-    /// Largest input pts released so far with this anchor; sizes the slew
-    /// steps and keeps tracks sharing the anchor in pts order.
-    pub last_released_pts: Option<Timestamp>,
-}
-
-impl Anchor {
-    pub fn new(anchor: TimestampAnchor) -> Self {
-        Self {
-            current: anchor,
-            target: anchor,
-            last_released_pts: None,
-        }
-    }
-}
-
-impl Mode {
-    /// Anchor a started track of `kind` applies right now.
-    pub fn anchor(&self, kind: TrackKind) -> Option<Anchor> {
-        match (self, kind) {
-            (Mode::Undecided, _) => None,
-            (Mode::Shared(anchor), _) => Some(*anchor),
-            (Mode::Independent { audio, .. }, TrackKind::Audio) => *audio,
-            (Mode::Independent { video, .. }, TrackKind::Video) => *video,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum TrackState {
-    /// Written chunks are buffered and not released yet.
-    Waiting,
-    /// Chunks are released with the anchor `Mode` holds for the track.
-    Started,
-}
-
+/// Read-only snapshot of [`SharedState`](super::state::SharedState) the decisions are made
+/// from. Valid until the state is mutated.
 pub(super) struct StateView {
-    options: LiveSyncOptions,
-    now_pts: Timestamp,
-    mode: Mode,
-    shared_estimation: Option<EdgeEstimate>,
-    audio: Option<TrackView>,
-    video: Option<TrackView>,
+    pub options: LiveSyncOptions,
+    pub now_pts: Timestamp,
+    pub mode: Mode,
+    pub shared_estimation: Option<EdgeEstimate>,
+    pub audio: Option<TrackView>,
+    pub video: Option<TrackView>,
 }
 
 pub(super) struct TrackView {
-    state: TrackState,
-    estimation: Option<EdgeEstimate>,
-    /// Oldest buffered pts, the next one to be released; `None` when empty.
-    oldest_buffered_pts: Option<Timestamp>,
-    /// Newest buffered pts; `None` when empty.
-    newest_buffered_pts: Option<Timestamp>,
+    pub state: TrackState,
+    pub estimation: Option<EdgeEstimate>,
+    pub buffer_empty: bool,
     /// Output pts the released content ends at.
-    last_released_pts: Option<Timestamp>,
+    pub last_released_pts: Option<Timestamp>,
 }
 
 impl StateView {
@@ -98,45 +37,16 @@ impl StateView {
         }
     }
 
-    fn should_reset(&self, kind: TrackKind) -> bool {
+    /// Track stalled long enough that it has to earn its start again.
+    pub fn should_reset(&self, kind: TrackKind) -> bool {
         match self.track(kind) {
             Some(track) => track.should_reset(self),
             None => false,
         }
     }
 
-    /// Mapping to flush the buffer with on reset: the one the track applies
-    /// when it is started, otherwise a best effort one. `None` when there is
-    /// nothing to build it from.
-    fn flush_anchor(&self, kind: TrackKind) -> Option<TimestampAnchor> {
-        let track = self.track(kind)?;
-        if track.state == TrackState::Started {
-            return self.mode.anchor(kind).map(|anchor| anchor.current);
-        }
-
-        // Try to maintain continuity if there is still time to reach queue:
-        // the oldest buffered chunk picks the timeline up where the released
-        // content ended.
-        if let Some(last_pts) = track.last_released_pts
-            && last_pts > self.now_pts + MIN_QUEUE_HEADROOM
-        {
-            return Some(TimestampAnchor {
-                input_pts: track.oldest_buffered_pts?,
-                output_pts: last_pts,
-            });
-        }
-
-        // Nothing to continue from, so the newest buffered chunk stands in for the live edge.
-        // As result effective buffer is exactly desired buffer.
-        Some(TimestampAnchor {
-            input_pts: track.newest_buffered_pts?,
-            output_pts: self.now_pts + self.options.buffering_strategy.desired_buffer(),
-        })
-    }
-
-    /// Mode after a waiting track of `kind` starts; `None` while it should
-    /// keep waiting.
-    fn start_decision(&self, kind: TrackKind) -> Option<Mode> {
+    /// Mode after a waiting track of `kind` starts; `None` while it should keep waiting.
+    pub fn start_decision(&self, kind: TrackKind) -> Option<Mode> {
         let track = self.track(kind)?;
         if track.state != TrackState::Waiting {
             return None;
@@ -151,8 +61,11 @@ impl StateView {
             return None;
         }
 
+        const SPLIT_THRESHOLD: Duration = Duration::from_secs(10);
+
         let strategy = self.options.buffering_strategy;
-        let shared_timeline = self.tracks_share_timeline(Duration::from_secs(10));
+        let shared_timeline =
+            TrackView::is_timeline_shared(&self.audio, &self.video, SPLIT_THRESHOLD);
 
         // shared_timeline in line with existing mode, so keep shared mode
         if let (Mode::Shared(anchor), Some(true) | None) = (self.mode, shared_timeline) {
@@ -196,19 +109,22 @@ impl StateView {
         })
     }
 
-    /// Mode after this tick's corrections; the current mode when nothing
-    /// changes.
-    fn correct_decision(&self) -> Mode {
-        let strategy = self.options.buffering_strategy;
-
+    /// Mode after this tick's corrections; the current mode when nothing changes.
+    pub fn correct_decision(&self) -> Mode {
         // split threshold is looser than the converge one, so the mode cannot flap
-        let tracks_diverged = self.tracks_share_timeline(Duration::from_secs(10)) == Some(false);
-        let tracks_converged = self.tracks_share_timeline(Duration::from_secs(3)) == Some(true);
+        const SPLIT_THRESHOLD: Duration = Duration::from_secs(5);
+        const MERGE_THRESHOLD: Duration = Duration::from_secs(3);
+
+        let strategy = self.options.buffering_strategy;
+        let tracks_diverged =
+            TrackView::is_timeline_shared(&self.audio, &self.video, SPLIT_THRESHOLD) == Some(false);
+        let tracks_converged =
+            TrackView::is_timeline_shared(&self.audio, &self.video, MERGE_THRESHOLD) == Some(true);
 
         match self.mode {
             Mode::Undecided => Mode::Undecided,
-            // Tracks turned out to be on different timelines. Every started track
-            // keeps the anchor value as its own, so the switch does not affect output.
+            // Tracks turned out to be on different timelines. Every started track keeps the anchor
+            // value as its own, so the switch does not affect output.
             Mode::Shared(anchor) if tracks_diverged => Mode::Independent {
                 audio: match &self.audio {
                     Some(track) if track.state == TrackState::Started => Some(anchor),
@@ -268,8 +184,8 @@ impl StateView {
             anchor.target = strategy.desired_anchor(&estimation, self.now_pts);
         }
 
-        // video follows audio's live edge; sizes its own buffer when audio is not
-        // running or its edge is not stable yet
+        // video follows audio's live edge; sizes its own buffer when audio is not running or its
+        // edge is not stable yet
         if let (Some(anchor), Some(estimation)) = (video.as_mut(), video_estimation) {
             match self.video_anchor_following_audio_edge(audio) {
                 Some(following) => {
@@ -289,9 +205,9 @@ impl StateView {
         Mode::Independent { audio, video }
     }
 
-    /// Mapping that presents video's live edge at the output pts where `audio`
-    /// presents audio's; `None` while audio is not running or its edge is
-    /// not stable.
+    // Anchor that will transform video pts, in a way that would transform current video
+    // edge to the same output pts as current audio edge.
+    // If audio edge is unstable return None
     fn video_anchor_following_audio_edge(&self, audio: Option<Anchor>) -> Option<TimestampAnchor> {
         let audio = audio?;
         let audio_edge = self.audio.as_ref()?.estimation?.upper_bound;
@@ -300,22 +216,24 @@ impl StateView {
             return None;
         }
 
-        // This anchor will transform video pts, in a way that would transform
-        // current video edge to the same output pts as current audio edge
         Some(TimestampAnchor {
             input_pts: video_edge.pts,
             output_pts: audio.target.to_output_pts(audio_edge.pts),
         })
     }
+}
 
+impl TrackView {
     /// Heuristic that decides if all tracks are on the same timeline. Live
     /// edges closer than `threshold` are treated as the same timeline. `None`
     /// when there is not enough information to decide either way.
-    fn tracks_share_timeline(&self, threshold: Duration) -> Option<bool> {
-        let (Some(audio), Some(video)) = (&self.audio, &self.video) else {
-            return None;
-        };
-        let (Some(audio), Some(video)) = (audio.estimation, video.estimation) else {
+    fn is_timeline_shared(
+        audio: &Option<TrackView>,
+        video: &Option<TrackView>,
+        threshold: Duration,
+    ) -> Option<bool> {
+        let (Some(audio), Some(video)) = (audio.as_ref()?.estimation, video.as_ref()?.estimation)
+        else {
             return None;
         };
         let (audio, video) = (audio.upper_bound, video.upper_bound);
@@ -349,14 +267,12 @@ impl StateView {
             (false, false) => None,
         }
     }
-}
 
-impl TrackView {
     fn should_reset(&self, shared: &StateView) -> bool {
         if self.state == TrackState::Waiting {
             return false;
         }
-        if self.oldest_buffered_pts.is_some() {
+        if !self.buffer_empty {
             return false;
         }
         let Some(last_pts) = self.last_released_pts else {
