@@ -15,6 +15,7 @@ pub(crate) mod vulkan_encoder;
 pub(crate) mod vulkan_instance;
 #[cfg(feature = "transcoder")]
 pub(crate) mod vulkan_transcoder;
+pub(crate) mod waiter_thread;
 pub(crate) mod wrappers;
 
 pub use vulkan_adapter::{VulkanAdapter, VulkanAdapterInfo, VulkanAdapterInitError};

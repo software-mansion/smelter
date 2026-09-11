@@ -303,7 +303,7 @@ impl EncoderCommandBufferPools {
 }
 
 impl CommandBufferPoolStorage for EncoderCommandBufferPools {
-    fn mark_submitted_as_free(&mut self, last_waited_for: SemaphoreWaitValue) {
+    fn mark_submitted_as_free(&self, last_waited_for: SemaphoreWaitValue) {
         self.transfer.mark_submitted_as_free(last_waited_for);
         self.encode.mark_submitted_as_free(last_waited_for);
     }
@@ -1140,7 +1140,7 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
             &view_create_info,
         )?;
 
-        self.query_pool.reset(cmd_buffer.buffer());
+        self.query_pool.reset(cmd_buffer.buffer(), 0);
 
         self.begin_video_coding(cmd_buffer.buffer());
 
@@ -1265,7 +1265,7 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
             encode_info = encode_info.reference_slots(&reference_slots);
         }
 
-        self.query_pool.begin_query(cmd_buffer.buffer());
+        self.query_pool.begin_query(cmd_buffer.buffer(), 0);
 
         unsafe {
             self.encoding_device
@@ -1275,7 +1275,7 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder<'a> for VulkanEncoder<'a, C> {
                 .cmd_encode_video_khr(cmd_buffer.buffer(), &encode_info);
         }
 
-        self.query_pool.end_query(cmd_buffer.buffer());
+        self.query_pool.end_query(cmd_buffer.buffer(), 0);
 
         unsafe {
             self.encoding_device

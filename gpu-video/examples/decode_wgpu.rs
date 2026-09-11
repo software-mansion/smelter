@@ -35,7 +35,7 @@ fn main() {
     let mut decoder = device
         .video()
         .unwrap()
-        .create_wgpu_textures_decoder_h264(DecoderParameters::default())
+        .create_wgpu_textures_decoder_h264(&queue, DecoderParameters::default())
         .unwrap();
 
     let mut output_file = std::fs::File::create("output.nv12").unwrap();

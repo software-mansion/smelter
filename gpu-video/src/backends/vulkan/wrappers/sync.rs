@@ -32,6 +32,11 @@ impl TimelineSemaphore {
         Ok(Self { semaphore, device })
     }
 
+    pub(crate) fn counter_value(&self) -> Result<SemaphoreWaitValue, VulkanCommonError> {
+        let value = unsafe { self.device.get_semaphore_counter_value(self.semaphore)? };
+        Ok(SemaphoreWaitValue(value))
+    }
+
     pub(crate) fn wait(
         &self,
         timeout: u64,
@@ -42,6 +47,16 @@ impl TimelineSemaphore {
             .values(std::slice::from_ref(&value.0));
 
         unsafe { self.device.wait_semaphores(&wait_info, timeout)? };
+
+        Ok(())
+    }
+
+    pub(crate) fn signal(&self, value: SemaphoreWaitValue) -> Result<(), VulkanCommonError> {
+        let signal_info = vk::SemaphoreSignalInfo::default()
+            .semaphore(self.semaphore)
+            .value(value.0);
+
+        unsafe { self.device.signal_semaphore(&signal_info)? };
 
         Ok(())
     }
@@ -59,7 +74,7 @@ pub(crate) trait TrackerKind {
 }
 
 pub(crate) trait CommandBufferPoolStorage: Sized {
-    fn mark_submitted_as_free(&mut self, last_waited_for: SemaphoreWaitValue);
+    fn mark_submitted_as_free(&self, last_waited_for: SemaphoreWaitValue);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -105,7 +120,7 @@ impl<K: TrackerKind> Tracker<K> {
         })
     }
 
-    #[allow(dead_code)]
+    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
     pub(crate) fn wait_for_all(&mut self, timeout: u64) -> Result<(), VulkanCommonError> {
         let waited_for = self.semaphore_tracker.wait_for_all(timeout)?;
 
@@ -127,8 +142,13 @@ impl<K: TrackerKind> Tracker<K> {
     }
 
     /// Call this to mark that this value was waited for already
-    pub(crate) fn mark_waited(&mut self, value: SemaphoreWaitValue) {
+    pub(crate) fn mark_waited(&self, value: SemaphoreWaitValue) {
         self.command_buffer_pools.mark_submitted_as_free(value);
+    }
+
+    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
+    pub(crate) fn raw_semaphore(&self) -> vk::Semaphore {
+        self.semaphore_tracker.semaphore.semaphore
     }
 }
 
@@ -178,7 +198,7 @@ impl<'a, S> SemaphoreSubmitInfo<'a, S> {
 }
 
 pub(crate) struct SemaphoreTracker<S> {
-    pub(crate) semaphore: TimelineSemaphore,
+    pub(crate) semaphore: Arc<TimelineSemaphore>,
     next_value: u64,
     pub(crate) wait_for: Option<TrackerWait<S>>,
     last_waited_for: Option<SemaphoreWaitValue>,
@@ -190,7 +210,7 @@ impl<S> SemaphoreTracker<S> {
             next_value: 1,
             wait_for: None,
             last_waited_for: None,
-            semaphore: TimelineSemaphore::new(device, 0, label)?,
+            semaphore: Arc::new(TimelineSemaphore::new(device, 0, label)?),
         })
     }
 
@@ -215,7 +235,6 @@ impl<S> SemaphoreTracker<S> {
     }
 
     /// This is a noop if there's nothing to wait for
-    #[allow(dead_code)]
     pub(crate) fn wait_for_all(
         &mut self,
         timeout: u64,

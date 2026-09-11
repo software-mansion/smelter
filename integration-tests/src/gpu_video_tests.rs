@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::OnceLock};
+use std::path::PathBuf;
 
 use gpu_video::{VideoAdapterExt, parameters::VideoDeviceDescriptor};
 
@@ -24,24 +24,20 @@ struct TestCase<Options> {
     pub allowed_error: f32,
 }
 
-fn video_device() -> &'static (wgpu::Device, wgpu::Queue) {
-    static DEVICE: OnceLock<(wgpu::Device, wgpu::Queue)> = OnceLock::new();
+fn create_video_device() -> (wgpu::Device, wgpu::Queue) {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let mut adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
+        .into_iter()
+        .filter(|a| {
+            a.video_adapter_info()
+                .is_some_and(|info| info.supports_decoding)
+        })
+        .collect::<Vec<_>>();
+    adapters.sort_by_key(|a| a.get_info().device_type == wgpu::DeviceType::DiscreteGpu);
 
-    DEVICE.get_or_init(|| {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-        let mut adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
-            .into_iter()
-            .filter(|a| {
-                a.video_adapter_info()
-                    .is_some_and(|info| info.supports_decoding)
-            })
-            .collect::<Vec<_>>();
-        adapters.sort_by_key(|a| a.get_info().device_type == wgpu::DeviceType::DiscreteGpu);
+    let adapter = adapters.last().unwrap();
 
-        let adapter = adapters.last().unwrap();
-
-        adapter
-            .request_device_with_video_support(&VideoDeviceDescriptor::default())
-            .unwrap()
-    })
+    adapter
+        .request_device_with_video_support(&VideoDeviceDescriptor::default())
+        .unwrap()
 }
