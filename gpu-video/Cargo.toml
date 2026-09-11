@@ -30,7 +30,14 @@ _metal-interop = [
     "objc2-core-video/objc2-metal",
 ]
 wgpu = ["dep:wgpu", "_metal-interop"]
-transcoder = ["dep:naga", "dep:bytemuck", "_metal-interop", "dep:objc2-metal-performance-shaders"]
+transcoder = [
+    "dep:naga",
+    "dep:bytemuck",
+    "_metal-interop",
+    "dep:objc2-metal-performance-shaders",
+    "objc2-metal/MTLCommandBuffer",
+    "objc2-metal/MTLCommandQueue",
+]
 default = ["wgpu"]
 
 [dependencies]
