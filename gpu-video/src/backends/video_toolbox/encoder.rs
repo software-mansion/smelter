@@ -826,7 +826,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
             self.metal_compatible_input,
         )?;
 
-        let buffer = self.session.acquire_input_buffer()?;
+        let buffer = session.acquire_input_buffer()?;
 
         let sample = session.encode_blocking(
             &buffer,
