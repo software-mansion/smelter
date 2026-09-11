@@ -30,7 +30,7 @@ use crate::{
     parameters::RateControl,
 };
 
-pub(crate) mod callback_encoder;
+pub(crate) mod async_encoder;
 
 const MB: u64 = 1024 * 1024;
 
@@ -107,9 +107,6 @@ impl From<VulkanEncoderError> for VideoEncoderError {
             #[cfg(feature = "wgpu")]
             VulkanEncoderError::WgpuTextureEncoderError(err) => {
                 VideoEncoderError::WgpuTextureEncoderError(err)
-            }
-            VulkanEncoderError::VulkanCommonError(VulkanCommonError::SubmissionWaitTimeout) => {
-                VideoEncoderError::EncodeSubmissionTimeout
             }
             VulkanEncoderError::VkError(_)
             | VulkanEncoderError::NoMemory

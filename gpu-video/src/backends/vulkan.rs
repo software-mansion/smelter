@@ -25,7 +25,7 @@ pub use vulkan_device::{VulkanDevice, VulkanDeviceInitError};
 pub use vulkan_transcoder::{VulkanTranscoder, VulkanTranscoderError};
 // TODO: expose-backend api
 pub(crate) use vulkan_encoder::{
-    VulkanEncoder, VulkanEncoderError, callback_encoder::VulkanCallbackEncoder,
+    VulkanEncoder, VulkanEncoderError, async_encoder::AsyncVulkanEncoder,
 };
 pub use vulkan_instance::{VulkanInstance, VulkanInstanceInitError};
 

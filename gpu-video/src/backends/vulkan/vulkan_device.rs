@@ -11,7 +11,7 @@ use crate::backends::vulkan::vulkan_decoder::decoders_h264::VulkanBytesDecoderH2
 use crate::backends::vulkan::vulkan_encoder::FullEncoderParameters;
 use crate::backends::vulkan::waiter_thread::{WaiterThread, WaiterThreadHandle};
 use crate::backends::vulkan::{
-    VulkanAdapter, VulkanAdapterInfo, VulkanCallbackEncoder, VulkanDecoderError, VulkanEncoderError,
+    VulkanAdapter, VulkanAdapterInfo, AsyncVulkanEncoder, VulkanDecoderError, VulkanEncoderError,
 };
 use crate::backends::vulkan::{VulkanCommonError, wrappers::*};
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
@@ -272,7 +272,7 @@ impl VulkanDevice {
         )?;
 
         Ok(BytesEncoderH264 {
-            encoder: Box::new(VulkanCallbackEncoder::new(
+            encoder: Box::new(AsyncVulkanEncoder::new(
                 Arc::new(self.encoding_device()?),
                 parameters,
                 on_chunk_callback,
@@ -294,7 +294,7 @@ impl VulkanDevice {
         )?;
 
         Ok(BytesEncoderH265 {
-            encoder: Box::new(VulkanCallbackEncoder::new(
+            encoder: Box::new(AsyncVulkanEncoder::new(
                 Arc::new(self.encoding_device()?),
                 parameters,
                 on_chunk_callback,

@@ -29,13 +29,15 @@ use std::collections::HashMap;
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
 
+type OnEncodedChunkCallback = Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>;
+
 // TODO: rename
 // TODO: Test if transcoding works after changes
-pub(crate) struct VulkanCallbackEncoder<'a, C: EncodeCodec> {
+pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
     submission_tracker: SubmissionTracker,
     input_image_pool: EncodeInputImagePool<'a>,
-    on_chunk_callback: Arc<Mutex<Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>>>,
-    // TODO: these should be only needed for wgpu, bytes decoder doesn;t need it
+    on_chunk_callback: Arc<Mutex<OnEncodedChunkCallback>>,
+
     #[cfg(feature = "wgpu")]
     command_encoder: Option<wgpu::hal::vulkan::CommandEncoder>,
     #[cfg(feature = "wgpu")]
@@ -45,11 +47,11 @@ pub(crate) struct VulkanCallbackEncoder<'a, C: EncodeCodec> {
     encoding_device: Arc<EncodingDevice>,
 }
 
-impl<'a, C: EncodeCodec + 'a> VulkanCallbackEncoder<'a, C> {
+impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
     pub(crate) fn new(
         encoding_device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters<C>,
-        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
+        on_chunk_callback: OnEncodedChunkCallback,
         waiter_thread: Arc<WaiterThreadHandle>,
     ) -> Result<Self, VulkanEncoderError> {
         let max_in_flight_submissions = parameters.max_in_flight_submissions.get() as usize;
@@ -224,7 +226,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanCallbackEncoder<'a, C> {
     }
 }
 
-impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for VulkanCallbackEncoder<'a, C> {
+impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for AsyncVulkanEncoder<'a, C> {
     // TODO: handle in_flight equal 0
     fn encode_bytes(
         &mut self,
@@ -244,11 +246,11 @@ impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for VulkanCallbackEncoder
     }
 
     fn flush(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
-        Ok(VulkanCallbackEncoder::flush(self, timeout)?)
+        Ok(AsyncVulkanEncoder::flush(self, timeout)?)
     }
 }
 
-impl VideoEncoderParametersInfoH264 for VulkanCallbackEncoder<'static, H264Codec> {
+impl VideoEncoderParametersInfoH264 for AsyncVulkanEncoder<'static, H264Codec> {
     fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.encoder.sps()
     }
@@ -258,7 +260,7 @@ impl VideoEncoderParametersInfoH264 for VulkanCallbackEncoder<'static, H264Codec
     }
 }
 
-impl VideoEncoderParametersInfoH265 for VulkanCallbackEncoder<'static, H265Codec> {
+impl VideoEncoderParametersInfoH265 for AsyncVulkanEncoder<'static, H265Codec> {
     fn vps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.encoder.vps()
     }
