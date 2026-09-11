@@ -26,6 +26,10 @@ mod caps;
 mod decoder;
 mod encoder;
 mod error;
+#[cfg(metal_interop)]
+mod metal_interop;
+#[cfg(feature = "transcoder")]
+mod transcoder;
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
 
@@ -113,10 +117,7 @@ impl CoreVideoDeviceBackend for VTDevice {
         self: Arc<Self>,
         parameters: crate::device::DecoderParameters,
     ) -> Result<crate::BytesDecoder, crate::VideoDecoderError> {
-        #[cfg(feature = "wgpu")]
-        let decoder = VTDecoder::new(None, parameters.usage_flags)?;
-        #[cfg(not(feature = "wgpu"))]
-        let decoder = VTDecoder::new(parameters.usage_flags)?;
+        let decoder = VTDecoder::new(false, parameters.usage_flags);
 
         Ok(crate::BytesDecoder {
             decoder: Box::new(decoder),
@@ -153,9 +154,11 @@ impl CoreVideoDeviceBackend for VTDevice {
     #[cfg(feature = "transcoder")]
     fn create_transcoder(
         self: Arc<Self>,
-        _parameters: crate::parameters::TranscoderParameters,
+        parameters: crate::parameters::TranscoderParameters,
     ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
-        Err(crate::transcoder::VideoTranscoderError::TranscoderUnsupported)
+        Ok(crate::VideoTranscoder {
+            transcoder: Box::new(transcoder::Transcoder::new(parameters)?),
+        })
     }
 
     fn decode_capabilities(&self) -> crate::capabilities::DecodeCapabilities {

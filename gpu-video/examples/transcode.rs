@@ -1,4 +1,4 @@
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn main() {
     use std::{
         fs::File,
@@ -124,15 +124,15 @@ fn main() {
     }
 }
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn print_usage_and_exit(executable_name: &str) -> ! {
     eprintln!("usage: {executable_name} INPUT OUT_WIDTH OUT_HEIGHT [nearest|bilinear|lanczos3]");
     std::process::exit(1);
 }
 
-#[cfg(not(vulkan))]
+#[cfg(not(supported))]
 fn main() {
     println!(
-        "This crate doesn't work on your operating system, because it does not support vulkan"
+        "This crate doesn't work on your operating system, because it does not support vulkan or videotoolbox"
     );
 }

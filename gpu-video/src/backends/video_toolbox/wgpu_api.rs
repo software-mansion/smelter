@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use objc2_core_foundation as cf;
 use objc2_core_video as cv;
 use objc2_metal as mtl;
 use objc2_metal::MTLDevice;
@@ -11,10 +10,11 @@ use crate::{
     backends::{
         WgpuBackend,
         video_toolbox::{
-            VTBackend, VTDevice, allocate_retained,
+            VTBackend, VTDevice,
             decoder::VTDecoder,
             encoder::{H264Codec, H265Codec, VTEncoder},
-            error::{OSStatusError, VTInitError},
+            error::VTInitError,
+            metal_interop::{MetalTextureError, SyncCache, plane_textures_from_pixel_buffer},
         },
     },
     device::WgpuVideoDeviceBackend,
@@ -89,7 +89,7 @@ impl WgpuVideoDeviceBackend for VTDevice {
         wgpu_device: wgpu::Device,
         parameters: crate::device::DecoderParameters,
     ) -> Result<crate::WgpuTexturesDecoder, crate::VideoDecoderError> {
-        let decoder = VTDecoder::new(Some(&wgpu_device), parameters.usage_flags)?;
+        let decoder = VTDecoder::new_wgpu(&wgpu_device, parameters.usage_flags)?;
 
         Ok(WgpuTexturesDecoder {
             wgpu_device,
@@ -139,54 +139,21 @@ impl WgpuVideoDeviceBackend for VTDevice {
     }
 }
 
-pub(crate) fn make_texture_cache(
-    device: &wgpu::Device,
-    usage: mtl::MTLTextureUsage,
-) -> Result<SyncCache, VTInitError> {
-    let metal_device = unsafe {
-        device
-            .as_hal::<wgpu::hal::metal::Api>()
-            .ok_or(VTInitError::NotMetalBackend)?
-            .raw_device()
-            .clone()
-    };
+impl SyncCache {
+    pub(crate) fn new_from_wgpu(
+        device: &wgpu::Device,
+        usage: mtl::MTLTextureUsage,
+    ) -> Result<Self, VTInitError> {
+        let metal_device = unsafe {
+            device
+                .as_hal::<wgpu::hal::metal::Api>()
+                .ok_or(VTInitError::NotMetalBackend)?
+                .raw_device()
+                .clone()
+        };
 
-    let texture_attributes = unsafe {
-        cf::CFDictionary::<cf::CFString, cf::CFNumber>::from_slices(
-            &[cv::kCVMetalTextureUsage],
-            &[cf::CFNumber::new_i64(usage.0 as i64).as_ref()],
-        )
-    };
-
-    let texture_cache = unsafe {
-        allocate_retained(|ptr| {
-            cv::CVMetalTextureCache::create(
-                None,
-                None,
-                &metal_device,
-                Some(texture_attributes.as_ref()),
-                ptr,
-            )
-        })?
-    };
-
-    Ok(SyncCache(texture_cache))
-}
-
-pub(crate) struct SyncCache(pub(crate) cf::CFRetained<cv::CVMetalTextureCache>);
-unsafe impl Send for SyncCache {}
-
-pub(crate) struct SendSyncCVBuffer(pub(crate) cf::CFRetained<cv::CVBuffer>);
-unsafe impl Send for SendSyncCVBuffer {}
-unsafe impl Sync for SendSyncCVBuffer {}
-
-#[derive(Debug, thiserror::Error)]
-pub enum MetalTextureError {
-    #[error(transparent)]
-    OSStatus(#[from] OSStatusError),
-
-    #[error("Failed to extract Metal texture from CVMetalTexture")]
-    ExtractionFailed,
+        Self::new_from_mtl(&metal_device, usage)
+    }
 }
 
 pub(crate) fn wgpu_texture_from_pixel_buffer(
@@ -199,54 +166,13 @@ pub(crate) fn wgpu_texture_from_pixel_buffer(
 ) -> Result<wgpu::Texture, MetalTextureError> {
     let width = cv::CVPixelBufferGetWidth(buffer);
     let height = cv::CVPixelBufferGetHeight(buffer);
-    let y_width = cv::CVPixelBufferGetWidthOfPlane(buffer, 0);
-    let y_height = cv::CVPixelBufferGetHeightOfPlane(buffer, 0);
-    let uv_width = cv::CVPixelBufferGetWidthOfPlane(buffer, 1);
-    let uv_height = cv::CVPixelBufferGetHeightOfPlane(buffer, 1);
 
-    cache.0.flush(0);
-    let texture_y = unsafe {
-        allocate_retained(|ptr| {
-            cv::CVMetalTextureCache::create_texture_from_image(
-                None,
-                &cache.0,
-                buffer,
-                None,
-                mtl::MTLPixelFormat::R8Unorm,
-                y_width,
-                y_height,
-                0,
-                ptr,
-            )
-        })?
-    };
-    let mtl_texture_y =
-        cv::CVMetalTextureGetTexture(&texture_y).ok_or(MetalTextureError::ExtractionFailed)?;
-
-    let texture_uv = unsafe {
-        allocate_retained(|ptr| {
-            cv::CVMetalTextureCache::create_texture_from_image(
-                None,
-                &cache.0,
-                buffer,
-                None,
-                mtl::MTLPixelFormat::RG8Unorm,
-                uv_width,
-                uv_height,
-                1,
-                ptr,
-            )
-        })?
-    };
-    let mtl_texture_uv =
-        cv::CVMetalTextureGetTexture(&texture_uv).ok_or(MetalTextureError::ExtractionFailed)?;
-
-    let guard_y = SendSyncCVBuffer(texture_y);
-    let guard_uv = SendSyncCVBuffer(texture_uv);
+    let planes = plane_textures_from_pixel_buffer(cache, buffer)?;
+    let guards = planes.guards;
 
     unsafe {
         let texture = wgpu::hal::metal::Device::texture_from_raw_planar(
-            [mtl_texture_y, mtl_texture_uv],
+            [planes.y, planes.uv],
             wgpu::TextureFormat::NV12,
             mtl::MTLTextureType::Type2D,
             1,
@@ -256,10 +182,7 @@ pub(crate) fn wgpu_texture_from_pixel_buffer(
                 height: height as u32,
                 depth: 1,
             },
-            Some(Box::new(move || {
-                drop(guard_y);
-                drop(guard_uv);
-            })),
+            Some(Box::new(move || drop(guards))),
         );
 
         let texture = device.create_texture_from_hal::<wgpu::hal::metal::Api>(

@@ -32,8 +32,10 @@ pub(crate) struct VTDecoder {
     sps: FxHashMap<u8, Sps>,
     pps: FxHashMap<(u8, u8), Pps>,
     needs_session_update: bool,
+    metal_compatible_output: bool,
+    #[cfg(metal_interop)]
     #[cfg(feature = "wgpu")]
-    texture_cache: Option<super::wgpu_api::SyncCache>,
+    pub(crate) texture_cache: Option<super::metal_interop::SyncCache>,
     session_color_range: Option<ColorRange>,
     usage: DecoderUsage,
 }
@@ -49,16 +51,19 @@ impl VideoDecoderBackend for VTDecoder {
 }
 
 impl VTDecoder {
-    #[cfg(not(feature = "wgpu"))]
-    pub(crate) fn new(usage: DecoderUsage) -> Result<Self, VTDecoderError> {
-        Ok(Self {
+    pub(crate) fn new(metal_compatible_output: bool, usage: DecoderUsage) -> Self {
+        Self {
             session: None,
             sps: Default::default(),
             pps: Default::default(),
             needs_session_update: false,
+            metal_compatible_output,
+            #[cfg(metal_interop)]
+            #[cfg(feature = "wgpu")]
+            texture_cache: None,
             session_color_range: None,
             usage,
-        })
+        }
     }
 
     fn download_outputs(
@@ -77,7 +82,7 @@ impl VTDecoder {
             .collect()
     }
 
-    fn decode_to_cvbuffers(
+    pub(crate) fn decode_to_cvbuffers(
         &mut self,
         instructions: Vec<DecoderInstruction>,
     ) -> Result<Vec<DecodeResult<cf::CFRetained<cv::CVBuffer>>>, VTDecoderError> {
@@ -242,8 +247,7 @@ impl VTDecoder {
             ColorRange::Limited => cv::kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
         };
 
-        #[cfg(feature = "wgpu")]
-        let destination_image_buffer_attributes = if self.output_to_wgpu_textures() {
+        let destination_image_buffer_attributes = if self.metal_compatible_output {
             unsafe {
                 cf::CFDictionary::<cf::CFString, cf::CFType>::from_slices(
                     &[
@@ -265,14 +269,6 @@ impl VTDecoder {
                     &[cf::CFNumber::new_i32(pixel_format as i32).as_ref()],
                 )
             }
-        };
-
-        #[cfg(not(feature = "wgpu"))]
-        let destination_image_buffer_attributes = unsafe {
-            cf::CFDictionary::<cf::CFString, cf::CFType>::from_slices(
-                &[cv::kCVPixelBufferPixelFormatTypeKey],
-                &[cf::CFNumber::new_i32(pixel_format as i32).as_ref()],
-            )
         };
 
         let session = unsafe {
