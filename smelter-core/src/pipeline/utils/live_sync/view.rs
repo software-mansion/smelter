@@ -5,7 +5,7 @@ use crate::{
     pipeline::utils::input_sync::TimestampAnchor,
     utils::{
         input_sync::TrackKind,
-        live_sync::{LiveSyncOptions, edge_estimator::EdgeEstimate},
+        live_sync::{LiveSyncOptions, edge_estimator::EdgeEstimate, state::MIN_QUEUE_HEADROOM},
     },
 };
 
@@ -82,7 +82,11 @@ pub(super) struct StateView {
 pub(super) struct TrackView {
     state: TrackState,
     estimation: Option<EdgeEstimate>,
-    buffer_empty: bool,
+    /// Oldest buffered pts, the next one to be released; `None` when empty.
+    oldest_buffered_pts: Option<Timestamp>,
+    /// Newest buffered pts; `None` when empty.
+    newest_buffered_pts: Option<Timestamp>,
+    /// Output pts the released content ends at.
     last_released_pts: Option<Timestamp>,
 }
 
@@ -99,6 +103,35 @@ impl StateView {
             Some(track) => track.should_reset(self),
             None => false,
         }
+    }
+
+    /// Mapping to flush the buffer with on reset: the one the track applies
+    /// when it is started, otherwise a best effort one. `None` when there is
+    /// nothing to build it from.
+    fn flush_anchor(&self, kind: TrackKind) -> Option<TimestampAnchor> {
+        let track = self.track(kind)?;
+        if track.state == TrackState::Started {
+            return self.mode.anchor(kind).map(|anchor| anchor.current);
+        }
+
+        // Try to maintain continuity if there is still time to reach queue:
+        // the oldest buffered chunk picks the timeline up where the released
+        // content ended.
+        if let Some(last_pts) = track.last_released_pts
+            && last_pts > self.now_pts + MIN_QUEUE_HEADROOM
+        {
+            return Some(TimestampAnchor {
+                input_pts: track.oldest_buffered_pts?,
+                output_pts: last_pts,
+            });
+        }
+
+        // Nothing to continue from, so the newest buffered chunk stands in for the live edge.
+        // As result effective buffer is exactly desired buffer.
+        Some(TimestampAnchor {
+            input_pts: track.newest_buffered_pts?,
+            output_pts: self.now_pts + self.options.buffering_strategy.desired_buffer(),
+        })
     }
 
     /// Mode after a waiting track of `kind` starts; `None` while it should
@@ -152,8 +185,8 @@ impl StateView {
                 }
             }
             TrackKind::Video => {
-                let video_anchor = other_track_anchor
-                    .and_then(|audio| self.video_anchor_following_audio_edge(audio))
+                let video_anchor = self
+                    .video_anchor_following_audio_edge(other_track_anchor)
                     .unwrap_or_else(|| strategy.desired_anchor(&track_estimation, self.now_pts));
                 Mode::Independent {
                     audio: other_track_anchor,
@@ -238,9 +271,7 @@ impl StateView {
         // video follows audio's live edge; sizes its own buffer when audio is not
         // running or its edge is not stable yet
         if let (Some(anchor), Some(estimation)) = (video.as_mut(), video_estimation) {
-            let following_anchor =
-                audio.and_then(|audio| self.video_anchor_following_audio_edge(audio));
-            match following_anchor {
+            match self.video_anchor_following_audio_edge(audio) {
                 Some(following) => {
                     let diff = following.distance_to(anchor.target);
                     if estimation.upper_bound.stable && diff > Timestamp::from_millis(50) {
@@ -259,8 +290,10 @@ impl StateView {
     }
 
     /// Mapping that presents video's live edge at the output pts where `audio`
-    /// presents audio's; `None` while audio's edge is not stable.
-    fn video_anchor_following_audio_edge(&self, audio: Anchor) -> Option<TimestampAnchor> {
+    /// presents audio's; `None` while audio is not running or its edge is
+    /// not stable.
+    fn video_anchor_following_audio_edge(&self, audio: Option<Anchor>) -> Option<TimestampAnchor> {
+        let audio = audio?;
         let audio_edge = self.audio.as_ref()?.estimation?.upper_bound;
         let video_edge = self.video.as_ref()?.estimation?.upper_bound;
         if !audio_edge.stable {
@@ -323,7 +356,7 @@ impl TrackView {
         if self.state == TrackState::Waiting {
             return false;
         }
-        if !self.buffer_empty {
+        if self.oldest_buffered_pts.is_some() {
             return false;
         }
         let Some(last_pts) = self.last_released_pts else {

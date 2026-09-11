@@ -18,7 +18,7 @@ use crate::prelude::*;
 const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
 
 /// Lead over the playback position below which chunks are force-released.
-const MIN_QUEUE_HEADROOM: Duration = Duration::from_millis(100);
+pub(super) const MIN_QUEUE_HEADROOM: Duration = Duration::from_millis(100);
 
 /// Smaller changes of the edge-aligned target are ignored, so estimator
 /// jitter does not keep nudging a following track.
