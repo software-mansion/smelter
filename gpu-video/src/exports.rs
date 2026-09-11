@@ -134,7 +134,7 @@ pub use crate::decoders::WgpuTexturesDecoderH264;
 pub use crate::decoders::{BytesDecoderH264, VideoDecoderError};
 pub use crate::encoders::{BytesEncoderH264, BytesEncoderH265, VideoEncoderError};
 #[cfg(feature = "wgpu")]
-pub use crate::encoders::{WgpuTexturesEncoderH264, WgpuTexturesEncoderH265, EncodeTexture};
+pub use crate::encoders::{EncodeTexture, WgpuTexturesEncoderH264, WgpuTexturesEncoderH265};
 pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 #[cfg(feature = "transcoder")]

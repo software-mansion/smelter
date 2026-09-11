@@ -128,7 +128,6 @@ fn main() {
 
         wgpu_state.render(time, &[&h264_texture, &h265_texture]);
 
-        // TODO: it should be verified that the input for the correct encoder was passed
         encoder_h264
             .encode(
                 InputFrame {

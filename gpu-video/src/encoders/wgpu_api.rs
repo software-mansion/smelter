@@ -1,24 +1,18 @@
-use std::{any::Any, ops::Deref};
+use std::ops::Deref;
 
 use crate::{
     InputFrame, VideoEncoderError,
     encoders::{VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
 };
 
-pub(crate) trait EncodeTextureBackend: Any + Send {}
+// TODO: docs
+pub struct EncodeTexture(pub(crate) wgpu::Texture);
 
-// TODO: should this also be used by bytes decoders?
-pub struct EncodeTexture {
-    pub(crate) wgpu_texture: wgpu::Texture,
-    pub(crate) backend_texture: Box<dyn EncodeTextureBackend>,
-}
-
-// TODO: should implement deref?
 impl Deref for EncodeTexture {
     type Target = wgpu::Texture;
 
     fn deref(&self) -> &Self::Target {
-        &self.wgpu_texture
+        &self.0
     }
 }
 
@@ -27,7 +21,6 @@ pub(crate) trait WgpuVideoEncoderBackend: Send {
         &mut self,
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
-        // TODO: Maybe the encode texture should return InputFrame?
         frame: InputFrame<EncodeTexture>,
         force_idr: bool,
     ) -> Result<(), VideoEncoderError>;
@@ -187,8 +180,8 @@ pub enum WgpuTextureEncoderError {
     #[error("The supplied texture's format is {0:?}, when it should be NV12")]
     NotNV12Texture(wgpu::TextureFormat),
 
-    #[error("The supplied texture does not have COPY_SRC usage. Texture's usages: {0:?}")]
-    NoCopySrcTextureUsage(wgpu::TextureUsages),
+    #[error("The supplied texture was not obtained from this encoder's input_texture()")]
+    TextureNotFromEncoder,
 
     #[error(
         "The dimensions of the provided frame ({provided_dimensions:?}) are not the same as the expected dimensions ({expected_dimensions:?})"

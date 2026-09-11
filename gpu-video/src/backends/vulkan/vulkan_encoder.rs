@@ -7,8 +7,6 @@ use std::{
 use ash::vk;
 use tracing::warn;
 
-#[cfg(feature = "wgpu")]
-use crate::encoders::EncodeTexture;
 use crate::{
     EncodedOutputChunk, InputFrame, RawFrameData, VideoBackendError,
     backends::vulkan::{

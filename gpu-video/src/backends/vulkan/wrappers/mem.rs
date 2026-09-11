@@ -13,7 +13,6 @@ use crate::{
         vulkan_encoder::VulkanEncoderError,
         wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
     },
-    encoders::EncodeTextureBackend,
 };
 
 use super::{Device, Instance};
@@ -342,8 +341,6 @@ pub(crate) struct EncodeInputImage {
     pub(crate) wgpu_texture: Option<wgpu::Texture>,
     pool_freelist: Weak<Mutex<Vec<EncodeInputImage>>>,
 }
-
-impl EncodeTextureBackend for EncodeInputImage {}
 
 impl EncodeInputImage {
     pub(crate) fn release_to_pool(self) {
