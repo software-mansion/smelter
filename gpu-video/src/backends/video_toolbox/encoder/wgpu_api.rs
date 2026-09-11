@@ -9,7 +9,6 @@ use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_core_foundation as cf;
 use objc2_core_media as cm;
 use objc2_core_video as cv;
-use objc2_metal as mtl;
 use objc2_metal::{MTLSharedEvent, MTLSharedEventListener};
 use objc2_video_toolbox as vt;
 use wgpu::hal::{Device as _, Queue as _, metal::Api as MtlApi};
@@ -18,9 +17,8 @@ use crate::{
     EncodedOutputChunk, InputFrame, VideoEncoderError, VideoTexture,
     backends::video_toolbox::{
         error::{OSStatusError, OSStatusExt, VTEncoderError, VTInitError},
-        wgpu_api::{
-            SendSyncCVBuffer, SyncCache, make_texture_cache, video_texture_from_pixel_buffer,
-        },
+        metal_interop::SendSyncCVBuffer,
+        wgpu_api::video_texture_from_pixel_buffer,
     },
     device::{EncoderOutputParameters, VideoParameters},
     encoders::{EncodeTexture, WgpuTextureEncoderError, WgpuVideoEncoderBackend},
@@ -33,7 +31,6 @@ pub(crate) struct VTWgpuEncodeState {
     /// this runs frame encode closures
     listener: Retained<MTLSharedEventListener>,
     next_fence_value: u64,
-    texture_cache: SyncCache,
     issued_input_textures: Arc<Mutex<HashMap<VideoTexture, SendSyncCVBuffer>>>,
     pending: VecDeque<PendingFrame>,
 }
@@ -71,18 +68,10 @@ impl VTWgpuEncodeState {
             return Err(VTEncoderError::SharedEventUnavailable);
         }
 
-        let texture_cache = make_texture_cache(
-            wgpu_device,
-            mtl::MTLTextureUsage(
-                mtl::MTLTextureUsage::ShaderWrite.0 | mtl::MTLTextureUsage::RenderTarget.0,
-            ),
-        )?;
-
         Ok(Self {
             fence,
             listener: MTLSharedEventListener::new(),
             next_fence_value: 1,
-            texture_cache,
             issued_input_textures: Default::default(),
             pending: VecDeque::new(),
         })
@@ -96,8 +85,17 @@ impl<C: EncodeCodec> VTEncoder<C> {
         output_parameters: EncoderOutputParameters<C::Profile>,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<Self, VTEncoderError> {
-        let mut encoder =
-            Self::create(input_parameters, output_parameters, true, on_chunk_callback)?;
+        let mut encoder = Self::new_metal(
+            input_parameters,
+            output_parameters,
+            unsafe {
+                wgpu_device
+                    .as_hal::<MtlApi>()
+                    .ok_or(VTInitError::NotMetalBackend)?
+            }
+            .raw_device(),
+            on_chunk_callback,
+        )?;
         encoder.wgpu = Some(VTWgpuEncodeState::new(wgpu_device)?);
         Ok(encoder)
     }
@@ -106,14 +104,14 @@ impl<C: EncodeCodec> VTEncoder<C> {
         &mut self,
         wgpu_device: &wgpu::Device,
     ) -> Result<EncodeTexture, VTEncoderError> {
-        let state = self
-            .wgpu
-            .as_ref()
-            .ok_or(VTEncoderError::NotConfiguredForWgpuInput)?;
+        let (Some(state), Some(texture_cache)) = (self.wgpu.as_ref(), self.texture_cache.as_ref())
+        else {
+            return Err(VTEncoderError::NotConfiguredForWgpuInput);
+        };
 
         let buffer = self.session.acquire_input_buffer()?;
         let texture = video_texture_from_pixel_buffer(
-            &state.texture_cache,
+            texture_cache,
             wgpu_device,
             &buffer,
             wgpu::TextureUsages::COPY_DST
