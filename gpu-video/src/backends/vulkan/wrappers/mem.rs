@@ -209,6 +209,7 @@ impl<'a> EncodeOutputBufferPool<'a> {
 }
 
 pub(crate) struct EncodeOutputBuffer {
+    // TODO: this buffer should grow when necessary
     pub(crate) buffer: Buffer,
     pool_freelist: Weak<Mutex<Vec<EncodeOutputBuffer>>>,
 }
@@ -248,7 +249,7 @@ impl<'a> EncodeInputImagePool<'a> {
         }
     }
 
-    pub(crate) fn vk_image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError> {
+    pub(crate) fn image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError> {
         if let Some(image) = self.freelist.lock().unwrap().pop() {
             return Ok(image);
         }
@@ -270,68 +271,71 @@ impl<'a> EncodeInputImagePool<'a> {
     }
 
     #[cfg(feature = "wgpu")]
-    pub(crate) fn wgpu_texture(
+    pub(crate) fn image_with_wgpu_texture(
         &mut self,
         wgpu_device: &wgpu::Device,
-    ) -> Result<EncodeInputImage, VulkanEncoderError> {
+    ) -> Result<(EncodeInputImage, wgpu::Texture), VulkanEncoderError> {
         use wgpu::hal::vulkan::Api as VkApi;
 
         let hal_device = unsafe { wgpu_device.as_hal::<VkApi>().unwrap() };
 
-        let mut image = self.vk_image()?;
-        if image.wgpu_texture.is_none() {
-            let vk_extent = image.image.extent;
-            let size = wgpu::Extent3d {
-                width: vk_extent.width,
-                height: vk_extent.height,
-                depth_or_array_layers: vk_extent.depth,
-            };
+        let mut image = self.image()?;
+        let wgpu_texture = match image.wgpu_texture.clone() {
+            Some(wgpu_texture) => wgpu_texture,
+            None => {
+                let vk_extent = image.image.extent;
+                let size = wgpu::Extent3d {
+                    width: vk_extent.width,
+                    height: vk_extent.height,
+                    depth_or_array_layers: vk_extent.depth,
+                };
 
-            let vk_image_clone = image.image.clone();
-            let hal_texture = unsafe {
-                hal_device.texture_from_raw(
-                    image.image.image,
-                    &wgpu::hal::TextureDescriptor {
-                        label: Some("gpu-video encoder input texture"),
-                        size,
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: wgpu::TextureFormat::NV12,
-                        usage: wgpu::TextureUses::COLOR_TARGET | wgpu::TextureUses::COPY_DST,
-                        memory_flags: wgpu::hal::MemoryFlags::empty(),
-                        view_formats: Vec::new(),
-                    },
-                    Some(Box::new(move || {
-                        // TODO: is this correct?
-                        drop(vk_image_clone);
-                    })),
-                    wgpu::hal::vulkan::TextureMemory::External,
-                )
-            };
+                let image_clone = image.image.clone();
+                let hal_texture = unsafe {
+                    hal_device.texture_from_raw(
+                        image.image.image,
+                        &wgpu::hal::TextureDescriptor {
+                            label: Some("gpu-video encoder input texture"),
+                            size,
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: wgpu::TextureFormat::NV12,
+                            usage: wgpu::TextureUses::COLOR_TARGET | wgpu::TextureUses::COPY_DST,
+                            memory_flags: wgpu::hal::MemoryFlags::empty(),
+                            view_formats: Vec::new(),
+                        },
+                        Some(Box::new(move || {
+                            drop(image_clone);
+                        })),
+                        wgpu::hal::vulkan::TextureMemory::External,
+                    )
+                };
 
-            let texture = unsafe {
-                wgpu_device.create_texture_from_hal::<VkApi>(
-                    hal_texture,
-                    &wgpu::TextureDescriptor {
-                        label: Some("gpu-video encoder input texture"),
-                        size,
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: wgpu::TextureFormat::NV12,
-                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                            | wgpu::TextureUsages::COPY_DST,
-                        view_formats: &[],
-                    },
-                    wgpu::TextureUses::UNINITIALIZED,
-                )
-            };
+                let texture = unsafe {
+                    wgpu_device.create_texture_from_hal::<VkApi>(
+                        hal_texture,
+                        &wgpu::TextureDescriptor {
+                            label: Some("gpu-video encoder input texture"),
+                            size,
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: wgpu::TextureFormat::NV12,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                | wgpu::TextureUsages::COPY_DST,
+                            view_formats: &[],
+                        },
+                        wgpu::TextureUses::UNINITIALIZED,
+                    )
+                };
 
-            image.wgpu_texture = Some(texture);
-        }
+                image.wgpu_texture = Some(texture.clone());
+                texture
+            }
+        };
 
-        Ok(image)
+        Ok((image, wgpu_texture))
     }
 }
 

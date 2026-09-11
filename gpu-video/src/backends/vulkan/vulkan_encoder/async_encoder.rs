@@ -31,7 +31,6 @@ mod wgpu_api;
 
 type OnEncodedChunkCallback = Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>;
 
-// TODO: rename
 // TODO: Test if transcoding works after changes
 pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
     submission_tracker: SubmissionTracker,
@@ -39,9 +38,7 @@ pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
     on_chunk_callback: Arc<Mutex<OnEncodedChunkCallback>>,
 
     #[cfg(feature = "wgpu")]
-    command_encoder: Option<wgpu::hal::vulkan::CommandEncoder>,
-    #[cfg(feature = "wgpu")]
-    used_input_images: HashMap<ash::vk::Image, EncodeInputImage>,
+    used_input_images: Arc<Mutex<HashMap<wgpu::Texture, EncodeInputImage>>>,
 
     encoder: VulkanEncoder<'a, C>,
     encoding_device: Arc<EncodingDevice>,
@@ -83,11 +80,8 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
             submission_tracker,
             input_image_pool,
             on_chunk_callback: Arc::new(Mutex::new(on_chunk_callback)),
-            // TODO: ugh
             #[cfg(feature = "wgpu")]
-            command_encoder: None,
-            #[cfg(feature = "wgpu")]
-            used_input_images: HashMap::new(),
+            used_input_images: Arc::new(Mutex::new(HashMap::new())),
             encoding_device,
         })
     }
@@ -227,7 +221,6 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
 }
 
 impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for AsyncVulkanEncoder<'a, C> {
-    // TODO: handle in_flight equal 0
     fn encode_bytes(
         &mut self,
         frame: &InputFrame<RawFrameData>,
@@ -238,7 +231,7 @@ impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for AsyncVulkanEncoder<'a
             .wait_if_full(timeout)
             .map_err(VulkanEncoderError::from)?;
 
-        let encode_image = self.input_image_pool.vk_image()?;
+        let encode_image = self.input_image_pool.image()?;
         let buffer = self.transfer_buffer_to_image(frame, &encode_image.image)?;
         self.submit_encode(encode_image, Some(buffer), force_idr, frame.pts, timeout)?;
 

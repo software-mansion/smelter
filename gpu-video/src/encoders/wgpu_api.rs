@@ -6,13 +6,16 @@ use crate::{
 };
 
 // TODO: docs
-pub struct EncodeTexture(pub(crate) wgpu::Texture);
+pub struct EncodeTexture {
+    pub(crate) wgpu_texture: wgpu::Texture,
+    pub(crate) on_drop: Option<Box<dyn FnOnce()>>
+}
 
 impl Deref for EncodeTexture {
     type Target = wgpu::Texture;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.wgpu_texture
     }
 }
 

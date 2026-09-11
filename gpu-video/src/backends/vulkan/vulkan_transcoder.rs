@@ -1,5 +1,3 @@
-// TODO: Change things here
-
 use std::sync::Arc;
 
 use ash::vk;
