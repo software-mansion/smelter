@@ -814,7 +814,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
             self.metal_compatible_input,
         )?;
 
-        let buffer = self.session.acquire_input_buffer()?;
+        let buffer = session.acquire_input_buffer()?;
 
         session.encode_for_stream_format(
             &buffer,
