@@ -6,9 +6,13 @@ use std::{
     sync::mpsc,
 };
 
+#[cfg(metal_interop)]
+use objc2::runtime::ProtocolObject;
 use objc2_core_foundation as cf;
 use objc2_core_media as cm;
 use objc2_core_video as cv;
+#[cfg(metal_interop)]
+use objc2_metal as mtl;
 use objc2_video_toolbox as vt;
 
 use crate::{
@@ -23,6 +27,11 @@ use crate::{
     },
     parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl},
 };
+
+#[cfg(metal_interop)]
+use super::metal_interop::SyncCache;
+#[cfg(feature = "transcoder")]
+use super::metal_interop::{PlaneTextures, plane_textures_from_pixel_buffer};
 
 #[cfg(feature = "wgpu")]
 pub(crate) mod wgpu_api;
@@ -369,8 +378,17 @@ pub(crate) struct VTEncoder<C: EncodeCodec> {
     // Retained so a session invalidated mid-stream can be rebuilt identically.
     input_parameters: VideoParameters,
     output_parameters: EncoderOutputParameters<C::Profile>,
+    metal_compatible_input: bool,
     #[cfg(feature = "wgpu")]
     wgpu: Option<wgpu_api::VTWgpuEncodeState>,
+    #[cfg(metal_interop)]
+    texture_cache: Option<SyncCache>,
+}
+
+#[cfg(feature = "transcoder")]
+pub(crate) struct MetalInputFrame {
+    pub(crate) buffer: cf::CFRetained<cv::CVBuffer>,
+    pub(crate) planes: PlaneTextures,
 }
 
 impl<C: EncodeCodec> VTEncoder<C> {
@@ -381,7 +399,25 @@ impl<C: EncodeCodec> VTEncoder<C> {
         Ok(Self::create(input_parameters, output_parameters, false)?)
     }
 
-    pub(crate) fn create(
+    #[cfg(metal_interop)]
+    pub(crate) fn new_metal(
+        input_parameters: VideoParameters,
+        output_parameters: EncoderOutputParameters<C::Profile>,
+        device: &ProtocolObject<dyn mtl::MTLDevice>,
+    ) -> Result<Self, VTEncoderError> {
+        let mut encoder = Self::create(input_parameters, output_parameters, true)?;
+
+        encoder.texture_cache = Some(SyncCache::new_from_mtl(
+            device,
+            mtl::MTLTextureUsage(
+                mtl::MTLTextureUsage::ShaderWrite.0 | mtl::MTLTextureUsage::RenderTarget.0,
+            ),
+        )?);
+
+        Ok(encoder)
+    }
+
+    fn create(
         input_parameters: VideoParameters,
         output_parameters: EncoderOutputParameters<C::Profile>,
         metal_compatible_input: bool,
@@ -417,8 +453,11 @@ impl<C: EncodeCodec> VTEncoder<C> {
             parameters_changed_mid_stream: false,
             input_parameters,
             output_parameters,
+            metal_compatible_input,
             #[cfg(feature = "wgpu")]
             wgpu: None,
+            #[cfg(metal_interop)]
+            texture_cache: None,
         })
     }
 
@@ -567,6 +606,20 @@ impl<C: EncodeCodec> VTEncoder<C> {
         })
     }
 
+    /// [`Self::encode_pixel_buffer`].
+    #[cfg(feature = "transcoder")]
+    pub(crate) fn acquire_input_frame(&self) -> Result<MetalInputFrame, VTEncoderError> {
+        let texture_cache = self
+            .texture_cache
+            .as_ref()
+            .ok_or(VTEncoderError::NotConfiguredForMetalInput)?;
+
+        let buffer = self.session.acquire_input_buffer()?;
+        let planes = plane_textures_from_pixel_buffer(texture_cache, &buffer)?;
+
+        Ok(MetalInputFrame { buffer, planes })
+    }
+
     pub(crate) fn encode_pixel_buffer(
         &mut self,
         buffer: &cv::CVBuffer,
@@ -622,16 +675,6 @@ impl<C: EncodeCodec> VTEncoder<C> {
         self.collect_output(&sample, pts)
     }
 
-    #[cfg(feature = "wgpu")]
-    fn metal_compatible_input(&self) -> bool {
-        self.wgpu.is_some()
-    }
-
-    #[cfg(not(feature = "wgpu"))]
-    fn metal_compatible_input(&self) -> bool {
-        false
-    }
-
     fn recover_from_invalidated_session(
         &mut self,
         generation: u64,
@@ -655,7 +698,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
             self.session = Self::build_session(
                 self.input_parameters,
                 &self.output_parameters,
-                self.metal_compatible_input(),
+                self.metal_compatible_input,
             )
             .map_err(|source| VTEncoderError::SessionInvalidated(Box::new(source)))?;
             self.session_generation += 1;
@@ -780,7 +823,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
         let session = Self::build_session(
             self.input_parameters,
             &self.output_parameters,
-            self.metal_compatible_input(),
+            self.metal_compatible_input,
         )?;
 
         let buffer = self.session.acquire_input_buffer()?;
