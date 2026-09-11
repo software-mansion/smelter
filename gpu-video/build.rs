@@ -13,7 +13,8 @@ fn main() {
             )
         },
         video_toolbox: { target_vendor = "apple" },
-        supported: { any(vulkan, video_toolbox) }
+        supported: { any(vulkan, video_toolbox) },
+        metal_interop: { all(target_vendor = "apple", feature = "_metal-interop") }
     }
 }
 

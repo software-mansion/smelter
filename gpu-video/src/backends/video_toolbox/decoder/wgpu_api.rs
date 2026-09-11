@@ -6,7 +6,8 @@ use crate::{
     backends::video_toolbox::{
         decoder::VTDecoder,
         error::{VTDecoderError, VTInitError},
-        wgpu_api::{make_texture_cache, wgpu_texture_from_pixel_buffer},
+        metal_interop::SyncCache,
+        wgpu_api::wgpu_texture_from_pixel_buffer,
     },
     decoders::WgpuVideoDecoderBackend,
     frame_sorter::DecodeResult,
@@ -25,32 +26,16 @@ impl WgpuVideoDecoderBackend for VTDecoder {
 }
 
 impl VTDecoder {
-    pub(crate) fn new(
-        device: Option<&wgpu::Device>,
+    pub(crate) fn new_wgpu(
+        device: &wgpu::Device,
         usage: crate::parameters::DecoderUsage,
     ) -> Result<Self, VTInitError> {
-        let texture_cache = if let Some(device) = device {
-            Some(make_texture_cache(
-                device,
-                mtl::MTLTextureUsage::ShaderRead,
-            )?)
-        } else {
-            None
-        };
-
-        Ok(Self {
-            session: None,
-            sps: Default::default(),
-            pps: Default::default(),
-            needs_session_update: false,
-            texture_cache,
-            session_color_range: None,
-            usage,
-        })
-    }
-
-    pub(crate) fn output_to_wgpu_textures(&self) -> bool {
-        self.texture_cache.is_some()
+        let mut decoder = Self::new(true, usage);
+        decoder.texture_cache = Some(SyncCache::new_from_wgpu(
+            device,
+            mtl::MTLTextureUsage::ShaderRead,
+        )?);
+        Ok(decoder)
     }
 
     fn to_wgpu_textures(

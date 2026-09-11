@@ -2,6 +2,8 @@ use objc2_core_media as cm;
 use objc2_core_video as cv;
 use objc2_video_toolbox as vt;
 
+#[cfg(feature = "transcoder")]
+use crate::VideoTranscoderError;
 use crate::{
     VideoBackendError, VideoDecoderError, VideoDeviceInitError, VideoEncoderError,
     parser::{h264::H264ParserError, reference_manager::ReferenceManagementError},
@@ -279,9 +281,9 @@ pub enum VTDecoderError {
     #[error("Invalid input data: {0}")]
     InvalidInputData(String),
 
-    #[cfg(feature = "wgpu")]
+    #[cfg(metal_interop)]
     #[error(transparent)]
-    MetalTexture(#[from] super::wgpu_api::MetalTextureError),
+    MetalTexture(#[from] super::metal_interop::MetalTextureError),
 
     #[error("Decoder asked to output to wgpu textures, but was created without a wgpu device")]
     NotConfiguredForWgpuOutput,
@@ -352,35 +354,33 @@ pub enum VTEncoderError {
     #[error("Encoder asked to encode wgpu textures, but was created without a wgpu device")]
     NotConfiguredForWgpuInput,
 
+    #[error("Encoder asked for a Metal input frame, but was created without a Metal device")]
+    NotConfiguredForMetalInput,
+
     #[cfg(feature = "wgpu")]
     #[error(transparent)]
     WgpuTextureEncoder(#[from] crate::encoders::WgpuTextureEncoderError),
 
-    #[cfg(feature = "wgpu")]
     #[error(transparent)]
     Init(#[from] VTInitError),
 
-    #[cfg(feature = "wgpu")]
     #[error(
         "The Metal device did not provide an MTLSharedEvent, which wgpu texture encoding requires"
     )]
     SharedEventUnavailable,
 
-    #[cfg(feature = "wgpu")]
+    #[cfg(metal_interop)]
     #[error(transparent)]
-    MetalTexture(#[from] super::wgpu_api::MetalTextureError),
+    MetalTexture(#[from] super::metal_interop::MetalTextureError),
 
-    #[cfg(feature = "wgpu")]
     #[error("The frame submission callback was dropped before reporting a result")]
     SubmissionLost,
 
-    #[cfg(feature = "wgpu")]
     #[error(
         "Timed out waiting for the GPU to finish the frame copy (the device may have been lost)"
     )]
     SubmissionTimeout,
 
-    #[cfg(feature = "wgpu")]
     #[error(
         "The encoder was asked to wait for an encoded frame, but no submitted frame is pending"
     )]
@@ -440,5 +440,68 @@ impl From<VTInitError> for VideoDecoderError {
             message: err.to_string(),
             source: Box::new(err),
         })
+    }
+}
+
+#[cfg(feature = "transcoder")]
+#[derive(Debug, thiserror::Error)]
+pub enum VTTranscoderError {
+    #[error(transparent)]
+    Decoder(#[from] VTDecoderError),
+
+    #[error(transparent)]
+    Encoder(#[from] VTEncoderError),
+
+    #[error("H264 parser error: {0}")]
+    ParserError(#[from] H264ParserError),
+
+    #[error("Reference management error: {0}")]
+    ReferenceManagementError(#[from] ReferenceManagementError),
+
+    #[error(transparent)]
+    Init(#[from] VTInitError),
+
+    #[error(transparent)]
+    MetalTexture(#[from] super::metal_interop::MetalTextureError),
+
+    #[error("This machine has no Metal device")]
+    NoMetalDevice,
+
+    #[error("The Metal device does not support Metal Performance Shaders, which resizing requires")]
+    MetalPerformanceShadersUnsupported,
+
+    #[error("Failed to create a Metal command queue")]
+    CommandQueueCreationFailed,
+
+    #[error("Failed to create a Metal command buffer")]
+    CommandBufferCreationFailed,
+
+    #[error("The GPU failed to execute the resize commands: {0}")]
+    ResizeFailed(String),
+}
+
+#[cfg(feature = "transcoder")]
+impl From<VTTranscoderError> for VideoTranscoderError {
+    fn from(err: VTTranscoderError) -> Self {
+        match err {
+            VTTranscoderError::Decoder(err) => VideoTranscoderError::Decoder(err.into()),
+            VTTranscoderError::Encoder(err) => VideoTranscoderError::Encoder(err.into()),
+            VTTranscoderError::ParserError(err) => VideoTranscoderError::Decoder(err.into()),
+            VTTranscoderError::ReferenceManagementError(err) => {
+                VideoTranscoderError::Decoder(err.into())
+            }
+            VTTranscoderError::Init(_)
+            | VTTranscoderError::MetalTexture(_)
+            | VTTranscoderError::NoMetalDevice
+            | VTTranscoderError::MetalPerformanceShadersUnsupported
+            | VTTranscoderError::CommandQueueCreationFailed
+            | VTTranscoderError::CommandBufferCreationFailed
+            | VTTranscoderError::ResizeFailed(_) => {
+                VideoTranscoderError::BackendError(VideoBackendError {
+                    message: err.to_string(),
+                    source: Box::new(err),
+                })
+            }
+        }
     }
 }
