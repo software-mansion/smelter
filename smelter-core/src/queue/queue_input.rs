@@ -47,6 +47,10 @@ impl<T> QueueSender<T> {
     pub fn try_send(&self, item: T) -> Result<(), crossbeam_channel::TrySendError<T>> {
         self.0.try_send(item)
     }
+
+    pub fn into_inner(self) -> crossbeam_channel::Sender<T> {
+        self.0
+    }
 }
 
 impl<T> std::fmt::Debug for QueueSender<T> {
@@ -214,8 +218,8 @@ impl InnerQueueInput {
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum QueueTrackOffset {
+#[derive(Debug, Clone)]
+pub enum QueueTrackOffset {
     None,
     /// Effectively offset from sync point
     Pts(Timestamp),

@@ -312,16 +312,15 @@ impl SingleBenchmarkPass {
         &self,
         pipeline: &Arc<Mutex<Pipeline>>,
         input_id: InputId,
-    ) -> Result<Sender<PipelineEvent<Frame>>, RegisterInputError> {
+    ) -> Result<Sender<Frame>, RegisterInputError> {
         let input = Pipeline::register_raw_data_input(
             pipeline,
             input_id,
             RawDataInputOptions {
                 video: true,
                 audio: false,
-                buffer_duration: None,
                 required: true,
-                offset: None,
+                offset: QueueTrackOffset::None,
             },
         )?;
 
@@ -426,7 +425,7 @@ fn default_audio_encoder() -> AudioEncoderOptions {
     })
 }
 
-fn raw_data_sender(senders: Vec<Sender<PipelineEvent<Frame>>>, input: RawInputFile) {
+fn raw_data_sender(senders: Vec<Sender<Frame>>, input: RawInputFile) {
     if senders.is_empty() {
         return;
     }
@@ -445,7 +444,7 @@ fn raw_data_sender(senders: Vec<Sender<PipelineEvent<Frame>>>, input: RawInputFi
             counter += 1;
 
             for sender in &senders {
-                if sender.send(PipelineEvent::Data(frame.clone())).is_err() {
+                if sender.send(frame.clone()).is_err() {
                     debug!("Stopping raw data sender");
                     return;
                 }

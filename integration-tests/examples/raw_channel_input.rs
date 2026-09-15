@@ -97,9 +97,8 @@ fn main() {
         RawDataInputOptions {
             video: true,
             audio: false,
-            buffer_duration: None,
             required: true,
-            offset: Some(Duration::ZERO),
+            offset: QueueTrackOffset::FromStart(Duration::ZERO),
         },
     )
     .unwrap();
@@ -112,7 +111,7 @@ fn main() {
 
     let video_sender = sender.video.unwrap();
     for frame in frames {
-        video_sender.send(PipelineEvent::Data(frame)).unwrap();
+        video_sender.send(frame).unwrap();
     }
     thread::sleep(Duration::from_millis(30000));
 }
