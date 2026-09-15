@@ -8,6 +8,7 @@ use crate::backends::vulkan::{
     codec::h264::parameters::H264DecodeProfileInfo,
     vulkan_decoder::VulkanDecoderError,
     vulkan_device::EncodingDevice,
+    vulkan_encoder::VulkanEncoderError,
     wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
 };
 
@@ -162,6 +163,175 @@ impl DecodeInputBuffer {
         Ok(())
     }
 
+    pub(crate) fn release_to_pool(self) {
+        if let Some(pool_freelist) = self.pool_freelist.upgrade() {
+            pool_freelist.lock().unwrap().push(self);
+        }
+    }
+}
+
+pub(crate) struct EncodeOutputBufferPool<'a> {
+    freelist: Arc<Mutex<Vec<EncodeOutputBuffer>>>,
+    allocator: Arc<Allocator>,
+    profile: Arc<ProfileInfo<'a>>,
+    buffer_len: u64,
+}
+
+impl<'a> EncodeOutputBufferPool<'a> {
+    pub(crate) fn new(
+        allocator: Arc<Allocator>,
+        profile: Arc<ProfileInfo<'a>>,
+        buffer_len: u64,
+    ) -> Self {
+        Self {
+            allocator,
+            freelist: Arc::new(Mutex::new(Vec::new())),
+            profile,
+            buffer_len,
+        }
+    }
+
+    pub(crate) fn buffer(&mut self) -> Result<EncodeOutputBuffer, VulkanEncoderError> {
+        if let Some(buffer) = self.freelist.lock().unwrap().pop() {
+            return Ok(buffer);
+        }
+
+        let buffer = Buffer::new_encode(self.allocator.clone(), self.buffer_len, &self.profile)?;
+
+        Ok(EncodeOutputBuffer {
+            buffer,
+            pool_freelist: Arc::downgrade(&self.freelist),
+        })
+    }
+}
+
+pub(crate) struct EncodeOutputBuffer {
+    // TODO: this buffer should grow when necessary
+    pub(crate) buffer: Buffer,
+    pool_freelist: Weak<Mutex<Vec<EncodeOutputBuffer>>>,
+}
+
+impl EncodeOutputBuffer {
+    pub(crate) fn release_to_pool(self) {
+        if let Some(pool_freelist) = self.pool_freelist.upgrade() {
+            pool_freelist.lock().unwrap().push(self);
+        }
+    }
+}
+
+pub(crate) struct EncodeInputImagePool<'a> {
+    freelist: Arc<Mutex<Vec<EncodeInputImage>>>,
+    encoding_device: Arc<EncodingDevice>,
+    profile: Arc<ProfileInfo<'a>>,
+    extent: vk::Extent3D,
+    queue_family_indices: Vec<u32>,
+    layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
+}
+
+impl<'a> EncodeInputImagePool<'a> {
+    pub(crate) fn new(
+        encoding_device: Arc<EncodingDevice>,
+        profile: Arc<ProfileInfo<'a>>,
+        extent: vk::Extent3D,
+        queue_family_indices: Vec<u32>,
+        layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
+    ) -> Self {
+        Self {
+            freelist: Arc::new(Mutex::new(Vec::new())),
+            encoding_device,
+            profile,
+            extent,
+            queue_family_indices,
+            layout_tracker,
+        }
+    }
+
+    pub(crate) fn image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError> {
+        if let Some(image) = self.freelist.lock().unwrap().pop() {
+            return Ok(image);
+        }
+
+        let image = Image::new_encode(
+            &self.encoding_device,
+            self.extent,
+            &self.profile,
+            &self.queue_family_indices,
+            self.layout_tracker.clone(),
+        )?;
+
+        Ok(EncodeInputImage {
+            image: Arc::new(image),
+            pool_freelist: Arc::downgrade(&self.freelist),
+        })
+    }
+
+    #[cfg(feature = "wgpu")]
+    pub(crate) fn image_with_wgpu_texture(
+        &mut self,
+        wgpu_device: &wgpu::Device,
+    ) -> Result<(EncodeInputImage, wgpu::Texture), VulkanEncoderError> {
+        use wgpu::hal::vulkan::Api as VkApi;
+
+        let hal_device = unsafe { wgpu_device.as_hal::<VkApi>().unwrap() };
+
+        let image = self.image()?;
+
+        let vk_extent = image.image.extent;
+        let size = wgpu::Extent3d {
+            width: vk_extent.width,
+            height: vk_extent.height,
+            depth_or_array_layers: vk_extent.depth,
+        };
+
+        let image_clone = image.image.clone();
+        let hal_texture = unsafe {
+            hal_device.texture_from_raw(
+                image.image.image,
+                &wgpu::hal::TextureDescriptor {
+                    label: Some("gpu-video encoder input texture"),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::NV12,
+                    usage: wgpu::TextureUses::COLOR_TARGET | wgpu::TextureUses::COPY_DST,
+                    memory_flags: wgpu::hal::MemoryFlags::empty(),
+                    view_formats: Vec::new(),
+                },
+                Some(Box::new(move || {
+                    drop(image_clone);
+                })),
+                wgpu::hal::vulkan::TextureMemory::External,
+            )
+        };
+
+        let wgpu_texture = unsafe {
+            wgpu_device.create_texture_from_hal::<VkApi>(
+                hal_texture,
+                &wgpu::TextureDescriptor {
+                    label: Some("gpu-video encoder input texture"),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::NV12,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                },
+                wgpu::TextureUses::UNINITIALIZED,
+            )
+        };
+
+        Ok((image, wgpu_texture))
+    }
+}
+
+pub(crate) struct EncodeInputImage {
+    pub(crate) image: Arc<Image>,
+    pool_freelist: Weak<Mutex<Vec<EncodeInputImage>>>,
+}
+
+impl EncodeInputImage {
     pub(crate) fn release_to_pool(self) {
         if let Some(pool_freelist) = self.pool_freelist.upgrade() {
             pool_freelist.lock().unwrap().push(self);
@@ -384,15 +554,14 @@ impl Image {
         device: &EncodingDevice,
         extent: vk::Extent3D,
         profile: &ProfileInfo,
-        additional_queue_index: u32,
+        additional_queue_family_indices: &[u32],
         tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, VulkanCommonError> {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
             .profiles(std::slice::from_ref(&profile.profile_info));
-        let queue_indices = [
-            device.encode_queues.family_index as u32,
-            additional_queue_index,
-        ];
+        let mut queue_indices = vec![device.encode_queues.family_index as u32];
+        queue_indices.extend_from_slice(additional_queue_family_indices);
+
         let encode_image_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
@@ -401,10 +570,15 @@ impl Image {
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
+            .usage(
+                vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR,
+            )
             .sharing_mode(vk::SharingMode::CONCURRENT)
             .queue_family_indices(&queue_indices)
             .initial_layout(vk::ImageLayout::UNDEFINED)
+            .flags(vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE)
             .push_next(&mut profile_list_info);
 
         Self::new(device.allocator.clone(), &encode_image_info, tracker)
