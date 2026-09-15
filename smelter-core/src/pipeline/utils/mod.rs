@@ -1,5 +1,4 @@
 pub(crate) mod channel;
-pub(crate) mod input_buffer;
 pub(crate) mod input_sync;
 pub(crate) mod live_sync;
 
