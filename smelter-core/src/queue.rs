@@ -27,10 +27,8 @@ use crate::audio_mixer::InputSamplesSet;
 
 use crate::prelude::*;
 
-pub use self::queue_input::{InputSideChannel, QueueInputOptions};
-pub(crate) use self::queue_input::{
-    QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput,
-};
+pub use self::queue_input::{InputSideChannel, QueueInputOptions, QueueTrackOffset};
+pub(crate) use self::queue_input::{QueueInput, QueueSender, QueueTrackOptions, WeakQueueInput};
 
 use self::{
     audio_queue::AudioQueue,

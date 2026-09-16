@@ -4,28 +4,21 @@ use crossbeam_channel::Sender;
 
 use crate::prelude::*;
 
+/// Senders are connected directly to the queue. Dropping a sender signals end of stream.
 #[derive(Debug)]
 pub struct RawDataInputSender {
-    pub video: Option<Sender<PipelineEvent<Frame>>>,
-    pub audio: Option<Sender<PipelineEvent<InputAudioSamples>>>,
+    pub video: Option<Sender<Frame>>,
+    pub audio: Option<Sender<InputAudioSamples>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct RawDataInputOptions {
     pub video: bool,
     pub audio: bool,
-
-    /// Duration of stream that should be buffered before stream is started.
-    /// If you have both audio and video streams then make sure to use the same value
-    /// to avoid desync.
-    ///
-    /// This value defines minimal latency on the queue, but if you set it to low and fail
-    /// to deliver the input stream on time it can cause either black screen or flickering image.
-    ///
-    /// By default DEFAULT_BUFFER_DURATION will be used.
-    pub buffer_duration: Option<Duration>,
     pub required: bool,
-    pub offset: Option<Duration>,
+    /// Defines how PTS of delivered frames/samples maps onto the queue timeline. PTS values
+    /// are passed to the queue unchanged.
+    pub offset: QueueTrackOffset,
 }
 
 #[derive(Debug, Clone)]
