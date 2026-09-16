@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
 
 use crate::{
-    RawFrameData, VideoBackendError,
+    H264ParserError, RawFrameData, ReferenceManagementError, VideoBackendError,
     backends::vulkan::{
         VulkanCommonError, codec::h264::parameters::SeqParameterSetExt,
         vulkan_device::DecodingDevice, wrappers::*,
@@ -446,8 +446,7 @@ impl<'a> VulkanDecoder<'a> {
                 )
         };
 
-        let semaphore_wait_value = self
-            .decoding_device
+        self.decoding_device
             .h264_decode_queues
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
@@ -495,7 +494,6 @@ impl<'a> VulkanDecoder<'a> {
                     cropped_height: cropped_extent.height,
                 },
             },
-            semaphore_wait_value,
             result_query,
             in_flight_resources,
             decoder: self,
@@ -877,6 +875,12 @@ pub enum VulkanDecoderError {
     #[error("Monochrome video is not supported")]
     MonochromeChromaFormatUnsupported,
 
+    #[error("H264 parser error: {0}")]
+    ParserError(#[from] H264ParserError),
+
+    #[error("Reference management error: {0}")]
+    ReferenceManagementError(#[from] ReferenceManagementError),
+
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
 }
@@ -890,6 +894,10 @@ impl From<VulkanDecoderError> for VideoDecoderError {
             }
             VulkanDecoderError::VulkanCommonError(VulkanCommonError::SubmissionWaitTimeout) => {
                 VideoDecoderError::DecodeSubmissionTimeout
+            }
+            VulkanDecoderError::ParserError(err) => VideoDecoderError::ParserError(err),
+            VulkanDecoderError::ReferenceManagementError(err) => {
+                VideoDecoderError::ReferenceManagementError(err)
             }
             VulkanDecoderError::VkError(_)
             | VulkanDecoderError::NoSession
@@ -968,8 +976,6 @@ pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
     pub(crate) decode_result: DecodeResult<DecodeSubmissionImageInfo>,
     pub(crate) decoder: &'borrow mut VulkanDecoder<'decoder>,
     pub(crate) result_query: Option<ResultQuery<vk::QueryResultStatusKHR>>,
-    #[cfg_attr(not(feature = "transcoder"), expect(dead_code))]
-    pub(crate) semaphore_wait_value: SemaphoreWaitValue,
     pub(crate) in_flight_resources: InFlightDecodeResources,
 }
 
