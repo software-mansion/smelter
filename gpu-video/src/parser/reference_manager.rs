@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use h264_reader::nal::{
     pps::PicParameterSet,
-    slice::{
-        DecRefPicMarking, MemoryManagementControlOperation, ModificationOfPicNums, NumRefIdxActive,
-        RefPicListModifications, SliceHeader,
-    },
+    slice::{DecRefPicMarking, MemoryManagementControlOperation, SliceHeader},
     sps::SeqParameterSet,
 };
 
@@ -31,21 +28,10 @@ pub enum ReferenceManagementError {
     /// cleared by decoding a valid IDR frame.
     #[error("Decoder is in a corrupted state. Waiting for IDR frame")]
     CorruptedState,
-
-    #[error(
-        "A non-existing short-term reference remains in the active reference picture list after the modification process"
-    )]
-    NonExistingReferenceInActiveList,
 }
 
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct ReferenceId(usize);
-
-#[derive(Debug, Clone, Copy)]
-enum BFrameReferenceListKind {
-    L0,
-    L1,
-}
 
 #[derive(Debug, Default)]
 #[allow(non_snake_case)]
@@ -564,105 +550,31 @@ impl ReferenceContext {
             PicOrderCnt_for_decoding
         };
 
-        let (reference_list_l0, reference_list_l1) = match header.slice_type.family {
-            h264_reader::nal::slice::SliceFamily::P => {
-                let num_ref_idx_l0_active = header.num_ref_idx_l0_active(pps);
-
-                let mut reference_list_l0 =
-                    self.initialize_reference_picture_list_for_p_frame(&header, sps)?;
-
-                match &header.ref_pic_list_modification {
-                    Some(RefPicListModifications::P {
-                        ref_pic_list_modification_l0,
-                    }) => {
-                        self.modify_reference_picture_list(
-                            sps,
-                            &header,
-                            &mut reference_list_l0,
-                            ref_pic_list_modification_l0,
-                        )?;
-                    }
-
-                    None
-                    | Some(RefPicListModifications::I)
-                    | Some(RefPicListModifications::B { .. }) => return Err(ReferenceManagementError::IncorrectData(
-                        "a slice marked 'P' slice family contains a reference picture list for a different family".into()
-                    ))?,
-                }
-
-                reference_list_l0.truncate(num_ref_idx_l0_active as usize);
-
-                if reference_list_l0.iter().any(|p| p.non_existing) {
-                    return Err(ReferenceManagementError::NonExistingReferenceInActiveList);
-                }
-
-                (Some(reference_list_l0), None)
-            }
-            h264_reader::nal::slice::SliceFamily::I => (None, None),
-            h264_reader::nal::slice::SliceFamily::B => {
-                let num_ref_idx_l0_active = header.num_ref_idx_l0_active(pps);
-                let num_ref_idx_l1_active = header.num_ref_idx_l1_active(pps)?;
-
-                let mut reference_list_l0 = self.initialize_reference_picture_list_for_b_frame(
-                    sps,
-                    PicOrderCnt_for_decoding,
-                    BFrameReferenceListKind::L0,
-                )?;
-                let mut reference_list_l1 = self.initialize_reference_picture_list_for_b_frame(
-                    sps,
-                    PicOrderCnt_for_decoding,
-                    BFrameReferenceListKind::L1,
-                )?;
-
-                match &header.ref_pic_list_modification {
-                    Some(RefPicListModifications::B {
-                        ref_pic_list_modification_l0,
-                        ref_pic_list_modification_l1,
-                    }) => {
-                        self.modify_reference_picture_list(
-                            sps,
-                            &header,
-                            &mut reference_list_l0,
-                            ref_pic_list_modification_l0,
-                        )?;
-
-                        self.modify_reference_picture_list(
-                            sps,
-                            &header,
-                            &mut reference_list_l1,
-                            ref_pic_list_modification_l1
-                        )?;
-                    }
-
-                    None
-                    | Some(RefPicListModifications::I)
-                    | Some(RefPicListModifications::P { .. }) => return Err(ReferenceManagementError::IncorrectData(
-                        "a slice marked 'B' slice family contains a reference picture list for a different family".into()
-                    ))?,
-                }
-
-                reference_list_l0.truncate(num_ref_idx_l0_active as usize);
-                reference_list_l1.truncate(num_ref_idx_l1_active as usize);
-
-                if reference_list_l0.iter().any(|p| p.non_existing)
-                    || reference_list_l1.iter().any(|p| p.non_existing)
-                {
-                    return Err(ReferenceManagementError::NonExistingReferenceInActiveList);
-                }
-
-                (Some(reference_list_l0), Some(reference_list_l1))
-            }
+        match header.slice_type.family {
+            h264_reader::nal::slice::SliceFamily::P
+            | h264_reader::nal::slice::SliceFamily::B
+            | h264_reader::nal::slice::SliceFamily::I => {}
             h264_reader::nal::slice::SliceFamily::SP => {
                 return Err(ReferenceManagementError::SPFramesNotSupported);
             }
             h264_reader::nal::slice::SliceFamily::SI => {
                 return Err(ReferenceManagementError::SIFramesNotSupported);
             }
+        }
+
+        // An IDR picture invalidates the whole DPB before it is decoded (H.264 spec 8.2.5.1), so
+        // there is nothing to hand over as reference pictures.
+        let reference_pictures = if matches!(
+            header.dec_ref_pic_marking,
+            Some(DecRefPicMarking::Idr { .. })
+        ) {
+            Vec::new()
+        } else {
+            self.reference_pictures_for_frame(&header, sps)
         };
 
         Ok(DecodeInformation {
-            reference_list_l0,
-            reference_list_l1,
+            reference_pictures,
             header: header.clone(),
             slice_indices,
             rbsp_bytes,
@@ -863,98 +775,56 @@ impl ReferenceContext {
         Ok([pic_order_cnt; 2])
     }
 
-    fn initialize_short_term_reference_picture_list_for_p_frame(
+    /// Returns every picture currently held in the DPB, in the form the decoding backend expects
+    /// as its active reference pictures for the current frame.
+    ///
+    /// The reference picture list construction and modification processes (H.264 spec 8.2.4) are
+    /// deliberately *not* performed here. Vulkan Video drivers parse the slice headers themselves
+    /// and build `RefPicList0`/`RefPicList1` from the set of reference slots they are given, so the
+    /// application has to hand over the whole DPB. This mirrors what ffmpeg's Vulkan hwaccel does.
+    ///
+    /// Short-term pictures come first, most recent first, followed by long-term pictures in
+    /// ascending `LongTermFrameIdx` order. Non-existing pictures (inferred for gaps in `frame_num`)
+    /// are skipped, because they are never sent to the backend and have no DPB slot.
+    fn reference_pictures_for_frame(
         &self,
         header: &SliceHeader,
         sps: &SeqParameterSet,
     ) -> Vec<ReferencePictureInfo> {
-        let mut short_term_reference_list = self
+        let mut short_term = self
             .pictures
             .short_term
             .iter()
-            .map(|reference| {
-                (
-                    reference,
-                    decode_picture_numbers_for_short_term_ref(
-                        reference.frame_num.into(),
-                        header.frame_num.into(),
-                        sps,
-                    ),
-                )
+            .filter(|pic| !pic.non_existing)
+            .map(|pic| {
+                let numbers = decode_picture_numbers_for_short_term_ref(
+                    pic.frame_num.into(),
+                    header.frame_num.into(),
+                    sps,
+                );
+                (numbers.FrameNumWrap, pic)
             })
             .collect::<Vec<_>>();
+        short_term.sort_by_key(|(frame_num_wrap, _)| -*frame_num_wrap);
 
-        short_term_reference_list.sort_by_key(|(_, numbers)| -numbers.PicNum);
+        let mut long_term = self.pictures.long_term.iter().collect::<Vec<_>>();
+        long_term.sort_by_key(|pic| pic.LongTermFrameIdx);
 
-        short_term_reference_list
+        short_term
             .into_iter()
-            .map(|(reference, numbers)| ReferencePictureInfo {
-                id: reference.id,
-                LongTermPicNum: None,
-                FrameNum: numbers.FrameNum as u16,
-                non_existing: reference.non_existing,
-                PicOrderCnt: reference.pic_order_cnt,
-            })
-            .collect()
-    }
-
-    fn initialize_long_term_reference_picture_list_for_frame(&self) -> Vec<ReferencePictureInfo> {
-        let mut long_term_reference_list = self.pictures.long_term.clone();
-
-        long_term_reference_list.sort_by_key(|pic| pic.LongTermFrameIdx);
-
-        long_term_reference_list
-            .into_iter()
-            .map(|pic| ReferencePictureInfo {
+            .map(|(_, pic)| ReferencePictureInfo {
                 id: pic.id,
-                LongTermPicNum: Some(pic.LongTermFrameIdx),
-                PicOrderCnt: pic.pic_order_cnt,
-                non_existing: false,
+                LongTermFrameIdx: None,
                 FrameNum: pic.frame_num,
+                PicOrderCnt: pic.pic_order_cnt,
             })
+            .chain(long_term.into_iter().map(|pic| ReferencePictureInfo {
+                id: pic.id,
+                LongTermFrameIdx: Some(pic.LongTermFrameIdx),
+                FrameNum: pic.frame_num,
+                PicOrderCnt: pic.pic_order_cnt,
+            }))
             .collect()
-    }
-
-    fn initialize_reference_picture_list_for_p_frame(
-        &self,
-        header: &SliceHeader,
-        sps: &SeqParameterSet,
-    ) -> Result<Vec<ReferencePictureInfo>, ReferenceManagementError> {
-        let short_term_reference_list =
-            self.initialize_short_term_reference_picture_list_for_p_frame(header, sps);
-
-        let long_term_reference_list = self.initialize_long_term_reference_picture_list_for_frame();
-
-        let reference_list = short_term_reference_list
-            .into_iter()
-            .chain(long_term_reference_list)
-            .collect::<Vec<_>>();
-
-        Ok(reference_list)
-    }
-
-    #[allow(non_snake_case)]
-    fn initialize_reference_picture_list_for_b_frame(
-        &self,
-        sps: &SeqParameterSet,
-        CurrPicOrderCnt: [i32; 2],
-        list_kind: BFrameReferenceListKind,
-    ) -> Result<Vec<ReferencePictureInfo>, ReferenceManagementError> {
-        let short_term_reference_list = self
-            .initialize_short_term_reference_picture_list_for_b_frame(
-                sps,
-                CurrPicOrderCnt,
-                list_kind,
-            )?;
-
-        let long_term_reference_list = self.initialize_long_term_reference_picture_list_for_frame();
-
-        let reference_list = short_term_reference_list
-            .into_iter()
-            .chain(long_term_reference_list)
-            .collect();
-
-        Ok(reference_list)
     }
 
     fn verify_frame_num(
@@ -969,194 +839,6 @@ impl ReferenceContext {
             self.detected_corrupted_state = true;
             return Err(ReferenceManagementError::CorruptedState);
         }
-
-        Ok(())
-    }
-
-    #[allow(non_snake_case)]
-    fn initialize_short_term_reference_picture_list_for_b_frame(
-        &self,
-        sps: &SeqParameterSet,
-        CurrPicOrderCnt: [i32; 2],
-        list_kind: BFrameReferenceListKind,
-    ) -> Result<Vec<ReferencePictureInfo>, ReferenceManagementError> {
-        let is_poc_type_zero = matches!(
-            sps.pic_order_cnt,
-            h264_reader::nal::sps::PicOrderCntType::TypeZero { .. }
-        );
-
-        let eligible = self
-            .pictures
-            .short_term
-            .iter()
-            .filter(|pic| !is_poc_type_zero || !pic.non_existing);
-
-        let (mut primary, mut remaining): (Vec<_>, Vec<_>) =
-            eligible.partition(|pic| match list_kind {
-                BFrameReferenceListKind::L0 => pic.pic_order_cnt < CurrPicOrderCnt,
-                BFrameReferenceListKind::L1 => pic.pic_order_cnt > CurrPicOrderCnt,
-            });
-
-        primary.sort_by_key(|pic| match list_kind {
-            BFrameReferenceListKind::L0 => -pic.pic_order_cnt[0],
-            BFrameReferenceListKind::L1 => pic.pic_order_cnt[0],
-        });
-
-        remaining.sort_by_key(|pic| match list_kind {
-            BFrameReferenceListKind::L0 => pic.pic_order_cnt[0],
-            BFrameReferenceListKind::L1 => -pic.pic_order_cnt[0],
-        });
-
-        let reference_list = primary
-            .into_iter()
-            .chain(remaining)
-            .map(|pic| ReferencePictureInfo {
-                LongTermPicNum: None,
-                FrameNum: pic.frame_num,
-                non_existing: pic.non_existing,
-                PicOrderCnt: pic.pic_order_cnt,
-                id: pic.id,
-            })
-            .collect();
-
-        Ok(reference_list)
-    }
-
-    #[allow(non_snake_case)]
-    fn modify_reference_picture_list(
-        &self,
-        sps: &SeqParameterSet,
-        header: &SliceHeader,
-        reference_list: &mut Vec<ReferencePictureInfo>,
-        ref_pic_list_modifications: &[ModificationOfPicNums],
-    ) -> Result<(), ReferenceManagementError> {
-        // 0 is Subtract, 1 is Add, 2 is LongTermRef
-        let mut refIdxLX = 0;
-        let mut picNumLXPred = header.frame_num as i64;
-
-        for ref_pic_list_modification in ref_pic_list_modifications {
-            match ref_pic_list_modification {
-                ModificationOfPicNums::Subtract(_) | ModificationOfPicNums::Add(_) => {
-                    self.modify_short_term_reference_picture_list(
-                        sps,
-                        header,
-                        reference_list,
-                        ref_pic_list_modification,
-                        &mut refIdxLX,
-                        &mut picNumLXPred,
-                    )?;
-                }
-
-                ModificationOfPicNums::LongTermRef(long_term_pic_num) => {
-                    self.modify_long_term_reference_picture_list(
-                        reference_list,
-                        *long_term_pic_num,
-                        &mut refIdxLX,
-                    )?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    #[allow(non_snake_case)]
-    fn modify_long_term_reference_picture_list(
-        &self,
-        reference_list: &mut Vec<ReferencePictureInfo>,
-        picture_to_shift: u32,
-        refIdxLX: &mut usize,
-    ) -> Result<(), ReferenceManagementError> {
-        let shifted_picture_idx = reference_list
-            .iter()
-            .enumerate()
-            .find(|(_, pic)| match pic.LongTermPicNum {
-                Some(num) => num == picture_to_shift as u64,
-                None => false,
-            })
-            .map(|(i, _)| i)
-            .ok_or(ReferenceManagementError::IncorrectData(
-                format!("picture with LongTermPicNum = {picture_to_shift} is not present in the reference list during modification")
-            ))?;
-
-        if reference_list[shifted_picture_idx].non_existing {
-            return Err(ReferenceManagementError::IncorrectData(
-                "a reference picture marked for shifting in the long-term reference list modification process is marked as non-existing".into()
-            ));
-        }
-
-        let shifted_picture = reference_list.remove(shifted_picture_idx);
-        reference_list.insert(*refIdxLX, shifted_picture);
-        *refIdxLX += 1;
-
-        Ok(())
-    }
-
-    #[allow(non_snake_case)]
-    fn modify_short_term_reference_picture_list(
-        &self,
-        sps: &SeqParameterSet,
-        header: &SliceHeader,
-        reference_list: &mut Vec<ReferencePictureInfo>,
-        ref_pic_list_modification: &ModificationOfPicNums,
-        refIdxLX: &mut usize,
-        picNumLXPred: &mut i64,
-    ) -> Result<(), ReferenceManagementError> {
-        let picNumLXNoWrap = match *ref_pic_list_modification {
-            ModificationOfPicNums::Subtract(abs_diff_pic_num_minus_1) => {
-                let abs_diff_pic_num = abs_diff_pic_num_minus_1 as i64 + 1;
-                if *picNumLXPred - abs_diff_pic_num < 0 {
-                    *picNumLXPred - abs_diff_pic_num + sps.max_frame_num()
-                } else {
-                    *picNumLXPred - abs_diff_pic_num
-                }
-            }
-            ModificationOfPicNums::Add(abs_diff_pic_num_minus_1) => {
-                let abs_diff_pic_num = abs_diff_pic_num_minus_1 as i64 + 1;
-                if *picNumLXPred + abs_diff_pic_num >= sps.max_frame_num() {
-                    *picNumLXPred + abs_diff_pic_num - sps.max_frame_num()
-                } else {
-                    *picNumLXPred + abs_diff_pic_num
-                }
-            }
-            ModificationOfPicNums::LongTermRef(_) => return Ok(()),
-        };
-
-        *picNumLXPred = picNumLXNoWrap;
-
-        let picNumLX = if picNumLXNoWrap > header.frame_num as i64 {
-            picNumLXNoWrap - sps.max_frame_num()
-        } else {
-            picNumLXNoWrap
-        };
-
-        let shifted_picture_idx = reference_list
-            .iter()
-            .position(|picture_info| decode_picture_numbers_for_short_term_ref(picture_info.FrameNum.into(), header.frame_num.into(), sps).PicNum == picNumLX)
-            .ok_or(ReferenceManagementError::IncorrectData(
-                format!("picture with picNumLX = {picNumLX} is not present in the reference list during modification")
-            ))?;
-
-        if reference_list[shifted_picture_idx].non_existing {
-            return Err(ReferenceManagementError::IncorrectData(
-                "a short-term reference picture marked for shifting in the reference list modification process is marked as non-existing".into()
-            ));
-        }
-
-        if reference_list[shifted_picture_idx].is_long_term() {
-            return Err(ReferenceManagementError::IncorrectData(
-                "a long-term reference picture marked for shifting in the short-term reference list modification process".into()
-            ));
-        }
-
-        let shifted_picture_info = reference_list[shifted_picture_idx];
-        if *refIdxLX <= reference_list.len() {
-            reference_list.insert(*refIdxLX, shifted_picture_info);
-            if *refIdxLX <= shifted_picture_idx {
-                reference_list.remove(shifted_picture_idx + 1);
-            }
-        }
-        *refIdxLX += 1;
 
         Ok(())
     }
@@ -1190,7 +872,6 @@ fn decode_picture_numbers_for_short_term_ref(
     let PicNum = FrameNumWrap;
 
     ShortTermReferencePictureNumbers {
-        FrameNum,
         FrameNumWrap,
         PicNum,
     }
@@ -1207,8 +888,6 @@ struct LongTermReferencePicture {
 
 #[allow(non_snake_case)]
 struct ShortTermReferencePictureNumbers {
-    FrameNum: i64,
-
     FrameNumWrap: i64,
 
     PicNum: i64,
@@ -1221,47 +900,10 @@ struct ReferencePictures {
 }
 
 trait SliceHeaderExt {
-    fn num_ref_idx_l0_active(&self, pps: &PicParameterSet) -> u32;
-    fn num_ref_idx_l1_active(&self, pps: &PicParameterSet)
-    -> Result<u32, ReferenceManagementError>;
     fn includes_mmco_equal_5(&self) -> bool;
 }
 
 impl SliceHeaderExt for SliceHeader {
-    fn num_ref_idx_l0_active(&self, pps: &PicParameterSet) -> u32 {
-        self.num_ref_idx_active
-            .as_ref()
-            .map(|num| match num {
-                NumRefIdxActive::P {
-                    num_ref_idx_l0_active_minus1,
-                } => *num_ref_idx_l0_active_minus1,
-                NumRefIdxActive::B {
-                    num_ref_idx_l0_active_minus1,
-                    ..
-                } => *num_ref_idx_l0_active_minus1,
-            })
-            .unwrap_or(pps.num_ref_idx_l0_default_active_minus1)
-            + 1
-    }
-
-    fn num_ref_idx_l1_active(
-        &self,
-        pps: &PicParameterSet,
-    ) -> Result<u32, ReferenceManagementError> {
-        Ok(
-            self
-                .num_ref_idx_active
-                .as_ref()
-                .map(|num| match num {
-                    NumRefIdxActive::P { .. } => Err(ReferenceManagementError::IncorrectData(
-                        "requested num_ref_idx_l1_active, but the header contains the information for a P-frame, which does not include it".into()
-                    )),
-                    NumRefIdxActive::B { num_ref_idx_l1_active_minus1, .. } => Ok(*num_ref_idx_l1_active_minus1)
-                })
-                .unwrap_or(Ok(pps.num_ref_idx_l1_default_active_minus1))? + 1
-        )
-    }
-
     fn includes_mmco_equal_5(&self) -> bool {
         let Some(DecRefPicMarking::Adaptive(ref mmcos)) = self.dec_ref_pic_marking else {
             return false;
@@ -1275,8 +917,9 @@ impl SliceHeaderExt for SliceHeader {
 
 #[derive(Clone)]
 pub struct DecodeInformation {
-    pub(crate) reference_list_l0: Option<Vec<ReferencePictureInfo>>,
-    pub(crate) reference_list_l1: Option<Vec<ReferencePictureInfo>>,
+    /// All pictures in the DPB at the time this picture is decoded, see
+    /// [`ReferenceContext::reference_pictures_for_frame`].
+    pub(crate) reference_pictures: Vec<ReferencePictureInfo>,
     pub(crate) rbsp_bytes: Vec<u8>,
     pub(crate) slice_indices: Vec<usize>,
     pub(crate) header: Arc<SliceHeader>,
@@ -1289,8 +932,7 @@ pub struct DecodeInformation {
 impl std::fmt::Debug for DecodeInformation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DecodeInformation")
-            .field("reference_list_l0", &self.reference_list_l0)
-            .field("reference_list_l1", &self.reference_list_l1)
+            .field("reference_pictures", &self.reference_pictures)
             .field("slice_indices", &self.slice_indices)
             .field("sps_id", &self.sps_id)
             .field("pps_id", &self.pps_id)
@@ -1304,15 +946,15 @@ impl std::fmt::Debug for DecodeInformation {
 #[allow(non_snake_case)]
 pub(crate) struct ReferencePictureInfo {
     pub(crate) id: ReferenceId,
-    pub(crate) LongTermPicNum: Option<u64>,
-    pub(crate) non_existing: bool,
+    /// `Some` for long-term reference pictures.
+    pub(crate) LongTermFrameIdx: Option<u64>,
     pub(crate) FrameNum: u16,
     pub(crate) PicOrderCnt: [i32; 2],
 }
 
 impl ReferencePictureInfo {
     pub fn is_long_term(&self) -> bool {
-        self.LongTermPicNum.is_some()
+        self.LongTermFrameIdx.is_some()
     }
 }
 

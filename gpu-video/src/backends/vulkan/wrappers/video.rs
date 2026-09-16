@@ -209,6 +209,15 @@ impl Drop for VideoSession {
 
 impl From<ReferencePictureInfo> for vk::native::StdVideoDecodeH264ReferenceInfo {
     fn from(picture_info: ReferencePictureInfo) -> Self {
+        // The Vulkan spec does not define what `FrameNum` should hold for a long-term reference.
+        // Drivers need `LongTermPicNum` to resolve `long_term_pic_num` in
+        // `ref_pic_list_modification`, and ffmpeg's Vulkan hwaccel puts `LongTermFrameIdx` there
+        // (for frames `LongTermPicNum == LongTermFrameIdx`), so we follow that convention.
+        let frame_num = match picture_info.LongTermFrameIdx {
+            Some(idx) => idx as u16,
+            None => picture_info.FrameNum,
+        };
+
         vk::native::StdVideoDecodeH264ReferenceInfo {
             flags: vk::native::StdVideoDecodeH264ReferenceInfoFlags {
                 __bindgen_padding_0: [0; 3],
@@ -217,10 +226,11 @@ impl From<ReferencePictureInfo> for vk::native::StdVideoDecodeH264ReferenceInfo 
                     0,
                     0,
                     picture_info.is_long_term().into(),
-                    picture_info.non_existing.into(),
+                    // non-existing pictures are never sent to the backend
+                    0,
                 ),
             },
-            FrameNum: picture_info.FrameNum,
+            FrameNum: frame_num,
             PicOrderCnt: picture_info.PicOrderCnt,
             reserved: 0,
         }
