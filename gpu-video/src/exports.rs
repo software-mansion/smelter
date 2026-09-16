@@ -220,12 +220,14 @@ impl VideoDevice {
         )
     }
 
+    // TODO: docs
     /// Create a single-input multiple-output transcoder.
     /// Each item in `parameters.output_parameters` corresponds to one output.
     #[cfg(feature = "transcoder")]
     pub fn create_transcoder(
         &self,
         parameters: crate::parameters::TranscoderParameters,
+        on_chunk: impl FnMut(EncodedOutputChunk<Vec<u8>>) + Send + 'static,
     ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
         self.inner.clone().create_transcoder(parameters)
     }
