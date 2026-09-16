@@ -63,6 +63,7 @@ impl AudioEncoder for OpusEncoder {
             },
             AudioEncoderConfig {
                 extradata: Some(extradata),
+                initial_padding: None,
             },
         ))
     }

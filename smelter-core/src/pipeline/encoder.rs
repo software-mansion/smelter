@@ -1,4 +1,4 @@
-use std::{iter, sync::Arc};
+use std::{iter, sync::Arc, time::Duration};
 
 use smelter_render::{OutputFrameFormat, Resolution};
 use tokio::sync::watch;
@@ -47,6 +47,7 @@ pub(crate) trait VideoEncoder: Sized {
 #[derive(Debug)]
 pub(crate) struct AudioEncoderConfig {
     pub extradata: Option<bytes::Bytes>,
+    pub initial_padding: Option<Duration>,
 }
 
 pub(crate) trait AudioEncoder: Sized {

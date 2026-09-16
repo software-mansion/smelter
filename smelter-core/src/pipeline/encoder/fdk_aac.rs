@@ -125,6 +125,9 @@ impl AudioEncoder for FdkAacEncoder {
                 // carried inline in each frame, so there's no out-of-band ASC.
                 extradata: (info.confSize > 0)
                     .then(|| Bytes::copy_from_slice(&info.confBuf[0..(info.confSize as usize)])),
+                initial_padding: Some(Duration::from_secs_f64(
+                    info.nDelay as f64 / options.sample_rate as f64,
+                )),
             },
         ))
     }
@@ -229,10 +232,6 @@ impl FdkAacEncoder {
                 // assume that encoder is always producing batches representing full frame
                 let frame_start = self.encoded_samples;
                 self.encoded_samples += self.samples_per_frame as u64;
-
-                if self.encoded_samples <= self.codec_delay {
-                    continue;
-                }
 
                 let first_pts = self.first_input_pts.unwrap_or_default();
                 let offset = Duration::from_secs_f64(frame_start as f64 / self.sample_rate as f64);

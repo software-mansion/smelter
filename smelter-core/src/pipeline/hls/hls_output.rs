@@ -120,6 +120,7 @@ impl HlsOutput {
             start_at,
             video_stream.is_some(),
             audio_stream.is_some(),
+            None,
         );
 
         std::thread::Builder::new()
