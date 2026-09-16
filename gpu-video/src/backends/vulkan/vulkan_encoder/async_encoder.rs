@@ -32,7 +32,7 @@ use std::collections::HashMap;
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
 
-type OnEncodedChunkCallback = Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>;
+pub(crate) type OnEncodedChunkCallback = Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>;
 
 pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
     submission_tracker: SubmissionTracker,

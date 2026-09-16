@@ -55,6 +55,7 @@ pub(crate) struct ResizeSubmission {
     pub(crate) outputs: Box<[ResizingImageBundle]>,
     pub(crate) _input: ResizingImageBundle,
     pub(crate) descriptors: Descriptors,
+    pub(crate) wait_value: SemaphoreWaitValue,
 }
 
 impl ResizingImageBundle {
@@ -222,7 +223,7 @@ pub(crate) struct ResizingPipeline {
     descriptor_heap: DescriptorHeap,
     image_heap: ImageHeap,
     pipeline: ComputePipeline,
-    buffer_pool: CommandBufferPool,
+    pub(crate) buffer_pool: CommandBufferPool,
     device: Arc<VulkanDevice>,
 }
 
@@ -526,6 +527,7 @@ impl ResizingPipeline {
         signals
             .push(decoder_semaphore_submit_info.signal_info(vk::PipelineStageFlags2::ALL_COMMANDS));
 
+        let submission_wait_value = decoder_semaphore_submit_info.signal_value();
         let submit_info = vk::SubmitInfo2::default()
             .command_buffer_infos(std::slice::from_ref(&buffer_info))
             .wait_semaphore_infos(&waits)
@@ -539,7 +541,7 @@ impl ResizingPipeline {
             )?;
         }
 
-        buffer.mark_submitted(input_submission.semaphore_wait_value);
+        buffer.mark_submitted(submission_wait_value);
         for semaphore_submit_info in encoder_semaphore_submit_infos {
             semaphore_submit_info.mark_submitted();
         }
@@ -550,6 +552,7 @@ impl ResizingPipeline {
             outputs,
             _input: input,
             descriptors,
+            wait_value: submission_wait_value,
         })
     }
 

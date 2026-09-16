@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
@@ -11,9 +11,11 @@ use crate::{
         vulkan_decoder::{ImageModifiers, InFlightDecodeResources},
         vulkan_encoder::{
             DynVulkanEncoder, FullEncoderParameters, VulkanEncoder, VulkanEncoderError,
+            async_encoder::OnEncodedChunkCallback,
         },
         vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
-        wrappers::{ResultQuery, SemaphoreWaitValue},
+        waiter_thread::{SubmissionWaitRequest, WaiterThreadHandle},
+        wrappers::{CommandBufferPoolStorage, ResultQuery, SemaphoreWaitValue},
     },
     frame_sorter::{DecodeResult, FrameSorter},
     parameters::DecoderUsage,
@@ -35,7 +37,6 @@ enum AnyFullEncoderParameters {
 
 pub(crate) struct ResizedImages {
     images: ResizeSubmission,
-    decoder_wait_value: SemaphoreWaitValue,
     result_query: Option<ResultQuery<vk::QueryResultStatusKHR>>,
     _in_flight_resources: InFlightDecodeResources,
 }
@@ -47,6 +48,8 @@ pub struct VulkanTranscoder {
     reference_ctx: ReferenceContext,
     sorter: FrameSorter<ResizedImages>,
     resizing_pipeline: ResizingPipeline,
+    waiter_thread: Arc<WaiterThreadHandle>,
+    on_chunk_callback: Arc<Mutex<OnEncodedChunkCallback>>,
     encoders: Vec<Box<dyn DynVulkanEncoder<'static>>>,
 }
 
@@ -67,6 +70,8 @@ impl VulkanTranscoder {
     pub(crate) fn new(
         device: Arc<VulkanDevice>,
         config: TranscoderParameters,
+        waiter_thread: Arc<WaiterThreadHandle>,
+        on_chunk_callback: OnEncodedChunkCallback,
     ) -> Result<Self, VulkanTranscoderError> {
         let decoder = VulkanDecoder::new(
             Arc::new(device.decoding_device()?),
@@ -144,6 +149,8 @@ impl VulkanTranscoder {
             sorter,
             resizing_pipeline: pipeline,
             encoders,
+            on_chunk_callback: Arc::new(Mutex::new(on_chunk_callback)),
+            waiter_thread,
             device,
         })
     }
@@ -210,6 +217,10 @@ impl VulkanTranscoder {
         let mut encoded_frame_sets = Vec::new();
 
         for instruction in instructions {
+            let decoder_semaphore = self.decoder.tracker.semaphore_tracker.semaphore.clone();
+            let decoder_command_buffer_pools = self.decoder.tracker.command_buffer_pools.clone();
+            let resizing_pipeline_command_buffer_pools = self.resizing_pipeline.buffer_pool.clone();
+
             let Some(mut frame) = self.decoder.decode(instruction)? else {
                 continue;
             };
@@ -228,10 +239,23 @@ impl VulkanTranscoder {
                 .resizing_pipeline
                 .run(&mut frame, &mut trackers, cropped_extent)?;
 
+            // TODO: handle max in flight
+            // TODO: frame return strategy:
+            // 1. wait for all outputs to finish and then return
+            // 2. return output as soon as it's possible
+            self.waiter_thread.submit(SubmissionWaitRequest {
+                semaphore: decoder_semaphore,
+                wait_for: output.wait_value,
+                on_finish: Box::new(move || {
+                    decoder_command_buffer_pools.mark_submitted_as_free(output.wait_value);
+                    resizing_pipeline_command_buffer_pools
+                        .mark_submitted_as_free(output.wait_value);
+                }),
+            });
+
             let sorted = self.sorter.put(DecodeResult {
                 frame: ResizedImages {
                     images: output,
-                    decoder_wait_value: frame.semaphore_wait_value,
                     result_query: frame.result_query,
                     _in_flight_resources: frame.in_flight_resources,
                 },
@@ -261,16 +285,18 @@ impl VulkanTranscoder {
             submits.push(submit);
         }
 
-        let mut semaphores = Vec::new();
-        let mut values = Vec::new();
         for (submit, encoder) in submits.iter().zip(self.encoders.iter_mut()) {
-            semaphores.push(encoder.tracker().semaphore_tracker.semaphore.semaphore);
-            values.push(submit.0.wait_value.0);
+            let wait_for = submit.0.wait_value;
+            let command_buffer_pools = encoder.tracker().command_buffer_pools.clone();
+
+            self.waiter_thread.submit(SubmissionWaitRequest {
+                semaphore: encoder.tracker().semaphore_tracker.semaphore.clone(),
+                wait_for,
+                on_finish: Box::new(move || {
+                    command_buffer_pools.mark_submitted_as_free(wait_for);
+                }),
+            });
         }
-        let wait = vk::SemaphoreWaitInfo::default()
-            .semaphores(&semaphores)
-            .values(&values);
-        unsafe { self.device.device.wait_semaphores(&wait, u64::MAX)? };
 
         let mut results = Vec::new();
         for (submit, encoder) in submits.into_iter().zip(self.encoders.iter_mut()) {
@@ -279,13 +305,6 @@ impl VulkanTranscoder {
             results.push(result);
         }
 
-        // TODO: this is atrocious
-        self.decoder
-            .tracker
-            .mark_waited(resized_images.data.decoder_wait_value);
-
-        self.resizing_pipeline
-            .mark_command_buffers_completed(resized_images.data.decoder_wait_value);
         self.resizing_pipeline
             .free_submission(resized_images.data.images);
 

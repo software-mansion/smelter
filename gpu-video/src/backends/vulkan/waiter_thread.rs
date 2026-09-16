@@ -29,6 +29,7 @@ pub(crate) struct WaiterThreadHandle {
 }
 
 impl WaiterThreadHandle {
+    // TODO: inline SubmissionWaitRequest into args
     pub(crate) fn submit(&self, request: SubmissionWaitRequest) -> Result<(), VulkanCommonError> {
         self.shared.wait_requests.lock().unwrap().push(request);
         self.shared.waker_semaphore.wake()
@@ -146,7 +147,7 @@ pub(crate) struct SubmissionWaitRequest {
 }
 
 pub(crate) struct SubmissionTracker {
-    waiter_thread: Arc<WaiterThreadHandle>,
+    pub(crate) waiter_thread: Arc<WaiterThreadHandle>,
     semaphore: Arc<TimelineSemaphore>,
 
     max_in_flight: usize,
