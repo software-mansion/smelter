@@ -23,7 +23,7 @@ pub struct FdkAacEncoder {
     output_buffer: Vec<u8>,
     sample_rate: u32,
     samples_per_frame: u32,
-    codec_delay: u64,
+    codec_delay: Duration,
 
     // This logic relies on the fact that input samples will always be continuous.
     first_input_pts: Option<Timestamp>,
@@ -109,13 +109,14 @@ impl AudioEncoder for FdkAacEncoder {
             info = maybe_info.assume_init();
         }
 
+        let codec_delay = Duration::from_secs_f64(info.nDelay as f64 / options.sample_rate as f64);
         Ok((
             Self {
                 encoder,
                 input_buffer: Vec::new(),
                 output_buffer: vec![0; info.maxOutBufBytes as usize],
                 sample_rate: options.sample_rate,
-                codec_delay: info.nDelay as u64,
+                codec_delay,
                 first_input_pts: None,
                 encoded_samples: 0,
                 samples_per_frame: info.frameLength,
@@ -125,9 +126,7 @@ impl AudioEncoder for FdkAacEncoder {
                 // carried inline in each frame, so there's no out-of-band ASC.
                 extradata: (info.confSize > 0)
                     .then(|| Bytes::copy_from_slice(&info.confBuf[0..(info.confSize as usize)])),
-                initial_padding: Some(Duration::from_secs_f64(
-                    info.nDelay as f64 / options.sample_rate as f64,
-                )),
+                initial_padding: Some(codec_delay),
             },
         ))
     }
@@ -235,9 +234,7 @@ impl FdkAacEncoder {
 
                 let first_pts = self.first_input_pts.unwrap_or_default();
                 let offset = Duration::from_secs_f64(frame_start as f64 / self.sample_rate as f64);
-                let codec_delay =
-                    Duration::from_secs_f64(self.codec_delay as f64 / self.sample_rate as f64);
-                let pts = first_pts + offset - codec_delay;
+                let pts = first_pts + offset - self.codec_delay;
 
                 output.push(EncodedOutputChunk {
                     data: Bytes::copy_from_slice(
