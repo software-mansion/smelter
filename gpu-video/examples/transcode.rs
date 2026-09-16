@@ -4,11 +4,13 @@ fn main() {
         fs::File,
         io::{Read, Write},
         num::NonZeroU32,
+        sync::mpsc::Sender,
+        thread::JoinHandle,
         time::Duration,
     };
 
     use gpu_video::{
-        EncodedInputChunk, VideoInstance,
+        EncodedInputChunk, EncodedOutputChunk, VideoInstance,
         parameters::{
             AnyEncoderParameters, RateControl, ScalingAlgorithm, TranscoderOutputParameters,
             TranscoderParameters, VideoAdapterDescriptor, VideoDeviceDescriptor,
@@ -77,29 +79,42 @@ fn main() {
         })
         .unwrap();
 
+    let (thread_handles, chunk_senders): (Vec<_>, Vec<_>) = [
+        spawn_writer_thread("output.h264"),
+        spawn_writer_thread("output.h265"),
+    ]
+    .into_iter()
+    .unzip();
+
     let mut transcoder = video_device
-        .create_transcoder(TranscoderParameters {
-            input_framerate: 30.into(),
-            output_parameters: vec![
-                TranscoderOutputParameters {
-                    output_width,
-                    output_height,
-                    encoder_parameters: AnyEncoderParameters::H264(params_h264),
-                    scaling_algorithm,
-                },
-                TranscoderOutputParameters {
-                    output_width,
-                    output_height,
-                    encoder_parameters: AnyEncoderParameters::H265(params_h265),
-                    scaling_algorithm,
-                },
-            ],
-        })
+        .create_transcoder(
+            TranscoderParameters {
+                input_framerate: 30.into(),
+                output_parameters: vec![
+                    TranscoderOutputParameters {
+                        output_width,
+                        output_height,
+                        encoder_parameters: AnyEncoderParameters::H264(params_h264),
+                        scaling_algorithm,
+                    },
+                    TranscoderOutputParameters {
+                        output_width,
+                        output_height,
+                        encoder_parameters: AnyEncoderParameters::H265(params_h265),
+                        scaling_algorithm,
+                    },
+                ],
+                max_in_flight_submissions: Some(3),
+            },
+            move |transcoded| {
+                chunk_senders[transcoded.output_index]
+                    .send(transcoded.chunk)
+                    .unwrap();
+            },
+        )
         .unwrap();
 
     let mut input_file = File::open(input_file).unwrap();
-    let mut output_file_h264 = File::create("output.h264").unwrap();
-    let mut output_file_h265 = File::create("output.h265").unwrap();
 
     let mut buffer = vec![0; 4096];
     while let Ok(n) = input_file.read(&mut buffer)
@@ -109,18 +124,14 @@ fn main() {
             data: &buffer[..n],
             pts: None,
         };
-        let output = transcoder.transcode(input).unwrap();
-
-        for output in output {
-            output_file_h264.write_all(&output[0].data).unwrap();
-            output_file_h265.write_all(&output[1].data).unwrap();
-        }
+        transcoder.transcode(input).unwrap();
     }
 
-    let flushed = transcoder.flush().unwrap();
-    for output in flushed {
-        output_file_h264.write_all(&output[0].data).unwrap();
-        output_file_h265.write_all(&output[1].data).unwrap();
+    transcoder.flush().unwrap();
+
+    drop(transcoder);
+    for handle in thread_handles {
+        handle.join().unwrap();
     }
 }
 
@@ -128,6 +139,26 @@ fn main() {
 fn print_usage_and_exit(executable_name: &str) -> ! {
     eprintln!("usage: {executable_name} INPUT OUT_WIDTH OUT_HEIGHT [nearest|bilinear|lanczos3]");
     std::process::exit(1);
+}
+
+#[cfg(vulkan)]
+fn spawn_writer_thread(
+    file_name: &'static str,
+) -> (
+    std::thread::JoinHandle<()>,
+    std::sync::mpsc::Sender<gpu_video::EncodedOutputChunk<Vec<u8>>>,
+) {
+    use std::io::Write;
+
+    let (chunk_sender, chunk_receiver) =
+        std::sync::mpsc::channel::<gpu_video::EncodedOutputChunk<Vec<u8>>>();
+    let writer_thread_handle = std::thread::spawn(move || {
+        let mut output_file = std::fs::File::create(file_name).unwrap();
+        for chunk in chunk_receiver.iter() {
+            output_file.write_all(&chunk.data).unwrap();
+        }
+    });
+    (writer_thread_handle, chunk_sender)
 }
 
 #[cfg(not(vulkan))]

@@ -1,27 +1,29 @@
-use std::sync::Arc;
+use std::{
+    sync::{Arc, Mutex, atomic::Ordering},
+    time::Duration,
+};
 
 use ash::vk;
+use tracing::error;
 
 use crate::{
-    EncodedInputChunk, EncodedOutputChunk, H264ParserError, OutputFrame, ReferenceManagementError,
-    VideoBackendError, VideoTranscoderError,
+    DecoderEvent, EncodedInputChunk, H264ParserError, OutputFrame, ReferenceManagementError,
+    TranscodedChunk, VideoBackendError, VideoTranscoderError,
     backends::vulkan::{
-        VulkanCommonError, VulkanDecoder, VulkanDecoderError, VulkanDevice,
-        codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
-        vulkan_decoder::{ImageModifiers, InFlightDecodeResources},
+        AsyncVulkanEncoder, VulkanCommonError, VulkanDecoderError, VulkanDevice,
+        codec::{h264::H264Codec, h265::H265Codec},
+        vulkan_decoder::{ImageModifiers, decoders_h264::VulkanDecoderH264},
         vulkan_encoder::{
-            DynVulkanEncoder, FullEncoderParameters, VulkanEncoder, VulkanEncoderError,
+            FullEncoderParameters, VulkanEncoderError, async_encoder::DynVulkanEncoder,
         },
-        vulkan_transcoder::pipeline::{OutputConfig, ResizeSubmission, ResizingPipeline},
-        wrappers::{ResultQuery, SemaphoreWaitValue},
+        vulkan_transcoder::pipeline::{OutputConfig, ResizingPipeline},
+        waiter_thread::{SubmissionTracker, WaiterThreadHandle},
+        wrappers::{CommandBufferPoolStorage, EncodeInputImage},
     },
+    device::DecoderParameters,
     frame_sorter::{DecodeResult, FrameSorter},
     parameters::DecoderUsage,
-    parser::{
-        decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
-        h264::H264Parser,
-        reference_manager::ReferenceContext,
-    },
+    parser::decoder_instructions::DecoderInstruction,
     transcoder::{AnyEncoderParameters, TranscoderParameters, VideoTranscoderBackend},
 };
 
@@ -33,56 +35,53 @@ enum AnyFullEncoderParameters {
     H265(FullEncoderParameters<H265Codec>),
 }
 
-pub(crate) struct ResizedImages {
-    images: ResizeSubmission,
-    decoder_wait_value: SemaphoreWaitValue,
-    result_query: Option<ResultQuery<vk::QueryResultStatusKHR>>,
-    _in_flight_resources: InFlightDecodeResources,
-}
-
 pub struct VulkanTranscoder {
-    device: Arc<VulkanDevice>,
-    decoder: VulkanDecoder<'static>,
-    parser: H264Parser,
-    reference_ctx: ReferenceContext,
-    sorter: FrameSorter<ResizedImages>,
+    decoder: VulkanDecoderH264,
+    sorter: FrameSorter<Box<[EncodeInputImage]>>,
     resizing_pipeline: ResizingPipeline,
-    encoders: Vec<Box<dyn DynVulkanEncoder<'static>>>,
+    submission_tracker: SubmissionTracker,
+    encoders: Vec<Box<dyn DynVulkanEncoder>>,
 }
 
 impl VideoTranscoderBackend for VulkanTranscoder {
     fn transcode(
         &mut self,
         input: EncodedInputChunk<'_>,
-    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VideoTranscoderError> {
-        VulkanTranscoder::transcode(self, input).map_err(Into::into)
+        timeout: Duration,
+    ) -> Result<(), VideoTranscoderError> {
+        VulkanTranscoder::transcode(self, input, timeout).map_err(Into::into)
     }
 
-    fn flush(&mut self) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VideoTranscoderError> {
-        VulkanTranscoder::flush(self).map_err(Into::into)
+    fn flush(&mut self, timeout: Duration) -> Result<(), VideoTranscoderError> {
+        VulkanTranscoder::flush(self, timeout).map_err(Into::into)
     }
 }
 
 impl VulkanTranscoder {
+    // TODO; make sure max_in_flight set to 0 works
     pub(crate) fn new(
         device: Arc<VulkanDevice>,
         config: TranscoderParameters,
+        waiter_thread: Arc<WaiterThreadHandle>,
+        on_chunk_callback: Box<dyn FnMut(TranscodedChunk) + Send>,
     ) -> Result<Self, VulkanTranscoderError> {
-        let decoder = VulkanDecoder::new(
+        let max_in_flight = config.max_in_flight_submissions.unwrap_or(3);
+
+        let decoder = VulkanDecoderH264::new(
             Arc::new(device.decoding_device()?),
-            DecoderUsage::Transcoding,
+            DecoderParameters {
+                corrupted_state_handling: Default::default(),
+                usage_flags: DecoderUsage::Transcoding,
+                max_in_flight_submissions: max_in_flight,
+            },
             ImageModifiers {
                 create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
                     | vk::ImageCreateFlags::MUTABLE_FORMAT,
                 usage_flags: vk::ImageUsageFlags::STORAGE,
                 additional_queue_index: device.queues.compute.family_index,
             },
-            // i'm sure it's fine
-            64,
         )?;
 
-        let parser = H264Parser::default();
-        let reference_ctx = ReferenceContext::default();
         let sorter = FrameSorter::new();
 
         let scaling_algorithms: Vec<_> = config
@@ -91,235 +90,233 @@ impl VulkanTranscoder {
             .map(|c| c.scaling_algorithm)
             .collect();
 
-        let parameters = config
-            .output_parameters
-            .iter()
-            .map(|c| match c.encoder_parameters {
-                AnyEncoderParameters::H264(params) => device
-                    .validate_and_fill_encoder_parameters(
-                        params,
-                        c.output_width,
-                        c.output_height,
-                        config.input_framerate,
-                        Some(0), // TODO: async transcoder
-                    )
-                    .map(AnyFullEncoderParameters::H264),
+        let pipeline = pipeline::ResizingPipeline::new(
+            device.clone(),
+            scaling_algorithms
+                .into_iter()
+                .map(|scaling_algorithm| OutputConfig { scaling_algorithm })
+                .collect(),
+            max_in_flight,
+        )?;
 
-                AnyEncoderParameters::H265(params) => device
-                    .validate_and_fill_encoder_parameters(
-                        params,
-                        c.output_width,
-                        c.output_height,
-                        config.input_framerate,
-                        Some(0), // TODO: async transcoder
-                    )
-                    .map(AnyFullEncoderParameters::H265),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let submission_tracker = SubmissionTracker::new(
+            decoder.tracker().semaphore_tracker.semaphore.clone(),
+            waiter_thread.clone(),
+            max_in_flight as usize,
+        );
 
-        let encoders = parameters
-            .iter()
-            .copied()
-            .map(|p| match p {
-                AnyFullEncoderParameters::H264(p) => device
-                    .encoding_device()
-                    .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
-                    .map(|e| Box::new(e) as Box<dyn DynVulkanEncoder>),
-
-                AnyFullEncoderParameters::H265(p) => device
-                    .encoding_device()
-                    .and_then(|d| VulkanEncoder::new(Arc::new(d), p))
-                    .map(|e| Box::new(e) as Box<dyn DynVulkanEncoder>),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let pipeline_output_configs =
-            make_pipeline_output_configs(&parameters, &scaling_algorithms);
-        let pipeline = pipeline::ResizingPipeline::new(device.clone(), pipeline_output_configs)?;
+        let encoder_params = encoder_params_from_config(&config, &device)?;
+        let encoders =
+            encoders_from_params(encoder_params, &device, waiter_thread, on_chunk_callback)?;
 
         Ok(Self {
             decoder,
-            parser,
-            reference_ctx,
             sorter,
             resizing_pipeline: pipeline,
             encoders,
-            device,
+            submission_tracker,
         })
     }
 
-    /// Transcodes the input bytes and returns a [`Vec`] where each element corresponds to an
-    /// output frame. Each frame is a [`Vec`] where each element corresponds to one output.
+    // TODO: does timeout make sense here?
+    // If one encode times out, the rest won't be scheduled
+    // Another issue I forgot about:
+    // If decoder parses something and then times out the parser still contains the bytes and the
+    // state might be invalid
     pub fn transcode(
         &mut self,
         input: EncodedInputChunk<'_>,
-    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VulkanTranscoderError> {
-        let instructions = self.parse_input(input)?;
-        self.transcode_instructions(instructions)
+        timeout: Duration,
+    ) -> Result<(), VulkanTranscoderError> {
+        let instructions = self
+            .decoder
+            .process_event(DecoderEvent::DecodeChunk(input))?;
+        self.transcode_instructions(instructions, timeout)
     }
 
-    /// Flush the internal queues of the transcoder. Only do this once you're sure no new frames
-    /// are coming, otherwise the output may have the wrong frame order. Returns a [`Vec`] where
-    /// each element corresponds to an output frame. Each frame is a [`Vec`] where each element
-    /// corresponds to one output.
-    pub fn flush(
-        &mut self,
-    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VulkanTranscoderError> {
-        let instructions = self.flush_parser()?;
-        let mut output = self.transcode_instructions(instructions)?;
-        output.append(&mut self.flush_transcoder()?);
-
-        Ok(output)
+    pub fn flush(&mut self, timeout: Duration) -> Result<(), VulkanTranscoderError> {
+        let instructions = self
+            .decoder
+            .process_event(DecoderEvent::Flush)
+            .map_err(VulkanTranscoderError::from)?;
+        self.transcode_instructions(instructions, timeout)?;
+        self.flush_transcoder(timeout)
     }
 
-    fn flush_parser(&mut self) -> Result<Vec<DecoderInstruction>, VulkanTranscoderError> {
-        let access_units = self.parser.flush()?;
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
-
-        Ok(instructions)
-    }
-
-    fn flush_transcoder(
-        &mut self,
-    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VulkanTranscoderError> {
+    fn flush_transcoder(&mut self, timeout: Duration) -> Result<(), VulkanTranscoderError> {
         let remaining = self.sorter.flush();
-
-        let mut output = Vec::new();
         for resized_images in remaining {
-            let encoded = self.encode_resized_images(resized_images)?;
-            output.push(encoded);
+            self.encode_resized_images(resized_images, timeout)?;
         }
 
-        Ok(output)
-    }
+        self.submission_tracker.wait_for_all(timeout)?;
+        for encoder in self.encoders.iter_mut() {
+            encoder.wait_for_all(timeout)?;
+        }
 
-    fn parse_input(
-        &mut self,
-        input: EncodedInputChunk<'_>,
-    ) -> Result<Vec<DecoderInstruction>, VulkanTranscoderError> {
-        let access_units = self.parser.parse(input.data, input.pts)?;
-        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)?;
-
-        Ok(instructions)
+        Ok(())
     }
 
     fn transcode_instructions(
         &mut self,
         instructions: Vec<DecoderInstruction>,
-    ) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, VulkanTranscoderError> {
-        let mut encoded_frame_sets = Vec::new();
-
+        timeout: Duration,
+    ) -> Result<(), VulkanTranscoderError> {
         for instruction in instructions {
+            let decoder_command_buffer_pools = self.decoder.tracker().command_buffer_pools.clone();
+            let resizing_pipeline_command_buffer_pools = self.resizing_pipeline.buffer_pool.clone();
+            let decode_failed_flag = self.decoder.decode_failed_flag();
+
+            self.submission_tracker.wait_if_full(timeout)?;
             let Some(mut frame) = self.decoder.decode(instruction)? else {
                 continue;
             };
 
-            let mut trackers = self
-                .encoders
-                .iter_mut()
-                .map(|e| e.tracker())
-                .collect::<Vec<_>>();
             let metadata = &frame.decode_result.metadata;
             let cropped_extent = vk::Extent2D {
                 width: metadata.cropped_width,
                 height: metadata.cropped_height,
             };
-            let output = self
-                .resizing_pipeline
-                .run(&mut frame, &mut trackers, cropped_extent)?;
+            let output =
+                self.resizing_pipeline
+                    .run(&mut frame, cropped_extent, &mut self.encoders)?;
+
+            self.submission_tracker
+                .add_wait_request(output.wait_value, move || {
+                    if let Some(query) = frame.result_query.take()
+                        && let Err(err) = query.check_results_blocking()
+                    {
+                        error!("Decoding a frame failed: {err}");
+                        decode_failed_flag.store(true, Ordering::Relaxed);
+                    }
+
+                    decoder_command_buffer_pools.mark_submitted_as_free(output.wait_value);
+                    resizing_pipeline_command_buffer_pools
+                        .mark_submitted_as_free(output.wait_value);
+
+                    drop(frame.in_flight_resources);
+                    drop(output.in_flight_resources);
+                })?;
 
             let sorted = self.sorter.put(DecodeResult {
-                frame: ResizedImages {
-                    images: output,
-                    decoder_wait_value: frame.semaphore_wait_value,
-                    result_query: frame.result_query,
-                    _in_flight_resources: frame.in_flight_resources,
-                },
+                frame: output.outputs,
                 metadata: frame.decode_result.metadata,
             });
 
             for resized_images in sorted {
-                let encoded_frames = self.encode_resized_images(resized_images)?;
-                encoded_frame_sets.push(encoded_frames);
+                self.encode_resized_images(resized_images, timeout)?;
             }
         }
 
-        Ok(encoded_frame_sets)
+        Ok(())
     }
 
     fn encode_resized_images(
         &mut self,
-        resized_images: OutputFrame<ResizedImages>,
-    ) -> Result<Vec<EncodedOutputChunk<Vec<u8>>>, VulkanTranscoderError> {
-        let mut submits = Vec::new();
-        for (encoder, frame) in self
-            .encoders
-            .iter_mut()
-            .zip(resized_images.data.images.outputs.iter())
-        {
-            let submit = encoder.encode(frame.image.clone(), false, resized_images.metadata.pts)?;
-            submits.push(submit);
+        resized_images: OutputFrame<Box<[EncodeInputImage]>>,
+        timeout: Duration,
+    ) -> Result<(), VulkanTranscoderError> {
+        for encoder in self.encoders.iter_mut() {
+            encoder.wait_if_full(timeout)?;
         }
 
-        let mut semaphores = Vec::new();
-        let mut values = Vec::new();
-        for (submit, encoder) in submits.iter().zip(self.encoders.iter_mut()) {
-            semaphores.push(encoder.tracker().semaphore_tracker.semaphore.semaphore);
-            values.push(submit.0.wait_value.0);
-        }
-        let wait = vk::SemaphoreWaitInfo::default()
-            .semaphores(&semaphores)
-            .values(&values);
-        unsafe { self.device.device.wait_semaphores(&wait, u64::MAX)? };
-
-        let mut results = Vec::new();
-        for (submit, encoder) in submits.into_iter().zip(self.encoders.iter_mut()) {
-            let waited = submit.mark_waited(encoder.tracker());
-            let result = waited.download()?;
-            results.push(result);
+        for (encoder, image) in self.encoders.iter_mut().zip(resized_images.data) {
+            encoder.encode(image, false, resized_images.metadata.pts)?;
         }
 
-        // TODO: this is atrocious
-        self.decoder
-            .tracker
-            .mark_waited(resized_images.data.decoder_wait_value);
-
-        self.resizing_pipeline
-            .mark_command_buffers_completed(resized_images.data.decoder_wait_value);
-        self.resizing_pipeline
-            .free_submission(resized_images.data.images);
-
-        if let Some(query) = resized_images.data.result_query {
-            query.check_results_blocking()?
-        }
-
-        Ok(results)
+        Ok(())
     }
 }
 
-fn make_pipeline_output_configs(
-    parameters: &[AnyFullEncoderParameters],
-    scaling_algorithms: &[crate::parameters::ScalingAlgorithm],
-) -> Vec<OutputConfig> {
-    parameters
+fn encoder_params_from_config(
+    config: &TranscoderParameters,
+    device: &Arc<VulkanDevice>,
+) -> Result<Vec<AnyFullEncoderParameters>, VulkanTranscoderError> {
+    config
+        .output_parameters
         .iter()
-        .zip(scaling_algorithms.iter())
-        .map(|(p, &scaling)| match p {
-            AnyFullEncoderParameters::H264(p) => OutputConfig {
-                width: p.width.get(),
-                height: p.height.get(),
-                profile: H264Codec::profile_info(p),
-                scaling_algorithm: scaling,
-            },
+        .map(|c| match c.encoder_parameters {
+            AnyEncoderParameters::H264(params) => device
+                .validate_and_fill_encoder_parameters(
+                    params,
+                    c.output_width,
+                    c.output_height,
+                    config.input_framerate,
+                    config.max_in_flight_submissions,
+                )
+                .map(AnyFullEncoderParameters::H264),
 
-            AnyFullEncoderParameters::H265(p) => OutputConfig {
-                width: p.width.get(),
-                height: p.height.get(),
-                profile: H265Codec::profile_info(p),
-                scaling_algorithm: scaling,
-            },
+            AnyEncoderParameters::H265(params) => device
+                .validate_and_fill_encoder_parameters(
+                    params,
+                    c.output_width,
+                    c.output_height,
+                    config.input_framerate,
+                    config.max_in_flight_submissions,
+                )
+                .map(AnyFullEncoderParameters::H265),
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(VulkanTranscoderError::from)
+}
+
+fn encoders_from_params(
+    params: Vec<AnyFullEncoderParameters>,
+    device: &Arc<VulkanDevice>,
+    waiter_thread: Arc<WaiterThreadHandle>,
+    on_chunk_callback: Box<dyn FnMut(TranscodedChunk) + Send>,
+) -> Result<Vec<Box<dyn DynVulkanEncoder>>, VulkanTranscoderError> {
+    let create_output_callback = {
+        let on_chunk_callback = Arc::new(Mutex::new(on_chunk_callback));
+        move |output_index| {
+            let on_chunk_callback = on_chunk_callback.clone();
+            Box::new(move |chunk| {
+                let mut callback = on_chunk_callback.lock().unwrap();
+                (callback)(TranscodedChunk {
+                    output_index,
+                    chunk,
+                })
+            })
+        }
+    };
+
+    let encode_image_queue_indices = vec![device.queues.compute.family_index as u32];
+    let encoders = params
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(output_index, p)| match p {
+            AnyFullEncoderParameters::H264(p) => device
+                .encoding_device()
+                .and_then(|d| {
+                    AsyncVulkanEncoder::new_with_input_images(
+                        Arc::new(d),
+                        p,
+                        create_output_callback(output_index),
+                        waiter_thread.clone(),
+                        vk::ImageUsageFlags::STORAGE,
+                        encode_image_queue_indices.clone(),
+                    )
+                })
+                .map(|e| Box::new(e) as Box<dyn DynVulkanEncoder>),
+
+            AnyFullEncoderParameters::H265(p) => device
+                .encoding_device()
+                .and_then(|d| {
+                    AsyncVulkanEncoder::new_with_input_images(
+                        Arc::new(d),
+                        p,
+                        create_output_callback(output_index),
+                        waiter_thread.clone(),
+                        vk::ImageUsageFlags::STORAGE,
+                        encode_image_queue_indices.clone(),
+                    )
+                })
+                .map(|e| Box::new(e) as Box<dyn DynVulkanEncoder>),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(encoders)
 }
 
 #[derive(Debug, thiserror::Error)]

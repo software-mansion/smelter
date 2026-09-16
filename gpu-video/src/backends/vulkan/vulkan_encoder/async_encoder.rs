@@ -12,13 +12,14 @@ use tracing::error;
 use crate::{
     EncodedOutputChunk, InputFrame, RawFrameData,
     backends::vulkan::{
-        VulkanEncoder, VulkanEncoderError,
+        VulkanCommonError, VulkanEncoder, VulkanEncoderError,
         codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
         vulkan_device::EncodingDevice,
-        vulkan_encoder::{DynVulkanEncoder, EncoderTrackerWaitState, FullEncoderParameters},
+        vulkan_encoder::{EncoderTrackerKind, EncoderTrackerWaitState, FullEncoderParameters},
         waiter_thread::{SubmissionTracker, WaiterThreadHandle},
         wrappers::{
             Buffer, CommandBufferPoolStorage, EncodeInputImage, EncodeInputImagePool, Image,
+            Tracker,
         },
     },
     encoders::{
@@ -32,10 +33,10 @@ use std::collections::HashMap;
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
 
-type OnEncodedChunkCallback = Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>;
+pub(crate) type OnEncodedChunkCallback = Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>;
 
 pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
-    submission_tracker: SubmissionTracker,
+    pub(crate) submission_tracker: SubmissionTracker,
     input_image_pool: EncodeInputImagePool<'a>,
     on_chunk_callback: Arc<Mutex<OnEncodedChunkCallback>>,
     encode_failed: Arc<AtomicBool>,
@@ -43,7 +44,7 @@ pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
     #[cfg(feature = "wgpu")]
     used_input_images: Arc<Mutex<HashMap<wgpu::Texture, EncodeInputImage>>>,
 
-    encoder: VulkanEncoder<'a, C>,
+    pub(crate) encoder: VulkanEncoder<'a, C>,
     encoding_device: Arc<EncodingDevice>,
 }
 
@@ -54,14 +55,6 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
         on_chunk_callback: OnEncodedChunkCallback,
         waiter_thread: Arc<WaiterThreadHandle>,
     ) -> Result<Self, VulkanEncoderError> {
-        let max_in_flight = parameters.max_in_flight_submissions as usize;
-        let encoder = VulkanEncoder::new(encoding_device.clone(), parameters)?;
-        let submission_tracker = SubmissionTracker::new(
-            encoder.tracker.semaphore_tracker.semaphore.clone(),
-            waiter_thread,
-            max_in_flight,
-        );
-
         let input_image_queue_families = vec![
             encoding_device.queues.transfer.family_index as u32,
             encoding_device.queues.wgpu.family_index as u32,
@@ -75,6 +68,33 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
             }
             false => vk::ImageUsageFlags::TRANSFER_DST,
         };
+
+        Self::new_with_input_images(
+            encoding_device,
+            parameters,
+            on_chunk_callback,
+            waiter_thread,
+            encode_image_usages,
+            input_image_queue_families,
+        )
+    }
+
+    pub(crate) fn new_with_input_images(
+        encoding_device: Arc<EncodingDevice>,
+        parameters: FullEncoderParameters<C>,
+        on_chunk_callback: OnEncodedChunkCallback,
+        waiter_thread: Arc<WaiterThreadHandle>,
+        input_image_usage_flags: vk::ImageUsageFlags,
+        input_image_queue_families: Vec<u32>,
+    ) -> Result<Self, VulkanEncoderError> {
+        let max_in_flight = parameters.max_in_flight_submissions as usize;
+        let encoder = VulkanEncoder::new(encoding_device.clone(), parameters)?;
+        let submission_tracker = SubmissionTracker::new(
+            encoder.tracker.semaphore_tracker.semaphore.clone(),
+            waiter_thread,
+            max_in_flight,
+        );
+
         let input_image_pool = EncodeInputImagePool::new(
             encoding_device.clone(),
             encoder.profile_info.clone(),
@@ -83,7 +103,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
                 .video_session
                 .max_coded_extent
                 .into(),
-            encode_image_usages,
+            input_image_usage_flags,
             input_image_queue_families,
             encoder.tracker.image_layout_tracker.clone(),
         );
@@ -192,7 +212,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
         Ok(buffer)
     }
 
-    fn submit_encode(
+    pub(crate) fn submit_encode(
         &mut self,
         encode_image: EncodeInputImage,
         staging_buffer: Option<Buffer>,
@@ -206,7 +226,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
 
         let on_chunk_callback = self.on_chunk_callback.clone();
         let command_buffer_pools = self.encoder.tracker.command_buffer_pools.clone();
-        let wait_value = submission.0.wait_value;
+        let wait_value = submission.wait_value;
         let encode_failed = self.encode_failed.clone();
 
         self.submission_tracker
@@ -214,7 +234,8 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
                 command_buffer_pools.mark_submitted_as_free(wait_value);
                 encode_image.release_to_pool();
                 drop(staging_buffer);
-                match submission.0.download() {
+
+                match submission.download() {
                     Ok(chunk) => (on_chunk_callback.lock().unwrap())(chunk),
                     Err(err) => {
                         error!("Encoding a frame failed: {err}");
@@ -225,7 +246,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
             .map_err(VulkanEncoderError::from)
     }
 
-    fn flush(&mut self, timeout: Duration) -> Result<(), VulkanEncoderError> {
+    pub(crate) fn flush(&mut self, timeout: Duration) -> Result<(), VulkanEncoderError> {
         Ok(self.submission_tracker.wait_for_all(timeout)?)
     }
 }
@@ -274,5 +295,49 @@ impl VideoEncoderParametersInfoH265 for AsyncVulkanEncoder<'static, H265Codec> {
 
     fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.encoder.pps()
+    }
+}
+
+pub(crate) trait DynVulkanEncoder: Send {
+    fn encode(
+        &mut self,
+        encode_image: EncodeInputImage,
+        force_idr: bool,
+        pts: Option<u64>,
+    ) -> Result<(), VulkanEncoderError>;
+
+    fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind>;
+
+    fn next_input_image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError>;
+
+    fn wait_if_full(&mut self, timeout: Duration) -> Result<(), VulkanCommonError>;
+
+    fn wait_for_all(&mut self, timeout: Duration) -> Result<(), VulkanCommonError>;
+}
+
+impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder for AsyncVulkanEncoder<'a, C> {
+    fn wait_if_full(&mut self, timeout: Duration) -> Result<(), VulkanCommonError> {
+        self.submission_tracker.wait_if_full(timeout)
+    }
+
+    fn encode(
+        &mut self,
+        encode_image: EncodeInputImage,
+        force_idr: bool,
+        pts: Option<u64>,
+    ) -> Result<(), VulkanEncoderError> {
+        self.submit_encode(encode_image, None, force_idr, pts)
+    }
+
+    fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind> {
+        &mut self.encoder.tracker
+    }
+
+    fn next_input_image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError> {
+        self.input_image_pool.image()
+    }
+
+    fn wait_for_all(&mut self, timeout: Duration) -> Result<(), VulkanCommonError> {
+        self.submission_tracker.wait_for_all(timeout)
     }
 }

@@ -146,7 +146,7 @@ pub(crate) struct SubmissionWaitRequest {
 }
 
 pub(crate) struct SubmissionTracker {
-    waiter_thread: Arc<WaiterThreadHandle>,
+    pub(crate) waiter_thread: Arc<WaiterThreadHandle>,
     semaphore: Arc<TimelineSemaphore>,
 
     max_in_flight: usize,
