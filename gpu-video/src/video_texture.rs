@@ -7,11 +7,7 @@ pub struct VideoTexture(Planes);
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Planes {
     Single(wgpu::Texture),
-    #[cfg_attr(vulkan, expect(dead_code))]
-    Separated {
-        y: wgpu::Texture,
-        uv: wgpu::Texture,
-    },
+    Separated { y: wgpu::Texture, uv: wgpu::Texture },
 }
 
 impl VideoTexture {

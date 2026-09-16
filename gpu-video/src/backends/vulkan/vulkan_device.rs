@@ -79,8 +79,9 @@ impl CoreVideoDeviceBackend for VulkanDevice {
     fn create_transcoder(
         self: Arc<Self>,
         parameters: crate::parameters::TranscoderParameters,
+        on_chunk_callback: Box<dyn FnMut(crate::transcoder::TranscodedChunk) + Send>,
     ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
-        VulkanDevice::create_transcoder(self, parameters).map_err(Into::into)
+        VulkanDevice::create_transcoder(self, parameters, on_chunk_callback).map_err(Into::into)
     }
 
     fn decode_capabilities(&self) -> DecodeCapabilities {
@@ -278,6 +279,7 @@ impl VulkanDevice {
                 parameters,
                 on_chunk_callback,
                 self.waiter_thread.clone(),
+                false,
             )?),
         })
     }
@@ -301,6 +303,7 @@ impl VulkanDevice {
                 parameters,
                 on_chunk_callback,
                 self.waiter_thread.clone(),
+                false,
             )?),
         })
     }
@@ -309,9 +312,16 @@ impl VulkanDevice {
     fn create_transcoder(
         self: Arc<Self>,
         parameters: crate::parameters::TranscoderParameters,
+        on_chunk_callback: Box<dyn FnMut(crate::transcoder::TranscodedChunk) + Send>,
     ) -> Result<crate::transcoder::VideoTranscoder, super::VulkanTranscoderError> {
+        let waiter_thread = self.waiter_thread.clone();
         Ok(crate::transcoder::VideoTranscoder {
-            transcoder: Box::new(super::VulkanTranscoder::new(self, parameters)?),
+            backend: Box::new(super::VulkanTranscoder::new(
+                self,
+                parameters,
+                waiter_thread,
+                on_chunk_callback,
+            )?),
         })
     }
 

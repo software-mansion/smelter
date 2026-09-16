@@ -1,5 +1,8 @@
 use std::{
-    sync::{Arc, Mutex, atomic::Ordering},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
@@ -10,7 +13,8 @@ use crate::{
     backends::vulkan::{
         VulkanDecoder,
         vulkan_decoder::{
-            DecodeSubmission, DownloadFrameSubmission, ImageModifiers, VulkanDecoderError,
+            DecodeSubmission, DecoderTracker, DownloadFrameSubmission, ImageModifiers,
+            VulkanDecoderError,
         },
         vulkan_device::DecodingDevice,
         waiter_thread::{SubmissionTracker, WaiterThreadHandle},
@@ -31,19 +35,15 @@ pub(crate) struct VulkanDecoderH264 {
 }
 
 impl VulkanDecoderH264 {
-    fn new(
+    pub(crate) fn new(
         decoding_device: Arc<DecodingDevice>,
         parameters: DecoderParameters,
+        image_modifiers: ImageModifiers,
     ) -> Result<Self, VulkanDecoderError> {
-        let transfer_queue_idx = decoding_device.queues.transfer.family_index;
         let decoder = VulkanDecoder::new(
             decoding_device,
             parameters.usage_flags,
-            ImageModifiers {
-                additional_queue_index: transfer_queue_idx,
-                create_flags: Default::default(),
-                usage_flags: Default::default(),
-            },
+            image_modifiers,
             parameters.max_in_flight_submissions.max(1),
         )?;
 
@@ -56,18 +56,28 @@ impl VulkanDecoderH264 {
         })
     }
 
-    fn process_event(
+    pub(crate) fn process_event(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
     ) -> Result<Vec<DecoderInstruction>, VideoDecoderError> {
         self.event_processor.process_event(event)
     }
 
-    fn decode(
+    pub(crate) fn decode(
         &mut self,
         instruction: DecoderInstruction,
     ) -> Result<Option<DecodeSubmission<'_, 'static>>, VulkanDecoderError> {
         self.decoder.decode(instruction)
+    }
+
+    #[cfg_attr(not(feature = "transcoder"), expect(dead_code))]
+    pub(crate) fn tracker(&self) -> &DecoderTracker {
+        &self.decoder.tracker
+    }
+
+    #[cfg_attr(not(feature = "transcoder"), expect(dead_code))]
+    pub(crate) fn decode_failed_flag(&self) -> Arc<AtomicBool> {
+        self.event_processor.decode_failed_flag()
     }
 }
 
@@ -89,7 +99,16 @@ impl VulkanBytesDecoderH264 {
         on_frame_callback: Box<dyn FnMut(OutputFrame<RawFrameData>) + Send>,
         waiter_thread: Arc<WaiterThreadHandle>,
     ) -> Result<Self, VulkanDecoderError> {
-        let decoder = VulkanDecoderH264::new(decoding_device, parameters)?;
+        let transfer_queue_idx = decoding_device.queues.transfer.family_index;
+        let decoder = VulkanDecoderH264::new(
+            decoding_device,
+            parameters,
+            ImageModifiers {
+                additional_queue_index: transfer_queue_idx,
+                create_flags: Default::default(),
+                usage_flags: Default::default(),
+            },
+        )?;
         let submission_tracker = SubmissionTracker::new(
             decoder.decoder.tracker.semaphore_tracker.semaphore.clone(),
             waiter_thread,
@@ -200,7 +219,16 @@ impl VulkanWgpuTexturesDecoderH264 {
         on_frame_callback: Box<dyn FnMut(OutputFrame<VideoTexture>) + Send>,
         waiter_thread: Arc<WaiterThreadHandle>,
     ) -> Result<Self, VulkanDecoderError> {
-        let decoder = VulkanDecoderH264::new(decoding_device, parameters)?;
+        let transfer_queue_idx = decoding_device.queues.transfer.family_index;
+        let decoder = VulkanDecoderH264::new(
+            decoding_device,
+            parameters,
+            ImageModifiers {
+                additional_queue_index: transfer_queue_idx,
+                create_flags: Default::default(),
+                usage_flags: Default::default(),
+            },
+        )?;
         let submission_tracker = SubmissionTracker::new(
             decoder.decoder.tracker.semaphore_tracker.semaphore.clone(),
             waiter_thread,
