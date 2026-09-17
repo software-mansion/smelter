@@ -27,6 +27,7 @@ impl MoqClientInput {
             "decoder_map": {
                 "h264": "ffmpeg_h264",
             },
+            "buffer": 500,
         })
     }
 

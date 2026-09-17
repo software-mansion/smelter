@@ -114,8 +114,6 @@ pub(crate) struct EdgeEstimate {
     ///   - It can grow faster than real time only when "forgetting" (assuming fixed window, e.g. gaps can affect it)
     ///   - Breaking stable state might mean degraded performance, but it is too late to treat it as
     ///     a signal because it is set after late packet arrives
-    ///   - TODO: If we estimate gap size (equal to chunk size) we could lower this bound without
-    ///     new incoming packet (when packet we expect was not yet delivered)
     pub lower_bound: PtsBound,
     /// Plain statistics of what was actually delivered; unlike the bounds
     /// they do not extrapolate.
@@ -146,15 +144,25 @@ impl EdgeEstimate {
         Self::is_timeline_shared(audio, video, MERGE_THRESHOLD) == Some(true)
     }
 
-    /// Heuristic that decides if two tracks are on the same timeline. Live
-    /// edges closer than `threshold` are treated as the same timeline. `None`
-    /// when there is not enough information to decide either way.
+    /// Heuristic that decides if two tracks are on the same timeline. Live edges closer than
+    /// `threshold` are treated as the same timeline, unless the lower bounds are further apart
+    /// than that. `None` when there is not enough information to decide either way.
     fn is_timeline_shared(
         audio: Option<&EdgeEstimate>,
         video: Option<&EdgeEstimate>,
         threshold: Duration,
     ) -> Option<bool> {
-        let (audio, video) = (audio?.upper_bound, video?.upper_bound);
+        let (audio, video) = (audio?, video?);
+
+        // A timeline that falls behind shows in the lower bound at once, in the upper bound only
+        // after the old minimum leaves the window, so lower bounds that far apart are enough
+        let (audio_lower, video_lower) = (audio.lower_bound, video.lower_bound);
+        let lower_diff = (audio_lower.pts - video_lower.pts).abs();
+        if audio_lower.stable && video_lower.stable && lower_diff >= Timestamp::from(threshold) {
+            return Some(false);
+        }
+
+        let (audio, video) = (audio.upper_bound, video.upper_bound);
 
         let diff = (audio.pts - video.pts).abs();
         // If diff is that large we ignore stability, timelines have to be diverged

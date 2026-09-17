@@ -3,6 +3,9 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Revision is pinned in flake.lock. Does not follow our nixpkgs, so the
+    # upstream binary cache (kixelated.cachix.org) still matches.
+    moq.url = "github:moq-dev/moq";
   };
 
   outputs = inputs@{ flake-parts, ... }:
@@ -81,6 +84,11 @@
             pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               wayland
             ]
+          ) ++ (
+            # Not available on x86_64-darwin
+            pkgs.lib.optionals (inputs'.moq.packages ? moq-relay) [
+              inputs'.moq.packages.moq-relay
+            ]
           );
         in
         {
@@ -112,6 +120,9 @@
           };
           packages = {
             default = packageWithoutChromium;
+          } // lib.optionalAttrs (inputs'.moq.packages ? moq-relay) {
+            # Not available on x86_64-darwin
+            moq-relay = inputs'.moq.packages.moq-relay;
           };
         };
     };

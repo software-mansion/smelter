@@ -126,12 +126,23 @@ fn correct_shared(
     shared_estimation: Option<EdgeEstimate>,
     ctx: &Context,
 ) -> Mode {
-    if let Some(estimation) = shared_estimation
-        && !ctx
+    if let Some(estimation) = shared_estimation {
+        let anchor = &mut shared.anchor;
+        if !ctx
             .strategy
-            .buffer_in_range(&estimation, shared.anchor.current, ctx.now_pts)
-    {
-        shared.anchor.target = ctx.strategy.desired_anchor(&estimation, ctx.now_pts);
+            .buffer_in_range(&estimation, anchor.current, ctx.now_pts)
+        {
+            anchor.target = ctx.strategy.desired_anchor(&estimation, ctx.now_pts);
+        }
+
+        // Content is already late and a slew cannot catch up with that, so jump. Both tracks
+        // move, as the shared estimate covers the slower one.
+        let lower_bound = estimation.lower_bound;
+        let is_late =
+            lower_bound.stable && anchor.current.to_output_pts(lower_bound.pts) < ctx.now_pts;
+        if is_late {
+            anchor.current = anchor.target;
+        }
     }
     if !ctx.audio_started && !ctx.video_started {
         // We need to do it because current will never converge on target (nothing is actively
@@ -155,6 +166,15 @@ fn correct_independent(
         .buffer_in_range(leader_estimation, leader_anchor.current, ctx.now_pts)
     {
         leader_anchor.target = ctx.strategy.desired_anchor(leader_estimation, ctx.now_pts);
+    }
+
+    // Content is already late and a slew cannot catch up with that, so jump. The secondary track
+    // is anchored to the leader, so it moves along.
+    let lower_bound = leader_estimation.lower_bound;
+    let is_late =
+        lower_bound.stable && leader_anchor.current.to_output_pts(lower_bound.pts) < ctx.now_pts;
+    if is_late {
+        leader_anchor.current = leader_anchor.target;
     }
 
     if ctx.tracks_converged() {
