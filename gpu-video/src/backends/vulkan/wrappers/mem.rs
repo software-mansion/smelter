@@ -224,6 +224,7 @@ pub(crate) struct EncodeInputImagePool<'a> {
     encoding_device: Arc<EncodingDevice>,
     profile: Arc<ProfileInfo<'a>>,
     extent: vk::Extent3D,
+    usage_flags: vk::ImageUsageFlags,
     queue_family_indices: Vec<u32>,
     layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
 }
@@ -233,6 +234,7 @@ impl<'a> EncodeInputImagePool<'a> {
         encoding_device: Arc<EncodingDevice>,
         profile: Arc<ProfileInfo<'a>>,
         extent: vk::Extent3D,
+        usage_flags: vk::ImageUsageFlags,
         queue_family_indices: Vec<u32>,
         layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Self {
@@ -241,6 +243,7 @@ impl<'a> EncodeInputImagePool<'a> {
             encoding_device,
             profile,
             extent,
+            usage_flags,
             queue_family_indices,
             layout_tracker,
         }
@@ -255,6 +258,7 @@ impl<'a> EncodeInputImagePool<'a> {
             &self.encoding_device,
             self.extent,
             &self.profile,
+            self.usage_flags,
             &self.queue_family_indices,
             self.layout_tracker.clone(),
         )?;
@@ -554,6 +558,7 @@ impl Image {
         device: &EncodingDevice,
         extent: vk::Extent3D,
         profile: &ProfileInfo,
+        usage_flags: vk::ImageUsageFlags,
         additional_queue_family_indices: &[u32],
         tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, VulkanCommonError> {
@@ -570,11 +575,7 @@ impl Image {
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(
-                vk::ImageUsageFlags::COLOR_ATTACHMENT
-                    | vk::ImageUsageFlags::TRANSFER_DST
-                    | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR,
-            )
+            .usage(usage_flags | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
             .sharing_mode(vk::SharingMode::CONCURRENT)
             .queue_family_indices(&queue_indices)
             .initial_layout(vk::ImageLayout::UNDEFINED)

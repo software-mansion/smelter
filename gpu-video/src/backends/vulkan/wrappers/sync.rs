@@ -106,11 +106,6 @@ impl<K: TrackerKind> Tracker<K> {
         })
     }
 
-    /// Call this to mark that this value was waited for already
-    pub(crate) fn mark_waited(&self, value: SemaphoreWaitValue) {
-        self.command_buffer_pools.mark_submitted_as_free(value);
-    }
-
     #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
     pub(crate) fn raw_semaphore(&self) -> vk::Semaphore {
         self.semaphore_tracker.semaphore.semaphore

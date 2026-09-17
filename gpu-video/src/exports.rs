@@ -138,7 +138,7 @@ pub use crate::encoders::{EncodeTexture, WgpuTexturesEncoderH264, WgpuTexturesEn
 pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 #[cfg(feature = "transcoder")]
-pub use crate::transcoder::{VideoTranscoder, VideoTranscoderError};
+pub use crate::transcoder::{TranscodedChunk, VideoTranscoder, VideoTranscoderError};
 
 #[derive(thiserror::Error, Debug)]
 #[error("{message}")]
@@ -227,9 +227,11 @@ impl VideoDevice {
     pub fn create_transcoder(
         &self,
         parameters: crate::parameters::TranscoderParameters,
-        on_chunk: impl FnMut(EncodedOutputChunk<Vec<u8>>) + Send + 'static,
+        on_chunk: impl FnMut(TranscodedChunk) + Send + 'static,
     ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
-        self.inner.clone().create_transcoder(parameters)
+        self.inner
+            .clone()
+            .create_transcoder(parameters, Box::new(on_chunk))
     }
 
     /// Creates an H.264 encoder that sends each encoded frame via callback.

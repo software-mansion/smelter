@@ -35,15 +35,15 @@ mod wgpu_api;
 pub(crate) type OnEncodedChunkCallback = Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>;
 
 pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
-    submission_tracker: SubmissionTracker,
-    input_image_pool: EncodeInputImagePool<'a>,
+    pub(crate) submission_tracker: SubmissionTracker,
+    pub(crate) input_image_pool: EncodeInputImagePool<'a>,
     on_chunk_callback: Arc<Mutex<OnEncodedChunkCallback>>,
     encode_failed: Arc<AtomicBool>,
 
     #[cfg(feature = "wgpu")]
     used_input_images: Arc<Mutex<HashMap<wgpu::Texture, EncodeInputImage>>>,
 
-    encoder: VulkanEncoder<'a, C>,
+    pub(crate) encoder: VulkanEncoder<'a, C>,
     encoding_device: Arc<EncodingDevice>,
 }
 
@@ -54,6 +54,29 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
         on_chunk_callback: OnEncodedChunkCallback,
         waiter_thread: Arc<WaiterThreadHandle>,
     ) -> Result<Self, VulkanEncoderError> {
+        let input_image_queue_families = vec![
+            encoding_device.queues.transfer.family_index as u32,
+            encoding_device.queues.wgpu.family_index as u32,
+        ];
+
+        Self::new_with_input_images(
+            encoding_device,
+            parameters,
+            on_chunk_callback,
+            waiter_thread,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST,
+            input_image_queue_families,
+        )
+    }
+
+    pub(crate) fn new_with_input_images(
+        encoding_device: Arc<EncodingDevice>,
+        parameters: FullEncoderParameters<C>,
+        on_chunk_callback: OnEncodedChunkCallback,
+        waiter_thread: Arc<WaiterThreadHandle>,
+        input_image_usage_flags: vk::ImageUsageFlags,
+        input_image_queue_families: Vec<u32>,
+    ) -> Result<Self, VulkanEncoderError> {
         let max_in_flight = parameters.max_in_flight_submissions as usize;
         let encoder = VulkanEncoder::new(encoding_device.clone(), parameters)?;
         let submission_tracker = SubmissionTracker::new(
@@ -62,10 +85,6 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
             max_in_flight,
         );
 
-        let input_image_queue_families = vec![
-            encoding_device.queues.transfer.family_index as u32,
-            encoding_device.queues.wgpu.family_index as u32,
-        ];
         let input_image_pool = EncodeInputImagePool::new(
             encoding_device.clone(),
             encoder.profile_info.clone(),
@@ -74,6 +93,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
                 .video_session
                 .max_coded_extent
                 .into(),
+            input_image_usage_flags,
             input_image_queue_families,
             encoder.tracker.image_layout_tracker.clone(),
         );
@@ -182,7 +202,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
         Ok(buffer)
     }
 
-    fn submit_encode(
+    pub(crate) fn submit_encode(
         &mut self,
         encode_image: EncodeInputImage,
         staging_buffer: Option<Buffer>,
@@ -215,7 +235,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
             .map_err(VulkanEncoderError::from)
     }
 
-    fn flush(&mut self, timeout: Duration) -> Result<(), VulkanEncoderError> {
+    pub(crate) fn flush(&mut self, timeout: Duration) -> Result<(), VulkanEncoderError> {
         Ok(self.submission_tracker.wait_for_all(timeout)?)
     }
 }

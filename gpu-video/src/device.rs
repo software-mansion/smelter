@@ -264,6 +264,7 @@ pub(crate) trait CoreVideoDeviceBackend: Send + Sync {
     fn create_transcoder(
         self: Arc<Self>,
         parameters: crate::parameters::TranscoderParameters,
+        on_chunk_callback: Box<dyn FnMut(crate::transcoder::TranscodedChunk) + Send>,
     ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError>;
 
     fn decode_capabilities(&self) -> DecodeCapabilities;
