@@ -12,7 +12,7 @@ use tracing::error;
 use crate::{
     EncodedOutputChunk, InputFrame, RawFrameData,
     backends::vulkan::{
-        VulkanEncoder, VulkanEncoderError,
+        VulkanCommonError, VulkanEncoder, VulkanEncoderError,
         codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
         vulkan_device::EncodingDevice,
         vulkan_encoder::{EncoderTrackerKind, EncoderTrackerWaitState, FullEncoderParameters},
@@ -300,6 +300,8 @@ pub(crate) trait DynVulkanEncoder: Send {
     fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind>;
 
     fn next_input_image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError>;
+
+    fn wait_for_all(&mut self, timeout: Duration) -> Result<(), VulkanCommonError>;
 }
 
 impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder for AsyncVulkanEncoder<'a, C> {
@@ -321,5 +323,9 @@ impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder for AsyncVulkanEncoder<'a, C> {
 
     fn next_input_image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError> {
         self.input_image_pool.image()
+    }
+
+    fn wait_for_all(&mut self, timeout: Duration) -> Result<(), VulkanCommonError> {
+        self.submission_tracker.wait_for_all(timeout)
     }
 }

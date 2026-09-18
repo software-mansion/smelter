@@ -57,6 +57,14 @@ pub struct VulkanTranscoder {
     encoders: Vec<Box<dyn DynVulkanEncoder>>,
 }
 
+impl Drop for VulkanTranscoder {
+    fn drop(&mut self) {
+        for encoder in self.encoders.iter_mut() {
+            encoder.wait_for_all(Duration::MAX).unwrap();
+        }
+    }
+}
+
 impl VideoTranscoderBackend for VulkanTranscoder {
     // TODO: handle timeout
     fn transcode(
@@ -241,8 +249,6 @@ impl VulkanTranscoder {
         &mut self,
         instructions: Vec<DecoderInstruction>,
     ) -> Result<(), VulkanTranscoderError> {
-        let mut encoded_frame_sets = Vec::new();
-
         for instruction in instructions {
             let decoder_semaphore = self.decoder.tracker.semaphore_tracker.semaphore.clone();
             let decoder_command_buffer_pools = self.decoder.tracker.command_buffer_pools.clone();
@@ -303,8 +309,7 @@ impl VulkanTranscoder {
             });
 
             for resized_images in sorted {
-                let encoded_frames = self.encode_resized_images(resized_images)?;
-                encoded_frame_sets.push(encoded_frames);
+                self.encode_resized_images(resized_images)?;
             }
         }
 
@@ -320,7 +325,7 @@ impl VulkanTranscoder {
             .iter_mut()
             .zip(resized_images.data.images.into_iter())
         {
-            // TODO: encode can block if > max_in_flight
+            // TODO: encode can block if > max_in_flight so other submits won't happen
             // TODO: views need to be kept alive
             encoder.encode(
                 frame.image,
