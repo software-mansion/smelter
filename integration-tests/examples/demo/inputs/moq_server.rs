@@ -14,12 +14,14 @@ use sha2::{Digest, Sha256};
 use smelter::config::read_config;
 use tracing::warn;
 
-use crate::IP;
+use crate::{IP, inputs::InputBufferOption};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoqServerInput {
     pub name: String,
     pub auth_token: String,
+    #[serde(default)]
+    pub buffer: InputBufferOption,
 }
 
 impl MoqServerInput {
@@ -30,6 +32,7 @@ impl MoqServerInput {
                 "h264": "ffmpeg_h264",
             },
             "auth_token": self.auth_token,
+            "buffer": self.buffer.serialize_register(),
         })
     }
 
@@ -71,13 +74,18 @@ fn self_signed_cert_fingerprint() -> Result<String> {
 pub struct MoqServerInputBuilder {
     name: String,
     auth_token: String,
+    buffer: InputBufferOption,
 }
 
 impl MoqServerInputBuilder {
     pub fn new() -> Self {
         let name = Self::generate_name();
         let auth_token = "example".to_string();
-        Self { name, auth_token }
+        Self {
+            name,
+            auth_token,
+            buffer: InputBufferOption::default(),
+        }
     }
 
     fn generate_name() -> String {
@@ -88,7 +96,7 @@ impl MoqServerInputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_name()?.prompt_token()
+        self.prompt_name()?.prompt_token()?.prompt_buffer()
     }
 
     fn prompt_name(self) -> Result<Self> {
@@ -109,6 +117,11 @@ impl MoqServerInputBuilder {
         }
     }
 
+    fn prompt_buffer(mut self) -> Result<Self> {
+        self.buffer = InputBufferOption::prompt()?;
+        Ok(self)
+    }
+
     pub fn with_name(mut self, name: String) -> Self {
         self.name = name;
         self
@@ -123,6 +136,7 @@ impl MoqServerInputBuilder {
         MoqServerInput {
             name: self.name,
             auth_token: self.auth_token,
+            buffer: self.buffer,
         }
     }
 }
