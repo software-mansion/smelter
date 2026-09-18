@@ -46,6 +46,14 @@
 //!   edges, or between their slowest deliveries, sits between the merge (3s) and the split (5s)
 //!   threshold), the secondary track offset is not re-aligned. If the leader was slewing when the
 //!   re-alignment stopped, the offset keeps what the leader had left to slew at that moment.
+//! - A pts jump below the discontinuity threshold (10s) that is not matched by a gap in arrival
+//!   is taken at face value. Forward, the output freezes for the length of the jump and the extra
+//!   buffer is slewed away only if it exceeds the maximum. Backward, chunks are late until the
+//!   stale estimate resets the track.
+//! - Old content delivered while the upper bound is stable (e.g. a backlog flushed by a track
+//!   that joins late) counts as slow delivery and inflates the spread until it leaves the window.
+//! - Live edges are estimated from pts, so with unrelated timelines the offset between the tracks
+//!   is biased by the video reorder depth (B-frames).
 //!
 //! Live edge detection itself is implemented by `LiveEdgeEstimator`, usable on its own by
 //! inputs with different buffering logic.
