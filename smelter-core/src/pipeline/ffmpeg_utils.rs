@@ -5,7 +5,10 @@ use tracing::warn;
 
 use crate::{prelude::*, queue::QueueContext};
 
-const OFFSET_RESOLUTION_TIMEOUT: Duration = Duration::from_millis(500);
+// With slow preset and disable sliced threads the encoder delay can be substantial.
+// e.g. rc_lookahead 60  + 16 thread machine would have delay of about 100 frames, which
+// at 24fps makes 4.2 seconds
+const OFFSET_RESOLUTION_TIMEOUT: Duration = Duration::from_millis(5000);
 
 /// Timestamp offset subtracted from every chunk on output.
 ///
@@ -21,6 +24,10 @@ pub(crate) struct TimestampOffset {
     queue_ctx: QueueContext,
     /// Relative to the queue start, not to the sync point the chunk PTS use.
     start_at: Option<Timestamp>,
+    /// Encoder priming that precedes the first audio chunk. The offset anchors on the content
+    /// start, so the priming frames get negative timestamps and the muxer emits an edit list
+    /// that skips them.
+    audio_initial_padding: Duration,
     state: State,
 }
 
@@ -40,9 +47,11 @@ impl TimestampOffset {
         start_at: Option<Timestamp>,
         has_video: bool,
         has_audio: bool,
+        audio_initial_padding: Option<Duration>,
     ) -> Self {
         Self {
             queue_ctx,
+            audio_initial_padding: audio_initial_padding.unwrap_or_default(),
             start_at,
             // Not resolved here even when `start_at` is set, we need to wait for queue start
             state: State::Pending {
@@ -67,17 +76,23 @@ impl TimestampOffset {
             } => (waiting_for_video, waiting_for_audio, lowest_pts, buffered),
         };
 
-        match chunk.kind {
-            MediaKind::Video(_) => *waiting_for_video = false,
-            MediaKind::Audio(_) => *waiting_for_audio = false,
-        }
+        let content_pts = match chunk.kind {
+            MediaKind::Video(_) => {
+                *waiting_for_video = false;
+                chunk.pts
+            }
+            MediaKind::Audio(_) => {
+                *waiting_for_audio = false;
+                chunk.pts + self.audio_initial_padding
+            }
+        };
         let lowest = match *lowest_pts {
-            Some(lowest) => Timestamp::min(lowest, chunk.pts),
-            None => chunk.pts,
+            Some(lowest) => Timestamp::min(lowest, content_pts),
+            None => content_pts,
         };
         *lowest_pts = Some(lowest);
 
-        let timed_out = chunk.pts > lowest + OFFSET_RESOLUTION_TIMEOUT;
+        let timed_out = content_pts > lowest + OFFSET_RESOLUTION_TIMEOUT;
         if timed_out {
             warn!(
                 ?lowest,

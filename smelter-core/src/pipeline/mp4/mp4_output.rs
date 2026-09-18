@@ -134,6 +134,9 @@ impl Mp4Output {
             start_at,
             video_stream.is_some(),
             audio_stream.is_some(),
+            audio_encoder
+                .as_ref()
+                .and_then(|encoder| encoder.config.initial_padding),
         );
 
         std::thread::Builder::new()
