@@ -218,8 +218,10 @@ pub fn decode_aac_audio(dump: &Bytes, expected_sample_rate: u32) -> Result<Vec<A
     let Some(stream) = demux(dump)?.audio else {
         bail!("MP4 dump has no audio stream");
     };
-    let mut decoder = FfmpegContext::from_parameters(stream.parameters)?
-        .decoder()
+    let mut decoder = FfmpegContext::from_parameters(stream.parameters)?.decoder();
+    // Needed to shift the pts of frames trimmed by the edit list (encoder priming).
+    decoder.set_packet_time_base(stream.time_base);
+    let mut decoder = decoder
         .audio()
         .context("Failed to initialize AAC decoder for MP4 dump")?;
 
