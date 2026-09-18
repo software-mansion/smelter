@@ -42,8 +42,9 @@
 //! - If the input stream clock drifts faster than the anchor slew rate (3% when shrinking the
 //!   buffer, 4% when growing it), the correction logic will not keep up. Only drift below that
 //!   rate or an immediate timestamp discontinuity larger than 10s is handled.
-//! - While the distance between the live edges sits between the merge (3s) and the split (5s)
-//!   threshold, the secondary track offset is not re-aligned. If the leader was slewing when the
+//! - While the tracks count as neither converged nor diverged (the distance between their live
+//!   edges, or between their slowest deliveries, sits between the merge (3s) and the split (5s)
+//!   threshold), the secondary track offset is not re-aligned. If the leader was slewing when the
 //!   re-alignment stopped, the offset keeps what the leader had left to slew at that moment.
 //!
 //! Live edge detection itself is implemented by `LiveEdgeEstimator`, usable on its own by
@@ -80,6 +81,10 @@ pub(crate) struct LiveSyncOptions {
     /// Start with the current estimates if the live edge was not detected
     /// within this much time from the track's first chunk.
     pub max_wait: Duration,
+    /// Distance between the upper bound and its recent counterpart above which the estimate of a
+    /// started track counts as stale and the track starts over: its timeline slipped and the full
+    /// window still holds the old edge.
+    pub stale_estimate_threshold: Duration,
 }
 
 /// Synchronization of a single input; create per-track handles with

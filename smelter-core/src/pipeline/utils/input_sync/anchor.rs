@@ -5,7 +5,7 @@ use crate::Timestamp;
 /// Correspondence between the input and output timelines of a track: content
 /// at `input_pts` is presented at `output_pts`, and every other timestamp
 /// keeps its distance to the anchor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct TimestampAnchor {
     /// Raw pts of the anchor: the estimated live edge when a live track
     /// starts, the first written pts for non-live inputs, or the oldest
@@ -15,6 +15,15 @@ pub(crate) struct TimestampAnchor {
     /// presented.
     pub output_pts: Timestamp,
 }
+
+/// Anchors are equal when they describe the same mapping, whichever point they are anchored at.
+impl PartialEq for TimestampAnchor {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_offset() == other.as_offset()
+    }
+}
+
+impl Eq for TimestampAnchor {}
 
 impl TimestampAnchor {
     /// The offset that produces output PTS values when added to input PTS

@@ -102,14 +102,14 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         self.drop_closed_tracks();
 
         if let Some(audio) = &self.audio
-            && audio.is_stalled(self.mode, now)
+            && audio.is_stalled(self.mode, self.options.stale_estimate_threshold, now)
         {
             debug!("Live sync: audio track stalled, resetting");
             self.reset_track(TrackKind::Audio, now);
         }
 
         if let Some(video) = &self.video
-            && video.is_stalled(self.mode, now)
+            && video.is_stalled(self.mode, self.options.stale_estimate_threshold, now)
         {
             debug!("Live sync: video track stalled, resetting");
             self.reset_track(TrackKind::Video, now);
@@ -510,19 +510,39 @@ impl<B: LiveSyncBuffer> Track<B> {
         })
     }
 
-    /// Track stalled long enough that it has to earn its start again.
-    fn is_stalled(&self, mode: Option<Mode>, now: Instant) -> bool {
+    /// Track stalled long enough that it has to earn its start again: it ran out of released
+    /// content, or its timeline slipped against its own recent deliveries.
+    fn is_stalled(
+        &self,
+        mode: Option<Mode>,
+        stale_estimate_threshold: Duration,
+        now: Instant,
+    ) -> bool {
         let started = mode.is_some_and(|mode| mode.is_started(self.kind));
-        if !started || self.buffer.peek_pts().is_some() {
+        if !started {
             return false;
         }
-        let Some(last_pts) = self.last_released_pts else {
-            return false;
-        };
 
         // Slightly late track can still recover; reset would cause a gap of at
         // least the stabilization period.
-        last_pts + Timestamp::from_secs(1) <= self.sync_point.timestamp_at(now)
+        let now_pts = self.sync_point.timestamp_at(now);
+        let ran_out_of_content = self.buffer.peek_pts().is_none()
+            && self
+                .last_released_pts
+                .is_some_and(|last_pts| last_pts + Timestamp::from_secs(1) <= now_pts);
+
+        // The upper bound still describes an edge the stream is no longer at. The full window
+        // would take its whole look-back to notice; a reset starts over on a fresh estimate.
+        let estimate_is_stale = self.estimator.estimate(now).is_some_and(|estimate| {
+            estimate
+                .recent_upper_bound_pts
+                .is_some_and(|recent_upper_bound_pts| {
+                    estimate.upper_bound.pts - recent_upper_bound_pts
+                        >= Timestamp::from(stale_estimate_threshold)
+                })
+        });
+
+        ran_out_of_content || estimate_is_stale
     }
 
     /// Whether `pts` belongs to a different timeline than the one this track
