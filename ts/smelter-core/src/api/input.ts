@@ -185,6 +185,7 @@ function intoMoqRegisterInput(input: Inputs.RegisterMoqServerInput): RegisterInp
     required: input.required,
     decoder_map: input.decoderMap,
     side_channel: intoSideChannel(input.sideChannel),
+    buffer: intoInputBuffer(input.buffer),
   };
 }
 
@@ -196,6 +197,7 @@ function intoMoqClientRegisterInput(input: Inputs.RegisterMoqClientInput): Regis
     required: input.required,
     decoder_map: input.decoderMap,
     side_channel: intoSideChannel(input.sideChannel),
+    buffer: intoInputBuffer(input.buffer),
   };
 }
 

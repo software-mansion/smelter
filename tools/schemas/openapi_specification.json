@@ -2393,7 +2393,7 @@
             "description": "Live stream, synchronized to the estimated live edge."
           }
         ],
-        "description": "Stats report for a track synchronized by the input sync (`RTMP`, `HLS`)."
+        "description": "Stats report for a track synchronized by the input sync (`RTMP`, `HLS`, `MoQ`)."
       },
       "InputWhepVideoOptions": {
         "type": "object",
@@ -2606,7 +2606,7 @@
         "enum": [
           "waiting_for_start",
           "started_shared",
-          "started_track"
+          "started_independent"
         ]
       },
       "LiveSyncTrackStatsReport": {
@@ -2647,7 +2647,7 @@
           "target_offset_distance_seconds": {
             "type": "number",
             "format": "double",
-            "description": "Remaining shift of the playback position to reach the target buffer.\nPositive when the buffer is being shrunk, negative when it is being\ngrown, zero when converged."
+            "description": "Remaining shift of the playback position until the timestamp offset of the track reaches\nits target. Positive when the buffer is being shrunk, negative when it is being grown, zero\nwhen converged. For the secondary track of `started_independent` it is the remaining shift\nrelative to the leader's final position."
           },
           "live_edge_lower_bound_distance_seconds": {
             "type": [
@@ -2655,7 +2655,7 @@
               "null"
             ],
             "format": "double",
-            "description": "How far the playback position is behind the pessimistic live edge\nestimate (content arriving as slow as the slowest recent chunk).\nMargin before the playback runs out of content. `None` before the\ntrack starts."
+            "description": "How far the playback position is behind the pessimistic live edge estimate (content\narriving as slow as the slowest recent chunk). Margin before the playback runs out of\ncontent. Measured against the estimate of both tracks combined in `started_shared` and of\nthis track alone in `started_independent`. `None` before the track starts."
           },
           "live_edge_upper_bound_distance_seconds": {
             "type": [
@@ -2663,7 +2663,7 @@
               "null"
             ],
             "format": "double",
-            "description": "How far the playback position is behind the optimistic live edge\nestimate (content arriving as fast as the fastest recent chunk).\nTotal latency introduced by the synchronization. `None` before the\ntrack starts."
+            "description": "How far the playback position is behind the optimistic live edge estimate (content\narriving as fast as the fastest recent chunk). Total latency introduced by the\nsynchronization. Measured against the estimate of both tracks combined in `started_shared`\nand of this track alone in `started_independent`. `None` before the track starts."
           },
           "buffer": {
             "$ref": "#/components/schemas/LiveSyncBufferStatsReport",
@@ -2800,6 +2800,17 @@
                 "description": "Enable side channel for video and/or audio track."
               }
             ]
+          },
+          "buffer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputBuffer",
+                "description": "(default=2000) Buffer kept between the live edge of the stream and playback.\nA number value represents `buffer.desired_ms` option"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -2807,40 +2818,28 @@
       "MoqClientInputStatsReport": {
         "type": "object",
         "description": "Stats report for `MoQ` client input.",
-        "required": [
-          "video",
-          "audio"
-        ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/MoqClientInputTrackStatsReport",
-            "description": "Stats for the video track."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the video track. `None` when the track is not active."
+              }
+            ]
           },
           "audio": {
-            "$ref": "#/components/schemas/MoqClientInputTrackStatsReport",
-            "description": "Stats for the audio track."
-          }
-        }
-      },
-      "MoqClientInputTrackStatsReport": {
-        "type": "object",
-        "description": "Stats report for a track in `MoQ` client input.",
-        "required": [
-          "bitrate_1_second",
-          "bitrate_1_minute"
-        ],
-        "properties": {
-          "bitrate_1_second": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate in the 1-second window.",
-            "minimum": 0
-          },
-          "bitrate_1_minute": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate in the 1-minute window.",
-            "minimum": 0
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the audio track. `None` when the track is not active."
+              }
+            ]
           }
         }
       },
@@ -3201,6 +3200,17 @@
                 "description": "Enable side channel for video and/or audio track."
               }
             ]
+          },
+          "buffer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputBuffer",
+                "description": "(default=2000) Buffer kept between the live edge of the stream and playback.\nA number value represents `buffer.desired_ms` option"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -3208,40 +3218,28 @@
       "MoqServerInputStatsReport": {
         "type": "object",
         "description": "Stats report for `MoQ` server input.",
-        "required": [
-          "video",
-          "audio"
-        ],
         "properties": {
           "video": {
-            "$ref": "#/components/schemas/MoqServerInputTrackStatsReport",
-            "description": "Stats for the video track."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the video track. `None` when the track is not active."
+              }
+            ]
           },
           "audio": {
-            "$ref": "#/components/schemas/MoqServerInputTrackStatsReport",
-            "description": "Stats for the audio track."
-          }
-        }
-      },
-      "MoqServerInputTrackStatsReport": {
-        "type": "object",
-        "description": "Stats report for a track in `MoQ` server input.",
-        "required": [
-          "bitrate_1_second",
-          "bitrate_1_minute"
-        ],
-        "properties": {
-          "bitrate_1_second": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate in the 1-second window.",
-            "minimum": 0
-          },
-          "bitrate_1_minute": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate in the 1-minute window.",
-            "minimum": 0
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the audio track. `None` when the track is not active."
+              }
+            ]
           }
         }
       },

@@ -18,6 +18,7 @@ pub(crate) struct MoqServerInputState {
     pub queue_input: WeakQueueInput,
     pub auth_token: Arc<str>,
     pub decoders: MoqInputDecoders,
+    pub buffer: LiveInputBufferOptions,
     pub should_close: Arc<AtomicBool>,
     pub connection_task_handle: Option<JoinHandle<()>>,
     pub session: Option<MoqSession>,
@@ -27,6 +28,7 @@ pub(crate) struct MoqServerInputStateOptions {
     pub queue_input: WeakQueueInput,
     pub auth_token: Arc<str>,
     pub decoders: MoqInputDecoders,
+    pub buffer: LiveInputBufferOptions,
 }
 
 impl MoqServerInputState {
@@ -35,6 +37,7 @@ impl MoqServerInputState {
             queue_input: options.queue_input,
             auth_token: options.auth_token,
             decoders: options.decoders,
+            buffer: options.buffer,
             should_close: Arc::new(false.into()),
             connection_task_handle: None,
             session: None,

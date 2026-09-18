@@ -61,13 +61,13 @@ pub(crate) struct LiveSyncTrackStateSnapshot {
     pub buffer: LiveSyncBufferStats,
     /// Signed distance between the current and the target anchor; positive
     /// when the buffer is being shrunk.
-    pub target_offset_distance_ns: i64,
+    pub target_offset_distance: Timestamp,
     /// How far the playback position is behind the pessimistic live edge estimate
     /// bounds; `None` before the track starts.
-    pub live_edge_lower_bound_distance_ns: Option<i64>,
+    pub live_edge_lower_bound_distance: Option<Timestamp>,
     /// How far the playback position is behind the optimistic live edge estimate
     /// bounds; `None` before the track starts.
-    pub live_edge_upper_bound_distance_ns: Option<i64>,
+    pub live_edge_upper_bound_distance: Option<Timestamp>,
 }
 
 /// Snapshot of the content held in a sync buffer.
@@ -152,17 +152,18 @@ impl InputSyncTrackState {
                     bitrate_1_minute,
                     state: live.state,
                     discontinuities_detected: live.discontinuities_detected,
-                    target_offset_distance_seconds: ns_to_secs(
-                        live.snapshot.target_offset_distance_ns,
-                    ),
+                    target_offset_distance_seconds: live
+                        .snapshot
+                        .target_offset_distance
+                        .as_secs_f64(),
                     live_edge_lower_bound_distance_seconds: live
                         .snapshot
-                        .live_edge_lower_bound_distance_ns
-                        .map(ns_to_secs),
+                        .live_edge_lower_bound_distance
+                        .map(|distance| distance.as_secs_f64()),
                     live_edge_upper_bound_distance_seconds: live
                         .snapshot
-                        .live_edge_upper_bound_distance_ns
-                        .map(ns_to_secs),
+                        .live_edge_upper_bound_distance
+                        .map(|distance| distance.as_secs_f64()),
                     buffer: match live.snapshot.buffer {
                         LiveSyncBufferStats::Fifo { duration } => {
                             LiveSyncBufferStatsReport::Fifo(FifoBufferStatsReport {
@@ -282,9 +283,9 @@ impl InnerInputSyncTrackState {
                             buffer: LiveSyncBufferStats::Fifo {
                                 duration: Timestamp::ZERO,
                             },
-                            target_offset_distance_ns: 0,
-                            live_edge_lower_bound_distance_ns: None,
-                            live_edge_upper_bound_distance_ns: None,
+                            target_offset_distance: Timestamp::ZERO,
+                            live_edge_lower_bound_distance: None,
+                            live_edge_upper_bound_distance: None,
                         },
                     }))
                 }
