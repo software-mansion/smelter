@@ -15,10 +15,11 @@ use crate::{
         VulkanEncoder, VulkanEncoderError,
         codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
         vulkan_device::EncodingDevice,
-        vulkan_encoder::{DynVulkanEncoder, EncoderTrackerWaitState, FullEncoderParameters},
+        vulkan_encoder::{EncoderTrackerKind, EncoderTrackerWaitState, FullEncoderParameters},
         waiter_thread::{SubmissionTracker, WaiterThreadHandle},
         wrappers::{
             Buffer, CommandBufferPoolStorage, EncodeInputImage, EncodeInputImagePool, Image,
+            Tracker,
         },
     },
     encoders::{
@@ -36,7 +37,7 @@ pub(crate) type OnEncodedChunkCallback = Box<dyn FnMut(EncodedOutputChunk<Vec<u8
 
 pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
     pub(crate) submission_tracker: SubmissionTracker,
-    pub(crate) input_image_pool: EncodeInputImagePool<'a>,
+    input_image_pool: EncodeInputImagePool<'a>,
     on_chunk_callback: Arc<Mutex<OnEncodedChunkCallback>>,
     encode_failed: Arc<AtomicBool>,
 
@@ -202,10 +203,10 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
         Ok(buffer)
     }
 
-    pub(crate) fn submit_encode(
+    pub(crate) fn submit_encode<R: Send + 'static>(
         &mut self,
         encode_image: EncodeInputImage,
-        staging_buffer: Option<Buffer>,
+        in_flight_resources: R,
         force_idr: bool,
         pts: Option<u64>,
     ) -> Result<(), VulkanEncoderError> {
@@ -223,7 +224,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
             .add_wait_request(wait_value, move || {
                 command_buffer_pools.mark_submitted_as_free(wait_value);
                 encode_image.release_to_pool();
-                drop(staging_buffer);
+                drop(in_flight_resources);
                 match submission.0.download() {
                     Ok(chunk) => (on_chunk_callback.lock().unwrap())(chunk),
                     Err(err) => {
@@ -253,7 +254,7 @@ impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for AsyncVulkanEncoder<'a
 
         let encode_image = self.input_image_pool.image()?;
         let buffer = self.transfer_buffer_to_image(frame, &encode_image.image)?;
-        self.submit_encode(encode_image, Some(buffer), force_idr, frame.pts)?;
+        self.submit_encode(encode_image, buffer, force_idr, frame.pts)?;
 
         Ok(())
     }
@@ -284,5 +285,41 @@ impl VideoEncoderParametersInfoH265 for AsyncVulkanEncoder<'static, H265Codec> {
 
     fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
         self.encoder.pps()
+    }
+}
+
+pub(crate) trait DynVulkanEncoder: Send {
+    fn encode(
+        &mut self,
+        encode_image: EncodeInputImage,
+        in_flight_resouces: Box<dyn Send + 'static>,
+        force_idr: bool,
+        pts: Option<u64>,
+    ) -> Result<(), VulkanEncoderError>;
+
+    fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind>;
+
+    fn next_input_image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError>;
+}
+
+impl<'a, C: EncodeCodec + 'a> DynVulkanEncoder for AsyncVulkanEncoder<'a, C> {
+    fn encode(
+        &mut self,
+        encode_image: EncodeInputImage,
+        in_flight_resouces: Box<dyn Send + 'static>,
+        force_idr: bool,
+        pts: Option<u64>,
+    ) -> Result<(), VulkanEncoderError> {
+        // TODO: timeout
+        self.submission_tracker.wait_if_full(Duration::MAX)?;
+        self.submit_encode(encode_image, in_flight_resouces, force_idr, pts)
+    }
+
+    fn tracker(&mut self) -> &mut Tracker<EncoderTrackerKind> {
+        &mut self.encoder.tracker
+    }
+
+    fn next_input_image(&mut self) -> Result<EncodeInputImage, VulkanEncoderError> {
+        self.input_image_pool.image()
     }
 }

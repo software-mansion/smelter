@@ -96,7 +96,7 @@ impl<'a, C: EncodeCodec + 'a> WgpuVideoEncoderBackend for AsyncVulkanEncoder<'a,
 
         let encode_image =
             self.image_from_wgpu_texture(wgpu_device, wgpu_queue, &frame.data.wgpu_texture)?;
-        self.submit_encode(encode_image, None, force_idr, frame.pts)?;
+        self.submit_encode(encode_image, (), force_idr, frame.pts)?;
 
         Ok(())
     }
