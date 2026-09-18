@@ -50,7 +50,7 @@ impl LiveSyncTrackStats {
                 LiveSyncTrackState::StartedShared
             }
             Some(Mode::Independent(independent)) if independent.anchor(kind).is_some() => {
-                LiveSyncTrackState::StartedTrack
+                LiveSyncTrackState::StartedIndependent
             }
             _ => LiveSyncTrackState::WaitingForStart,
         };
@@ -84,8 +84,8 @@ impl LiveSyncTrackStats {
     }
 
     /// Throttled to [`SNAPSHOT_INTERVAL`]. `anchors` is `(current, target)` of the anchor the
-    /// track applies and `estimator` the live edge estimator it is corrected against, both `None`
-    /// before it started.
+    /// track applies and `estimator` the live edge estimator its mode reads for it (shared in
+    /// `Mode::Shared`, the track's own in `Mode::Independent`), both `None` before it started.
     pub fn report_state_snapshot(
         &mut self,
         buffer: &impl LiveSyncBuffer,
