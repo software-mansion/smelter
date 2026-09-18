@@ -7,6 +7,7 @@ mod debug;
 mod mem;
 #[cfg(feature = "transcoder")]
 mod pipeline;
+mod query;
 mod sync;
 mod video;
 mod vk_extensions;
@@ -16,6 +17,7 @@ pub(crate) use debug::*;
 pub(crate) use mem::*;
 #[cfg(feature = "transcoder")]
 pub(crate) use pipeline::*;
+pub(crate) use query::*;
 pub(crate) use sync::*;
 pub(crate) use video::*;
 pub(crate) use vk_extensions::*;

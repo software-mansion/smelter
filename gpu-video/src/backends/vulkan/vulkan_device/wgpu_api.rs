@@ -4,13 +4,14 @@ use ash::vk;
 use wgpu::hal::vulkan::Api as VkApi;
 
 use crate::{
-    VideoDecoderError, VideoEncoderError, WgpuInitError, WgpuTexturesDecoderH264,
+    EncodedOutputChunk, VideoDecoderError, VideoEncoderError, WgpuInitError,
+    WgpuTexturesDecoderH264,
     backends::{
         WgpuBackend,
         vulkan::{
-            VulkanAdapter, VulkanBackend, VulkanDevice, VulkanDeviceInitError,
+            AsyncVulkanEncoder, VulkanAdapter, VulkanBackend, VulkanDevice, VulkanDeviceInitError,
+            VulkanEncoderError,
             vulkan_decoder::{VulkanDecoderError, decoders_h264::VulkanWgpuTexturesDecoderH264},
-            vulkan_encoder::{VulkanEncoder, VulkanEncoderError},
         },
     },
     device::{
@@ -36,9 +37,16 @@ impl WgpuVideoDeviceBackend for VulkanDevice {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: EncoderParametersH264,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH264, VideoEncoderError> {
-        VulkanDevice::create_wgpu_textures_encoder_h264(self, wgpu_device, wgpu_queue, parameters)
-            .map_err(Into::into)
+        VulkanDevice::create_wgpu_textures_encoder_h264(
+            self,
+            wgpu_device,
+            wgpu_queue,
+            parameters,
+            on_chunk_callback,
+        )
+        .map_err(Into::into)
     }
 
     fn create_wgpu_textures_encoder_h265(
@@ -46,9 +54,16 @@ impl WgpuVideoDeviceBackend for VulkanDevice {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: EncoderParametersH265,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH265, VideoEncoderError> {
-        VulkanDevice::create_wgpu_textures_encoder_h265(self, wgpu_device, wgpu_queue, parameters)
-            .map_err(Into::into)
+        VulkanDevice::create_wgpu_textures_encoder_h265(
+            self,
+            wgpu_device,
+            wgpu_queue,
+            parameters,
+            on_chunk_callback,
+        )
+        .map_err(Into::into)
     }
 }
 
@@ -168,20 +183,24 @@ impl VulkanDevice {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: EncoderParametersH264,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH264, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
             parameters.output_parameters,
             parameters.input_parameters.width,
             parameters.input_parameters.height,
             parameters.input_parameters.target_framerate,
+            parameters.max_in_flight_submissions,
         )?;
 
         Ok(crate::WgpuTexturesEncoderH264 {
             wgpu_device,
             wgpu_queue,
-            encoder: Box::new(VulkanEncoder::new(
+            backend: Box::new(AsyncVulkanEncoder::new(
                 Arc::new(self.encoding_device()?),
                 parameters,
+                on_chunk_callback,
+                self.waiter_thread.clone(),
             )?),
         })
     }
@@ -191,20 +210,24 @@ impl VulkanDevice {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: EncoderParametersH265,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH265, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
             parameters.output_parameters,
             parameters.input_parameters.width,
             parameters.input_parameters.height,
             parameters.input_parameters.target_framerate,
+            parameters.max_in_flight_submissions,
         )?;
 
         Ok(crate::WgpuTexturesEncoderH265 {
             wgpu_device,
             wgpu_queue,
-            encoder: Box::new(VulkanEncoder::new(
+            backend: Box::new(AsyncVulkanEncoder::new(
                 Arc::new(self.encoding_device()?),
                 parameters,
+                on_chunk_callback,
+                self.waiter_thread.clone(),
             )?),
         })
     }
