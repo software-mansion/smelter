@@ -408,6 +408,9 @@ struct DecoderTrackWriter {
     waiting_for_keyframe: bool,
     pending_discontinuity: bool,
     closed: bool,
+    /// Packets of the current GOP not sent yet. Decode-only packets wait here for a presentable
+    /// packet that needs them decoded; the next keyframe drops them if none came.
+    held: Vec<HlsPacket>,
 
     is_live: bool,
 }
@@ -421,39 +424,55 @@ impl DecoderTrackWriter {
             waiting_for_keyframe: true,
             pending_discontinuity: false,
             closed: false,
+            held: Vec::new(),
         }
     }
 
-    fn send_chunk(&mut self, packet: HlsPacket) {
+    fn handle_chunk(&mut self, packet: HlsPacket) {
         self.maybe_handle_discontinuity();
         if self.pending_discontinuity {
             // drop `packet` because discontinuity still not handled
             return;
         }
 
-        if self.waiting_for_keyframe {
-            if !packet.is_key() {
-                debug!("Waiting for keyframe");
-                return;
-            }
-            self.waiting_for_keyframe = false;
+        if packet.is_key() {
+            self.held.clear();
         }
-
-        let chunk = packet.into_chunk(self.kind);
-        self.send_to_decoder(EncodedInputEvent::Chunk(chunk));
+        if packet.decode_only {
+            self.held.push(packet);
+            return;
+        }
+        for held in std::mem::take(&mut self.held) {
+            self.send_to_decoder(TrackEvent::Chunk(held));
+        }
+        self.send_to_decoder(TrackEvent::Chunk(packet));
     }
 
     fn maybe_handle_discontinuity(&mut self) {
         if !self.pending_discontinuity {
             return;
         }
-        self.pending_discontinuity = !self.send_to_decoder(EncodedInputEvent::Discontinuity);
+        self.pending_discontinuity = !self.send_to_decoder(TrackEvent::Discontinuity);
     }
 
     /// Pushes an event to the decoder thread; `false` when it did not fit
     /// (live only) or the decoder is gone. A live stream cannot wait for a
     /// decoder that is not keeping up, a non-live one waits for room.
-    fn send_to_decoder(&mut self, event: EncodedInputEvent) -> bool {
+    /// Packets are dropped while the decoder waits for a keyframe.
+    fn send_to_decoder(&mut self, event: TrackEvent<HlsPacket>) -> bool {
+        let event = match event {
+            TrackEvent::Chunk(packet) => {
+                if self.waiting_for_keyframe {
+                    if !packet.is_key() {
+                        debug!("Waiting for keyframe");
+                        return true;
+                    }
+                    self.waiting_for_keyframe = false;
+                }
+                EncodedInputEvent::Chunk(packet.into_chunk(self.kind))
+            }
+            TrackEvent::Discontinuity => EncodedInputEvent::Discontinuity,
+        };
         let event = PipelineEvent::Data(event);
         match self.is_live {
             true => match self.decoder_handle.chunk_sender.try_send(event) {
@@ -482,10 +501,12 @@ impl DecoderTrackWriter {
 impl TrackSink<HlsPacket> for DecoderTrackWriter {
     fn on_event(&mut self, event: TrackEvent<HlsPacket>) {
         match event {
-            TrackEvent::Chunk(packet) => self.send_chunk(packet),
+            TrackEvent::Chunk(packet) => self.handle_chunk(packet),
             TrackEvent::Discontinuity => {
                 self.pending_discontinuity = true;
                 self.waiting_for_keyframe = true;
+                // old timeline, nothing presentable follows it
+                self.held.clear();
                 self.maybe_handle_discontinuity();
             }
         }
