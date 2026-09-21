@@ -37,7 +37,7 @@ fn changing_profile() {
 }
 
 /// Tests for problems with frame cropping and stutter at frame 133.
-/// Related PRs: #2071
+/// Related PRs: #2071, #2219
 #[test]
 fn frame_cropping() {
     TestCase {
