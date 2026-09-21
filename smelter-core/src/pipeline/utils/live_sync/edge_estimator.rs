@@ -19,6 +19,16 @@ const MAX_LOOKBACK: Duration = Duration::from_secs(120);
 /// batched delivery (e.g. HLS segments) keeps several bursts in view.
 const LOOKBACK_GAPS: u32 = 4;
 
+/// Look-back of the recent upper bound for perfectly steady delivery (see
+/// [`EdgeEstimate::recent_upper_bound_pts`]). Short, so a slipped timeline is noticed within a
+/// few seconds; it stays robust because the minimum only falls behind when every chunk in the
+/// window is slow.
+const RECENT_LOOKBACK: Duration = Duration::from_secs(2);
+
+/// The recent look-back covers at least this many worst-case arrival gaps, so batched delivery
+/// keeps a whole burst in view.
+const RECENT_LOOKBACK_GAPS: u32 = 2;
+
 /// Look-back of the arrival gap maximum. Longer than [`MIN_LOOKBACK`], so a
 /// one-off stall keeps the offset window widened for a while after it ends
 /// instead of being forgotten as soon as it leaves a short window.
@@ -114,9 +124,11 @@ pub(crate) struct EdgeEstimate {
     ///   - It can grow faster than real time only when "forgetting" (assuming fixed window, e.g. gaps can affect it)
     ///   - Breaking stable state might mean degraded performance, but it is too late to treat it as
     ///     a signal because it is set after late packet arrives
-    ///   - TODO: If we estimate gap size (equal to chunk size) we could lower this bound without
-    ///     new incoming packet (when packet we expect was not yet delivered)
     pub lower_bound: PtsBound,
+    /// Upper bound over a short look-back; `None` when nothing was observed within it. Never
+    /// ahead of `upper_bound`. It falls behind when the timeline slipped (pts advancing slower
+    /// than real time) and the full window has not forgotten the old fastest delivery yet.
+    pub recent_upper_bound_pts: Option<Timestamp>,
     /// Plain statistics of what was actually delivered; unlike the bounds
     /// they do not extrapolate.
     pub delivery: DeliveryStats,
@@ -130,6 +142,69 @@ impl EdgeEstimate {
         match self.lower_bound.stable {
             true => self.upper_bound.pts - self.lower_bound.pts,
             false => Timestamp::ZERO,
+        }
+    }
+
+    /// Whether the tracks are known to be on different timelines.
+    pub fn timelines_diverged(audio: Option<&EdgeEstimate>, video: Option<&EdgeEstimate>) -> bool {
+        // looser than the converge threshold, so a mode cannot flap between the two
+        const SPLIT_THRESHOLD: Duration = Duration::from_secs(5);
+        Self::is_timeline_shared(audio, video, SPLIT_THRESHOLD) == Some(false)
+    }
+
+    /// Whether the tracks are known to be on the same timeline.
+    pub fn timelines_converged(audio: Option<&EdgeEstimate>, video: Option<&EdgeEstimate>) -> bool {
+        const MERGE_THRESHOLD: Duration = Duration::from_secs(3);
+        Self::is_timeline_shared(audio, video, MERGE_THRESHOLD) == Some(true)
+    }
+
+    /// Heuristic that decides if two tracks are on the same timeline. Live edges closer than
+    /// `threshold` are treated as the same timeline, unless the lower bounds are further apart
+    /// than that. `None` when there is not enough information to decide either way.
+    fn is_timeline_shared(
+        audio: Option<&EdgeEstimate>,
+        video: Option<&EdgeEstimate>,
+        threshold: Duration,
+    ) -> Option<bool> {
+        let (audio, video) = (audio?, video?);
+
+        // A timeline that falls behind shows in the lower bound at once, in the upper bound only
+        // after the old minimum leaves the window, so lower bounds that far apart are enough
+        let (audio_lower, video_lower) = (audio.lower_bound, video.lower_bound);
+        let lower_diff = (audio_lower.pts - video_lower.pts).abs();
+        if audio_lower.stable && video_lower.stable && lower_diff >= Timestamp::from(threshold) {
+            return Some(false);
+        }
+
+        let (audio, video) = (audio.upper_bound, video.upper_bound);
+
+        let diff = (audio.pts - video.pts).abs();
+        // If diff is that large we ignore stability, timelines have to be diverged
+        if diff >= Timestamp::from_secs(120) {
+            return Some(false);
+        }
+
+        // If diff is over the threshold we check stability too before deciding
+        if diff < Timestamp::from(threshold) {
+            return match audio.stable && video.stable {
+                true => Some(true),
+                false => None,
+            };
+        }
+
+        match (audio.stable, video.stable) {
+            (true, true) => Some(false),
+            // unstable track ahead of the stable one only diverges further;
+            // behind it could be backlog
+            (true, false) => match video.pts < audio.pts {
+                true => None,
+                false => Some(false),
+            },
+            (false, true) => match audio.pts < video.pts {
+                true => None,
+                false => Some(false),
+            },
+            (false, false) => None,
         }
     }
 }
@@ -239,9 +314,13 @@ impl LiveEdgeEstimator {
                 stable: false,
             },
         };
+        let recent_upper_bound_pts = observations
+            .recent_min_offset_ns(now_index, max_gap)
+            .map(bound_pts);
         Some(EdgeEstimate {
             upper_bound,
             lower_bound,
+            recent_upper_bound_pts,
             delivery: DeliveryStats {
                 last_pts: observations.last_pts,
                 observed_for: now.saturating_duration_since(observations.first_observation),
@@ -392,5 +471,20 @@ impl Observations {
             let newest = self.buckets.back().expect("never empty");
             (newest.min_offset_ns, newest.max_offset_ns)
         })
+    }
+
+    /// Offset minimum over the recent look-back; `None` when nothing was observed within it.
+    fn recent_min_offset_ns(&self, now_index: u64, max_gap: Duration) -> Option<i64> {
+        let lookback = Duration::clamp(
+            max_gap * RECENT_LOOKBACK_GAPS,
+            RECENT_LOOKBACK,
+            MAX_LOOKBACK,
+        );
+        let oldest_valid = now_index.saturating_sub(buckets_in(lookback) - 1);
+        self.buckets
+            .iter()
+            .filter(|bucket| bucket.index >= oldest_valid)
+            .map(|bucket| bucket.min_offset_ns)
+            .min()
     }
 }

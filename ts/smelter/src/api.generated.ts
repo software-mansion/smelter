@@ -1766,15 +1766,15 @@ export type InputSyncTrackStatsReport =
        */
       discontinuities_detected: number;
       /**
-       * Remaining shift of the playback position to reach the target buffer. Positive when the buffer is being shrunk, negative when it is being grown, zero when converged.
+       * Remaining shift of the playback position until the timestamp offset of the track reaches its target. Positive when the buffer is being shrunk, negative when it is being grown, zero when converged. For the secondary track of `started_independent` it is the remaining shift relative to the leader's final position.
        */
       target_offset_distance_seconds: number;
       /**
-       * How far the playback position is behind the pessimistic live edge estimate (content arriving as slow as the slowest recent chunk). Margin before the playback runs out of content. `None` before the track starts.
+       * How far the playback position is behind the pessimistic live edge estimate (content arriving as slow as the slowest recent chunk). Margin before the playback runs out of content. Measured against the estimate of both tracks combined in `started_shared` and of this track alone in `started_independent`. `None` before the track starts.
        */
       live_edge_lower_bound_distance_seconds?: number | null;
       /**
-       * How far the playback position is behind the optimistic live edge estimate (content arriving as fast as the fastest recent chunk). Total latency introduced by the synchronization. `None` before the track starts.
+       * How far the playback position is behind the optimistic live edge estimate (content arriving as fast as the fastest recent chunk). Total latency introduced by the synchronization. Measured against the estimate of both tracks combined in `started_shared` and of this track alone in `started_independent`. `None` before the track starts.
        */
       live_edge_upper_bound_distance_seconds?: number | null;
       /**
@@ -1793,7 +1793,7 @@ export type SimpleSyncTrackState = "running" | "initial_buffering";
 /**
  * State of the live edge synchronization of a track.
  */
-export type LiveSyncTrackState = "waiting_for_start" | "started_shared" | "started_track";
+export type LiveSyncTrackState = "waiting_for_start" | "started_shared" | "started_independent";
 /**
  * Stats report for the content currently held in the sync buffer.
  */

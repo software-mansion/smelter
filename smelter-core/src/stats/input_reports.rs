@@ -230,21 +230,22 @@ pub struct LiveSyncTrackStatsReport {
     /// Total count of timestamp discontinuities detected.
     pub discontinuities_detected: u32,
 
-    /// Remaining shift of the playback position to reach the target buffer.
-    /// Positive when the buffer is being shrunk, negative when it is being
-    /// grown, zero when converged.
+    /// Remaining shift of the playback position until the timestamp offset of the track reaches
+    /// its target. Positive when the buffer is being shrunk, negative when it is being grown, zero
+    /// when converged. For the secondary track of `started_independent` it is the remaining shift
+    /// relative to the leader's final position.
     pub target_offset_distance_seconds: f64,
 
-    /// How far the playback position is behind the pessimistic live edge
-    /// estimate (content arriving as slow as the slowest recent chunk).
-    /// Margin before the playback runs out of content. `None` before the
-    /// track starts.
+    /// How far the playback position is behind the pessimistic live edge estimate (content
+    /// arriving as slow as the slowest recent chunk). Margin before the playback runs out of
+    /// content. Measured against the estimate of both tracks combined in `started_shared` and of
+    /// this track alone in `started_independent`. `None` before the track starts.
     pub live_edge_lower_bound_distance_seconds: Option<f64>,
 
-    /// How far the playback position is behind the optimistic live edge
-    /// estimate (content arriving as fast as the fastest recent chunk).
-    /// Total latency introduced by the synchronization. `None` before the
-    /// track starts.
+    /// How far the playback position is behind the optimistic live edge estimate (content
+    /// arriving as fast as the fastest recent chunk). Total latency introduced by the
+    /// synchronization. Measured against the estimate of both tracks combined in `started_shared`
+    /// and of this track alone in `started_independent`. `None` before the track starts.
     pub live_edge_upper_bound_distance_seconds: Option<f64>,
 
     /// Content currently held back by the sync.
@@ -255,15 +256,18 @@ pub struct LiveSyncTrackStatsReport {
 }
 
 /// State of the live edge synchronization of a track.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LiveSyncTrackState {
     /// Chunks are held back until the live edge is estimated.
     WaitingForStart,
-    /// Started, aligned to the live edge shared with the other track.
+    /// Started with the timestamp offset shared with the other track; the buffer is sized from the
+    /// live edge of both tracks combined.
     StartedShared,
-    /// Started with its own live edge, timestamps are unrelated to the other track.
-    StartedTrack,
+    /// Started while the tracks are on unrelated timelines. The leader (audio when it runs) sizes
+    /// the buffer from its own live edge; the secondary track follows the leader, shifted by the
+    /// distance between their live edges.
+    StartedIndependent,
 }
 
 /// Stats report for the content currently held in the sync buffer.

@@ -173,6 +173,7 @@ impl HlsDemuxerThread {
                     // a gap between chunks.
                     stabilization_tolerance: Duration::from_millis(250),
                     max_wait: Duration::from_secs(10),
+                    stale_estimate_threshold: Duration::from_secs(1),
                 },
                 input_ctx.ctx.queue_ctx.sync_point,
                 stats,
