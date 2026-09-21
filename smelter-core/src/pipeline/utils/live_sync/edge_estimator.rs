@@ -20,8 +20,10 @@ const MAX_LOOKBACK: Duration = Duration::from_secs(120);
 const LOOKBACK_GAPS: u32 = 4;
 
 /// Look-back of the recent upper bound for perfectly steady delivery (see
-/// [`EdgeEstimate::recent_upper_bound_pts`]).
-const RECENT_LOOKBACK: Duration = Duration::from_secs(4);
+/// [`EdgeEstimate::recent_upper_bound_pts`]). Short, so a slipped timeline is noticed within a
+/// few seconds; it stays robust because the minimum only falls behind when every chunk in the
+/// window is slow.
+const RECENT_LOOKBACK: Duration = Duration::from_secs(2);
 
 /// The recent look-back covers at least this many worst-case arrival gaps, so batched delivery
 /// keeps a whole burst in view.

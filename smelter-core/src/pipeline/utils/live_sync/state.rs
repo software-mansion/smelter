@@ -7,7 +7,7 @@ use super::{
     buffer::{BufferingStrategy, LiveSyncBuffer},
     decision_correct_mode::correct_mode_decision,
     decision_start_track::start_track_decision,
-    edge_estimator::LiveEdgeEstimator,
+    edge_estimator::{EdgeEstimate, LiveEdgeEstimator},
     mode::{IndependentMode, Mode},
     stats::LiveSyncTrackStats,
 };
@@ -523,24 +523,37 @@ impl<B: LiveSyncBuffer> Track<B> {
             return false;
         }
 
-        // Slightly late track can still recover; reset would cause a gap of at
-        // least the stabilization period.
+        const STALL_TIMEOUT: Duration = Duration::from_secs(1);
         let now_pts = self.sync_point.timestamp_at(now);
-        let ran_out_of_content = self.buffer.peek_pts().is_none()
-            && self
-                .last_released_pts
-                .is_some_and(|last_pts| last_pts + Timestamp::from_secs(1) <= now_pts);
+
+        // Chunks that keep arriving but map late are not a stall: the anchor is undersized for
+        // this track, and a restart on a shared anchor would only rejoin it and be late again.
+        let delivery_stopped = match self.last_written {
+            Some((_, arrived_at)) => now.saturating_duration_since(arrived_at) >= STALL_TIMEOUT,
+            None => true,
+        };
+        // Slightly late track can still recover; reset would cause a gap of at least the
+        // stabilization period.
+        let released_content_ran_out = match self.last_released_pts {
+            Some(last_pts) => last_pts + STALL_TIMEOUT <= now_pts,
+            None => false,
+        };
+        let ran_out_of_content =
+            delivery_stopped && self.buffer.peek_pts().is_none() && released_content_ran_out;
 
         // The upper bound still describes an edge the stream is no longer at. The full window
         // would take its whole look-back to notice; a reset starts over on a fresh estimate.
-        let estimate_is_stale = self.estimator.estimate(now).is_some_and(|estimate| {
-            estimate
-                .recent_upper_bound_pts
-                .is_some_and(|recent_upper_bound_pts| {
-                    estimate.upper_bound.pts - recent_upper_bound_pts
-                        >= Timestamp::from(stale_estimate_threshold)
-                })
-        });
+        let estimate_is_stale = match self.estimator.estimate(now) {
+            Some(EdgeEstimate {
+                upper_bound,
+                recent_upper_bound_pts: Some(recent_upper_bound_pts),
+                ..
+            }) => {
+                upper_bound.pts - recent_upper_bound_pts
+                    >= Timestamp::from(stale_estimate_threshold)
+            }
+            _ => false,
+        };
 
         ran_out_of_content || estimate_is_stale
     }
