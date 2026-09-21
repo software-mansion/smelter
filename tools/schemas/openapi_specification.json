@@ -2665,6 +2665,14 @@
             "format": "double",
             "description": "How far the playback position is behind the optimistic live edge estimate (content\narriving as fast as the fastest recent chunk). Total latency introduced by the\nsynchronization. Measured against the estimate of both tracks combined in `started_shared`\nand of this track alone in `started_independent`. `None` before the track starts."
           },
+          "live_edge_recent_upper_bound_distance_seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Like `live_edge_upper_bound_distance_seconds`, but the estimate only looks back over the\nlast few seconds instead of the full window, so it reacts to a latency change within\nseconds. Never larger than the full-window value; it drops below it when the stream slipped\n(content arriving slower than real time) and the full window still remembers the earlier,\nfaster delivery. `None` before the track starts or when nothing arrived within the window."
+          },
           "buffer": {
             "$ref": "#/components/schemas/LiveSyncBufferStatsReport",
             "description": "Content currently held back by the sync."

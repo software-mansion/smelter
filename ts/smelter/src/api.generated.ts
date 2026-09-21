@@ -1790,6 +1790,10 @@ export type InputSyncTrackStatsReport =
        */
       live_edge_upper_bound_distance_seconds?: number | null;
       /**
+       * Like `live_edge_upper_bound_distance_seconds`, but the estimate only looks back over the last few seconds instead of the full window, so it reacts to a latency change within seconds. Never larger than the full-window value; it drops below it when the stream slipped (content arriving slower than real time) and the full window still remembers the earlier, faster delivery. `None` before the track starts or when nothing arrived within the window.
+       */
+      live_edge_recent_upper_bound_distance_seconds?: number | null;
+      /**
        * Content currently held back by the sync.
        */
       buffer: LiveSyncBufferStatsReport;

@@ -228,6 +228,13 @@ pub struct LiveSyncTrackStatsReport {
     /// and of this track alone in `started_independent`. `None` before the track starts.
     pub live_edge_upper_bound_distance_seconds: Option<f64>,
 
+    /// Like `live_edge_upper_bound_distance_seconds`, but the estimate only looks back over the
+    /// last few seconds instead of the full window, so it reacts to a latency change within
+    /// seconds. Never larger than the full-window value; it drops below it when the stream slipped
+    /// (content arriving slower than real time) and the full window still remembers the earlier,
+    /// faster delivery. `None` before the track starts or when nothing arrived within the window.
+    pub live_edge_recent_upper_bound_distance_seconds: Option<f64>,
+
     /// Content currently held back by the sync.
     pub buffer: LiveSyncBufferStatsReport,
 

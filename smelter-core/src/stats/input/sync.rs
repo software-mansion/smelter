@@ -68,6 +68,9 @@ pub(crate) struct LiveSyncTrackStateSnapshot {
     /// How far the playback position is behind the optimistic live edge estimate
     /// bounds; `None` before the track starts.
     pub live_edge_upper_bound_distance: Option<Timestamp>,
+    /// Like `live_edge_upper_bound_distance`, but the estimate only looks back over a short
+    /// window; `None` before the track starts or when nothing arrived within it.
+    pub live_edge_recent_upper_bound_distance: Option<Timestamp>,
 }
 
 /// Snapshot of the content held in a sync buffer.
@@ -163,6 +166,10 @@ impl InputSyncTrackState {
                     live_edge_upper_bound_distance_seconds: live
                         .snapshot
                         .live_edge_upper_bound_distance
+                        .map(|distance| distance.as_secs_f64()),
+                    live_edge_recent_upper_bound_distance_seconds: live
+                        .snapshot
+                        .live_edge_recent_upper_bound_distance
                         .map(|distance| distance.as_secs_f64()),
                     buffer: match live.snapshot.buffer {
                         LiveSyncBufferStats::Fifo { duration } => {
@@ -286,6 +293,7 @@ impl InnerInputSyncTrackState {
                             target_offset_distance: Timestamp::ZERO,
                             live_edge_lower_bound_distance: None,
                             live_edge_upper_bound_distance: None,
+                            live_edge_recent_upper_bound_distance: None,
                         },
                     }))
                 }
