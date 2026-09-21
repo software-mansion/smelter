@@ -8,6 +8,8 @@ use inquire::{Confirm, Text};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::inputs::InputBufferOption;
+
 const MOQ_CLIENT_DEFAULT_URL: &str = "https://localhost:443";
 const MOQ_CLIENT_DEFAULT_BROADCAST_PATH: &str = "anon/test";
 
@@ -16,6 +18,8 @@ pub struct MoqClientInput {
     pub name: String,
     pub endpoint_url: String,
     pub broadcast_path: String,
+    #[serde(default)]
+    pub buffer: InputBufferOption,
 }
 
 impl MoqClientInput {
@@ -27,6 +31,7 @@ impl MoqClientInput {
             "decoder_map": {
                 "h264": "ffmpeg_h264",
             },
+            "buffer": self.buffer.serialize_register(),
         })
     }
 
@@ -47,6 +52,7 @@ pub struct MoqClientInputBuilder {
     name: String,
     endpoint_url: String,
     broadcast_path: String,
+    buffer: InputBufferOption,
 }
 
 impl MoqClientInputBuilder {
@@ -58,6 +64,7 @@ impl MoqClientInputBuilder {
             name,
             endpoint_url: url,
             broadcast_path,
+            buffer: InputBufferOption::default(),
         }
     }
 
@@ -69,7 +76,10 @@ impl MoqClientInputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_name()?.prompt_url()?.prompt_broadcast_path()
+        self.prompt_name()?
+            .prompt_url()?
+            .prompt_broadcast_path()?
+            .prompt_buffer()
     }
 
     fn prompt_name(self) -> Result<Self> {
@@ -105,6 +115,11 @@ impl MoqClientInputBuilder {
         }
     }
 
+    fn prompt_buffer(mut self) -> Result<Self> {
+        self.buffer = InputBufferOption::prompt()?;
+        Ok(self)
+    }
+
     pub fn with_name(mut self, name: String) -> Self {
         self.name = name;
         self
@@ -125,6 +140,7 @@ impl MoqClientInputBuilder {
             name: self.name,
             endpoint_url: self.endpoint_url,
             broadcast_path: self.broadcast_path,
+            buffer: self.buffer,
         }
     }
 }

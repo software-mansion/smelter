@@ -1,8 +1,10 @@
 use anyhow::Result;
+use inquire::Select;
 use integration_tests::media::VideoCodec;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::fmt::Debug;
-use strum::{Display, EnumIter};
+use strum::{Display, EnumIter, IntoEnumIterator};
 
 use crate::inputs::{
     hls::HlsInput, moq_client::MoqClientInput, moq_server::MoqServerInput, mp4::Mp4Input,
@@ -171,6 +173,38 @@ impl From<VideoDecoder> for VideoCodec {
 pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,
+}
+
+#[derive(Debug, Display, EnumIter, Default, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InputBufferOption {
+    #[default]
+    #[strum(to_string = "default")]
+    Default,
+
+    #[strum(to_string = "min 200ms, desired 500ms")]
+    Low,
+
+    #[strum(to_string = "desired 5s")]
+    High,
+}
+
+impl InputBufferOption {
+    pub fn prompt() -> Result<Self> {
+        let options = InputBufferOption::iter().collect();
+        let selection =
+            Select::new("Select buffer (ESC for default):", options).prompt_skippable()?;
+        Ok(selection.unwrap_or_default())
+    }
+
+    /// Value of the `buffer` field in the register request.
+    pub fn serialize_register(&self) -> serde_json::Value {
+        match self {
+            Self::Default => serde_json::Value::Null,
+            Self::Low => json!({ "min_ms": 200, "desired_ms": 500 }),
+            Self::High => json!(5000),
+        }
+    }
 }
 
 pub fn filter_video_inputs(inputs: &[InputHandle]) -> Vec<&InputHandle> {

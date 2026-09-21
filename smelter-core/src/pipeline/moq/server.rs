@@ -8,7 +8,7 @@ use tracing::{Instrument, Level, info, span, warn};
 use crate::{
     pipeline::moq::{
         MoqSession,
-        input::connection::{BroadcastCtx, MoqEndpointKind, handle_broadcast},
+        input::connection::{BroadcastCtx, handle_broadcast},
         server::{certificate::load_or_create_self_signed_tls, state::MoqServerState},
     },
     queue::WeakQueueInput,
@@ -183,9 +183,9 @@ async fn handle_session(
         input.ensure_no_active_connection(&input_ref)?;
         let broadcast_ctx = BroadcastCtx {
             broadcast,
-            decoders: input.decoders,
+            decoder_options: input.decoders,
+            buffer: input.buffer,
             should_close: input.should_close.clone(),
-            endpoint_kind: MoqEndpointKind::Server,
         };
         let Some(handle) =
             start_broadcast_handler_task(ctx, &input_ref, input.queue_input.clone(), broadcast_ctx)
