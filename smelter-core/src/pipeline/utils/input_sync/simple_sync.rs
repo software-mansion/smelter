@@ -4,11 +4,10 @@ use std::{
 };
 
 use super::{
-    BoxedTrackSink, InputSyncItem, InputSyncStatsSender, TimestampAnchor, TrackClosedError,
-    TrackEvent, TrackKind,
+    BoxedTrackSink, InputSyncItem, InputSyncStatsSender, TrackClosedError, TrackEvent, TrackKind,
 };
 use crate::{
-    Timestamp,
+    Timestamp, TimestampOffset,
     stats::{InputSyncMode, InputSyncTrackStatsEvent, SimpleSyncStatsEvent, SimpleSyncTrackState},
 };
 
@@ -31,7 +30,7 @@ struct SimpleSyncState {
 
 impl SimpleSyncState {
     /// Records a written pts. Returns the anchor once the buffer is released.
-    fn register_pts(&mut self, pts: Timestamp) -> Option<TimestampAnchor> {
+    fn register_pts(&mut self, pts: Timestamp) -> Option<TimestampOffset> {
         if !self.buffering {
             return Some(self.anchor());
         };
@@ -50,11 +49,8 @@ impl SimpleSyncState {
         }
     }
 
-    fn anchor(&self) -> TimestampAnchor {
-        TimestampAnchor {
-            input_pts: self.min_pts.unwrap_or(Timestamp::ZERO),
-            output_pts: Timestamp::ZERO,
-        }
+    fn anchor(&self) -> TimestampOffset {
+        Timestamp::offset(self.min_pts.unwrap_or(Timestamp::ZERO), Timestamp::ZERO)
     }
 }
 
@@ -103,7 +99,7 @@ pub(crate) struct SimpleSyncTrack<T: InputSyncItem> {
     stats: InputSyncStatsSender,
     /// Set once the shared state reports released. The anchor is fixed from
     /// then on, so the shared state does not have to be checked anymore.
-    anchor: Option<TimestampAnchor>,
+    anchor: Option<TimestampOffset>,
     /// Chunks with raw timestamps, held back until the anchor is known.
     buffer: Vec<T>,
     sink: BoxedTrackSink<T>,

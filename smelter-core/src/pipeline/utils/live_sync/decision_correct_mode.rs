@@ -6,7 +6,7 @@ use super::{
     mode::{IndependentMode, Mode, SecondaryTrackOffset, SharedMode, SlewingAnchor},
     state::SharedState,
 };
-use crate::{InstantExt, Timestamp, pipeline::utils::input_sync::TrackKind};
+use crate::{InstantExt, Timestamp, TimestampOffset, pipeline::utils::input_sync::TrackKind};
 
 /// Mode after this tick's corrections; the current mode when nothing changes.
 pub(super) fn correct_mode_decision<B: LiveSyncBuffer>(
@@ -100,8 +100,8 @@ fn split_shared(
     let secondary_track_offset = match ctx.audio_started && ctx.video_started {
         // the shared anchor is an offset of zero; slew from there
         true => Some(SecondaryTrackOffset {
-            current: Timestamp::ZERO,
-            target: audio.upper_bound.pts - video.upper_bound.pts,
+            current: TimestampOffset::ZERO,
+            target: Timestamp::offset(video.upper_bound.pts, audio.upper_bound.pts),
             last_released_pts: None,
         }),
         false => None,
@@ -160,8 +160,8 @@ fn correct_independent(
     if ctx.tracks_converged() {
         return match &mut independent.secondary_track_offset {
             // Stay on Mode::Independent, but start converging on shared
-            Some(offset) if offset.current.abs() > Timestamp::from_millis(200) => {
-                offset.target = Timestamp::ZERO;
+            Some(offset) if offset.current.abs_duration() > Duration::from_millis(200) => {
+                offset.target = TimestampOffset::ZERO;
                 Mode::Independent(independent)
             }
             // If only track or already converged, switch to shared
@@ -186,19 +186,18 @@ fn correct_independent(
     {
         // offset that presents both live edges at once; the secondary is always video, since
         // audio leads whenever it runs
-        let edge_offset = audio.upper_bound.pts - video.upper_bound.pts;
+        let edge_offset = Timestamp::offset(video.upper_bound.pts, audio.upper_bound.pts);
 
         // what the leader still has to slew; added so the secondary track goes straight to its
         // final position instead of following the leader there
         let leader = independent.leader_anchor;
-        let leader_remaining_slew = leader.target.as_offset() - leader.current.as_offset();
+        let leader_remaining_slew = leader.target - leader.current;
 
         let new_offset = edge_offset + leader_remaining_slew;
 
         // Video lagging behind audio is noticed far sooner than video running ahead, so only a
         // move that presents video later waits for the tolerance
-        let offset_change = new_offset - offset.target;
-        if offset_change < Timestamp::ZERO || offset_change > Timestamp::from(OFFSET_TOLERANCE) {
+        if new_offset < offset.target || new_offset > offset.target + OFFSET_TOLERANCE {
             offset.target = new_offset;
         }
     }

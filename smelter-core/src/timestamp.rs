@@ -4,6 +4,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use tracing::trace;
+
 const NANOS_PER_SEC: i64 = 1_000_000_000;
 const NANOS_PER_MILLI: i64 = 1_000_000;
 const NANOS_PER_MICRO: i64 = 1_000;
@@ -174,6 +176,12 @@ impl Timestamp {
 
     pub fn clamp(value: Timestamp, min: Timestamp, max: Timestamp) -> Timestamp {
         Ord::clamp(value, min, max)
+    }
+
+    /// Offset that presents content at `input_pts` at `output_pts`; every other timestamp
+    /// keeps its distance to that pair.
+    pub(crate) fn offset(input_pts: Timestamp, output_pts: Timestamp) -> TimestampOffset {
+        TimestampOffset(output_pts - input_pts)
     }
 }
 
@@ -359,6 +367,95 @@ impl Sub<Timestamp> for Instant {
 impl std::iter::Sum for Timestamp {
     fn sum<I: Iterator<Item = Timestamp>>(iter: I) -> Timestamp {
         iter.fold(Timestamp::ZERO, Add::add)
+    }
+}
+
+/// Mapping between two timelines: the offset that, added to a pts on the source timeline, gives
+/// the pts on the destination timeline it is presented at. Usually a track's input and output
+/// timelines.
+///
+/// Ordered by how late the same input pts is presented: `a > b` when `a` holds content back for
+/// longer than `b`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct TimestampOffset(Timestamp);
+
+impl TimestampOffset {
+    pub(crate) const ZERO: TimestampOffset = TimestampOffset(Timestamp::ZERO);
+
+    pub(crate) fn abs_duration(self) -> Duration {
+        self.0.abs_duration()
+    }
+
+    pub(crate) fn as_secs_f64(self) -> f64 {
+        self.0.as_secs_f64()
+    }
+
+    /// Maps a raw timestamp (pts or dts) onto the output timeline.
+    pub(crate) fn to_output_pts(self, pts: Timestamp) -> Timestamp {
+        pts + self.0
+    }
+
+    /// Input pts presented at `output_pts`.
+    pub(crate) fn to_input_pts(self, output_pts: Timestamp) -> Timestamp {
+        output_pts - self.0
+    }
+
+    /// Moves the mapping at most `step` toward `target`, i.e. toward
+    /// presenting the same input pts at the same output pts. A no-op once both
+    /// describe the same mapping.
+    pub(crate) fn nudge_toward(&mut self, target: TimestampOffset, max_step: Timestamp) {
+        let offset_to_target = target.0 - self.0;
+        if offset_to_target == Timestamp::ZERO {
+            return;
+        }
+        let change = Timestamp::clamp(offset_to_target, -max_step, max_step);
+        self.0 += change;
+        trace!(?change, anchor=?self.0, "Nudging anchor toward target");
+    }
+}
+
+/// Mapping that presents every input pts `rhs` later than `self` does.
+impl Add<Timestamp> for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn add(self, rhs: Timestamp) -> Self::Output {
+        TimestampOffset(self.0 + rhs)
+    }
+}
+
+/// Mapping that presents every input pts `rhs` later than `self` does.
+impl Add<Duration> for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn add(self, rhs: Duration) -> Self::Output {
+        TimestampOffset(self.0 + rhs)
+    }
+}
+
+/// Mapping that presents every input pts `rhs` earlier than `self` does.
+impl Sub<Timestamp> for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn sub(self, rhs: Timestamp) -> Self::Output {
+        TimestampOffset(self.0 - rhs)
+    }
+}
+
+/// Mapping of `self` applied after `rhs`.
+impl Add for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn add(self, rhs: TimestampOffset) -> Self::Output {
+        TimestampOffset(self.0 + rhs.0)
+    }
+}
+
+/// Mapping of `self` with `rhs` undone, so `(a + b) - b == a`.
+impl Sub for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn sub(self, rhs: TimestampOffset) -> Self::Output {
+        TimestampOffset(self.0 - rhs.0)
     }
 }
 

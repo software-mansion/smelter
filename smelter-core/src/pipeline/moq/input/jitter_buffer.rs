@@ -6,10 +6,7 @@ use std::{
 use tracing::trace;
 
 use crate::{
-    pipeline::utils::{
-        input_sync::{InputSyncItem, TimestampAnchor},
-        live_sync::LiveSyncBuffer,
-    },
+    pipeline::utils::{input_sync::InputSyncItem, live_sync::LiveSyncBuffer},
     stats::LiveSyncBufferStats,
 };
 
@@ -53,7 +50,7 @@ impl InputSyncItem for MoqChunk {
         self.chunk.size()
     }
 
-    fn apply_anchor(&mut self, anchor: TimestampAnchor) {
+    fn apply_anchor(&mut self, anchor: TimestampOffset) {
         self.chunk.apply_anchor(anchor);
     }
 

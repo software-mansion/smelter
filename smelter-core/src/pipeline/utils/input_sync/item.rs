@@ -1,7 +1,5 @@
 use crate::prelude::*;
 
-use super::TimestampAnchor;
-
 /// Item that can be buffered and synchronized by an [`InputSyncTrack`].
 ///
 /// [`InputSyncTrack`]: super::InputSyncTrack
@@ -17,7 +15,7 @@ pub(crate) trait InputSyncItem {
     /// Maps all timestamps of the item (pts, and dts if present) onto the
     /// output timeline `anchor` describes. Called by the track when the item
     /// is read.
-    fn apply_anchor(&mut self, anchor: TimestampAnchor);
+    fn apply_anchor(&mut self, anchor: TimestampOffset);
 
     /// Marks the item as decode-only: it still has to reach the decoder
     /// (later items need it decoded, e.g. video reference frames), but the
@@ -34,7 +32,7 @@ impl InputSyncItem for EncodedInputChunk {
         self.data.len()
     }
 
-    fn apply_anchor(&mut self, anchor: TimestampAnchor) {
+    fn apply_anchor(&mut self, anchor: TimestampOffset) {
         self.pts = anchor.to_output_pts(self.pts);
         self.dts = self.dts.map(|dts| anchor.to_output_pts(dts));
     }

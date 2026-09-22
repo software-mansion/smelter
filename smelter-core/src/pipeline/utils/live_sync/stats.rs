@@ -2,8 +2,8 @@ use std::time::{Duration, Instant};
 
 use super::{buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator, mode::Mode};
 use crate::{
-    InstantExt, Timestamp,
-    pipeline::utils::input_sync::{InputSyncStatsSender, TimestampAnchor, TrackKind},
+    InstantExt, Timestamp, TimestampOffset,
+    pipeline::utils::input_sync::{InputSyncStatsSender, TrackKind},
     stats::{
         InputSyncMode, InputSyncTrackStatsEvent, LiveSyncStatsEvent, LiveSyncTrackState,
         LiveSyncTrackStateSnapshot,
@@ -89,7 +89,7 @@ impl LiveSyncTrackStats {
     pub fn report_state_snapshot(
         &mut self,
         buffer: &impl LiveSyncBuffer,
-        anchors: Option<(TimestampAnchor, TimestampAnchor)>,
+        anchors: Option<(TimestampOffset, TimestampOffset)>,
         estimator: Option<&LiveEdgeEstimator>,
     ) {
         let now = Instant::now();
@@ -101,8 +101,8 @@ impl LiveSyncTrackStats {
         self.last_snapshot = Some(now);
         let estimate = estimator.and_then(|estimator| estimator.estimate(now));
         let target_offset_distance = match anchors {
-            Some((current, target)) => current.as_offset() - target.as_offset(),
-            None => Timestamp::ZERO,
+            Some((current, target)) => current - target,
+            None => TimestampOffset::ZERO,
         };
         let live_edge_distance = |bound_pts: Timestamp| {
             let (current, _) = anchors?;
