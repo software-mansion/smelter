@@ -22,6 +22,7 @@
 - Made decoders work asynchronously. Bytes decoder now returns frames via callback ([#2143](https://github.com/software-mansion/smelter/pull/2143) by @noituri)
 
 ### 🐛 Bug fixes
+- Request only the transfer and compute queues that are actually used when creating the device. ([#2223](https://github.com/software-mansion/smelter/pull/2223) by @jerzywilczek)
 - H.264 decoder now hands the whole DPB to the Vulkan driver and lets it build the reference picture lists. ([#2219](https://github.com/software-mansion/smelter/pull/2219) by @jerzywilczek)
 - Fix artifacts in h264 decoder caused by unnecessary short reference deletion ([#1991](https://github.com/software-mansion/smelter/pull/1991) by @noituri)
 - `bytemuck` is now only required if compiling with the `transcoder` feature ([#1986](https://github.com/software-mansion/smelter/pull/1986) by @jerzywilczek)

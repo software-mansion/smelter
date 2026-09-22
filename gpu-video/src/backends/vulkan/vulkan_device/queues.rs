@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -86,27 +86,31 @@ pub(crate) struct QueueIndices<'a> {
 
 impl QueueIndices<'_> {
     pub(crate) fn queue_create_infos(&self) -> Vec<QueueCreateInfo> {
-        [
-            self.h264_decode
-                .as_ref()
-                .map(|q| (q.family_index, q.queue_count)),
-            self.encode
-                .as_ref()
-                .map(|q| (q.family_index, q.queue_count)),
-            Some((self.transfer.family_index, self.transfer.queue_count)),
-            (self.compute.family_index != self.transfer.family_index)
-                .then_some((self.compute.family_index, self.compute.queue_count)),
-            Some((
-                self.graphics_transfer_compute.family_index,
-                self.graphics_transfer_compute.queue_count,
-            )),
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<HashSet<(usize, usize)>>()
-        .into_iter()
-        .map(|(family_idx, queue_count)| QueueCreateInfo::new(family_idx, vec![1.0; queue_count]))
-        .collect()
+        // Only request the queues we use. Every requested queue makes `vkCreateDevice` slower
+        // (~16 ms on NVIDIA).
+        let requests = [
+            (Some(&self.transfer), 1),
+            (Some(&self.compute), 1),
+            (Some(&self.graphics_transfer_compute), 1),
+            (self.h264_decode.as_ref(), usize::MAX),
+            (self.encode.as_ref(), usize::MAX),
+        ];
+
+        let mut requested = BTreeMap::<usize, usize>::new();
+        for (queue_index, wanted) in requests {
+            let Some(queue_index) = queue_index else {
+                continue;
+            };
+            let count = requested.entry(queue_index.family_index).or_default();
+            *count = count.saturating_add(wanted).min(queue_index.queue_count);
+        }
+
+        requested
+            .into_iter()
+            .map(|(family_idx, queue_count)| {
+                QueueCreateInfo::new(family_idx, vec![1.0; queue_count])
+            })
+            .collect()
     }
 }
 
