@@ -64,25 +64,27 @@ async fn decode_video(
 
     let mut decoder = video_device.create_wgpu_textures_decoder_h264(
         &queue,
-        gpu_video::parameters::DecoderParameters::default()
+        gpu_video::parameters::DecoderParameters::default(),
+        |_frame| {
+            // Each frame contains a wgpu::Texture you can sample for drawing.
+            // Keep this callback light, e.g. pass the frame through a channel.
+        },
     ).unwrap();
-        
+
     let mut buffer = vec![0; 4096];
 
     while let Ok(n) = encoded_video_reader.read(&mut buffer) {
         if n == 0 {
-            return;
+            break;
         }
 
-        let decoded_frames = decoder.decode(gpu_video::EncodedInputChunk {
+        decoder.decode(gpu_video::EncodedInputChunk {
             data: &buffer[..n],
             pts: None
         }).unwrap();
-
-        for frame in decoded_frames {
-            // Each frame contains a wgpu::Texture you can sample for drawing.
-        }
     }
+
+    decoder.flush().unwrap();
 }
 ```
 

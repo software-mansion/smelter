@@ -281,15 +281,6 @@ pub enum VTDecoderError {
 
     #[error("Failed to extract Metal texture from CVMetalTexture")]
     MetalTextureExtractionFailed,
-
-    #[error("Decoder asked to output to wgpu textures, but was created without a wgpu device")]
-    NotConfiguredForWgpuOutput,
-
-    #[error("VideoToolbox decoder produced no output (callback was not called)")]
-    NoDecoderOutput,
-
-    #[error("VideoToolbox decoder returned success with no image and no FrameDropped flag")]
-    UnexpectedNullImage,
 }
 
 impl From<VTDecoderError> for VideoDecoderError {

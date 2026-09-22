@@ -68,6 +68,7 @@ impl Decoder for GvBytesDecoderH264 {
 
 pub(super) struct GvWgpuTexturesDecoderH264 {
     decoder: WgpuTexturesDecoderH264,
+    frame_receiver: Receiver<OutputFrame<wgpu::Texture>>,
     wgpu_device: wgpu::Device,
     wgpu_queue: wgpu::Queue,
 }
@@ -78,17 +79,28 @@ impl GvWgpuTexturesDecoderH264 {
         wgpu_queue: &wgpu::Queue,
         parameters: DecoderParameters,
     ) -> Self {
+        let (frame_sender, frame_receiver) = crossbeam_channel::unbounded();
         let decoder = wgpu_device
             .video()
             .unwrap()
-            .create_wgpu_textures_decoder_h264(wgpu_queue, parameters)
+            .create_wgpu_textures_decoder_h264(wgpu_queue, parameters, move |frame| {
+                frame_sender.send(frame).unwrap()
+            })
             .unwrap();
 
         Self {
             decoder,
+            frame_receiver,
             wgpu_device: wgpu_device.clone(),
             wgpu_queue: wgpu_queue.clone(),
         }
+    }
+
+    fn drain(&mut self) -> Vec<Nv12Frame> {
+        self.frame_receiver
+            .try_iter()
+            .map(|frame| download_nv12_texture(&self.wgpu_device, &self.wgpu_queue, frame.data))
+            .collect()
     }
 }
 
@@ -100,19 +112,13 @@ impl Decoder for GvWgpuTexturesDecoderH264 {
     fn decode_bytes(&mut self, data: &[u8]) -> Vec<Nv12Frame> {
         self.decoder
             .decode(EncodedInputChunk { data, pts: None })
-            .unwrap()
-            .into_iter()
-            .map(|frame| download_nv12_texture(&self.wgpu_device, &self.wgpu_queue, frame.data))
-            .collect()
+            .unwrap();
+        self.drain()
     }
 
     fn flush_frames(&mut self) -> Vec<Nv12Frame> {
-        self.decoder
-            .flush()
-            .unwrap()
-            .into_iter()
-            .map(|frame| download_nv12_texture(&self.wgpu_device, &self.wgpu_queue, frame.data))
-            .collect()
+        self.decoder.flush().unwrap();
+        self.drain()
     }
 }
 
