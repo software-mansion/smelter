@@ -255,6 +255,7 @@ pub enum LiveSyncTrackState {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LiveSyncBufferStatsReport {
     Fifo(FifoBufferStatsReport),
+    Jitter(JitterBufferStatsReport),
 }
 
 /// Stats report for a FIFO sync buffer.
@@ -262,6 +263,15 @@ pub enum LiveSyncBufferStatsReport {
 pub struct FifoBufferStatsReport {
     /// Duration of the buffered content.
     pub duration_seconds: f64,
+}
+
+/// Stats report for a sync buffer that reorders out-of-order delivery.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct JitterBufferStatsReport {
+    /// Duration of the buffered content.
+    pub duration_seconds: f64,
+    /// Whether the next chunk is held back behind a gap that might still be filled.
+    pub waiting_for_gap: bool,
 }
 
 /// Stats report for the given time window in a live stream track.

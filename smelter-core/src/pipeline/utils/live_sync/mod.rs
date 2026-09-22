@@ -73,7 +73,7 @@ mod stats;
 mod track;
 
 pub(crate) use buffer::{BufferingStrategy, ChunkBuffer, FifoBuffer, LiveSyncBuffer};
-pub(crate) use track::LiveSyncTrack;
+pub(crate) use track::{LiveSyncDeadline, LiveSyncTrack};
 
 use crate::pipeline::utils::input_sync::{BoxedTrackSink, InputSyncStatsSender, TrackKind};
 use state::SharedState;
@@ -119,8 +119,8 @@ impl<B: LiveSyncBuffer> LiveSync<B> {
     /// once they are synchronized. Tracks share the live edge detection but
     /// each starts on its own.
     pub fn add_track(&self, kind: TrackKind, sink: BoxedTrackSink<B::Chunk>) -> LiveSyncTrack<B> {
-        self.shared.lock().unwrap().add_track(kind, sink);
-        LiveSyncTrack::new(self.shared.clone(), kind)
+        let deadline = self.shared.lock().unwrap().add_track(kind, sink);
+        LiveSyncTrack::new(self.shared.clone(), kind, deadline)
     }
 
     /// Give up on live edge detection; every track releases everything it

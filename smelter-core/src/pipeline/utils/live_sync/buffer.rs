@@ -124,16 +124,9 @@ pub(crate) trait LiveSyncBuffer: Default + Send + 'static {
     /// or the next item is behind a gap that might still be filled.
     fn try_read(&mut self) -> Option<Self::Chunk>;
 
-    /// Pts of the buffered items, in the order [`read`](Self::read) would
-    /// produce them. Items held back by [`try_read`](Self::try_read) are
-    /// included.
-    fn pts_values(&self) -> impl Iterator<Item = Timestamp>;
-
     /// Pts of the item [`read`](Self::read) would produce; `None` only when
     /// the buffer is empty.
-    fn peek_pts(&self) -> Option<Timestamp> {
-        self.pts_values().next()
-    }
+    fn peek_next_pts(&self) -> Option<Timestamp>;
 
     /// Snapshot of the buffered content for stats.
     fn stats(&self) -> LiveSyncBufferStats;
@@ -169,13 +162,13 @@ impl<T: InputSyncItem + Send + 'static> LiveSyncBuffer for FifoBuffer<T> {
         self.read()
     }
 
-    fn pts_values(&self) -> impl Iterator<Item = Timestamp> {
-        self.queue.iter().map(|chunk| chunk.pts())
+    fn peek_next_pts(&self) -> Option<Timestamp> {
+        self.queue.front().map(|chunk| chunk.pts())
     }
 
     fn stats(&self) -> LiveSyncBufferStats {
-        let min = self.pts_values().min();
-        let max = self.pts_values().max();
+        let min = self.queue.iter().map(|chunk| chunk.pts()).min();
+        let max = self.queue.iter().map(|chunk| chunk.pts()).max();
         LiveSyncBufferStats::Fifo {
             duration: match (min, max) {
                 (Some(min), Some(max)) => max - min,

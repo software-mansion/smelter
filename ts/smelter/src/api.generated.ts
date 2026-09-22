@@ -1809,13 +1809,25 @@ export type LiveSyncTrackState = "waiting_for_start" | "started_shared" | "start
 /**
  * Stats report for the content currently held in the sync buffer.
  */
-export type LiveSyncBufferStatsReport = {
-  type: "fifo";
-  /**
-   * Duration of the buffered content.
-   */
-  duration_seconds: number;
-};
+export type LiveSyncBufferStatsReport =
+  | {
+      type: "fifo";
+      /**
+       * Duration of the buffered content.
+       */
+      duration_seconds: number;
+    }
+  | {
+      type: "jitter";
+      /**
+       * Duration of the buffered content.
+       */
+      duration_seconds: number;
+      /**
+       * Whether the next chunk is held back behind a gap that might still be filled.
+       */
+      waiting_for_gap: boolean;
+    };
 /**
  * Stats report for outputs.
  */

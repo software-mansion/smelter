@@ -5,9 +5,9 @@ use crate::{
     pipeline::utils::input_sync::TrackKind,
     stats::{
         input_reports::{
-            FifoBufferStatsReport, InputSyncTrackStatsReport, LiveSyncBufferStatsReport,
-            LiveSyncTrackSlidingWindowStatsReport, LiveSyncTrackState, LiveSyncTrackStatsReport,
-            SimpleSyncTrackState, SimpleSyncTrackStatsReport,
+            FifoBufferStatsReport, InputSyncTrackStatsReport, JitterBufferStatsReport,
+            LiveSyncBufferStatsReport, LiveSyncTrackSlidingWindowStatsReport, LiveSyncTrackState,
+            LiveSyncTrackStatsReport, SimpleSyncTrackState, SimpleSyncTrackStatsReport,
         },
         utils::SlidingWindowValue,
     },
@@ -73,7 +73,14 @@ pub(crate) struct LiveSyncTrackStateSnapshot {
 /// Snapshot of the content held in a sync buffer.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum LiveSyncBufferStats {
-    Fifo { duration: Timestamp },
+    Fifo {
+        duration: Timestamp,
+    },
+    Jitter {
+        duration: Timestamp,
+        /// The next chunk is held back behind a gap that might still be filled.
+        waiting_for_gap: bool,
+    },
 }
 
 /// Per-input pair of track states, shared by every protocol using the input sync.
@@ -170,6 +177,13 @@ impl InputSyncTrackState {
                                 duration_seconds: duration.as_secs_f64(),
                             })
                         }
+                        LiveSyncBufferStats::Jitter {
+                            duration,
+                            waiting_for_gap,
+                        } => LiveSyncBufferStatsReport::Jitter(JitterBufferStatsReport {
+                            duration_seconds: duration.as_secs_f64(),
+                            waiting_for_gap,
+                        }),
                     },
                     last_10_seconds: LiveSyncTrackSlidingWindowStatsReport {
                         discontinuities_detected: live.discontinuities_detected_10_secs.sum(),

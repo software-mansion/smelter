@@ -10,6 +10,7 @@ use super::{
     edge_estimator::{EdgeEstimate, LiveEdgeEstimator},
     mode::{IndependentMode, Mode},
     stats::LiveSyncTrackStats,
+    track::LiveSyncDeadline,
 };
 use crate::pipeline::utils::input_sync::{
     BoxedTrackSink, InputSyncItem, InputSyncStatsSender, TimestampAnchor, TrackClosedError,
@@ -73,8 +74,13 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         self.mode.is_some_and(|mode| mode.is_started(kind))
     }
 
-    pub(super) fn add_track(&mut self, kind: TrackKind, sink: BoxedTrackSink<B::Chunk>) {
+    pub(super) fn add_track(
+        &mut self,
+        kind: TrackKind,
+        sink: BoxedTrackSink<B::Chunk>,
+    ) -> LiveSyncDeadline {
         debug!(?kind, "Live sync: adding track");
+        let deadline = LiveSyncDeadline::new();
         let track = Track {
             kind,
             sync_point: self.sync_point,
@@ -85,6 +91,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             ),
             buffer: B::default(),
             sink,
+            deadline: deadline.clone(),
             last_released_pts: None,
             last_written: None,
             stats: LiveSyncTrackStats::new(&self.stats_sender, kind, self.sync_point),
@@ -93,6 +100,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             TrackKind::Audio => self.audio = Some(track),
             TrackKind::Video => self.video = Some(track),
         }
+        deadline
     }
 
     /// Runs every transition due at `now` (resets, start decisions, corrections) and releases
@@ -141,6 +149,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             }
         }
 
+        self.publish_deadlines(now);
         self.report_stats();
     }
 
@@ -152,7 +161,25 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         for kind in [TrackKind::Audio, TrackKind::Video] {
             self.reset_track(kind, now);
         }
+        self.publish_deadlines(now);
         self.report_stats();
+    }
+
+    /// Oldest input pts each track could still release on time under its current anchor.
+    fn publish_deadlines(&mut self, now: Instant) {
+        let now_pts = self.sync_point.timestamp_at(now);
+        for kind in [TrackKind::Audio, TrackKind::Video] {
+            let anchor = self.mode.and_then(|mode| mode.anchor(kind));
+            let track = match kind {
+                TrackKind::Audio => self.audio.as_ref(),
+                TrackKind::Video => self.video.as_ref(),
+            };
+            if let Some(track) = track {
+                let deadline =
+                    anchor.map(|anchor| anchor.to_input_pts(now_pts + MIN_QUEUE_HEADROOM));
+                track.deadline.set(deadline);
+            }
+        }
     }
 
     /// Fails once the sink of the track is gone, so the input can stop
@@ -212,7 +239,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         debug!(
             ?kind,
             offset = ?anchor.as_offset(),
-            buffered = track.buffer.pts_values().count(),
+            buffer = ?track.buffer.stats(),
             ?mode,
             "Live sync: track started"
         );
@@ -222,7 +249,8 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         // to reach "on time" position
         while let Some(mut chunk) = track.buffer.try_read() {
             // The last video frame is always presented, so the output shows something right away
-            let is_last_video_frame = kind == TrackKind::Video && track.buffer.peek_pts().is_none();
+            let is_last_video_frame =
+                kind == TrackKind::Video && track.buffer.peek_next_pts().is_none();
             let is_too_late = anchor.to_output_pts(chunk.pts()) <= now_pts;
             if !is_last_video_frame && is_too_late {
                 chunk.mark_decode_only();
@@ -251,7 +279,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         debug!(
             ?kind,
             offset = ?flush_anchor.map(|anchor| anchor.as_offset()),
-            buffered = track.buffer.pts_values().count(),
+            buffer = ?track.buffer.stats(),
             "Live sync: resetting track"
         );
         track.estimator = LiveEdgeEstimator::new(
@@ -284,7 +312,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         let Some(anchor) = mode.anchor(kind) else {
             return false;
         };
-        let Some(next_pts) = track.buffer.peek_pts() else {
+        let Some(next_pts) = track.buffer.peek_next_pts() else {
             return false;
         };
         // a chunk about to miss the queue is released even if it is behind a gap that might
@@ -340,7 +368,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         if !shared.is_started(kind) || !shared.is_started(other_kind) {
             return false;
         }
-        let Some(pts) = track.buffer.peek_pts() else {
+        let Some(pts) = track.buffer.peek_next_pts() else {
             return false;
         };
 
@@ -350,7 +378,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             // waiting for the other track
             return false;
         }
-        match other.buffer.peek_pts() {
+        match other.buffer.peek_next_pts() {
             Some(other_pts) => other_pts < pts,
             None => true,
         }
@@ -448,6 +476,8 @@ pub(super) struct Track<B: LiveSyncBuffer> {
     buffer: B,
     /// Receives the chunks this track releases.
     sink: BoxedTrackSink<B::Chunk>,
+    /// Shared with the input, see [`LiveSyncDeadline`].
+    deadline: LiveSyncDeadline,
     /// Output pts the released content ends at. Used to maintain continuity after
     /// reset so it has to survive the reset itself.
     pub last_released_pts: Option<Timestamp>,
@@ -497,7 +527,7 @@ impl<B: LiveSyncBuffer> Track<B> {
             && last_pts > now_pts + MIN_QUEUE_HEADROOM
         {
             return Some(TimestampAnchor {
-                input_pts: self.buffer.peek_pts()?,
+                input_pts: self.buffer.peek_next_pts()?,
                 output_pts: last_pts,
             });
         }
@@ -539,7 +569,7 @@ impl<B: LiveSyncBuffer> Track<B> {
             None => false,
         };
         let ran_out_of_content =
-            delivery_stopped && self.buffer.peek_pts().is_none() && released_content_ran_out;
+            delivery_stopped && self.buffer.peek_next_pts().is_none() && released_content_ran_out;
 
         // The upper bound still describes an edge the stream is no longer at. The full window
         // would take its whole look-back to notice; a reset starts over on a fresh estimate.

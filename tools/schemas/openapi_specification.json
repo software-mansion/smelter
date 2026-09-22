@@ -2523,6 +2523,25 @@
           }
         }
       },
+      "JitterBufferStatsReport": {
+        "type": "object",
+        "description": "Stats report for a sync buffer that reorders out-of-order delivery.",
+        "required": [
+          "duration_seconds",
+          "waiting_for_gap"
+        ],
+        "properties": {
+          "duration_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Duration of the buffered content."
+          },
+          "waiting_for_gap": {
+            "type": "boolean",
+            "description": "Whether the next chunk is held back behind a gap that might still be filled."
+          }
+        }
+      },
       "LiveSyncBufferStatsReport": {
         "oneOf": [
           {
@@ -2540,6 +2559,27 @@
                     "type": "string",
                     "enum": [
                       "fifo"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JitterBufferStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "jitter"
                     ]
                   }
                 }
