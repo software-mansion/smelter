@@ -4,25 +4,24 @@ use std::{
 };
 
 use crate::{
-    VideoEncoderError,
+    BytesDecoderH264, OutputFrame, RawFrameData, VideoEncoderError,
     adapter::{DeviceType, VideoAdapterBackend, VideoAdapterInfo},
     backends::{
         CoreBackend,
         video_toolbox::{
-            decoder::VTDecoder,
+            decoders_h264::VTDecoderH264,
             error::{OSStatusError, OSStatusExt},
         },
     },
     device::CoreVideoDeviceBackend,
-    frame_sorter::FrameSorter,
     instance::VideoInstanceBackend,
-    parser::{h264::H264Parser, reference_manager::ReferenceContext},
 };
 
 use objc2_core_foundation as cf;
 
 mod caps;
 mod decoder;
+mod decoders_h264;
 mod error;
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
@@ -110,17 +109,10 @@ impl CoreVideoDeviceBackend for VTDevice {
     fn create_bytes_decoder_h264(
         self: Arc<Self>,
         parameters: crate::device::DecoderParameters,
-    ) -> Result<crate::BytesDecoder, crate::VideoDecoderError> {
-        #[cfg(feature = "wgpu")]
-        let decoder = VTDecoder::new(None, parameters.usage_flags)?;
-        #[cfg(not(feature = "wgpu"))]
-        let decoder = VTDecoder::new(parameters.usage_flags)?;
-
-        Ok(crate::BytesDecoder {
-            decoder: Box::new(decoder),
-            parser: H264Parser::new_avcc_output(),
-            reference_ctx: ReferenceContext::new(parameters.missed_frame_handling),
-            frame_sorter: FrameSorter::default(),
+        on_frame_callback: Box<dyn FnMut(OutputFrame<RawFrameData>) + Send>,
+    ) -> Result<BytesDecoderH264, crate::VideoDecoderError> {
+        Ok(BytesDecoderH264 {
+            backend: Box::new(VTDecoderH264::new_bytes(parameters, on_frame_callback)),
         })
     }
 

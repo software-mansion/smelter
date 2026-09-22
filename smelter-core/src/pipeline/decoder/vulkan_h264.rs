@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use crossbeam_channel::Receiver;
 use gpu_video::{
-    H264DecoderEvent, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
+    H264DecoderEvent, OutputFrame, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
     WgpuTexturesDecoderH264,
     parameters::{CorruptedStateHandling, DecoderParameters, DecoderUsage},
 };
@@ -15,6 +16,7 @@ use crate::prelude::*;
 
 pub struct VulkanH264Decoder {
     decoder: WgpuTexturesDecoderH264,
+    frame_receiver: Receiver<OutputFrame<wgpu::Texture>>,
     keyframe_request_sender: Option<KeyframeRequestSender>,
 }
 
@@ -35,6 +37,7 @@ impl VideoDecoder for VulkanH264Decoder {
             .device
             .video()
             .map_err(|_| DecoderInitError::VulkanContextRequiredForVulkanDecoder)?;
+        let (frame_sender, frame_receiver) = crossbeam_channel::unbounded();
         let decoder = device.create_wgpu_textures_decoder_h264(
             &ctx.wgpu_ctx.queue,
             DecoderParameters {
@@ -42,9 +45,13 @@ impl VideoDecoder for VulkanH264Decoder {
                 usage_flags: DecoderUsage::Default,
                 ..Default::default()
             },
+            move |frame| {
+                let _ = frame_sender.send(frame);
+            },
         )?;
         Ok(Self {
             decoder,
+            frame_receiver,
             keyframe_request_sender,
         })
     }
@@ -66,34 +73,35 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             EncodedInputEvent::Discontinuity => H264DecoderEvent::Flush,
         };
 
-        let frames = match self.decoder.process_event(decoder_event, None) {
-            Ok(frames) => frames,
-            Err(VideoDecoderError::ReferenceManagementError(
-                ReferenceManagementError::CorruptedState,
-            )) => {
-                if let Some(s) = self.keyframe_request_sender.as_ref() {
-                    s.send()
+        if let Err(err) = self.decoder.process_event(decoder_event, None) {
+            match err {
+                VideoDecoderError::ReferenceManagementError(
+                    ReferenceManagementError::CorruptedState,
+                ) => {
+                    if let Some(s) = self.keyframe_request_sender.as_ref() {
+                        s.send()
+                    }
+                    debug!("Vulkan H264 decoder detected a missing frame.");
                 }
-                debug!("Vulkan H264 decoder detected a missing frame.");
-                return Vec::new();
+                err => warn!("Failed to decode frame: {err}"),
             }
-            Err(err) => {
-                warn!("Failed to decode frame: {err}");
-                return Vec::new();
-            }
-        };
+        }
 
-        frames.into_iter().map(from_vk_frame).collect()
+        self.drain_decoded_frames()
     }
 
     fn flush(&mut self) -> Vec<Frame> {
-        match self.decoder.flush() {
-            Ok(frames) => frames.into_iter().map(from_vk_frame).collect(),
-            Err(err) => {
-                warn!("Failed to flush the decoder: {err}");
-                Vec::new()
-            }
+        if let Err(err) = self.decoder.flush() {
+            warn!("Failed to flush the decoder: {err}");
         }
+
+        self.drain_decoded_frames()
+    }
+}
+
+impl VulkanH264Decoder {
+    fn drain_decoded_frames(&self) -> Vec<Frame> {
+        self.frame_receiver.try_iter().map(from_vk_frame).collect()
     }
 }
 

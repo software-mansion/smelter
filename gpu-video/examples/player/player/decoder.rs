@@ -1,4 +1,12 @@
-use std::{io::Read, sync::mpsc::SyncSender, time::Duration};
+use std::{
+    io::Read,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc::SyncSender,
+    },
+    time::Duration,
+};
 
 use bytes::BytesMut;
 use gpu_video::{EncodedInputChunk, OutputFrame, VideoDeviceExt, parameters::DecoderParameters};
@@ -12,28 +20,35 @@ pub fn run_decoder(
     queue: wgpu::Queue,
     mut bytestream_reader: impl Read,
 ) {
-    let mut decoder = device
-        .video()
-        .unwrap()
-        .create_wgpu_textures_decoder_h264(&queue, DecoderParameters::default())
-        .unwrap();
     let frame_interval = 1.0 / (framerate as f64);
     let mut frame_number = 0u64;
     let mut buffer = BytesMut::zeroed(4096);
 
-    let send_frame = move |frame: OutputFrame<wgpu::Texture>, frame_number: &mut u64| {
-        let result = FrameWithPts {
-            frame: frame.data,
-            pts: Duration::from_secs_f64(*frame_number as f64 * frame_interval),
-        };
+    let receiver_gone = Arc::new(AtomicBool::new(false));
+    let on_frame = {
+        let receiver_gone = receiver_gone.clone();
+        move |frame: OutputFrame<wgpu::Texture>| {
+            let result = FrameWithPts {
+                frame: frame.data,
+                pts: Duration::from_secs_f64(frame_number as f64 * frame_interval),
+            };
 
-        *frame_number += 1;
+            frame_number += 1;
 
-        tx.send(result)
+            if tx.send(result).is_err() {
+                receiver_gone.store(true, Ordering::Relaxed);
+            }
+        }
     };
 
+    let mut decoder = device
+        .video()
+        .unwrap()
+        .create_wgpu_textures_decoder_h264(&queue, DecoderParameters::default(), on_frame)
+        .unwrap();
+
     while let Ok(n) = bytestream_reader.read(&mut buffer) {
-        if n == 0 {
+        if n == 0 || receiver_gone.load(Ordering::Relaxed) {
             break;
         }
 
@@ -42,18 +57,10 @@ pub fn run_decoder(
             pts: None,
         };
 
-        let decoded = decoder.decode(frame).unwrap();
-
-        for f in decoded {
-            if send_frame(f, &mut frame_number).is_err() {
-                return;
-            }
-        }
+        decoder.decode(frame).unwrap();
     }
 
-    for f in decoder.flush().unwrap() {
-        if send_frame(f, &mut frame_number).is_err() {
-            return;
-        }
+    if !receiver_gone.load(Ordering::Relaxed) {
+        decoder.flush().unwrap();
     }
 }

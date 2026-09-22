@@ -3,16 +3,14 @@ use std::sync::Arc;
 use objc2_metal::MTLDevice;
 
 use crate::{
-    VideoEncoderError, WgpuTexturesDecoder,
+    OutputFrame, VideoEncoderError, WgpuTexturesDecoderH264,
     adapter::VideoAdapterInfo,
     backends::{
         WgpuBackend,
-        video_toolbox::{VTBackend, VTDevice, decoder::VTDecoder, error::VTInitError},
+        video_toolbox::{VTBackend, VTDevice, decoders_h264::VTDecoderH264, error::VTInitError},
     },
     device::WgpuVideoDeviceBackend,
-    frame_sorter::FrameSorter,
     global_registry::{GlobalRegistry, VideoDeviceKey},
-    parser::{h264::H264Parser, reference_manager::ReferenceContext},
 };
 
 use super::{caps, query_api_version};
@@ -79,16 +77,14 @@ impl WgpuVideoDeviceBackend for VTDevice {
     fn create_wgpu_textures_decoder_h264(
         self: Arc<Self>,
         wgpu_device: wgpu::Device,
+        _wgpu_queue: wgpu::Queue,
         parameters: crate::device::DecoderParameters,
-    ) -> Result<crate::WgpuTexturesDecoder, crate::VideoDecoderError> {
-        let decoder = VTDecoder::new(Some(&wgpu_device), parameters.usage_flags)?;
+        on_frame_callback: Box<dyn FnMut(OutputFrame<wgpu::Texture>) + Send>,
+    ) -> Result<WgpuTexturesDecoderH264, crate::VideoDecoderError> {
+        let backend = VTDecoderH264::new_wgpu_textures(wgpu_device, parameters, on_frame_callback)?;
 
-        Ok(WgpuTexturesDecoder {
-            wgpu_device,
-            decoder: Box::new(decoder),
-            parser: H264Parser::new_avcc_output(),
-            reference_ctx: ReferenceContext::new(parameters.missed_frame_handling),
-            frame_sorter: FrameSorter::default(),
+        Ok(WgpuTexturesDecoderH264 {
+            backend: Box::new(backend),
         })
     }
 

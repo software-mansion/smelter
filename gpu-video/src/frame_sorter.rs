@@ -13,7 +13,9 @@ pub(crate) struct DecodeResultMetadata {
     pub(crate) is_idr: bool,
     pub(crate) color_space: ColorSpace,
     pub(crate) color_range: ColorRange,
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) cropped_width: u32,
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) cropped_height: u32,
 }
 
@@ -97,7 +99,7 @@ impl<T> FrameSorter<T> {
         result
     }
 
-    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
+    #[cfg_attr(any(not(feature = "wgpu"), video_toolbox), expect(dead_code))]
     pub(crate) fn put_frames(&mut self, frames: Vec<DecodeResult<T>>) -> Vec<OutputFrame<T>> {
         let mut result = Vec::new();
         for unsorted_frame in frames {

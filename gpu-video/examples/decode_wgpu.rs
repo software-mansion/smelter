@@ -32,13 +32,29 @@ fn main() {
         .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
 
+    let (frame_sender, frame_receiver) = std::sync::mpsc::channel::<OutputFrame<wgpu::Texture>>();
+
+    let writer_thread_handle = std::thread::spawn({
+        let device = device.clone();
+        let queue = queue.clone();
+        move || {
+            let mut output_file = std::fs::File::create("output.nv12").unwrap();
+            for OutputFrame { data, .. } in frame_receiver.iter() {
+                let decoded_frame = download_wgpu_texture(&device, &queue, data);
+                output_file.write_all(&decoded_frame).unwrap();
+            }
+        }
+    });
+
+    let on_frame = move |output_frame| {
+        frame_sender.send(output_frame).unwrap();
+    };
+
     let mut decoder = device
         .video()
         .unwrap()
-        .create_wgpu_textures_decoder_h264(&queue, DecoderParameters::default())
+        .create_wgpu_textures_decoder_h264(&queue, DecoderParameters::default(), on_frame)
         .unwrap();
-
-    let mut output_file = std::fs::File::create("output.nv12").unwrap();
 
     for chunk in h264_bytestream.chunks(256) {
         let chunk = EncodedInputChunk {
@@ -46,19 +62,13 @@ fn main() {
             pts: None,
         };
 
-        let frames = decoder.decode(chunk).unwrap();
-
-        for OutputFrame { data, .. } in frames {
-            let decoded_frame = download_wgpu_texture(&device, &queue, data);
-            output_file.write_all(&decoded_frame).unwrap();
-        }
+        decoder.decode(chunk).unwrap();
     }
 
-    let remaining_frames = decoder.flush().unwrap();
-    for OutputFrame { data, .. } in remaining_frames {
-        let decoded_frame = download_wgpu_texture(&device, &queue, data);
-        output_file.write_all(&decoded_frame).unwrap();
-    }
+    decoder.flush().unwrap();
+    drop(decoder);
+
+    writer_thread_handle.join().unwrap();
 }
 
 #[cfg(not(supported))]

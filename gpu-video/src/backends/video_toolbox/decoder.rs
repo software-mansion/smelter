@@ -1,7 +1,6 @@
 use std::{
     ffi::c_void,
     ptr::{NonNull, null, null_mut},
-    sync::{Arc, Mutex},
 };
 
 use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
@@ -10,7 +9,7 @@ use objc2_core_media as cm;
 use objc2_core_video as cv;
 use objc2_video_toolbox as vt;
 use rustc_hash::FxHashMap;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     RawFrameData,
@@ -18,11 +17,10 @@ use crate::{
         OSStatusError, allocate_retained,
         error::{OSStatusExt, VTDecoderError},
     },
-    decoders::VideoDecoderBackend,
     device::{ColorRange, ColorSpace},
     frame_sorter::{DecodeResult, DecodeResultMetadata},
     parameters::DecoderUsage,
-    parser::{decoder_instructions::DecoderInstruction, reference_manager::DecodeInformation},
+    parser::reference_manager::DecodeInformation,
 };
 
 #[cfg(feature = "wgpu")]
@@ -31,87 +29,56 @@ pub(crate) mod wgpu_api;
 pub(crate) struct VTDecoder {
     session: Option<Session>,
     sps: FxHashMap<u8, Sps>,
-    pps: FxHashMap<(u8, u8), Pps>,
+    pps: FxHashMap<(u8, u8), Box<[u8]>>,
     needs_session_update: bool,
-    #[cfg(feature = "wgpu")]
-    texture_cache: Option<wgpu_api::SyncCache>,
     session_color_range: Option<ColorRange>,
     usage: DecoderUsage,
+    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
+    metal_compatible_output: bool,
 }
 
-impl VideoDecoderBackend for VTDecoder {
-    fn decode_to_bytes(
-        &mut self,
-        decoder_instructions: Vec<DecoderInstruction>,
-    ) -> Result<Vec<DecodeResult<RawFrameData>>, crate::VideoDecoderError> {
-        let buffers = self.decode_to_cvbuffers(decoder_instructions)?;
-        Ok(self.download_outputs(buffers)?)
-    }
+/// What VideoToolbox reported for one submission through its output handler.
+pub(super) enum Completion {
+    Frame(DecodeResult<cf::CFRetained<cv::CVBuffer>>),
+    Dropped,
+    Failed,
 }
 
 impl VTDecoder {
-    #[cfg(not(feature = "wgpu"))]
-    pub(crate) fn new(usage: DecoderUsage) -> Result<Self, VTDecoderError> {
-        Ok(Self {
+    pub(super) fn new(usage: DecoderUsage, metal_compatible_output: bool) -> Self {
+        Self {
             session: None,
             sps: Default::default(),
             pps: Default::default(),
             needs_session_update: false,
             session_color_range: None,
             usage,
-        })
-    }
-
-    fn download_outputs(
-        &self,
-        outputs: Vec<DecodeResult<cf::CFRetained<cv::CVBuffer>>>,
-    ) -> Result<Vec<DecodeResult<RawFrameData>>, VTDecoderError> {
-        outputs
-            .into_iter()
-            .map(|output_frame| {
-                let frame = self.download_output(&output_frame.frame)?;
-                Ok(DecodeResult {
-                    frame,
-                    metadata: output_frame.metadata,
-                })
-            })
-            .collect()
-    }
-
-    fn decode_to_cvbuffers(
-        &mut self,
-        instructions: Vec<DecoderInstruction>,
-    ) -> Result<Vec<DecodeResult<cf::CFRetained<cv::CVBuffer>>>, VTDecoderError> {
-        let mut results = Vec::new();
-
-        for instruction in instructions {
-            match instruction {
-                DecoderInstruction::Sps { sps, raw_bytes } => self.process_sps(Sps {
-                    raw: raw_bytes,
-                    sps,
-                })?,
-                DecoderInstruction::Pps { pps, raw_bytes } => self.process_pps(Pps {
-                    raw: raw_bytes,
-                    pps,
-                })?,
-                DecoderInstruction::Decode { decode_info, .. } => {
-                    results.extend(self.do_decode(decode_info, false)?)
-                }
-                DecoderInstruction::Idr { decode_info, .. } => {
-                    results.extend(self.do_decode(decode_info, true)?)
-                }
-                DecoderInstruction::Drop { .. } => {}
-            }
+            metal_compatible_output,
         }
-
-        Ok(results)
     }
 
-    fn do_decode(
+    pub(super) fn process_sps(&mut self, sps: SeqParameterSet, raw: Box<[u8]>) {
+        let id = sps.id().id();
+        self.sps.insert(id, Sps { raw, sps });
+        self.needs_session_update = true;
+    }
+
+    pub(super) fn process_pps(&mut self, pps: PicParameterSet, raw: Box<[u8]>) {
+        let sps_id = pps.seq_parameter_set_id.id();
+        let pps_id = pps.pic_parameter_set_id.id();
+        self.pps.insert((sps_id, pps_id), raw);
+        self.needs_session_update = true;
+    }
+
+    /// Submits one access unit. VideoToolbox invokes `on_completion` exactly once per successful
+    /// submission, possibly on another thread. If this returns an error, it is never invoked.
+    pub(super) fn submit(
         &mut self,
         decode_info: DecodeInformation,
         is_idr: bool,
-    ) -> Result<Option<DecodeResult<cf::CFRetained<cv::CVBuffer>>>, VTDecoderError> {
+        flags: vt::VTDecodeFrameFlags,
+        on_completion: impl Fn(Completion) + Send + 'static,
+    ) -> Result<(), VTDecoderError> {
         if is_idr {
             self.ensure_session(decode_info.sps_id)?;
         }
@@ -119,6 +86,10 @@ impl VTDecoder {
         let sps = self.sps.get(&decode_info.sps_id).ok_or_else(|| {
             VTDecoderError::InvalidInputData(format!("Unknown SPS id {}", decode_info.sps_id))
         })?;
+        let (cropped_width, cropped_height) = sps
+            .sps
+            .pixel_dimensions()
+            .map_err(|err| VTDecoderError::InvalidInputData(format!("Invalid SPS: {err:?}")))?;
 
         let metadata = DecodeResultMetadata {
             pts: decode_info.pts,
@@ -127,72 +98,26 @@ impl VTDecoder {
             is_idr,
             color_space: ColorSpace::from(&sps.sps),
             color_range: ColorRange::from(&sps.sps),
+            cropped_width,
+            cropped_height,
         };
 
-        self.upload_and_decode_au(decode_info.rbsp_bytes.into_boxed_slice(), metadata)
-    }
-
-    fn download_output(
-        &self,
-        buffer: &cf::CFRetained<cv::CVBuffer>,
-    ) -> Result<RawFrameData, OSStatusError> {
-        let width = cv::CVPixelBufferGetWidth(buffer);
-        let height = cv::CVPixelBufferGetHeight(buffer);
-        let locked = unsafe { buffer.lock(cv::CVPixelBufferLockFlags::ReadOnly)? };
-        let mut result = Vec::with_capacity(width * height * 3 / 2);
-
-        // NV12: plane 0 is Y (1 byte/pixel), plane 1 is CbCr (2 bytes/pixel)
-        for plane in 0..2usize {
-            let plane_width = cv::CVPixelBufferGetWidthOfPlane(buffer, plane);
-            let plane_height = cv::CVPixelBufferGetHeightOfPlane(buffer, plane);
-            let stride = cv::CVPixelBufferGetBytesPerRowOfPlane(buffer, plane) as isize;
-            let base_address = locked.plane_address(plane);
-            let row_data_bytes = plane_width * if plane == 0 { 1 } else { 2 };
-            for line in 0..plane_height as isize {
-                let data = unsafe {
-                    std::slice::from_raw_parts(base_address.offset(line * stride), row_data_bytes)
-                };
-                result.extend_from_slice(data);
-            }
-        }
-
-        drop(locked);
-
-        let data = RawFrameData {
-            frame: result,
-            width: width as u32,
-            height: height as u32,
-        };
-
-        Ok(data)
-    }
-
-    fn upload_and_decode_au(
-        &mut self,
-        decode_data: Box<[u8]>,
-        metadata: DecodeResultMetadata,
-    ) -> Result<Option<DecodeResult<cf::CFRetained<cv::CVBuffer>>>, VTDecoderError> {
         let Some(session) = self.session.as_ref() else {
             return Err(VTDecoderError::NoSession);
         };
 
         let buffer = session.begin_au()?;
-        session.append_slice(decode_data, &buffer)?;
-        session.decode_block_buffer(buffer, metadata)
+        session.append_slice(decode_info.rbsp_bytes.into_boxed_slice(), &buffer)?;
+        session.submit(buffer, metadata, flags, on_completion)
     }
 
-    fn process_sps(&mut self, sps: Sps) -> Result<(), OSStatusError> {
-        let id = sps.sps.id().id();
-        self.sps.insert(id, sps);
-        self.needs_session_update = true;
-        Ok(())
-    }
+    pub(super) fn wait_for_pending_frames(&self) -> Result<(), VTDecoderError> {
+        let Some(session) = self.session.as_ref() else {
+            return Ok(());
+        };
 
-    fn process_pps(&mut self, pps: Pps) -> Result<(), OSStatusError> {
-        let sps_id = pps.pps.seq_parameter_set_id.id();
-        let pps_id = pps.pps.pic_parameter_set_id.id();
-        self.pps.insert((sps_id, pps_id), pps);
-        self.needs_session_update = true;
+        unsafe { session.session.wait_for_asynchronous_frames().osstatus()? };
+
         Ok(())
     }
 
@@ -220,9 +145,9 @@ impl VTDecoder {
         }
 
         for pps in self.pps.values() {
-            let ptr = NonNull::from(&pps.raw[4]);
+            let ptr = NonNull::from(&pps[4]);
             parameters.push(ptr);
-            counts.push(pps.raw.len() - 4);
+            counts.push(pps.len() - 4);
         }
 
         let format_description = unsafe {
@@ -264,7 +189,7 @@ impl VTDecoder {
         };
 
         #[cfg(feature = "wgpu")]
-        let destination_image_buffer_attributes = if self.output_to_wgpu_textures() {
+        let destination_image_buffer_attributes = if self.metal_compatible_output {
             unsafe {
                 cf::CFDictionary::<cf::CFString, cf::CFType>::from_slices(
                     &[
@@ -343,18 +268,37 @@ impl VTDecoder {
     }
 }
 
-struct CallbackOutput {
-    status: i32,
-    #[allow(dead_code)]
-    flags: vt::VTDecodeInfoFlags,
-    image: Option<cf::CFRetained<cv::CVBuffer>>,
-    metadata: DecodeResultMetadata,
-}
+pub(super) fn download_to_bytes(
+    buffer: &cf::CFRetained<cv::CVBuffer>,
+) -> Result<RawFrameData, OSStatusError> {
+    let width = cv::CVPixelBufferGetWidth(buffer);
+    let height = cv::CVPixelBufferGetHeight(buffer);
+    let locked = unsafe { buffer.lock(cv::CVPixelBufferLockFlags::ReadOnly)? };
+    let mut result = Vec::with_capacity(width * height * 3 / 2);
 
-// Safety: CVBuffers are unsafe to transfer if you dont lock them or force the OS to sync them in a
-// different way. If we access them on a CPU, we always lock, and if we transfer it to metal the GPU
-// does the sync.
-unsafe impl Send for CallbackOutput {}
+    // NV12: plane 0 is Y (1 byte/pixel), plane 1 is CbCr (2 bytes/pixel)
+    for plane in 0..2usize {
+        let plane_width = cv::CVPixelBufferGetWidthOfPlane(buffer, plane);
+        let plane_height = cv::CVPixelBufferGetHeightOfPlane(buffer, plane);
+        let stride = cv::CVPixelBufferGetBytesPerRowOfPlane(buffer, plane) as isize;
+        let base_address = locked.plane_address(plane);
+        let row_data_bytes = plane_width * if plane == 0 { 1 } else { 2 };
+        for line in 0..plane_height as isize {
+            let data = unsafe {
+                std::slice::from_raw_parts(base_address.offset(line * stride), row_data_bytes)
+            };
+            result.extend_from_slice(data);
+        }
+    }
+
+    drop(locked);
+
+    Ok(RawFrameData {
+        frame: result,
+        width: width as u32,
+        height: height as u32,
+    })
+}
 
 struct Session {
     session: cf::CFRetained<vt::VTDecompressionSession>,
@@ -406,11 +350,13 @@ impl Session {
         result
     }
 
-    fn decode_block_buffer(
+    fn submit(
         &self,
         buffer: cf::CFRetained<cm::CMBlockBuffer>,
         metadata: DecodeResultMetadata,
-    ) -> Result<Option<DecodeResult<cf::CFRetained<cv::CVBuffer>>>, VTDecoderError> {
+        flags: vt::VTDecodeFrameFlags,
+        on_completion: impl Fn(Completion) + Send + 'static,
+    ) -> Result<(), VTDecoderError> {
         let len = unsafe { buffer.data_length() };
         let sample_buffer = unsafe {
             allocate_retained(|ptr| {
@@ -428,23 +374,33 @@ impl Session {
             })?
         };
 
-        let slot = Arc::new(Mutex::new(None));
-        let slot_clone = slot.clone();
-
         let block = block2::RcBlock::new(
             move |status: i32,
-                  flags: vt::VTDecodeInfoFlags,
+                  info_flags: vt::VTDecodeInfoFlags,
                   image: *mut cv::CVImageBuffer,
                   _pts: cm::CMTime,
                   _dur: cm::CMTime| {
                 let image =
                     NonNull::new(image).map(|image| unsafe { cf::CFRetained::retain(image) });
-                *slot_clone.lock().unwrap() = Some(CallbackOutput {
-                    status,
-                    flags,
-                    image,
-                    metadata,
-                });
+
+                let completion = match (status.osstatus(), image) {
+                    (Err(err), _) => {
+                        debug!("VideoToolbox failed to decode a frame: {err}");
+                        Completion::Failed
+                    }
+                    (Ok(()), Some(frame)) => Completion::Frame(DecodeResult { frame, metadata }),
+                    (Ok(()), None) if info_flags.contains(vt::VTDecodeInfoFlags::FrameDropped) => {
+                        Completion::Dropped
+                    }
+                    (Ok(()), None) => {
+                        debug!(
+                            "VideoToolbox returned success with no image and no FrameDropped flag"
+                        );
+                        Completion::Failed
+                    }
+                };
+
+                on_completion(completion);
             },
         );
 
@@ -452,44 +408,31 @@ impl Session {
             self.session
                 .decode_frame_with_output_handler(
                     &sample_buffer,
-                    vt::VTDecodeFrameFlags::empty(),
+                    flags,
                     null_mut(),
                     block2::RcBlock::as_ptr(&block),
                 )
                 .osstatus()?
         };
 
-        let Some(output) = slot.lock().unwrap().take() else {
-            return Err(VTDecoderError::NoDecoderOutput);
-        };
-
-        output.status.osstatus()?;
-
-        match output.image {
-            Some(image) => Ok(Some(DecodeResult {
-                frame: image,
-                metadata: output.metadata,
-            })),
-            None if output.flags.contains(vt::VTDecodeInfoFlags::FrameDropped) => Ok(None),
-            None => Err(VTDecoderError::UnexpectedNullImage),
-        }
+        Ok(())
     }
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
-        unsafe { self.session.invalidate() };
+        unsafe {
+            if let Err(err) = self.session.wait_for_asynchronous_frames().osstatus() {
+                warn!("error {err} while waiting for asynchronous frames");
+            }
+            self.session.invalidate()
+        };
     }
 }
 
 struct Sps {
     raw: Box<[u8]>,
     sps: SeqParameterSet,
-}
-
-struct Pps {
-    raw: Box<[u8]>,
-    pps: PicParameterSet,
 }
 
 trait CVBufferExt {

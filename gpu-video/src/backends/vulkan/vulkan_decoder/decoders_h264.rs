@@ -1,10 +1,6 @@
 use std::{
     collections::VecDeque,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-        mpsc::Receiver,
-    },
+    sync::{Arc, Mutex, atomic::Ordering, mpsc::Receiver},
     time::Duration,
 };
 
@@ -19,23 +15,18 @@ use crate::{
         waiter_thread::{SubmissionWaitRequest, WaiterThreadHandle},
         wrappers::{Buffer, CommandBufferPoolStorage, SemaphoreWaitValue, TimelineSemaphore},
     },
-    decoders::{VideoDecoderBackend, VideoDecoderError},
+    decoders::{H264EventProcessor, VideoDecoderBackend, VideoDecoderError},
     device::DecoderParameters,
     frame_sorter::{DecodeResult, FrameSorter},
     parser::{
-        decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
+        decoder_instructions::DecoderInstruction,
         h264::{AccessUnit, H264Parser},
-        reference_manager::ReferenceContext,
     },
 };
 
 pub(crate) struct VulkanDecoderH264 {
     decoder: VulkanDecoder<'static>,
-
-    parser: H264Parser,
-    reference_ctx: ReferenceContext,
-
-    decode_failed: Arc<AtomicBool>,
+    event_processor: H264EventProcessor,
 }
 
 impl VulkanDecoderH264 {
@@ -57,9 +48,10 @@ impl VulkanDecoderH264 {
 
         Ok(Self {
             decoder,
-            parser: H264Parser::default(),
-            reference_ctx: ReferenceContext::new(parameters.corrupted_state_handling),
-            decode_failed: Arc::new(AtomicBool::new(false)),
+            event_processor: H264EventProcessor::new(
+                H264Parser::default(),
+                parameters.corrupted_state_handling,
+            ),
         })
     }
 
@@ -67,24 +59,7 @@ impl VulkanDecoderH264 {
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
     ) -> Result<Vec<DecoderInstruction>, VideoDecoderError> {
-        if self.decode_failed.swap(false, Ordering::Relaxed) {
-            self.reference_ctx.mark_corrupted_state();
-        }
-
-        let access_units = match event {
-            DecoderEvent::DecodeChunk(chunk) => self.parser.parse(chunk.data, chunk.pts)?,
-            DecoderEvent::DecodeParsedFrame(au) => vec![au],
-            DecoderEvent::SignalFrameEnd | DecoderEvent::Flush => self.parser.flush()?,
-            DecoderEvent::SignalDataLoss => {
-                self.reference_ctx.mark_corrupted_state();
-                return Ok(Vec::new());
-            }
-        };
-
-        Ok(compile_to_decoder_instructions(
-            &mut self.reference_ctx,
-            access_units,
-        )?)
+        self.event_processor.process_event(event)
     }
 
     fn decode(
@@ -204,7 +179,7 @@ impl VulkanBytesDecoderH264 {
             decoder,
             submission_tracker,
             output: Arc::new(Mutex::new(BytesOutput {
-                frame_sorter: FrameSorter::new(),
+                frame_sorter: FrameSorter::default(),
                 on_frame_callback,
             })),
         })
@@ -236,7 +211,7 @@ impl VideoDecoderBackend for VulkanBytesDecoderH264 {
             let (frame, semaphore_wait_value) = submission.download_to_buffer()?;
 
             let command_buffer_pools = self.decoder.decoder.tracker.command_buffer_pools.clone();
-            let decode_failed = self.decoder.decode_failed.clone();
+            let decode_failed = self.decoder.event_processor.decode_failed_flag();
             let output = self.output.clone();
 
             self.submission_tracker
@@ -284,6 +259,7 @@ pub(crate) struct VulkanWgpuTexturesDecoderH264 {
     decoder: VulkanDecoderH264,
     submission_tracker: SubmissionTracker,
     frame_sorter: FrameSorter<wgpu::Texture>,
+    on_frame_callback: Box<dyn FnMut(OutputFrame<wgpu::Texture>) + Send>,
     wgpu_device: wgpu::Device,
     wgpu_queue: wgpu::Queue,
 }
@@ -295,6 +271,7 @@ impl VulkanWgpuTexturesDecoderH264 {
         parameters: DecoderParameters,
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
+        on_frame_callback: Box<dyn FnMut(OutputFrame<wgpu::Texture>) + Send>,
         waiter_thread: Arc<WaiterThreadHandle>,
     ) -> Result<Self, VulkanDecoderError> {
         let decoder = VulkanDecoderH264::new(decoding_device, parameters)?;
@@ -307,7 +284,8 @@ impl VulkanWgpuTexturesDecoderH264 {
         Ok(Self {
             decoder,
             submission_tracker,
-            frame_sorter: FrameSorter::new(),
+            frame_sorter: FrameSorter::default(),
+            on_frame_callback,
             wgpu_device,
             wgpu_queue,
         })
@@ -320,7 +298,7 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanWgpuTexturesDecoderH264 
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
         timeout: Duration,
-    ) -> Result<Vec<OutputFrame<wgpu::Texture>>, VideoDecoderError> {
+    ) -> Result<(), VideoDecoderError> {
         let flush = matches!(event, DecoderEvent::Flush);
         let instructions = self.decoder.process_event(event)?;
 
@@ -336,11 +314,11 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanWgpuTexturesDecoderH264 
 
             unordered_frames.push(DecodeResult {
                 frame: frame.frame.clone(),
-                metadata: frame.decode_metadata.clone(),
+                metadata: frame.decode_metadata,
             });
 
             let command_buffer_pools = self.decoder.decoder.tracker.command_buffer_pools.clone();
-            let decode_failed = self.decoder.decode_failed.clone();
+            let decode_failed = self.decoder.event_processor.decode_failed_flag();
 
             self.submission_tracker
                 .add_wait_request(semaphore_wait_value, timeout, move || {
@@ -357,6 +335,10 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanWgpuTexturesDecoderH264 
             ordered_frames.append(&mut self.frame_sorter.flush());
         }
 
-        Ok(ordered_frames)
+        for frame in ordered_frames {
+            (self.on_frame_callback)(frame);
+        }
+
+        Ok(())
     }
 }
