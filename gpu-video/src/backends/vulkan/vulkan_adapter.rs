@@ -147,6 +147,16 @@ impl<'a> VulkanAdapter<'a> {
             })
             .map(|(i, _)| i)?;
 
+        let graphics_transfer_compute_queue_idx = queues
+            .iter()
+            .enumerate()
+            .find(|(_, q)| {
+                q.queue_family_properties.queue_flags.contains(
+                    vk::QueueFlags::GRAPHICS | vk::QueueFlags::TRANSFER | vk::QueueFlags::COMPUTE,
+                )
+            })
+            .map(|(i, _)| i)?;
+
         let compute_queue_idx = queues
             .iter()
             .enumerate()
@@ -159,15 +169,18 @@ impl<'a> VulkanAdapter<'a> {
                         .queue_flags
                         .intersects(vk::QueueFlags::GRAPHICS)
             })
-            .map(|(i, _)| i)?;
-
-        let graphics_transfer_compute_queue_idx = queues
-            .iter()
-            .enumerate()
-            .find(|(_, q)| {
-                q.queue_family_properties.queue_flags.contains(
-                    vk::QueueFlags::GRAPHICS | vk::QueueFlags::TRANSFER | vk::QueueFlags::COMPUTE,
-                )
+            // Fall back to any compute-capable queue when no dedicated one exists
+            // (e.g. NVIDIA Maxwell only exposes COMPUTE on the graphics family).
+            // If the candidate is wgpu's family it must have a second queue for
+            // us, since two threads must not submit to the same VkQueue.
+            .or_else(|| {
+                queues.iter().enumerate().find(|(i, q)| {
+                    q.queue_family_properties
+                        .queue_flags
+                        .contains(vk::QueueFlags::COMPUTE)
+                        && (*i != graphics_transfer_compute_queue_idx
+                            || q.queue_family_properties.queue_count >= 2)
+                })
             })
             .map(|(i, _)| i)?;
 
@@ -247,7 +260,13 @@ impl<'a> VulkanAdapter<'a> {
                 },
                 compute: QueueIndex {
                     family_index: compute_queue_idx,
-                    queue_count: queue_counts[compute_queue_idx] as usize,
+                    // On fallback to wgpu's family, take two queues: index 0 for wgpu,
+                    // index 1 for gpu-video (the fallback guarantees two exist).
+                    queue_count: if compute_queue_idx == graphics_transfer_compute_queue_idx {
+                        2
+                    } else {
+                        queue_counts[compute_queue_idx] as usize
+                    },
                     video_properties: video_properties[compute_queue_idx],
                     query_result_status_properties: query_result_status_properties
                         [compute_queue_idx],

@@ -205,6 +205,12 @@ impl VulkanDevice {
                 } else {
                     transfer_queue.clone()
                 }
+            } else if queue_indices.compute.family_index
+                == queue_indices.graphics_transfer_compute.family_index
+                && queue_indices.compute.queue_count > 1
+            {
+                // Fallback shares wgpu's family; wgpu takes index 0, we take index 1.
+                queue_from_device(device.clone(), &queue_indices.graphics_transfer_compute, 1)
             } else {
                 queue_from_device(device.clone(), &queue_indices.compute, 0)
             };
