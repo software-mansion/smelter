@@ -10,18 +10,18 @@ use crate::parser::{
 pub(crate) enum DecoderInstruction {
     Decode {
         decode_info: DecodeInformation,
-        #[cfg_attr(video_toolbox, allow(unused))]
+        #[cfg_attr(video_toolbox, expect(dead_code))]
         reference_id: ReferenceId,
     },
 
     Idr {
         decode_info: DecodeInformation,
-        #[cfg_attr(video_toolbox, allow(unused))]
+        #[cfg_attr(video_toolbox, expect(dead_code))]
         reference_id: ReferenceId,
     },
 
     Drop {
-        #[cfg_attr(video_toolbox, allow(unused))]
+        #[cfg_attr(video_toolbox, expect(dead_code))]
         reference_ids: Vec<ReferenceId>,
     },
 

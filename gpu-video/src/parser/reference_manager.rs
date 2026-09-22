@@ -978,7 +978,7 @@ pub struct DecodeInformation {
     pub(crate) reference_pictures: Vec<ReferencePictureInfo>,
     pub(crate) rbsp_bytes: Vec<u8>,
     pub(crate) slice_indices: Vec<usize>,
-    #[cfg_attr(video_toolbox, allow(unused))]
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) header: Arc<SliceHeader>,
     pub(crate) sps_id: u8,
     pub(crate) pps_id: u8,
@@ -1003,16 +1003,19 @@ impl std::fmt::Debug for DecodeInformation {
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
 pub(crate) struct ReferencePictureInfo {
-    #[cfg_attr(video_toolbox, allow(unused))]
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) id: ReferenceId,
     /// `Some` for long-term reference pictures.
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) LongTermFrameIdx: Option<u64>,
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) FrameNum: u16,
-    #[cfg_attr(video_toolbox, allow(unused))]
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) PicOrderCnt: [i32; 2],
 }
 
 impl ReferencePictureInfo {
+    #[cfg(vulkan)]
     pub fn is_long_term(&self) -> bool {
         self.LongTermFrameIdx.is_some()
     }
@@ -1021,11 +1024,11 @@ impl ReferencePictureInfo {
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
 pub(crate) struct PictureInfo {
-    #[cfg_attr(video_toolbox, allow(unused))]
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) used_for_long_term_reference: bool,
-    #[cfg_attr(video_toolbox, allow(unused))]
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) non_existing: bool,
-    #[cfg_attr(video_toolbox, allow(unused))]
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) FrameNum: u16,
     pub(crate) PicOrderCnt_for_decoding: [i32; 2],
     pub(crate) PicOrderCnt_as_reference_pic: [i32; 2],
