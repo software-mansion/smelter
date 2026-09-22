@@ -27,7 +27,7 @@ impl GlobalRegistry {
         }
     }
 
-    #[cfg_attr(video_toolbox, allow(unused))]
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     pub(crate) fn unregister_device(key: &VideoDeviceKey) {
         let mut registry = REGISTRY.write().unwrap();
         if registry.devices.remove(key).is_none() {
