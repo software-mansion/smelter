@@ -1,6 +1,12 @@
 use crate::common_core::prelude as core;
 use crate::*;
 
+// Without this, DeckLink inputs would be rejected as unsupported even though core supports them.
+const _: () = assert!(
+    smelter_core::DECKLINK_ENABLED == cfg!(feature = "decklink"),
+    "smelter-api and smelter-core `decklink` features must be enabled together"
+);
+
 impl TryFrom<DeckLink> for core::RegisterInputOptions {
     type Error = TypeError;
 

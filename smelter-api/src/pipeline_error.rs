@@ -14,6 +14,12 @@ use smelter_render::error::{
     UnregisterRendererError, UpdateSceneError, WgpuError,
 };
 
+// Without this, Vulkan encoder errors would silently map to the generic output error code.
+const _: () = assert!(
+    smelter_core::GPU_VIDEO_ENABLED == cfg!(feature = "gpu-video"),
+    "smelter-api and smelter-core `gpu-video` features must be enabled together"
+);
+
 pub enum ErrorType {
     UserError,
     EntityNotFound,

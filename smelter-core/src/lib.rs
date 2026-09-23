@@ -30,3 +30,6 @@ mod output;
 pub use output::*;
 
 mod prelude;
+
+pub const GPU_VIDEO_ENABLED: bool = cfg!(feature = "gpu-video");
+pub const DECKLINK_ENABLED: bool = cfg!(feature = "decklink");
