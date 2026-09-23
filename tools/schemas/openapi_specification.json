@@ -1056,8 +1056,7 @@
         "required": [
           "error_code",
           "message",
-          "stack",
-          "http_status_code"
+          "stack"
         ],
         "properties": {
           "error_code": {
@@ -1071,11 +1070,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "http_status_code": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
           }
         }
       },

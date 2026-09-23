@@ -2,7 +2,7 @@
 
 use smelter_core::{
     error::{
-        EncoderInitError, InitPipelineError, InputInitError, OutputInitError, RegisterInputError,
+        InitPipelineError, InputInitError, OutputInitError, RegisterInputError,
         RegisterOutputError, UnregisterInputError, UnregisterOutputError, UpdateInputError,
     },
     protocols::{
@@ -13,9 +13,6 @@ use smelter_render::error::{
     InitRendererEngineError, RegisterError, RegisterRendererError, RequestKeyframeError,
     UnregisterRendererError, UpdateSceneError, WgpuError,
 };
-
-#[cfg(feature = "gpu-video")]
-use gpu_video::VideoEncoderError;
 
 pub enum ErrorType {
     UserError,
@@ -194,9 +191,11 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
             #[cfg(feature = "gpu-video")]
             RegisterOutputError::OutputError(
                 _,
-                OutputInitError::EncoderError(EncoderInitError::VulkanEncoderError(
-                    VideoEncoderError::ParametersError { .. },
-                )),
+                OutputInitError::EncoderError(
+                    smelter_core::error::EncoderInitError::VulkanEncoderError(
+                        gpu_video::VideoEncoderError::ParametersError { .. },
+                    ),
+                ),
             ) => PipelineErrorInfo::new(INVALID_VULKAN_VIDEO_PARAMETERS, ErrorType::UserError),
 
             // Generic

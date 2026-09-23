@@ -19,7 +19,8 @@ pub struct ApiError {
     pub message: String,
     pub stack: Vec<String>,
 
-    #[schema(value_type = u16)]
+    /// Sent as the HTTP status, not as part of the body.
+    #[schema(ignore, value_type = u16)]
     pub http_status_code: StatusCode,
 }
 

@@ -9,10 +9,10 @@ use axum::{
     routing::{get, post},
 };
 use serde::Serialize;
-use serde_json::{Value, json};
 use tower_http::cors::CorsLayer;
 
 use crate::{
+    error::ApiError,
     routes::{
         control_request::{handle_reset, handle_start},
         status::{stats_handler, status_handler},
@@ -99,19 +99,16 @@ where
     axum::Json<T>: FromRequest<S, Rejection = JsonRejection>,
     S: Send + Sync,
 {
-    type Rejection = (StatusCode, axum::Json<Value>);
+    type Rejection = ApiError;
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         match axum::Json::<T>::from_request(req, state).await {
             Ok(value) => Ok(Self(value.0)),
-            Err(rejection) => {
-                let payload = json!({
-                    "error_code": "MALFORMED_REQUEST",
-                    "message": rejection.body_text(),
-                });
-
-                Err((rejection.status(), axum::Json(payload)))
-            }
+            Err(rejection) => Err(ApiError::new(
+                "MALFORMED_REQUEST",
+                rejection.body_text(),
+                rejection.status(),
+            )),
         }
     }
 }
@@ -123,19 +120,16 @@ impl<S> FromRequest<S> for Multipart
 where
     S: Send + Sync,
 {
-    type Rejection = (StatusCode, axum::Json<Value>);
+    type Rejection = ApiError;
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         match axum::extract::Multipart::from_request(req, state).await {
             Ok(multipart) => Ok(Multipart(multipart)),
-            Err(rejection) => {
-                let payload = json!({
-                    "error_code": "MALFORMED_MULTIPART",
-                    "message": rejection.body_text(),
-                });
-
-                Err((StatusCode::BAD_REQUEST, axum::Json(payload)))
-            }
+            Err(rejection) => Err(ApiError::new(
+                "MALFORMED_MULTIPART",
+                rejection.body_text(),
+                StatusCode::BAD_REQUEST,
+            )),
         }
     }
 }
