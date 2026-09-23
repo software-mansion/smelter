@@ -56,6 +56,16 @@
               }
             }
           },
+          "409": {
+            "description": "Reset is already in progress.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error.",
             "content": {

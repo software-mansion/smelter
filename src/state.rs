@@ -25,8 +25,15 @@ pub enum ApiStateInitError {
     ChromiumContextInit(#[from] ChromiumContextInitError),
 }
 
+enum PipelineState {
+    Running(Arc<Mutex<Pipeline>>),
+    Resetting,
+    /// Last reset failed.
+    Down,
+}
+
 pub struct ApiState {
-    pub pipeline: Mutex<Option<Arc<Mutex<Pipeline>>>>,
+    pipeline: Mutex<PipelineState>,
     pub config: Config,
     pub chromium_context: Option<Arc<ChromiumContext>>,
     pub runtime: Arc<Runtime>,
@@ -42,24 +49,44 @@ impl ApiState {
             false => None,
         };
         let options = pipeline_options_from_config(&config, &runtime, &chromium_context);
-        let pipeline = Pipeline::new(options)?;
-        Ok(Arc::new(ApiState {
-            pipeline: Mutex::new(Some(Arc::new(Mutex::new(pipeline)))),
+        let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
+        Ok(Self::with_pipeline(
             config,
             runtime,
             chromium_context,
-        }))
+            pipeline,
+        ))
+    }
+
+    /// Creates state around an already created pipeline. A reset still creates the new
+    /// pipeline from `config`.
+    pub fn with_pipeline(
+        config: Config,
+        runtime: Arc<Runtime>,
+        chromium_context: Option<Arc<ChromiumContext>>,
+        pipeline: Arc<Mutex<Pipeline>>,
+    ) -> Arc<ApiState> {
+        Arc::new(ApiState {
+            pipeline: Mutex::new(PipelineState::Running(pipeline)),
+            config,
+            runtime,
+            chromium_context,
+        })
     }
 
     pub fn pipeline(&self) -> Result<Arc<Mutex<Pipeline>>, ApiError> {
-        match self.pipeline.lock().unwrap().clone() {
-            Some(pipeline) => Ok(pipeline),
-            None => Err(ApiError {
-                error_code: "PIPELINE_DOWN",
-                message: "Pipeline reset failed. Pipeline is down".to_string(),
-                stack: Vec::new(),
-                http_status_code: StatusCode::INTERNAL_SERVER_ERROR,
-            }),
+        match &*self.pipeline.lock().unwrap() {
+            PipelineState::Running(pipeline) => Ok(pipeline.clone()),
+            PipelineState::Resetting => Err(ApiError::new(
+                "PIPELINE_RESETTING",
+                "Pipeline reset is in progress.".to_string(),
+                StatusCode::SERVICE_UNAVAILABLE,
+            )),
+            PipelineState::Down => Err(ApiError::new(
+                "PIPELINE_DOWN",
+                "Pipeline reset failed. Pipeline is down".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )),
         }
     }
 
@@ -95,15 +122,37 @@ impl ApiState {
         Ok(())
     }
 
+    /// Replaces the pipeline with a new one. The state lock is not held while the new
+    /// pipeline is created, so other requests fail with `PIPELINE_RESETTING` instead of
+    /// blocking.
     pub fn reset(&self) -> Result<(), ApiError> {
-        let mut guard = self.pipeline.lock().unwrap();
-        guard.take();
+        {
+            let mut state = self.pipeline.lock().unwrap();
+            if matches!(*state, PipelineState::Resetting) {
+                return Err(ApiError::new(
+                    "PIPELINE_RESETTING",
+                    "Pipeline reset is already in progress.".to_string(),
+                    StatusCode::CONFLICT,
+                ));
+            }
+            *state = PipelineState::Resetting;
+        }
 
         let options =
             pipeline_options_from_config(&self.config, &self.runtime, &self.chromium_context);
-        let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
-        *guard = Some(pipeline);
-        Ok(())
+        let result = Pipeline::new(options);
+
+        let mut state = self.pipeline.lock().unwrap();
+        match result {
+            Ok(pipeline) => {
+                *state = PipelineState::Running(Arc::new(Mutex::new(pipeline)));
+                Ok(())
+            }
+            Err(err) => {
+                *state = PipelineState::Down;
+                Err(err.into())
+            }
+        }
     }
 }
 

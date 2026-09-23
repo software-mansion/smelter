@@ -29,6 +29,7 @@ pub async fn handle_start(
     operation_id = "reset",
     responses(
         (status = 200, description = "Smelter instance reset.", body = OkResponse),
+        (status = 409, description = "Reset is already in progress.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["control_request"],
