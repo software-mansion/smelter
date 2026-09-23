@@ -4,7 +4,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use moq_mux::{catalog::hang::Container, container::Consumer as ContainerConsumer};
+use moq_mux::catalog::hang::Container;
 use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
 use smelter_render::error::ErrorStack;
 use tracing::{Instrument, Span, debug, info, trace, warn};
@@ -26,16 +26,23 @@ use crate::{
         H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread,
         channel::{Sender, TrySendError},
         input_sync::{InputSyncStatsSender, TrackEvent, TrackKind, TrackSink},
-        live_sync::{BufferingStrategy, ChunkBuffer, LiveSync, LiveSyncOptions},
+        live_sync::{BufferingStrategy, LiveSync, LiveSyncOptions},
     },
 };
 
 use crate::prelude::*;
 
-use self::catalog::{MoqCatalogError, read_catalog};
-use super::buffer::resolve_buffer_options;
+use self::{
+    catalog::{MoqCatalogError, read_catalog},
+    track_reader::{LateGroupOptions, MoqTrackReader},
+};
+use super::{
+    buffer::resolve_buffer_options,
+    jitter_buffer::{MoqChunk, MoqJitterBuffer},
+};
 
 mod catalog;
+mod track_reader;
 
 struct VideoTrack {
     name: String,
@@ -57,9 +64,8 @@ struct TrackCtx {
     input_ref: Ref<InputId>,
     broadcast: BroadcastConsumer,
     decoders: MoqInputDecoders,
-    input_sync: Arc<LiveSync<ChunkBuffer>>,
-    /// How long the container consumer waits for a stalled group.
-    group_latency: Duration,
+    input_sync: Arc<LiveSync<MoqJitterBuffer>>,
+    late_groups: LateGroupOptions,
     decoder_buffer_size: Duration,
     should_close: Arc<AtomicBool>,
 }
@@ -151,10 +157,10 @@ impl BroadcastHandler {
             broadcast,
             decoders,
             input_sync,
-            // TODO: Temporary, we need to get read of that logic and handle reorder
-            // in LiveSync jitter buffer, waiting (or not) for the rest of the group
-            // should only depend on remaining time to queue
-            group_latency: Duration::max(desired.saturating_sub(min), min),
+            late_groups: LateGroupOptions {
+                grace: Duration::min(Duration::from_secs(1), desired),
+                max_behind: max,
+            },
             decoder_buffer_size,
             should_close,
         };
@@ -233,7 +239,7 @@ async fn run_video_track(
         broadcast,
         decoders,
         input_sync,
-        group_latency,
+        late_groups,
         decoder_buffer_size,
         should_close,
     } = track_ctx;
@@ -246,32 +252,27 @@ async fn run_video_track(
         frame_sender,
         decoder_buffer_size,
     )?;
-    let track = broadcast.subscribe_track(&Track::new(&video.name))?;
-
-    // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
-    // group start timestamp and highest received timestamp.
-    let mut consumer = ContainerConsumer::new(track, video.container).with_latency(group_latency);
-
     let sink = MoqTrackSink::new(decoder_handle, ctx.queue_ctx.sync_point);
     let mut track_sync = input_sync.add_track(TrackKind::Video, Box::new(sink));
+
+    let track = broadcast.subscribe_track(&Track::new(&video.name))?;
+    let mut reader = MoqTrackReader::new(
+        track,
+        video.container,
+        MediaKind::Video(video.codec),
+        track_sync.deadline(),
+        late_groups,
+    );
 
     loop {
         if should_close.load(std::sync::atomic::Ordering::Relaxed) {
             break;
         };
-        let Some(frame) = consumer.read().await? else {
+        let Some(chunk) = reader.read().await? else {
             break;
         };
 
-        let pts = Timestamp::from_micros(frame.timestamp.as_micros() as i64);
-        trace!(?pts, "Video chunk received.");
-        let chunk = EncodedInputChunk {
-            data: frame.payload,
-            pts,
-            dts: None,
-            kind: MediaKind::Video(video.codec),
-            decode_only: false,
-        };
+        trace!(pts = ?chunk.chunk.pts, ?chunk, "Video chunk received.");
         if track_sync.write_chunk(chunk).is_err() {
             debug!("Failed to send video chunk, channel closed.");
             break;
@@ -292,39 +293,34 @@ async fn run_audio_track(
         broadcast,
         decoders: _,
         input_sync,
-        group_latency,
+        late_groups,
         decoder_buffer_size,
         should_close,
     } = track_ctx;
 
     let decoder_handle =
         spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender, decoder_buffer_size)?;
-    let track = broadcast.subscribe_track(&Track::new(&audio.name))?;
-
-    // .with_latency() defines how long we wait for a stalled group. Group delay is a difference between
-    // group start timestamp and highest received timestamp.
-    let mut consumer = ContainerConsumer::new(track, audio.container).with_latency(group_latency);
-
     let sink = MoqTrackSink::new(decoder_handle, ctx.queue_ctx.sync_point);
     let mut track_sync = input_sync.add_track(TrackKind::Audio, Box::new(sink));
+
+    let track = broadcast.subscribe_track(&Track::new(&audio.name))?;
+    let mut reader = MoqTrackReader::new(
+        track,
+        audio.container,
+        MediaKind::Audio(audio.codec),
+        track_sync.deadline(),
+        late_groups,
+    );
 
     loop {
         if should_close.load(std::sync::atomic::Ordering::Relaxed) {
             break;
         };
-        let Some(frame) = consumer.read().await? else {
+        let Some(chunk) = reader.read().await? else {
             break;
         };
 
-        let pts = Timestamp::from_micros(frame.timestamp.as_micros() as i64);
-        trace!(?pts, "Audio chunk received.");
-        let chunk = EncodedInputChunk {
-            data: frame.payload,
-            pts,
-            dts: None,
-            kind: MediaKind::Audio(audio.codec),
-            decode_only: false,
-        };
+        trace!(pts = ?chunk.chunk.pts, "Audio chunk received.");
         if track_sync.write_chunk(chunk).is_err() {
             debug!("Failed to send audio chunk, channel closed.");
             break;
@@ -354,10 +350,10 @@ impl MoqTrackSink {
     }
 }
 
-impl TrackSink<EncodedInputChunk> for MoqTrackSink {
-    fn on_event(&mut self, event: TrackEvent<EncodedInputChunk>) {
+impl TrackSink<MoqChunk> for MoqTrackSink {
+    fn on_event(&mut self, event: TrackEvent<MoqChunk>) {
         let chunk = match event {
-            TrackEvent::Chunk(chunk) => chunk,
+            TrackEvent::Chunk(chunk) => chunk.chunk,
             // ignore, assume that decoder does not need reset
             TrackEvent::Discontinuity => return,
         };

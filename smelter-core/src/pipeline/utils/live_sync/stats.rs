@@ -116,6 +116,8 @@ impl LiveSyncTrackStats {
                     .and_then(|estimate| live_edge_distance(estimate.lower_bound.pts)),
                 live_edge_upper_bound_distance: estimate
                     .and_then(|estimate| live_edge_distance(estimate.upper_bound.pts)),
+                live_edge_recent_upper_bound_distance: estimate
+                    .and_then(|estimate| live_edge_distance(estimate.recent_upper_bound_pts?)),
             },
         ));
     }

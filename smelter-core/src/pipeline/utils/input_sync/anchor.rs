@@ -36,6 +36,11 @@ impl TimestampAnchor {
         pts + self.as_offset()
     }
 
+    /// Input pts presented at `output_pts`.
+    pub(crate) fn to_input_pts(self, output_pts: Timestamp) -> Timestamp {
+        output_pts - self.as_offset()
+    }
+
     /// Mapping that presents every input pts `offset` later than this one.
     pub(crate) fn offset_by(self, offset: Timestamp) -> Self {
         Self {

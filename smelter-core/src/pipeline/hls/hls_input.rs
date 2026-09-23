@@ -173,7 +173,9 @@ impl HlsDemuxerThread {
                     // a gap between chunks.
                     stabilization_tolerance: Duration::from_millis(250),
                     max_wait: Duration::from_secs(10),
-                    stale_estimate_threshold: Duration::from_secs(1),
+                    // Depending on what is actually producing the HLS or when segment size change
+                    // the upper bound can jump quickly, so threshold has to be large.
+                    stale_estimate_threshold: Duration::from_secs(10),
                 },
                 input_ctx.ctx.queue_ctx.sync_point,
                 stats,
