@@ -251,7 +251,6 @@ impl VTDecoder {
         session: &vt::VTDecompressionSession,
     ) -> Result<(), OSStatusError> {
         match self.usage {
-            // Leave VideoToolbox on its default realtime-playback path.
             DecoderUsage::Default | DecoderUsage::Streaming => return Ok(()),
             DecoderUsage::Transcoding | DecoderUsage::Offline => {}
         }
@@ -276,7 +275,6 @@ pub(super) fn download_to_bytes(
     let locked = unsafe { buffer.lock(cv::CVPixelBufferLockFlags::ReadOnly)? };
     let mut result = Vec::with_capacity(width * height * 3 / 2);
 
-    // NV12: plane 0 is Y (1 byte/pixel), plane 1 is CbCr (2 bytes/pixel)
     for plane in 0..2usize {
         let plane_width = cv::CVPixelBufferGetWidthOfPlane(buffer, plane);
         let plane_height = cv::CVPixelBufferGetHeightOfPlane(buffer, plane);

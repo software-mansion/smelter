@@ -5,7 +5,6 @@ pub mod parser;
 #[cfg(not(feature = "expose-parsers"))]
 pub(crate) mod parser;
 
-// TODO: The modules below should compile on macos
 #[cfg(all(supported, feature = "expose-backends"))]
 pub mod backends;
 #[cfg(all(supported, not(feature = "expose-backends")))]
@@ -39,4 +38,4 @@ pub use exports::*;
 
 // If no backend is available and parsers are not exposed
 #[cfg(not(any(supported, feature = "expose-parsers")))]
-compile_error!("gpu-video can be only compiled on platforms supported by vulkan.");
+compile_error!("gpu-video can be only compiled on platforms supported by vulkan or video toolbox.");
