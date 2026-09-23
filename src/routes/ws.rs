@@ -32,7 +32,6 @@ pub(super) async fn handle_ws_upgrade(socket: WebSocket) {
     enum InternalMessage {
         Event(Event),
         Close,
-        Pong(Vec<u8>),
     }
     let (mut socket_sender, mut socket_receiver) = socket.split();
     let (event_sender, mut event_receiver) = channel(100);
@@ -70,12 +69,6 @@ pub(super) async fn handle_ws_upgrade(socket: WebSocket) {
                     }
                     return;
                 }
-                InternalMessage::Pong(data) => {
-                    if let Err(err) = socket_sender.send(Message::Pong(data)).await {
-                        debug!(%err, "WebSocket send error.");
-                        return;
-                    }
-                }
             }
         }
     });
@@ -87,9 +80,7 @@ pub(super) async fn handle_ws_upgrade(socket: WebSocket) {
                     let _ = event_sender.send(InternalMessage::Close).await;
                     return;
                 }
-                Message::Ping(data) => {
-                    let _ = event_sender.send(InternalMessage::Pong(data)).await;
-                }
+                // Pings are answered by tungstenite while reading.
                 msg => {
                     debug!(?msg, "Received ws message.")
                 }

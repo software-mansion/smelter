@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::State;
-use smelter_api::{InputInfo, InstanceConfiguration, InstanceStatus, OutputInfo};
+use smelter_api::{InputStatus, InstanceConfiguration, InstanceStatus, OutputStatus};
 use smelter_core::stats::StatsReport;
 use smelter_render::RenderingMode;
 
@@ -27,12 +27,18 @@ pub async fn status_handler(
 
     let inputs = pipeline
         .inputs()
-        .map(|(id, input)| InputInfo::new(id.to_string(), input.protocol))
+        .map(|(id, input)| InputStatus {
+            input_id: id.to_string(),
+            input_type: input.protocol.into(),
+        })
         .collect();
 
     let outputs = pipeline
         .outputs()
-        .map(|(id, output)| OutputInfo::new(id.to_string(), output.protocol))
+        .map(|(id, output)| OutputStatus {
+            output_id: id.to_string(),
+            output_type: output.protocol.into(),
+        })
         .collect();
 
     let output_framerate = state.config.output_framerate;
@@ -47,7 +53,7 @@ pub async fn status_handler(
         download_root: state.config.download_root.clone(),
         webrtc_stun_servers: state.config.webrtc_stun_servers.clone(),
         web_renderer_enable: state.config.web_renderer_enable,
-        web_renderer_enable_gpu: state.config.web_renderer_gpu_enable,
+        web_renderer_gpu_enable: state.config.web_renderer_gpu_enable,
         whip_whep_enable: state.config.whip_whep_enable,
         rendering_mode: match state.config.rendering_mode {
             RenderingMode::GpuOptimized => "gpu_optimized",

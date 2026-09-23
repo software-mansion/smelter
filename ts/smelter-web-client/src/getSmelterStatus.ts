@@ -60,7 +60,7 @@ export async function getSmelterStatus(manager: SmelterManager): Promise<Smelter
       downloadRoot: status.configuration.download_root,
 
       webRendererEnable: status.configuration.web_renderer_enable,
-      webRendererEnableGpu: status.configuration.web_renderer_enable_gpu,
+      webRendererEnableGpu: status.configuration.web_renderer_gpu_enable,
 
       whipWhepServerPort: status.configuration.whip_whep_server_port,
       whipWhepEnable: status.configuration.whip_whep_enable,

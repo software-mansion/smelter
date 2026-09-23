@@ -70,8 +70,8 @@ impl From<Option<core::Port>> for RegisterOutputResponse {
 pub struct InstanceStatus {
     pub instance_id: String,
     pub configuration: InstanceConfiguration,
-    pub inputs: Vec<InputInfo>,
-    pub outputs: Vec<OutputInfo>,
+    pub inputs: Vec<InputStatus>,
+    pub outputs: Vec<OutputStatus>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -89,7 +89,7 @@ pub struct InstanceConfiguration {
     pub download_root: Arc<Path>,
 
     pub web_renderer_enable: bool,
-    pub web_renderer_enable_gpu: bool,
+    pub web_renderer_gpu_enable: bool,
 
     pub whip_whep_server_port: u16,
     pub whip_whep_enable: bool,
@@ -99,55 +99,82 @@ pub struct InstanceConfiguration {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct InputInfo {
+pub struct InputStatus {
     pub input_id: String,
-    pub input_type: String,
+    pub input_type: InputType,
 }
 
-impl InputInfo {
-    pub fn new(input_id: String, protocol: core::InputProtocolKind) -> Self {
-        let input_type = match protocol {
-            core::InputProtocolKind::Rtp => "rtp",
-            core::InputProtocolKind::Rtmp => "rtmp",
-            core::InputProtocolKind::Mp4 => "mp4",
-            core::InputProtocolKind::Whip => "whip",
-            core::InputProtocolKind::Whep => "whep",
-            core::InputProtocolKind::Hls => "hls",
-            core::InputProtocolKind::MoqServer => "moq_server",
-            core::InputProtocolKind::MoqClient => "moq_client",
-            core::InputProtocolKind::V4l2 => "v4l2",
-            core::InputProtocolKind::DeckLink => "decklink",
-            core::InputProtocolKind::RawDataChannel => "raw_data",
-        };
-        Self {
-            input_id,
-            input_type: input_type.to_string(),
+/// Same values as `type` in the register input request. `raw_data` is used for inputs
+/// registered through the Rust API.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InputType {
+    RtpStream,
+    RtmpServer,
+    MoqServer,
+    MoqClient,
+    Mp4,
+    WhipServer,
+    WhepClient,
+    Hls,
+    V4l2,
+    #[serde(rename = "decklink")]
+    DeckLink,
+    RawData,
+}
+
+impl From<core::InputProtocolKind> for InputType {
+    fn from(value: core::InputProtocolKind) -> Self {
+        match value {
+            core::InputProtocolKind::Rtp => Self::RtpStream,
+            core::InputProtocolKind::Rtmp => Self::RtmpServer,
+            core::InputProtocolKind::MoqServer => Self::MoqServer,
+            core::InputProtocolKind::MoqClient => Self::MoqClient,
+            core::InputProtocolKind::Mp4 => Self::Mp4,
+            core::InputProtocolKind::Whip => Self::WhipServer,
+            core::InputProtocolKind::Whep => Self::WhepClient,
+            core::InputProtocolKind::Hls => Self::Hls,
+            core::InputProtocolKind::V4l2 => Self::V4l2,
+            core::InputProtocolKind::DeckLink => Self::DeckLink,
+            core::InputProtocolKind::RawDataChannel => Self::RawData,
         }
     }
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct OutputInfo {
+pub struct OutputStatus {
     pub output_id: String,
-    pub output_type: String,
+    pub output_type: OutputType,
 }
 
-impl OutputInfo {
-    pub fn new(output_id: String, protocol: core::OutputProtocolKind) -> Self {
-        let output_type = match protocol {
-            core::OutputProtocolKind::Rtp => "rtp",
-            core::OutputProtocolKind::Rtmp => "rtmp",
-            core::OutputProtocolKind::Mp4 => "mp4",
-            core::OutputProtocolKind::Whip => "whip",
-            core::OutputProtocolKind::Whep => "whep",
-            core::OutputProtocolKind::Hls => "hls",
-            core::OutputProtocolKind::MoqClient => "moq_client",
-            core::OutputProtocolKind::EncodedDataChannel => "encoded_data",
-            core::OutputProtocolKind::RawDataChannel => "raw_data",
-        };
-        Self {
-            output_id,
-            output_type: output_type.to_string(),
+/// Same values as `type` in the register output request. `encoded_data` and `raw_data`
+/// are used for outputs registered through the Rust API.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OutputType {
+    RtpStream,
+    RtmpClient,
+    MoqClient,
+    Mp4,
+    WhipClient,
+    WhepServer,
+    Hls,
+    EncodedData,
+    RawData,
+}
+
+impl From<core::OutputProtocolKind> for OutputType {
+    fn from(value: core::OutputProtocolKind) -> Self {
+        match value {
+            core::OutputProtocolKind::Rtp => Self::RtpStream,
+            core::OutputProtocolKind::Rtmp => Self::RtmpClient,
+            core::OutputProtocolKind::MoqClient => Self::MoqClient,
+            core::OutputProtocolKind::Mp4 => Self::Mp4,
+            core::OutputProtocolKind::Whip => Self::WhipClient,
+            core::OutputProtocolKind::Whep => Self::WhepServer,
+            core::OutputProtocolKind::Hls => Self::Hls,
+            core::OutputProtocolKind::EncodedDataChannel => Self::EncodedData,
+            core::OutputProtocolKind::RawDataChannel => Self::RawData,
         }
     }
 }
