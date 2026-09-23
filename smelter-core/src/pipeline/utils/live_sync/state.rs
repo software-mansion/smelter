@@ -126,7 +126,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         // audio first, so video's decision can align to it
         for kind in [TrackKind::Audio, TrackKind::Video] {
             if let Some(mode) = start_track_decision(self, kind, now) {
-                self.start_track(kind, mode, now);
+                self.start_track(kind, mode);
             }
         }
 
@@ -223,17 +223,12 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     }
 
     /// Applies a start decision: `mode` holds the anchor the track starts with; the buffered
-    /// backlog is released with it.
-    fn start_track(&mut self, kind: TrackKind, mode: Mode, now: Instant) {
-        let now_pts = self.sync_point.timestamp_at(now);
+    /// backlog is released with it by the regular release in the same tick.
+    fn start_track(&mut self, kind: TrackKind, mode: Mode) {
         let Some(anchor) = mode.anchor(kind) else {
             return;
         };
-        let track = match kind {
-            TrackKind::Audio => self.audio.as_mut(),
-            TrackKind::Video => self.video.as_mut(),
-        };
-        let Some(track) = track else {
+        let Some(track) = self.track(kind) else {
             return;
         };
         debug!(
@@ -243,21 +238,6 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             ?mode,
             "Live sync: track started"
         );
-
-        // Not using regular try_release_chunk, because decoder should only drop late packets
-        // during startup phase. It avoids visible video speedup when queue input drains decoder
-        // to reach "on time" position
-        while let Some(mut chunk) = track.buffer.try_read() {
-            // The last video frame is always presented, so the output shows something right away
-            let is_last_video_frame =
-                kind == TrackKind::Video && track.buffer.peek_next_pts().is_none();
-            let is_too_late = anchor.to_output_pts(chunk.pts()) <= now_pts;
-            if !is_last_video_frame && is_too_late {
-                chunk.mark_decode_only();
-            }
-            track.release_chunk(chunk, anchor);
-        }
-
         self.mode = Some(mode);
     }
 
@@ -323,9 +303,19 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             true => track.buffer.read(),
             false => track.buffer.try_read(),
         };
-        let Some(chunk) = chunk else {
+        let Some(mut chunk) = chunk else {
             return false;
         };
+
+        // Late content is only decoded, so the decoder catches up instead of the queue playing
+        // it back sped up. The newest video frame is always presented, so the output shows
+        // something right away.
+        let is_last_video_frame =
+            kind == TrackKind::Video && track.buffer.peek_next_pts().is_none();
+        let decode_only = !is_last_video_frame && anchor.to_output_pts(chunk.pts()) <= now_pts;
+        if decode_only {
+            chunk.mark_decode_only();
+        }
 
         mode.nudge_anchor_toward_target(kind, chunk.pts(), self.options.buffering_strategy);
         let anchor = mode.anchor(kind).unwrap_or(anchor);
