@@ -92,13 +92,45 @@ impl UpdateInputRequest {
 pub struct UpdateOutputRequest {
     pub video: Option<VideoScene>,
     pub audio: Option<AudioScene>,
+    /// Time in milliseconds when this request should be applied. Value `0` represents
+    /// time of the start request. Negative values are rejected.
     pub schedule_time_ms: Option<f64>,
+}
+
+impl UpdateOutputRequest {
+    pub fn schedule_time(&self) -> Result<Option<core::Timestamp>, TypeError> {
+        timestamp_from_schedule_time(self.schedule_time_ms)
+    }
 }
 
 /// Request body shared by all unregister routes.
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UnregisterRequest {
     /// Time in milliseconds when this request should be applied. Value `0` represents
-    /// time of the start request.
+    /// time of the start request. Negative values are rejected.
     pub schedule_time_ms: Option<f64>,
+}
+
+impl UnregisterRequest {
+    pub fn schedule_time(&self) -> Result<Option<core::Timestamp>, TypeError> {
+        timestamp_from_schedule_time(self.schedule_time_ms)
+    }
+}
+
+fn timestamp_from_schedule_time(
+    schedule_time_ms: Option<f64>,
+) -> Result<Option<core::Timestamp>, TypeError> {
+    // Largest value in milliseconds that fits in a `Timestamp`.
+    const MAX_SCHEDULE_TIME_MS: f64 = i64::MAX as f64 / 1_000_000.0;
+
+    match schedule_time_ms {
+        Some(time) if time < 0.0 || time.is_nan() => {
+            Err(TypeError::new("Schedule time cannot be negative."))
+        }
+        Some(time) if time > MAX_SCHEDULE_TIME_MS => {
+            Err(TypeError::new("Schedule time is too large."))
+        }
+        Some(time) => Ok(Some(core::Timestamp::from_secs_f64(time / 1000.0))),
+        None => Ok(None),
+    }
 }

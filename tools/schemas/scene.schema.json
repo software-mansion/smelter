@@ -24,6 +24,7 @@
       ]
     },
     "schedule_time_ms": {
+      "description": "Time in milliseconds when this request should be applied. Value `0` represents time of the start request. Negative values are rejected.",
       "type": [
         "number",
         "null"

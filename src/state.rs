@@ -1,14 +1,18 @@
 use std::sync::{Arc, Mutex};
 
 use smelter_core::{
-    Pipeline, PipelineMoqServerOptions, PipelineOptions, PipelineRtmpServerOptions,
-    PipelineWgpuOptions, PipelineWhipWhepServerOptions, error::InitPipelineError,
-    protocols::WebrtcUdpPortStrategy,
+    LateEventPolicy, Pipeline, PipelineMoqServerOptions, PipelineOptions,
+    PipelineRtmpServerOptions, PipelineWgpuOptions, PipelineWhipWhepServerOptions, Timestamp,
+    error::InitPipelineError, protocols::WebrtcUdpPortStrategy,
 };
-use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
+use smelter_render::{
+    error::ErrorStack,
+    web_renderer::{ChromiumContext, ChromiumContextInitError},
+};
 
 use reqwest::StatusCode;
 use tokio::runtime::Runtime;
+use tracing::error;
 
 use crate::{config::Config, error::ApiError};
 
@@ -57,6 +61,38 @@ impl ApiState {
                 http_status_code: StatusCode::INTERNAL_SERVER_ERROR,
             }),
         }
+    }
+
+    /// Runs `action` at `schedule_time`, or immediately when it is not set. Errors from
+    /// scheduled actions cannot be returned to the caller, so they are only logged.
+    pub fn schedule_or_run<E>(
+        &self,
+        schedule_time: Option<Timestamp>,
+        action: impl FnOnce(&mut Pipeline) -> Result<(), E> + Send + 'static,
+    ) -> Result<(), ApiError>
+    where
+        E: std::error::Error + 'static,
+        ApiError: From<E>,
+    {
+        let pipeline = self.pipeline()?;
+        match schedule_time {
+            Some(schedule_time) => Pipeline::schedule_event(
+                &pipeline,
+                schedule_time,
+                LateEventPolicy::Default,
+                move |pipeline| {
+                    if let Err(err) = action(pipeline) {
+                        error!(
+                            "Error while running scheduled request for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                },
+            ),
+            None => action(&mut pipeline.lock().unwrap())?,
+        }
+        Ok(())
     }
 
     pub fn reset(&self) -> Result<(), ApiError> {

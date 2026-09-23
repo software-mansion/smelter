@@ -6803,7 +6803,7 @@
               "null"
             ],
             "format": "double",
-            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request."
+            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request. Negative values are rejected."
           }
         }
       },
@@ -6855,7 +6855,8 @@
               "number",
               "null"
             ],
-            "format": "double"
+            "format": "double",
+            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request. Negative values are rejected."
           }
         },
         "additionalProperties": false

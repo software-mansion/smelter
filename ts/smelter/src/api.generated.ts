@@ -2331,6 +2331,9 @@ export interface ShaderSpec {
 export interface UpdateOutputRequest {
   video?: VideoScene | null;
   audio?: AudioScene | null;
+  /**
+   * Time in milliseconds when this request should be applied. Value `0` represents time of the start request. Negative values are rejected.
+   */
   schedule_time_ms?: number | null;
 }
 export interface UpdateInputRequest {
