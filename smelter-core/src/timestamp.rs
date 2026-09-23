@@ -248,7 +248,8 @@ impl fmt::Debug for Timestamp {
     }
 }
 
-impl Add for Timestamp {
+/// Timestamp + Timestamp -> Timestamp
+impl Add<Timestamp> for Timestamp {
     type Output = Timestamp;
 
     fn add(self, rhs: Timestamp) -> Timestamp {
@@ -258,6 +259,7 @@ impl Add for Timestamp {
     }
 }
 
+/// Timestamp + Duration -> Timestamp
 impl Add<Duration> for Timestamp {
     type Output = Timestamp;
 
@@ -266,7 +268,8 @@ impl Add<Duration> for Timestamp {
     }
 }
 
-impl Sub for Timestamp {
+/// Timestamp - Timestamp -> Timestamp
+impl Sub<Timestamp> for Timestamp {
     type Output = Timestamp;
 
     fn sub(self, rhs: Timestamp) -> Timestamp {
@@ -276,6 +279,7 @@ impl Sub for Timestamp {
     }
 }
 
+/// Timestamp - Duration -> Timestamp
 impl Sub<Duration> for Timestamp {
     type Output = Timestamp;
 
@@ -284,30 +288,35 @@ impl Sub<Duration> for Timestamp {
     }
 }
 
-impl AddAssign for Timestamp {
+/// Timestamp += Timestamp
+impl AddAssign<Timestamp> for Timestamp {
     fn add_assign(&mut self, rhs: Timestamp) {
         *self = *self + rhs;
     }
 }
 
+/// Timestamp += Duration
 impl AddAssign<Duration> for Timestamp {
     fn add_assign(&mut self, rhs: Duration) {
         *self = *self + rhs;
     }
 }
 
-impl SubAssign for Timestamp {
+/// Timestamp -= Timestamp
+impl SubAssign<Timestamp> for Timestamp {
     fn sub_assign(&mut self, rhs: Timestamp) {
         *self = *self - rhs;
     }
 }
 
+/// Timestamp -= Duration
 impl SubAssign<Duration> for Timestamp {
     fn sub_assign(&mut self, rhs: Duration) {
         *self = *self - rhs;
     }
 }
 
+/// -Timestamp -> Timestamp
 impl Neg for Timestamp {
     type Output = Timestamp;
 
@@ -316,6 +325,7 @@ impl Neg for Timestamp {
     }
 }
 
+/// Timestamp * impl Into<i64> -> Timestamp
 impl<T: Into<i64>> Mul<T> for Timestamp {
     type Output = Timestamp;
 
@@ -326,6 +336,7 @@ impl<T: Into<i64>> Mul<T> for Timestamp {
     }
 }
 
+/// Timestamp / i64 -> Timestamp
 impl Div<i64> for Timestamp {
     type Output = Timestamp;
 
@@ -336,6 +347,7 @@ impl Div<i64> for Timestamp {
     }
 }
 
+/// Timestamp / u32 -> Timestamp
 impl Div<u32> for Timestamp {
     type Output = Timestamp;
 
@@ -344,6 +356,7 @@ impl Div<u32> for Timestamp {
     }
 }
 
+/// Instant + Timestamp -> Instant
 impl Add<Timestamp> for Instant {
     type Output = Instant;
 
@@ -356,6 +369,7 @@ impl Add<Timestamp> for Instant {
     }
 }
 
+/// Instant - Timestamp -> Instant
 impl Sub<Timestamp> for Instant {
     type Output = Instant;
 
@@ -364,6 +378,7 @@ impl Sub<Timestamp> for Instant {
     }
 }
 
+/// Iterator<Item = Timestamp>::sum() -> Timestamp
 impl std::iter::Sum for Timestamp {
     fn sum<I: Iterator<Item = Timestamp>>(iter: I) -> Timestamp {
         iter.fold(Timestamp::ZERO, Add::add)
@@ -414,7 +429,7 @@ impl TimestampOffset {
     }
 }
 
-/// Mapping that presents every input pts `rhs` later than `self` does.
+/// TimestampOffset + Timestamp -> TimestampOffset
 impl Add<Timestamp> for TimestampOffset {
     type Output = TimestampOffset;
 
@@ -423,7 +438,7 @@ impl Add<Timestamp> for TimestampOffset {
     }
 }
 
-/// Mapping that presents every input pts `rhs` later than `self` does.
+/// TimestampOffset + Duration -> TimestampOffset
 impl Add<Duration> for TimestampOffset {
     type Output = TimestampOffset;
 
@@ -432,7 +447,7 @@ impl Add<Duration> for TimestampOffset {
     }
 }
 
-/// Mapping that presents every input pts `rhs` earlier than `self` does.
+/// TimestampOffset - Timestamp -> TimestampOffset
 impl Sub<Timestamp> for TimestampOffset {
     type Output = TimestampOffset;
 
@@ -441,8 +456,8 @@ impl Sub<Timestamp> for TimestampOffset {
     }
 }
 
-/// Mapping of `self` applied after `rhs`.
-impl Add for TimestampOffset {
+/// TimestampOffset + TimestampOffset -> TimestampOffset
+impl Add<TimestampOffset> for TimestampOffset {
     type Output = TimestampOffset;
 
     fn add(self, rhs: TimestampOffset) -> Self::Output {
@@ -450,8 +465,8 @@ impl Add for TimestampOffset {
     }
 }
 
-/// Mapping of `self` with `rhs` undone, so `(a + b) - b == a`.
-impl Sub for TimestampOffset {
+/// TimestampOffset - TimestampOffset -> TimestampOffset
+impl Sub<TimestampOffset> for TimestampOffset {
     type Output = TimestampOffset;
 
     fn sub(self, rhs: TimestampOffset) -> Self::Output {
