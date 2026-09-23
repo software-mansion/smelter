@@ -33,7 +33,7 @@ pub async fn handle_register(
         Ok(Json(info.into()))
     })
     .await
-    // `unwrap()` panics only when the task panicked or `response.abort()` was called
+    // `unwrap()` panics only when the blocking task panicked
     .unwrap()
 }
 
