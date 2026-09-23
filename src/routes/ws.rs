@@ -7,6 +7,7 @@ use axum::{
     },
     response::IntoResponse,
 };
+use crossbeam_channel::{bounded, select};
 use futures_util::{SinkExt, StreamExt};
 use smelter_render::event_handler::{Event, subscribe};
 use tokio::sync::mpsc::channel;
@@ -35,18 +36,28 @@ pub(super) async fn handle_ws_upgrade(socket: WebSocket) {
     }
     let (mut socket_sender, mut socket_receiver) = socket.split();
     let (event_sender, mut event_receiver) = channel(100);
+    // Dropped when the connection is closed, which stops the event thread.
+    let (connection_closed_sender, connection_closed_receiver) = bounded::<()>(0);
 
     let event_sender_2 = event_sender.clone();
     thread::Builder::new()
         .name("Web socket thread".to_string())
         .spawn(move || {
-            let receiver = subscribe();
-            for event in receiver {
-                if event_sender_2
-                    .blocking_send(InternalMessage::Event(event))
-                    .is_err()
-                {
-                    return;
+            let events = subscribe();
+            loop {
+                select! {
+                    recv(events) -> event => {
+                        let Ok(event) = event else {
+                            return;
+                        };
+                        if event_sender_2
+                            .blocking_send(InternalMessage::Event(event))
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
+                    recv(connection_closed_receiver) -> _ => return,
                 }
             }
         })
@@ -74,6 +85,7 @@ pub(super) async fn handle_ws_upgrade(socket: WebSocket) {
     });
 
     tokio::spawn(async move {
+        let _connection_closed_sender = connection_closed_sender;
         while let Some(Ok(msg)) = socket_receiver.next().await {
             match msg {
                 Message::Close(_) => {
