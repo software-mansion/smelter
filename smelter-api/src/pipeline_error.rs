@@ -10,8 +10,8 @@ use smelter_core::{
     },
 };
 use smelter_render::error::{
-    InitRendererEngineError, RegisterError, RegisterRendererError, RequestKeyframeError,
-    UnregisterRendererError, UpdateSceneError, WgpuError,
+    RegisterError, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
+    UpdateSceneError, WgpuError,
 };
 
 // Without this, Vulkan encoder errors would silently map to the generic output error code.
@@ -216,14 +216,14 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
     }
 }
 
-const UPDATE_INPUT_NOT_FOUND: &str = "INPUT_STREAM_NOT_FOUND";
+const INPUT_STREAM_NOT_FOUND: &str = "INPUT_STREAM_NOT_FOUND";
 const UPDATE_INPUT_ACTION_NOT_SUPPORTED: &str = "INPUT_ACTION_NOT_SUPPORTED";
 
 impl From<&UpdateInputError> for PipelineErrorInfo {
     fn from(err: &UpdateInputError) -> Self {
         match err {
             UpdateInputError::NotFound(_) => {
-                PipelineErrorInfo::new(UPDATE_INPUT_NOT_FOUND, ErrorType::EntityNotFound)
+                PipelineErrorInfo::new(INPUT_STREAM_NOT_FOUND, ErrorType::EntityNotFound)
             }
             UpdateInputError::SeekNotSupported(_) | UpdateInputError::PausingNotSupported(_) => {
                 PipelineErrorInfo::new(UPDATE_INPUT_ACTION_NOT_SUPPORTED, ErrorType::UserError)
@@ -231,8 +231,6 @@ impl From<&UpdateInputError> for PipelineErrorInfo {
         }
     }
 }
-
-const INPUT_STREAM_NOT_FOUND: &str = "INPUT_STREAM_NOT_FOUND";
 
 impl From<&UnregisterInputError> for PipelineErrorInfo {
     fn from(err: &UnregisterInputError) -> Self {
@@ -294,22 +292,6 @@ impl From<&RequestKeyframeError> for PipelineErrorInfo {
             RequestKeyframeError::KeyframesUnsupported(_)
             | RequestKeyframeError::NoVideoOutput(_) => {
                 PipelineErrorInfo::new(REQUEST_KEYFRAME_ERROR, ErrorType::UserError)
-            }
-        }
-    }
-}
-
-const WGPU_INIT_ERROR: &str = "WGPU_INIT_ERROR";
-const LAYOUT_INIT_ERROR: &str = "LAYOUT_INIT_ERROR";
-
-impl From<&InitRendererEngineError> for PipelineErrorInfo {
-    fn from(err: &InitRendererEngineError) -> Self {
-        match err {
-            InitRendererEngineError::FailedToInitWgpuCtx(_) => {
-                PipelineErrorInfo::new(WGPU_INIT_ERROR, ErrorType::ServerError)
-            }
-            InitRendererEngineError::LayoutTransformationsInitError(_) => {
-                PipelineErrorInfo::new(LAYOUT_INIT_ERROR, ErrorType::ServerError)
             }
         }
     }
