@@ -367,11 +367,12 @@ impl Pipeline {
     }
 
     pub fn start(pipeline: &Arc<Mutex<Self>>) {
-        let guard = pipeline.lock().unwrap();
+        let mut guard = pipeline.lock().unwrap();
         if guard.is_started {
             error!("Pipeline already started.");
             return;
         }
+        guard.is_started = true;
         info!("Starting pipeline.");
         let (video_sender, video_receiver) = bounded(2);
         let (audio_sender, audio_receiver) = bounded(100);
