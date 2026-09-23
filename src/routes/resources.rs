@@ -25,6 +25,7 @@ use crate::{
     responses(
         (status = 200, description = "Shader registered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["register_request"],
@@ -50,6 +51,7 @@ pub async fn handle_register_shader(
     responses(
         (status = 200, description = "Shader unregistered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 404, description = "Shader not found.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -74,6 +76,7 @@ pub async fn handle_unregister_shader(
     responses(
         (status = 200, description = "Web renderer registered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["register_request"],
@@ -99,6 +102,7 @@ pub async fn handle_register_web_renderer(
     responses(
         (status = 200, description = "Web renderer unregistered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 404, description = "Web renderer not found.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -123,6 +127,7 @@ pub async fn handle_unregister_web_renderer(
     responses(
         (status = 200, description = "Image registered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["register_request"],
@@ -148,6 +153,7 @@ pub async fn handle_register_image(
     responses(
         (status = 200, description = "Image unregistered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 404, description = "Image not found.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -179,6 +185,7 @@ pub struct RegisterFontRequest {
     responses(
         (status = 200, description = "Font registered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["register_request"],
@@ -192,7 +199,7 @@ pub async fn handle_register_font(
         .await
         .map_err(|err| ApiError::malformed_request(&err))?
     else {
-        return Err(ApiError::malformed_request(&"Missing font file"));
+        return Err(ApiError::invalid_request(&"Missing font file"));
     };
 
     let bytes = field

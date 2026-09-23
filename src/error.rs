@@ -34,11 +34,21 @@ impl ApiError {
         }
     }
 
+    /// Request could not be parsed.
     pub fn malformed_request(err: &dyn Display) -> Self {
         ApiError::new(
             "MALFORMED_REQUEST",
             format!("Received malformed request:\n{err}"),
             StatusCode::BAD_REQUEST,
+        )
+    }
+
+    /// Request was parsed, but its content is not valid.
+    pub fn invalid_request(err: &dyn Display) -> Self {
+        ApiError::new(
+            "MALFORMED_REQUEST",
+            format!("Received invalid request:\n{err}"),
+            StatusCode::UNPROCESSABLE_ENTITY,
         )
     }
 }
@@ -88,7 +98,7 @@ impl_api_err!(InitPipelineError);
 
 impl From<TypeError> for ApiError {
     fn from(err: TypeError) -> Self {
-        ApiError::malformed_request(&err)
+        ApiError::invalid_request(&err)
     }
 }
 

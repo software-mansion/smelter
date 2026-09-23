@@ -17,6 +17,7 @@ use crate::{error::ApiError, routes::Json, state::ApiState};
     responses(
         (status = 200, description = "Output registered successfully.", body = RegisterOutputResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["register_request"],
@@ -43,6 +44,7 @@ pub async fn handle_register(
     responses(
         (status = 200, description = "Output unregistered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 404, description = "Output not found.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -67,6 +69,8 @@ pub async fn handle_unregister(
     responses(
         (status = 200, description = "Output updated successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Output not found.", body = ApiError),
+        (status = 422, description = "Invalid request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["update_request"],
@@ -97,6 +101,7 @@ pub async fn handle_update(
     responses(
         (status = 200, description = "Keyframe request successful.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Output not found.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
     tags = ["update_request"],

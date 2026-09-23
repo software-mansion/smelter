@@ -259,7 +259,7 @@ impl From<&UpdateSceneError> for PipelineErrorInfo {
         match err {
             UpdateSceneError::WgpuError(err) => err.into(),
             UpdateSceneError::OutputNotRegistered(_) => {
-                PipelineErrorInfo::new(OUTPUT_STREAM_NOT_FOUND, ErrorType::UserError)
+                PipelineErrorInfo::new(OUTPUT_STREAM_NOT_FOUND, ErrorType::EntityNotFound)
             }
             UpdateSceneError::SceneError(_) => PipelineErrorInfo {
                 error_code: BUILD_SCENE_ERROR,
@@ -280,10 +280,15 @@ impl From<&UpdateSceneError> for PipelineErrorInfo {
 const REQUEST_KEYFRAME_ERROR: &str = "REQUEST_KEYFRAME_ERROR";
 
 impl From<&RequestKeyframeError> for PipelineErrorInfo {
-    fn from(_err: &RequestKeyframeError) -> Self {
-        PipelineErrorInfo {
-            error_code: REQUEST_KEYFRAME_ERROR,
-            error_type: ErrorType::UserError,
+    fn from(err: &RequestKeyframeError) -> Self {
+        match err {
+            RequestKeyframeError::OutputNotRegistered(_) => {
+                PipelineErrorInfo::new(OUTPUT_STREAM_NOT_FOUND, ErrorType::EntityNotFound)
+            }
+            RequestKeyframeError::KeyframesUnsupported(_)
+            | RequestKeyframeError::NoVideoOutput(_) => {
+                PipelineErrorInfo::new(REQUEST_KEYFRAME_ERROR, ErrorType::UserError)
+            }
         }
     }
 }
