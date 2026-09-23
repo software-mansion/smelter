@@ -129,7 +129,7 @@ libcef = { workspace = true, optional = true }
 
 # Platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
-smelter-core = { workspace = true, features = ["gpu-video"] }
+smelter-api = { workspace = true, features = ["gpu-video"] }
 
 [[bin]]
 name = "process_helper"

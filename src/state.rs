@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use axum::response::IntoResponse;
 use smelter_core::{
     Pipeline, PipelineMoqServerOptions, PipelineOptions, PipelineRtmpServerOptions,
     PipelineWgpuOptions, PipelineWhipWhepServerOptions, error::InitPipelineError,
@@ -9,34 +8,9 @@ use smelter_core::{
 use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 
 use reqwest::StatusCode;
-use serde::Serialize;
 use tokio::runtime::Runtime;
-use utoipa::ToSchema;
 
 use crate::{config::Config, error::ApiError};
-
-#[derive(Serialize, Debug, ToSchema)]
-#[serde(untagged)]
-pub enum Response {
-    Ok {},
-    RegisteredPort {
-        port: Option<u16>,
-    },
-    RegisteredMp4 {
-        video_duration_ms: Option<u64>,
-        audio_duration_ms: Option<u64>,
-    },
-    RegisteredWhipInput {
-        bearer_token: Arc<str>,
-        endpoint_route: Arc<str>,
-    },
-}
-
-impl IntoResponse for Response {
-    fn into_response(self) -> axum::response::Response {
-        axum::Json(self).into_response()
-    }
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiStateInitError {

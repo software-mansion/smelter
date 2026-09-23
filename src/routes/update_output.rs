@@ -1,29 +1,15 @@
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use smelter_core::{LateEventPolicy, Pipeline, Timestamp};
 use smelter_render::error::ErrorStack;
 use tracing::error;
-use utoipa::ToSchema;
 
-use crate::{
-    error::ApiError,
-    state::{ApiState, Response},
-};
+use crate::{error::ApiError, state::ApiState};
 
-use smelter_api::{AudioScene, OutputId, VideoScene};
+use smelter_api::{OkResponse, OutputId, UpdateOutputRequest};
 
 use super::Json;
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct UpdateOutputRequest {
-    pub video: Option<VideoScene>,
-    pub audio: Option<AudioScene>,
-    pub schedule_time_ms: Option<f64>,
-}
 
 #[utoipa::path(
     post,
@@ -31,7 +17,7 @@ pub struct UpdateOutputRequest {
     operation_id = "update_output",
     params(("output_id" = str, Path, description = "Output ID.")),
     responses(
-        (status = 200, description = "Output updated successfully.", body = Response),
+        (status = 200, description = "Output updated successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -41,7 +27,7 @@ pub async fn handle_output_update(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<UpdateOutputRequest>,
-) -> Result<Response, ApiError> {
+) -> Result<Json<OkResponse>, ApiError> {
     let output_id = output_id.into();
     let scene = match request.video {
         Some(component) => Some(component.try_into()?),
@@ -73,7 +59,7 @@ pub async fn handle_output_update(
             .unwrap()
             .update_output(output_id, scene, audio)?,
     };
-    Ok(Response::Ok {})
+    Ok(Json(OkResponse {}))
 }
 
 #[utoipa::path(
@@ -82,7 +68,7 @@ pub async fn handle_output_update(
     operation_id = "request_keyframe",
     params(("output_id" = str, Path, description = "Output ID.")),
     responses(
-        (status = 200, description = "Keyframe request successful.", body = Response),
+        (status = 200, description = "Keyframe request successful.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -91,11 +77,11 @@ pub async fn handle_output_update(
 pub async fn handle_keyframe_request(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
-) -> Result<Response, ApiError> {
+) -> Result<Json<OkResponse>, ApiError> {
     api.pipeline()?
         .lock()
         .unwrap()
         .request_keyframe(output_id.into())?;
 
-    Ok(Response::Ok {})
+    Ok(Json(OkResponse {}))
 }

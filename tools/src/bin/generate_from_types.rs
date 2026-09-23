@@ -6,7 +6,6 @@ use schemars::{
     schema_for,
 };
 use serde::{Deserialize, Serialize};
-use smelter::routes;
 use utoipa::OpenApi;
 
 const ROOT_DIR: &str = env!("CARGO_MANIFEST_DIR");
@@ -24,13 +23,13 @@ fn main() {
 #[serde(untagged)]
 #[allow(dead_code)]
 enum ApiTypes {
-    RegisterInput(routes::register_request::RegisterInput),
-    RegisterOutput(Box<routes::register_request::RegisterOutput>),
+    RegisterInput(smelter_api::RegisterInput),
+    RegisterOutput(Box<smelter_api::RegisterOutput>),
     RegisterImage(smelter_api::ImageSpec),
     RegisterWebRenderer(smelter_api::WebRendererSpec),
     RegisterShader(smelter_api::ShaderSpec),
-    UpdateOutput(Box<routes::update_output::UpdateOutputRequest>),
-    UpdateInput(routes::update_input::UpdateInputRequest),
+    UpdateOutput(Box<smelter_api::UpdateOutputRequest>),
+    UpdateInput(smelter_api::UpdateInputRequest),
 
     StatsReport(smelter_core::stats::StatsReport),
 }
@@ -41,7 +40,7 @@ pub fn generate_json_schema(check_flag: bool) {
         false => (SchemaAction::Update, SchemaAction::Update),
     };
     generate_schema(
-        schema_for!(routes::update_output::UpdateOutputRequest),
+        schema_for!(smelter_api::UpdateOutputRequest),
         "./schemas/scene.schema.json",
         scene_schema_action,
     );

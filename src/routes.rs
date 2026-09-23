@@ -5,8 +5,10 @@ use axum::{
     extract::{FromRequest, Request, rejection::JsonRejection},
     http::StatusCode,
     middleware,
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
+use serde::Serialize;
 use serde_json::{Value, json};
 use tower_http::cors::CorsLayer;
 
@@ -81,6 +83,12 @@ pub fn routes(state: Arc<ApiState>) -> Router {
 /// Wrap axum::Json to return serialization errors as json
 pub struct Json<T>(pub T);
 
+impl<T: Serialize> IntoResponse for Json<T> {
+    fn into_response(self) -> Response {
+        axum::Json(self.0).into_response()
+    }
+}
+
 #[async_trait]
 impl<S, T> FromRequest<S> for Json<T>
 where
@@ -90,9 +98,6 @@ where
     type Rejection = (StatusCode, axum::Json<Value>);
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let (parts, body) = req.into_parts();
-        let req = Request::from_parts(parts, body);
-
         match axum::Json::<T>::from_request(req, state).await {
             Ok(value) => Ok(Self(value.0)),
             Err(rejection) => {
@@ -117,9 +122,6 @@ where
     type Rejection = (StatusCode, axum::Json<Value>);
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let (parts, body) = req.into_parts();
-        let req = Request::from_parts(parts, body);
-
         match axum::extract::Multipart::from_request(req, state).await {
             Ok(multipart) => Ok(Multipart(multipart)),
             Err(rejection) => {

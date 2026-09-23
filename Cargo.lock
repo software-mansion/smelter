@@ -6244,7 +6244,10 @@ name = "smelter-api"
 version = "0.6.0"
 dependencies = [
  "bytes",
+ "ffmpeg-next",
+ "gpu-video",
  "itertools 0.14.0",
+ "rtmp",
  "schemars 0.8.22",
  "serde",
  "serde_json",

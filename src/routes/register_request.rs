@@ -4,50 +4,19 @@ use axum::extract::{Path, State};
 use glyphon::fontdb::Source;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use smelter_core::{InputInitInfo, Pipeline, RegisterOutputOptions, protocols::Port};
+use smelter_core::Pipeline;
 use utoipa::ToSchema;
 
 use crate::{
     error::ApiError,
     routes::{Json, Multipart},
-    state::Response,
 };
 use smelter_api::{
-    DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, MoqClientInput, MoqClientOutput,
-    MoqServerInput, Mp4Input, Mp4Output, OutputId, RendererId, RtmpInput, RtmpOutput, RtpInput,
-    RtpOutput, ShaderSpec, V4l2Input, WebRendererSpec, WhepInput, WhepOutput, WhipInput,
-    WhipOutput,
+    ImageSpec, InputId, OkResponse, OutputId, RegisterInput, RegisterInputResponse, RegisterOutput,
+    RegisterOutputResponse, RendererId, ShaderSpec, WebRendererSpec,
 };
 
 use super::ApiState;
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum RegisterInput {
-    RtpStream(RtpInput),
-    RtmpServer(RtmpInput),
-    MoqServer(MoqServerInput),
-    MoqClient(MoqClientInput),
-    Mp4(Mp4Input),
-    WhipServer(WhipInput),
-    WhepClient(WhepInput),
-    Hls(HlsInput),
-    V4l2(V4l2Input),
-    #[serde(rename = "decklink")]
-    DeckLink(DeckLink),
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum RegisterOutput {
-    RtpStream(RtpOutput),
-    RtmpClient(RtmpOutput),
-    MoqClient(MoqClientOutput),
-    Mp4(Mp4Output),
-    WhipClient(WhipOutput),
-    WhepServer(WhepOutput),
-    Hls(HlsOutput),
-}
 
 #[utoipa::path(
     post,
@@ -55,7 +24,7 @@ pub enum RegisterOutput {
     operation_id = "register_input",
     params(("input_id" = str, Path, description = "Input ID.")),
     responses(
-        (status = 200, description = "Input registered successfully.", body = Response),
+        (status = 200, description = "Input registered successfully.", body = RegisterInputResponse),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -65,61 +34,11 @@ pub async fn handle_input(
     State(api): State<Arc<ApiState>>,
     Path(input_id): Path<InputId>,
     Json(request): Json<RegisterInput>,
-) -> Result<Response, ApiError> {
-    let api = api.clone();
+) -> Result<Json<RegisterInputResponse>, ApiError> {
     tokio::task::spawn_blocking(move || {
-        let response = match request {
-            RegisterInput::RtpStream(rtp) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), rtp.try_into()?)?
-            }
-            RegisterInput::RtmpServer(rtmp) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), rtmp.try_into()?)?
-            }
-            RegisterInput::MoqServer(moq_server) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), moq_server.try_into()?)?
-            }
-            RegisterInput::MoqClient(moq_client) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), moq_client.try_into()?)?
-            }
-            RegisterInput::Mp4(mp4) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), mp4.try_into()?)?
-            }
-            RegisterInput::DeckLink(decklink) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), decklink.try_into()?)?
-            }
-            RegisterInput::WhipServer(whip) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), whip.try_into()?)?
-            }
-            RegisterInput::WhepClient(whep) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), whep.try_into()?)?
-            }
-            RegisterInput::Hls(hls) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), hls.try_into()?)?
-            }
-            RegisterInput::V4l2(v4l2) => {
-                Pipeline::register_input(&api.pipeline()?, input_id.into(), v4l2.try_into()?)?
-            }
-        };
-        match response {
-            InputInitInfo::Rtp { port } => Ok(Response::RegisteredPort {
-                port: port.map(|p| p.0),
-            }),
-            InputInitInfo::Mp4 {
-                video_duration,
-                audio_duration,
-            } => Ok(Response::RegisteredMp4 {
-                video_duration_ms: video_duration.map(|v| v.as_millis() as u64),
-                audio_duration_ms: audio_duration.map(|a| a.as_millis() as u64),
-            }),
-            InputInitInfo::Whip {
-                bearer_token,
-                endpoint_route,
-            } => Ok(Response::RegisteredWhipInput {
-                bearer_token,
-                endpoint_route,
-            }),
-            InputInitInfo::Other => Ok(Response::Ok {}),
-        }
+        let info =
+            Pipeline::register_input(&api.pipeline()?, input_id.into(), request.try_into()?)?;
+        Ok(Json(info.into()))
     })
     .await
     // `unwrap()` panics only when the task panicked or `response.abort()` was called
@@ -132,7 +51,7 @@ pub async fn handle_input(
     operation_id = "register_output",
     params(("output_id" = str, Path, description = "Output ID.")),
     responses(
-        (status = 200, description = "Output registered successfully.", body = Response),
+        (status = 200, description = "Output registered successfully.", body = RegisterOutputResponse),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -142,24 +61,11 @@ pub async fn handle_output(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<RegisterOutput>,
-) -> Result<Response, ApiError> {
-    let api = api.clone();
+) -> Result<Json<RegisterOutputResponse>, ApiError> {
     tokio::task::spawn_blocking(move || {
-        let options: RegisterOutputOptions = match request {
-            RegisterOutput::RtpStream(rtp) => rtp.try_into()?,
-            RegisterOutput::Mp4(mp4) => mp4.try_into()?,
-            RegisterOutput::WhipClient(whip) => whip.try_into()?,
-            RegisterOutput::WhepServer(whep) => whep.try_into()?,
-            RegisterOutput::RtmpClient(rtmp) => rtmp.try_into()?,
-            RegisterOutput::Hls(hls) => hls.try_into()?,
-            RegisterOutput::MoqClient(moq_client) => moq_client.try_into()?,
-        };
-
-        let response = Pipeline::register_output(&api.pipeline()?, output_id.into(), options)?;
-        match response {
-            Some(Port(port)) => Ok(Response::RegisteredPort { port: Some(port) }),
-            None => Ok(Response::Ok {}),
-        }
+        let port =
+            Pipeline::register_output(&api.pipeline()?, output_id.into(), request.try_into()?)?;
+        Ok(Json(port.into()))
     })
     .await
     .unwrap()
@@ -171,7 +77,7 @@ pub async fn handle_output(
     operation_id = "register_shader",
     params(("shader_id" = str, Path, description = "Shader ID.")),
     responses(
-        (status = 200, description = "Shader registered successfully.", body = Response),
+        (status = 200, description = "Shader registered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -181,11 +87,10 @@ pub async fn handle_shader(
     State(api): State<Arc<ApiState>>,
     Path(shader_id): Path<RendererId>,
     Json(request): Json<ShaderSpec>,
-) -> Result<Response, ApiError> {
-    let api = api.clone();
+) -> Result<Json<OkResponse>, ApiError> {
     tokio::task::spawn_blocking(move || {
         Pipeline::register_renderer(&api.pipeline()?, shader_id.into(), request.try_into()?)?;
-        Ok(Response::Ok {})
+        Ok(Json(OkResponse {}))
     })
     .await
     .unwrap()
@@ -197,7 +102,7 @@ pub async fn handle_shader(
     operation_id = "register_web_renderer",
     params(("instance_id" = str, Path, description = "Web renderer instance ID.")),
     responses(
-        (status = 200, description = "Web renderer registered successfully.", body = Response),
+        (status = 200, description = "Web renderer registered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -207,11 +112,10 @@ pub async fn handle_web_renderer(
     State(api): State<Arc<ApiState>>,
     Path(instance_id): Path<RendererId>,
     Json(request): Json<WebRendererSpec>,
-) -> Result<Response, ApiError> {
-    let api = api.clone();
+) -> Result<Json<OkResponse>, ApiError> {
     tokio::task::spawn_blocking(move || {
         Pipeline::register_renderer(&api.pipeline()?, instance_id.into(), request.try_into()?)?;
-        Ok(Response::Ok {})
+        Ok(Json(OkResponse {}))
     })
     .await
     .unwrap()
@@ -223,7 +127,7 @@ pub async fn handle_web_renderer(
     operation_id = "register_image",
     params(("image_id" = str, Path, description = "Image ID.")),
     responses(
-        (status = 200, description = "Image registered successfully.", body = Response),
+        (status = 200, description = "Image registered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -233,11 +137,10 @@ pub async fn handle_image(
     State(api): State<Arc<ApiState>>,
     Path(image_id): Path<RendererId>,
     Json(request): Json<ImageSpec>,
-) -> Result<Response, ApiError> {
-    let api = api.clone();
+) -> Result<Json<OkResponse>, ApiError> {
     tokio::task::spawn_blocking(move || {
         Pipeline::register_renderer(&api.pipeline()?, image_id.into(), request.try_into()?)?;
-        Ok(Response::Ok {})
+        Ok(Json(OkResponse {}))
     })
     .await
     .unwrap()
@@ -256,7 +159,7 @@ pub struct RegisterFontRequest {
     operation_id = "register_font",
     request_body(content = RegisterFontRequest, content_type = "multipart/form-data"),
     responses(
-        (status = 200, description = "Font registered successfully.", body = Response),
+        (status = 200, description = "Font registered successfully.", body = OkResponse),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
@@ -265,7 +168,7 @@ pub struct RegisterFontRequest {
 pub async fn handle_font(
     State(api): State<Arc<ApiState>>,
     Multipart(mut multipart): Multipart,
-) -> Result<Response, ApiError> {
+) -> Result<Json<OkResponse>, ApiError> {
     let Some(field) = multipart
         .next_field()
         .await
@@ -286,7 +189,7 @@ pub async fn handle_font(
             .lock()
             .unwrap()
             .register_font(binary_font_source);
-        Ok(Response::Ok {})
+        Ok(Json(OkResponse {}))
     })
     .await
     .unwrap()

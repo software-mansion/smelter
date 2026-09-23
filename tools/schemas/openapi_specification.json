@@ -21,7 +21,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -51,7 +51,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -102,7 +102,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/RegisterInputResponse"
                 }
               }
             }
@@ -163,7 +163,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/RegisterOutputResponse"
                 }
               }
             }
@@ -224,7 +224,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -285,7 +285,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -346,7 +346,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -396,7 +396,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -445,7 +445,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterInput"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -457,7 +457,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -516,7 +516,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterOutput"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -528,7 +528,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -587,7 +587,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterRenderer"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -599,7 +599,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -658,7 +658,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterRenderer"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -670,7 +670,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -729,7 +729,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterRenderer"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -741,7 +741,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -812,7 +812,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -883,7 +883,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -934,7 +934,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -3651,6 +3651,10 @@
           }
         ]
       },
+      "OkResponse": {
+        "type": "object",
+        "description": "Response for requests that do not return any data."
+      },
       "OpusEncoderPreset": {
         "type": "string",
         "enum": [
@@ -4730,6 +4734,62 @@
           }
         ]
       },
+      "RegisterInputResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "port": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "video_duration_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "audio_duration_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "bearer_token",
+              "endpoint_route"
+            ],
+            "properties": {
+              "bearer_token": {
+                "type": "string"
+              },
+              "endpoint_route": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object"
+          }
+        ]
+      },
       "RegisterOutput": {
         "oneOf": [
           {
@@ -4880,6 +4940,20 @@
             ]
           }
         ]
+      },
+      "RegisterOutputResponse": {
+        "type": "object",
+        "properties": {
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Port allocated for the output. Only returned for RTP outputs.",
+            "minimum": 0
+          }
+        }
       },
       "RendererId": {
         "type": "string"
@@ -5070,62 +5144,6 @@
             "minimum": 0
           }
         }
-      },
-      "Response": {
-        "oneOf": [
-          {
-            "type": "object"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "port": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "int32",
-                "minimum": 0
-              }
-            }
-          },
-          {
-            "type": "object",
-            "properties": {
-              "video_duration_ms": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "int64",
-                "minimum": 0
-              },
-              "audio_duration_ms": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "int64",
-                "minimum": 0
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "bearer_token",
-              "endpoint_route"
-            ],
-            "properties": {
-              "bearer_token": {
-                "type": "string"
-              },
-              "endpoint_route": {
-                "type": "string"
-              }
-            }
-          }
-        ]
       },
       "RtmpClientAudioEncoderOptions": {
         "oneOf": [
@@ -6775,34 +6793,9 @@
           "tcp_server"
         ]
       },
-      "UnregisterInput": {
+      "UnregisterRequest": {
         "type": "object",
-        "properties": {
-          "schedule_time_ms": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request."
-          }
-        }
-      },
-      "UnregisterOutput": {
-        "type": "object",
-        "properties": {
-          "schedule_time_ms": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request."
-          }
-        }
-      },
-      "UnregisterRenderer": {
-        "type": "object",
+        "description": "Request body shared by all unregister routes.",
         "properties": {
           "schedule_time_ms": {
             "type": [
