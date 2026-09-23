@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    Timestamp,
+    Timestamp, TimestampOffset,
     pipeline::utils::input_sync::TrackKind,
     stats::{
         input_reports::{
@@ -61,7 +61,7 @@ pub(crate) struct LiveSyncTrackStateSnapshot {
     pub buffer: LiveSyncBufferStats,
     /// Signed distance between the current and the target anchor; positive
     /// when the buffer is being shrunk.
-    pub target_offset_distance: Timestamp,
+    pub target_offset_distance: TimestampOffset,
     /// How far the playback position is behind the pessimistic live edge estimate
     /// bounds; `None` before the track starts.
     pub live_edge_lower_bound_distance: Option<Timestamp>,
@@ -304,7 +304,7 @@ impl InnerInputSyncTrackState {
                             buffer: LiveSyncBufferStats::Fifo {
                                 duration: Timestamp::ZERO,
                             },
-                            target_offset_distance: Timestamp::ZERO,
+                            target_offset_distance: TimestampOffset::ZERO,
                             live_edge_lower_bound_distance: None,
                             live_edge_upper_bound_distance: None,
                             live_edge_recent_upper_bound_distance: None,

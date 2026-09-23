@@ -6,7 +6,7 @@ use super::{
     mode::{IndependentMode, Mode, SecondaryTrackOffset, SharedMode, SlewingAnchor},
     state::SharedState,
 };
-use crate::{InstantExt, pipeline::utils::input_sync::TrackKind};
+use crate::{InstantExt, Timestamp, pipeline::utils::input_sync::TrackKind};
 
 /// Mode after a waiting track of `kind` starts; `None` while it should keep waiting.
 pub(super) fn start_track_decision<B: LiveSyncBuffer>(
@@ -99,12 +99,15 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
             let video_estimation = video_estimation?;
             let old_video_anchor = mode.anchor(TrackKind::Video)?;
 
-            let video_offset = track_estimation.upper_bound.pts - video_estimation.upper_bound.pts;
+            let video_offset = Timestamp::offset(
+                video_estimation.upper_bound.pts,
+                track_estimation.upper_bound.pts,
+            );
 
             // Calculate audio anchor that will produce old video anchor when shifted
             // by the offset, so video does not move; the buffer is sized by audio's own
             // estimate from now on.
-            let current = old_video_anchor.offset_by(-video_offset);
+            let current = old_video_anchor - video_offset;
             let target = strategy.desired_anchor(&track_estimation, now_pts);
 
             IndependentMode {
@@ -137,7 +140,10 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
             // Always some, because we know that audio already started
             let audio_estimation = audio_estimation?;
 
-            let video_offset = audio_estimation.upper_bound.pts - track_estimation.upper_bound.pts;
+            let video_offset = Timestamp::offset(
+                track_estimation.upper_bound.pts,
+                audio_estimation.upper_bound.pts,
+            );
 
             IndependentMode {
                 leader_kind: TrackKind::Audio,

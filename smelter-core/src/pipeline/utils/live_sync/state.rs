@@ -13,8 +13,7 @@ use super::{
     track::LiveSyncDeadline,
 };
 use crate::pipeline::utils::input_sync::{
-    BoxedTrackSink, InputSyncItem, InputSyncStatsSender, TimestampAnchor, TrackClosedError,
-    TrackEvent, TrackKind,
+    BoxedTrackSink, InputSyncItem, InputSyncStatsSender, TrackClosedError, TrackEvent, TrackKind,
 };
 
 use crate::prelude::*;
@@ -233,7 +232,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         };
         debug!(
             ?kind,
-            offset = ?anchor.as_offset(),
+            ?anchor,
             buffer = ?track.buffer.stats(),
             ?mode,
             "Live sync: track started"
@@ -258,7 +257,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         };
         debug!(
             ?kind,
-            offset = ?flush_anchor.map(|anchor| anchor.as_offset()),
+            ?flush_anchor,
             buffer = ?track.buffer.stats(),
             "Live sync: resetting track"
         );
@@ -480,7 +479,7 @@ pub(super) struct Track<B: LiveSyncBuffer> {
 impl<B: LiveSyncBuffer> Track<B> {
     /// Pushes a chunk out, with its timestamps mapped onto the output
     /// timeline by `anchor`.
-    fn release_chunk(&mut self, mut chunk: B::Chunk, anchor: TimestampAnchor) {
+    fn release_chunk(&mut self, mut chunk: B::Chunk, anchor: TimestampOffset) {
         let input_pts = chunk.pts();
         chunk.apply_anchor(anchor);
         let output_pts = chunk.pts();
@@ -506,7 +505,7 @@ impl<B: LiveSyncBuffer> Track<B> {
         mode: Option<Mode>,
         strategy: BufferingStrategy,
         now: Instant,
-    ) -> Option<TimestampAnchor> {
+    ) -> Option<TimestampOffset> {
         if let Some(anchor) = mode.and_then(|mode| mode.anchor(self.kind)) {
             return Some(anchor);
         }
@@ -516,18 +515,15 @@ impl<B: LiveSyncBuffer> Track<B> {
         if let Some(last_pts) = self.last_released_pts
             && last_pts > now_pts + MIN_QUEUE_HEADROOM
         {
-            return Some(TimestampAnchor {
-                input_pts: self.buffer.peek_next_pts()?,
-                output_pts: last_pts,
-            });
+            return Some(Timestamp::offset(self.buffer.peek_next_pts()?, last_pts));
         }
 
         // otherwise like a fresh start: last observed chunk at the desired buffer
         let (last_written_pts, _) = self.last_written?;
-        Some(TimestampAnchor {
-            input_pts: last_written_pts,
-            output_pts: now_pts + strategy.desired_buffer(),
-        })
+        Some(Timestamp::offset(
+            last_written_pts,
+            now_pts + strategy.desired_buffer(),
+        ))
     }
 
     /// Track stalled long enough that it has to earn its start again: it ran out of released

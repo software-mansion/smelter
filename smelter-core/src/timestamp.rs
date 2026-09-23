@@ -4,6 +4,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use tracing::trace;
+
 const NANOS_PER_SEC: i64 = 1_000_000_000;
 const NANOS_PER_MILLI: i64 = 1_000_000;
 const NANOS_PER_MICRO: i64 = 1_000;
@@ -175,6 +177,12 @@ impl Timestamp {
     pub fn clamp(value: Timestamp, min: Timestamp, max: Timestamp) -> Timestamp {
         Ord::clamp(value, min, max)
     }
+
+    /// Offset that presents content at `input_pts` at `output_pts`; every other timestamp
+    /// keeps its distance to that pair.
+    pub(crate) fn offset(input_pts: Timestamp, output_pts: Timestamp) -> TimestampOffset {
+        TimestampOffset(output_pts - input_pts)
+    }
 }
 
 impl From<Duration> for Timestamp {
@@ -240,7 +248,8 @@ impl fmt::Debug for Timestamp {
     }
 }
 
-impl Add for Timestamp {
+/// Timestamp + Timestamp -> Timestamp
+impl Add<Timestamp> for Timestamp {
     type Output = Timestamp;
 
     fn add(self, rhs: Timestamp) -> Timestamp {
@@ -250,6 +259,7 @@ impl Add for Timestamp {
     }
 }
 
+/// Timestamp + Duration -> Timestamp
 impl Add<Duration> for Timestamp {
     type Output = Timestamp;
 
@@ -258,7 +268,8 @@ impl Add<Duration> for Timestamp {
     }
 }
 
-impl Sub for Timestamp {
+/// Timestamp - Timestamp -> Timestamp
+impl Sub<Timestamp> for Timestamp {
     type Output = Timestamp;
 
     fn sub(self, rhs: Timestamp) -> Timestamp {
@@ -268,6 +279,7 @@ impl Sub for Timestamp {
     }
 }
 
+/// Timestamp - Duration -> Timestamp
 impl Sub<Duration> for Timestamp {
     type Output = Timestamp;
 
@@ -276,30 +288,35 @@ impl Sub<Duration> for Timestamp {
     }
 }
 
-impl AddAssign for Timestamp {
+/// Timestamp += Timestamp
+impl AddAssign<Timestamp> for Timestamp {
     fn add_assign(&mut self, rhs: Timestamp) {
         *self = *self + rhs;
     }
 }
 
+/// Timestamp += Duration
 impl AddAssign<Duration> for Timestamp {
     fn add_assign(&mut self, rhs: Duration) {
         *self = *self + rhs;
     }
 }
 
-impl SubAssign for Timestamp {
+/// Timestamp -= Timestamp
+impl SubAssign<Timestamp> for Timestamp {
     fn sub_assign(&mut self, rhs: Timestamp) {
         *self = *self - rhs;
     }
 }
 
+/// Timestamp -= Duration
 impl SubAssign<Duration> for Timestamp {
     fn sub_assign(&mut self, rhs: Duration) {
         *self = *self - rhs;
     }
 }
 
+/// -Timestamp -> Timestamp
 impl Neg for Timestamp {
     type Output = Timestamp;
 
@@ -308,6 +325,7 @@ impl Neg for Timestamp {
     }
 }
 
+/// Timestamp * impl Into<i64> -> Timestamp
 impl<T: Into<i64>> Mul<T> for Timestamp {
     type Output = Timestamp;
 
@@ -318,6 +336,7 @@ impl<T: Into<i64>> Mul<T> for Timestamp {
     }
 }
 
+/// Timestamp / i64 -> Timestamp
 impl Div<i64> for Timestamp {
     type Output = Timestamp;
 
@@ -328,6 +347,7 @@ impl Div<i64> for Timestamp {
     }
 }
 
+/// Timestamp / u32 -> Timestamp
 impl Div<u32> for Timestamp {
     type Output = Timestamp;
 
@@ -336,6 +356,7 @@ impl Div<u32> for Timestamp {
     }
 }
 
+/// Instant + Timestamp -> Instant
 impl Add<Timestamp> for Instant {
     type Output = Instant;
 
@@ -348,6 +369,7 @@ impl Add<Timestamp> for Instant {
     }
 }
 
+/// Instant - Timestamp -> Instant
 impl Sub<Timestamp> for Instant {
     type Output = Instant;
 
@@ -356,9 +378,99 @@ impl Sub<Timestamp> for Instant {
     }
 }
 
+/// Iterator<Item = Timestamp>::sum() -> Timestamp
 impl std::iter::Sum for Timestamp {
     fn sum<I: Iterator<Item = Timestamp>>(iter: I) -> Timestamp {
         iter.fold(Timestamp::ZERO, Add::add)
+    }
+}
+
+/// Mapping between two timelines: the offset that, added to a pts on the source timeline, gives
+/// the pts on the destination timeline it is presented at. Usually a track's input and output
+/// timelines.
+///
+/// Ordered by how late the same input pts is presented: `a > b` when `a` holds content back for
+/// longer than `b`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct TimestampOffset(Timestamp);
+
+impl TimestampOffset {
+    pub(crate) const ZERO: TimestampOffset = TimestampOffset(Timestamp::ZERO);
+
+    pub(crate) fn abs_duration(self) -> Duration {
+        self.0.abs_duration()
+    }
+
+    pub(crate) fn as_secs_f64(self) -> f64 {
+        self.0.as_secs_f64()
+    }
+
+    /// Maps a raw timestamp (pts or dts) onto the output timeline.
+    pub(crate) fn to_output_pts(self, pts: Timestamp) -> Timestamp {
+        pts + self.0
+    }
+
+    /// Input pts presented at `output_pts`.
+    pub(crate) fn to_input_pts(self, output_pts: Timestamp) -> Timestamp {
+        output_pts - self.0
+    }
+
+    /// Moves the mapping at most `step` toward `target`, i.e. toward
+    /// presenting the same input pts at the same output pts. A no-op once both
+    /// describe the same mapping.
+    pub(crate) fn nudge_toward(&mut self, target: TimestampOffset, max_step: Timestamp) {
+        let offset_to_target = target.0 - self.0;
+        if offset_to_target == Timestamp::ZERO {
+            return;
+        }
+        let change = Timestamp::clamp(offset_to_target, -max_step, max_step);
+        self.0 += change;
+        trace!(?change, anchor=?self.0, "Nudging anchor toward target");
+    }
+}
+
+/// TimestampOffset + Timestamp -> TimestampOffset
+impl Add<Timestamp> for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn add(self, rhs: Timestamp) -> Self::Output {
+        TimestampOffset(self.0 + rhs)
+    }
+}
+
+/// TimestampOffset + Duration -> TimestampOffset
+impl Add<Duration> for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn add(self, rhs: Duration) -> Self::Output {
+        TimestampOffset(self.0 + rhs)
+    }
+}
+
+/// TimestampOffset - Timestamp -> TimestampOffset
+impl Sub<Timestamp> for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn sub(self, rhs: Timestamp) -> Self::Output {
+        TimestampOffset(self.0 - rhs)
+    }
+}
+
+/// TimestampOffset + TimestampOffset -> TimestampOffset
+impl Add<TimestampOffset> for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn add(self, rhs: TimestampOffset) -> Self::Output {
+        TimestampOffset(self.0 + rhs.0)
+    }
+}
+
+/// TimestampOffset - TimestampOffset -> TimestampOffset
+impl Sub<TimestampOffset> for TimestampOffset {
+    type Output = TimestampOffset;
+
+    fn sub(self, rhs: TimestampOffset) -> Self::Output {
+        TimestampOffset(self.0 - rhs.0)
     }
 }
 

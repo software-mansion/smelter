@@ -23,7 +23,7 @@ use crate::{
             channel::TrySendError,
             input_sync::{
                 InputSync, InputSyncItem, InputSyncStatsSender, InputSyncTrack, SimpleSync,
-                TimestampAnchor, TrackEvent, TrackKind, TrackSink,
+                TrackEvent, TrackKind, TrackSink,
             },
             live_sync::{BufferingStrategy, FifoBuffer, LiveSync, LiveSyncOptions},
         },
@@ -341,7 +341,7 @@ struct HlsPacket {
     time_base: Rational,
     /// Mapping onto the output timeline; identity until the track applies its
     /// own on read.
-    anchor: TimestampAnchor,
+    anchor: TimestampOffset,
     /// The packet has to be decoded, but the decoded content must not be
     /// presented (see [`InputSyncItem::mark_decode_only`]).
     decode_only: bool,
@@ -352,10 +352,7 @@ impl HlsPacket {
         Self {
             packet,
             time_base,
-            anchor: TimestampAnchor {
-                input_pts: Timestamp::ZERO,
-                output_pts: Timestamp::ZERO,
-            },
+            anchor: TimestampOffset::ZERO,
             decode_only: false,
         }
     }
@@ -393,7 +390,7 @@ impl InputSyncItem for HlsPacket {
         self.packet.size()
     }
 
-    fn apply_anchor(&mut self, anchor: TimestampAnchor) {
+    fn apply_anchor(&mut self, anchor: TimestampOffset) {
         self.anchor = anchor;
     }
 

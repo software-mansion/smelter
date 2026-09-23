@@ -21,11 +21,9 @@ use crate::{
     stats::{InputStatsEvent, InputSyncTrackStatsEvent, StatsEvent, StatsSender},
 };
 
-mod anchor;
 mod item;
 mod simple_sync;
 
-pub(crate) use anchor::TimestampAnchor;
 pub(crate) use item::InputSyncItem;
 pub(crate) use simple_sync::{SimpleSync, SimpleSyncTrack};
 

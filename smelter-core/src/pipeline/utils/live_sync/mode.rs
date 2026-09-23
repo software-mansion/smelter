@@ -1,10 +1,7 @@
 use std::{fmt, time::Duration};
 
 use super::buffer::BufferingStrategy;
-use crate::{
-    Timestamp,
-    pipeline::utils::input_sync::{TimestampAnchor, TrackKind},
-};
+use crate::{Timestamp, TimestampOffset, pipeline::utils::input_sync::TrackKind};
 
 /// Anchors the started tracks apply; a track without an anchor holds its chunks back.
 /// Corrections move `target`; `current` slews toward it in small steps as chunks are read.
@@ -41,16 +38,16 @@ pub(super) struct IndependentMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct SlewingAnchor {
     /// Applied to every chunk read right now.
-    pub current: TimestampAnchor,
+    pub current: TimestampOffset,
     /// What the corrections aim for.
-    pub target: TimestampAnchor,
+    pub target: TimestampOffset,
     /// Largest input pts released so far with this anchor; sizes the slew steps.
     pub last_released_pts: Option<Timestamp>,
 }
 
 impl SlewingAnchor {
     /// Anchor that is not slewing.
-    pub fn new(anchor: TimestampAnchor) -> Self {
+    pub fn new(anchor: TimestampOffset) -> Self {
         Self {
             current: anchor,
             target: anchor,
@@ -71,23 +68,23 @@ impl SlewingAnchor {
     }
 }
 
-/// Offset added to a secondary track pts to get the leader pts presented at the same time once
-/// the leader reaches its target. Corrections move `target`; `current` slews toward it as
-/// secondary chunks are read, faster than the leader's anchor since the secondary track is always
-/// video, where a slew costs dropped or repeated frames and no pitch change.
+/// Maps a secondary track pts to the leader pts presented at the same time once the leader
+/// reaches its target. Corrections move `target`; `current` slews toward it as secondary chunks
+/// are read, faster than the leader's anchor since the secondary track is always video, where a
+/// slew costs dropped or repeated frames and no pitch change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct SecondaryTrackOffset {
-    pub current: Timestamp,
+    pub current: TimestampOffset,
     /// Includes what the leader still has to slew, so reaching it puts the secondary track on
     /// its final anchor even while the leader is still on its way.
-    pub target: Timestamp,
+    pub target: TimestampOffset,
     /// Largest input pts of the secondary track released so far; sizes the slew steps.
     pub last_released_pts: Option<Timestamp>,
 }
 
 impl SecondaryTrackOffset {
     /// Offset that is not slewing.
-    pub fn new(offset: Timestamp) -> Self {
+    pub fn new(offset: TimestampOffset) -> Self {
         Self {
             current: offset,
             target: offset,
@@ -97,7 +94,7 @@ impl SecondaryTrackOffset {
 }
 
 impl SharedMode {
-    pub fn from_anchor(anchor: TimestampAnchor) -> Self {
+    pub fn from_anchor(anchor: TimestampOffset) -> Self {
         Self {
             anchor: SlewingAnchor::new(anchor),
             audio_started: false,
@@ -130,23 +127,23 @@ impl SharedMode {
 impl IndependentMode {
     /// Anchor a track of `kind` applies right now; the secondary track's is the leader's applied
     /// after the offset.
-    pub fn anchor(&self, kind: TrackKind) -> Option<TimestampAnchor> {
+    pub fn anchor(&self, kind: TrackKind) -> Option<TimestampOffset> {
         let leader = self.leader_anchor.current;
         match self.leader_kind == kind {
             true => Some(leader),
-            false => Some(leader.offset_by(self.secondary_track_offset?.current)),
+            false => Some(leader + self.secondary_track_offset?.current),
         }
     }
 
     /// Anchor the track of `kind` is slewing toward. The secondary track's is the leader's
     /// current anchor applied after the target offset, since that offset already accounts for
     /// what the leader still has to slew.
-    pub fn target(&self, kind: TrackKind) -> Option<TimestampAnchor> {
+    pub fn target(&self, kind: TrackKind) -> Option<TimestampOffset> {
         match self.leader_kind == kind {
             true => Some(self.leader_anchor.target),
             false => {
                 let offset = self.secondary_track_offset?.target;
-                Some(self.leader_anchor.current.offset_by(offset))
+                Some(self.leader_anchor.current + offset)
             }
         }
     }
@@ -154,7 +151,7 @@ impl IndependentMode {
 
 impl Mode {
     /// Anchor a track of `kind` applies right now; `None` while the track has not started.
-    pub fn anchor(&self, kind: TrackKind) -> Option<TimestampAnchor> {
+    pub fn anchor(&self, kind: TrackKind) -> Option<TimestampOffset> {
         match self {
             Mode::Shared(shared) => shared.is_started(kind).then_some(shared.anchor.current),
             Mode::Independent(independent) => independent.anchor(kind),
@@ -162,7 +159,7 @@ impl Mode {
     }
 
     /// Anchor the track of `kind` is slewing toward; `None` while the track has not started.
-    pub fn target(&self, kind: TrackKind) -> Option<TimestampAnchor> {
+    pub fn target(&self, kind: TrackKind) -> Option<TimestampOffset> {
         match self {
             Mode::Shared(shared) => shared.is_started(kind).then_some(shared.anchor.target),
             Mode::Independent(independent) => independent.target(kind),
@@ -196,8 +193,7 @@ impl Mode {
                 offset.last_released_pts = Some(Timestamp::max(last_pts, pts));
 
                 let max_step = Timestamp::max(Timestamp::ZERO, pts - last_pts).mul_f64(SLEW_RATE);
-                let distance = offset.target - offset.current;
-                offset.current += Timestamp::clamp(distance, -max_step, max_step);
+                offset.current.nudge_toward(offset.target, max_step);
             }
         }
     }
@@ -238,11 +234,10 @@ impl Mode {
         if old == new {
             return None;
         }
-        let anchor_change = |old: TimestampAnchor, new: TimestampAnchor| {
-            let change = new.as_offset() - old.as_offset();
-            (change != Timestamp::ZERO).then_some(change)
+        let anchor_change = |old: TimestampOffset, new: TimestampOffset| {
+            let change = new - old;
+            (change != TimestampOffset::ZERO).then_some(change)
         };
-        let offset_change = |old: Timestamp, new: Timestamp| (old != new).then(|| new - old);
 
         Some(match (old, new) {
             (Some(Mode::Shared(old)), Some(Mode::Shared(new)))
@@ -262,8 +257,8 @@ impl Mode {
                     new_mode.secondary_track_offset,
                 ) {
                     (Some(old), Some(new)) => (
-                        offset_change(old.target, new.target),
-                        offset_change(old.current, new.current),
+                        anchor_change(old.target, new.target),
+                        anchor_change(old.current, new.current),
                     ),
                     (None, None) => (None, None),
                     _ => return Some(ModeChange::Mode(new)),
@@ -291,15 +286,15 @@ pub(super) enum ModeChange {
     Mode(Option<Mode>),
     /// Same mode, the shared anchor moved.
     Shared {
-        target_change: Option<Timestamp>,
-        current_change: Option<Timestamp>,
+        target_change: Option<TimestampOffset>,
+        current_change: Option<TimestampOffset>,
     },
     /// Same mode; the leader's anchor and/or the secondary track offset moved.
     Independent {
-        target_change: Option<Timestamp>,
-        current_change: Option<Timestamp>,
-        offset_target_change: Option<Timestamp>,
-        offset_current_change: Option<Timestamp>,
+        target_change: Option<TimestampOffset>,
+        current_change: Option<TimestampOffset>,
+        offset_target_change: Option<TimestampOffset>,
+        offset_current_change: Option<TimestampOffset>,
     },
 }
 
@@ -315,7 +310,7 @@ impl ModeChange {
                 current_change: None,
                 offset_current_change: None,
                 offset_target_change: Some(change),
-            } if change.abs() < Timestamp::from(MINOR_CHANGE)
+            } if change.abs_duration() < MINOR_CHANGE
         )
     }
 }

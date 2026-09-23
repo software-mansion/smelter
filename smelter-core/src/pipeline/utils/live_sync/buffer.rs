@@ -2,8 +2,7 @@ use std::collections::VecDeque;
 use std::time::Duration;
 
 use crate::{
-    pipeline::utils::input_sync::{InputSyncItem, TimestampAnchor},
-    stats::LiveSyncBufferStats,
+    pipeline::utils::input_sync::InputSyncItem, stats::LiveSyncBufferStats,
     utils::live_sync::edge_estimator::EdgeEstimate,
 };
 
@@ -32,8 +31,8 @@ impl BufferingStrategy {
 
     pub fn max_shift(
         &self,
-        current: TimestampAnchor,
-        target: TimestampAnchor,
+        current: TimestampOffset,
+        target: TimestampOffset,
         input_step: Timestamp,
     ) -> Timestamp {
         if current == target {
@@ -41,9 +40,9 @@ impl BufferingStrategy {
         }
 
         let desired = self.desired_buffer();
-        let ratio = current.distance_to(target).as_secs_f64() / desired.as_secs_f64();
+        let ratio = (current - target).abs_duration().as_secs_f64() / desired.as_secs_f64();
 
-        if current.presents_later_than(target) {
+        if current > target {
             // shrinking buffer
 
             // min 1% shrink
@@ -67,13 +66,13 @@ impl BufferingStrategy {
         &self,
         estimation: &EdgeEstimate,
         now_pts: Timestamp,
-    ) -> TimestampAnchor {
+    ) -> TimestampOffset {
         let BufferingStrategy::Range { min, desired, .. } = *self;
         let spread = estimation.spread();
-        TimestampAnchor {
-            input_pts: estimation.upper_bound.pts,
-            output_pts: Timestamp::max(now_pts + desired, now_pts + spread + min),
-        }
+        Timestamp::offset(
+            estimation.upper_bound.pts,
+            Timestamp::max(now_pts + desired, now_pts + spread + min),
+        )
     }
 
     /// Whether the buffer `anchor` produces is within the range this strategy allows;
@@ -84,7 +83,7 @@ impl BufferingStrategy {
     pub(super) fn buffer_in_range(
         &self,
         estimation: &EdgeEstimate,
-        anchor: TimestampAnchor,
+        anchor: TimestampOffset,
         now_pts: Timestamp,
     ) -> bool {
         let BufferingStrategy::Range { min, max, .. } = *self;
