@@ -23,8 +23,6 @@ const ASSUMED_MIN_DIMENSION: u32 = 16;
 const ASSUMED_MAX_DIMENSION: u32 = 8192;
 const ASSUMED_H264_MAX_LEVEL_IDC: u8 = 62;
 const ASSUMED_H265_MAX_LEVEL_IDC: u8 = 186;
-/// VideoToolbox manages the reference list internally and never exposes a maximum. `0` here means
-/// "not reported", it does not mean the encoder cannot use references.
 const ASSUMED_ENCODE_MAX_REFERENCES: u32 = 0;
 
 const ENCODER_PROBE_WIDTH: i32 = 1920;
@@ -53,8 +51,6 @@ fn hardware_decode_supported(codec: CMVideoCodecType) -> bool {
 }
 
 fn decode_h264_capabilities() -> DecodeH264Capabilities {
-    // VideoToolbox only reports per-codec support, not per-profile. Apple hardware decoders
-    // handle all three H.264 profiles, so we advertise them with the assumed limits above.
     let profile = DecodeH264ProfileCapabilities {
         min_width: ASSUMED_MIN_DIMENSION,
         max_width: ASSUMED_MAX_DIMENSION,
@@ -83,8 +79,6 @@ fn decode_h265_capabilities() -> DecodeH265Capabilities {
 }
 
 fn encode_h264_capabilities(supported_properties: &CFDictionary) -> EncodeH264Capabilities {
-    // As with decode, VideoToolbox does not enumerate encode profiles. Apple hardware encoders
-    // support baseline/main/high, so we advertise them with the same probed rate-control info.
     let profile = encode_profile_capabilities(supported_properties);
     EncodeH264Capabilities {
         baseline_profile: Some(profile),
@@ -115,8 +109,6 @@ fn encode_profile_capabilities(supported_properties: &CFDictionary) -> EncodePro
     }
 }
 
-/// Returns the supported-property dictionary for a *hardware* encoder of `codec`, or `None` if the
-/// system has no hardware encoder for it.
 fn hardware_encoder_properties(codec: CMVideoCodecType) -> Option<CFRetained<CFDictionary>> {
     let specification = require_hardware_encoder_specification();
 
@@ -135,9 +127,8 @@ fn hardware_encoder_properties(codec: CMVideoCodecType) -> Option<CFRetained<CFD
         )
     };
 
-    // `encoder_id` follows the Copy rule and is owned by us; release it (we only need the props).
     if let Some(encoder_id) = NonNull::new(encoder_id.cast_mut()) {
-        // SAFETY: on success VideoToolbox handed us a +1 retained `CFString`.
+        // SAFETY: a non-null `encoder_id` is a +1 retained `CFString`, regardless of status.
         drop(unsafe { CFRetained::from_raw(encoder_id) });
     }
 
@@ -150,8 +141,6 @@ fn hardware_encoder_properties(codec: CMVideoCodecType) -> Option<CFRetained<CFD
     Some(unsafe { CFRetained::from_raw(supported_properties) })
 }
 
-/// Builds `{ RequireHardwareAcceleratedVideoEncoder: true }` so probing rejects the software
-/// fallback encoders and only reports genuine hardware capabilities.
 fn require_hardware_encoder_specification() -> CFRetained<CFDictionary> {
     // SAFETY: extern statics holding framework-owned constants.
     let key = unsafe { kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder };

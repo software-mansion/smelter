@@ -198,7 +198,7 @@ impl crate::decoders::WgpuVideoDecoderBackend for VTDecoderH264<wgpu::Texture> {
     }
 }
 
-/// VideoToolbox's output handlers run on its own threads with no ordering guarantee, but the
+/// VideoToolbox's output handlers run on their own threads with no ordering guarantee, but the
 /// frame sorter needs frames in decode order, so a completion is held until every earlier
 /// submission has been emitted.
 struct Shared<T> {
