@@ -5,12 +5,14 @@ use axum::{
     extract::{FromRequest, Request, rejection::JsonRejection},
     http::StatusCode,
     middleware,
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
-use serde_json::{Value, json};
+use serde::Serialize;
 use tower_http::cors::CorsLayer;
 
 use crate::{
+    error::ApiError,
     routes::{
         control_request::{handle_reset, handle_start},
         status::{stats_handler, status_handler},
@@ -19,45 +21,49 @@ use crate::{
     state::ApiState,
 };
 
-use self::{update_output::handle_keyframe_request, update_output::handle_output_update};
 use crate::middleware::body_logger_middleware;
 
 pub mod control_request;
-pub mod register_request;
+pub mod input;
+pub mod output;
+pub mod resources;
 pub mod status;
-pub mod unregister_request;
-pub mod update_input;
-pub mod update_output;
 pub mod ws;
 
 pub fn routes(state: Arc<ApiState>) -> Router {
     let inputs = Router::new()
-        .route("/:id/register", post(register_request::handle_input))
-        .route("/:id/unregister", post(unregister_request::handle_input))
-        .route("/:id/update", post(update_input::handle_input_update));
+        .route("/:id/register", post(input::handle_register))
+        .route("/:id/unregister", post(input::handle_unregister))
+        .route("/:id/update", post(input::handle_update));
 
     let outputs = Router::new()
-        .route("/:id/register", post(register_request::handle_output))
-        .route("/:id/unregister", post(unregister_request::handle_output))
-        .route("/:id/update", post(handle_output_update))
-        .route("/:id/request_keyframe", post(handle_keyframe_request));
+        .route("/:id/register", post(output::handle_register))
+        .route("/:id/unregister", post(output::handle_unregister))
+        .route("/:id/update", post(output::handle_update))
+        .route(
+            "/:id/request_keyframe",
+            post(output::handle_request_keyframe),
+        );
 
     let image = Router::new()
-        .route("/:id/register", post(register_request::handle_image))
-        .route("/:id/unregister", post(unregister_request::handle_image));
+        .route("/:id/register", post(resources::handle_register_image))
+        .route("/:id/unregister", post(resources::handle_unregister_image));
 
     let web = Router::new()
-        .route("/:id/register", post(register_request::handle_web_renderer))
+        .route(
+            "/:id/register",
+            post(resources::handle_register_web_renderer),
+        )
         .route(
             "/:id/unregister",
-            post(unregister_request::handle_web_renderer),
+            post(resources::handle_unregister_web_renderer),
         );
 
     let shader = Router::new()
-        .route("/:id/register", post(register_request::handle_shader))
-        .route("/:id/unregister", post(unregister_request::handle_shader));
+        .route("/:id/register", post(resources::handle_register_shader))
+        .route("/:id/unregister", post(resources::handle_unregister_shader));
 
-    let font = Router::new().route("/register", post(register_request::handle_font));
+    let font = Router::new().route("/register", post(resources::handle_register_font));
 
     Router::new()
         .nest("/api/input", inputs)
@@ -81,28 +87,28 @@ pub fn routes(state: Arc<ApiState>) -> Router {
 /// Wrap axum::Json to return serialization errors as json
 pub struct Json<T>(pub T);
 
+impl<T: Serialize> IntoResponse for Json<T> {
+    fn into_response(self) -> Response {
+        axum::Json(self.0).into_response()
+    }
+}
+
 #[async_trait]
 impl<S, T> FromRequest<S> for Json<T>
 where
     axum::Json<T>: FromRequest<S, Rejection = JsonRejection>,
     S: Send + Sync,
 {
-    type Rejection = (StatusCode, axum::Json<Value>);
+    type Rejection = ApiError;
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let (parts, body) = req.into_parts();
-        let req = Request::from_parts(parts, body);
-
         match axum::Json::<T>::from_request(req, state).await {
             Ok(value) => Ok(Self(value.0)),
-            Err(rejection) => {
-                let payload = json!({
-                    "error_code": "MALFORMED_REQUEST",
-                    "message": rejection.body_text(),
-                });
-
-                Err((rejection.status(), axum::Json(payload)))
-            }
+            Err(rejection) => Err(ApiError::new(
+                "MALFORMED_REQUEST",
+                rejection.body_text(),
+                rejection.status(),
+            )),
         }
     }
 }
@@ -114,22 +120,16 @@ impl<S> FromRequest<S> for Multipart
 where
     S: Send + Sync,
 {
-    type Rejection = (StatusCode, axum::Json<Value>);
+    type Rejection = ApiError;
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let (parts, body) = req.into_parts();
-        let req = Request::from_parts(parts, body);
-
         match axum::extract::Multipart::from_request(req, state).await {
             Ok(multipart) => Ok(Multipart(multipart)),
-            Err(rejection) => {
-                let payload = json!({
-                    "error_code": "MALFORMED_MULTIPART",
-                    "message": rejection.body_text(),
-                });
-
-                Err((StatusCode::BAD_REQUEST, axum::Json(payload)))
-            }
+            Err(rejection) => Err(ApiError::new(
+                "MALFORMED_MULTIPART",
+                rejection.body_text(),
+                StatusCode::BAD_REQUEST,
+            )),
         }
     }
 }

@@ -55,12 +55,7 @@ impl CompositorInstance {
 
         let (should_close_sender, should_close_receiver) = crossbeam_channel::bounded(1);
         let pipeline = Arc::new(Mutex::new(Pipeline::new(options).unwrap()));
-        let state = Arc::new(ApiState {
-            pipeline: Mutex::new(Some(pipeline.clone())),
-            config,
-            chromium_context: None,
-            runtime: runtime(),
-        });
+        let state = ApiState::with_pipeline(config, runtime(), None, pipeline.clone());
 
         let events = pipeline.lock().unwrap().subscribe_pipeline_events();
         thread::Builder::new()

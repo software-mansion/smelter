@@ -21,7 +21,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -51,7 +51,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Reset is already in progress.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -102,13 +112,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/RegisterInputResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -163,13 +183,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/RegisterOutputResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -224,13 +254,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -285,13 +325,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -346,13 +396,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -396,13 +456,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -445,7 +515,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterInput"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -457,7 +527,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -474,6 +544,16 @@
           },
           "404": {
             "description": "Input not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -516,7 +596,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterOutput"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -528,7 +608,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -545,6 +625,16 @@
           },
           "404": {
             "description": "Output not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -587,7 +677,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterRenderer"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -599,7 +689,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -616,6 +706,16 @@
           },
           "404": {
             "description": "Shader not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -658,7 +758,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterRenderer"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -670,7 +770,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -687,6 +787,16 @@
           },
           "404": {
             "description": "Web renderer not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -729,7 +839,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnregisterRenderer"
+                "$ref": "#/components/schemas/UnregisterRequest"
               }
             }
           },
@@ -741,7 +851,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -758,6 +868,16 @@
           },
           "404": {
             "description": "Image not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -812,7 +932,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -829,6 +949,16 @@
           },
           "404": {
             "description": "Input not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -883,13 +1013,33 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Output not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -934,13 +1084,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Output not found.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1056,8 +1216,7 @@
         "required": [
           "error_code",
           "message",
-          "stack",
-          "http_status_code"
+          "stack"
         ],
         "properties": {
           "error_code": {
@@ -1071,11 +1230,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "http_status_code": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
           }
         }
       },
@@ -2072,21 +2226,6 @@
       "InputId": {
         "type": "string"
       },
-      "InputInfo": {
-        "type": "object",
-        "required": [
-          "input_id",
-          "input_type"
-        ],
-        "properties": {
-          "input_id": {
-            "type": "string"
-          },
-          "input_type": {
-            "type": "string"
-          }
-        }
-      },
       "InputRtpAudioOptions": {
         "oneOf": [
           {
@@ -2320,6 +2459,21 @@
         ],
         "description": "Stats report for inputs."
       },
+      "InputStatus": {
+        "type": "object",
+        "required": [
+          "input_id",
+          "input_type"
+        ],
+        "properties": {
+          "input_id": {
+            "type": "string"
+          },
+          "input_type": {
+            "$ref": "#/components/schemas/InputType"
+          }
+        }
+      },
       "InputStream": {
         "type": "object",
         "required": [
@@ -2395,6 +2549,23 @@
         ],
         "description": "Stats report for a track synchronized by the input sync (`RTMP`, `HLS`, `MoQ`)."
       },
+      "InputType": {
+        "type": "string",
+        "description": "Same values as `type` in the register input request. `raw_data` is used for inputs\nregistered through the Rust API.",
+        "enum": [
+          "rtp_stream",
+          "rtmp_server",
+          "moq_server",
+          "moq_client",
+          "mp4",
+          "whip_server",
+          "whep_client",
+          "hls",
+          "v4l2",
+          "decklink",
+          "raw_data"
+        ]
+      },
       "InputWhepVideoOptions": {
         "type": "object",
         "properties": {
@@ -2436,7 +2607,7 @@
           "run_late_scheduled_events",
           "download_root",
           "web_renderer_enable",
-          "web_renderer_enable_gpu",
+          "web_renderer_gpu_enable",
           "whip_whep_server_port",
           "whip_whep_enable",
           "webrtc_stun_servers",
@@ -2472,7 +2643,7 @@
           "web_renderer_enable": {
             "type": "boolean"
           },
-          "web_renderer_enable_gpu": {
+          "web_renderer_gpu_enable": {
             "type": "boolean"
           },
           "whip_whep_server_port": {
@@ -2512,13 +2683,13 @@
           "inputs": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/InputInfo"
+              "$ref": "#/components/schemas/InputStatus"
             }
           },
           "outputs": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/OutputInfo"
+              "$ref": "#/components/schemas/OutputStatus"
             }
           }
         }
@@ -3651,6 +3822,10 @@
           }
         ]
       },
+      "OkResponse": {
+        "type": "object",
+        "description": "Response for requests that do not return any data."
+      },
       "OpusEncoderPreset": {
         "type": "string",
         "enum": [
@@ -3784,21 +3959,6 @@
           }
         },
         "additionalProperties": false
-      },
-      "OutputInfo": {
-        "type": "object",
-        "required": [
-          "output_id",
-          "output_type"
-        ],
-        "properties": {
-          "output_id": {
-            "type": "string"
-          },
-          "output_type": {
-            "type": "string"
-          }
-        }
       },
       "OutputMoqClientAudioOptions": {
         "type": "object",
@@ -4292,6 +4452,36 @@
         ],
         "description": "Stats report for outputs."
       },
+      "OutputStatus": {
+        "type": "object",
+        "required": [
+          "output_id",
+          "output_type"
+        ],
+        "properties": {
+          "output_id": {
+            "type": "string"
+          },
+          "output_type": {
+            "$ref": "#/components/schemas/OutputType"
+          }
+        }
+      },
+      "OutputType": {
+        "type": "string",
+        "description": "Same values as `type` in the register output request. `encoded_data` and `raw_data`\nare used for outputs registered through the Rust API.",
+        "enum": [
+          "rtp_stream",
+          "rtmp_client",
+          "moq_client",
+          "mp4",
+          "whip_client",
+          "whep_server",
+          "hls",
+          "encoded_data",
+          "raw_data"
+        ]
+      },
       "OutputWhepAudioOptions": {
         "type": "object",
         "required": [
@@ -4730,6 +4920,62 @@
           }
         ]
       },
+      "RegisterInputResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "port": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "video_duration_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "audio_duration_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "bearer_token",
+              "endpoint_route"
+            ],
+            "properties": {
+              "bearer_token": {
+                "type": "string"
+              },
+              "endpoint_route": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object"
+          }
+        ]
+      },
       "RegisterOutput": {
         "oneOf": [
           {
@@ -4880,6 +5126,20 @@
             ]
           }
         ]
+      },
+      "RegisterOutputResponse": {
+        "type": "object",
+        "properties": {
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Port allocated for the output. Only returned for RTP outputs.",
+            "minimum": 0
+          }
+        }
       },
       "RendererId": {
         "type": "string"
@@ -5070,62 +5330,6 @@
             "minimum": 0
           }
         }
-      },
-      "Response": {
-        "oneOf": [
-          {
-            "type": "object"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "port": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "int32",
-                "minimum": 0
-              }
-            }
-          },
-          {
-            "type": "object",
-            "properties": {
-              "video_duration_ms": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "int64",
-                "minimum": 0
-              },
-              "audio_duration_ms": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "int64",
-                "minimum": 0
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "bearer_token",
-              "endpoint_route"
-            ],
-            "properties": {
-              "bearer_token": {
-                "type": "string"
-              },
-              "endpoint_route": {
-                "type": "string"
-              }
-            }
-          }
-        ]
       },
       "RtmpClientAudioEncoderOptions": {
         "oneOf": [
@@ -6775,8 +6979,9 @@
           "tcp_server"
         ]
       },
-      "UnregisterInput": {
+      "UnregisterRequest": {
         "type": "object",
+        "description": "Request body shared by all unregister routes.",
         "properties": {
           "schedule_time_ms": {
             "type": [
@@ -6784,33 +6989,7 @@
               "null"
             ],
             "format": "double",
-            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request."
-          }
-        }
-      },
-      "UnregisterOutput": {
-        "type": "object",
-        "properties": {
-          "schedule_time_ms": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request."
-          }
-        }
-      },
-      "UnregisterRenderer": {
-        "type": "object",
-        "properties": {
-          "schedule_time_ms": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request."
+            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request. Negative values are rejected."
           }
         }
       },
@@ -6862,7 +7041,8 @@
               "number",
               "null"
             ],
-            "format": "double"
+            "format": "double",
+            "description": "Time in milliseconds when this request should be applied. Value `0` represents\ntime of the start request. Negative values are rejected."
           }
         },
         "additionalProperties": false

@@ -1,0 +1,356 @@
+//! Maps pipeline errors to error codes and error categories returned by the HTTP API.
+
+use smelter_core::{
+    error::{
+        InitPipelineError, InputInitError, OutputInitError, RegisterInputError,
+        RegisterOutputError, UnregisterInputError, UnregisterOutputError, UpdateInputError,
+    },
+    protocols::{
+        MoqClientError, MoqServerError, Mp4InputError, RtmpClientError, WebrtcClientError,
+    },
+};
+use smelter_render::error::{
+    RegisterError, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
+    UpdateSceneError, WgpuError,
+};
+
+// Without this, Vulkan encoder errors would silently map to the generic output error code.
+const _: () = assert!(
+    smelter_core::GPU_VIDEO_ENABLED == cfg!(feature = "gpu-video"),
+    "smelter-api and smelter-core `gpu-video` features must be enabled together"
+);
+
+pub enum ErrorType {
+    UserError,
+    EntityNotFound,
+    Conflict,
+    BadGateway,
+
+    ServerError,
+}
+
+pub struct PipelineErrorInfo {
+    pub error_code: &'static str,
+    pub error_type: ErrorType,
+}
+
+impl PipelineErrorInfo {
+    fn new(error_code: &'static str, error_type: ErrorType) -> Self {
+        Self {
+            error_code,
+            error_type,
+        }
+    }
+}
+
+impl From<&InitPipelineError> for PipelineErrorInfo {
+    fn from(_value: &InitPipelineError) -> Self {
+        PipelineErrorInfo::new("PIPELINE_INIT_FAILED", ErrorType::ServerError)
+    }
+}
+
+const INPUT_STREAM_ALREADY_REGISTERED: &str = "INPUT_STREAM_ALREADY_REGISTERED";
+const INPUT_ERROR: &str = "INPUT_STREAM_INPUT_ERROR";
+
+const RESOURCE_DOES_NOT_EXIST: &str = "RESOURCE_DOES_NOT_EXIST";
+const INVALID_MP4_SOURCE: &str = "INVALID_MP4_SOURCE";
+const WHEP_INVALID_SERVER_URL: &str = "WHEP_INVALID_SERVER_URL";
+const WHEP_REQUEST_FAILED: &str = "WHEP_REQUEST_FAILED";
+const WHEP_BAD_STATUS: &str = "WHEP_BAD_STATUS";
+const MOQ_SERVER_NOT_RUNNING: &str = "MOQ_SERVER_NOT_RUNNING";
+const MOQ_CLIENT_INVALID_URL: &str = "MOQ_CLIENT_INVALID_URL";
+const MOQ_CLIENT_INVALID_SCHEME: &str = "MOQ_CLIENT_INVALID_SCHEME";
+
+impl From<&RegisterInputError> for PipelineErrorInfo {
+    fn from(err: &RegisterInputError) -> Self {
+        match err {
+            RegisterInputError::AlreadyRegistered(_) => {
+                PipelineErrorInfo::new(INPUT_STREAM_ALREADY_REGISTERED, ErrorType::Conflict)
+            }
+
+            // WHEP
+            RegisterInputError::InputError(_, InputInitError::Whep(err))
+                if matches!(err.as_ref(), WebrtcClientError::InvalidEndpointUrl(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHEP_INVALID_SERVER_URL, ErrorType::UserError)
+            }
+            RegisterInputError::InputError(_, InputInitError::Whep(err))
+                if matches!(err.as_ref(), WebrtcClientError::RequestFailed(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHEP_REQUEST_FAILED, ErrorType::UserError)
+            }
+            RegisterInputError::InputError(_, InputInitError::Whep(err)) if matches!(err.as_ref(), WebrtcClientError::BadStatus(status, _) if status.is_client_error()) => {
+                PipelineErrorInfo::new(WHEP_BAD_STATUS, ErrorType::UserError)
+            }
+            RegisterInputError::InputError(_, InputInitError::Whep(err)) if matches!(err.as_ref(), WebrtcClientError::BadStatus(status, _) if status.is_server_error()) => {
+                PipelineErrorInfo::new(WHEP_BAD_STATUS, ErrorType::BadGateway)
+            }
+
+            // MP4
+            RegisterInputError::InputError(
+                _,
+                InputInitError::Mp4(Mp4InputError::Mp4ReaderError(_)),
+            ) => PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError),
+            RegisterInputError::InputError(
+                _,
+                InputInitError::Mp4(Mp4InputError::HttpError(err)),
+            ) if err.is_request() || err.is_status() => {
+                PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError)
+            }
+            RegisterInputError::InputError(_, InputInitError::Mp4(Mp4InputError::IoError(_))) => {
+                PipelineErrorInfo::new(INVALID_MP4_SOURCE, ErrorType::UserError)
+            }
+
+            // MoQ Server
+            RegisterInputError::InputError(
+                _,
+                InputInitError::MoqServer(MoqServerError::ServerNotRunning),
+            ) => PipelineErrorInfo::new(MOQ_SERVER_NOT_RUNNING, ErrorType::UserError),
+
+            // MoQ Client
+            RegisterInputError::InputError(
+                _,
+                InputInitError::MoqClient(MoqClientError::InvalidUrl(_, _)),
+            ) => PipelineErrorInfo::new(MOQ_CLIENT_INVALID_URL, ErrorType::UserError),
+            RegisterInputError::InputError(
+                _,
+                InputInitError::MoqClient(MoqClientError::InvalidScheme(_)),
+            ) => PipelineErrorInfo::new(MOQ_CLIENT_INVALID_SCHEME, ErrorType::UserError),
+
+            // FFmpeg (used in HLS input)
+            RegisterInputError::InputError(
+                _,
+                InputInitError::FfmpegError(ffmpeg_next::Error::Other {
+                    errno: ffmpeg_next::error::ENOENT,
+                }),
+            ) => PipelineErrorInfo::new(RESOURCE_DOES_NOT_EXIST, ErrorType::UserError),
+
+            // Generic
+            RegisterInputError::InputError(_, _) => {
+                PipelineErrorInfo::new(INPUT_ERROR, ErrorType::ServerError)
+            }
+        }
+    }
+}
+
+const OUTPUT_STREAM_ALREADY_REGISTERED: &str = "OUTPUT_STREAM_ALREADY_REGISTERED";
+const OUTPUT_ERROR: &str = "OUTPUT_STREAM_OUTPUT_ERROR";
+const NO_VIDEO_OR_AUDIO_FOR_OUTPUT: &str = "NO_VIDEO_OR_AUDIO_FOR_OUTPUT";
+
+const RTMP_CONNECTION_FAILED: &str = "RTMP_CONNECTION_FAILED";
+const WHIP_INVALID_SERVER_URL: &str = "WHIP_INVALID_SERVER_URL";
+const WHIP_REQUEST_FAILED: &str = "WHIP_REQUEST_FAILED";
+const WHIP_BAD_STATUS: &str = "WHIP_BAD_STATUS";
+
+const SERVER_PATH_RESOLUTION_FAILED: &str = "SERVER_PATH_RESOLUTION_FAILED";
+#[cfg(feature = "gpu-video")]
+const INVALID_VULKAN_VIDEO_PARAMETERS: &str = "INVALID_VULKAN_VIDEO_PARAMETERS";
+
+impl From<&RegisterOutputError> for PipelineErrorInfo {
+    fn from(err: &RegisterOutputError) -> Self {
+        match err {
+            RegisterOutputError::AlreadyRegistered(_) => {
+                PipelineErrorInfo::new(OUTPUT_STREAM_ALREADY_REGISTERED, ErrorType::Conflict)
+            }
+
+            // RTMP
+            RegisterOutputError::OutputError(
+                _,
+                OutputInitError::RtmpError(RtmpClientError::RtmpStreamError(
+                    rtmp::RtmpStreamError::TcpError(_),
+                )),
+            ) => PipelineErrorInfo::new(RTMP_CONNECTION_FAILED, ErrorType::UserError),
+
+            // WHIP
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
+                if matches!(err.as_ref(), WebrtcClientError::InvalidEndpointUrl(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHIP_INVALID_SERVER_URL, ErrorType::UserError)
+            }
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err))
+                if matches!(err.as_ref(), WebrtcClientError::RequestFailed(_, _)) =>
+            {
+                PipelineErrorInfo::new(WHIP_REQUEST_FAILED, ErrorType::UserError)
+            }
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err)) if matches!(err.as_ref(), WebrtcClientError::BadStatus(status, _) if status.is_client_error()) => {
+                PipelineErrorInfo::new(WHIP_BAD_STATUS, ErrorType::UserError)
+            }
+            RegisterOutputError::OutputError(_, OutputInitError::WhipInitError(err)) if matches!(err.as_ref(), WebrtcClientError::BadStatus(status, _) if status.is_server_error()) => {
+                PipelineErrorInfo::new(WHIP_BAD_STATUS, ErrorType::BadGateway)
+            }
+
+            // FFmpeg (used in MP4/HLS output)
+            RegisterOutputError::OutputError(
+                _,
+                OutputInitError::FfmpegError(ffmpeg_next::Error::Other { errno }),
+            ) if matches!(
+                *errno,
+                ffmpeg_next::error::ENOENT
+                    | ffmpeg_next::error::EACCES
+                    | ffmpeg_next::error::ENOTSUP
+            ) =>
+            {
+                PipelineErrorInfo::new(SERVER_PATH_RESOLUTION_FAILED, ErrorType::UserError)
+            }
+
+            // Vulkan
+            #[cfg(feature = "gpu-video")]
+            RegisterOutputError::OutputError(
+                _,
+                OutputInitError::EncoderError(
+                    smelter_core::error::EncoderInitError::VulkanEncoderError(
+                        gpu_video::VideoEncoderError::ParametersError { .. },
+                    ),
+                ),
+            ) => PipelineErrorInfo::new(INVALID_VULKAN_VIDEO_PARAMETERS, ErrorType::UserError),
+
+            // Generic
+            RegisterOutputError::OutputError(_, _) => {
+                PipelineErrorInfo::new(OUTPUT_ERROR, ErrorType::ServerError)
+            }
+            RegisterOutputError::SceneError(_, err) => err.into(),
+            RegisterOutputError::NoVideoAndAudio(_) => {
+                PipelineErrorInfo::new(NO_VIDEO_OR_AUDIO_FOR_OUTPUT, ErrorType::UserError)
+            }
+        }
+    }
+}
+
+const INPUT_STREAM_NOT_FOUND: &str = "INPUT_STREAM_NOT_FOUND";
+const UPDATE_INPUT_ACTION_NOT_SUPPORTED: &str = "INPUT_ACTION_NOT_SUPPORTED";
+
+impl From<&UpdateInputError> for PipelineErrorInfo {
+    fn from(err: &UpdateInputError) -> Self {
+        match err {
+            UpdateInputError::NotFound(_) => {
+                PipelineErrorInfo::new(INPUT_STREAM_NOT_FOUND, ErrorType::EntityNotFound)
+            }
+            UpdateInputError::SeekNotSupported(_) | UpdateInputError::PausingNotSupported(_) => {
+                PipelineErrorInfo::new(UPDATE_INPUT_ACTION_NOT_SUPPORTED, ErrorType::UserError)
+            }
+        }
+    }
+}
+
+impl From<&UnregisterInputError> for PipelineErrorInfo {
+    fn from(err: &UnregisterInputError) -> Self {
+        match err {
+            UnregisterInputError::NotFound(_) => {
+                PipelineErrorInfo::new(INPUT_STREAM_NOT_FOUND, ErrorType::EntityNotFound)
+            }
+        }
+    }
+}
+
+const OUTPUT_STREAM_NOT_FOUND: &str = "OUTPUT_STREAM_NOT_FOUND";
+const NO_AUDIO_AND_VIDEO_SPECIFIED: &str = "NO_AUDIO_AND_VIDEO_SPECIFIED";
+const AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING: &str = "AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING";
+
+impl From<&UnregisterOutputError> for PipelineErrorInfo {
+    fn from(err: &UnregisterOutputError) -> Self {
+        match err {
+            UnregisterOutputError::NotFound(_) => {
+                PipelineErrorInfo::new(OUTPUT_STREAM_NOT_FOUND, ErrorType::EntityNotFound)
+            }
+        }
+    }
+}
+
+const BUILD_SCENE_ERROR: &str = "BUILD_SCENE_ERROR";
+
+impl From<&UpdateSceneError> for PipelineErrorInfo {
+    fn from(err: &UpdateSceneError) -> Self {
+        match err {
+            UpdateSceneError::WgpuError(err) => err.into(),
+            UpdateSceneError::OutputNotRegistered(_) => {
+                PipelineErrorInfo::new(OUTPUT_STREAM_NOT_FOUND, ErrorType::EntityNotFound)
+            }
+            UpdateSceneError::SceneError(_) => PipelineErrorInfo {
+                error_code: BUILD_SCENE_ERROR,
+                error_type: ErrorType::UserError,
+            },
+            UpdateSceneError::NoAudioAndVideo(_) => PipelineErrorInfo {
+                error_code: NO_AUDIO_AND_VIDEO_SPECIFIED,
+                error_type: ErrorType::UserError,
+            },
+            UpdateSceneError::AudioVideoNotMatching(_) => PipelineErrorInfo {
+                error_code: AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING,
+                error_type: ErrorType::UserError,
+            },
+        }
+    }
+}
+
+const REQUEST_KEYFRAME_ERROR: &str = "REQUEST_KEYFRAME_ERROR";
+
+impl From<&RequestKeyframeError> for PipelineErrorInfo {
+    fn from(err: &RequestKeyframeError) -> Self {
+        match err {
+            RequestKeyframeError::OutputNotRegistered(_) => {
+                PipelineErrorInfo::new(OUTPUT_STREAM_NOT_FOUND, ErrorType::EntityNotFound)
+            }
+            RequestKeyframeError::KeyframesUnsupported(_)
+            | RequestKeyframeError::NoVideoOutput(_) => {
+                PipelineErrorInfo::new(REQUEST_KEYFRAME_ERROR, ErrorType::UserError)
+            }
+        }
+    }
+}
+
+const ENTITY_ALREADY_REGISTERED: &str = "ENTITY_ALREADY_REGISTERED";
+const INVALID_SHADER: &str = "INVALID_SHADER";
+const REGISTER_IMAGE_ERROR: &str = "REGISTER_IMAGE_ERROR";
+const REGISTER_WEB_RENDERER_ERROR: &str = "REGISTER_WEB_RENDERER_ERROR";
+
+impl From<&RegisterRendererError> for PipelineErrorInfo {
+    fn from(err: &RegisterRendererError) -> Self {
+        match err {
+            RegisterRendererError::RendererRegistry(err) => match err {
+                RegisterError::KeyTaken { .. } => {
+                    PipelineErrorInfo::new(ENTITY_ALREADY_REGISTERED, ErrorType::Conflict)
+                }
+            },
+            RegisterRendererError::Shader(_, _) => {
+                PipelineErrorInfo::new(INVALID_SHADER, ErrorType::UserError)
+            }
+            RegisterRendererError::Image(_, _) => {
+                PipelineErrorInfo::new(REGISTER_IMAGE_ERROR, ErrorType::UserError)
+            }
+            RegisterRendererError::Web(_, _) => {
+                PipelineErrorInfo::new(REGISTER_WEB_RENDERER_ERROR, ErrorType::ServerError)
+            }
+        }
+    }
+}
+
+const ENTITY_NOT_FOUND: &str = "ENTITY_NOT_FOUND";
+
+impl From<&UnregisterRendererError> for PipelineErrorInfo {
+    fn from(err: &UnregisterRendererError) -> Self {
+        match err {
+            UnregisterRendererError::RendererRegistry(_) => {
+                PipelineErrorInfo::new(ENTITY_NOT_FOUND, ErrorType::EntityNotFound)
+            }
+        }
+    }
+}
+
+const WGPU_VALIDATION_ERROR: &str = "WGPU_VALIDATION_ERROR";
+const WGPU_OUT_OF_MEMORY_ERROR: &str = "WGPU_OUT_OF_MEMORY_ERROR";
+const WGPU_INTERNAL_ERROR: &str = "WGPU_INTERNAL_ERROR";
+
+impl From<&WgpuError> for PipelineErrorInfo {
+    fn from(err: &WgpuError) -> Self {
+        match err {
+            WgpuError::Validation(_) => {
+                PipelineErrorInfo::new(WGPU_VALIDATION_ERROR, ErrorType::UserError)
+            }
+            WgpuError::OutOfMemory(_) => {
+                PipelineErrorInfo::new(WGPU_OUT_OF_MEMORY_ERROR, ErrorType::ServerError)
+            }
+            WgpuError::Internal(_) => {
+                PipelineErrorInfo::new(WGPU_INTERNAL_ERROR, ErrorType::ServerError)
+            }
+        }
+    }
+}

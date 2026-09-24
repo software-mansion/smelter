@@ -1,14 +1,5 @@
-#![recursion_limit = "256"]
-
+use smelter::server;
 use tracing::info;
-
-pub mod config;
-pub mod error;
-pub mod logger;
-pub mod middleware;
-pub mod routes;
-pub mod server;
-pub mod state;
 
 fn main() {
     #[cfg(feature = "web-renderer")]

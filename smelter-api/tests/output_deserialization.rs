@@ -575,7 +575,7 @@ fn err_rtmp_negative_keyframe_interval() {
                 }
             }
         }),
-        "Keyframe interval cannot be negative.",
+        "Invalid keyframe_interval_ms. Value cannot be negative.",
     );
 }
 
@@ -1268,7 +1268,7 @@ fn err_mp4_negative_start_at() {
                 }
             }
         }),
-        "Start time cannot be negative.",
+        "Invalid start_at_ms. Value cannot be negative.",
     );
 }
 
@@ -1993,7 +1993,7 @@ fn err_hls_negative_start_at() {
                 }
             }
         }),
-        "Start time cannot be negative.",
+        "Invalid start_at_ms. Value cannot be negative.",
     );
 }
 

@@ -6,7 +6,6 @@ use schemars::{
     schema_for,
 };
 use serde::{Deserialize, Serialize};
-use smelter::routes;
 use utoipa::OpenApi;
 
 const ROOT_DIR: &str = env!("CARGO_MANIFEST_DIR");
@@ -24,13 +23,13 @@ fn main() {
 #[serde(untagged)]
 #[allow(dead_code)]
 enum ApiTypes {
-    RegisterInput(routes::register_request::RegisterInput),
-    RegisterOutput(Box<routes::register_request::RegisterOutput>),
+    RegisterInput(smelter_api::RegisterInput),
+    RegisterOutput(Box<smelter_api::RegisterOutput>),
     RegisterImage(smelter_api::ImageSpec),
     RegisterWebRenderer(smelter_api::WebRendererSpec),
     RegisterShader(smelter_api::ShaderSpec),
-    UpdateOutput(Box<routes::update_output::UpdateOutputRequest>),
-    UpdateInput(routes::update_input::UpdateInputRequest),
+    UpdateOutput(Box<smelter_api::UpdateOutputRequest>),
+    UpdateInput(smelter_api::UpdateInputRequest),
 
     StatsReport(smelter_core::stats::StatsReport),
 }
@@ -41,7 +40,7 @@ pub fn generate_json_schema(check_flag: bool) {
         false => (SchemaAction::Update, SchemaAction::Update),
     };
     generate_schema(
-        schema_for!(routes::update_output::UpdateOutputRequest),
+        schema_for!(smelter_api::UpdateOutputRequest),
         "./schemas/scene.schema.json",
         scene_schema_action,
     );
@@ -133,20 +132,20 @@ enum SchemaAction {
     paths(
         smelter::routes::control_request::handle_start,
         smelter::routes::control_request::handle_reset,
-        smelter::routes::register_request::handle_input,
-        smelter::routes::register_request::handle_output,
-        smelter::routes::register_request::handle_shader,
-        smelter::routes::register_request::handle_web_renderer,
-        smelter::routes::register_request::handle_image,
-        smelter::routes::register_request::handle_font,
-        smelter::routes::unregister_request::handle_input,
-        smelter::routes::unregister_request::handle_output,
-        smelter::routes::unregister_request::handle_shader,
-        smelter::routes::unregister_request::handle_web_renderer,
-        smelter::routes::unregister_request::handle_image,
-        smelter::routes::update_input::handle_input_update,
-        smelter::routes::update_output::handle_output_update,
-        smelter::routes::update_output::handle_keyframe_request,
+        smelter::routes::input::handle_register,
+        smelter::routes::output::handle_register,
+        smelter::routes::resources::handle_register_shader,
+        smelter::routes::resources::handle_register_web_renderer,
+        smelter::routes::resources::handle_register_image,
+        smelter::routes::resources::handle_register_font,
+        smelter::routes::input::handle_unregister,
+        smelter::routes::output::handle_unregister,
+        smelter::routes::resources::handle_unregister_shader,
+        smelter::routes::resources::handle_unregister_web_renderer,
+        smelter::routes::resources::handle_unregister_image,
+        smelter::routes::input::handle_update,
+        smelter::routes::output::handle_update,
+        smelter::routes::output::handle_request_keyframe,
         smelter::routes::status::status_handler,
         smelter::routes::status::stats_handler,
         smelter::routes::ws::ws_handler,

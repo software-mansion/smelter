@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smelter_render::scene;
@@ -63,8 +61,8 @@ impl TryFrom<Transition> for scene::Transition {
             }
         };
 
-        let duration = Duration::try_from_secs_f64(transition.duration_ms / 1000.0)
-            .map_err(|err| TypeError::new(format!("Invalid duration. {err}")))?;
+        let duration = duration_from_ms(transition.duration_ms)
+            .map_err(|err| TypeError::new(format!("Invalid transition.duration_ms. {err}")))?;
 
         Ok(Self {
             duration,

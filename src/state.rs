@@ -1,42 +1,20 @@
 use std::sync::{Arc, Mutex};
 
-use axum::response::IntoResponse;
 use smelter_core::{
-    Pipeline, PipelineMoqServerOptions, PipelineOptions, PipelineRtmpServerOptions,
-    PipelineWgpuOptions, PipelineWhipWhepServerOptions, error::InitPipelineError,
-    protocols::WebrtcUdpPortStrategy,
+    LateEventPolicy, Pipeline, PipelineMoqServerOptions, PipelineOptions,
+    PipelineRtmpServerOptions, PipelineWgpuOptions, PipelineWhipWhepServerOptions, Timestamp,
+    error::InitPipelineError, protocols::WebrtcUdpPortStrategy,
 };
-use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
+use smelter_render::{
+    error::ErrorStack,
+    web_renderer::{ChromiumContext, ChromiumContextInitError},
+};
 
 use reqwest::StatusCode;
-use serde::Serialize;
 use tokio::runtime::Runtime;
-use utoipa::ToSchema;
+use tracing::error;
 
 use crate::{config::Config, error::ApiError};
-
-#[derive(Serialize, Debug, ToSchema)]
-#[serde(untagged)]
-pub enum Response {
-    Ok {},
-    RegisteredPort {
-        port: Option<u16>,
-    },
-    RegisteredMp4 {
-        video_duration_ms: Option<u64>,
-        audio_duration_ms: Option<u64>,
-    },
-    RegisteredWhipInput {
-        bearer_token: Arc<str>,
-        endpoint_route: Arc<str>,
-    },
-}
-
-impl IntoResponse for Response {
-    fn into_response(self) -> axum::response::Response {
-        axum::Json(self).into_response()
-    }
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiStateInitError {
@@ -47,8 +25,15 @@ pub enum ApiStateInitError {
     ChromiumContextInit(#[from] ChromiumContextInitError),
 }
 
+enum PipelineState {
+    Running(Arc<Mutex<Pipeline>>),
+    Resetting,
+    /// Last reset failed.
+    Down,
+}
+
 pub struct ApiState {
-    pub pipeline: Mutex<Option<Arc<Mutex<Pipeline>>>>,
+    pipeline: Mutex<PipelineState>,
     pub config: Config,
     pub chromium_context: Option<Arc<ChromiumContext>>,
     pub runtime: Arc<Runtime>,
@@ -64,36 +49,110 @@ impl ApiState {
             false => None,
         };
         let options = pipeline_options_from_config(&config, &runtime, &chromium_context);
-        let pipeline = Pipeline::new(options)?;
-        Ok(Arc::new(ApiState {
-            pipeline: Mutex::new(Some(Arc::new(Mutex::new(pipeline)))),
+        let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
+        Ok(Self::with_pipeline(
             config,
             runtime,
             chromium_context,
-        }))
+            pipeline,
+        ))
+    }
+
+    /// Creates state around an already created pipeline. A reset still creates the new
+    /// pipeline from `config`.
+    pub fn with_pipeline(
+        config: Config,
+        runtime: Arc<Runtime>,
+        chromium_context: Option<Arc<ChromiumContext>>,
+        pipeline: Arc<Mutex<Pipeline>>,
+    ) -> Arc<ApiState> {
+        Arc::new(ApiState {
+            pipeline: Mutex::new(PipelineState::Running(pipeline)),
+            config,
+            runtime,
+            chromium_context,
+        })
     }
 
     pub fn pipeline(&self) -> Result<Arc<Mutex<Pipeline>>, ApiError> {
-        match self.pipeline.lock().unwrap().clone() {
-            Some(pipeline) => Ok(pipeline),
-            None => Err(ApiError {
-                error_code: "PIPELINE_DOWN",
-                message: "Pipeline reset failed. Pipeline is down".to_string(),
-                stack: Vec::new(),
-                http_status_code: StatusCode::INTERNAL_SERVER_ERROR,
-            }),
+        match &*self.pipeline.lock().unwrap() {
+            PipelineState::Running(pipeline) => Ok(pipeline.clone()),
+            PipelineState::Resetting => Err(ApiError::new(
+                "PIPELINE_RESETTING",
+                "Pipeline reset is in progress.".to_string(),
+                StatusCode::SERVICE_UNAVAILABLE,
+            )),
+            PipelineState::Down => Err(ApiError::new(
+                "PIPELINE_DOWN",
+                "Pipeline reset failed. Pipeline is down".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )),
         }
     }
 
+    /// Runs `action` at `schedule_time`, or immediately when it is not set. Errors from
+    /// scheduled actions cannot be returned to the caller, so they are only logged.
+    pub fn schedule_or_run<E>(
+        &self,
+        schedule_time: Option<Timestamp>,
+        action: impl FnOnce(&mut Pipeline) -> Result<(), E> + Send + 'static,
+    ) -> Result<(), ApiError>
+    where
+        E: std::error::Error + 'static,
+        ApiError: From<E>,
+    {
+        let pipeline = self.pipeline()?;
+        match schedule_time {
+            Some(schedule_time) => Pipeline::schedule_event(
+                &pipeline,
+                schedule_time,
+                LateEventPolicy::Default,
+                move |pipeline| {
+                    if let Err(err) = action(pipeline) {
+                        error!(
+                            "Error while running scheduled request for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                },
+            ),
+            None => action(&mut pipeline.lock().unwrap())?,
+        }
+        Ok(())
+    }
+
+    /// Replaces the pipeline with a new one. The state lock is not held while the new
+    /// pipeline is created, so other requests fail with `PIPELINE_RESETTING` instead of
+    /// blocking.
     pub fn reset(&self) -> Result<(), ApiError> {
-        let mut guard = self.pipeline.lock().unwrap();
-        guard.take();
+        {
+            let mut state = self.pipeline.lock().unwrap();
+            if matches!(*state, PipelineState::Resetting) {
+                return Err(ApiError::new(
+                    "PIPELINE_RESETTING",
+                    "Pipeline reset is already in progress.".to_string(),
+                    StatusCode::CONFLICT,
+                ));
+            }
+            *state = PipelineState::Resetting;
+        }
 
         let options =
             pipeline_options_from_config(&self.config, &self.runtime, &self.chromium_context);
-        let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
-        *guard = Some(pipeline);
-        Ok(())
+        let result = Pipeline::new(options);
+
+        let mut state = self.pipeline.lock().unwrap();
+        match result {
+            Ok(pipeline) => {
+                *state = PipelineState::Running(Arc::new(Mutex::new(pipeline)));
+                Ok(())
+            }
+            Err(err) => {
+                *state = PipelineState::Down;
+                Err(err.into())
+            }
+        }
     }
 }
 

@@ -435,7 +435,7 @@ fn err_rtp_negative_buffer() {
                 "buffer_size_ms": -100.0
             }
         }),
-        "Invalid buffer_size_ms. cannot convert float seconds to Duration: value is negative",
+        "Invalid buffer_size_ms. Value cannot be negative.",
     );
 }
 
@@ -640,7 +640,7 @@ fn err_mp4_negative_seek() {
                 "seek_ms": -1000.0
             }
         }),
-        "Invalid duration. cannot convert float seconds to Duration: value is negative",
+        "Invalid seek_ms. Value cannot be negative.",
     );
 }
 
@@ -742,7 +742,7 @@ fn err_whip_negative_buffer() {
                 "buffer_size_ms": -50.0
             }
         }),
-        "Invalid buffer_size_ms. cannot convert float seconds to Duration: value is negative",
+        "Invalid buffer_size_ms. Value cannot be negative.",
     );
 }
 
@@ -812,7 +812,7 @@ fn err_whep_negative_buffer() {
                 "buffer_size_ms": -50.0
             }
         }),
-        "Invalid buffer_size_ms. cannot convert float seconds to Duration: value is negative",
+        "Invalid buffer_size_ms. Value cannot be negative.",
     );
 }
 

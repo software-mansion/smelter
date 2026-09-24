@@ -2,10 +2,10 @@ use std::fmt::Display;
 
 use axum::{http::StatusCode, response::IntoResponse};
 use serde::Serialize;
-use smelter_api::TypeError;
+use smelter_api::{ErrorType, PipelineErrorInfo, TypeError};
 use smelter_core::error::{
-    ErrorType, InitPipelineError, PipelineErrorInfo, RegisterInputError, RegisterOutputError,
-    UnregisterInputError, UnregisterOutputError, UpdateInputError,
+    InitPipelineError, RegisterInputError, RegisterOutputError, UnregisterInputError,
+    UnregisterOutputError, UpdateInputError,
 };
 use smelter_render::error::{
     ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
@@ -19,7 +19,8 @@ pub struct ApiError {
     pub message: String,
     pub stack: Vec<String>,
 
-    #[schema(value_type = u16)]
+    /// Sent as the HTTP status, not as part of the body.
+    #[schema(ignore, value_type = u16)]
     pub http_status_code: StatusCode,
 }
 
@@ -33,11 +34,21 @@ impl ApiError {
         }
     }
 
+    /// Request could not be parsed.
     pub fn malformed_request(err: &dyn Display) -> Self {
         ApiError::new(
             "MALFORMED_REQUEST",
             format!("Received malformed request:\n{err}"),
             StatusCode::BAD_REQUEST,
+        )
+    }
+
+    /// Request was parsed, but its content is not valid.
+    pub fn invalid_request(err: &dyn Display) -> Self {
+        ApiError::new(
+            "MALFORMED_REQUEST",
+            format!("Received invalid request:\n{err}"),
+            StatusCode::UNPROCESSABLE_ENTITY,
         )
     }
 }
@@ -87,7 +98,7 @@ impl_api_err!(InitPipelineError);
 
 impl From<TypeError> for ApiError {
     fn from(err: TypeError) -> Self {
-        ApiError::malformed_request(&err)
+        ApiError::invalid_request(&err)
     }
 }
 

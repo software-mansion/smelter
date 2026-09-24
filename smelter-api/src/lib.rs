@@ -15,6 +15,12 @@ mod common_core;
 mod input;
 #[cfg(not(target_arch = "wasm32"))]
 mod output;
+#[cfg(not(target_arch = "wasm32"))]
+mod pipeline_error;
+#[cfg(not(target_arch = "wasm32"))]
+mod request;
+#[cfg(not(target_arch = "wasm32"))]
+mod response;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use audio::*;
@@ -24,3 +30,9 @@ pub use common_core::*;
 pub use input::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub use output::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub use pipeline_error::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub use request::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub use response::*;

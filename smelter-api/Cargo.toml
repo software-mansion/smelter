@@ -8,6 +8,7 @@ license-file = "../LICENSE"
 default = []
 decklink = ["smelter-core/decklink"]
 web-renderer = ["smelter-core/web-renderer"]
+gpu-video = ["smelter-core/gpu-video", "dep:gpu-video"]
 
 [dependencies]
 smelter-render = { workspace = true }
@@ -20,6 +21,9 @@ itertools = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 smelter-core = { workspace = true }
+ffmpeg-next = { workspace = true }
+rtmp = { workspace = true }
+gpu-video = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

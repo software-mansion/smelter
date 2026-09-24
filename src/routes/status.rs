@@ -1,58 +1,13 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
-use axum::{extract::State, response::IntoResponse};
-use serde::Serialize;
-use smelter_core::{InputProtocolKind, OutputProtocolKind, stats::StatsReport};
+use axum::extract::State;
+use smelter_api::{InputStatus, InstanceConfiguration, InstanceStatus, OutputStatus};
+use smelter_core::stats::StatsReport;
 use smelter_render::RenderingMode;
-use utoipa::ToSchema;
 
-use crate::error::ApiError;
+use crate::{error::ApiError, routes::Json};
 
 use super::ApiState;
-
-#[derive(Serialize, ToSchema)]
-struct InputInfo {
-    input_id: String,
-    input_type: String,
-}
-
-#[derive(Serialize, ToSchema)]
-struct OutputInfo {
-    output_id: String,
-    output_type: String,
-}
-
-#[derive(Serialize, ToSchema)]
-struct InstanceConfiguration {
-    api_port: u16,
-
-    output_framerate: f64,
-    mixing_sample_rate: u32,
-
-    ahead_of_time_processing: bool,
-    never_drop_output_frames: bool,
-    run_late_scheduled_events: bool,
-
-    #[schema(value_type = str)]
-    download_root: Arc<Path>,
-
-    web_renderer_enable: bool,
-    web_renderer_enable_gpu: bool,
-
-    whip_whep_server_port: u16,
-    whip_whep_enable: bool,
-    webrtc_stun_servers: Arc<Vec<String>>,
-
-    rendering_mode: &'static str,
-}
-
-#[derive(Serialize, ToSchema)]
-struct InstanceStatus {
-    instance_id: String,
-    configuration: InstanceConfiguration,
-    inputs: Vec<InputInfo>,
-    outputs: Vec<OutputInfo>,
-}
 
 #[utoipa::path(
     get,
@@ -66,51 +21,23 @@ struct InstanceStatus {
 )]
 pub async fn status_handler(
     State(state): State<Arc<ApiState>>,
-) -> Result<impl IntoResponse, ApiError> {
+) -> Result<Json<InstanceStatus>, ApiError> {
     let pipeline = state.pipeline()?;
     let pipeline = pipeline.lock().unwrap();
 
-    let inputs: Vec<InputInfo> = pipeline
+    let inputs = pipeline
         .inputs()
-        .map(|(id, input)| {
-            let input_type = match &input.protocol {
-                InputProtocolKind::Rtp => "rtp",
-                InputProtocolKind::Rtmp => "rtmp",
-                InputProtocolKind::Mp4 => "mp4",
-                InputProtocolKind::Whip => "whip",
-                InputProtocolKind::Whep => "whep",
-                InputProtocolKind::Hls => "hls",
-                InputProtocolKind::MoqServer => "moq_server",
-                InputProtocolKind::MoqClient => "moq_client",
-                InputProtocolKind::V4l2 => "v4l2",
-                InputProtocolKind::DeckLink => "decklink",
-                InputProtocolKind::RawDataChannel => "raw_data",
-            };
-            InputInfo {
-                input_id: id.to_string(),
-                input_type: input_type.to_string(),
-            }
+        .map(|(id, input)| InputStatus {
+            input_id: id.to_string(),
+            input_type: input.protocol.into(),
         })
         .collect();
 
-    let outputs: Vec<OutputInfo> = pipeline
+    let outputs = pipeline
         .outputs()
-        .map(|(id, output)| {
-            let output_type = match &output.protocol {
-                OutputProtocolKind::Rtp => "rtp",
-                OutputProtocolKind::Rtmp => "rtmp",
-                OutputProtocolKind::Mp4 => "mp4",
-                OutputProtocolKind::Whip => "whip",
-                OutputProtocolKind::Whep => "whep",
-                OutputProtocolKind::Hls => "hls",
-                OutputProtocolKind::MoqClient => "moq_client",
-                OutputProtocolKind::EncodedDataChannel => "encoded_data",
-                OutputProtocolKind::RawDataChannel => "raw_data",
-            };
-            OutputInfo {
-                output_id: id.to_string(),
-                output_type: output_type.to_string(),
-            }
+        .map(|(id, output)| OutputStatus {
+            output_id: id.to_string(),
+            output_type: output.protocol.into(),
         })
         .collect();
 
@@ -126,7 +53,7 @@ pub async fn status_handler(
         download_root: state.config.download_root.clone(),
         webrtc_stun_servers: state.config.webrtc_stun_servers.clone(),
         web_renderer_enable: state.config.web_renderer_enable,
-        web_renderer_enable_gpu: state.config.web_renderer_gpu_enable,
+        web_renderer_gpu_enable: state.config.web_renderer_gpu_enable,
         whip_whep_enable: state.config.whip_whep_enable,
         rendering_mode: match state.config.rendering_mode {
             RenderingMode::GpuOptimized => "gpu_optimized",
@@ -135,13 +62,12 @@ pub async fn status_handler(
         },
     };
 
-    Ok(axum::Json(InstanceStatus {
+    Ok(Json(InstanceStatus {
         instance_id: state.config.instance_id.clone(),
         configuration,
         inputs,
         outputs,
-    })
-    .into_response())
+    }))
 }
 
 #[utoipa::path(
@@ -156,7 +82,7 @@ pub async fn status_handler(
 )]
 pub async fn stats_handler(
     State(state): State<Arc<ApiState>>,
-) -> Result<impl IntoResponse, ApiError> {
+) -> Result<Json<StatsReport>, ApiError> {
     let pipeline = state.pipeline()?;
-    Ok(axum::Json(pipeline.lock().unwrap().stats()))
+    Ok(Json(pipeline.lock().unwrap().stats()))
 }
