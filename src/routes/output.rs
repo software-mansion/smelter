@@ -28,9 +28,9 @@ pub async fn handle_register(
     Json(request): Json<RegisterOutput>,
 ) -> Result<Json<RegisterOutputResponse>, ApiError> {
     tokio::task::spawn_blocking(move || {
-        let port =
+        let info =
             Pipeline::register_output(&api.pipeline()?, output_id.into(), request.try_into()?)?;
-        Ok(Json(port.into()))
+        Ok(Json(info.into()))
     })
     .await
     .unwrap()

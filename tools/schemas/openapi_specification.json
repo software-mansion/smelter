@@ -5128,18 +5128,37 @@
         ]
       },
       "RegisterOutputResponse": {
-        "type": "object",
-        "properties": {
-          "port": {
-            "type": [
-              "integer",
-              "null"
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "port"
             ],
-            "format": "int32",
-            "description": "Port allocated for the output. Only returned for RTP outputs.",
-            "minimum": 0
+            "properties": {
+              "port": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Port allocated for the output.",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "endpoint_route"
+            ],
+            "properties": {
+              "endpoint_route": {
+                "type": "string",
+                "description": "Route on the WHIP/WHEP server where the output stream is served."
+              }
+            }
+          },
+          {
+            "type": "object"
           }
-        }
+        ]
       },
       "RendererId": {
         "type": "string"

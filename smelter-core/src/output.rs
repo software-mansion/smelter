@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bytes::Bytes;
 use crossbeam_channel::Receiver;
 use smelter_render::scene::Component;
@@ -92,6 +94,12 @@ pub enum PipelineOutputEndCondition {
     AnyInput,
     AllInputs,
     Never,
+}
+
+pub enum OutputInitInfo {
+    Rtp { port: Port },
+    Whep { endpoint_route: Arc<str> },
+    Other,
 }
 
 #[derive(Debug)]

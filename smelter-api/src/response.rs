@@ -52,16 +52,25 @@ impl From<core::InputInitInfo> for RegisterInputResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct RegisterOutputResponse {
-    /// Port allocated for the output. Only returned for RTP outputs.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub port: Option<u16>,
+#[serde(untagged)]
+pub enum RegisterOutputResponse {
+    Rtp {
+        /// Port allocated for the output.
+        port: u16,
+    },
+    Whep {
+        /// Route on the WHIP/WHEP server where the output stream is served.
+        endpoint_route: Arc<str>,
+    },
+    Other {},
 }
 
-impl From<Option<core::Port>> for RegisterOutputResponse {
-    fn from(value: Option<core::Port>) -> Self {
-        Self {
-            port: value.map(|p| p.0),
+impl From<core::OutputInitInfo> for RegisterOutputResponse {
+    fn from(value: core::OutputInitInfo) -> Self {
+        match value {
+            core::OutputInitInfo::Rtp { port } => Self::Rtp { port: port.0 },
+            core::OutputInitInfo::Whep { endpoint_route } => Self::Whep { endpoint_route },
+            core::OutputInitInfo::Other => Self::Other {},
         }
     }
 }

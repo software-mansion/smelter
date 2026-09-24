@@ -62,9 +62,6 @@ export class Smelter {
 
     const apiRequest = intoRegisterOutput(request, output.scene());
     const result = await this.api.registerOutput(outputId, apiRequest);
-    if (request.type === 'whep_server') {
-      result.endpoint_route = `/whep/${encodeURIComponent(outputId)}`;
-    }
     this.outputs[outputId] = output;
     await output.ready();
     return result;

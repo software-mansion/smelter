@@ -153,7 +153,7 @@ impl Pipeline {
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
         register_options: RegisterOutputOptions,
-    ) -> Result<Option<Port>, RegisterOutputError> {
+    ) -> Result<OutputInitInfo, RegisterOutputError> {
         let RegisterOutputOptions {
             output_options,
             video,

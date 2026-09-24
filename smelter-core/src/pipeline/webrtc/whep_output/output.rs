@@ -48,7 +48,7 @@ impl WhepOutput {
         ctx: Arc<PipelineCtx>,
         output_ref: Ref<OutputId>,
         options: WhepOutputOptions,
-    ) -> Result<Self, OutputInitError> {
+    ) -> Result<(Self, Arc<str>), OutputInitError> {
         let state_clone = ctx.whip_whep_state.clone();
         let Some(state) = state_clone else {
             return Err(OutputInitError::WhipWhepServerNotRunning);
@@ -81,12 +81,16 @@ impl WhepOutput {
             },
         );
 
-        Ok(Self {
+        let endpoint_route =
+            Arc::from(format!("/whep/{}", urlencoding::encode(&output_ref.id().0)));
+
+        let output = Self {
             audio: audio_options.map(|a| a.track_thread_handle),
             video: video_options.map(|v| v.track_thread_handle),
             output_ref,
             outputs_state: state.outputs.clone(),
-        })
+        };
+        Ok((output, endpoint_route))
     }
 
     fn init_video_thread(
