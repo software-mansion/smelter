@@ -26,6 +26,10 @@ export type RegisterInputResponse = {
   video_duration_ms?: number;
   audio_duration_ms?: number;
 
+  // RTP specific
+
+  port?: number;
+
   // WHIP specific
 
   endpoint_route?: string;
@@ -33,6 +37,12 @@ export type RegisterInputResponse = {
 };
 
 export type RegisterOutputResponse = {
+  // RTP specific
+
+  port?: number;
+
+  // WHEP specific
+
   endpoint_route?: string;
 };
 

@@ -133,35 +133,35 @@ pub(super) fn new_external_output(
     ctx: Arc<PipelineCtx>,
     output_ref: Ref<OutputId>,
     options: ProtocolOutputOptions,
-) -> Result<(Box<dyn Output>, Option<Port>), OutputInitError> {
+) -> Result<(Box<dyn Output>, OutputInitInfo), OutputInitError> {
     match options {
         ProtocolOutputOptions::Rtp(opt) => {
             let (output, port) = RtpOutput::new(ctx, output_ref, opt)?;
-            Ok((Box::new(output), Some(port)))
+            Ok((Box::new(output), OutputInitInfo::Rtp { port }))
         }
         ProtocolOutputOptions::Rtmp(opt) => {
             let output = RtmpClientOutput::new(ctx, output_ref, opt)?;
-            Ok((Box::new(output), None))
+            Ok((Box::new(output), OutputInitInfo::Other))
         }
         ProtocolOutputOptions::Mp4(opt) => {
             let output = Mp4Output::new(ctx, output_ref, opt)?;
-            Ok((Box::new(output), None))
+            Ok((Box::new(output), OutputInitInfo::Other))
         }
         ProtocolOutputOptions::Hls(opt) => {
             let output = HlsOutput::new(ctx, output_ref, opt)?;
-            Ok((Box::new(output), None))
+            Ok((Box::new(output), OutputInitInfo::Other))
         }
         ProtocolOutputOptions::Whip(opt) => {
             let output = WhipOutput::new(ctx, output_ref, opt)?;
-            Ok((Box::new(output), None))
+            Ok((Box::new(output), OutputInitInfo::Other))
         }
         ProtocolOutputOptions::Whep(opt) => {
-            let output = WhepOutput::new(ctx, output_ref, opt)?;
-            Ok((Box::new(output), None))
+            let (output, endpoint_route) = WhepOutput::new(ctx, output_ref, opt)?;
+            Ok((Box::new(output), OutputInitInfo::Whep { endpoint_route }))
         }
         ProtocolOutputOptions::MoqClient(opt) => {
             let output = MoqClientOutput::new(ctx, output_ref, opt)?;
-            Ok((Box::new(output), None))
+            Ok((Box::new(output), OutputInitInfo::Other))
         }
     }
 }

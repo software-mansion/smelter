@@ -10,6 +10,7 @@
 - Support FFmpeg 9 by [@wkozyra95](https://github.com/wkozyra95)
 - Add `start_at_ms` option to MP4 and HLS outputs. Output is created when the register request is handled, but it starts producing data at the specified time by [@wkozyra95](https://github.com/wkozyra95)
 - Add `buffer` option to RTMP and HLS inputs to control the buffer kept between the live edge and playback, and `ingest_mode` option to RTMP input by [@wkozyra95](https://github.com/wkozyra95)
+- Return `endpoint_route` when registering a WHEP server output by [@wkozyra95](https://github.com/wkozyra95)
 
 ### 🐛 Bug fixes
 
