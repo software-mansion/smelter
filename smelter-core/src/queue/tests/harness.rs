@@ -491,12 +491,6 @@ impl TestQueue {
     }
 }
 
-impl Drop for TestQueue {
-    fn drop(&mut self) {
-        self.queue.shutdown();
-    }
-}
-
 /// Relay frames or sample batches from an unbounded channel to the queue's
 /// bounded track channel, so test sends never block on the queue's ~100ms
 /// internal buffer. Dropping the returned sender stops the relay, which closes

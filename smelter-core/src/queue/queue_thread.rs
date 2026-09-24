@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     ops::Add,
-    sync::{Arc, atomic::Ordering},
+    sync::{Arc, Weak},
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -13,7 +13,8 @@ use super::{LateEventPolicy, Queue, QueueAudioOutput, QueueVideoOutput, Schedule
 use crate::Timestamp;
 
 pub(super) struct QueueThread {
-    queue: Arc<Queue>,
+    queue: Weak<Queue>,
+    tick_duration: Duration,
     start_receiver: Receiver<QueueStartEvent>,
     scheduled_event_receiver: Receiver<ScheduledEvent>,
     scheduled_events: BTreeMap<Timestamp, Vec<Box<dyn FnOnce() + Send>>>,
@@ -27,12 +28,13 @@ pub(super) struct QueueStartEvent {
 
 impl QueueThread {
     pub fn new(
-        queue: Arc<Queue>,
+        queue: &Arc<Queue>,
         start_receiver: Receiver<QueueStartEvent>,
         scheduled_event_receiver: Receiver<ScheduledEvent>,
     ) -> Self {
         Self {
-            queue,
+            queue: Arc::downgrade(queue),
+            tick_duration: queue.tick_duration,
             start_receiver,
             scheduled_event_receiver,
             scheduled_events: BTreeMap::new(),
@@ -48,14 +50,16 @@ impl QueueThread {
 
     fn run(mut self) {
         let _span = info_span!("Queue").entered();
-        let ticker = tick(self.queue.tick_duration);
-        while !self.queue.should_close.load(Ordering::Relaxed) {
+        let ticker = tick(self.tick_duration);
+        while self.queue.strong_count() > 0 {
             select! {
                 recv(ticker) -> _ => {
-                    self.cleanup_old_data()
+                    let Some(queue) = self.queue.upgrade() else { return };
+                    Self::cleanup_old_data(&queue)
                 },
                 recv(self.scheduled_event_receiver) -> event => {
-                    let event = event.unwrap();
+                    // Disconnected when the queue is dropped.
+                    let Ok(event) = event else { return };
                     match self.scheduled_events.get_mut(&event.pts) {
                         Some(events) => {
                             events.push(event.callback);
@@ -66,21 +70,22 @@ impl QueueThread {
                     }
                 }
                 recv(self.start_receiver) -> start_event => {
-                    QueueThreadAfterStart::new(self, start_event.unwrap()).run();
+                    let Ok(start_event) = start_event else { return };
+                    QueueThreadAfterStart::new(self, start_event).run();
                     return;
                 },
             };
         }
     }
 
-    fn cleanup_old_data(&mut self) {
+    fn cleanup_old_data(queue: &Queue) {
         // Drop old frames as if start was happening now.
-        self.queue
+        queue
             .video_queue
             .lock()
             .unwrap()
             .drop_old_frames_before_start();
-        self.queue
+        queue
             .audio_queue
             .lock()
             .unwrap()
@@ -89,7 +94,8 @@ impl QueueThread {
 }
 
 struct QueueThreadAfterStart {
-    queue: Arc<Queue>,
+    queue: Weak<Queue>,
+    tick_duration: Duration,
     queue_start_pts: Timestamp,
     audio_processor: AudioQueueProcessor,
     video_processor: VideoQueueProcessor,
@@ -100,16 +106,15 @@ struct QueueThreadAfterStart {
 impl QueueThreadAfterStart {
     fn new(queue_thread: QueueThread, start_event: QueueStartEvent) -> Self {
         Self {
-            queue: queue_thread.queue.clone(),
+            queue: queue_thread.queue,
+            tick_duration: queue_thread.tick_duration,
             queue_start_pts: start_event.queue_start_pts,
             audio_processor: AudioQueueProcessor {
-                queue: queue_thread.queue.clone(),
                 sender: start_event.audio_sender,
                 chunks_counter: 0,
                 queue_start_pts: start_event.queue_start_pts,
             },
             video_processor: VideoQueueProcessor {
-                queue: queue_thread.queue,
                 sender: start_event.video_sender,
                 sent_batches_counter: 0,
                 queue_start_pts: start_event.queue_start_pts,
@@ -120,81 +125,78 @@ impl QueueThreadAfterStart {
     }
 
     fn run(mut self) {
-        let ticker = tick(self.queue.tick_duration);
+        let ticker = tick(self.tick_duration);
 
-        while !self.queue.should_close.load(Ordering::Relaxed) {
+        loop {
             select! {
                 recv(ticker) -> _ => {
-                    self.on_handle_tick()
+                    loop {
+                        let Some(queue) = self.queue.upgrade() else { return };
+                        if self.process_next(&queue).is_none() {
+                            break;
+                        }
+                    }
                 },
                 recv(self.scheduled_event_receiver) -> event => {
-                    self.on_enqueue_event(event.unwrap())
+                    // Disconnected when the queue is dropped.
+                    let Ok(event) = event else { return };
+                    let Some(queue) = self.queue.upgrade() else { return };
+                    self.on_enqueue_event(&queue, event)
                 }
             };
         }
     }
 
-    fn on_handle_tick(&mut self) {
-        while !self.queue.should_close.load(Ordering::Relaxed) {
-            let audio_pts_range = self.audio_processor.next_buffer_pts_range();
-            let video_pts = self.video_processor.next_buffer_pts();
-            let event_pts = self
-                .scheduled_events
-                .first_key_value()
-                .map(|(pts, _)| *pts + self.queue_start_pts);
+    /// Some(()) - Handled scheduled events or pushed (or dropped) the next batch.
+    /// None - Nothing to push.
+    fn process_next(&mut self, queue: &Queue) -> Option<()> {
+        let audio_pts_range = self.audio_processor.next_buffer_pts_range(queue);
+        let video_pts = self.video_processor.next_buffer_pts(queue);
+        let event_pts = self
+            .scheduled_events
+            .first_key_value()
+            .map(|(pts, _)| *pts + self.queue_start_pts);
 
-            self.video_processor
-                .queue
-                .video_queue
-                .lock()
-                .unwrap()
-                .should_push_next_frameset(video_pts, self.queue_start_pts);
+        queue
+            .video_queue
+            .lock()
+            .unwrap()
+            .should_push_next_frameset(video_pts, self.queue_start_pts);
 
-            self.audio_processor
-                .queue
-                .audio_queue
-                .lock()
-                .unwrap()
-                .should_push_for_pts_range(audio_pts_range, self.queue_start_pts);
+        queue
+            .audio_queue
+            .lock()
+            .unwrap()
+            .should_push_for_pts_range(audio_pts_range, self.queue_start_pts);
 
-            if let Some(event_pts) = event_pts
-                && event_pts < video_pts
-                && event_pts < audio_pts_range.0
-            {
-                info!("Handle scheduled event for PTS={:?}", event_pts);
-                self.queue.queue_ctx.last_pts.update(event_pts);
-                if let Some((_, callbacks)) = self.scheduled_events.pop_first() {
-                    for callback in callbacks {
-                        callback()
-                    }
-                }
-            } else if video_pts > audio_pts_range.0 {
-                self.queue.queue_ctx.last_pts.update(audio_pts_range.0);
-                trace!(pts_range=?audio_pts_range, "Try to push audio samples for.");
-                if self
-                    .audio_processor
-                    .try_push_next_sample_batch(audio_pts_range)
-                    .is_none()
-                {
-                    break;
-                }
-            } else {
-                self.queue.queue_ctx.last_pts.update(video_pts);
-                trace!(pts=?video_pts, "Try to push video frames.");
-                if self
-                    .video_processor
-                    .try_push_next_frame_set(video_pts)
-                    .is_none()
-                {
-                    break;
+        if let Some(event_pts) = event_pts
+            && event_pts < video_pts
+            && event_pts < audio_pts_range.0
+        {
+            info!("Handle scheduled event for PTS={:?}", event_pts);
+            queue.queue_ctx.last_pts.update(event_pts);
+            if let Some((_, callbacks)) = self.scheduled_events.pop_first() {
+                for callback in callbacks {
+                    callback()
                 }
             }
+            Some(())
+        } else if video_pts > audio_pts_range.0 {
+            queue.queue_ctx.last_pts.update(audio_pts_range.0);
+            trace!(pts_range=?audio_pts_range, "Try to push audio samples for.");
+            self.audio_processor
+                .try_push_next_sample_batch(queue, audio_pts_range)
+        } else {
+            queue.queue_ctx.last_pts.update(video_pts);
+            trace!(pts=?video_pts, "Try to push video frames.");
+            self.video_processor
+                .try_push_next_frame_set(queue, video_pts)
         }
     }
 
-    fn on_enqueue_event(&mut self, scheduled_event: ScheduledEvent) {
-        let audio_pts_range = self.audio_processor.next_buffer_pts_range();
-        let video_pts = self.video_processor.next_buffer_pts();
+    fn on_enqueue_event(&mut self, queue: &Queue, scheduled_event: ScheduledEvent) {
+        let audio_pts_range = self.audio_processor.next_buffer_pts_range(queue);
+        let video_pts = self.video_processor.next_buffer_pts(queue);
         let event_pts = self
             .scheduled_events
             .first_key_value()
@@ -209,7 +211,7 @@ impl QueueThreadAfterStart {
         let is_future_event = new_event_pts >= min_pts;
         let run_late = match scheduled_event.late_policy {
             LateEventPolicy::AlwaysRun => true,
-            LateEventPolicy::Default => self.queue.run_late_scheduled_events,
+            LateEventPolicy::Default => queue.run_late_scheduled_events,
         };
 
         if !is_future_event {
@@ -236,25 +238,24 @@ impl QueueThreadAfterStart {
 }
 
 struct VideoQueueProcessor {
-    queue: Arc<Queue>,
     sent_batches_counter: u32,
     queue_start_pts: Timestamp,
     sender: Sender<QueueVideoOutput>,
 }
 
 impl VideoQueueProcessor {
-    fn next_buffer_pts(&self) -> Timestamp {
+    fn next_buffer_pts(&self, queue: &Queue) -> Timestamp {
         self.queue_start_pts
             + Duration::from_secs_f64(
-                self.sent_batches_counter as f64 * self.queue.output_framerate.den as f64
-                    / self.queue.output_framerate.num as f64,
+                self.sent_batches_counter as f64 * queue.output_framerate.den as f64
+                    / queue.output_framerate.num as f64,
             )
     }
 
     /// Some(()) - Successfully pushed new frame (or dropped it).
     /// None - Nothing to push.
-    fn try_push_next_frame_set(&mut self, next_buffer_pts: Timestamp) -> Option<()> {
-        let mut internal_queue = self.queue.video_queue.lock().unwrap();
+    fn try_push_next_frame_set(&mut self, queue: &Queue, next_buffer_pts: Timestamp) -> Option<()> {
+        let mut internal_queue = queue.video_queue.lock().unwrap();
 
         let should_push_next_frame =
             internal_queue.should_push_next_frameset(next_buffer_pts, self.queue_start_pts);
@@ -266,16 +267,16 @@ impl VideoQueueProcessor {
             internal_queue.get_frames_batch(next_buffer_pts, self.queue_start_pts);
         drop(internal_queue);
 
-        frames_batch.required = frames_batch.required || self.queue.never_drop_output_frames;
+        frames_batch.required = frames_batch.required || queue.never_drop_output_frames;
 
         // potentially infinitely blocking if output is not consumed
         // and one of the stream is "required"
-        self.send_output_frames(frames_batch);
+        self.send_output_frames(queue, frames_batch);
 
         Some(())
     }
 
-    fn send_output_frames(&mut self, frameset: QueueVideoOutput) {
+    fn send_output_frames(&mut self, queue: &Queue, frameset: QueueVideoOutput) {
         let pts = frameset.pts;
         debug!(?pts, "Pushing video frames.");
         trace!(?frameset);
@@ -284,7 +285,7 @@ impl VideoQueueProcessor {
                 warn!(?pts, "Dropping video frame on queue output.");
             }
         } else {
-            let send_deadline = self.queue.queue_ctx.sync_point.add(frameset.pts);
+            let send_deadline = queue.queue_ctx.sync_point.add(frameset.pts);
             if self.sender.send_deadline(frameset, send_deadline).is_err() {
                 warn!(?pts, "Dropping video frame on queue output.");
             }
@@ -294,17 +295,16 @@ impl VideoQueueProcessor {
 }
 
 struct AudioQueueProcessor {
-    queue: Arc<Queue>,
     chunks_counter: u32,
     queue_start_pts: Timestamp,
     sender: Sender<QueueAudioOutput>,
 }
 
 impl AudioQueueProcessor {
-    fn next_buffer_pts_range(&self) -> (Timestamp, Timestamp) {
+    fn next_buffer_pts_range(&self, queue: &Queue) -> (Timestamp, Timestamp) {
         (
-            self.queue_start_pts + (self.queue.audio_chunk_duration * self.chunks_counter),
-            self.queue_start_pts + (self.queue.audio_chunk_duration * (self.chunks_counter + 1)),
+            self.queue_start_pts + (queue.audio_chunk_duration * self.chunks_counter),
+            self.queue_start_pts + (queue.audio_chunk_duration * (self.chunks_counter + 1)),
         )
     }
 
@@ -312,9 +312,10 @@ impl AudioQueueProcessor {
     /// None - Nothing to push.
     fn try_push_next_sample_batch(
         &mut self,
+        queue: &Queue,
         next_buffer_pts_range: (Timestamp, Timestamp),
     ) -> Option<()> {
-        let mut internal_queue = self.queue.audio_queue.lock().unwrap();
+        let mut internal_queue = queue.audio_queue.lock().unwrap();
 
         let should_push_next_batch =
             internal_queue.should_push_for_pts_range(next_buffer_pts_range, self.queue_start_pts);
@@ -326,14 +327,14 @@ impl AudioQueueProcessor {
             internal_queue.pop_samples_set(next_buffer_pts_range, self.queue_start_pts);
         drop(internal_queue);
 
-        samples.required = samples.required || self.queue.never_drop_output_frames;
+        samples.required = samples.required || queue.never_drop_output_frames;
 
-        self.send_output_batch(samples);
+        self.send_output_batch(queue, samples);
 
         Some(())
     }
 
-    fn send_output_batch(&mut self, samples: QueueAudioOutput) {
+    fn send_output_batch(&mut self, queue: &Queue, samples: QueueAudioOutput) {
         let pts_range = (samples.start_pts, samples.end_pts);
         debug!(?pts_range, "Pushing audio samples.");
         trace!(?samples);
@@ -342,7 +343,7 @@ impl AudioQueueProcessor {
                 warn!(?pts_range, "Dropping audio batch on queue output.");
             }
         } else {
-            let deadline = self.queue.queue_ctx.sync_point.add(samples.start_pts);
+            let deadline = queue.queue_ctx.sync_point.add(samples.start_pts);
             if self.sender.send_deadline(samples, deadline).is_err() {
                 warn!(?pts_range, "Dropping audio batch on queue output.")
             }

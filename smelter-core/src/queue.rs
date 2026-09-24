@@ -13,10 +13,7 @@ use std::{
     collections::HashMap,
     fmt::Debug,
     path::Path,
-    sync::{
-        Arc, Mutex, RwLock,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, Mutex, RwLock},
     time::{Duration, Instant},
 };
 
@@ -139,8 +136,6 @@ pub struct Queue {
 
     start_sender: Mutex<Option<Sender<QueueStartEvent>>>,
     scheduled_event_sender: Sender<ScheduledEvent>,
-
-    should_close: AtomicBool,
 }
 
 #[derive(Debug, Clone)]
@@ -296,26 +291,16 @@ impl Queue {
             never_drop_output_frames: opts.never_drop_output_frames,
             run_late_scheduled_events: opts.run_late_scheduled_events,
             tick_duration: opts.tick_duration,
-
-            should_close: AtomicBool::new(false),
         });
 
-        QueueThread::new(
-            queue.clone(),
-            queue_start_receiver,
-            scheduled_event_receiver,
-        )
-        .spawn();
+        // Queue thread holds only a weak reference, it stops when the queue is dropped.
+        QueueThread::new(&queue, queue_start_receiver, scheduled_event_receiver).spawn();
 
         queue
     }
 
     pub fn ctx(&self) -> QueueContext {
         self.queue_ctx.clone()
-    }
-
-    pub fn shutdown(&self) {
-        self.should_close.store(true, Ordering::Relaxed)
     }
 
     pub(crate) fn add_input(&self, input_id: &InputId, queue_input: QueueInput) {
