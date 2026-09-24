@@ -88,8 +88,10 @@ impl Renderer {
             .map_err(types::to_js_error)
     }
 
-    pub async fn register_font(&mut self, font: Source) {
-        self.renderer.register_font(font);
+    pub async fn register_font(&mut self, font: Source) -> Result<(), JsValue> {
+        self.renderer
+            .register_font(font)
+            .map_err(types::to_js_error)
     }
 
     pub fn unregister_input(&mut self, input_id: String) {

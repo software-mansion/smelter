@@ -213,7 +213,7 @@ pub async fn handle_register_font(
         api.pipeline()?
             .lock()
             .unwrap()
-            .register_font(binary_font_source);
+            .register_font(binary_font_source)?;
         Ok(Json(OkResponse {}))
     })
     .await

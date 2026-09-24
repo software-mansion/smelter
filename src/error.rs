@@ -8,8 +8,8 @@ use smelter_core::error::{
     UnregisterOutputError, UpdateInputError,
 };
 use smelter_render::error::{
-    ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
-    UpdateSceneError,
+    ErrorStack, RegisterFontError, RegisterRendererError, RequestKeyframeError,
+    UnregisterRendererError, UpdateSceneError,
 };
 use utoipa::ToSchema;
 
@@ -88,6 +88,7 @@ macro_rules! impl_api_err {
 impl_api_err!(RegisterInputError);
 impl_api_err!(RegisterOutputError);
 impl_api_err!(RegisterRendererError);
+impl_api_err!(RegisterFontError);
 impl_api_err!(RequestKeyframeError);
 impl_api_err!(UnregisterInputError);
 impl_api_err!(UpdateInputError);
