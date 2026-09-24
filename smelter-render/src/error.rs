@@ -38,6 +38,12 @@ pub enum UnregisterRendererError {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum RegisterFontError {
+    #[error("Failed to load font. Provided file is not a valid font.")]
+    InvalidFont,
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum RenderSceneError {
     #[error(transparent)]
     WgpuError(#[from] WgpuError),

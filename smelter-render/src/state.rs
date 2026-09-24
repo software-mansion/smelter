@@ -7,8 +7,8 @@ use crate::{
     FrameSet, InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RenderingMode,
     Resolution,
     error::{
-        InitRendererEngineError, RegisterRendererError, RenderSceneError, UnregisterRendererError,
-        UpdateSceneError,
+        InitRendererEngineError, RegisterFontError, RegisterRendererError, RenderSceneError,
+        UnregisterRendererError, UpdateSceneError,
     },
     image,
     scene::{Component, OutputScene, SceneState},
@@ -160,9 +160,9 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn register_font(&self, font_source: fontdb::Source) {
+    pub fn register_font(&self, font_source: fontdb::Source) -> Result<(), RegisterFontError> {
         let ctx = self.0.lock().unwrap().text_renderer_ctx.clone();
-        ctx.add_font(font_source);
+        ctx.add_font(font_source)
     }
 
     pub fn render(&self, input: FrameSet<InputId>) -> Result<FrameSet<OutputId>, RenderSceneError> {

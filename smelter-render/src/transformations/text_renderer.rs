@@ -18,6 +18,7 @@ use wgpu::{
 
 use crate::{
     Resolution,
+    error::RegisterFontError,
     scene::{
         HorizontalAlign, RGBAColor, TextComponent, TextDimensions, TextStyle, TextWeight, TextWrap,
     },
@@ -272,9 +273,13 @@ impl TextRendererCtx {
         }
     }
 
-    pub fn add_font(&self, source: Source) {
+    pub fn add_font(&self, source: Source) -> Result<(), RegisterFontError> {
         let mut font_system = self.font_system.lock().unwrap();
-        font_system.db_mut().load_font_source(source);
+        let ids = font_system.db_mut().load_font_source(source);
+        if ids.is_empty() {
+            return Err(RegisterFontError::InvalidFont);
+        }
+        Ok(())
     }
 }
 

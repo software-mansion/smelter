@@ -10,8 +10,8 @@ use smelter_core::{
     },
 };
 use smelter_render::error::{
-    RegisterError, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
-    UpdateSceneError, WgpuError,
+    RegisterError, RegisterFontError, RegisterRendererError, RequestKeyframeError,
+    UnregisterRendererError, UpdateSceneError, WgpuError,
 };
 
 // Without this, Vulkan encoder errors would silently map to the generic output error code.
@@ -318,6 +318,18 @@ impl From<&RegisterRendererError> for PipelineErrorInfo {
             }
             RegisterRendererError::Web(_, _) => {
                 PipelineErrorInfo::new(REGISTER_WEB_RENDERER_ERROR, ErrorType::ServerError)
+            }
+        }
+    }
+}
+
+const INVALID_FONT: &str = "INVALID_FONT";
+
+impl From<&RegisterFontError> for PipelineErrorInfo {
+    fn from(err: &RegisterFontError) -> Self {
+        match err {
+            RegisterFontError::InvalidFont => {
+                PipelineErrorInfo::new(INVALID_FONT, ErrorType::UserError)
             }
         }
     }

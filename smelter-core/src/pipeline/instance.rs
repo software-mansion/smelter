@@ -15,8 +15,8 @@ use tracing::{Level, error, info, span, trace, warn};
 use smelter_render::{
     FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions, RendererSpec,
     error::{
-        ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
-        UpdateSceneError,
+        ErrorStack, RegisterFontError, RegisterRendererError, RequestKeyframeError,
+        UnregisterRendererError, UpdateSceneError,
     },
     scene::Component,
 };
@@ -270,8 +270,8 @@ impl Pipeline {
         }
     }
 
-    pub fn register_font(&self, font_source: fontdb::Source) {
-        self.renderer.register_font(font_source);
+    pub fn register_font(&self, font_source: fontdb::Source) -> Result<(), RegisterFontError> {
+        self.renderer.register_font(font_source)
     }
 
     fn check_output_spec(

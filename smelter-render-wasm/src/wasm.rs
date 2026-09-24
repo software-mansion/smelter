@@ -134,9 +134,7 @@ impl SmelterRenderer {
         let mut renderer = self.0.lock().await;
         renderer
             .register_font(Source::Binary(Arc::new(bytes)))
-            .await;
-
-        Ok(())
+            .await
     }
 
     pub async fn unregister_input(&self, input_id: String) {
