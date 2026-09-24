@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::common_core::prelude as core;
 use crate::*;
 
@@ -46,9 +44,9 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
         let video_decoders = core::Mp4InputVideoDecoders { h264 };
 
         let seek = seek_ms
-            .map(|ms| Duration::try_from_secs_f64(ms / 1000.0))
+            .map(duration_from_ms)
             .transpose()
-            .map_err(|err| TypeError::new(format!("Invalid duration. {err}")))?;
+            .map_err(|err| TypeError::new(format!("Invalid seek_ms. {err}")))?;
 
         Ok(core::RegisterInputOptions::Mp4(core::Mp4InputOptions {
             source,

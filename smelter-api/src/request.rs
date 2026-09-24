@@ -81,9 +81,9 @@ pub struct UpdateInputRequest {
 impl UpdateInputRequest {
     pub fn seek(&self) -> Result<Option<Duration>, TypeError> {
         self.seek_ms
-            .map(|ms| Duration::try_from_secs_f64(ms / 1000.0))
+            .map(duration_from_ms)
             .transpose()
-            .map_err(|err| TypeError::new(format!("Invalid seek duration. {err}")))
+            .map_err(|err| TypeError::new(format!("Invalid seek_ms. {err}")))
     }
 }
 
@@ -120,17 +120,9 @@ impl UnregisterRequest {
 fn timestamp_from_schedule_time(
     schedule_time_ms: Option<f64>,
 ) -> Result<Option<core::Timestamp>, TypeError> {
-    // Largest value in milliseconds that fits in a `Timestamp`.
-    const MAX_SCHEDULE_TIME_MS: f64 = i64::MAX as f64 / 1_000_000.0;
-
-    match schedule_time_ms {
-        Some(time) if time < 0.0 || time.is_nan() => {
-            Err(TypeError::new("Schedule time cannot be negative."))
-        }
-        Some(time) if time > MAX_SCHEDULE_TIME_MS => {
-            Err(TypeError::new("Schedule time is too large."))
-        }
-        Some(time) => Ok(Some(core::Timestamp::from_secs_f64(time / 1000.0))),
-        None => Ok(None),
-    }
+    let schedule_time = schedule_time_ms
+        .map(duration_from_ms)
+        .transpose()
+        .map_err(|err| TypeError::new(format!("Invalid schedule_time_ms. {err}")))?;
+    Ok(schedule_time.map(Into::into))
 }

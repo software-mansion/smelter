@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::TypeError;
+use crate::{TypeError, duration_from_ms};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -24,7 +24,7 @@ impl SideChannel {
         let Some(delay_ms) = self.delay_ms else {
             return Ok(Duration::ZERO);
         };
-        Duration::try_from_secs_f64(delay_ms / 1000.0)
-            .map_err(|err| TypeError::new(format!("Invalid side channel delay. {err}")))
+        duration_from_ms(delay_ms)
+            .map_err(|err| TypeError::new(format!("Invalid side_channel.delay_ms. {err}")))
     }
 }

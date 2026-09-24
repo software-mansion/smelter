@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -46,9 +44,21 @@ impl TryFrom<InputBuffer> for core::LiveInputBufferOptions {
             },
             InputBuffer::Options(options) => options,
         };
-        let desired = parse_buffer_ms("buffer.desired_ms", options.desired_ms)?;
-        let min = parse_buffer_ms("buffer.min_ms", options.min_ms)?;
-        let max = parse_buffer_ms("buffer.max_ms", options.max_ms)?;
+        let desired = options
+            .desired_ms
+            .map(duration_from_ms)
+            .transpose()
+            .map_err(|err| TypeError::new(format!("Invalid buffer.desired_ms. {err}")))?;
+        let min = options
+            .min_ms
+            .map(duration_from_ms)
+            .transpose()
+            .map_err(|err| TypeError::new(format!("Invalid buffer.min_ms. {err}")))?;
+        let max = options
+            .max_ms
+            .map(duration_from_ms)
+            .transpose()
+            .map_err(|err| TypeError::new(format!("Invalid buffer.max_ms. {err}")))?;
 
         if let (Some(min), Some(desired)) = (min, desired)
             && min > desired
@@ -73,15 +83,5 @@ impl TryFrom<InputBuffer> for core::LiveInputBufferOptions {
         }
 
         Ok(Self { desired, min, max })
-    }
-}
-
-fn parse_buffer_ms(name: &str, value: Option<f64>) -> Result<Option<Duration>, TypeError> {
-    let Some(ms) = value else {
-        return Ok(None);
-    };
-    match Duration::try_from_secs_f64(ms / 1000.0) {
-        Ok(duration) => Ok(Some(duration)),
-        Err(err) => Err(TypeError::new(format!("Invalid {name}. {err}"))),
     }
 }

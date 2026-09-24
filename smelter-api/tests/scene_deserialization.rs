@@ -1553,7 +1553,7 @@ fn err_transition_negative_duration() {
                 }
             }
         }),
-        "Invalid duration. cannot convert float seconds to Duration: value is negative",
+        "Invalid transition.duration_ms. Value cannot be negative.",
     );
 }
 

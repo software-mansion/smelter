@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use smelter_render::error::ErrorStack;
 
 use bytes::Bytes;
@@ -31,7 +29,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
         let transport_protocol = transport_protocol.unwrap_or(TransportProtocol::Udp).into();
 
         let buffer_duration = buffer_size_ms
-            .map(|ms| Duration::try_from_secs_f64(ms / 1000.0))
+            .map(duration_from_ms)
             .transpose()
             .map_err(|err| TypeError::new(format!("Invalid buffer_size_ms. {err}")))?;
 
