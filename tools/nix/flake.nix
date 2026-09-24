@@ -3,9 +3,9 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # Revision is pinned in flake.lock. Does not follow our nixpkgs, so the
-    # upstream binary cache (kixelated.cachix.org) still matches.
-    moq.url = "github:moq-dev/moq";
+    # Does not follow our nixpkgs, so the upstream binary cache (kixelated.cachix.org) still
+    # matches.
+    moq.url = "github:moq-dev/moq/f1a828ac8c4fe812e145ef838b554a42a364f306";
   };
 
   outputs = inputs@{ flake-parts, ... }:
