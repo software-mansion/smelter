@@ -1348,6 +1348,7 @@ mod optional_input {
         input.send_frame(ms(90));
         input.send_frame(ms(105));
 
+        sleep(Duration::from_millis(1));
         queue.start();
 
         sleep(Duration::from_millis(1));
