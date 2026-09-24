@@ -149,7 +149,7 @@ fn pick_dimensions(left: &Option<Image>, right: &Option<Image>) -> (usize, usize
 
 fn black_image(width: usize, height: usize) -> Image {
     let mut rgba = vec![0u8; width * height * 4];
-    for px in rgba.chunks_exact_mut(4) {
+    for px in rgba.as_chunks_mut::<4>().0 {
         px[3] = 255;
     }
     Image {
