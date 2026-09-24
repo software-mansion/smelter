@@ -13,7 +13,7 @@ use tracing::{Level, enabled, trace};
 pub async fn body_logger_middleware(
     request: Request,
     next: Next,
-) -> Result<impl IntoResponse, Response> {
+) -> Result<impl IntoResponse, (StatusCode, String)> {
     if !enabled!(target: "smelter::log_request_body", Level::TRACE) {
         return Ok(next.run(request).await);
     }
@@ -24,13 +24,13 @@ pub async fn body_logger_middleware(
     Ok(response)
 }
 
-async fn buffer_request_body(request: Request) -> Result<Request, Response> {
+async fn buffer_request_body(request: Request) -> Result<Request, (StatusCode, String)> {
     let (parts, body) = request.into_parts();
 
     let bytes = body
         .collect()
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())?
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
         .to_bytes();
 
     match serde_json::from_slice::<Value>(&bytes) {
@@ -50,13 +50,13 @@ async fn buffer_request_body(request: Request) -> Result<Request, Response> {
     Ok(Request::from_parts(parts, Body::from(bytes)))
 }
 
-async fn buffer_response_body(response: Response) -> Result<Response, Response> {
+async fn buffer_response_body(response: Response) -> Result<Response, (StatusCode, String)> {
     let (parts, body) = response.into_parts();
 
     let bytes = body
         .collect()
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())?
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
         .to_bytes();
 
     match serde_json::from_slice::<Value>(&bytes) {
