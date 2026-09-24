@@ -156,7 +156,9 @@ impl Decoder {
                     ),
                     2 => AudioSamples::Stereo(
                         self.decoded_samples_buffer[..raw_frame_size]
-                            .chunks_exact(2)
+                            .as_chunks::<2>()
+                            .0
+                            .iter()
                             .map(|c| (c[0] as f64 / i16::MAX as f64, c[1] as f64 / i16::MAX as f64))
                             .collect(),
                     ),

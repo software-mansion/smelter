@@ -839,7 +839,9 @@ fn drain_until_closed(rx: Receiver<Pair>) {
 
 /// Pack RGBA8 into the 0x00RRGGBB u32s minifb expects.
 fn rgba_to_minifb(rgba: &[u8]) -> Vec<u32> {
-    rgba.chunks_exact(4)
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
         .map(|p| ((p[0] as u32) << 16) | ((p[1] as u32) << 8) | (p[2] as u32))
         .collect()
 }

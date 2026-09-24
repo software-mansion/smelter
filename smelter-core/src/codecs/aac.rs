@@ -83,9 +83,8 @@ impl AacAudioSpecificConfig {
         let mut profile = (0b11111000 & first) >> 3;
         let sample_rate: u32;
         let channel_count: u8;
-        let frame_length: u32;
 
-        if profile == 31 {
+        let frame_length: u32 = if profile == 31 {
             profile = ((first & 0b00000111) << 3) + ((second & 0b11100000) >> 5) + 0b00100000;
             let frequency_id = (second & 0b00011110) >> 1;
 
@@ -119,7 +118,7 @@ impl AacAudioSpecificConfig {
             channel_count = ((b1 & 0b00000001) << 3) | ((b2 & 0b11100000) >> 5);
             let frame_length_flag = b2 & 0b00010000 != 0;
 
-            frame_length = frame_length_flag_to_frame_length(frame_length_flag);
+            frame_length_flag_to_frame_length(frame_length_flag)
         } else {
             let frequency_id = ((first & 0b00000111) << 1) + ((second & 0b10000000) >> 7);
             let channel_and_frame_len_byte: u8;
@@ -144,8 +143,8 @@ impl AacAudioSpecificConfig {
 
             channel_count = (channel_and_frame_len_byte & 0b01111000) >> 3;
             let frame_length_flag = channel_and_frame_len_byte & 0b00000100 != 0;
-            frame_length = frame_length_flag_to_frame_length(frame_length_flag);
-        }
+            frame_length_flag_to_frame_length(frame_length_flag)
+        };
 
         Ok(AacAudioSpecificConfig {
             profile,

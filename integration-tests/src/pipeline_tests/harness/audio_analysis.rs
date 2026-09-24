@@ -61,7 +61,7 @@ pub fn chunks_to_stereo(chunks: &[AudioSampleBatch]) -> [Vec<f32>; 2] {
     let mut r = vec![0.0_f32; max_end_sample];
     for c in chunks {
         let start = pts_to_sample(c.pts);
-        for (i, pair) in c.samples.chunks_exact(2).enumerate() {
+        for (i, pair) in c.samples.as_chunks::<2>().0.iter().enumerate() {
             let idx = start + i;
             if idx < l.len() {
                 l[idx] = pair[0];
@@ -119,7 +119,7 @@ pub fn detect_artifacts(chunks: &[AudioSampleBatch], peak: f32) -> Vec<(usize, u
         chunk_r.clear();
         chunk_l.reserve(frames);
         chunk_r.reserve(frames);
-        for pair in c.samples.chunks_exact(2) {
+        for pair in c.samples.as_chunks::<2>().0 {
             chunk_l.push(pair[0]);
             chunk_r.push(pair[1]);
         }
