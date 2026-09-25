@@ -369,6 +369,7 @@ pub(crate) struct VTEncoder<C: EncodeCodec> {
     // Retained so a session invalidated mid-stream can be rebuilt identically.
     input_parameters: VideoParameters,
     output_parameters: EncoderOutputParameters<C::Profile>,
+    on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     #[cfg(feature = "wgpu")]
     wgpu: Option<wgpu_api::VTWgpuEncodeState>,
 }
@@ -377,14 +378,21 @@ impl<C: EncodeCodec> VTEncoder<C> {
     pub(crate) fn new(
         input_parameters: VideoParameters,
         output_parameters: EncoderOutputParameters<C::Profile>,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<Self, VideoEncoderError> {
-        Ok(Self::create(input_parameters, output_parameters, false)?)
+        Ok(Self::create(
+            input_parameters,
+            output_parameters,
+            false,
+            on_chunk_callback,
+        )?)
     }
 
     pub(crate) fn create(
         input_parameters: VideoParameters,
         output_parameters: EncoderOutputParameters<C::Profile>,
         metal_compatible_input: bool,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<Self, VTEncoderError> {
         let time_scale = i32::try_from(input_parameters.target_framerate.numerator)
             .ok()
@@ -417,6 +425,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
             parameters_changed_mid_stream: false,
             input_parameters,
             output_parameters,
+            on_chunk_callback,
             #[cfg(feature = "wgpu")]
             wgpu: None,
         })
@@ -806,7 +815,7 @@ impl<C: EncodeCodec> VideoEncoderBackend for VTEncoder<C> {
         &mut self,
         frame: &InputFrame<RawFrameRef<'_>>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
+    ) -> Result<(), VideoEncoderError> {
         if frame.data.frame.len() != self.picture_byte_size {
             return Err(VideoEncoderError::InconsistentPictureByteSize {
                 bytes: frame.data.frame.len(),
@@ -816,7 +825,13 @@ impl<C: EncodeCodec> VideoEncoderBackend for VTEncoder<C> {
 
         let buffer = self.session.input_buffer_from_nv12(frame.data.frame)?;
 
-        Ok(self.encode_pixel_buffer(&buffer, frame.pts, force_idr)?)
+        let chunk = self.encode_pixel_buffer(&buffer, frame.pts, force_idr)?;
+        (self.on_chunk_callback)(chunk);
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), VideoEncoderError> {
+        Ok(())
     }
 }
 

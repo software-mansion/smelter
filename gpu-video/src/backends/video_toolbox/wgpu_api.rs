@@ -107,12 +107,13 @@ impl WgpuVideoDeviceBackend for VTDevice {
             &wgpu_device,
             parameters.input_parameters,
             parameters.output_parameters,
+            on_chunk_callback,
         )?;
 
         Ok(crate::WgpuTexturesEncoderH264 {
             wgpu_device,
             wgpu_queue,
-            encoder: Box::new(encoder),
+            backend: Box::new(encoder),
         })
     }
 
@@ -127,12 +128,13 @@ impl WgpuVideoDeviceBackend for VTDevice {
             &wgpu_device,
             parameters.input_parameters,
             parameters.output_parameters,
+            on_chunk_callback,
         )?;
 
         Ok(crate::WgpuTexturesEncoderH265 {
             wgpu_device,
             wgpu_queue,
-            encoder: Box::new(encoder),
+            backend: Box::new(encoder),
         })
     }
 }
