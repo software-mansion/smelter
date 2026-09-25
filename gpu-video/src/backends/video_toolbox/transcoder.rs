@@ -78,12 +78,22 @@ impl Backend {
         // TODO: propagate the decoded stream's color space and range to the encoders instead of
         // relying on the caller's output parameters (which default to unspecified/limited)
         let encoder = match params.encoder_parameters {
-            AnyEncoderParameters::H264(output_parameters) => AnyEncoder::H264(
-                VTEncoder::new_metal(input_parameters, output_parameters, device)?,
-            ),
-            AnyEncoderParameters::H265(output_parameters) => AnyEncoder::H265(
-                VTEncoder::new_metal(input_parameters, output_parameters, device)?,
-            ),
+            AnyEncoderParameters::H264(output_parameters) => {
+                AnyEncoder::H264(VTEncoder::new_metal(
+                    input_parameters,
+                    output_parameters,
+                    device,
+                    Box::new(|_| {}),
+                )?)
+            }
+            AnyEncoderParameters::H265(output_parameters) => {
+                AnyEncoder::H265(VTEncoder::new_metal(
+                    input_parameters,
+                    output_parameters,
+                    device,
+                    Box::new(|_| {}),
+                )?)
+            }
         };
 
         let resizer = resize::Resizer::new(params, device)?;
