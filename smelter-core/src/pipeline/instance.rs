@@ -428,7 +428,6 @@ impl Pipeline {
 impl Drop for Pipeline {
     fn drop(&mut self) {
         info!("Stopping pipeline");
-        self.queue.shutdown();
         self.ctx.webrtc_setting_engine.close();
     }
 }
