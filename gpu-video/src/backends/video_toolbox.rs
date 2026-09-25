@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    BytesDecoderH264, OutputFrame, RawFrameData, VideoEncoderError,
+    BytesDecoderH264, EncodedOutputChunk, OutputFrame, RawFrameData, VideoEncoderError,
     adapter::{DeviceType, VideoAdapterBackend, VideoAdapterInfo},
     backends::{
         CoreBackend,
@@ -119,6 +119,7 @@ impl CoreVideoDeviceBackend for VTDevice {
     fn create_bytes_encoder_h264(
         self: Arc<Self>,
         _parameters: crate::device::EncoderParametersH264,
+        _on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::BytesEncoderH264, crate::VideoEncoderError> {
         Err(VideoEncoderError::EncoderUnsupported)
     }
@@ -126,6 +127,7 @@ impl CoreVideoDeviceBackend for VTDevice {
     fn create_bytes_encoder_h265(
         self: Arc<Self>,
         _parameters: crate::device::EncoderParametersH265,
+        _on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::BytesEncoderH265, crate::VideoEncoderError> {
         Err(VideoEncoderError::EncoderUnsupported)
     }

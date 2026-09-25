@@ -3,7 +3,7 @@ use std::sync::Arc;
 use objc2_metal::MTLDevice;
 
 use crate::{
-    OutputFrame, VideoEncoderError, WgpuTexturesDecoderH264,
+    EncodedOutputChunk, OutputFrame, VideoEncoderError, WgpuTexturesDecoderH264,
     adapter::VideoAdapterInfo,
     backends::{
         WgpuBackend,
@@ -93,6 +93,7 @@ impl WgpuVideoDeviceBackend for VTDevice {
         _wgpu_device: wgpu::Device,
         _wgpu_queue: wgpu::Queue,
         _parameters: crate::device::EncoderParametersH264,
+        _on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH264, crate::VideoEncoderError> {
         Err(VideoEncoderError::EncoderUnsupported)
     }
@@ -102,6 +103,7 @@ impl WgpuVideoDeviceBackend for VTDevice {
         _wgpu_device: wgpu::Device,
         _wgpu_queue: wgpu::Queue,
         _parameters: crate::device::EncoderParametersH265,
+        _on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH265, crate::VideoEncoderError> {
         Err(VideoEncoderError::EncoderUnsupported)
     }
