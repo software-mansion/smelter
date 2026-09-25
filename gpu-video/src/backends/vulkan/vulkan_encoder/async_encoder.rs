@@ -66,6 +66,15 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
             encoding_device.queues.transfer.family_index as u32,
             encoding_device.queues.wgpu.family_index as u32,
         ];
+
+        let encode_image_usages = match cfg!(feature = "wgpu") {
+            true => {
+                vk::ImageUsageFlags::STORAGE
+                    | vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_DST
+            }
+            false => vk::ImageUsageFlags::TRANSFER_DST,
+        };
         let input_image_pool = EncodeInputImagePool::new(
             encoding_device.clone(),
             encoder.profile_info.clone(),
@@ -74,6 +83,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
                 .video_session
                 .max_coded_extent
                 .into(),
+            encode_image_usages,
             input_image_queue_families,
             encoder.tracker.image_layout_tracker.clone(),
         );

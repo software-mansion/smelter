@@ -276,10 +276,12 @@ impl WgpuState {
         for nv12_texture in output_textures {
             let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
                 aspect: wgpu::TextureAspect::Plane0,
+                usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
                 ..Default::default()
             });
             let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
                 aspect: wgpu::TextureAspect::Plane1,
+                usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
                 ..Default::default()
             });
             self.rgba_to_nv12_converter.convert(

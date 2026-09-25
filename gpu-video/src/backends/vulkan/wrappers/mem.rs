@@ -224,6 +224,7 @@ pub(crate) struct EncodeInputImagePool<'a> {
     encoding_device: Arc<EncodingDevice>,
     profile: Arc<ProfileInfo<'a>>,
     extent: vk::Extent3D,
+    image_usages: vk::ImageUsageFlags,
     queue_family_indices: Vec<u32>,
     layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
 }
@@ -233,6 +234,7 @@ impl<'a> EncodeInputImagePool<'a> {
         encoding_device: Arc<EncodingDevice>,
         profile: Arc<ProfileInfo<'a>>,
         extent: vk::Extent3D,
+        image_usages: vk::ImageUsageFlags,
         queue_family_indices: Vec<u32>,
         layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Self {
@@ -241,6 +243,7 @@ impl<'a> EncodeInputImagePool<'a> {
             encoding_device,
             profile,
             extent,
+            image_usages,
             queue_family_indices,
             layout_tracker,
         }
@@ -255,6 +258,7 @@ impl<'a> EncodeInputImagePool<'a> {
             &self.encoding_device,
             self.extent,
             &self.profile,
+            self.image_usages,
             &self.queue_family_indices,
             self.layout_tracker.clone(),
         )?;
@@ -294,7 +298,7 @@ impl<'a> EncodeInputImagePool<'a> {
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
                     format: wgpu::TextureFormat::NV12,
-                    usage: wgpu::TextureUses::COLOR_TARGET | wgpu::TextureUses::COPY_DST,
+                    usage: wgpu::hal::vulkan::conv::map_vk_image_usage(self.image_usages),
                     memory_flags: wgpu::hal::MemoryFlags::empty(),
                     view_formats: Vec::new(),
                 },
@@ -315,7 +319,7 @@ impl<'a> EncodeInputImagePool<'a> {
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
                     format: wgpu::TextureFormat::NV12,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+                    usage: image_usage_to_wgpu_texture_usages(self.image_usages),
                     view_formats: &[],
                 },
                 wgpu::TextureUses::UNINITIALIZED,
@@ -337,6 +341,38 @@ impl EncodeInputImage {
             pool_freelist.lock().unwrap().push(self);
         }
     }
+}
+
+#[cfg(feature = "wgpu")]
+fn image_usage_to_wgpu_texture_usages(usage: vk::ImageUsageFlags) -> wgpu::TextureUsages {
+    let mut usages = wgpu::TextureUsages::empty();
+    usages.set(
+        wgpu::TextureUsages::COPY_SRC,
+        usage.contains(vk::ImageUsageFlags::TRANSFER_SRC),
+    );
+    usages.set(
+        wgpu::TextureUsages::COPY_DST,
+        usage.contains(vk::ImageUsageFlags::TRANSFER_DST),
+    );
+    usages.set(
+        wgpu::TextureUsages::TEXTURE_BINDING,
+        usage.contains(vk::ImageUsageFlags::SAMPLED),
+    );
+    usages.set(
+        wgpu::TextureUsages::STORAGE_BINDING,
+        usage.contains(vk::ImageUsageFlags::STORAGE),
+    );
+    usages.set(
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+        usage.intersects(
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        ),
+    );
+    usages.set(
+        wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
+        usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT),
+    );
+    usages
 }
 
 pub(crate) struct Buffer {
@@ -554,6 +590,7 @@ impl Image {
         device: &EncodingDevice,
         extent: vk::Extent3D,
         profile: &ProfileInfo,
+        additional_usages: vk::ImageUsageFlags,
         additional_queue_family_indices: &[u32],
         tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, VulkanCommonError> {
@@ -570,11 +607,7 @@ impl Image {
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(
-                vk::ImageUsageFlags::COLOR_ATTACHMENT
-                    | vk::ImageUsageFlags::TRANSFER_DST
-                    | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR,
-            )
+            .usage(additional_usages | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
             .sharing_mode(vk::SharingMode::CONCURRENT)
             .queue_family_indices(&queue_indices)
             .initial_layout(vk::ImageLayout::UNDEFINED)

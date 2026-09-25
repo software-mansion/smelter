@@ -69,8 +69,6 @@ impl BytesEncoderH264 {
     /// Same as [`Self::encode`], but if [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
     /// encode submissions are already in flight, this blocks until all submissions above the limit finish,
     /// or times out after `timeout`.
-    ///
-    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode_timeout(
         &mut self,
         frame: &InputFrame<RawFrameData>,
@@ -90,8 +88,6 @@ impl BytesEncoderH264 {
 
     /// Flush all chunks from the encoder.
     /// This blocks until all chunks have been sent via the provided callback, or times out after `timeout`.
-    ///
-    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush_timeout(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
         self.encoder.flush(timeout)
     }
@@ -141,8 +137,6 @@ impl BytesEncoderH265 {
     /// Same as [`Self::encode`], but if [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
     /// encode submissions are already in flight, this blocks until all submissions above the limit finish,
     /// or times out after `timeout`.
-    ///
-    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode_timeout(
         &mut self,
         frame: &InputFrame<RawFrameData>,
@@ -162,8 +156,6 @@ impl BytesEncoderH265 {
 
     /// Flush all chunks from the encoder.
     /// This blocks until all chunks have been sent via the provided callback, or times out after `timeout`.
-    ///
-    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush_timeout(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
         self.encoder.flush(timeout)
     }

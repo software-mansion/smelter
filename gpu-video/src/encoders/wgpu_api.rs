@@ -7,8 +7,9 @@ use crate::{
 
 /// Input texture for a wgpu textures encoder.
 ///
-/// [`EncodeTexture::texture`] returns an NV12 [`wgpu::Texture`] with [`wgpu::TextureUsages::COPY_DST`] and [`wgpu::TextureUsages::RENDER_ATTACHMENT`] usages.
-/// The input data for encoding should be written to the [`wgpu::Texture`]. Each frame needs to obtain a new [`EncodeTexture`] from the encoder.
+/// [`EncodeTexture::texture`] returns an NV12 [`wgpu::Texture`] with [`wgpu::TextureUsages::COPY_DST`], [`wgpu::TextureUsages::RENDER_ATTACHMENT`]
+/// and [`wgpu::TextureUsages::STORAGE_BINDING`] usages. The input data for encoding should be written to the [`wgpu::Texture`].
+/// Each frame needs to obtain a new [`EncodeTexture`] from the encoder.
 ///
 /// The [`wgpu::Texture`] is not safe to use after the texture was submitted to the encoder.
 pub struct EncodeTexture {
@@ -98,8 +99,6 @@ impl WgpuTexturesEncoderH264 {
     /// Same as [`Self::encode`], but if [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
     /// encode submissions are already in flight, this blocks until all submissions above the limit finish,
     /// or times out after `timeout`.
-    ///
-    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode_timeout(
         &mut self,
         frame: InputFrame<EncodeTexture>,
@@ -125,8 +124,6 @@ impl WgpuTexturesEncoderH264 {
 
     /// Flush all chunks from the encoder.
     /// This blocks until all chunks have been sent via the provided callback, or times out after `timeout`.
-    ///
-    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush_timeout(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
         self.backend.flush(timeout)
     }
@@ -185,8 +182,6 @@ impl WgpuTexturesEncoderH265 {
     /// Same as [`Self::encode`], but if [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
     /// encode submissions are already in flight, this blocks until all submissions above the limit finish,
     /// or times out after `timeout`.
-    ///
-    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode_timeout(
         &mut self,
         frame: InputFrame<EncodeTexture>,
@@ -212,8 +207,6 @@ impl WgpuTexturesEncoderH265 {
 
     /// Flush all chunks from the encoder.
     /// This blocks until all chunks have been sent via the provided callback, or times out after `timeout`.
-    ///
-    /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush_timeout(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
         self.backend.flush(timeout)
     }

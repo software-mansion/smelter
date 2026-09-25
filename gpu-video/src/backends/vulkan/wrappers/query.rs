@@ -13,7 +13,7 @@ pub(crate) struct ResultQueryPool<T> {
     pool: Arc<QueryPool>,
     freelist: Arc<Mutex<Vec<u32>>>,
     query_count: u32,
-    _query_data_type: PhantomData<T>,
+    _query_data_type: PhantomData<fn() -> T>,
 }
 
 impl<T: ResultQueryData> ResultQueryPool<T> {

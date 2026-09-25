@@ -28,7 +28,10 @@ pub fn create_vulkan_graphics_ctx(
 
     let instance_flags = wgpu::InstanceFlags::default();
     let api_version = vk::API_VERSION_1_3;
-    let wgpu_features = features | required_wgpu_features() | wgpu::Features::TEXTURE_FORMAT_NV12;
+    let wgpu_features = features
+        | required_wgpu_features()
+        | wgpu::Features::TEXTURE_FORMAT_NV12
+        | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
 
     let limits = set_required_wgpu_limits(limits);
 

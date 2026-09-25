@@ -81,7 +81,9 @@ impl VulkanDevice {
             .family_index as u32;
         let mut required_extensions = video_adapter.required_extensions();
 
-        let wgpu_features = desc.wgpu_features | wgpu::Features::TEXTURE_FORMAT_NV12;
+        let wgpu_features = desc.wgpu_features
+            | wgpu::Features::TEXTURE_FORMAT_NV12
+            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         let mut wgpu_extensions = hal_adapter.required_device_extensions(wgpu_features);
         required_extensions.append(&mut wgpu_extensions);
 
@@ -104,7 +106,9 @@ impl VulkanDevice {
             wgpu_limits,
         } = desc;
 
-        let wgpu_features = wgpu_features | wgpu::Features::TEXTURE_FORMAT_NV12;
+        let wgpu_features = wgpu_features
+            | wgpu::Features::TEXTURE_FORMAT_NV12
+            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         let device_key_for_dropping = Arc::new(OnceLock::new());
         let device_key_for_dropping_clone = device_key_for_dropping.clone();
 
