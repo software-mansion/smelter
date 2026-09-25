@@ -124,8 +124,11 @@ impl CoreVideoDeviceBackend for VTDevice {
         parameters: crate::device::EncoderParametersH264,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::BytesEncoderH264, crate::VideoEncoderError> {
-        let encoder =
-            VTEncoder::<H264Codec>::new(parameters.input_parameters, parameters.output_parameters)?;
+        let encoder = VTEncoder::<H264Codec>::new(
+            parameters.input_parameters,
+            parameters.output_parameters,
+            on_chunk_callback,
+        )?;
 
         Ok(crate::BytesEncoderH264 {
             encoder: Box::new(encoder),
@@ -137,8 +140,11 @@ impl CoreVideoDeviceBackend for VTDevice {
         parameters: crate::device::EncoderParametersH265,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::BytesEncoderH265, crate::VideoEncoderError> {
-        let encoder =
-            VTEncoder::<H265Codec>::new(parameters.input_parameters, parameters.output_parameters)?;
+        let encoder = VTEncoder::<H265Codec>::new(
+            parameters.input_parameters,
+            parameters.output_parameters,
+            on_chunk_callback,
+        )?;
 
         Ok(crate::BytesEncoderH265 {
             encoder: Box::new(encoder),

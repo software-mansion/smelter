@@ -1,7 +1,8 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     ptr::{NonNull, null_mut},
-    sync::mpsc,
+    sync::{Arc, Mutex, mpsc},
+    time::Duration,
 };
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -22,7 +23,7 @@ use crate::{
         },
     },
     device::{EncoderOutputParameters, VideoParameters},
-    encoders::{WgpuTextureEncoderError, WgpuVideoEncoderBackend},
+    encoders::{EncodeTexture, WgpuTextureEncoderError, WgpuVideoEncoderBackend},
 };
 
 use super::{CallbackOutput, EncodeCodec, VTEncoder, check_output_status, output_handler};
@@ -33,6 +34,7 @@ pub(crate) struct VTWgpuEncodeState {
     listener: Retained<MTLSharedEventListener>,
     next_fence_value: u64,
     texture_cache: SyncCache,
+    issued_input_textures: Arc<Mutex<HashMap<wgpu::Texture, SendSyncCVBuffer>>>,
     pending: VecDeque<PendingFrame>,
 }
 
@@ -81,6 +83,7 @@ impl VTWgpuEncodeState {
             listener: MTLSharedEventListener::new(),
             next_fence_value: 1,
             texture_cache,
+            issued_input_textures: Default::default(),
             pending: VecDeque::new(),
         })
     }
@@ -91,67 +94,70 @@ impl<C: EncodeCodec> VTEncoder<C> {
         wgpu_device: &wgpu::Device,
         input_parameters: VideoParameters,
         output_parameters: EncoderOutputParameters<C::Profile>,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<Self, VTEncoderError> {
-        let mut encoder = Self::create(input_parameters, output_parameters, true)?;
+        let mut encoder =
+            Self::create(input_parameters, output_parameters, true, on_chunk_callback)?;
         encoder.wgpu = Some(VTWgpuEncodeState::new(wgpu_device)?);
         Ok(encoder)
     }
 
-    pub(crate) fn submit_texture(
+    fn issue_input_texture(
         &mut self,
         wgpu_device: &wgpu::Device,
+    ) -> Result<EncodeTexture, VTEncoderError> {
+        let state = self
+            .wgpu
+            .as_ref()
+            .ok_or(VTEncoderError::NotConfiguredForWgpuInput)?;
+
+        let buffer = self.session.acquire_input_buffer()?;
+        let wgpu_texture = wgpu_texture_from_pixel_buffer(
+            &state.texture_cache,
+            wgpu_device,
+            &buffer,
+            wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::STORAGE_BINDING,
+            wgpu::TextureUses::UNINITIALIZED,
+            "gpu-video encoder input",
+        )?;
+
+        state
+            .issued_input_textures
+            .lock()
+            .unwrap()
+            .insert(wgpu_texture.clone(), SendSyncCVBuffer(buffer));
+
+        let issued_input_textures = state.issued_input_textures.clone();
+        Ok(EncodeTexture {
+            wgpu_texture: wgpu_texture.clone(),
+            on_drop: Some(Box::new(move || {
+                issued_input_textures.lock().unwrap().remove(&wgpu_texture);
+            })),
+        })
+    }
+
+    pub(crate) fn submit_texture(
+        &mut self,
         wgpu_queue: &wgpu::Queue,
-        frame: &InputFrame<wgpu::Texture>,
+        frame: &InputFrame<EncodeTexture>,
         force_idr: bool,
     ) -> Result<(), VTEncoderError> {
-        if self.wgpu.is_none() {
+        let Some(state) = self.wgpu.as_ref() else {
             return Err(VTEncoderError::NotConfiguredForWgpuInput);
-        }
+        };
 
         if self.parameters_changed_mid_stream && !self.inline_stream_params {
             return Err(VTEncoderError::ParametersDiverged);
         }
 
-        let expected_extent = wgpu::Extent3d {
-            width: self.input_parameters.width.get(),
-            height: self.input_parameters.height.get(),
-            depth_or_array_layers: 1,
-        };
-        if !frame.data.usage().contains(wgpu::TextureUsages::COPY_SRC) {
-            return Err(WgpuTextureEncoderError::NoCopySrcTextureUsage(frame.data.usage()).into());
-        }
-        if frame.data.format() != wgpu::TextureFormat::NV12 {
-            return Err(WgpuTextureEncoderError::NotNV12Texture(frame.data.format()).into());
-        }
-        if frame.data.size() != expected_extent {
-            return Err(WgpuTextureEncoderError::InconsistentPictureDimensions {
-                provided_dimensions: frame.data.size(),
-                expected_dimensions: expected_extent,
-            }
-            .into());
-        }
-
-        let buffer = self.session.acquire_input_buffer()?;
-
-        {
-            let state = self.wgpu.as_ref().unwrap();
-            let wrapped = wgpu_texture_from_pixel_buffer(
-                &state.texture_cache,
-                wgpu_device,
-                &buffer,
-                wgpu::TextureUsages::COPY_DST,
-                wgpu::TextureUses::UNINITIALIZED,
-                "gpu-video encoder input",
-            )?;
-
-            let mut encoder = wgpu_device.create_command_encoder(&Default::default());
-            encoder.copy_texture_to_texture(
-                frame.data.as_image_copy(),
-                wrapped.as_image_copy(),
-                expected_extent,
-            );
-            wgpu_queue.submit([encoder.finish()]);
-        }
+        let SendSyncCVBuffer(buffer) = state
+            .issued_input_textures
+            .lock()
+            .unwrap()
+            .remove(&frame.data.wgpu_texture)
+            .ok_or(WgpuTextureEncoderError::TextureNotFromEncoder)?;
 
         let (cm_pts, duration) = self.next_frame_timing();
         let session_generation = self.session_generation;
@@ -299,12 +305,26 @@ impl<C: EncodeCodec> VTEncoder<C> {
 impl<C: EncodeCodec> WgpuVideoEncoderBackend for VTEncoder<C> {
     fn encode_texture(
         &mut self,
-        wgpu_device: &wgpu::Device,
+        _wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
-        frame: InputFrame<wgpu::Texture>,
+        frame: InputFrame<EncodeTexture>,
         force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VideoEncoderError> {
-        self.submit_texture(wgpu_device, wgpu_queue, &frame, force_idr)?;
-        Ok(self.wait_for_encoded_frame()?)
+        _timeout: Duration,
+    ) -> Result<(), VideoEncoderError> {
+        self.submit_texture(wgpu_queue, &frame, force_idr)?;
+        let chunk = self.wait_for_encoded_frame()?;
+        (self.on_chunk_callback)(chunk);
+        Ok(())
+    }
+
+    fn flush(&mut self, _timeout: Duration) -> Result<(), VideoEncoderError> {
+        Ok(())
+    }
+
+    fn next_input_texture(
+        &mut self,
+        wgpu_device: &wgpu::Device,
+    ) -> Result<EncodeTexture, VideoEncoderError> {
+        Ok(self.issue_input_texture(wgpu_device)?)
     }
 }
