@@ -56,6 +56,9 @@ pub enum VideoTranscoderError {
     #[error("Wrong output number: expected a value between 0 and {expected_max}, found {actual}")]
     WrongOutputNumber { expected_max: usize, actual: usize },
 
+    #[error("Transcoding is not supported on this backend")]
+    TranscoderUnsupported,
+
     #[error("Transcoder error: {0}")]
     BackendError(VideoBackendError),
 }

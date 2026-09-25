@@ -1,4 +1,4 @@
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn main() {
     use std::io::Write;
 
@@ -21,7 +21,7 @@ fn main() {
     let h264_bytestream = std::fs::read(&args[1]).unwrap_or_else(|_| panic!("read {}", args[1]));
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
+    let adapter = pollster::block_on(instance.enumerate_adapters(Default::default()))
         .into_iter()
         .find(|a| {
             a.video_adapter_info()
@@ -32,13 +32,29 @@ fn main() {
         .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
 
+    let (frame_sender, frame_receiver) = std::sync::mpsc::channel::<OutputFrame<wgpu::Texture>>();
+
+    let writer_thread_handle = std::thread::spawn({
+        let device = device.clone();
+        let queue = queue.clone();
+        move || {
+            let mut output_file = std::fs::File::create("output.nv12").unwrap();
+            for OutputFrame { data, .. } in frame_receiver.iter() {
+                let decoded_frame = download_wgpu_texture(&device, &queue, data);
+                output_file.write_all(&decoded_frame).unwrap();
+            }
+        }
+    });
+
+    let on_frame = move |output_frame| {
+        frame_sender.send(output_frame).unwrap();
+    };
+
     let mut decoder = device
         .video()
         .unwrap()
-        .create_wgpu_textures_decoder_h264(&queue, DecoderParameters::default())
+        .create_wgpu_textures_decoder_h264(&queue, DecoderParameters::default(), on_frame)
         .unwrap();
-
-    let mut output_file = std::fs::File::create("output.nv12").unwrap();
 
     for chunk in h264_bytestream.chunks(256) {
         let chunk = EncodedInputChunk {
@@ -46,29 +62,23 @@ fn main() {
             pts: None,
         };
 
-        let frames = decoder.decode(chunk).unwrap();
-
-        for OutputFrame { data, .. } in frames {
-            let decoded_frame = download_wgpu_texture(&device, &queue, data);
-            output_file.write_all(&decoded_frame).unwrap();
-        }
+        decoder.decode(chunk).unwrap();
     }
 
-    let remaining_frames = decoder.flush().unwrap();
-    for OutputFrame { data, .. } in remaining_frames {
-        let decoded_frame = download_wgpu_texture(&device, &queue, data);
-        output_file.write_all(&decoded_frame).unwrap();
-    }
+    decoder.flush().unwrap();
+    drop(decoder);
+
+    writer_thread_handle.join().unwrap();
 }
 
-#[cfg(not(vulkan))]
+#[cfg(not(supported))]
 fn main() {
     println!(
-        "This crate doesn't work on your operating system, because it does not support vulkan"
+        "This crate doesn't work on your operating system, because it does not support vulkan or video toolbox"
     );
 }
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn download_wgpu_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,

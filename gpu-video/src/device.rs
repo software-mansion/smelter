@@ -156,6 +156,7 @@ impl From<&h264_reader::nal::sps::SeqParameterSet> for ColorRange {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(video_toolbox, expect(unused))]
 pub(crate) struct CodecColorDescription {
     pub colour_primaries: u8,
     pub transfer_characteristics: u8,

@@ -1,8 +1,19 @@
-use std::time::Duration;
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 use crate::{
     DecoderEvent, EncodedInputChunk, H264ParserError, ReferenceManagementError, VideoBackendError,
-    parser::h264::AccessUnit,
+    device::CorruptedStateHandling,
+    parser::{
+        decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
+        h264::{AccessUnit, H264Parser},
+        reference_manager::ReferenceContext,
+    },
 };
 
 #[cfg(feature = "wgpu")]
@@ -16,6 +27,58 @@ pub(crate) trait VideoDecoderBackend: Send {
         event: DecoderEvent<'_, AccessUnit>,
         timeout: Duration,
     ) -> Result<(), VideoDecoderError>;
+}
+
+/// Turns decoder events into decoder instructions and keeps the parser and reference state.
+///
+/// Backends set the shared `decode_failed` flag from their completion threads when a submitted
+/// frame fails to decode. The flag is consumed at the start of the next event, which marks the
+/// reference state as corrupted.
+pub(crate) struct H264EventProcessor {
+    parser: H264Parser,
+    reference_ctx: ReferenceContext,
+    decode_failed: Arc<AtomicBool>,
+}
+
+impl H264EventProcessor {
+    pub(crate) fn new(
+        parser: H264Parser,
+        corrupted_state_handling: CorruptedStateHandling,
+    ) -> Self {
+        Self {
+            parser,
+            reference_ctx: ReferenceContext::new(corrupted_state_handling),
+            decode_failed: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub(crate) fn decode_failed_flag(&self) -> Arc<AtomicBool> {
+        self.decode_failed.clone()
+    }
+
+    pub(crate) fn process_event(
+        &mut self,
+        event: DecoderEvent<'_, AccessUnit>,
+    ) -> Result<Vec<DecoderInstruction>, VideoDecoderError> {
+        if self.decode_failed.swap(false, Ordering::Relaxed) {
+            self.reference_ctx.mark_corrupted_state();
+        }
+
+        let access_units = match event {
+            DecoderEvent::DecodeChunk(chunk) => self.parser.parse(chunk.data, chunk.pts)?,
+            DecoderEvent::DecodeParsedFrame(au) => vec![au],
+            DecoderEvent::SignalFrameEnd | DecoderEvent::Flush => self.parser.flush()?,
+            DecoderEvent::SignalDataLoss => {
+                self.reference_ctx.mark_corrupted_state();
+                return Ok(Vec::new());
+            }
+        };
+
+        Ok(compile_to_decoder_instructions(
+            &mut self.reference_ctx,
+            access_units,
+        )?)
+    }
 }
 
 /// A decoder that outputs frames stored as [`Vec<u8>`] with the raw pixel data.

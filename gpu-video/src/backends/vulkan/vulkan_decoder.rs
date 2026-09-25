@@ -110,9 +110,9 @@ impl<'a> VulkanDecoder<'a> {
                 }
             }
 
-            DecoderInstruction::Sps(sps) => self.process_sps(sps)?,
+            DecoderInstruction::Sps { sps, .. } => self.process_sps(sps)?,
 
-            DecoderInstruction::Pps(pps) => self.process_pps(pps)?,
+            DecoderInstruction::Pps { pps, .. } => self.process_pps(pps)?,
         }
 
         Ok(None)
@@ -484,9 +484,7 @@ impl<'a> VulkanDecoder<'a> {
                 },
                 metadata: DecodeResultMetadata {
                     pic_order_cnt: decode_information.picture_info.PicOrderCnt_for_decoding[0],
-                    max_num_reorder_frames: video_session_resources
-                        .parameters
-                        .max_num_reorder_frames,
+                    max_num_reorder_frames: decode_information.max_num_reorder_frames,
                     is_idr,
                     pts: decode_information.pts,
                     color_space,
