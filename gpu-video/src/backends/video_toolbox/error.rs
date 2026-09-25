@@ -285,10 +285,20 @@ pub enum VTDecoderError {
 
 impl From<VTDecoderError> for VideoDecoderError {
     fn from(err: VTDecoderError) -> Self {
-        VideoDecoderError::BackendError(VideoBackendError {
-            message: err.to_string(),
-            source: Box::new(err),
-        })
+        match err {
+            VTDecoderError::ParserError(h264_parser_error) => {
+                VideoDecoderError::ParserError(h264_parser_error)
+            }
+            VTDecoderError::ReferenceManagementError(reference_management_error) => {
+                VideoDecoderError::ReferenceManagementError(reference_management_error)
+            }
+            VTDecoderError::InvalidInputData(e) => VideoDecoderError::InvalidInputData(e),
+
+            err => VideoDecoderError::BackendError(VideoBackendError {
+                message: err.to_string(),
+                source: Box::new(err),
+            }),
+        }
     }
 }
 
