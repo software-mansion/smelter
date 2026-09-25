@@ -26,6 +26,10 @@ mod decoder;
 mod decoders_h264;
 mod encoder;
 mod error;
+#[cfg(metal_interop)]
+mod metal_interop;
+#[cfg(feature = "transcoder")]
+mod transcoder;
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
 
@@ -146,9 +150,11 @@ impl CoreVideoDeviceBackend for VTDevice {
     #[cfg(feature = "transcoder")]
     fn create_transcoder(
         self: Arc<Self>,
-        _parameters: crate::parameters::TranscoderParameters,
+        parameters: crate::parameters::TranscoderParameters,
     ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
-        Err(crate::transcoder::VideoTranscoderError::TranscoderUnsupported)
+        Ok(crate::VideoTranscoder {
+            transcoder: Box::new(transcoder::Transcoder::new(parameters)?),
+        })
     }
 
     fn decode_capabilities(&self) -> crate::capabilities::DecodeCapabilities {
