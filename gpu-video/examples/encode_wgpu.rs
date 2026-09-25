@@ -10,7 +10,7 @@ fn main() {
         InputFrame,
         parameters::{RateControl, VideoDeviceDescriptor, VideoParameters},
     };
-    use std::{io::Write, num::NonZeroU32};
+    use std::num::NonZeroU32;
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
@@ -51,6 +51,9 @@ fn main() {
 
     let video_device = device.video().unwrap();
 
+    let (h264_writer_thread_handle, h264_chunk_sender) = spawn_writer_thread("output.h264");
+    let (h265_writer_thread_handle, h265_chunk_sender) = spawn_writer_thread("output.h265");
+
     let mut encoder_h264 = video_device
         .create_wgpu_textures_encoder_h264(
             &queue,
@@ -67,7 +70,9 @@ fn main() {
                         virtual_buffer_size: std::time::Duration::from_secs(2),
                     })
                     .unwrap(),
+                max_in_flight_submissions: None,
             },
+            move |chunk| h264_chunk_sender.send(chunk).unwrap(),
         )
         .unwrap();
 
@@ -87,41 +92,49 @@ fn main() {
                         virtual_buffer_size: std::time::Duration::from_secs(2),
                     })
                     .unwrap(),
+                max_in_flight_submissions: None,
             },
+            move |chunk| h265_chunk_sender.send(chunk).unwrap(),
         )
         .unwrap();
 
     let wgpu_state = WgpuState::new(device, queue, width, height);
 
-    let mut output_file_h264 = std::fs::File::create("output.h264").unwrap();
-    let mut output_file_h265 = std::fs::File::create("output.h265").unwrap();
-
     for i in 0..frame_count {
         let time = 1.0 / 30.0 * i as f32;
-        wgpu_state.render(time);
+        let h264_texture = encoder_h264.input_texture().unwrap();
+        let h265_texture = encoder_h265.input_texture().unwrap();
 
-        let h264 = encoder_h264
+        wgpu_state.render(time, &[h264_texture.texture(), h265_texture.texture()]);
+
+        encoder_h264
             .encode(
                 InputFrame {
-                    data: wgpu_state.nv12_texture.clone(),
+                    data: h264_texture,
                     pts: None,
                 },
                 false,
             )
             .unwrap();
-        output_file_h264.write_all(&h264.data).unwrap();
 
-        let h265 = encoder_h265
+        encoder_h265
             .encode(
                 InputFrame {
-                    data: wgpu_state.nv12_texture.clone(),
+                    data: h265_texture,
                     pts: None,
                 },
                 false,
             )
             .unwrap();
-        output_file_h265.write_all(&h265.data).unwrap();
     }
+
+    encoder_h264.flush().unwrap();
+    encoder_h265.flush().unwrap();
+    drop(encoder_h264);
+    drop(encoder_h265);
+
+    h264_writer_thread_handle.join().unwrap();
+    h265_writer_thread_handle.join().unwrap();
 }
 
 #[cfg(vulkan)]
@@ -129,9 +142,6 @@ struct WgpuState {
     pipeline: wgpu::RenderPipeline,
     rgba_view: wgpu::TextureView,
     rgba_bg: wgpu::BindGroup,
-    nv12_texture: wgpu::Texture,
-    y_plane_view: wgpu::TextureView,
-    uv_plane_view: wgpu::TextureView,
     rgba_to_nv12_converter: WgpuRgbaToNv12Converter,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -213,29 +223,6 @@ impl WgpuState {
             ..Default::default()
         });
 
-        let nv12_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("encoder input"),
-            format: wgpu::TextureFormat::NV12,
-            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            dimension: wgpu::TextureDimension::D2,
-            sample_count: 1,
-            view_formats: &[],
-            mip_level_count: 1,
-            size: wgpu::Extent3d {
-                width: width.get(),
-                height: height.get(),
-                depth_or_array_layers: 1,
-            },
-        });
-        let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
-            aspect: wgpu::TextureAspect::Plane0,
-            ..Default::default()
-        });
-        let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
-            aspect: wgpu::TextureAspect::Plane1,
-            ..Default::default()
-        });
-
         let rgba_to_nv12_converter = WgpuRgbaToNv12Converter::new(
             &device,
             WgpuConverterParameters {
@@ -250,24 +237,21 @@ impl WgpuState {
             pipeline,
             rgba_view,
             rgba_bg,
-            nv12_texture,
-            y_plane_view,
-            uv_plane_view,
             rgba_to_nv12_converter,
             device,
             queue,
         }
     }
 
-    fn render(&self, time: f32) {
-        let mut encoder = self
+    fn render(&self, time: f32, output_textures: &[&wgpu::Texture]) {
+        let mut cmd_encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("wgpu encoder"),
             });
 
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = cmd_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("wgpu render pass"),
                 timestamp_writes: None,
                 occlusion_query_set: None,
@@ -288,17 +272,50 @@ impl WgpuState {
             render_pass.set_immediates(0, &time.to_ne_bytes());
             render_pass.draw(0..3, 0..1);
         }
-        self.rgba_to_nv12_converter.convert(
-            &mut encoder,
-            &self.rgba_bg,
-            &self.y_plane_view,
-            &self.uv_plane_view,
-        );
 
-        let buffer = encoder.finish();
+        for nv12_texture in output_textures {
+            let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+                aspect: wgpu::TextureAspect::Plane0,
+                usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
+                ..Default::default()
+            });
+            let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+                aspect: wgpu::TextureAspect::Plane1,
+                usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
+                ..Default::default()
+            });
+            self.rgba_to_nv12_converter.convert(
+                &mut cmd_encoder,
+                &self.rgba_bg,
+                &y_plane_view,
+                &uv_plane_view,
+            );
+        }
+
+        let buffer = cmd_encoder.finish();
 
         self.queue.submit([buffer]);
     }
+}
+
+#[cfg(vulkan)]
+fn spawn_writer_thread(
+    file_name: &'static str,
+) -> (
+    std::thread::JoinHandle<()>,
+    std::sync::mpsc::Sender<gpu_video::EncodedOutputChunk<Vec<u8>>>,
+) {
+    use std::io::Write;
+
+    let (chunk_sender, chunk_receiver) =
+        std::sync::mpsc::channel::<gpu_video::EncodedOutputChunk<Vec<u8>>>();
+    let writer_thread_handle = std::thread::spawn(move || {
+        let mut output_file = std::fs::File::create(file_name).unwrap();
+        for chunk in chunk_receiver.iter() {
+            output_file.write_all(&chunk.data).unwrap();
+        }
+    });
+    (writer_thread_handle, chunk_sender)
 }
 
 #[cfg(not(vulkan))]

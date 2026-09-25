@@ -109,35 +109,50 @@ async fn encode_video(
         .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
     let video_device = device.video().unwrap();
+    let encoder_parameters = gpu_video::parameters::EncoderParametersH264 {
+        output_parameters: video_device
+            .encoder_output_parameters_h264_high_quality(
+                gpu_video::parameters::RateControl::VariableBitrate {
+                    average_bitrate: 500_000,
+                    max_bitrate: 2_000_000,
+                    virtual_buffer_size: std::time::Duration::from_secs(2),
+                },
+            )
+            .unwrap(),
+        input_parameters: gpu_video::parameters::VideoParameters {
+            width: NonZeroU32::new(1920).unwrap(),
+            height: NonZeroU32::new(1080).unwrap(),
+            target_framerate: 30.into(),
+        },
+        max_in_flight_submissions: None,
+    };
 
     let mut encoder = video_device
         .create_wgpu_textures_encoder_h264(
             &queue,
-            gpu_video::parameters::EncoderParametersH264 {
-                output_parameters: video_device
-                    .encoder_output_parameters_h264_high_quality(
-                        gpu_video::parameters::RateControl::VariableBitrate {
-                            average_bitrate: 500_000,
-                            max_bitrate: 2_000_000,
-                            virtual_buffer_size: std::time::Duration::from_secs(2),
-                        },
-                    )
-                    .unwrap(),
-                input_parameters: gpu_video::parameters::VideoParameters {
-                    width: NonZeroU32::new(1920).unwrap(),
-                    height: NonZeroU32::new(1080).unwrap(),
-                    target_framerate: 30.into(),
-                },
+            encoder_parameters,
+            // callback used for passing the encoded frames
+            move |chunk| {
+                // ...
             }
         )
         .unwrap();
 
     for frame in frame_receiver.iter() {
-        // Encodes NV12 texture and returns encoded frame bytes
-        let encoded_frame = encoder
+        // NV12 frame is copied to the encoder's input texture.
+        let input_texture = encoder.input_texture().unwrap();
+        let mut command_encoder = device.create_command_encoder(&Default::default());
+        command_encoder.copy_texture_to_texture(
+            frame.as_image_copy(),
+            input_texture.texture().as_image_copy(),
+            frame.size(),
+        );
+        queue.submit([command_encoder.finish()]);
+
+        encoder
             .encode(
                 gpu_video::InputFrame {
-                    data: frame,
+                    data: input_texture,
                     pts: None,
                 },
                 false,
