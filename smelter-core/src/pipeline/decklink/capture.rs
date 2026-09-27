@@ -75,7 +75,10 @@ impl ChannelCallbackAdapter {
         let width = video_frame.width();
         let height = video_frame.height();
         let bytes_per_row = video_frame.bytes_per_row();
-        let data = video_frame.bytes()?;
+        let data = match self.frame_pre_processor {
+            Some(_) => video_frame.bytes()?,
+            None => bytes::Bytes::copy_from_slice(&video_frame.bytes()?),
+        };
         let pixel_format = video_frame.pixel_format()?;
 
         let frame = match pixel_format {
