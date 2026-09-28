@@ -86,8 +86,7 @@ pub(super) fn spawn_audio_decoder(
         input.input_ref.clone(),
         AudioDecoderThreadOptions {
             ctx: input.ctx.clone(),
-            // not tested it was always null, but audio is in ADTS, so config is
-            // not necessary
+            // Asc is defined for fMP4 and None for MPEG-TS
             decoder_options: FdkAacDecoderOptions { asc: extradata },
             samples_sender,
             input_buffer_size: buffer_size,
