@@ -278,6 +278,9 @@ pub enum DecoderInitError {
     #[error(transparent)]
     OpusError(#[from] opus::Error),
 
+    #[error("Opus channel mapping family {0} is not supported.")]
+    UnsupportedOpusChannelMappingFamily(u8),
+
     #[error(transparent)]
     AacError(#[from] FdkAacDecoderError),
 

@@ -117,10 +117,13 @@ impl InitializableThread for AudioTrackThread {
         let depayloader_stream =
             DepayloaderStream::new(DepayloaderOptions::Opus, packet_stream).flatten();
 
-        let decoder_stream =
-            AudioDecoderStream::<OpusDecoder, _>::new(ctx, (), depayloader_stream)?
-                .flatten()
-                .inspect(|batch| trace!(?batch, "Sample batch produced"));
+        let decoder_stream = AudioDecoderStream::<OpusDecoder, _>::new(
+            ctx,
+            OpusDecoderOptions { opus_head: None },
+            depayloader_stream,
+        )?
+        .flatten()
+        .inspect(|batch| trace!(?batch, "Sample batch produced"));
 
         let state = Self {
             stream: Box::new(decoder_stream),

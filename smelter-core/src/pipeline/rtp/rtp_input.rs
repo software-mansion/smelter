@@ -201,7 +201,7 @@ impl RtpInput {
                 RtpAudioThreadOptions {
                     ctx: ctx.clone(),
                     sample_rate: 48_000,
-                    decoder_options: (),
+                    decoder_options: OpusDecoderOptions { opus_head: None },
                     depayloader_options: DepayloaderOptions::Opus,
                     samples_sender,
                 },
