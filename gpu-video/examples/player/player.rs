@@ -36,7 +36,7 @@ struct Args {
 }
 
 struct FrameWithPts {
-    frame: wgpu::Texture,
+    frame: gpu_video::VideoTexture,
     /// Presentation timestamp
     pts: Duration,
 }

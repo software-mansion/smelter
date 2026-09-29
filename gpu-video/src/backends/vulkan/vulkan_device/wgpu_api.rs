@@ -4,8 +4,8 @@ use ash::vk;
 use wgpu::hal::vulkan::Api as VkApi;
 
 use crate::{
-    EncodedOutputChunk, OutputFrame, VideoDecoderError, VideoEncoderError, WgpuInitError,
-    WgpuTexturesDecoderH264,
+    EncodedOutputChunk, OutputFrame, VideoDecoderError, VideoEncoderError, VideoTexture,
+    WgpuInitError, WgpuTexturesDecoderH264,
     backends::{
         WgpuBackend,
         vulkan::{
@@ -27,7 +27,7 @@ impl WgpuVideoDeviceBackend for VulkanDevice {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: DecoderParameters,
-        on_frame_callback: Box<dyn FnMut(OutputFrame<wgpu::Texture>) + Send>,
+        on_frame_callback: Box<dyn FnMut(OutputFrame<VideoTexture>) + Send>,
     ) -> Result<crate::WgpuTexturesDecoderH264, VideoDecoderError> {
         VulkanDevice::create_wgpu_textures_decoder_h264(
             self,
@@ -175,7 +175,7 @@ impl VulkanDevice {
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
         parameters: DecoderParameters,
-        on_frame_callback: Box<dyn FnMut(OutputFrame<wgpu::Texture>) + Send>,
+        on_frame_callback: Box<dyn FnMut(OutputFrame<VideoTexture>) + Send>,
     ) -> Result<WgpuTexturesDecoderH264, VulkanDecoderError> {
         let backend = VulkanWgpuTexturesDecoderH264::new(
             Arc::new(self.decoding_device()?),

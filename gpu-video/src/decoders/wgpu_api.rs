@@ -10,14 +10,14 @@ pub(crate) trait WgpuVideoDecoderBackend: Send {
     ) -> Result<(), VideoDecoderError>;
 }
 
-/// A decoder that outputs frames stored as [`wgpu::Texture`]s
+/// A decoder that outputs frames stored as [`VideoTexture`](crate::VideoTexture)s
 pub struct WgpuTexturesDecoderH264 {
     pub(crate) backend: Box<dyn WgpuVideoDecoderBackend>,
 }
 
 impl WgpuTexturesDecoderH264 {
-    /// The decoded frames are sent via the callback provided at creation. The produced textures
-    /// have the [`wgpu::TextureFormat::NV12`] format and can be used as a texture binding.
+    /// The decoded frames are sent via the callback provided at creation. The produced
+    /// [`VideoTexture`](crate::VideoTexture)s hold NV12 data and can be used as a texture binding.
     ///
     /// If [`DecoderParameters::max_in_flight_submissions`](crate::parameters::DecoderParameters::max_in_flight_submissions)
     /// decode submissions are already in flight, this blocks until all submissions above the limit finish.

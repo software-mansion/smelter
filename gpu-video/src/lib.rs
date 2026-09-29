@@ -29,6 +29,8 @@ mod instance;
 #[cfg(all(supported, feature = "transcoder"))]
 mod transcoder;
 #[cfg(all(supported, feature = "wgpu"))]
+mod video_texture;
+#[cfg(all(supported, feature = "wgpu"))]
 pub(crate) mod wgpu_helpers;
 
 #[cfg(supported)]

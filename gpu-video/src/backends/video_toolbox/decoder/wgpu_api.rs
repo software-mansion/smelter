@@ -5,106 +5,112 @@ use objc2_core_video as cv;
 use objc2_metal as mtl;
 use wgpu::hal::metal::Api as MtlApi;
 
-use crate::backends::video_toolbox::{
-    allocate_retained,
-    error::{VTDecoderError, VTInitError},
+use crate::{
+    VideoTexture,
+    backends::video_toolbox::{
+        allocate_retained,
+        error::{VTDecoderError, VTInitError},
+    },
 };
 
-pub(crate) fn to_wgpu_texture(
+pub(crate) fn to_video_texture(
     device: &wgpu::Device,
     cache: &SyncCache,
     buffer: &cv::CVBuffer,
-) -> Result<wgpu::Texture, VTDecoderError> {
-    let width = cv::CVPixelBufferGetWidth(buffer);
-    let height = cv::CVPixelBufferGetHeight(buffer);
-    let y_width = cv::CVPixelBufferGetWidthOfPlane(buffer, 0);
-    let y_height = cv::CVPixelBufferGetHeightOfPlane(buffer, 0);
-    let uv_width = cv::CVPixelBufferGetWidthOfPlane(buffer, 1);
-    let uv_height = cv::CVPixelBufferGetHeightOfPlane(buffer, 1);
-
+) -> Result<VideoTexture, VTDecoderError> {
     let cache = cache.0.lock().unwrap();
     cache.0.flush(0);
-    let texture_y = unsafe {
+
+    let y_texture = plane_texture(
+        &cache,
+        device,
+        buffer,
+        0,
+        wgpu::TextureFormat::R8Unorm,
+        mtl::MTLPixelFormat::R8Unorm,
+        "gpu-video output y plane",
+    )?;
+    let uv_texture = plane_texture(
+        &cache,
+        device,
+        buffer,
+        1,
+        wgpu::TextureFormat::Rg8Unorm,
+        mtl::MTLPixelFormat::RG8Unorm,
+        "gpu-video output uv plane",
+    )?;
+
+    Ok(VideoTexture::from_planes(y_texture, uv_texture))
+}
+
+fn plane_texture(
+    cache: &MetalTextureCache,
+    device: &wgpu::Device,
+    buffer: &cv::CVBuffer,
+    plane_index: usize,
+    format: wgpu::TextureFormat,
+    mtl_format: mtl::MTLPixelFormat,
+    label: &str,
+) -> Result<wgpu::Texture, VTDecoderError> {
+    let width = cv::CVPixelBufferGetWidthOfPlane(buffer, plane_index);
+    let height = cv::CVPixelBufferGetHeightOfPlane(buffer, plane_index);
+
+    let cv_texture = unsafe {
         allocate_retained(|ptr| {
             cv::CVMetalTextureCache::create_texture_from_image(
                 None,
                 &cache.0,
                 buffer,
                 None,
-                mtl::MTLPixelFormat::R8Unorm,
-                y_width,
-                y_height,
-                0,
+                mtl_format,
+                width,
+                height,
+                plane_index,
                 ptr,
             )
         })?
     };
-    let mtl_texture_y = cv::CVMetalTextureGetTexture(&texture_y)
+    let mtl_texture = cv::CVMetalTextureGetTexture(&cv_texture)
         .ok_or(VTDecoderError::MetalTextureExtractionFailed)?;
+    let guard = SendSyncCVBuffer(cv_texture);
 
-    let texture_uv = unsafe {
-        allocate_retained(|ptr| {
-            cv::CVMetalTextureCache::create_texture_from_image(
-                None,
-                &cache.0,
-                buffer,
-                None,
-                mtl::MTLPixelFormat::RG8Unorm,
-                uv_width,
-                uv_height,
-                1,
-                ptr,
-            )
-        })?
+    let size = wgpu::Extent3d {
+        width: width as u32,
+        height: height as u32,
+        depth_or_array_layers: 1,
     };
-    let mtl_texture_uv = cv::CVMetalTextureGetTexture(&texture_uv)
-        .ok_or(VTDecoderError::MetalTextureExtractionFailed)?;
-
-    drop(cache);
-
-    let guard_y = SendSyncCVBuffer(texture_y);
-    let guard_uv = SendSyncCVBuffer(texture_uv);
 
     unsafe {
-        let texture = wgpu::hal::metal::Device::texture_from_raw_planar(
-            [mtl_texture_y, mtl_texture_uv],
-            wgpu::TextureFormat::NV12,
+        let hal_texture = wgpu::hal::metal::Device::texture_from_raw(
+            mtl_texture,
+            format,
             mtl::MTLTextureType::Type2D,
             1,
             1,
             wgpu::hal::CopyExtent {
-                width: width as u32,
-                height: height as u32,
+                width: size.width,
+                height: size.height,
                 depth: 1,
             },
-            Some(Box::new(move || {
-                drop(guard_y);
-                drop(guard_uv);
-            })),
+            Some(Box::new(move || drop(guard))),
         );
 
-        let texture = device.create_texture_from_hal::<MtlApi>(
-            texture,
+        Ok(device.create_texture_from_hal::<MtlApi>(
+            hal_texture,
             &wgpu::TextureDescriptor {
-                label: Some("gpu-video output"),
-                size: wgpu::Extent3d {
-                    width: width as u32,
-                    height: height as u32,
-                    depth_or_array_layers: 1,
-                },
+                label: Some(label),
+                size,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::NV12,
+                format,
                 usage: wgpu::TextureUsages::COPY_SRC
                     | wgpu::TextureUsages::COPY_DST
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             },
             wgpu::TextureUses::RESOURCE,
-        );
-
-        Ok(texture)
+        ))
     }
 }
 

@@ -1,11 +1,11 @@
 use crate::{
-    OutputFrame, WgpuConverterInitError,
+    OutputFrame, VideoTexture, WgpuConverterInitError,
     device::{ColorRange, ColorSpace},
     parameters::WgpuConverterParameters,
     wgpu_helpers::WgpuSampler,
 };
 
-/// Helper that lets you convert [`OutputFrame<wgpu::Texture>`] into RGBA [`wgpu::Texture`].
+/// Helper that lets you convert [`OutputFrame<VideoTexture>`] into RGBA [`wgpu::Texture`].
 /// Use [`WgpuNv12ToRgbaConverter::create_input_bind_group`] to create [`wgpu::BindGroup`] which represents
 /// NV12 bind group acceptable by the converter.
 pub struct WgpuNv12ToRgbaConverter {
@@ -94,10 +94,10 @@ impl WgpuNv12ToRgbaConverter {
         })
     }
 
-    /// Creates [`wgpu::BindGroup`] for [`OutputFrame<wgpu::Texture>`].
+    /// Creates [`wgpu::BindGroup`] for [`OutputFrame<VideoTexture>`].
     pub fn create_input_bind_group(
         &self,
-        decoded_frame: &OutputFrame<wgpu::Texture>,
+        decoded_frame: &OutputFrame<VideoTexture>,
     ) -> Result<wgpu::BindGroup, WgpuConverterInitError> {
         let OutputFrame { data, metadata } = decoded_frame;
         if (metadata.color_space != ColorSpace::Unspecified
@@ -110,18 +110,12 @@ impl WgpuNv12ToRgbaConverter {
             });
         }
 
-        let y_plane_view = data.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("gpu-video nv12 to rgba converter y plane view"),
-            format: Some(wgpu::TextureFormat::R8Unorm),
-            aspect: wgpu::TextureAspect::Plane0,
-            ..Default::default()
-        });
-        let uv_plane_view = data.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("gpu-video nv12 to rgba converter uv plane view"),
-            format: Some(wgpu::TextureFormat::Rg8Unorm),
-            aspect: wgpu::TextureAspect::Plane1,
-            ..Default::default()
-        });
+        let y_plane_view = data
+            .y_plane()
+            .create_view(Some("gpu-video nv12 to rgba converter y plane view"));
+        let uv_plane_view = data
+            .uv_plane()
+            .create_view(Some("gpu-video nv12 to rgba converter uv plane view"));
 
         Ok(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
