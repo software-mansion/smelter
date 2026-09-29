@@ -1,7 +1,4 @@
-use std::{
-    sync::{Arc, Mutex, atomic::Ordering},
-    time::Duration,
-};
+use std::sync::{Arc, Mutex, atomic::Ordering};
 
 use ash::vk;
 use tracing::error;
@@ -135,7 +132,7 @@ impl VulkanTranscoder {
             self.encode_resized_images(resized_images)?;
         }
 
-        self.resize_submission_tracker.wait_for_all(Duration::MAX)?;
+        self.resize_submission_tracker.wait_for_all()?;
         for encoder in self.encoders.iter_mut() {
             encoder.wait_for_all()?;
         }
@@ -152,7 +149,7 @@ impl VulkanTranscoder {
             let resizing_pipeline_command_buffer_pools = self.resizing_pipeline.buffer_pool.clone();
             let decode_failed_flag = self.decoder.decode_failed_flag();
 
-            self.resize_submission_tracker.wait_if_full(Duration::MAX)?;
+            self.resize_submission_tracker.wait_if_full()?;
             let Some(mut frame) = self.decoder.decode(instruction)? else {
                 continue;
             };

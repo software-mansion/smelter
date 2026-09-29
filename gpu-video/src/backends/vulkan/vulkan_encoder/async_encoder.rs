@@ -246,8 +246,8 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
             .map_err(VulkanEncoderError::from)
     }
 
-    fn flush(&mut self, timeout: Duration) -> Result<(), VulkanEncoderError> {
-        Ok(self.submission_tracker.wait_for_all(timeout)?)
+    fn flush(&mut self) -> Result<(), VulkanEncoderError> {
+        Ok(self.submission_tracker.wait_for_all(Duration::MAX)?)
     }
 }
 
@@ -256,10 +256,9 @@ impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for AsyncVulkanEncoder<'a
         &mut self,
         frame: &InputFrame<RawFrameData>,
         force_idr: bool,
-        timeout: Duration,
     ) -> Result<(), VideoEncoderError> {
         self.submission_tracker
-            .wait_if_full(timeout)
+            .wait_if_full(Duration::MAX)
             .map_err(VulkanEncoderError::from)?;
 
         let encode_image = self.input_image_pool.image()?;
@@ -269,8 +268,8 @@ impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for AsyncVulkanEncoder<'a
         Ok(())
     }
 
-    fn flush(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
-        Ok(AsyncVulkanEncoder::flush(self, timeout)?)
+    fn flush(&mut self) -> Result<(), VideoEncoderError> {
+        Ok(AsyncVulkanEncoder::flush(self)?)
     }
 }
 

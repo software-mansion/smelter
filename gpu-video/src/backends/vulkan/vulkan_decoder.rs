@@ -892,9 +892,6 @@ impl From<VulkanDecoderError> for VideoDecoderError {
             VulkanDecoderError::InvalidInputData(err_msg) => {
                 VideoDecoderError::InvalidInputData(err_msg)
             }
-            VulkanDecoderError::VulkanCommonError(VulkanCommonError::SubmissionWaitTimeout) => {
-                VideoDecoderError::DecodeSubmissionTimeout
-            }
             VulkanDecoderError::ParserError(err) => VideoDecoderError::ParserError(err),
             VulkanDecoderError::ReferenceManagementError(err) => {
                 VideoDecoderError::ReferenceManagementError(err)
