@@ -3,7 +3,7 @@ use std::sync::Arc;
 use objc2_metal::MTLDevice;
 
 use crate::{
-    EncodedOutputChunk, OutputFrame, VideoEncoderError, WgpuTexturesDecoderH264,
+    EncodedOutputChunk, OutputFrame, VideoEncoderError, VideoTexture, WgpuTexturesDecoderH264,
     adapter::VideoAdapterInfo,
     backends::{
         WgpuBackend,
@@ -57,7 +57,7 @@ impl WgpuBackend for VTBackend {
         let (device, queue) =
             pollster::block_on(wgpu_adapter.request_device(&wgpu::DeviceDescriptor {
                 label: Some("wgpu device created by the videotoolbox decoder"),
-                required_features: desc.wgpu_features | wgpu::Features::TEXTURE_FORMAT_NV12,
+                required_features: desc.wgpu_features,
                 required_limits: desc.wgpu_limits.clone(),
                 experimental_features: desc.wgpu_experimental_features,
                 ..Default::default()
@@ -79,7 +79,7 @@ impl WgpuVideoDeviceBackend for VTDevice {
         wgpu_device: wgpu::Device,
         _wgpu_queue: wgpu::Queue,
         parameters: crate::device::DecoderParameters,
-        on_frame_callback: Box<dyn FnMut(OutputFrame<wgpu::Texture>) + Send>,
+        on_frame_callback: Box<dyn FnMut(OutputFrame<VideoTexture>) + Send>,
     ) -> Result<WgpuTexturesDecoderH264, crate::VideoDecoderError> {
         let backend = VTDecoderH264::new_wgpu_textures(wgpu_device, parameters, on_frame_callback)?;
 

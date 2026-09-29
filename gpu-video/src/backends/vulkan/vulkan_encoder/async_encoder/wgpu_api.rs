@@ -4,7 +4,7 @@ use ash::vk;
 use wgpu::hal::{Queue, vulkan::Api as VkApi};
 
 use crate::{
-    InputFrame,
+    InputFrame, VideoTexture,
     backends::vulkan::{
         VulkanEncoderError,
         codec::EncodeCodec,
@@ -17,11 +17,11 @@ use crate::{
 };
 
 impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
-    fn image_from_wgpu_texture(
+    fn image_from_video_texture(
         &mut self,
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
-        wgpu_texture: &wgpu::Texture,
+        video_texture: &VideoTexture,
     ) -> Result<EncodeInputImage, VulkanEncoderError> {
         let hal_queue = unsafe { wgpu_queue.as_hal::<VkApi>().unwrap() };
 
@@ -29,8 +29,12 @@ impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
             .used_input_images
             .lock()
             .unwrap()
-            .remove(wgpu_texture)
+            .remove(video_texture)
             .ok_or(WgpuTextureEncoderError::TextureNotFromEncoder)?;
+
+        let Some(wgpu_texture) = video_texture.nv12_texture() else {
+            return Err(WgpuTextureEncoderError::TextureNotFromEncoder.into());
+        };
 
         if let Some(wait_for) = self.encoder.tracker.semaphore_tracker.wait_for.as_ref() {
             hal_queue.add_wait_semaphore(
@@ -95,7 +99,7 @@ impl<'a, C: EncodeCodec + 'a> WgpuVideoEncoderBackend for AsyncVulkanEncoder<'a,
             .map_err(VulkanEncoderError::from)?;
 
         let encode_image =
-            self.image_from_wgpu_texture(wgpu_device, wgpu_queue, &frame.data.wgpu_texture)?;
+            self.image_from_video_texture(wgpu_device, wgpu_queue, &frame.data.texture)?;
         self.submit_encode(encode_image, None, force_idr, frame.pts)?;
 
         Ok(())
@@ -109,17 +113,18 @@ impl<'a, C: EncodeCodec + 'a> WgpuVideoEncoderBackend for AsyncVulkanEncoder<'a,
         &mut self,
         wgpu_device: &wgpu::Device,
     ) -> Result<EncodeTexture, VideoEncoderError> {
-        let (image, wgpu_texture) = self.input_image_pool.image_with_wgpu_texture(wgpu_device)?;
+        let (image, texture) = self.input_image_pool.image_with_wgpu_texture(wgpu_device)?;
+        let texture = VideoTexture::from_nv12_texture(texture);
         self.used_input_images
             .lock()
             .unwrap()
-            .insert(wgpu_texture.clone(), image);
+            .insert(texture.clone(), image);
 
         let used_input_images = self.used_input_images.clone();
         Ok(EncodeTexture {
-            wgpu_texture: wgpu_texture.clone(),
+            texture: texture.clone(),
             on_drop: Some(Box::new(move || {
-                used_input_images.lock().unwrap().remove(&wgpu_texture);
+                used_input_images.lock().unwrap().remove(&texture);
             })),
         })
     }

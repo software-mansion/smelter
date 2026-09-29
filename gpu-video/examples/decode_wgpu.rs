@@ -3,7 +3,7 @@ fn main() {
     use std::io::Write;
 
     use gpu_video::{
-        EncodedInputChunk, OutputFrame, VideoAdapterExt, VideoDeviceExt,
+        EncodedInputChunk, OutputFrame, VideoAdapterExt, VideoDeviceExt, VideoTexture,
         parameters::{DecoderParameters, VideoDeviceDescriptor},
     };
 
@@ -32,7 +32,7 @@ fn main() {
         .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap();
 
-    let (frame_sender, frame_receiver) = std::sync::mpsc::channel::<OutputFrame<wgpu::Texture>>();
+    let (frame_sender, frame_receiver) = std::sync::mpsc::channel::<OutputFrame<VideoTexture>>();
 
     let writer_thread_handle = std::thread::spawn({
         let device = device.clone();
@@ -40,7 +40,7 @@ fn main() {
         move || {
             let mut output_file = std::fs::File::create("output.nv12").unwrap();
             for OutputFrame { data, .. } in frame_receiver.iter() {
-                let decoded_frame = download_wgpu_texture(&device, &queue, data);
+                let decoded_frame = download_video_texture(&device, &queue, data);
                 output_file.write_all(&decoded_frame).unwrap();
             }
         }
@@ -79,10 +79,10 @@ fn main() {
 }
 
 #[cfg(supported)]
-fn download_wgpu_texture(
+fn download_video_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    frame: wgpu::Texture,
+    frame: gpu_video::VideoTexture,
 ) -> Vec<u8> {
     use std::io::Write;
 
@@ -100,13 +100,9 @@ fn download_wgpu_texture(
         mapped_at_creation: false,
     });
 
+    let y_plane = frame.y_plane();
     encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo {
-            aspect: wgpu::TextureAspect::Plane0,
-            origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
-            texture: &frame,
-            mip_level: 0,
-        },
+        y_plane.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
             layout: wgpu::TexelCopyBufferLayout {
@@ -115,20 +111,12 @@ fn download_wgpu_texture(
                 rows_per_image: None,
             },
         },
-        wgpu::Extent3d {
-            width: frame.width(),
-            height: frame.height(),
-            depth_or_array_layers: 1,
-        },
+        y_plane.size(),
     );
 
+    let uv_plane = frame.uv_plane();
     encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo {
-            aspect: wgpu::TextureAspect::Plane1,
-            origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
-            texture: &frame,
-            mip_level: 0,
-        },
+        uv_plane.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
             layout: wgpu::TexelCopyBufferLayout {
@@ -137,11 +125,7 @@ fn download_wgpu_texture(
                 rows_per_image: None,
             },
         },
-        wgpu::Extent3d {
-            width: frame.width() / 2,
-            height: frame.height() / 2,
-            depth_or_array_layers: 1,
-        },
+        uv_plane.size(),
     );
 
     queue.submit(Some(encoder.finish()));

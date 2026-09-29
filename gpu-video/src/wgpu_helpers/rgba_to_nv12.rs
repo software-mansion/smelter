@@ -1,11 +1,11 @@
 use crate::{
-    WgpuConverterInitError,
+    VideoTexture, WgpuConverterInitError,
     device::{ColorRange, ColorSpace},
     parameters::WgpuConverterParameters,
     wgpu_helpers::WgpuSampler,
 };
 
-/// Helper that lets you convert RGBA [`wgpu::Texture`] into NV12 [`wgpu::Texture`].
+/// Helper that lets you convert RGBA [`wgpu::Texture`] into NV12 [`VideoTexture`].
 /// Use [`WgpuRgbaToNv12Converter::create_input_bind_group`] to create [`wgpu::BindGroup`] which represents
 /// RGBA bind group acceptable by the converter.
 pub struct WgpuRgbaToNv12Converter {
@@ -93,20 +93,28 @@ impl WgpuRgbaToNv12Converter {
         &self,
         command_encoder: &mut wgpu::CommandEncoder,
         src_rgba_bind_group: &wgpu::BindGroup,
-        dst_y_plane_view: &wgpu::TextureView,
-        dst_uv_plane_view: &wgpu::TextureView,
+        dst_texture: &VideoTexture,
     ) {
+        let usage = Some(wgpu::TextureUsages::RENDER_ATTACHMENT);
+        let dst_y_plane_view = dst_texture
+            .y_plane()
+            .create_view_with_usage(Some("gpu-video rgba to nv12 converter y plane view"), usage);
+        let dst_uv_plane_view = dst_texture.uv_plane().create_view_with_usage(
+            Some("gpu-video rgba to nv12 converter uv plane view"),
+            usage,
+        );
+
         self.y_plane_renderer.draw(
             command_encoder,
             src_rgba_bind_group,
             &self.sampler.bg,
-            dst_y_plane_view,
+            &dst_y_plane_view,
         );
         self.uv_plane_renderer.draw(
             command_encoder,
             src_rgba_bind_group,
             &self.sampler.bg,
-            dst_uv_plane_view,
+            &dst_uv_plane_view,
         );
     }
 }

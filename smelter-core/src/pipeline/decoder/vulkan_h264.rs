@@ -3,11 +3,11 @@ use std::sync::Arc;
 use crossbeam_channel::Receiver;
 use gpu_video::{
     H264DecoderEvent, OutputFrame, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
-    WgpuTexturesDecoderH264,
+    VideoTexture, WgpuTexturesDecoderH264,
     parameters::{CorruptedStateHandling, DecoderParameters, DecoderUsage},
 };
 use smelter_render::{FrameData, Resolution};
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::pipeline::decoder::{
     EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
@@ -16,7 +16,7 @@ use crate::prelude::*;
 
 pub struct VulkanH264Decoder {
     decoder: WgpuTexturesDecoderH264,
-    frame_receiver: Receiver<OutputFrame<wgpu::Texture>>,
+    frame_receiver: Receiver<OutputFrame<VideoTexture>>,
     keyframe_request_sender: Option<KeyframeRequestSender>,
 }
 
@@ -101,11 +101,14 @@ impl VideoDecoderInstance for VulkanH264Decoder {
 
 impl VulkanH264Decoder {
     fn drain_decoded_frames(&self) -> Vec<Frame> {
-        self.frame_receiver.try_iter().map(from_vk_frame).collect()
+        self.frame_receiver
+            .try_iter()
+            .filter_map(from_vk_frame)
+            .collect()
     }
 }
 
-fn from_vk_frame(frame: gpu_video::OutputFrame<wgpu::Texture>) -> Frame {
+fn from_vk_frame(frame: gpu_video::OutputFrame<VideoTexture>) -> Option<Frame> {
     let gpu_video::OutputFrame { data, metadata } = frame;
     let resolution = Resolution {
         width: data.width() as usize,
@@ -113,10 +116,15 @@ fn from_vk_frame(frame: gpu_video::OutputFrame<wgpu::Texture>) -> Frame {
     };
     let pts = Timestamp::from_micros(metadata.pts.unwrap() as i64);
 
+    let Some(texture) = data.nv12_texture() else {
+        error!("H264 Vulkan decoder produced a frame with separated planes. Dropping frame.");
+        return None;
+    };
+
     trace!(?pts, "H264 Vulkan decoder produced a frame.");
-    Frame {
-        data: FrameData::Nv12WgpuTexture(data.into()),
+    Some(Frame {
+        data: FrameData::Nv12WgpuTexture(Arc::new(texture.clone())),
         pts,
         resolution,
-    }
+    })
 }
