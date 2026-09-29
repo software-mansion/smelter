@@ -1,4 +1,5 @@
-use tracing::debug;
+use tokio::runtime::Handle;
+use tracing::{debug, warn};
 use webrtc::{
     api::{
         APIBuilder, interceptor_registry::register_default_interceptors, media_engine::MediaEngine,
@@ -27,8 +28,24 @@ use crate::pipeline::webrtc::whip_output::codec_preferences::CodecParameters;
 use crate::prelude::*;
 
 #[derive(Debug)]
-pub(super) struct PeerConnection {
+pub(super) struct PeerConnection(Arc<Inner>);
+
+/// Closes the peer connection when the last `PeerConnection` is dropped.
+#[derive(Debug)]
+struct Inner {
     pc: Arc<RTCPeerConnection>,
+    tokio_rt: Handle,
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        let pc = self.pc.clone();
+        self.tokio_rt.spawn(async move {
+            if let Err(err) = pc.close().await {
+                warn!(%err, "Failed to close peer connection.");
+            }
+        });
+    }
 }
 
 impl PeerConnection {
@@ -68,24 +85,27 @@ impl PeerConnection {
             },
         ));
 
-        Ok(Self {
+        Ok(Self(Arc::new(Inner {
             pc: peer_connection,
-        })
+            tokio_rt: ctx.tokio_rt.clone(),
+        })))
     }
 
     pub fn on_connection_state_change(
         &self,
         f: impl Fn(RTCPeerConnectionState) + Send + Sync + 'static,
     ) {
-        self.pc
-            .on_peer_connection_state_change(Box::new(move |state: RTCPeerConnectionState| {
+        self.0.pc.on_peer_connection_state_change(Box::new(
+            move |state: RTCPeerConnectionState| {
                 f(state);
                 Box::pin(async {})
-            }));
+            },
+        ));
     }
 
     pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WebrtcClientError> {
         let transceiver = self
+            .0
             .pc
             .add_transceiver_from_kind(
                 RTPCodecType::Video,
@@ -104,6 +124,7 @@ impl PeerConnection {
 
     pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WebrtcClientError> {
         let transceiver = self
+            .0
             .pc
             .add_transceiver_from_kind(
                 RTPCodecType::Audio,
@@ -124,7 +145,8 @@ impl PeerConnection {
         &self,
         answer: RTCSessionDescription,
     ) -> Result<(), WebrtcClientError> {
-        self.pc
+        self.0
+            .pc
             .set_remote_description(answer)
             .await
             .map_err(WebrtcClientError::RemoteDescriptionError)
@@ -134,52 +156,39 @@ impl PeerConnection {
         &self,
         offer: RTCSessionDescription,
     ) -> Result<(), WebrtcClientError> {
-        self.pc
+        self.0
+            .pc
             .set_local_description(offer)
             .await
             .map_err(WebrtcClientError::LocalDescriptionError)
     }
 
     pub async fn create_offer(&self) -> Result<RTCSessionDescription, WebrtcClientError> {
-        self.pc
+        self.0
+            .pc
             .create_offer(None)
             .await
             .map_err(WebrtcClientError::OfferCreationError)
     }
 
     pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
-        self.pc.on_ice_candidate(f);
+        self.0.pc.on_ice_candidate(f);
     }
 
     pub async fn get_stats(&self) -> StatsReport {
-        self.pc.get_stats().await
+        self.0.pc.get_stats().await
     }
 
     pub fn downgrade(&self) -> WeakPeerConnection {
-        WeakPeerConnection {
-            pc: Arc::downgrade(&self.pc),
-        }
+        WeakPeerConnection(Arc::downgrade(&self.0))
     }
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct WeakPeerConnection {
-    pc: Weak<RTCPeerConnection>,
-}
+pub(super) struct WeakPeerConnection(Weak<Inner>);
 
 impl WeakPeerConnection {
     pub fn upgrade(&self) -> Option<PeerConnection> {
-        self.pc.upgrade().map(|pc| PeerConnection { pc })
-    }
-}
-
-impl Drop for PeerConnection {
-    fn drop(&mut self) {
-        if let Ok(handle) = tokio::runtime::Handle::try_current()
-            && Arc::strong_count(&self.pc) == 1
-        {
-            let pc = self.pc.clone();
-            handle.spawn(async move { pc.close().await });
-        }
+        self.0.upgrade().map(PeerConnection)
     }
 }
