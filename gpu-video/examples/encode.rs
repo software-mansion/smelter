@@ -3,7 +3,7 @@ fn main() {
     use std::{io::Read, num::NonZeroU32};
 
     use gpu_video::{
-        InputFrame, RawFrameData, VideoInstance,
+        InputFrame, RawFrameRef, VideoInstance,
         parameters::{
             EncoderParametersH264, EncoderParametersH265, RateControl, VideoAdapterDescriptor,
             VideoDeviceDescriptor, VideoInstanceDescriptor, VideoParameters,
@@ -84,16 +84,18 @@ fn main() {
         )
         .expect("create encoder");
 
-    let mut frame = InputFrame {
-        data: RawFrameData {
-            frame: vec![0; width.get() as usize * height.get() as usize * 3 / 2],
-            width: width.get(),
-            height: height.get(),
-        },
-        pts: None,
-    };
+    let mut frame_data = vec![0; width.get() as usize * height.get() as usize * 3 / 2];
 
-    while let Ok(()) = nv12.read_exact(&mut frame.data.frame) {
+    while let Ok(()) = nv12.read_exact(&mut frame_data) {
+        let frame = InputFrame {
+            data: RawFrameRef {
+                frame: frame_data.as_slice(),
+                width: width.get(),
+                height: height.get(),
+            },
+            pts: None,
+        };
+
         encoder_h264.encode(&frame, false).expect("encode");
         encoder_h265.encode(&frame, false).expect("encode");
     }

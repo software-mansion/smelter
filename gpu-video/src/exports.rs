@@ -510,3 +510,20 @@ pub struct RawFrameData {
     pub width: u32,
     pub height: u32,
 }
+
+/// Borrowed version of [`RawFrameData`], used as encoder input.
+pub struct RawFrameRef<'a> {
+    pub frame: &'a [u8],
+    pub width: u32,
+    pub height: u32,
+}
+
+impl<'a> From<&'a RawFrameData> for RawFrameRef<'a> {
+    fn from(data: &'a RawFrameData) -> Self {
+        Self {
+            frame: &data.frame,
+            width: data.width,
+            height: data.height,
+        }
+    }
+}

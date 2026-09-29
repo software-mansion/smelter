@@ -10,7 +10,7 @@ use ash::vk;
 use tracing::error;
 
 use crate::{
-    EncodedOutputChunk, InputFrame, RawFrameData,
+    EncodedOutputChunk, InputFrame, RawFrameRef,
     backends::vulkan::{
         VulkanEncoder, VulkanEncoderError,
         codec::{EncodeCodec, h264::H264Codec, h265::H265Codec},
@@ -102,7 +102,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
 
     fn transfer_buffer_to_image(
         &mut self,
-        frame: &InputFrame<RawFrameData>,
+        frame: &InputFrame<RawFrameRef<'_>>,
         input_image: &Arc<Image>,
     ) -> Result<Buffer, VulkanEncoderError> {
         let extent = input_image.extent;
@@ -129,7 +129,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
 
         let buffer = Buffer::new_transfer_with_data(
             self.encoding_device.allocator.clone(),
-            &frame.data.frame,
+            frame.data.frame,
         )?;
 
         unsafe {
@@ -233,7 +233,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
 impl<'a, C: EncodeCodec + 'static> VideoEncoderBackend for AsyncVulkanEncoder<'a, C> {
     fn encode_bytes(
         &mut self,
-        frame: &InputFrame<RawFrameData>,
+        frame: &InputFrame<RawFrameRef<'_>>,
         force_idr: bool,
         timeout: Duration,
     ) -> Result<(), VideoEncoderError> {

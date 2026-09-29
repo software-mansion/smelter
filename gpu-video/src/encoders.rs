@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{InputFrame, RawFrameData, VideoBackendError};
+use crate::{InputFrame, RawFrameRef, VideoBackendError};
 
 #[cfg(feature = "wgpu")]
 mod wgpu_api;
@@ -10,7 +10,7 @@ pub use wgpu_api::*;
 pub(crate) trait VideoEncoderBackend: Send {
     fn encode_bytes(
         &mut self,
-        frame: &InputFrame<RawFrameData>,
+        frame: &InputFrame<RawFrameRef<'_>>,
         force_idr: bool,
         timeout: Duration,
     ) -> Result<(), VideoEncoderError>;
@@ -60,7 +60,7 @@ impl BytesEncoderH264 {
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode(
         &mut self,
-        frame: &InputFrame<RawFrameData>,
+        frame: &InputFrame<RawFrameRef<'_>>,
         force_keyframe: bool,
     ) -> Result<(), VideoEncoderError> {
         self.encode_timeout(frame, force_keyframe, Duration::MAX)
@@ -71,7 +71,7 @@ impl BytesEncoderH264 {
     /// or times out after `timeout`.
     pub fn encode_timeout(
         &mut self,
-        frame: &InputFrame<RawFrameData>,
+        frame: &InputFrame<RawFrameRef<'_>>,
         force_keyframe: bool,
         timeout: Duration,
     ) -> Result<(), VideoEncoderError> {
@@ -128,7 +128,7 @@ impl BytesEncoderH265 {
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn encode(
         &mut self,
-        frame: &InputFrame<RawFrameData>,
+        frame: &InputFrame<RawFrameRef<'_>>,
         force_keyframe: bool,
     ) -> Result<(), VideoEncoderError> {
         self.encode_timeout(frame, force_keyframe, Duration::MAX)
@@ -139,7 +139,7 @@ impl BytesEncoderH265 {
     /// or times out after `timeout`.
     pub fn encode_timeout(
         &mut self,
-        frame: &InputFrame<RawFrameData>,
+        frame: &InputFrame<RawFrameRef<'_>>,
         force_keyframe: bool,
         timeout: Duration,
     ) -> Result<(), VideoEncoderError> {
