@@ -15,11 +15,11 @@ use objc2_video_toolbox as vt;
 use wgpu::hal::{Device as _, Queue as _, metal::Api as MtlApi};
 
 use crate::{
-    EncodedOutputChunk, InputFrame, VideoEncoderError,
+    EncodedOutputChunk, InputFrame, VideoEncoderError, VideoTexture,
     backends::video_toolbox::{
         error::{OSStatusError, OSStatusExt, VTEncoderError, VTInitError},
         wgpu_api::{
-            SendSyncCVBuffer, SyncCache, make_texture_cache, wgpu_texture_from_pixel_buffer,
+            SendSyncCVBuffer, SyncCache, make_texture_cache, video_texture_from_pixel_buffer,
         },
     },
     device::{EncoderOutputParameters, VideoParameters},
@@ -34,7 +34,7 @@ pub(crate) struct VTWgpuEncodeState {
     listener: Retained<MTLSharedEventListener>,
     next_fence_value: u64,
     texture_cache: SyncCache,
-    issued_input_textures: Arc<Mutex<HashMap<wgpu::Texture, SendSyncCVBuffer>>>,
+    issued_input_textures: Arc<Mutex<HashMap<VideoTexture, SendSyncCVBuffer>>>,
     pending: VecDeque<PendingFrame>,
 }
 
@@ -112,7 +112,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
             .ok_or(VTEncoderError::NotConfiguredForWgpuInput)?;
 
         let buffer = self.session.acquire_input_buffer()?;
-        let wgpu_texture = wgpu_texture_from_pixel_buffer(
+        let texture = video_texture_from_pixel_buffer(
             &state.texture_cache,
             wgpu_device,
             &buffer,
@@ -127,13 +127,13 @@ impl<C: EncodeCodec> VTEncoder<C> {
             .issued_input_textures
             .lock()
             .unwrap()
-            .insert(wgpu_texture.clone(), SendSyncCVBuffer(buffer));
+            .insert(texture.clone(), SendSyncCVBuffer(buffer));
 
         let issued_input_textures = state.issued_input_textures.clone();
         Ok(EncodeTexture {
-            wgpu_texture: wgpu_texture.clone(),
+            texture: texture.clone(),
             on_drop: Some(Box::new(move || {
-                issued_input_textures.lock().unwrap().remove(&wgpu_texture);
+                issued_input_textures.lock().unwrap().remove(&texture);
             })),
         })
     }
@@ -156,7 +156,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
             .issued_input_textures
             .lock()
             .unwrap()
-            .remove(&frame.data.wgpu_texture)
+            .remove(&frame.data.texture)
             .ok_or(WgpuTextureEncoderError::TextureNotFromEncoder)?;
 
         let (cm_pts, duration) = self.next_frame_timing();
