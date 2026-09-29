@@ -224,7 +224,7 @@ impl VulkanDevice {
         };
 
         let allocator = Arc::new(Allocator::new(
-            instance.instance.clone(),
+            &instance.instance,
             physical_device,
             device.clone(),
         )?);

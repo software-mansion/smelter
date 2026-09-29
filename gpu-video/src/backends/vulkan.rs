@@ -89,6 +89,12 @@ pub enum VulkanCommonError {
     #[error("Cannot find a queue with index {0}")]
     NoQueue(usize),
 
+    #[error("Memory allocation error: {0}")]
+    Allocation(#[from] gpu_allocator::AllocationError),
+
+    #[error("Tried to access memory of a buffer that is not host-mapped")]
+    BufferNotMapped,
+
     #[error("Memory copy requested to a buffer that is not set up for receiving input")]
     UploadToImproperBuffer,
 
