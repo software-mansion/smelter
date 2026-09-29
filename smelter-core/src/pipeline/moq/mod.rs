@@ -7,7 +7,6 @@ use moq_native::ClientConfig;
 use std::{
     net::{SocketAddr, ToSocketAddrs},
     ops::Deref,
-    sync::Arc,
 };
 use url::Url;
 
@@ -38,11 +37,11 @@ fn client_config(url: &Url, disable_tls_verification: bool) -> ClientConfig {
 
 pub(super) struct MoqSession {
     session: Session,
-    rt: Arc<tokio::runtime::Runtime>,
+    rt: tokio::runtime::Handle,
 }
 
 impl MoqSession {
-    fn new(session: Session, rt: Arc<tokio::runtime::Runtime>) -> Self {
+    fn new(session: Session, rt: tokio::runtime::Handle) -> Self {
         Self { session, rt }
     }
 }

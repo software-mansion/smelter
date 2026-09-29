@@ -4,7 +4,7 @@ use ::rtmp::TlsConfig;
 use smelter_render::{
     Framerate, RenderingMode, WgpuCtx, WgpuFeatures, web_renderer::ChromiumContext,
 };
-use tokio::runtime::Runtime;
+use tokio::runtime::{Handle, Runtime};
 
 use crate::{
     event::EventEmitter,
@@ -141,7 +141,7 @@ pub(crate) struct PipelineCtx {
     pub webrtc_setting_engine: WebrtcSettingEngineCtx,
     pub moq_disable_tls_verification: bool,
 
-    tokio_rt: Arc<Runtime>,
+    tokio_rt: Handle,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
     rtmp_state: Option<Arc<RtmpPipelineState>>,
     moq_state: Option<Arc<MoqPipelineState>>,

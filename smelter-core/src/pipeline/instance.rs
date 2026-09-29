@@ -71,6 +71,10 @@ pub struct Pipeline {
     #[allow(dead_code)]
     // triggers cleanup on drop
     udp_mux_handle: Option<UdpMuxHandle>,
+
+    #[allow(dead_code)]
+    // keeps the runtime alive, declared last so it is dropped after everything else
+    tokio_rt: Arc<Runtime>,
 }
 
 impl Pipeline {
@@ -636,7 +640,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     let (webrtc_setting_engine, udp_mux_handle) = WebrtcSettingEngineCtx::new(
         opts.webrtc_nat_1to1_ips,
         opts.webrtc_udp_port_strategy,
-        &tokio_rt,
+        tokio_rt.handle(),
     )?;
 
     let queue = Queue::new(queue_options);
@@ -651,7 +655,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         download_dir,
         event_emitter: Arc::new(EventEmitter::new()),
         stats_sender,
-        tokio_rt: tokio_rt.clone(),
+        tokio_rt: tokio_rt.handle().clone(),
         graphics_context,
         wgpu_ctx: renderer.wgpu_ctx(),
         whip_whep_state: match opts.whip_whep_server {
@@ -698,6 +702,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         rtmp_server,
         moq_server,
         udp_mux_handle,
+        tokio_rt,
     };
 
     Ok(pipeline)

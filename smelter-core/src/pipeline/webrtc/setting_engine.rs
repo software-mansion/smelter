@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tokio::{net::UdpSocket, runtime::Runtime};
+use tokio::{net::UdpSocket, runtime::Handle};
 use tracing::warn;
 use webrtc::{
     api::setting_engine::SettingEngine,
@@ -41,7 +41,7 @@ pub(crate) enum WebrtcSettingEngineCtx {
 pub(crate) struct UdpMuxHandle {
     udp_mux: Arc<UDPMuxDefault>,
     socket: Option<Arc<UdpSocket>>,
-    tokio_rt: Arc<Runtime>,
+    tokio_rt: Handle,
 }
 
 impl Drop for UdpMuxHandle {
@@ -61,7 +61,7 @@ impl WebrtcSettingEngineCtx {
     pub fn new(
         nat_1to1_ips: Arc<Vec<String>>,
         port_strategy: Option<WebrtcUdpPortStrategy>,
-        tokio_rt: &Arc<Runtime>,
+        tokio_rt: &Handle,
     ) -> Result<(Self, Option<UdpMuxHandle>), InitPipelineError> {
         match port_strategy {
             Some(WebrtcUdpPortStrategy::PortRange(start, end)) => Ok((
