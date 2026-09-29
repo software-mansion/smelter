@@ -25,6 +25,7 @@ pub(crate) struct OpusDecoder {
     /// Encoder warm-up samples (OpusHead pre-skip) at the start of the stream still to drop.
     /// Chunk timestamps are expected to already account for it, as ffmpeg does.
     samples_to_skip: usize,
+    channel_mapping: StereoMapping,
 }
 
 impl AudioDecoder for OpusDecoder {
@@ -50,12 +51,7 @@ impl AudioDecoder for OpusDecoder {
             .opus_head
             .map(|data| OpusHead::parse(&data))
             .unwrap_or_default();
-        // Mono and stereo only, more channels are coded as multiple streams.
-        if opus_head.channel_mapping_family != 0 {
-            return Err(DecoderInitError::UnsupportedOpusChannelMappingFamily(
-                opus_head.channel_mapping_family,
-            ));
-        }
+        let channel_mapping = opus_head.stereo_mapping()?;
         decoder.set_gain(opus_head.output_gain.into())?;
 
         Ok(Self {
@@ -66,6 +62,7 @@ impl AudioDecoder for OpusDecoder {
             plc_duration: Duration::ZERO,
             // Pre-skip is counted in 48 kHz samples.
             samples_to_skip: opus_head.pre_skip as usize * decoded_sample_rate as usize / 48_000,
+            channel_mapping,
         })
     }
 
@@ -230,7 +227,10 @@ impl OpusDecoder {
     /// Stamps the `range` of decoded samples in the buffer with `start_pts`.
     fn read_buffer(&self, range: Range<usize>, start_pts: Timestamp) -> InputAudioSamples {
         let (samples, _) = self.decoded_samples_buffer[2 * range.start..2 * range.end].as_chunks();
-        let samples = samples.iter().map(|&[l, r]| (l as f64, r as f64)).collect();
+        let samples = samples
+            .iter()
+            .map(|&sample| self.channel_mapping.map_samples(sample))
+            .collect();
         InputAudioSamples::new(
             AudioSamples::Stereo(samples),
             start_pts,
@@ -248,9 +248,16 @@ impl OpusDecoder {
 struct OpusHead {
     /// Encoder delay in 48 kHz samples.
     pre_skip: u16,
+    channel_count: u8,
     /// Gain in dB, Q7.8.
     output_gain: i16,
     channel_mapping_family: u8,
+    /// Fields below are present only for mapping families other than 0.
+    stream_count: u8,
+    /// Streams coding two channels, they come first.
+    coupled_count: u8,
+    /// Decoded channel index for each output channel.
+    channel_mapping: Vec<u8>,
 }
 
 impl OpusHead {
@@ -264,10 +271,54 @@ impl OpusHead {
             data.get(offset..offset + 2)
                 .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
         };
+        let channel_count = data.get(9).copied().unwrap_or(0);
         Self {
+            channel_count,
             pre_skip: le_u16(10).unwrap_or(0),
             output_gain: le_u16(16).unwrap_or(0) as i16,
             channel_mapping_family: data.get(18).copied().unwrap_or(0),
+            stream_count: data.get(19).copied().unwrap_or(0),
+            coupled_count: data.get(20).copied().unwrap_or(0),
+            channel_mapping: data
+                .get(21..21 + channel_count as usize)
+                .map(<[u8]>::to_vec)
+                .unwrap_or_default(),
+        }
+    }
+
+    /// Mono and stereo only, more channels are coded as multiple streams.
+    fn stereo_mapping(&self) -> Result<StereoMapping, DecoderInitError> {
+        match self.channel_mapping_family {
+            0 => Ok(StereoMapping::Normal),
+            // A single coupled stereo stream is the same as family 0, only the channel order can
+            // differ.
+            1 if self.channel_count == 2 && self.stream_count == 1 && self.coupled_count == 1 => {
+                match self.channel_mapping[..] {
+                    [0, 1] => Ok(StereoMapping::Normal),
+                    [1, 0] => Ok(StereoMapping::Swapped),
+                    _ => Err(DecoderInitError::UnsupportedOpusChannelMappingFamily(1)),
+                }
+            }
+            family => Err(DecoderInitError::UnsupportedOpusChannelMappingFamily(
+                family,
+            )),
+        }
+    }
+}
+
+/// Order of the decoded stereo channels in the output.
+#[derive(Debug, Clone, Copy)]
+enum StereoMapping {
+    Normal,
+    /// Stream codes the right channel first.
+    Swapped,
+}
+
+impl StereoMapping {
+    fn map_samples(self, [first, second]: [f32; 2]) -> (f64, f64) {
+        match self {
+            Self::Normal => (first as f64, second as f64),
+            Self::Swapped => (second as f64, first as f64),
         }
     }
 }
