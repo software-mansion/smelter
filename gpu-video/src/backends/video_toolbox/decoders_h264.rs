@@ -107,7 +107,6 @@ impl<T: Send + 'static> VTDecoderH264<T> {
     fn process_event(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
-        timeout: Duration,
     ) -> Result<(), VideoDecoderError> {
         let flush = matches!(event, DecoderEvent::Flush);
         let instructions = self.event_processor.process_event(event)?;
@@ -121,11 +120,9 @@ impl<T: Send + 'static> VTDecoderH264<T> {
                     self.decoder.process_pps(pps, raw_bytes)
                 }
                 DecoderInstruction::Decode { decode_info, .. } => {
-                    self.submit(decode_info, false, timeout)?
+                    self.submit(decode_info, false)?
                 }
-                DecoderInstruction::Idr { decode_info, .. } => {
-                    self.submit(decode_info, true, timeout)?
-                }
+                DecoderInstruction::Idr { decode_info, .. } => self.submit(decode_info, true)?,
                 DecoderInstruction::Drop { .. } => {}
             }
         }
@@ -135,7 +132,7 @@ impl<T: Send + 'static> VTDecoderH264<T> {
 
             let mut state = self
                 .shared
-                .wait_while(timeout, |state| state.in_flight() > 0)?;
+                .wait_while(Duration::MAX, |state| state.in_flight() > 0)?;
             state.flush_sorter();
         }
 
@@ -146,9 +143,8 @@ impl<T: Send + 'static> VTDecoderH264<T> {
         &mut self,
         decode_info: DecodeInformation,
         is_idr: bool,
-        timeout: Duration,
     ) -> Result<(), VideoDecoderError> {
-        let submission_index = self.allocate_submission_index(timeout)?;
+        let submission_index = self.allocate_submission_index()?;
 
         let shared = self.shared.clone();
         let result =
@@ -165,10 +161,11 @@ impl<T: Send + 'static> VTDecoderH264<T> {
         Ok(())
     }
 
-    fn allocate_submission_index(&self, timeout: Duration) -> Result<u64, VideoDecoderError> {
+    fn allocate_submission_index(&self) -> Result<u64, VideoDecoderError> {
         let mut state = if self.max_in_flight > 0 {
-            self.shared
-                .wait_while(timeout, |state| state.in_flight() >= self.max_in_flight)?
+            self.shared.wait_while(Duration::MAX, |state| {
+                state.in_flight() >= self.max_in_flight
+            })?
         } else {
             self.shared.state.lock().unwrap()
         };
@@ -183,9 +180,8 @@ impl VideoDecoderBackend for VTDecoderH264<RawFrameData> {
     fn process_event_bytes(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
-        timeout: Duration,
     ) -> Result<(), VideoDecoderError> {
-        self.process_event(event, timeout)
+        self.process_event(event)
     }
 }
 
@@ -194,9 +190,8 @@ impl crate::decoders::WgpuVideoDecoderBackend for VTDecoderH264<VideoTexture> {
     fn process_event_textures(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
-        timeout: Duration,
     ) -> Result<(), VideoDecoderError> {
-        self.process_event(event, timeout)
+        self.process_event(event)
     }
 }
 
