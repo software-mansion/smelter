@@ -25,7 +25,7 @@ mod whip_input;
 mod whip_output;
 
 pub(super) use server::WhipWhepServer;
-pub(super) use setting_engine::WebrtcSettingEngineCtx;
+pub(super) use setting_engine::{UdpMuxHandle, WebrtcSettingEngineCtx};
 pub(super) use whep_input::WhepInput;
 pub(super) use whep_output::WhepOutput;
 pub(super) use whip_input::WhipInput;

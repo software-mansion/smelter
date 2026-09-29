@@ -34,9 +34,27 @@ pub(crate) enum WebrtcSettingEngineCtx {
     MuxOnSinglePort {
         nat_1to1_ips: Arc<Vec<String>>,
         udp_mux: Arc<UDPMuxDefault>,
-        socket: Arc<Mutex<Option<Arc<UdpSocket>>>>,
-        tokio_rt: Arc<Runtime>,
     },
+}
+
+/// Owns the UDP mux socket, closes it on drop.
+pub(crate) struct UdpMuxHandle {
+    udp_mux: Arc<UDPMuxDefault>,
+    socket: Option<Arc<UdpSocket>>,
+    tokio_rt: Arc<Runtime>,
+}
+
+impl Drop for UdpMuxHandle {
+    fn drop(&mut self) {
+        let udp_mux = self.udp_mux.clone();
+        let socket = self.socket.take();
+        self.tokio_rt.spawn(async move {
+            if let Err(err) = udp_mux.close().await {
+                warn!(%err, "Failed to close UDP socket")
+            }
+            drop(socket);
+        });
+    }
 }
 
 impl WebrtcSettingEngineCtx {
@@ -44,45 +62,35 @@ impl WebrtcSettingEngineCtx {
         nat_1to1_ips: Arc<Vec<String>>,
         port_strategy: Option<WebrtcUdpPortStrategy>,
         tokio_rt: &Arc<Runtime>,
-    ) -> Result<Self, InitPipelineError> {
+    ) -> Result<(Self, Option<UdpMuxHandle>), InitPipelineError> {
         match port_strategy {
-            Some(WebrtcUdpPortStrategy::PortRange(start, end)) => Ok(Self::PortRange {
-                start,
-                end,
-                nat_1to1_ips,
-            }),
+            Some(WebrtcUdpPortStrategy::PortRange(start, end)) => Ok((
+                Self::PortRange {
+                    start,
+                    end,
+                    nat_1to1_ips,
+                },
+                None,
+            )),
             Some(WebrtcUdpPortStrategy::Mux(port)) => {
                 // WARNING: Make sure this code is never run in async context.
                 let (udp_mux, socket) = tokio_rt
                     .block_on(setup_socket_for_muxing(port))
                     .map_err(|e| InitPipelineError::BindUdpMuxSocket(port, e))?;
-                Ok(Self::MuxOnSinglePort {
-                    nat_1to1_ips,
-                    udp_mux,
-                    socket: Arc::new(Mutex::new(Some(socket))),
+                let handle = UdpMuxHandle {
+                    udp_mux: udp_mux.clone(),
+                    socket: Some(socket),
                     tokio_rt: tokio_rt.clone(),
-                })
+                };
+                Ok((
+                    Self::MuxOnSinglePort {
+                        nat_1to1_ips,
+                        udp_mux,
+                    },
+                    Some(handle),
+                ))
             }
-            None => Ok(Self::AnyPort { nat_1to1_ips }),
-        }
-    }
-
-    pub fn close(&self) {
-        if let WebrtcSettingEngineCtx::MuxOnSinglePort {
-            udp_mux,
-            socket,
-            tokio_rt,
-            ..
-        } = self
-        {
-            let udp_mux = udp_mux.clone();
-            let socket = socket.clone();
-            tokio_rt.spawn(async move {
-                if let Err(err) = udp_mux.close().await {
-                    warn!(%err, "Failed to close UDP socket")
-                }
-                socket.lock().take();
-            });
+            None => Ok((Self::AnyPort { nat_1to1_ips }, None)),
         }
     }
 

@@ -36,7 +36,8 @@ use crate::{
         },
         rtmp::spawn_rtmp_server,
         webrtc::{
-            WebrtcSettingEngineCtx, WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle,
+            UdpMuxHandle, WebrtcSettingEngineCtx, WhipWhepPipelineState, WhipWhepServer,
+            WhipWhepServerHandle,
         },
     },
     queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
@@ -66,6 +67,10 @@ pub struct Pipeline {
 
     #[allow(dead_code)]
     moq_server: Option<MoqServer>,
+
+    #[allow(dead_code)]
+    // triggers cleanup on drop
+    udp_mux_handle: Option<UdpMuxHandle>,
 }
 
 impl Pipeline {
@@ -428,7 +433,6 @@ impl Pipeline {
 impl Drop for Pipeline {
     fn drop(&mut self) {
         info!("Stopping pipeline");
-        self.ctx.webrtc_setting_engine.close();
     }
 }
 
@@ -629,7 +633,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         PipelineMoqServerOptions::Disable => None,
     };
 
-    let webrtc_setting_engine = WebrtcSettingEngineCtx::new(
+    let (webrtc_setting_engine, udp_mux_handle) = WebrtcSettingEngineCtx::new(
         opts.webrtc_nat_1to1_ips,
         opts.webrtc_udp_port_strategy,
         &tokio_rt,
@@ -693,6 +697,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         whip_whep_handle,
         rtmp_server,
         moq_server,
+        udp_mux_handle,
     };
 
     Ok(pipeline)
