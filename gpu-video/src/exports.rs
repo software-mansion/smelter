@@ -188,8 +188,9 @@ impl VideoDevice {
     /// where the frame is represented as a [`Vec<u8>`] in the [NV12 format](https://en.wikipedia.org/wiki/YCbCr#4:2:0).
     ///
     /// Heavy work in the callback can delay the delivery of frames and block [`BytesDecoderH264::decode`].
-    /// On vulkan, the delivery is done on one thread that's shared between all decoders and
-    /// encoders, so a slow callback would affect them all.
+    /// Depending on the backend, the callback is invoked either from the thread calling the
+    /// decoder or from a background thread. On vulkan that thread is shared between all decoders
+    /// and encoders, so a slow callback would affect them all.
     ///
     /// Prefer to use the callback only to pass the frame (e.g. through a channel) to another thread and do the heavy work there.
     pub fn create_bytes_decoder_h264(
@@ -202,12 +203,26 @@ impl VideoDevice {
             .create_bytes_decoder_h264(parameters, Box::new(on_frame))
     }
 
-    /// Creates an H.264 decoder that returns each decoded frame as a [`wgpu::Texture`].
+    /// Creates an H.264 decoder that sends each decoded frame via callback.
+    ///
+    /// The `on_frame` callback receives each decoded frame as an [`OutputFrame`] struct,
+    /// where the frame is represented as a [`wgpu::Texture`] in the
+    /// [`wgpu::TextureFormat::NV12`] format.
+    ///
+    /// Heavy work in the callback can delay the delivery of frames and block
+    /// [`WgpuTexturesDecoderH264::decode`].
+    /// Depending on the backend, the callback is invoked either from the thread calling the
+    /// decoder or from a background thread. On vulkan that thread is shared between all decoders
+    /// and encoders, so a slow callback would affect them all.
+    ///
+    /// Prefer to use the callback only to pass the frame (e.g. through a channel) to another thread
+    /// and do the heavy work there.
     #[cfg(feature = "wgpu")]
     pub fn create_wgpu_textures_decoder_h264(
         &self,
         wgpu_queue: &wgpu::Queue,
         parameters: DecoderParameters,
+        on_frame: impl FnMut(OutputFrame<wgpu::Texture>) + Send + 'static,
     ) -> Result<WgpuTexturesDecoderH264, VideoDecoderError> {
         let Some(wgpu_device) = self.wgpu_device.clone() else {
             return Err(VideoDecoderError::VideoDeviceWithoutWgpu);
@@ -217,6 +232,7 @@ impl VideoDevice {
             wgpu_device,
             wgpu_queue.clone(),
             parameters,
+            Box::new(on_frame),
         )
     }
 

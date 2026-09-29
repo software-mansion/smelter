@@ -64,7 +64,7 @@ impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
                 vec![vk::ImageLayout::TRANSFER_DST_OPTIMAL].into_boxed_slice(),
             );
 
-        let mut semaphore_submit_info = self
+        let semaphore_submit_info = self
             .encoder
             .tracker
             .semaphore_tracker
