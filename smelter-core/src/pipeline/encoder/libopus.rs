@@ -11,16 +11,22 @@ use crate::{
 
 use crate::prelude::*;
 
-const SAMPLES_PER_BATCH: usize = 960;
+/// Input pts further than that from the pts derived from sample count is a discontinuity.
+const MAX_PTS_DEVIATION: Duration = Duration::from_millis(10);
 
 #[derive(Debug)]
 pub struct OpusEncoder {
     encoder: opus::Encoder,
     sample_rate: u32,
+    /// Samples per channel in a single 20 ms Opus frame.
+    frame_size: usize,
     input_buffer: AudioSamplesBuffer,
     output_buffer: Vec<u8>,
+    /// Encoder lookahead in samples per channel, the delay it adds to its output.
+    lookahead: usize,
 
-    // This logic relays on the fact that input samples will always be continuous.
+    /// This logic relies on the fact that input samples will always be continuous.
+    /// `maybe_reset_on_discontinuity` is just a sanity check to make sure we can recover.
     first_input_pts: Option<Timestamp>,
     encoded_samples: u64,
 }
@@ -43,27 +49,27 @@ impl AudioEncoder for OpusEncoder {
         encoder.set_inband_fec(options.forward_error_correction)?;
         encoder.set_packet_loss_perc(options.packet_loss)?;
 
-        // OpusHead pre_skip is in 48 kHz samples (RFC 7845 §4.2) but
-        // `get_lookahead` returns input-rate samples; scale or decoders miss
-        // part of the pre-roll on sub-48 kHz streams. Matches ffmpeg's
-        // `libavcodec/libopusenc.c:100`.
-        let pre_skip = (encoder.get_lookahead()? as u32 * 48_000 / options.sample_rate) as u16;
+        let lookahead = encoder.get_lookahead()? as u32;
+        let pre_skip = (lookahead * 48_000 / options.sample_rate) as u16;
         let extradata = opus_head(options.channels, options.sample_rate, pre_skip);
-
-        let output_buffer = vec![0u8; 1024 * 1024];
 
         Ok((
             Self {
                 encoder,
                 sample_rate: options.sample_rate,
+                // 20 ms, all Opus sample rates are divisible by 50.
+                frame_size: (options.sample_rate / 50) as usize,
                 input_buffer: AudioSamplesBuffer::new(options.channels),
-                output_buffer,
+                output_buffer: vec![0u8; 1024 * 1024],
+                lookahead: lookahead as usize,
                 first_input_pts: None,
                 encoded_samples: 0,
             },
             AudioEncoderConfig {
                 extradata: Some(extradata),
-                initial_padding: None,
+                initial_padding: Some(Duration::from_secs_f64(
+                    lookahead as f64 / options.sample_rate as f64,
+                )),
             },
         ))
     }
@@ -75,59 +81,88 @@ impl AudioEncoder for OpusEncoder {
     }
 
     fn encode(&mut self, batch: OutputAudioSamples) -> Vec<EncodedOutputChunk> {
-        self.first_input_pts.get_or_insert(batch.start_pts);
         trace!(?batch, "libopus encoder received samples.");
+        self.maybe_reset_on_discontinuity(batch.start_pts);
+        self.first_input_pts.get_or_insert(batch.start_pts);
         self.input_buffer.push_back(batch.samples);
-        self.inner_encode(false)
+
+        let mut result = Vec::new();
+        while self.input_buffer.frames() >= self.frame_size {
+            let samples = self.input_buffer.read_samples(self.frame_size);
+            result.extend(self.encode_frame(samples));
+        }
+        result
     }
 
     fn flush(&mut self) -> Vec<EncodedOutputChunk> {
         trace!("Flushing libopus encoder");
-        self.inner_encode(true)
+        if self.first_input_pts.is_none() {
+            return Vec::new();
+        }
+        // Input buffer should always be smaller than frame size, but with lookahead there might
+        // be 2 encode calls necessary when flushing.
+        let frame_count = (self.input_buffer.frames() + self.lookahead).div_ceil(self.frame_size);
+        let mut result = Vec::new();
+        for _ in 0..frame_count {
+            // read_samples pads with zeros if not enough in buffer
+            let samples = self.input_buffer.read_samples(self.frame_size);
+            result.extend(self.encode_frame(samples));
+        }
+        result
     }
 }
 
 impl OpusEncoder {
-    fn inner_encode(&mut self, force: bool) -> Vec<EncodedOutputChunk> {
-        let mut result = vec![];
-        while self.input_buffer.frames() >= SAMPLES_PER_BATCH
-            || (force && self.input_buffer.frames() > 0)
-        {
-            let samples = self.input_buffer.read_samples(SAMPLES_PER_BATCH);
-            let raw_samples: Vec<_> = match samples {
-                AudioSamples::Mono(samples) => samples
-                    .iter()
-                    .map(|val| (*val * i16::MAX as f64) as i16)
-                    .collect(),
-                AudioSamples::Stereo(samples) => samples
-                    .iter()
-                    .flat_map(|(l, r)| {
-                        [(*l * i16::MAX as f64) as i16, (*r * i16::MAX as f64) as i16]
-                    })
-                    .collect(),
-            };
-
-            let data = match self.encoder.encode(&raw_samples, &mut self.output_buffer) {
-                Ok(len) => Bytes::copy_from_slice(&self.output_buffer[..len]),
-                Err(err) => {
-                    error!(%err, "Opus encoding error");
-                    continue;
-                }
-            };
-
-            result.push(EncodedOutputChunk {
-                data,
-                pts: self.first_input_pts.unwrap_or_default()
-                    + Duration::from_secs_f64(
-                        self.encoded_samples as f64 / self.sample_rate as f64,
-                    ),
-                dts: None,
-                is_keyframe: false,
-                kind: MediaKind::Audio(AudioCodec::Opus),
-            });
-            self.encoded_samples += SAMPLES_PER_BATCH as u64;
+    // Audio mixer should always produce continuous stream, just a sanity check
+    fn maybe_reset_on_discontinuity(&mut self, start_pts: Timestamp) {
+        let Some(first_input_pts) = self.first_input_pts else {
+            return;
+        };
+        let samples = self.encoded_samples + self.input_buffer.frames() as u64;
+        let expected_pts =
+            first_input_pts + Duration::from_secs_f64(samples as f64 / self.sample_rate as f64);
+        let diff_pts = start_pts - expected_pts;
+        if diff_pts.abs_duration() <= MAX_PTS_DEVIATION {
+            return;
         }
-        result
+        error!(?diff_pts, "Discontinuity in libopus encoder input.");
+        self.input_buffer.drain_samples(self.input_buffer.frames());
+        self.first_input_pts = None;
+        self.encoded_samples = 0;
+    }
+
+    fn encode_frame(&mut self, samples: AudioSamples) -> Option<EncodedOutputChunk> {
+        let samples: Vec<f32> = match samples {
+            AudioSamples::Mono(samples) => samples.iter().map(|&val| val as f32).collect(),
+            AudioSamples::Stereo(samples) => samples
+                .iter()
+                .flat_map(|&(l, r)| [l as f32, r as f32])
+                .collect(),
+        };
+
+        let first_pts = self.first_input_pts.unwrap_or_default();
+        // Shifted back by lookahead, so the first sample after pre-skip has the input pts.
+        let offset = Duration::from_secs_f64(self.encoded_samples as f64 / self.sample_rate as f64);
+        let lookahead = Duration::from_secs_f64(self.lookahead as f64 / self.sample_rate as f64);
+        let pts = first_pts + offset - lookahead;
+        // Advanced even if encoding fails, samples were already consumed.
+        self.encoded_samples += self.frame_size as u64;
+
+        let data = match self.encoder.encode_float(&samples, &mut self.output_buffer) {
+            Ok(len) => Bytes::copy_from_slice(&self.output_buffer[..len]),
+            Err(err) => {
+                error!(%err, "Opus encoding error");
+                return None;
+            }
+        };
+
+        Some(EncodedOutputChunk {
+            data,
+            pts,
+            dts: None,
+            is_keyframe: false,
+            kind: MediaKind::Audio(AudioCodec::Opus),
+        })
     }
 }
 
