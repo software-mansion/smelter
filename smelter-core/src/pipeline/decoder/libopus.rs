@@ -1,31 +1,38 @@
-use std::{sync::Arc, time::Duration};
-use tracing::{debug, info, trace};
+use std::{ops::Range, sync::Arc, time::Duration};
+use tracing::{debug, info, trace, warn};
+
+use smelter_render::error::ErrorStack;
 
 use crate::pipeline::decoder::{AudioDecoder, EncodedInputEvent};
 use crate::prelude::*;
 
-/// Opus's hard cap for a single decode call (see `opus_decoder.c`: `opus_int16 size[48];`,
-/// 48 × 2.5 ms). We won't ask for more than this in one shot — for longer gaps the older
-/// audio is dropped instead of stretched into low-quality concealment.
-const MAX_DECODE_DURATION: Duration = Duration::from_millis(120);
+/// Upper bound on audio synthesised by PLC in one outage. Concealment decays into noise long
+/// before that. The rest of a longer gap stays a gap in the timeline.
+const MAX_PLC_DURATION: Duration = Duration::from_millis(120);
+
+/// Smallest opus frame, it also limits granularity of what can be concealed
+const SMALLEST_OPUS_FRAME: Duration = Duration::from_micros(2500);
 
 pub(crate) struct OpusDecoder {
     decoder: opus::Decoder,
-    decoded_samples_buffer: Vec<i16>,
+    decoded_samples_buffer: Vec<f32>,
     decoded_sample_rate: u32,
 
-    /// Number of consecutive `LostData` events received since the last successful
-    /// chunk. On the next `Chunk`, opus's FEC path reconstructs the immediately
-    /// preceding frame and PLC-fills the older ones in the same call.
-    unhandled_lost_packets: u32,
+    /// End of the last produced batch. A chunk starting later means that audio was lost.
+    last_end_pts: Option<Timestamp>,
+    /// PLC produced since the last decoded chunk, limited by `MAX_PLC_DURATION`.
+    plc_duration: Duration,
+    /// Encoder warm-up samples (OpusHead pre-skip) at the start of the stream still to drop.
+    /// Chunk timestamps are expected to already account for it, as ffmpeg does.
+    samples_to_skip: usize,
 }
 
 impl AudioDecoder for OpusDecoder {
     const LABEL: &'static str = "OPUS decoder";
 
-    type Options = ();
+    type Options = OpusDecoderOptions;
 
-    fn new(ctx: &Arc<PipelineCtx>, _options: Self::Options) -> Result<Self, DecoderInitError> {
+    fn new(ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError> {
         info!("Initializing libopus decoder");
         const OPUS_SAMPLE_RATES: [u32; 5] = [8_000, 12_000, 16_000, 24_000, 48_000];
 
@@ -33,17 +40,32 @@ impl AudioDecoder for OpusDecoder {
             true => ctx.mixing_sample_rate,
             false => 48_000,
         };
-        let decoder = opus::Decoder::new(decoded_sample_rate, opus::Channels::Stereo)?;
+        let mut decoder = opus::Decoder::new(decoded_sample_rate, opus::Channels::Stereo)?;
         // Max sample rate for opus is 48kHz.
         // Usually packets contain 20ms audio chunks, but for safety we use buffer
         // that can hold >1s of 48kHz stereo audio (96k samples)
-        let decoded_samples_buffer = vec![0; 100_000];
+        let decoded_samples_buffer = vec![0.0; 100_000];
+
+        let opus_head = options
+            .opus_head
+            .map(|data| OpusHead::parse(&data))
+            .unwrap_or_default();
+        // Mono and stereo only, more channels are coded as multiple streams.
+        if opus_head.channel_mapping_family != 0 {
+            return Err(DecoderInitError::UnsupportedOpusChannelMappingFamily(
+                opus_head.channel_mapping_family,
+            ));
+        }
+        decoder.set_gain(opus_head.output_gain.into())?;
 
         Ok(Self {
             decoder,
             decoded_samples_buffer,
             decoded_sample_rate,
-            unhandled_lost_packets: 0,
+            last_end_pts: None,
+            plc_duration: Duration::ZERO,
+            // Pre-skip is counted in 48 kHz samples.
+            samples_to_skip: opus_head.pre_skip as usize * decoded_sample_rate as usize / 48_000,
         })
     }
 
@@ -53,13 +75,11 @@ impl AudioDecoder for OpusDecoder {
     ) -> Result<Vec<InputAudioSamples>, DecodingError> {
         let encoded_chunk = match event {
             EncodedInputEvent::Chunk(chunk) => chunk,
-            EncodedInputEvent::LostData => {
-                self.unhandled_lost_packets = self.unhandled_lost_packets.saturating_add(1);
-                return Ok(vec![]);
-            }
-            EncodedInputEvent::AuDelimiter => return Ok(vec![]),
+            // Gaps are detected from chunk timestamps instead.
+            EncodedInputEvent::LostData | EncodedInputEvent::AuDelimiter => return Ok(vec![]),
             EncodedInputEvent::Discontinuity => {
-                self.unhandled_lost_packets = 0;
+                self.last_end_pts = None;
+                self.plc_duration = Duration::ZERO;
                 if let Err(err) = self.decoder.reset_state() {
                     debug!("Failed to reset opus decoder state: {err}");
                 }
@@ -69,18 +89,28 @@ impl AudioDecoder for OpusDecoder {
 
         trace!(?encoded_chunk, "libopus decoder received a chunk.");
 
-        let recovered = match self.unhandled_lost_packets {
-            0 => None,
-            n => self.decode_chunk_fec(&encoded_chunk, n)?,
-        };
-        self.unhandled_lost_packets = 0;
+        let mut samples = Vec::new();
+        // `get_nb_samples` fails only for an invalid packet, which also fails to decode below.
+        if let Ok(samples_per_packet) = self.decoder.get_nb_samples(&encoded_chunk.data) {
+            let packet_duration = self.samples_to_duration(samples_per_packet);
+            // `encoded_chunk` can carry a copy of the packet before it (FEC), so the last lost
+            // packet can be recovered. Anything earlier is synthesised with PLC.
+            samples.extend(self.conceal_until(encoded_chunk.pts - packet_duration));
+            samples.extend(self.recover_fec(&encoded_chunk, samples_per_packet));
+        }
 
-        let decoded_samples = self.decode_chunk(&encoded_chunk)?;
-
-        let samples = match recovered {
-            Some(samples) => vec![samples, decoded_samples],
-            None => vec![decoded_samples],
-        };
+        match self.decode_chunk(&encoded_chunk) {
+            // Only encoder warm-up, all of it skipped.
+            Ok(batch) if batch.is_empty() => {}
+            Ok(batch) => samples.push(batch),
+            Err(err) if samples.is_empty() => return Err(err),
+            // Concealment already moved `last_end_pts`, so its output is kept. The next chunk
+            // conceals the failed one.
+            Err(err) => warn!(
+                "Audio decoder error: {}",
+                ErrorStack::new(&err).into_string()
+            ),
+        }
 
         trace!(?samples, "libopus decoder produced samples.");
         Ok(samples)
@@ -92,92 +122,152 @@ impl AudioDecoder for OpusDecoder {
 }
 
 impl OpusDecoder {
-    /// Panics if buffer.len() < 2 * decoded_samples_count
-    fn read_buffer(buffer: &[i16], decoded_samples_count: usize) -> AudioSamples {
-        AudioSamples::Stereo(
-            buffer[0..(2 * decoded_samples_count)]
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|c| (c[0] as f64 / i16::MAX as f64, c[1] as f64 / i16::MAX as f64))
-                .collect(),
-        )
-    }
-
     fn decode_chunk(
         &mut self,
         encoded_chunk: &EncodedInputChunk,
     ) -> Result<InputAudioSamples, DecodingError> {
-        let decoded_samples_count =
-            self.decoder
-                .decode(&encoded_chunk.data, &mut self.decoded_samples_buffer, false)?;
-
-        let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
-        Ok(InputAudioSamples {
-            samples,
-            start_pts: encoded_chunk.pts,
-            sample_rate: self.decoded_sample_rate,
-        })
+        let decoded_samples_count = self.decoder.decode_float(
+            &encoded_chunk.data,
+            &mut self.decoded_samples_buffer,
+            false, // fec
+        )?;
+        // Skipping moves the start of the batch, but not its end.
+        let skipped = usize::min(self.samples_to_skip, decoded_samples_count);
+        self.samples_to_skip -= skipped;
+        let start_pts = encoded_chunk.pts + self.samples_to_duration(skipped);
+        let batch = self.read_buffer(skipped..decoded_samples_count, start_pts);
+        self.last_end_pts = Some(batch.end_pts());
+        self.plc_duration = Duration::ZERO;
+        Ok(batch)
     }
 
-    /// Reconstruct the run of `lost_packets` lost frames preceding `encoded_chunk`.
-    ///
-    /// Inside libopus's `decode_fec=1` path (see `opus_decoder.c:672–696`), only the
-    /// trailing `packet_frame_size` of the requested span is real FEC — the prefix is
-    /// PLC (concealment synthesised from decoder state). So this call recovers one
-    /// preceding frame faithfully and fills the older losses with PLC.
-    ///
-    /// We assume each lost packet had the same duration as the current one; that's
-    /// the convention recommended by the opus reference and holds for typical
-    /// constant-duration streams.
-    fn decode_chunk_fec(
-        &mut self,
-        encoded_chunk: &EncodedInputChunk,
-        lost_packets: u32,
-    ) -> Result<Option<InputAudioSamples>, DecodingError> {
-        let Ok(samples_per_packet) = self.decoder.get_nb_samples(&encoded_chunk.data) else {
-            debug!("Failed to read opus packet duration; skipping FEC.");
-            return Ok(None);
-        };
-        let packet_duration =
-            Duration::from_secs_f64(samples_per_packet as f64 / self.decoded_sample_rate as f64);
-
-        // Cap how much we ask opus to synthesise. Beyond ~60–80 ms PLC degrades to
-        // noise, and opus itself rejects more than 120 ms per call.
-        let max_packets =
-            (MAX_DECODE_DURATION.as_secs_f64() / packet_duration.as_secs_f64()) as u32;
-        let recovered_packets = u32::min(lost_packets, max_packets);
-        if recovered_packets == 0 {
-            return Ok(None);
+    /// Conceals with PLC the gap between the last produced batch and `end_pts`. PLC continues the
+    /// last decoded audio, so it is placed right after it. Past `MAX_PLC_DURATION` the rest stays
+    /// a gap.
+    fn conceal_until(&mut self, end_pts: Timestamp) -> Option<InputAudioSamples> {
+        let last_end_pts = self.last_end_pts?;
+        let gap = (end_pts - last_end_pts).to_duration_saturating();
+        // Shorter gaps are timestamp jitter, and SILK can't conceal less than 10 ms anyway.
+        if gap <= Duration::from_millis(10) {
+            return None;
         }
 
-        let samples_per_channel = samples_per_packet * recovered_packets as usize;
-        let fec_buf_size = 2 * samples_per_channel;
+        // stop concealing after `MAX_PLC_DURATION` if no chunk decoded
+        let conceal_duration =
+            Duration::min(gap, MAX_PLC_DURATION.saturating_sub(self.plc_duration));
 
-        let decoded_samples_count = self.decoder.decode(
+        // libopus conceals only multiples of 2.5 ms.
+        let conceal_duration = SMALLEST_OPUS_FRAME
+            * (conceal_duration.as_secs_f64() / SMALLEST_OPUS_FRAME.as_secs_f64()).round() as u32;
+        if conceal_duration.is_zero() {
+            return None;
+        }
+
+        let plc_samples =
+            (conceal_duration.as_secs_f64() * self.decoded_sample_rate as f64).round() as usize;
+
+        let decoded_samples_count = match self.decoder.decode_float(
+            &[],
+            &mut self.decoded_samples_buffer[..2 * plc_samples],
+            false, // fec
+        ) {
+            Ok(count) => count,
+            Err(err) => {
+                warn!("Opus PLC failed: {err}");
+                return None;
+            }
+        };
+        let batch = self.read_buffer(0..decoded_samples_count, last_end_pts);
+        self.plc_duration += self.samples_to_duration(decoded_samples_count);
+        self.last_end_pts = Some(batch.end_pts());
+        debug!(?gap, "PLC used");
+        Some(batch)
+    }
+
+    /// Recovers the packet lost right before `encoded_chunk` from its FEC, placed right before it.
+    /// libopus falls back to PLC if the packet carries no FEC.
+    fn recover_fec(
+        &mut self,
+        encoded_chunk: &EncodedInputChunk,
+        samples_per_packet: usize,
+    ) -> Option<InputAudioSamples> {
+        let last_end_pts = self.last_end_pts?;
+        let packet_duration = self.samples_to_duration(samples_per_packet);
+        let gap = (encoded_chunk.pts - last_end_pts).to_duration_saturating();
+        // Shorter than half a packet is timestamp jitter, not lost audio. A gap shorter than the
+        // packet makes it overlap the previous batch.
+        if gap < packet_duration / 2 {
+            return None;
+        }
+
+        let decoded_samples_count = match self.decoder.decode_float(
             &encoded_chunk.data,
-            &mut self.decoded_samples_buffer[..fec_buf_size],
-            true,
-        )?;
-        debug!(
-            lost_packets,
-            dropped_packets = lost_packets - recovered_packets,
-            recovered_packets,
-            decoded_samples_count,
-            "FEC + PLC used"
-        );
+            &mut self.decoded_samples_buffer[..2 * samples_per_packet],
+            true, // fec
+        ) {
+            Ok(count) => count,
+            // A corrupted packet, decoding it reports the error.
+            Err(err) => {
+                debug!("Opus FEC failed: {err}");
+                return None;
+            }
+        };
+        let start_pts = encoded_chunk.pts - packet_duration;
+        let batch = self.read_buffer(0..decoded_samples_count, start_pts);
+        self.last_end_pts = Some(batch.end_pts());
 
-        // The recovered span (PLC prefix + FEC tail) is `recovered_packets` long
-        // and ends immediately before the current chunk. Older dropped packets
-        // stay as a gap in the timeline.
-        let recovered_duration = packet_duration * recovered_packets;
-        let start_pts = encoded_chunk.pts - recovered_duration;
+        // Only SILK and hybrid packets can carry FEC, even those only when the encoder has it
+        // enabled. Otherwise libopus used PLC.
+        // TOC config is the top 5 bits: 0..=11 SILK, 12..=15 hybrid, 16..=31 CELT.
+        let fec_possible = encoded_chunk.data.first().is_some_and(|toc| {
+            let config = (toc & 0b1111_1000) >> 3;
+            matches!(config, 0..=15)
+        });
+        debug!(?gap, fec_possible, "Lost packet recovered");
+        Some(batch)
+    }
 
-        let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
-        Ok(Some(InputAudioSamples {
-            samples,
+    /// Stamps the `range` of decoded samples in the buffer with `start_pts`.
+    fn read_buffer(&self, range: Range<usize>, start_pts: Timestamp) -> InputAudioSamples {
+        let (samples, _) = self.decoded_samples_buffer[2 * range.start..2 * range.end].as_chunks();
+        let samples = samples.iter().map(|&[l, r]| (l as f64, r as f64)).collect();
+        InputAudioSamples::new(
+            AudioSamples::Stereo(samples),
             start_pts,
-            sample_rate: self.decoded_sample_rate,
-        }))
+            self.decoded_sample_rate,
+        )
+    }
+
+    fn samples_to_duration(&self, samples: usize) -> Duration {
+        Duration::from_secs_f64(samples as f64 / self.decoded_sample_rate as f64)
+    }
+}
+
+/// Fields of the Opus ID header (RFC 7845 §5.1) that the decoder applies.
+#[derive(Debug, Default)]
+struct OpusHead {
+    /// Encoder delay in 48 kHz samples.
+    pre_skip: u16,
+    /// Gain in dB, Q7.8.
+    output_gain: i16,
+    channel_mapping_family: u8,
+}
+
+impl OpusHead {
+    /// Some E-RTMP senders send a truncated header, fields it doesn't reach keep their defaults.
+    fn parse(data: &[u8]) -> Self {
+        if !data.starts_with(b"OpusHead") {
+            warn!("Invalid Opus ID header, ignoring it.");
+            return Self::default();
+        }
+        let le_u16 = |offset: usize| {
+            data.get(offset..offset + 2)
+                .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+        };
+        Self {
+            pre_skip: le_u16(10).unwrap_or(0),
+            output_gain: le_u16(16).unwrap_or(0) as i16,
+            channel_mapping_family: data.get(18).copied().unwrap_or(0),
+        }
     }
 }

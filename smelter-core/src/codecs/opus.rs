@@ -2,6 +2,12 @@ use crate::{AudioChannels, codecs::AudioEncoderOptionsExt};
 
 pub use opus::Error as LibOpusDecoderError;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpusDecoderOptions {
+    /// Opus ID header (RFC 7845 §5.1), e.g. from an E-RTMP sequence header.
+    pub opus_head: Option<bytes::Bytes>,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct OpusEncoderOptions {
     pub channels: AudioChannels,

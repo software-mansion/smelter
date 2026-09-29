@@ -476,7 +476,7 @@ fn spawn_audio_decoder(
         AudioCodec::Opus => {
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
-                decoder_options: (),
+                decoder_options: OpusDecoderOptions { opus_head: None },
                 samples_sender: sample_sender,
                 input_buffer_size: buffer_size,
             };

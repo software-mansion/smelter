@@ -408,7 +408,9 @@ fn spawn_audio_decoder(
         RtmpAudioCodec::Opus => {
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
-                decoder_options: (),
+                decoder_options: OpusDecoderOptions {
+                    opus_head: Some(config.data),
+                },
                 samples_sender,
                 input_buffer_size: buffer_size,
             };
