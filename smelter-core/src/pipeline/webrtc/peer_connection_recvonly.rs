@@ -1,4 +1,5 @@
 use std::{
+    ops::Deref,
     sync::{Arc, Weak},
     time::Duration,
 };
@@ -10,16 +11,11 @@ use webrtc::{
         APIBuilder, interceptor_registry::register_default_interceptors, media_engine::MediaEngine,
     },
     ice_transport::{
-        ice_candidate::RTCIceCandidateInit, ice_connection_state::RTCIceConnectionState,
-        ice_gatherer::OnLocalCandidateHdlrFn, ice_gatherer_state::RTCIceGathererState,
+        ice_connection_state::RTCIceConnectionState, ice_gatherer_state::RTCIceGathererState,
         ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
-    peer_connection::{
-        RTCPeerConnection, configuration::RTCConfiguration,
-        peer_connection_state::RTCPeerConnectionState,
-        sdp::session_description::RTCSessionDescription,
-    },
+    peer_connection::{RTCPeerConnection, configuration::RTCConfiguration},
     rtp_transceiver::{
         RTCRtpTransceiver, RTCRtpTransceiverInit,
         rtp_codec::{RTCRtpCodecParameters, RTPCodecType},
@@ -55,6 +51,14 @@ impl Drop for Inner {
                 warn!(%err, "Failed to close peer connection.");
             }
         });
+    }
+}
+
+impl Deref for RecvonlyPeerConnection {
+    type Target = RTCPeerConnection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.pc
     }
 }
 
@@ -94,10 +98,6 @@ impl RecvonlyPeerConnection {
             pc: peer_connection,
             tokio_rt: ctx.tokio_rt.clone(),
         })))
-    }
-
-    pub fn connection_state(&self) -> RTCPeerConnectionState {
-        self.0.pc.connection_state()
     }
 
     pub async fn new_video_track(
@@ -145,32 +145,6 @@ impl RecvonlyPeerConnection {
         Ok(transceiver)
     }
 
-    pub async fn set_remote_description(
-        &self,
-        answer: RTCSessionDescription,
-    ) -> Result<(), webrtc::Error> {
-        self.0.pc.set_remote_description(answer).await
-    }
-
-    pub async fn set_local_description(
-        &self,
-        offer: RTCSessionDescription,
-    ) -> Result<(), webrtc::Error> {
-        self.0.pc.set_local_description(offer).await
-    }
-
-    pub async fn create_offer(&self) -> Result<RTCSessionDescription, webrtc::Error> {
-        self.0.pc.create_offer(None).await
-    }
-
-    pub async fn create_answer(&self) -> Result<RTCSessionDescription, webrtc::Error> {
-        self.0.pc.create_answer(None).await
-    }
-
-    pub async fn local_description(&self) -> Option<RTCSessionDescription> {
-        self.0.pc.local_description().await
-    }
-
     pub async fn wait_for_ice_candidates(
         &self,
         wait_timeout: Duration,
@@ -200,10 +174,6 @@ impl RecvonlyPeerConnection {
         Ok(())
     }
 
-    pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
-        self.0.pc.on_ice_candidate(f);
-    }
-
     pub fn on_track<F: FnMut(OnTrackHdlrContext) + Send + Sync + 'static>(&self, mut f: F) {
         self.0.pc.on_track(Box::new(move |track, rtc_receiver, _| {
             let ctx = OnTrackHdlrContext {
@@ -213,13 +183,6 @@ impl RecvonlyPeerConnection {
             f(ctx);
             Box::pin(async {})
         }));
-    }
-
-    pub async fn add_ice_candidate(
-        &self,
-        candidate: RTCIceCandidateInit,
-    ) -> Result<(), webrtc::Error> {
-        self.0.pc.add_ice_candidate(candidate).await
     }
 
     pub fn downgrade(&self) -> WeakRecvonlyPeerConnection {

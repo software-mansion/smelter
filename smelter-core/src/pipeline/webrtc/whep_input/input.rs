@@ -155,7 +155,7 @@ async fn init_whep_client(
     let _video_transceiver = pc.new_video_track(&video_codecs_params).await?;
     let _audio_transceiver = pc.new_audio_track().await?;
 
-    let offer = pc.create_offer().await?;
+    let offer = pc.create_offer(None).await?;
     debug!("SDP offer: {}", offer.sdp);
 
     let SdpAnswer {

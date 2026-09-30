@@ -4,10 +4,7 @@ use webrtc::{
     api::{
         APIBuilder, interceptor_registry::register_default_interceptors, media_engine::MediaEngine,
     },
-    ice_transport::{
-        ice_connection_state::RTCIceConnectionState, ice_gatherer::OnLocalCandidateHdlrFn,
-        ice_server::RTCIceServer,
-    },
+    ice_transport::{ice_connection_state::RTCIceConnectionState, ice_server::RTCIceServer},
     interceptor::registry::Registry,
     peer_connection::{
         RTCPeerConnection, configuration::RTCConfiguration,
@@ -18,10 +15,12 @@ use webrtc::{
         RTCRtpTransceiverInit, rtp_codec::RTPCodecType, rtp_sender::RTCRtpSender,
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
     },
-    stats::StatsReport,
 };
 
-use std::sync::{Arc, Weak};
+use std::{
+    ops::Deref,
+    sync::{Arc, Weak},
+};
 
 use crate::pipeline::webrtc::whip_output::codec_preferences::CodecParameters;
 
@@ -45,6 +44,14 @@ impl Drop for Inner {
                 warn!(%err, "Failed to close peer connection.");
             }
         });
+    }
+}
+
+impl Deref for PeerConnection {
+    type Target = RTCPeerConnection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.pc
     }
 }
 
@@ -169,14 +176,6 @@ impl PeerConnection {
             .create_offer(None)
             .await
             .map_err(WebrtcClientError::OfferCreationError)
-    }
-
-    pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
-        self.0.pc.on_ice_candidate(f);
-    }
-
-    pub async fn get_stats(&self) -> StatsReport {
-        self.0.pc.get_stats().await
     }
 
     pub fn downgrade(&self) -> WeakPeerConnection {

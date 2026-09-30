@@ -1,4 +1,5 @@
 use std::{
+    ops::Deref,
     sync::{Arc, Weak},
     time::Duration,
 };
@@ -12,10 +13,7 @@ use webrtc::{
         interceptor_registry::register_default_interceptors,
         media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9, MediaEngine},
     },
-    ice_transport::{
-        ice_candidate::RTCIceCandidateInit, ice_gatherer_state::RTCIceGathererState,
-        ice_server::RTCIceServer,
-    },
+    ice_transport::{ice_gatherer_state::RTCIceGathererState, ice_server::RTCIceServer},
     interceptor::registry::Registry,
     peer_connection::{
         RTCPeerConnection, configuration::RTCConfiguration,
@@ -51,6 +49,14 @@ impl Drop for Inner {
                 warn!(%err, "Failed to close peer connection.");
             }
         });
+    }
+}
+
+impl Deref for PeerConnection {
+    type Target = RTCPeerConnection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.pc
     }
 }
 
@@ -169,24 +175,6 @@ impl PeerConnection {
         Ok((track, sender, ssrc))
     }
 
-    pub async fn set_remote_description(
-        &self,
-        answer: RTCSessionDescription,
-    ) -> Result<(), WhipWhepServerError> {
-        Ok(self.0.pc.set_remote_description(answer).await?)
-    }
-
-    pub async fn set_local_description(
-        &self,
-        offer: RTCSessionDescription,
-    ) -> Result<(), WhipWhepServerError> {
-        Ok(self.0.pc.set_local_description(offer).await?)
-    }
-
-    pub async fn create_answer(&self) -> Result<RTCSessionDescription, WhipWhepServerError> {
-        Ok(self.0.pc.create_answer(None).await?)
-    }
-
     pub async fn local_description(&self) -> Result<RTCSessionDescription, WhipWhepServerError> {
         match self.0.pc.local_description().await {
             Some(dsc) => Ok(dsc),
@@ -207,7 +195,7 @@ impl PeerConnection {
         // allow audio/video only stream, when on second track codec wasn't succesfully negotiated
         cleanup_unnegotiated_tracks(video_sender, audio_sender).await?;
 
-        let answer = self.create_answer().await?;
+        let answer = self.create_answer(None).await?;
         self.set_local_description(answer).await?;
 
         self.wait_for_ice_candidates(Duration::from_secs(1)).await?;
@@ -244,17 +232,6 @@ impl PeerConnection {
             debug!("Maximum time for gathering candidate has elapsed.");
         }
         Ok(())
-    }
-
-    pub async fn add_ice_candidate(
-        &self,
-        candidate: RTCIceCandidateInit,
-    ) -> Result<(), WhipWhepServerError> {
-        Ok(self.0.pc.add_ice_candidate(candidate).await?)
-    }
-
-    pub fn connection_state(&self) -> RTCPeerConnectionState {
-        self.0.pc.connection_state()
     }
 
     pub fn on_connection_state_change(
