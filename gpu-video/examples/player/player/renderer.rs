@@ -208,7 +208,7 @@ impl Renderer {
         }
     }
 
-    pub fn render(&mut self, frame: &wgpu::Texture, window: &Window) {
+    pub fn render(&mut self, frame: &gpu_video::VideoTexture, window: &Window) {
         let device = &self.device;
         let surface = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture)
@@ -227,21 +227,8 @@ impl Renderer {
             format: Some(surface.texture.format().remove_srgb_suffix()),
             ..Default::default()
         });
-        let texture_view_y = frame.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("y texture"),
-            format: Some(wgpu::TextureFormat::R8Unorm),
-            aspect: wgpu::TextureAspect::Plane0,
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            ..Default::default()
-        });
-
-        let texture_view_uv = frame.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("uv texture"),
-            format: Some(wgpu::TextureFormat::Rg8Unorm),
-            aspect: wgpu::TextureAspect::Plane1,
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            ..Default::default()
-        });
+        let texture_view_y = frame.y_plane().create_view(Some("y texture"));
+        let texture_view_uv = frame.uv_plane().create_view(Some("uv texture"));
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bind group"),

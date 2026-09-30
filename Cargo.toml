@@ -145,6 +145,3 @@ enum_variant_names = "allow"
 [lints]
 workspace = true
 
-[patch.crates-io]
-wgpu = { git = "https://github.com/jerzywilczek/wgpu", rev = "d144c91af6fd090cd86c0a25e3ac2b359af6f871" }
-naga = { git = "https://github.com/jerzywilczek/wgpu", rev = "d144c91af6fd090cd86c0a25e3ac2b359af6f871" }

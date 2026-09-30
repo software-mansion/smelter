@@ -10,6 +10,8 @@ use objc2_core_video as cv;
 use objc2_video_toolbox as vt;
 use tracing::debug;
 
+#[cfg(feature = "wgpu")]
+use crate::VideoTexture;
 use crate::{
     DecoderEvent, OutputFrame, RawFrameData, VideoDecoderError,
     backends::video_toolbox::{
@@ -48,17 +50,17 @@ impl VTDecoderH264<RawFrameData> {
 }
 
 #[cfg(feature = "wgpu")]
-impl VTDecoderH264<wgpu::Texture> {
+impl VTDecoderH264<VideoTexture> {
     pub(super) fn new_wgpu_textures(
         wgpu_device: wgpu::Device,
         parameters: DecoderParameters,
-        on_frame_callback: Box<dyn FnMut(OutputFrame<wgpu::Texture>) + Send>,
+        on_frame_callback: Box<dyn FnMut(OutputFrame<VideoTexture>) + Send>,
     ) -> Result<Self, super::error::VTInitError> {
-        use super::decoder::wgpu_api::{make_texture_cache, to_wgpu_texture};
+        use super::decoder::wgpu_api::{make_texture_cache, to_video_texture};
 
         let cache = make_texture_cache(&wgpu_device)?;
         let convert = Box::new(move |buffer: &cf::CFRetained<cv::CVBuffer>| {
-            to_wgpu_texture(&wgpu_device, &cache, buffer)
+            to_video_texture(&wgpu_device, &cache, buffer)
         });
         Ok(Self::new(parameters, convert, on_frame_callback, true))
     }
@@ -188,7 +190,7 @@ impl VideoDecoderBackend for VTDecoderH264<RawFrameData> {
 }
 
 #[cfg(feature = "wgpu")]
-impl crate::decoders::WgpuVideoDecoderBackend for VTDecoderH264<wgpu::Texture> {
+impl crate::decoders::WgpuVideoDecoderBackend for VTDecoderH264<VideoTexture> {
     fn process_event_textures(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,

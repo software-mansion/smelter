@@ -1,6 +1,6 @@
 #[cfg(vulkan)]
 use gpu_video::{
-    VideoAdapterExt, VideoDeviceExt, WgpuRgbaToNv12Converter,
+    VideoAdapterExt, VideoDeviceExt, VideoTexture, WgpuRgbaToNv12Converter,
     parameters::{EncoderParametersH264, EncoderParametersH265},
 };
 
@@ -243,7 +243,7 @@ impl WgpuState {
         }
     }
 
-    fn render(&self, time: f32, output_textures: &[&wgpu::Texture]) {
+    fn render(&self, time: f32, output_textures: &[&VideoTexture]) {
         let mut cmd_encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -274,22 +274,8 @@ impl WgpuState {
         }
 
         for nv12_texture in output_textures {
-            let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
-                aspect: wgpu::TextureAspect::Plane0,
-                usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
-                ..Default::default()
-            });
-            let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
-                aspect: wgpu::TextureAspect::Plane1,
-                usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
-                ..Default::default()
-            });
-            self.rgba_to_nv12_converter.convert(
-                &mut cmd_encoder,
-                &self.rgba_bg,
-                &y_plane_view,
-                &uv_plane_view,
-            );
+            self.rgba_to_nv12_converter
+                .convert(&mut cmd_encoder, &self.rgba_bg, nv12_texture);
         }
 
         let buffer = cmd_encoder.finish();

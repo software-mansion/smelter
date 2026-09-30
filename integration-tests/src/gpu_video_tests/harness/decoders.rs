@@ -5,7 +5,7 @@ use ffmpeg_next::{
     media::Type,
 };
 use gpu_video::{
-    BytesDecoderH264, EncodedInputChunk, OutputFrame, RawFrameData, VideoDeviceExt,
+    BytesDecoderH264, EncodedInputChunk, OutputFrame, RawFrameData, VideoDeviceExt, VideoTexture,
     WgpuTexturesDecoderH264,
     parameters::DecoderParameters,
     parser::h264::{AccessUnit, H264Parser},
@@ -68,7 +68,7 @@ impl Decoder for GvBytesDecoderH264 {
 
 pub(super) struct GvWgpuTexturesDecoderH264 {
     decoder: WgpuTexturesDecoderH264,
-    frame_receiver: Receiver<OutputFrame<wgpu::Texture>>,
+    frame_receiver: Receiver<OutputFrame<VideoTexture>>,
     wgpu_device: wgpu::Device,
     wgpu_queue: wgpu::Queue,
 }
@@ -214,7 +214,7 @@ impl FfmpegDecoderH264 {
 fn download_nv12_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    texture: wgpu::Texture,
+    texture: VideoTexture,
 ) -> Nv12Frame {
     let width = texture.width();
     let height = texture.height();
@@ -231,13 +231,9 @@ fn download_nv12_texture(
     });
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    let y_plane = texture.y_plane();
     encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo {
-            aspect: wgpu::TextureAspect::Plane0,
-            origin: wgpu::Origin3d::ZERO,
-            texture: &texture,
-            mip_level: 0,
-        },
+        y_plane.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
             layout: wgpu::TexelCopyBufferLayout {
@@ -246,19 +242,11 @@ fn download_nv12_texture(
                 rows_per_image: None,
             },
         },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
+        y_plane.size(),
     );
+    let uv_plane = texture.uv_plane();
     encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo {
-            aspect: wgpu::TextureAspect::Plane1,
-            origin: wgpu::Origin3d::ZERO,
-            texture: &texture,
-            mip_level: 0,
-        },
+        uv_plane.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
             layout: wgpu::TexelCopyBufferLayout {
@@ -267,11 +255,7 @@ fn download_nv12_texture(
                 rows_per_image: None,
             },
         },
-        wgpu::Extent3d {
-            width: width / 2,
-            height: height / 2,
-            depth_or_array_layers: 1,
-        },
+        uv_plane.size(),
     );
 
     queue.submit(Some(encoder.finish()));

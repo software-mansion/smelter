@@ -15,7 +15,7 @@ A library for hardware video decoding and encoding using Vulkan Video, with [wgp
 
 ## Overview
 
-The goal of this library is to provide easy access to hardware video coding. You can use it to decode and encode a video frame to/from `Vec<u8>` with pixel data, or [`wgpu::Texture`]. Currently, we support the following codecs:
+The goal of this library is to provide easy access to hardware video coding. You can use it to decode and encode a video frame to/from `Vec<u8>` with pixel data, or straight to/from GPU textures through [wgpu]. Currently, we support the following codecs:
 
 |            | Decode | Encode |
 |:----------:|:------:|:------:|
@@ -29,6 +29,8 @@ The goal of this library is to provide easy access to hardware video coding. You
 
 An advantage of using this library with wgpu is that decoded video frames never leave the GPU memory. There's no copying the frames to RAM and back to the GPU, so it should be quite fast if you want to use them for rendering.
 
+Frames are passed around as a `VideoTexture`, a thin wrapper over the [`wgpu::Texture`]s holding the NV12 planes. It hands out plain texture views and copy descriptors for each plane, so it plugs into bind groups, render passes and copies like any other wgpu texture.
+
 This library was developed as a part of [smelter, a tool for video composition](https://smelter.dev/).
 
 <picture>
@@ -39,7 +41,7 @@ This library was developed as a part of [smelter, a tool for video composition](
 
 ## Code samples
 
-### Decode video frame to [`wgpu::Texture`]
+### Decode video frames into wgpu textures
 
 ```rust
 async fn decode_video(
@@ -66,7 +68,7 @@ async fn decode_video(
         &queue,
         gpu_video::parameters::DecoderParameters::default(),
         |_frame| {
-            // Each frame contains a wgpu::Texture you can sample for drawing.
+            // Each frame is a VideoTexture: wgpu textures with NV12 planes you can sample for drawing.
             // Keep this callback light, e.g. pass the frame through a channel.
         },
     ).unwrap();
@@ -88,11 +90,11 @@ async fn decode_video(
 }
 ```
 
-### Encode video frame from [`wgpu::Texture`]
+### Encode video frames from wgpu textures
 
 ```rust
 async fn encode_video(
-    frame_receiver: std::sync::mpsc::Receiver<wgpu::Texture>,
+    frame_receiver: std::sync::mpsc::Receiver<gpu_video::VideoTexture>,
 ) {
     use std::num::NonZeroU32;
     use gpu_video::{VideoAdapterExt, VideoDeviceExt, parameters::VideoDeviceDescriptor};
@@ -144,11 +146,7 @@ async fn encode_video(
         // NV12 frame is copied to the encoder's input texture.
         let input_texture = encoder.input_texture().unwrap();
         let mut command_encoder = device.create_command_encoder(&Default::default());
-        command_encoder.copy_texture_to_texture(
-            frame.as_image_copy(),
-            input_texture.texture().as_image_copy(),
-            frame.size(),
-        );
+        frame.copy_to(&mut command_encoder, input_texture.texture());
         queue.submit([command_encoder.finish()]);
 
         encoder

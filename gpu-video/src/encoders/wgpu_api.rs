@@ -1,19 +1,19 @@
 use std::time::Duration;
 
 use crate::{
-    InputFrame, VideoEncoderError,
+    InputFrame, VideoEncoderError, VideoTexture,
     encoders::{VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
 };
 
 /// Input texture for a wgpu textures encoder.
 ///
-/// [`EncodeTexture::texture`] returns an NV12 [`wgpu::Texture`] with [`wgpu::TextureUsages::COPY_DST`], [`wgpu::TextureUsages::RENDER_ATTACHMENT`]
-/// and [`wgpu::TextureUsages::STORAGE_BINDING`] usages. The input data for encoding should be written to the [`wgpu::Texture`].
+/// [`EncodeTexture::texture`] returns a [`VideoTexture`] with [`wgpu::TextureUsages::COPY_DST`], [`wgpu::TextureUsages::RENDER_ATTACHMENT`]
+/// and [`wgpu::TextureUsages::STORAGE_BINDING`] usages. The input data for encoding should be written to the [`VideoTexture`].
 /// Each frame needs to obtain a new [`EncodeTexture`] from the encoder.
 ///
-/// The [`wgpu::Texture`] is not safe to use after the texture was submitted to the encoder.
+/// The [`VideoTexture`] is not safe to use after the texture was submitted to the encoder.
 pub struct EncodeTexture {
-    pub(crate) wgpu_texture: wgpu::Texture,
+    pub(crate) texture: VideoTexture,
     pub(crate) on_drop: Option<Box<dyn FnOnce()>>,
 }
 
@@ -28,8 +28,8 @@ impl Drop for EncodeTexture {
 }
 
 impl EncodeTexture {
-    pub fn texture(&self) -> &wgpu::Texture {
-        &self.wgpu_texture
+    pub fn texture(&self) -> &VideoTexture {
+        &self.texture
     }
 }
 
@@ -69,7 +69,7 @@ impl<E: WgpuVideoEncoderBackend + VideoEncoderParametersInfoH265> WgpuVideoEncod
 {
 }
 
-/// An H.264 (AVC) encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
+/// An H.264 (AVC) encoder that takes input frames as NV12 [`VideoTexture`]s
 pub struct WgpuTexturesEncoderH264 {
     pub(crate) wgpu_device: wgpu::Device,
     pub(crate) wgpu_queue: wgpu::Queue,
@@ -152,7 +152,7 @@ impl WgpuTexturesEncoderH264 {
     }
 }
 
-/// An H.265 (HEVC) encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
+/// An H.265 (HEVC) encoder that takes input frames as NV12 [`VideoTexture`]s
 pub struct WgpuTexturesEncoderH265 {
     pub(crate) wgpu_device: wgpu::Device,
     pub(crate) wgpu_queue: wgpu::Queue,
