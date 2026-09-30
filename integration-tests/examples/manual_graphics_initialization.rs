@@ -5,8 +5,6 @@
 fn main() {
     use smelter::{config::read_config, state::pipeline_options_from_config};
     use smelter_core::{Pipeline, PipelineWgpuOptions, graphics_context::GraphicsContext};
-    use std::sync::Arc;
-    use tokio::runtime::Runtime;
 
     let graphics_context = GraphicsContext::new(Default::default()).unwrap();
 
@@ -17,8 +15,7 @@ fn main() {
 
     let config = read_config();
 
-    let mut options =
-        pipeline_options_from_config(&config, &Arc::new(Runtime::new().unwrap()), &None);
+    let mut options = pipeline_options_from_config(&config, &None);
     options.wgpu_options = PipelineWgpuOptions::Context(graphics_context);
     let _pipeline = Pipeline::new(options).unwrap();
 }

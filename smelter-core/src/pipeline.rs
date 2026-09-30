@@ -4,10 +4,7 @@ use ::rtmp::TlsConfig;
 use smelter_render::{
     Framerate, RenderingMode, WgpuCtx, WgpuFeatures, web_renderer::ChromiumContext,
 };
-use tokio::{
-    runtime::{Handle, Runtime},
-    task::JoinHandle,
-};
+use tokio::{runtime::Handle, task::JoinHandle};
 
 use crate::{
     event::EventEmitter,
@@ -73,7 +70,6 @@ pub struct PipelineOptions {
     pub rendering_mode: RenderingMode,
     pub max_layouts_count: usize,
     pub wgpu_options: PipelineWgpuOptions,
-    pub tokio_rt: Option<Arc<Runtime>>,
 
     /// required for web rendering support
     pub chromium_context: Option<Arc<ChromiumContext>>,

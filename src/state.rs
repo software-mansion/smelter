@@ -11,7 +11,6 @@ use smelter_render::{
 };
 
 use reqwest::StatusCode;
-use tokio::runtime::Runtime;
 use tracing::error;
 
 use crate::{config::Config, error::ApiError};
@@ -36,11 +35,10 @@ pub struct ApiState {
     pipeline: Mutex<PipelineState>,
     pub config: Config,
     pub chromium_context: Option<Arc<ChromiumContext>>,
-    pub runtime: Arc<Runtime>,
 }
 
 impl ApiState {
-    pub fn new(config: Config, runtime: Arc<Runtime>) -> Result<Arc<ApiState>, ApiStateInitError> {
+    pub fn new(config: Config) -> Result<Arc<ApiState>, ApiStateInitError> {
         let chromium_context = match config.web_renderer_enable && cfg!(feature = "web-renderer") {
             true => Some(ChromiumContext::new(
                 config.output_framerate,
@@ -48,28 +46,21 @@ impl ApiState {
             )?),
             false => None,
         };
-        let options = pipeline_options_from_config(&config, &runtime, &chromium_context);
+        let options = pipeline_options_from_config(&config, &chromium_context);
         let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
-        Ok(Self::with_pipeline(
-            config,
-            runtime,
-            chromium_context,
-            pipeline,
-        ))
+        Ok(Self::with_pipeline(config, chromium_context, pipeline))
     }
 
     /// Creates state around an already created pipeline. A reset still creates the new
     /// pipeline from `config`.
     pub fn with_pipeline(
         config: Config,
-        runtime: Arc<Runtime>,
         chromium_context: Option<Arc<ChromiumContext>>,
         pipeline: Arc<Mutex<Pipeline>>,
     ) -> Arc<ApiState> {
         Arc::new(ApiState {
             pipeline: Mutex::new(PipelineState::Running(pipeline)),
             config,
-            runtime,
             chromium_context,
         })
     }
@@ -157,8 +148,7 @@ impl ApiState {
             *state = PipelineState::Resetting;
         }
 
-        let options =
-            pipeline_options_from_config(&self.config, &self.runtime, &self.chromium_context);
+        let options = pipeline_options_from_config(&self.config, &self.chromium_context);
         let result = Pipeline::new(options);
 
         let mut state = self.pipeline.lock().unwrap();
@@ -177,7 +167,6 @@ impl ApiState {
 
 pub fn pipeline_options_from_config(
     opt: &Config,
-    tokio_rt: &Arc<Runtime>,
     chromium_context: &Option<Arc<ChromiumContext>>,
 ) -> PipelineOptions {
     PipelineOptions {
@@ -196,7 +185,6 @@ pub fn pipeline_options_from_config(
 
         rendering_mode: opt.rendering_mode,
         max_layouts_count: opt.render_max_layouts_count,
-        tokio_rt: Some(tokio_rt.clone()),
 
         chromium_context: chromium_context.clone(),
         wgpu_options: PipelineWgpuOptions::Options {
