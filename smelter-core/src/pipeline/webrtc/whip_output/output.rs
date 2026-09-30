@@ -50,9 +50,7 @@ impl WhipOutput {
             "WHIP client task",
             output_id = output_ref.to_string()
         );
-        let rt = ctx.tokio_rt.clone();
-
-        let init_result = rt.block_on(async {
+        let init_result = ctx.block_on_async_task(|ctx| async {
             // timeout has to be created inside tokio runtime
             timeout(
                 WHIP_INIT_TIMEOUT,
@@ -66,7 +64,7 @@ impl WhipOutput {
             Err(_) => return Err(OutputInitError::WhipInitTimeout),
         };
 
-        rt.spawn(whip_client_task.run().instrument(span));
+        ctx.tokio_rt.spawn(whip_client_task.run().instrument(span));
 
         Ok(output)
     }

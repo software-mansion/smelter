@@ -90,10 +90,27 @@ impl ApiState {
         }
     }
 
+    /// Runs `f` with the current pipeline on a blocking thread. `Pipeline` methods are blocking,
+    /// so route handlers must call them through this function.
+    pub async fn run_with_pipeline<T, E>(
+        self: &Arc<Self>,
+        f: impl FnOnce(&Arc<Mutex<Pipeline>>) -> Result<T, E> + Send + 'static,
+    ) -> Result<T, ApiError>
+    where
+        T: Send + 'static,
+        ApiError: From<E>,
+    {
+        let api = self.clone();
+        tokio::task::spawn_blocking(move || Ok(f(&api.pipeline()?)?))
+            .await
+            // `unwrap()` panics only when the blocking task panicked
+            .unwrap()
+    }
+
     /// Runs `action` at `schedule_time`, or immediately when it is not set. Errors from
     /// scheduled actions cannot be returned to the caller, so they are only logged.
-    pub fn schedule_or_run<E>(
-        &self,
+    pub async fn schedule_or_run<E>(
+        self: &Arc<Self>,
         schedule_time: Option<Timestamp>,
         action: impl FnOnce(&mut Pipeline) -> Result<(), E> + Send + 'static,
     ) -> Result<(), ApiError>
@@ -101,25 +118,27 @@ impl ApiState {
         E: std::error::Error + 'static,
         ApiError: From<E>,
     {
-        let pipeline = self.pipeline()?;
-        match schedule_time {
-            Some(schedule_time) => Pipeline::schedule_event(
-                &pipeline,
-                schedule_time,
-                LateEventPolicy::Default,
-                move |pipeline| {
-                    if let Err(err) = action(pipeline) {
-                        error!(
-                            "Error while running scheduled request for pts {}ms: {}",
-                            schedule_time.as_millis(),
-                            ErrorStack::new(&err).into_string()
-                        )
-                    }
-                },
-            ),
-            None => action(&mut pipeline.lock().unwrap())?,
-        }
-        Ok(())
+        self.run_with_pipeline(move |pipeline| match schedule_time {
+            Some(schedule_time) => {
+                Pipeline::schedule_event(
+                    pipeline,
+                    schedule_time,
+                    LateEventPolicy::Default,
+                    move |pipeline| {
+                        if let Err(err) = action(pipeline) {
+                            error!(
+                                "Error while running scheduled request for pts {}ms: {}",
+                                schedule_time.as_millis(),
+                                ErrorStack::new(&err).into_string()
+                            )
+                        }
+                    },
+                );
+                Ok(())
+            }
+            None => action(&mut pipeline.lock().unwrap()),
+        })
+        .await
     }
 
     /// Replaces the pipeline with a new one. The state lock is not held while the new

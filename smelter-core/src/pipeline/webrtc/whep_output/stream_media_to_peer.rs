@@ -2,7 +2,10 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use smelter_render::error::ErrorStack;
-use tokio::sync::broadcast::{self, error::RecvError};
+use tokio::{
+    runtime::Handle,
+    sync::broadcast::{self, error::RecvError},
+};
 use tracing::{error, info, trace, warn};
 use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
 
@@ -33,8 +36,8 @@ impl MediaStreamTask {
         }
     }
 
-    pub fn spawn(self) {
-        tokio::spawn(self.run());
+    pub fn spawn(self, tokio_rt: &Handle) {
+        tokio_rt.spawn(self.run());
     }
 
     async fn run(mut self) {

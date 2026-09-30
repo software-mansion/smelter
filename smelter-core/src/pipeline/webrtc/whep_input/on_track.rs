@@ -28,6 +28,7 @@ pub fn handle_on_track(
     audio_sender: &mut Option<QueueSender<InputAudioSamples>>,
 ) {
     let kind = ctx.track.kind();
+    let tokio_rt = ctx.pipeline_ctx.tokio_rt.clone();
     let span = info_span!("WHEP input track", ?kind, input_id=%input_ref);
     {
         let _span = span.enter();
@@ -46,7 +47,7 @@ pub fn handle_on_track(
                     warn!(?err, "On track handler failed")
                 }
             };
-            tokio::spawn(task.instrument(span));
+            tokio_rt.spawn(task.instrument(span));
         }
         RTPCodecType::Video => {
             let Some(video_sender) = video_sender.take() else {
@@ -61,7 +62,7 @@ pub fn handle_on_track(
                     warn!(?err, "On track handler failed")
                 }
             };
-            tokio::spawn(task.instrument(span));
+            tokio_rt.spawn(task.instrument(span));
         }
         RTPCodecType::Unspecified => {
             warn!("Unknown track kind");

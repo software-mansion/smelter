@@ -27,13 +27,13 @@ pub async fn handle_register(
     Path(output_id): Path<OutputId>,
     Json(request): Json<RegisterOutput>,
 ) -> Result<Json<RegisterOutputResponse>, ApiError> {
-    tokio::task::spawn_blocking(move || {
-        let info =
-            Pipeline::register_output(&api.pipeline()?, output_id.into(), request.try_into()?)?;
-        Ok(Json(info.into()))
-    })
-    .await
-    .unwrap()
+    let options = request.try_into()?;
+    let info = api
+        .run_with_pipeline(move |pipeline| {
+            Pipeline::register_output(pipeline, output_id.into(), options)
+        })
+        .await?;
+    Ok(Json(info.into()))
 }
 
 #[utoipa::path(
@@ -57,7 +57,8 @@ pub async fn handle_unregister(
 ) -> Result<Json<OkResponse>, ApiError> {
     api.schedule_or_run(request.schedule_time()?, move |pipeline| {
         pipeline.unregister_output(&output_id.into())
-    })?;
+    })
+    .await?;
     Ok(Json(OkResponse {}))
 }
 
@@ -89,7 +90,8 @@ pub async fn handle_update(
 
     api.schedule_or_run(schedule_time, move |pipeline| {
         pipeline.update_output(output_id.into(), scene, audio)
-    })?;
+    })
+    .await?;
     Ok(Json(OkResponse {}))
 }
 
@@ -110,10 +112,9 @@ pub async fn handle_request_keyframe(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
 ) -> Result<Json<OkResponse>, ApiError> {
-    api.pipeline()?
-        .lock()
-        .unwrap()
-        .request_keyframe(output_id.into())?;
-
+    api.run_with_pipeline(move |pipeline| {
+        pipeline.lock().unwrap().request_keyframe(output_id.into())
+    })
+    .await?;
     Ok(Json(OkResponse {}))
 }

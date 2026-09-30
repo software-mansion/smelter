@@ -27,14 +27,13 @@ pub async fn handle_register(
     Path(input_id): Path<InputId>,
     Json(request): Json<RegisterInput>,
 ) -> Result<Json<RegisterInputResponse>, ApiError> {
-    tokio::task::spawn_blocking(move || {
-        let info =
-            Pipeline::register_input(&api.pipeline()?, input_id.into(), request.try_into()?)?;
-        Ok(Json(info.into()))
-    })
-    .await
-    // `unwrap()` panics only when the blocking task panicked
-    .unwrap()
+    let options = request.try_into()?;
+    let info = api
+        .run_with_pipeline(move |pipeline| {
+            Pipeline::register_input(pipeline, input_id.into(), options)
+        })
+        .await?;
+    Ok(Json(info.into()))
 }
 
 #[utoipa::path(
@@ -58,7 +57,8 @@ pub async fn handle_unregister(
 ) -> Result<Json<OkResponse>, ApiError> {
     api.schedule_or_run(request.schedule_time()?, move |pipeline| {
         pipeline.unregister_input(&input_id.into())
-    })?;
+    })
+    .await?;
     Ok(Json(OkResponse {}))
 }
 
@@ -83,9 +83,12 @@ pub async fn handle_update(
 ) -> Result<Json<OkResponse>, ApiError> {
     let seek = request.seek()?;
 
-    api.pipeline()?
-        .lock()
-        .unwrap()
-        .update_input(&input_id.into(), request.pause, seek)?;
+    api.run_with_pipeline(move |pipeline| {
+        pipeline
+            .lock()
+            .unwrap()
+            .update_input(&input_id.into(), request.pause, seek)
+    })
+    .await?;
     Ok(Json(OkResponse {}))
 }

@@ -22,24 +22,28 @@ use super::ApiState;
 pub async fn status_handler(
     State(state): State<Arc<ApiState>>,
 ) -> Result<Json<InstanceStatus>, ApiError> {
-    let pipeline = state.pipeline()?;
-    let pipeline = pipeline.lock().unwrap();
+    let (inputs, outputs) = state
+        .run_with_pipeline(|pipeline| {
+            let pipeline = pipeline.lock().unwrap();
 
-    let inputs = pipeline
-        .inputs()
-        .map(|(id, input)| InputStatus {
-            input_id: id.to_string(),
-            input_type: input.protocol.into(),
-        })
-        .collect();
+            let inputs = pipeline
+                .inputs()
+                .map(|(id, input)| InputStatus {
+                    input_id: id.to_string(),
+                    input_type: input.protocol.into(),
+                })
+                .collect();
 
-    let outputs = pipeline
-        .outputs()
-        .map(|(id, output)| OutputStatus {
-            output_id: id.to_string(),
-            output_type: output.protocol.into(),
+            let outputs = pipeline
+                .outputs()
+                .map(|(id, output)| OutputStatus {
+                    output_id: id.to_string(),
+                    output_type: output.protocol.into(),
+                })
+                .collect();
+            Ok::<_, ApiError>((inputs, outputs))
         })
-        .collect();
+        .await?;
 
     let output_framerate = state.config.output_framerate;
     let configuration = InstanceConfiguration {
@@ -83,6 +87,8 @@ pub async fn status_handler(
 pub async fn stats_handler(
     State(state): State<Arc<ApiState>>,
 ) -> Result<Json<StatsReport>, ApiError> {
-    let pipeline = state.pipeline()?;
-    Ok(Json(pipeline.lock().unwrap().stats()))
+    let stats = state
+        .run_with_pipeline(|pipeline| Ok::<_, ApiError>(pipeline.lock().unwrap().stats()))
+        .await?;
+    Ok(Json(stats))
 }

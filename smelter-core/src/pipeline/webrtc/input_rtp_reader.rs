@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use tokio::sync::mpsc::Receiver;
+use tokio::{runtime::Handle, sync::mpsc::Receiver};
 use tracing::{Instrument, debug, warn};
 use webrtc::{
     rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication,
@@ -23,6 +23,7 @@ pub(super) struct WebrtcRtpReader {
     jitter_buffer: RtpJitterBuffer,
     rtp_receiver: Receiver<webrtc::rtp::packet::Packet>,
     keyframe_request_sender: Option<KeyframeRequestSender>,
+    tokio_rt: Handle,
 }
 
 impl WebrtcRtpReader {
@@ -33,7 +34,7 @@ impl WebrtcRtpReader {
         jitter_buffer: RtpJitterBuffer,
     ) -> Self {
         let rtcp_listeners = RtcpListeners::start(ctx, rtc_receiver.clone());
-        let rtp_receiver = Self::start_rtp_reader_task(track.clone());
+        let rtp_receiver = Self::start_rtp_reader_task(&ctx.tokio_rt, track.clone());
 
         Self {
             track,
@@ -42,11 +43,12 @@ impl WebrtcRtpReader {
             jitter_buffer,
             rtp_receiver,
             keyframe_request_sender: None,
+            tokio_rt: ctx.tokio_rt.clone(),
         }
     }
 
     pub async fn enable_pli(&mut self) -> KeyframeRequestSender {
-        let sender = start_pli_sender_task(&self.track, &self.rtc_receiver);
+        let sender = start_pli_sender_task(&self.tokio_rt, &self.track, &self.rtc_receiver);
         self.keyframe_request_sender = Some(sender.clone());
         sender.send();
         sender
@@ -54,9 +56,12 @@ impl WebrtcRtpReader {
 
     /// read_rtp is not cancel safe so we need to create separate tasks that
     /// sends packets over the channel
-    fn start_rtp_reader_task(track: Arc<TrackRemote>) -> Receiver<webrtc::rtp::packet::Packet> {
+    fn start_rtp_reader_task(
+        tokio_rt: &Handle,
+        track: Arc<TrackRemote>,
+    ) -> Receiver<webrtc::rtp::packet::Packet> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
-        tokio::spawn(async move {
+        tokio_rt.spawn(async move {
             loop {
                 let packet = match track.read_rtp().await {
                     Ok((packet, _)) => packet,
@@ -107,6 +112,7 @@ impl WebrtcRtpReader {
 }
 
 pub fn start_pli_sender_task(
+    tokio_rt: &Handle,
     track: &Arc<TrackRemote>,
     rtc_receiver: &Arc<RTCRtpReceiver>,
 ) -> KeyframeRequestSender {
@@ -114,7 +120,7 @@ pub fn start_pli_sender_task(
         KeyframeRequestSender::new_async();
     let ssrc = track.ssrc();
     let transport = rtc_receiver.transport();
-    tokio::spawn(
+    tokio_rt.spawn(
         async move {
             while keyframe_request_receiver.recv().await.is_some() {
                 debug!(ssrc, "Sending PLI");

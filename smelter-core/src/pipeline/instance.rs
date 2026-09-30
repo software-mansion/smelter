@@ -46,6 +46,8 @@ use crate::{
 
 use crate::prelude::*;
 
+/// Methods are blocking and may use `Runtime::block_on` internally. Do not call them from async
+/// code, use `spawn_blocking` or a regular thread instead.
 pub struct Pipeline {
     pub(super) inputs: HashMap<InputId, PipelineInput>,
     pub(super) outputs: HashMap<OutputId, PipelineOutput>,
@@ -682,10 +684,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     };
 
     let moq_server = match moq_state.as_ref() {
-        Some(state) => Some(
-            ctx.tokio_rt
-                .block_on(spawn_moq_server(ctx.clone(), state))?,
-        ),
+        Some(state) => Some(ctx.block_on_async_task(|ctx| spawn_moq_server(ctx, state))?),
         None => None,
     };
 

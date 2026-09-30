@@ -79,8 +79,7 @@ impl WhepInput {
             "WHEP client task",
             input_id = input_ref.to_string()
         );
-        let rt = ctx.tokio_rt.clone();
-        let init_result = rt.block_on(async {
+        let init_result = ctx.block_on_async_task(|ctx| async {
             // timeout has to be created inside tokio runtime
             timeout(WHEP_INIT_TIMEOUT, init_whep_client(input_ref, ctx, options))
                 .instrument(span)

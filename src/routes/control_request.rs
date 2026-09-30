@@ -19,7 +19,12 @@ use crate::{error::ApiError, routes::Json, state::ApiState};
 pub async fn handle_start(
     State(state): State<Arc<ApiState>>,
 ) -> Result<Json<OkResponse>, ApiError> {
-    Pipeline::start(&state.pipeline()?);
+    state
+        .run_with_pipeline(|pipeline| {
+            Pipeline::start(pipeline);
+            Ok::<_, ApiError>(())
+        })
+        .await?;
     Ok(Json(OkResponse {}))
 }
 

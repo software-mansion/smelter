@@ -39,6 +39,19 @@ Input (demuxer) → Decoder → Queue → Rendering/AudioMixer → Encoder → O
 
 In most cases, each element spawns at least one thread and communicates with other elements via channels.
 
+## Async / Tokio runtime
+
+- Public `Pipeline` functions never assume they run inside a Tokio runtime (caller can be a plain
+  thread).
+- Public `Pipeline` functions are blocking and may use `block_on` internally.
+- Never rely on the implicit (current) runtime. Spawn with `ctx.tokio_rt.spawn`, never
+  `tokio::spawn`. Anything else that needs a runtime (timers, library setup like moq-native
+  `init()`) runs either inside a future on `ctx.tokio_rt` (spawned task or
+  `ctx.tokio_rt.block_on(async { ... })`) or, for sync calls, in a block scoped with
+  `let _guard = ctx.tokio_rt.enter();`.
+- `Drop` impls never block and never depend on the caller's runtime. Async cleanup is spawned on a
+  stored `Handle`.
+
 ## Code Style
 
 - Merge all `crate` imports into a single `use crate::{...}`, except the prelude.

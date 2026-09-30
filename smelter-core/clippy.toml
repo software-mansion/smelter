@@ -1,0 +1,6 @@
+disallowed-methods = [
+    { path = "tokio::task::spawn", reason = "use ctx.tokio_rt.spawn" },
+    { path = "tokio::task::spawn_blocking", reason = "use ctx.tokio_rt.spawn_blocking" },
+    { path = "tokio::runtime::Handle::current", reason = "pass ctx.tokio_rt explicitly" },
+    { path = "tokio::runtime::Handle::try_current", reason = "pass ctx.tokio_rt explicitly" },
+]

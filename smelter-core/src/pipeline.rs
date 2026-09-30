@@ -4,7 +4,10 @@ use ::rtmp::TlsConfig;
 use smelter_render::{
     Framerate, RenderingMode, WgpuCtx, WgpuFeatures, web_renderer::ChromiumContext,
 };
-use tokio::runtime::{Handle, Runtime};
+use tokio::{
+    runtime::{Handle, Runtime},
+    task::JoinHandle,
+};
 
 use crate::{
     event::EventEmitter,
@@ -145,6 +148,28 @@ pub(crate) struct PipelineCtx {
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
     rtmp_state: Option<Arc<RtmpPipelineState>>,
     moq_state: Option<Arc<MoqPipelineState>>,
+}
+
+impl PipelineCtx {
+    /// Spawns a task on the pipeline runtime, `task` receives a clone of the context.
+    pub fn spawn_async_task<F, Fut>(self: &Arc<Self>, task: F) -> JoinHandle<Fut::Output>
+    where
+        F: FnOnce(Arc<Self>) -> Fut,
+        Fut: Future + Send + 'static,
+        Fut::Output: Send + 'static,
+    {
+        self.tokio_rt.spawn(task(self.clone()))
+    }
+
+    /// Runs a task on the pipeline runtime and blocks until it finishes, `task` receives a clone
+    /// of the context. Must not be called from async code.
+    pub fn block_on_async_task<F, Fut>(self: &Arc<Self>, task: F) -> Fut::Output
+    where
+        F: FnOnce(Arc<Self>) -> Fut,
+        Fut: Future,
+    {
+        self.tokio_rt.block_on(task(self.clone()))
+    }
 }
 
 impl std::fmt::Debug for PipelineCtx {
