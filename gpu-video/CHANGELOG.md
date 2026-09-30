@@ -17,6 +17,7 @@
   - Removed `vk-validation` and `vk-api-dump` features. Instead you can enable them when creating a `VideoInstance` or `wgpu::Instance`
 - Updated `wgpu` to `30.0.0` ([#2111](https://github.com/software-mansion/smelter/pull/2111) by @noituri)
 - `WgpuTexturesDecoderH264` now returns frames via a callback, the same way `BytesDecoderH264` does ([#2186](https://github.com/software-mansion/smelter/pull/2186) by @jerzywilczek)
+- wgpu decoders and encoders exchange frames as `VideoTexture` instead of `wgpu::Texture`, which lets NV12 frames work on Metal (by @jerzywilczek)
 
 ### ✨ New features
 - Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)

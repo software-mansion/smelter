@@ -3,6 +3,8 @@ use std::{
     time::Duration,
 };
 
+#[cfg(feature = "wgpu")]
+use crate::VideoTexture;
 use crate::{
     DecoderEvent, OutputFrame, RawFrameData,
     backends::vulkan::{
@@ -182,8 +184,8 @@ impl BytesOutput {
 pub(crate) struct VulkanWgpuTexturesDecoderH264 {
     decoder: VulkanDecoderH264,
     submission_tracker: SubmissionTracker,
-    frame_sorter: FrameSorter<wgpu::Texture>,
-    on_frame_callback: Box<dyn FnMut(OutputFrame<wgpu::Texture>) + Send>,
+    frame_sorter: FrameSorter<VideoTexture>,
+    on_frame_callback: Box<dyn FnMut(OutputFrame<VideoTexture>) + Send>,
     wgpu_device: wgpu::Device,
     wgpu_queue: wgpu::Queue,
 }
@@ -195,7 +197,7 @@ impl VulkanWgpuTexturesDecoderH264 {
         parameters: DecoderParameters,
         wgpu_device: wgpu::Device,
         wgpu_queue: wgpu::Queue,
-        on_frame_callback: Box<dyn FnMut(OutputFrame<wgpu::Texture>) + Send>,
+        on_frame_callback: Box<dyn FnMut(OutputFrame<VideoTexture>) + Send>,
         waiter_thread: Arc<WaiterThreadHandle>,
     ) -> Result<Self, VulkanDecoderError> {
         let decoder = VulkanDecoderH264::new(decoding_device, parameters)?;

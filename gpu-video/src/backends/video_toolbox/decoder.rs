@@ -14,7 +14,7 @@ use tracing::{debug, warn};
 use crate::{
     RawFrameData,
     backends::video_toolbox::{
-        OSStatusError, allocate_retained,
+        CVBufferExt, OSStatusError, allocate_retained,
         error::{OSStatusExt, VTDecoderError},
     },
     device::{ColorRange, ColorSpace},
@@ -273,26 +273,9 @@ pub(super) fn download_to_bytes(
     let width = cv::CVPixelBufferGetWidth(buffer);
     let height = cv::CVPixelBufferGetHeight(buffer);
     let locked = unsafe { buffer.lock(cv::CVPixelBufferLockFlags::ReadOnly)? };
-    let mut result = Vec::with_capacity(width * height * 3 / 2);
-
-    for plane in 0..2usize {
-        let plane_width = cv::CVPixelBufferGetWidthOfPlane(buffer, plane);
-        let plane_height = cv::CVPixelBufferGetHeightOfPlane(buffer, plane);
-        let stride = cv::CVPixelBufferGetBytesPerRowOfPlane(buffer, plane) as isize;
-        let base_address = locked.plane_address(plane);
-        let row_data_bytes = plane_width * if plane == 0 { 1 } else { 2 };
-        for line in 0..plane_height as isize {
-            let data = unsafe {
-                std::slice::from_raw_parts(base_address.offset(line * stride), row_data_bytes)
-            };
-            result.extend_from_slice(data);
-        }
-    }
-
-    drop(locked);
 
     Ok(RawFrameData {
-        frame: result,
+        frame: locked.download_nv12(),
         width: width as u32,
         height: height as u32,
     })
@@ -431,49 +414,4 @@ impl Drop for Session {
 struct Sps {
     raw: Box<[u8]>,
     sps: SeqParameterSet,
-}
-
-trait CVBufferExt {
-    unsafe fn lock(
-        &self,
-        flags: cv::CVPixelBufferLockFlags,
-    ) -> Result<LockedCvBuffer, OSStatusError>;
-}
-
-impl CVBufferExt for cf::CFRetained<cv::CVBuffer> {
-    unsafe fn lock(
-        &self,
-        flags: cv::CVPixelBufferLockFlags,
-    ) -> Result<LockedCvBuffer, OSStatusError> {
-        unsafe {
-            cv::CVPixelBufferLockBaseAddress(self, flags).osstatus()?;
-        }
-
-        Ok(LockedCvBuffer {
-            buffer: self.clone(),
-            flags,
-        })
-    }
-}
-
-struct LockedCvBuffer {
-    buffer: cf::CFRetained<cv::CVBuffer>,
-    flags: cv::CVPixelBufferLockFlags,
-}
-
-impl LockedCvBuffer {
-    fn plane_address(&self, plane: usize) -> *const u8 {
-        cv::CVPixelBufferGetBaseAddressOfPlane(&self.buffer, plane) as *const u8
-    }
-}
-
-impl Drop for LockedCvBuffer {
-    fn drop(&mut self) {
-        unsafe {
-            if let Err(e) = cv::CVPixelBufferUnlockBaseAddress(&self.buffer, self.flags).osstatus()
-            {
-                warn!("error {e} while unlocking a CVBuffer");
-            }
-        }
-    }
 }

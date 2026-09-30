@@ -9,7 +9,9 @@ use std::{
 };
 
 use bytes::BytesMut;
-use gpu_video::{EncodedInputChunk, OutputFrame, VideoDeviceExt, parameters::DecoderParameters};
+use gpu_video::{
+    EncodedInputChunk, OutputFrame, VideoDeviceExt, VideoTexture, parameters::DecoderParameters,
+};
 
 use super::FrameWithPts;
 
@@ -27,7 +29,7 @@ pub fn run_decoder(
     let receiver_gone = Arc::new(AtomicBool::new(false));
     let on_frame = {
         let receiver_gone = receiver_gone.clone();
-        move |frame: OutputFrame<wgpu::Texture>| {
+        move |frame: OutputFrame<VideoTexture>| {
             let result = FrameWithPts {
                 frame: frame.data,
                 pts: Duration::from_secs_f64(frame_number as f64 * frame_interval),

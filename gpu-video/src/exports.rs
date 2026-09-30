@@ -139,6 +139,8 @@ pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 #[cfg(feature = "transcoder")]
 pub use crate::transcoder::{VideoTranscoder, VideoTranscoderError};
+#[cfg(feature = "wgpu")]
+pub use crate::video_texture::{VideoTexture, VideoTexturePlane};
 
 #[derive(thiserror::Error, Debug)]
 #[error("{message}")]
@@ -206,8 +208,7 @@ impl VideoDevice {
     /// Creates an H.264 decoder that sends each decoded frame via callback.
     ///
     /// The `on_frame` callback receives each decoded frame as an [`OutputFrame`] struct,
-    /// where the frame is represented as a [`wgpu::Texture`] in the
-    /// [`wgpu::TextureFormat::NV12`] format.
+    /// where the frame is represented as a [`VideoTexture`] holding NV12 data.
     ///
     /// Heavy work in the callback can delay the delivery of frames and block
     /// [`WgpuTexturesDecoderH264::decode`].
@@ -222,7 +223,7 @@ impl VideoDevice {
         &self,
         wgpu_queue: &wgpu::Queue,
         parameters: DecoderParameters,
-        on_frame: impl FnMut(OutputFrame<wgpu::Texture>) + Send + 'static,
+        on_frame: impl FnMut(OutputFrame<VideoTexture>) + Send + 'static,
     ) -> Result<WgpuTexturesDecoderH264, VideoDecoderError> {
         let Some(wgpu_device) = self.wgpu_device.clone() else {
             return Err(VideoDecoderError::VideoDeviceWithoutWgpu);
@@ -276,7 +277,7 @@ impl VideoDevice {
             .create_bytes_encoder_h265(parameters, Box::new(on_chunk))
     }
 
-    /// Creates an H.264 encoder that takes input frames as [`wgpu::Texture`]s and sends each
+    /// Creates an H.264 encoder that takes input frames as [`VideoTexture`]s and sends each
     /// encoded frame via callback.
     ///
     /// Heavy work in the callback can delay the delivery of chunks and block [`WgpuTexturesEncoderH264::encode`].
@@ -301,7 +302,7 @@ impl VideoDevice {
         )
     }
 
-    /// Creates an H.265 encoder that takes input frames as [`wgpu::Texture`]s and sends each
+    /// Creates an H.265 encoder that takes input frames as [`VideoTexture`]s and sends each
     /// encoded frame via callback.
     ///
     /// Heavy work in the callback can delay the delivery of chunks and block [`WgpuTexturesEncoderH265::encode`].

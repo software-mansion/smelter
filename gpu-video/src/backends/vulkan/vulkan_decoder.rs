@@ -993,15 +993,20 @@ impl DecodeSubmission<'_, '_> {
         self,
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
-    ) -> Result<(DownloadFrameSubmission<wgpu::Texture>, SemaphoreWaitValue), VulkanDecoderError>
-    {
+    ) -> Result<
+        (
+            DownloadFrameSubmission<crate::VideoTexture>,
+            SemaphoreWaitValue,
+        ),
+        VulkanDecoderError,
+    > {
         let (texture, wait_value) =
             self.decoder
                 .output_to_wgpu_texture(wgpu_device, wgpu_queue, &self.decode_result)?;
 
         Ok((
             DownloadFrameSubmission {
-                frame: texture,
+                frame: crate::VideoTexture::from_nv12_texture(texture),
                 decode_metadata: self.decode_result.metadata,
                 result_query: self.result_query,
                 _in_flight_resources: self.in_flight_resources,

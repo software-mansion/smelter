@@ -41,7 +41,7 @@ pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
     encode_failed: Arc<AtomicBool>,
 
     #[cfg(feature = "wgpu")]
-    used_input_images: Arc<Mutex<HashMap<wgpu::Texture, EncodeInputImage>>>,
+    used_input_images: Arc<Mutex<HashMap<crate::VideoTexture, EncodeInputImage>>>,
 
     encoder: VulkanEncoder<'a, C>,
     encoding_device: Arc<EncodingDevice>,

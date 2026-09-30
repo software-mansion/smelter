@@ -1,10 +1,10 @@
-#[cfg(vulkan)]
+#[cfg(supported)]
 use gpu_video::{
-    VideoAdapterExt, VideoDeviceExt, WgpuRgbaToNv12Converter,
+    VideoAdapterExt, VideoDeviceExt, VideoTexture, WgpuRgbaToNv12Converter,
     parameters::{EncoderParametersH264, EncoderParametersH265},
 };
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn main() {
     use gpu_video::{
         InputFrame,
@@ -30,7 +30,7 @@ fn main() {
     let frame_count = args[3].parse::<u32>().expect("parse frame count");
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
+    let adapter = pollster::block_on(instance.enumerate_adapters(Default::default()))
         .into_iter()
         .find(|a| {
             a.video_adapter_info().is_some_and(|info| {
@@ -137,7 +137,7 @@ fn main() {
     h265_writer_thread_handle.join().unwrap();
 }
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 struct WgpuState {
     pipeline: wgpu::RenderPipeline,
     rgba_view: wgpu::TextureView,
@@ -147,7 +147,7 @@ struct WgpuState {
     queue: wgpu::Queue,
 }
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 impl WgpuState {
     fn new(
         device: wgpu::Device,
@@ -243,7 +243,7 @@ impl WgpuState {
         }
     }
 
-    fn render(&self, time: f32, output_textures: &[&wgpu::Texture]) {
+    fn render(&self, time: f32, output_textures: &[&VideoTexture]) {
         let mut cmd_encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -274,22 +274,8 @@ impl WgpuState {
         }
 
         for nv12_texture in output_textures {
-            let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
-                aspect: wgpu::TextureAspect::Plane0,
-                usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
-                ..Default::default()
-            });
-            let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
-                aspect: wgpu::TextureAspect::Plane1,
-                usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
-                ..Default::default()
-            });
-            self.rgba_to_nv12_converter.convert(
-                &mut cmd_encoder,
-                &self.rgba_bg,
-                &y_plane_view,
-                &uv_plane_view,
-            );
+            self.rgba_to_nv12_converter
+                .convert(&mut cmd_encoder, &self.rgba_bg, nv12_texture);
         }
 
         let buffer = cmd_encoder.finish();
@@ -298,7 +284,7 @@ impl WgpuState {
     }
 }
 
-#[cfg(vulkan)]
+#[cfg(supported)]
 fn spawn_writer_thread(
     file_name: &'static str,
 ) -> (
@@ -318,9 +304,9 @@ fn spawn_writer_thread(
     (writer_thread_handle, chunk_sender)
 }
 
-#[cfg(not(vulkan))]
+#[cfg(not(supported))]
 fn main() {
     println!(
-        "This crate doesn't work on your operating system, because it does not support vulkan"
+        "This crate doesn't work on your operating system, because it does not support vulkan or video toolbox"
     );
 }
