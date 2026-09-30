@@ -91,9 +91,6 @@ pub(super) struct InputResampler {
     /// Subtracted from `input_buffer_start_pts()` to get the PTS of the first warmup output
     /// sample in the input timeline.
     original_output_delay: Duration,
-    /// Nominal ratio = `output_sample_rate / input_sample_rate`. We multiply it by a "relative"
-    /// factor in [1/(1+MAX), 1+MAX] when correcting drift.
-    original_resampler_ratio: f64,
 
     /// PTS just past the last sample currently held in `resampler_input_buffer`. Updated only in
     /// `write_batch`. Combined with the buffer's frame count, it lets us compute
@@ -212,7 +209,6 @@ impl InputResampler {
             output_buffer: AudioSamplesBuffer::new(channels),
 
             original_output_delay: default_output_delay,
-            original_resampler_ratio,
             input_buffer_end_pts: Timestamp::ZERO,
 
             needs_input_resync: true,
@@ -245,16 +241,11 @@ impl InputResampler {
             )
     }
 
-    /// Adjust rubato's resample ratio by a multiplicative factor relative to
-    /// `original_resampler_ratio`. `rel_ratio == 1.0` means "no correction".
+    /// Adjust rubato's resample ratio by a multiplicative factor relative to the nominal
+    /// `output_sample_rate / input_sample_rate`. `rel_ratio == 1.0` means "no correction".
     fn set_resample_ratio_relative(&mut self, rel_ratio: f64) {
         let rel_ratio = rel_ratio.clamp(1.0 / (1.0 + MAX_STRETCH_RATIO), 1.0 + MAX_STRETCH_RATIO);
-        let desired = self.original_resampler_ratio * rel_ratio;
-        let current = self.resampler.resample_ratio();
-        let should_update = (current == 1.0 && desired != 1.0) || (desired - current).abs() > 0.01;
-        if should_update
-            && let Err(err) = self.resampler.set_resample_ratio_relative(rel_ratio, true)
-        {
+        if let Err(err) = self.resampler.set_resample_ratio_relative(rel_ratio, true) {
             warn!(%err, "Failed to update resampler ratio.");
             let _ = self.resampler.set_resample_ratio_relative(1.0, true);
         }
