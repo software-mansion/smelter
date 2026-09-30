@@ -15,7 +15,7 @@ enum Planes {
 }
 
 impl VideoTexture {
-    /// Wraps a texture in [`wgpu::TextureFormat::NV12`].
+    // TODO: make private
     pub fn from_nv12_texture(texture: wgpu::Texture) -> Self {
         Self(Planes::Single(texture))
     }
