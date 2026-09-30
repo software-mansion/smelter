@@ -4,11 +4,12 @@ use objc2_metal as mtl;
 use crate::VideoTexture;
 use crate::backends::video_toolbox::{
     error::{VTDecoderError, VTInitError},
-    wgpu_api::{self, SyncCache, video_texture_from_pixel_buffer},
+    metal_interop::SyncCache,
+    wgpu_api::video_texture_from_pixel_buffer,
 };
 
 pub(crate) fn make_texture_cache(device: &wgpu::Device) -> Result<SyncCache, VTInitError> {
-    wgpu_api::make_texture_cache(device, mtl::MTLTextureUsage::ShaderRead)
+    SyncCache::new_from_wgpu(device, mtl::MTLTextureUsage::ShaderRead)
 }
 
 pub(crate) fn to_video_texture(
