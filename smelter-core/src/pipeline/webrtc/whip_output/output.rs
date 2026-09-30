@@ -1,10 +1,6 @@
-use std::{
-    sync::Arc,
-    thread,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::{sync::mpsc, time::timeout};
 use tracing::{Instrument, Level, span};
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 
@@ -44,8 +40,6 @@ impl WhipOutput {
         output_ref: Ref<OutputId>,
         options: WhipOutputOptions,
     ) -> Result<Self, OutputInitError> {
-        let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
-
         ctx.stats_sender.send(StatsEvent::NewOutput {
             output_ref: output_ref.clone(),
             kind: OutputProtocolKind::Whip,
@@ -57,21 +51,24 @@ impl WhipOutput {
             output_id = output_ref.to_string()
         );
         let rt = ctx.tokio_rt.clone();
-        rt.spawn(
-            async {
-                let result = WhipClientTask::new(ctx, output_ref, options).await;
-                match result {
-                    Ok((task, handle)) => {
-                        init_confirmation_sender.send(Ok(handle)).unwrap();
-                        task.run().await
-                    }
-                    Err(err) => init_confirmation_sender.send(Err(err)).unwrap(),
-                }
-            }
-            .instrument(span),
-        );
 
-        wait_with_deadline(init_confirmation_receiver, WHIP_INIT_TIMEOUT)
+        let init_result = rt.block_on(async {
+            // timeout has to be created inside tokio runtime
+            timeout(
+                WHIP_INIT_TIMEOUT,
+                WhipClientTask::new(ctx, output_ref, options),
+            )
+            .instrument(span.clone())
+            .await
+        });
+        let (whip_client_task, output) = match init_result {
+            Ok(result) => result.map_err(|err| OutputInitError::WhipInitError(err.into()))?,
+            Err(_) => return Err(OutputInitError::WhipInitTimeout),
+        };
+
+        rt.spawn(whip_client_task.run().instrument(span));
+
+        Ok(output)
     }
 }
 
@@ -99,31 +96,6 @@ impl Output for WhipOutput {
     fn kind(&self) -> OutputProtocolKind {
         OutputProtocolKind::Whip
     }
-}
-
-fn wait_with_deadline<T>(
-    mut result_receiver: oneshot::Receiver<Result<T, WebrtcClientError>>,
-    timeout: Duration,
-) -> Result<T, OutputInitError> {
-    let start_time = Instant::now();
-    while start_time.elapsed() < timeout {
-        thread::sleep(Duration::from_millis(500));
-
-        match result_receiver.try_recv() {
-            Ok(result) => match result {
-                Ok(handle) => return Ok(handle),
-                Err(err) => return Err(OutputInitError::WhipInitError(err.into())),
-            },
-            Err(err) => match err {
-                oneshot::error::TryRecvError::Closed => {
-                    return Err(OutputInitError::UnknownWhipError);
-                }
-                oneshot::error::TryRecvError::Empty => {}
-            },
-        };
-    }
-    result_receiver.close();
-    Err(OutputInitError::WhipInitTimeout)
 }
 
 pub(super) struct WhipOutputStatsSender {
