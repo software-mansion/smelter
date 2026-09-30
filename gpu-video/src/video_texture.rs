@@ -6,13 +6,17 @@ pub struct VideoTexture(Planes);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Planes {
+    #[cfg_attr(video_toolbox, expect(dead_code))]
     Single(wgpu::Texture),
-    Separated { y: wgpu::Texture, uv: wgpu::Texture },
+    Separated {
+        y: wgpu::Texture,
+        uv: wgpu::Texture,
+    },
 }
 
 impl VideoTexture {
-    // TODO: make private
-    pub fn from_nv12_texture(texture: wgpu::Texture) -> Self {
+    #[cfg_attr(video_toolbox, expect(dead_code))]
+    pub(crate) fn from_nv12_texture(texture: wgpu::Texture) -> Self {
         Self(Planes::Single(texture))
     }
 
