@@ -418,6 +418,7 @@ impl<'a> CodingImageBundle<'a> {
                         vulkan_ctx.allocator.clone(),
                         &image_create_info,
                         image_tracker.clone(),
+                        true,
                     )
                     .map(Arc::new)
                     .and_then(|i| {
@@ -472,6 +473,7 @@ impl<'a> CodingImageBundle<'a> {
                 vulkan_ctx.allocator.clone(),
                 &image_create_info,
                 image_tracker.clone(),
+                true,
             )?);
 
             vulkan_ctx
