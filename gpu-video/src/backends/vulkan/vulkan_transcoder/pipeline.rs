@@ -136,6 +136,7 @@ impl ImageHeap {
                 self.device.allocator.clone(),
                 &create_info,
                 tracker.image_layout_tracker.clone(),
+                false,
             )?);
 
             self.device
