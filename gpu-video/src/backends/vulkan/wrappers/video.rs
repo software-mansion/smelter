@@ -12,7 +12,7 @@ use crate::{
     parser::reference_manager::{PictureInfo, ReferencePictureInfo},
 };
 
-use super::{Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
+use super::{DedicatedMemoryAllocation, Device, Image, ImageView, VideoQueueExt};
 
 pub(crate) struct VideoSessionParameters {
     pub(crate) parameters: vk::VideoSessionParametersKHR,
@@ -104,7 +104,7 @@ impl Drop for VideoSessionParameters {
 pub(crate) struct VideoSession {
     pub(crate) session: vk::VideoSessionKHR,
     pub(crate) device: Arc<Device>,
-    pub(crate) _allocations: Vec<MemoryAllocation>,
+    pub(crate) _allocations: Vec<DedicatedMemoryAllocation>,
     pub(crate) max_coded_extent: vk::Extent2D,
     pub(crate) max_dpb_slots: u32,
 }
@@ -112,7 +112,7 @@ pub(crate) struct VideoSession {
 impl VideoSession {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        vulkan_ctx: &VulkanDevice,
+        vulkan_device: &VulkanDevice,
         queue: &VideoQueues,
         profile_info: &vk::VideoProfileInfoKHR,
         max_coded_extent: vk::Extent2D,
@@ -137,51 +137,40 @@ impl VideoSession {
             .std_header_version(std_header_version);
 
         let video_session = unsafe {
-            vulkan_ctx
+            vulkan_device
                 .device
                 .video_queue_ext
                 .create_video_session_khr(&session_create_info, None)?
         };
 
         let memory_requirements = unsafe {
-            vulkan_ctx
+            vulkan_device
                 .device
                 .video_queue_ext
                 .get_video_session_memory_requirements_khr(video_session)?
         };
 
+        // Mesa driver returns alignment 0 which means that each allocation must have memory
+        // offset set to 0, so every allocation must be a separate memory block
         let allocations = memory_requirements
             .iter()
-            .map(|req| {
-                MemoryAllocation::new(
-                    vulkan_ctx.allocator.clone(),
-                    &req.memory_requirements,
-                    &vk_mem::AllocationCreateInfo {
-                        usage: vk_mem::MemoryUsage::Unknown,
-                        // Mesa driver returns alignment 0 which means that each allocation must have memory offset set to 0,
-                        // so every allocation must be a separate memory block
-                        flags: vk_mem::AllocationCreateFlags::DEDICATED_MEMORY,
-                        ..Default::default()
-                    },
-                )
-            })
+            .map(|req| DedicatedMemoryAllocation::new(vulkan_device, &req.memory_requirements))
             .collect::<Result<Vec<_>, _>>()?;
 
         let memory_bind_infos = memory_requirements
             .into_iter()
             .zip(allocations.iter())
             .map(|(req, allocation)| {
-                let allocation_info = allocation.allocation_info();
                 vk::BindVideoSessionMemoryInfoKHR::default()
                     .memory_bind_index(req.memory_bind_index)
-                    .memory(allocation_info.device_memory)
-                    .memory_offset(allocation_info.offset)
-                    .memory_size(allocation_info.size)
+                    .memory(allocation.memory)
+                    .memory_offset(0)
+                    .memory_size(allocation.size)
             })
             .collect::<Vec<_>>();
 
         unsafe {
-            vulkan_ctx
+            vulkan_device
                 .device
                 .video_queue_ext
                 .bind_video_session_memory_khr(video_session, &memory_bind_infos)?
@@ -190,7 +179,7 @@ impl VideoSession {
         Ok(VideoSession {
             session: video_session,
             _allocations: allocations,
-            device: vulkan_ctx.device.clone(),
+            device: vulkan_device.device.clone(),
             max_coded_extent,
             max_dpb_slots,
         })

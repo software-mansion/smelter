@@ -1,10 +1,13 @@
 use std::sync::{Arc, Mutex, Weak};
 
 use ash::vk::{self, Handle};
-use vk_mem::Alloc;
+use gpu_allocator::{
+    MemoryLocation,
+    vulkan::{Allocation, AllocationCreateDesc, AllocationScheme, AllocatorCreateDesc},
+};
 
 use crate::backends::vulkan::{
-    VulkanCommonError, VulkanDeviceInitError,
+    VulkanCommonError, VulkanDevice, VulkanDeviceInitError,
     codec::h264::parameters::H264DecodeProfileInfo,
     vulkan_decoder::VulkanDecoderError,
     vulkan_device::EncodingDevice,
@@ -15,74 +18,91 @@ use crate::backends::vulkan::{
 use super::{Device, Instance};
 
 pub(crate) struct Allocator {
-    allocator: vk_mem::Allocator,
-    _instance: Arc<Instance>,
-    pub(crate) device: Arc<Device>,
+    allocator: Mutex<gpu_allocator::vulkan::Allocator>,
+    device: Arc<Device>,
 }
 
 impl Allocator {
     pub(crate) fn new(
-        instance: Arc<Instance>,
+        instance: &Instance,
         physical_device: vk::PhysicalDevice,
         device: Arc<Device>,
     ) -> Result<Self, VulkanDeviceInitError> {
-        let mut allocator_create_info =
-            vk_mem::AllocatorCreateInfo::new(&instance, &device, physical_device);
-        allocator_create_info.vulkan_api_version = vk::API_VERSION_1_3;
-
-        let allocator = unsafe { vk_mem::Allocator::new(allocator_create_info)? };
+        let allocator = gpu_allocator::vulkan::Allocator::new(&AllocatorCreateDesc {
+            instance: instance.instance.clone(),
+            device: device.device.clone(),
+            physical_device,
+            debug_settings: Default::default(),
+            buffer_device_address: false,
+            allocation_sizes: Default::default(),
+        })
+        .map_err(VulkanCommonError::from)?;
 
         Ok(Self {
-            allocator,
+            allocator: Mutex::new(allocator),
             device,
-            _instance: instance,
         })
     }
-}
 
-impl std::ops::Deref for Allocator {
-    type Target = vk_mem::Allocator;
+    fn allocate(&self, desc: &AllocationCreateDesc) -> Result<Allocation, VulkanCommonError> {
+        self.allocator
+            .lock()
+            .unwrap()
+            .allocate(desc)
+            .map_err(Into::into)
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.allocator
+    fn free(&self, allocation: Allocation) -> Result<(), VulkanCommonError> {
+        self.allocator
+            .lock()
+            .unwrap()
+            .free(allocation)
+            .map_err(Into::into)
     }
 }
 
-pub(crate) struct MemoryAllocation {
-    pub(crate) allocation: vk_mem::Allocation,
-    allocator: Arc<Allocator>,
+fn allocation_scheme(
+    requirements: vk::MemoryDedicatedRequirements,
+    dedicated_sheme: AllocationScheme,
+) -> AllocationScheme {
+    if requirements.prefers_dedicated_allocation == vk::TRUE
+        || requirements.requires_dedicated_allocation == vk::TRUE
+    {
+        dedicated_sheme
+    } else {
+        AllocationScheme::GpuAllocatorManaged
+    }
 }
 
-impl MemoryAllocation {
+/// Device memory allocation that owns whole memory block
+pub(crate) struct DedicatedMemoryAllocation {
+    pub(crate) memory: vk::DeviceMemory,
+    pub(crate) size: u64,
+    device: Arc<Device>,
+}
+
+impl DedicatedMemoryAllocation {
     pub(crate) fn new(
-        allocator: Arc<Allocator>,
-        memory_requirements: &vk::MemoryRequirements,
-        alloc_info: &vk_mem::AllocationCreateInfo,
+        device: &VulkanDevice,
+        requirements: &vk::MemoryRequirements,
     ) -> Result<Self, VulkanCommonError> {
-        let allocation = unsafe { allocator.allocate_memory(memory_requirements, alloc_info)? };
+        let alloc_info = vk::MemoryAllocateInfo::default()
+            .allocation_size(requirements.size)
+            .memory_type_index(requirements.memory_type_bits.trailing_zeros());
+
+        let memory = unsafe { device.device.allocate_memory(&alloc_info, None)? };
 
         Ok(Self {
-            allocation,
-            allocator,
+            memory,
+            size: requirements.size,
+            device: device.device.clone(),
         })
     }
-
-    pub(crate) fn allocation_info(&self) -> vk_mem::AllocationInfo {
-        self.allocator.get_allocation_info(&self.allocation)
-    }
 }
 
-impl std::ops::Deref for MemoryAllocation {
-    type Target = vk_mem::Allocation;
-
-    fn deref(&self) -> &Self::Target {
-        &self.allocation
-    }
-}
-
-impl Drop for MemoryAllocation {
+impl Drop for DedicatedMemoryAllocation {
     fn drop(&mut self) {
-        unsafe { self.allocator.free_memory(&mut self.allocation) };
+        unsafe { self.device.free_memory(self.memory, None) };
     }
 }
 
@@ -153,12 +173,7 @@ impl DecodeInputBuffer {
             self.capacity = new_capacity;
         }
 
-        unsafe {
-            let mem = self.allocator.map_memory(&mut self.buffer.allocation)?;
-            let slice = std::slice::from_raw_parts_mut(mem.cast(), data.len());
-            slice.copy_from_slice(data);
-            self.allocator.unmap_memory(&mut self.buffer.allocation);
-        }
+        self.buffer.copy_data_into(data)?;
 
         Ok(())
     }
@@ -377,7 +392,7 @@ fn image_usage_to_wgpu_texture_usages(usage: vk::ImageUsageFlags) -> wgpu::Textu
 
 pub(crate) struct Buffer {
     pub(crate) buffer: vk::Buffer,
-    pub(crate) allocation: vk_mem::Allocation,
+    allocation: Allocation,
     allocator: Arc<Allocator>,
     transfer_direction: TransferDirection,
 }
@@ -457,22 +472,14 @@ impl Buffer {
         create_info: vk::BufferCreateInfo,
         transfer_direction: TransferDirection,
     ) -> Result<Self, VulkanCommonError> {
-        let allocation_flags = match transfer_direction {
-            TransferDirection::GpuToMem => vk_mem::AllocationCreateFlags::HOST_ACCESS_RANDOM,
-            TransferDirection::MemToGpu => {
-                vk_mem::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE
-            }
+        let location = match transfer_direction {
+            TransferDirection::GpuToMem => MemoryLocation::GpuToCpu,
+            TransferDirection::MemToGpu => MemoryLocation::CpuToGpu,
         };
 
-        let allocation_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::Auto,
-            required_flags: vk::MemoryPropertyFlags::HOST_COHERENT,
-            flags: allocation_flags,
-            ..Default::default()
-        };
-
-        let (buffer, allocation) =
-            unsafe { allocator.create_buffer(&create_info, &allocation_create_info)? };
+        let device = &allocator.device;
+        let buffer = unsafe { device.create_buffer(&create_info, None)? };
+        let allocation = Self::allocate_and_bind(&allocator, buffer, location)?;
 
         Ok(Self {
             buffer,
@@ -480,6 +487,47 @@ impl Buffer {
             allocator,
             transfer_direction,
         })
+    }
+
+    fn allocate_and_bind(
+        allocator: &Allocator,
+        buffer: vk::Buffer,
+        location: MemoryLocation,
+    ) -> Result<Allocation, VulkanCommonError> {
+        let device = &allocator.device;
+
+        let mut dedicated_requirements = vk::MemoryDedicatedRequirements::default();
+        let mut requirements =
+            vk::MemoryRequirements2::default().push_next(&mut dedicated_requirements);
+        unsafe {
+            device.get_buffer_memory_requirements2(
+                &vk::BufferMemoryRequirementsInfo2::default().buffer(buffer),
+                &mut requirements,
+            )
+        };
+
+        let requirements = requirements.memory_requirements;
+
+        let allocation = allocator.allocate(&AllocationCreateDesc {
+            name: "gpu-video buffer",
+            requirements,
+            location,
+            linear: true,
+            allocation_scheme: allocation_scheme(
+                dedicated_requirements,
+                AllocationScheme::DedicatedBuffer(buffer),
+            ),
+        })?;
+
+        unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset())? };
+
+        Ok(allocation)
+    }
+
+    fn mapped_slice_mut(&mut self) -> Result<&mut [u8], VulkanCommonError> {
+        self.allocation
+            .mapped_slice_mut()
+            .ok_or(VulkanCommonError::BufferNotMapped)
     }
 
     /// ## Safety
@@ -499,15 +547,8 @@ impl Buffer {
         offset: usize,
         size: usize,
     ) -> Result<Vec<u8>, VulkanCommonError> {
-        let output;
-        unsafe {
-            let memory = self.allocator.map_memory(&mut self.allocation)?;
-            let memory_slice = std::slice::from_raw_parts_mut(memory.add(offset), size);
-            output = memory_slice.to_vec();
-            self.allocator.unmap_memory(&mut self.allocation);
-        }
-
-        Ok(output)
+        let memory = self.mapped_slice_mut()?;
+        Ok(memory[offset..offset + size].to_vec())
     }
 
     fn copy_data_into(&mut self, data: &[u8]) -> Result<(), VulkanCommonError> {
@@ -515,12 +556,8 @@ impl Buffer {
             return Err(VulkanCommonError::UploadToImproperBuffer);
         }
 
-        unsafe {
-            let mem = self.allocator.map_memory(&mut self.allocation)?;
-            let slice = std::slice::from_raw_parts_mut(mem.cast(), data.len());
-            slice.copy_from_slice(data);
-            self.allocator.unmap_memory(&mut self.allocation);
-        }
+        let memory = self.mapped_slice_mut()?;
+        memory[..data.len()].copy_from_slice(data);
 
         Ok(())
     }
@@ -528,10 +565,10 @@ impl Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        unsafe {
-            self.allocator
-                .destroy_buffer(self.buffer, &mut self.allocation)
-        }
+        unsafe { self.allocator.device.destroy_buffer(self.buffer, None) };
+        self.allocator
+            .free(std::mem::take(&mut self.allocation))
+            .unwrap();
     }
 }
 
@@ -545,7 +582,7 @@ impl std::ops::Deref for Buffer {
 
 pub(crate) struct Image {
     pub(crate) image: vk::Image,
-    allocation: vk_mem::Allocation,
+    allocation: Allocation,
     allocator: Arc<Allocator>,
     tracker: Arc<Mutex<ImageLayoutTracker>>,
     pub(crate) device: Arc<Device>,
@@ -562,13 +599,10 @@ impl Image {
         tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, VulkanCommonError> {
         let extent = image_create_info.extent;
-        let alloc_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::Auto,
-            ..Default::default()
-        };
+        let image = unsafe { allocator.device.create_image(image_create_info, None)? };
 
-        let (image, allocation) =
-            unsafe { allocator.create_image(image_create_info, &alloc_info)? };
+        let linear = image_create_info.tiling == vk::ImageTiling::LINEAR;
+        let allocation = Self::allocate_and_bind(&allocator, image, linear)?;
 
         tracker.lock().unwrap().register_image(
             ImageKey(image.as_raw()),
@@ -584,6 +618,39 @@ impl Image {
             tracker,
             extent,
         })
+    }
+
+    fn allocate_and_bind(
+        allocator: &Allocator,
+        image: vk::Image,
+        linear: bool,
+    ) -> Result<Allocation, VulkanCommonError> {
+        let device = &allocator.device;
+        let mut dedicated_requirements = vk::MemoryDedicatedRequirements::default();
+        let mut requirements =
+            vk::MemoryRequirements2::default().push_next(&mut dedicated_requirements);
+        unsafe {
+            device.get_image_memory_requirements2(
+                &vk::ImageMemoryRequirementsInfo2::default().image(image),
+                &mut requirements,
+            )
+        };
+
+        let requirements = requirements.memory_requirements;
+        let allocation = allocator.allocate(&AllocationCreateDesc {
+            name: "gpu-video image",
+            requirements,
+            location: MemoryLocation::GpuOnly,
+            linear,
+            allocation_scheme: allocation_scheme(
+                dedicated_requirements,
+                AllocationScheme::DedicatedImage(image),
+            ),
+        })?;
+
+        unsafe { device.bind_image_memory(image, allocation.memory(), allocation.offset())? };
+
+        Ok(allocation)
     }
 
     pub(crate) fn new_encode(
@@ -813,14 +880,14 @@ impl std::ops::Deref for Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        unsafe {
-            if let Err(e) = self.tracker.lock().unwrap().unregister_image(self.key()) {
-                tracing::error!("Error while freeing image: {e}")
-            }
+        if let Err(e) = self.tracker.lock().unwrap().unregister_image(self.key()) {
+            tracing::error!("Error while freeing image: {e}")
+        }
 
-            self.allocator
-                .destroy_image(self.image, &mut self.allocation)
-        };
+        unsafe { self.device.destroy_image(self.image, None) };
+        self.allocator
+            .free(std::mem::take(&mut self.allocation))
+            .unwrap();
     }
 }
 

@@ -2330,6 +2330,7 @@ dependencies = [
  "bytes",
  "cfg_aliases",
  "clap",
+ "gpu-allocator",
  "h264-reader",
  "libc",
  "memchr",
@@ -2345,7 +2346,6 @@ dependencies = [
  "thiserror 2.0.17",
  "tracing",
  "tracing-subscriber",
- "vk-mem",
  "wgpu",
  "winit",
 ]
@@ -7639,17 +7639,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.98",
-]
-
-[[package]]
-name = "vk-mem"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cb12b79bcec57a3334d0284f1364c1846f378bb47df9779c6dbfcfc245c9404"
-dependencies = [
- "ash",
- "bitflags 2.13.1",
- "cc",
 ]
 
 [[package]]
