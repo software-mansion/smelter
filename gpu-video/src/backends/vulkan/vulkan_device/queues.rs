@@ -16,6 +16,13 @@ pub(crate) struct Queue {
     pub(crate) device: Arc<Device>,
 }
 
+impl Drop for Queue {
+    fn drop(&mut self) {
+        let queue = self.queue.lock().unwrap();
+        unsafe { self.device.queue_wait_idle(*queue).unwrap() };
+    }
+}
+
 impl Queue {
     pub(crate) fn supports_result_status_queries(&self) -> bool {
         self.query_result_status_properties
