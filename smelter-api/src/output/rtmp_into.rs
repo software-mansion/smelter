@@ -97,6 +97,7 @@ impl RtmpClientVideoEncoderOptions {
                     .into_iter()
                     .collect(),
                 bitstream_format: core::H264BitstreamFormat::Avcc,
+                low_latency: false,
             }),
             RtmpClientVideoEncoderOptions::FfmpegVp8 {
                 bitrate,

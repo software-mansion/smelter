@@ -127,6 +127,7 @@ impl AudioEncoder for FdkAacEncoder {
                 extradata: (info.confSize > 0)
                     .then(|| Bytes::copy_from_slice(&info.confBuf[0..(info.confSize as usize)])),
                 initial_padding: Some(codec_delay),
+                samples_per_frame: info.frameLength,
             },
         ))
     }
@@ -242,7 +243,7 @@ impl FdkAacEncoder {
                     ),
                     pts,
                     dts: None,
-                    is_keyframe: false,
+                    is_keyframe: true,
                     kind: MediaKind::Audio(AudioCodec::Aac),
                 });
             } else {

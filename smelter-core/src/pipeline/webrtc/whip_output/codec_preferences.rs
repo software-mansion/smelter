@@ -84,6 +84,7 @@ pub(super) fn resolve_video_preferences(
                             pixel_format: OutputPixelFormat::YUV420P,
                             raw_options: Vec::new(),
                             bitstream_format: H264BitstreamFormat::AnnexB,
+                            low_latency: true,
                         })
                     },
                 ]

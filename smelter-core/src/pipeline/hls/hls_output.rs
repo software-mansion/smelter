@@ -1,8 +1,8 @@
-use std::{ptr, sync::Arc, time::Duration};
+use std::{ptr, sync::Arc};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
-use smelter_render::{Framerate, OutputId};
+use smelter_render::OutputId;
 use tracing::{debug, error};
 
 use crate::{
@@ -19,7 +19,9 @@ use crate::{
             ffmpeg_h264::FfmpegH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
-        ffmpeg_utils::{FfmpegOptions, StreamMutExt, TimestampOffset, write_extradata},
+        ffmpeg_utils::{
+            FfmpegOptions, StreamMutExt, TimestampOffset, warn_unused_options, write_extradata,
+        },
         output::{Output, OutputAudio, OutputVideo},
         utils::InitializableThread,
     },
@@ -31,6 +33,7 @@ use crate::prelude::*;
 struct StreamState {
     index: usize,
     time_base: Rational,
+    packet_duration: Rational,
 }
 
 pub struct HlsOutput {
@@ -77,9 +80,6 @@ impl HlsOutput {
         };
 
         let mut ffmpeg_options = FfmpegOptions::from(&[
-            ("segment_format", "mpegts"),
-            ("segment_list_type", "m3u8"),
-            ("segment_list_flags", "cache+live"),
             ("hls_flags", "delete_segments"),
             (
                 "hls_list_size",
@@ -89,27 +89,32 @@ impl HlsOutput {
         ]);
         ffmpeg_options.append(&options.raw_options);
 
-        output_ctx
-            .write_header_with(ffmpeg_options.into_dictionary())
-            .map_err(OutputInitError::FfmpegError)?;
+        warn_unused_options(
+            &output_ctx
+                .write_header_with(ffmpeg_options.into_dictionary())
+                .map_err(OutputInitError::FfmpegError)?,
+            "HLS muxer",
+        );
 
         let (video_encoder, video_stream) = match video {
-            Some((encoder, index)) => (
+            Some((encoder, index, packet_duration)) => (
                 Some(encoder),
                 Some(StreamState {
                     index,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
+                    packet_duration,
                 }),
             ),
             None => (None, None),
         };
 
         let (audio_encoder, audio_stream) = match audio {
-            Some((encoder, index)) => (
+            Some((encoder, index, packet_duration)) => (
                 Some(encoder),
                 Some(StreamState {
                     index,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
+                    packet_duration,
                 }),
             ),
             None => (None, None),
@@ -134,11 +139,12 @@ impl HlsOutput {
                     output_ref: output_ref.clone(),
                 };
                 run_ffmpeg_output_thread(
+                    &ctx,
+                    &output_ref,
                     output_ctx,
                     video_stream,
                     audio_stream,
                     encoded_chunks_receiver,
-                    ctx.output_framerate,
                     stats_sender,
                     offset,
                 );
@@ -160,7 +166,7 @@ impl HlsOutput {
         options: VideoEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
-    ) -> Result<(VideoEncoderThreadHandle, usize), OutputInitError> {
+    ) -> Result<(VideoEncoderThreadHandle, usize, Rational), OutputInitError> {
         let resolution = options.resolution();
 
         let encoder = match &options {
@@ -213,7 +219,9 @@ impl HlsOutput {
             codecpar.height = resolution.height as i32;
         });
 
-        Ok((encoder, stream.index()))
+        let framerate = ctx.output_framerate;
+        let packet_duration = Rational(framerate.den as i32, framerate.num as i32);
+        Ok((encoder, stream.index(), packet_duration))
     }
 
     fn init_audio_track(
@@ -222,7 +230,7 @@ impl HlsOutput {
         options: AudioEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
-    ) -> Result<(AudioEncoderThreadHandle, usize), OutputInitError> {
+    ) -> Result<(AudioEncoderThreadHandle, usize, Rational), OutputInitError> {
         let channel_count = match options.channels() {
             AudioChannels::Mono => 1,
             AudioChannels::Stereo => 2,
@@ -265,7 +273,8 @@ impl HlsOutput {
             };
         });
 
-        Ok((encoder, stream.index()))
+        let packet_duration = Rational(encoder.config.samples_per_frame as i32, sample_rate as i32);
+        Ok((encoder, stream.index(), packet_duration))
     }
 }
 
@@ -293,19 +302,21 @@ impl Output for HlsOutput {
 const VIDEO_TIME_BASE: Rational = Rational(1, 90_000);
 const NS_TIME_BASE: Rational = Rational(1, 1_000_000_000);
 
+#[allow(clippy::too_many_arguments)]
 fn run_ffmpeg_output_thread(
+    ctx: &Arc<PipelineCtx>,
+    output_ref: &Ref<OutputId>,
     mut output_ctx: ffmpeg::format::context::Output,
     mut video_stream: Option<StreamState>,
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
-    framerate: Framerate,
     stats_sender: HlsOutputStatsSender,
     mut offset: TimestampOffset,
 ) {
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
     let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
 
-    for packet in packets_receiver.into_iter().map(Some).chain([None]) {
+    'packets: for packet in packets_receiver.into_iter().map(Some).chain([None]) {
         let chunks = match packet {
             Some(EncodedOutputEvent::Data(chunk)) => offset.resolve(chunk),
             Some(EncodedOutputEvent::VideoEOS) => {
@@ -337,14 +348,25 @@ fn run_ffmpeg_output_thread(
 
         for (timestamp_offset, chunk) in chunks {
             stats_sender.bytes_sent_event(chunk.data.len(), chunk.kind.into());
-            write_chunk(
+            let result = write_chunk(
                 chunk,
                 &mut video_stream,
                 &mut audio_stream,
                 &mut output_ctx,
-                framerate.get_interval_duration(),
                 timestamp_offset,
             );
+            if let Err(err) = result {
+                let try_write_trailer = !matches!(err, OutputHlsRuntimeError::NoSpaceLeftOnDevice);
+                ctx.event_emitter.emit(Event::OutputError {
+                    output_id: output_ref.id().clone(),
+                    err: err.into(),
+                    severity: ErrorSeverity::Critical,
+                });
+                match try_write_trailer {
+                    true => break 'packets,
+                    false => return,
+                }
+            }
         }
 
         if received_video_eos.unwrap_or(true) && received_audio_eos.unwrap_or(true) {
@@ -353,7 +375,17 @@ fn run_ffmpeg_output_thread(
     }
 
     if let Err(err) = output_ctx.write_trailer() {
-        error!("Failed to write trailer to m3u8 file: {}.", err);
+        let err = match err {
+            ffmpeg::Error::Other {
+                errno: ffmpeg::error::ENOSPC,
+            } => OutputHlsRuntimeError::NoSpaceLeftOnDevice,
+            err => OutputHlsRuntimeError::TrailerWriteError(err),
+        };
+        ctx.event_emitter.emit(Event::OutputError {
+            output_id: output_ref.id().clone(),
+            err: err.into(),
+            severity: ErrorSeverity::Critical,
+        });
     };
 }
 
@@ -362,9 +394,8 @@ fn write_chunk(
     video_stream: &mut Option<StreamState>,
     audio_stream: &mut Option<StreamState>,
     output_ctx: &mut ffmpeg::format::context::Output,
-    frame_duration: Duration,
     timestamp_offset: Timestamp,
-) {
+) -> Result<(), OutputHlsRuntimeError> {
     let stream = match chunk.kind {
         MediaKind::Video(_) => match video_stream {
             Some(stream) => stream,
@@ -372,7 +403,7 @@ fn write_chunk(
                 error!(
                     "Failed to create packet for video chunk. No video stream registered on init."
                 );
-                return;
+                return Ok(());
             }
         },
         MediaKind::Audio(_) => match audio_stream {
@@ -381,7 +412,7 @@ fn write_chunk(
                 error!(
                     "Failed to create packet for audio chunk. No audio stream registered on init."
                 );
-                return;
+                return Ok(());
             }
         },
     };
@@ -401,8 +432,8 @@ fn write_chunk(
         stream.time_base,
     )));
     packet.set_duration(Rescale::rescale(
-        &(frame_duration.as_nanos() as i64),
-        NS_TIME_BASE,
+        &1,
+        stream.packet_duration,
         stream.time_base,
     ));
     packet.set_time_base(stream.time_base);
@@ -412,9 +443,17 @@ fn write_chunk(
         packet.set_flags(ffmpeg::packet::Flags::KEY)
     }
 
-    if let Err(err) = packet.write(output_ctx) {
-        error!("Failed to write packet to HLS file: {}.", err);
-    }
+    // Encoders deliver packets in their own output order (video lags behind audio by the
+    // encoder delay). Interleaving by dts keeps audio in the segment of its matching video.
+    packet
+        .write_interleaved(output_ctx)
+        .map_err(|err| match err {
+            ffmpeg::Error::Other {
+                errno: ffmpeg::error::ENOSPC,
+            } => OutputHlsRuntimeError::NoSpaceLeftOnDevice,
+            err => OutputHlsRuntimeError::PacketWriteError(err),
+        })?;
+    Ok(())
 }
 
 struct HlsOutputStatsSender {

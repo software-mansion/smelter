@@ -102,6 +102,7 @@ impl HlsVideoEncoderOptions {
                     .into_iter()
                     .collect(),
                 bitstream_format: core::H264BitstreamFormat::AnnexB,
+                low_latency: false,
             }),
             HlsVideoEncoderOptions::VulkanH264 {
                 bitrate,

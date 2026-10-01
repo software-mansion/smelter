@@ -191,6 +191,14 @@ impl<T: AsRef<str>, const N: usize> From<&[(T, T); N]> for FfmpegOptions {
     }
 }
 
+/// FFmpeg leaves options it did not recognize in the dictionary and silently ignores them.
+pub(super) fn warn_unused_options(unused: &Dictionary, component: &str) {
+    let keys: Vec<&str> = unused.iter().map(|(key, _)| key).collect();
+    if !keys.is_empty() {
+        warn!(?keys, "{component} ignored unknown FFmpeg options.");
+    }
+}
+
 pub(super) fn write_extradata(codecpar: &mut AVCodecParameters, extradata: bytes::Bytes) {
     unsafe {
         // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.

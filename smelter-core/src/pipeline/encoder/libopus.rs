@@ -52,13 +52,14 @@ impl AudioEncoder for OpusEncoder {
         let lookahead = encoder.get_lookahead()? as u32;
         let pre_skip = (lookahead * 48_000 / options.sample_rate) as u16;
         let extradata = opus_head(options.channels, options.sample_rate, pre_skip);
+        // 20 ms, all Opus sample rates are divisible by 50.
+        let frame_size = options.sample_rate / 50;
 
         Ok((
             Self {
                 encoder,
                 sample_rate: options.sample_rate,
-                // 20 ms, all Opus sample rates are divisible by 50.
-                frame_size: (options.sample_rate / 50) as usize,
+                frame_size: frame_size as usize,
                 input_buffer: AudioSamplesBuffer::new(options.channels),
                 output_buffer: vec![0u8; 1024 * 1024],
                 lookahead: lookahead as usize,
@@ -70,6 +71,7 @@ impl AudioEncoder for OpusEncoder {
                 initial_padding: Some(Duration::from_secs_f64(
                     lookahead as f64 / options.sample_rate as f64,
                 )),
+                samples_per_frame: frame_size,
             },
         ))
     }
@@ -160,7 +162,7 @@ impl OpusEncoder {
             data,
             pts,
             dts: None,
-            is_keyframe: false,
+            is_keyframe: true,
             kind: MediaKind::Audio(AudioCodec::Opus),
         })
     }

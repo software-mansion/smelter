@@ -33,6 +33,8 @@ pub struct FfmpegH264EncoderOptions {
     pub pixel_format: OutputPixelFormat,
     pub raw_options: Vec<(Arc<str>, Arc<str>)>,
     pub bitstream_format: H264BitstreamFormat,
+    /// Configure the encoder for real-time outputs: no B-frames and minimal encoder delay.
+    pub low_latency: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

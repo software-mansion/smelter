@@ -120,6 +120,7 @@ impl WhipVideoEncoderOptions {
                     .into_iter()
                     .collect(),
                 bitstream_format: core::H264BitstreamFormat::AnnexB,
+                low_latency: true,
             }),
             WhipVideoEncoderOptions::VulkanH264 {
                 bitrate,

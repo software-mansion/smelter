@@ -6,7 +6,7 @@ use smelter_render::OutputFrameFormat;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::pipeline::encoder::ffmpeg_utils::{
-    create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format,
+    create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format, open_video_encoder,
 };
 use crate::pipeline::encoder::utils::{
     bitrate_from_resolution_framerate, gop_size_from_ms_framerate,
@@ -39,7 +39,9 @@ impl VideoEncoder for FfmpegH264Encoder {
         let codec_name = codec.name();
         debug!(h264_encoder = codec_name);
 
-        let mut encoder = Context::new().encoder().video()?;
+        // Allocating with the codec applies its own defaults, generic AVCodecContext defaults would
+        // override x264 presets.
+        let mut encoder = Context::new_with_codec(codec).encoder().video()?;
 
         let pts_unit_secs = Rational::new(1, TIME_BASE);
         let framerate = ctx.output_framerate;
@@ -62,7 +64,7 @@ impl VideoEncoder for FfmpegH264Encoder {
 
         let ffmpeg_options = initialize_ffmpeg_h264_options(ctx, &options, codec_name);
 
-        let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
+        let encoder = open_video_encoder(encoder, codec, ffmpeg_options)?;
         let extradata = encoder
             .read_extradata()
             .and_then(|extradata| build_avc_decoder_config(&extradata));
@@ -168,38 +170,6 @@ fn preset_to_str(preset: FfmpegH264EncoderPreset) -> &'static str {
     }
 }
 
-// Defaults the same as in libx264
-fn partitions_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
-    match preset {
-        FfmpegH264EncoderPreset::Ultrafast => "none",
-        FfmpegH264EncoderPreset::Superfast => "i8x8,i4x4",
-        FfmpegH264EncoderPreset::Veryfast => "p8x8,b8x8,i8x8,i4x4",
-        FfmpegH264EncoderPreset::Faster => "p8x8,b8x8,i8x8,i4x4",
-        FfmpegH264EncoderPreset::Fast => "p8x8,b8x8,i8x8,i4x4",
-        FfmpegH264EncoderPreset::Medium => "p8x8,b8x8,i8x8,i4x4",
-        FfmpegH264EncoderPreset::Slow => "all",
-        FfmpegH264EncoderPreset::Slower => "all",
-        FfmpegH264EncoderPreset::Veryslow => "all",
-        FfmpegH264EncoderPreset::Placebo => "all",
-    }
-}
-
-// Defaults the same as in libx264
-fn subq_mode_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
-    match preset {
-        FfmpegH264EncoderPreset::Ultrafast => "0",
-        FfmpegH264EncoderPreset::Superfast => "1",
-        FfmpegH264EncoderPreset::Veryfast => "2",
-        FfmpegH264EncoderPreset::Faster => "4",
-        FfmpegH264EncoderPreset::Fast => "6",
-        FfmpegH264EncoderPreset::Medium => "7",
-        FfmpegH264EncoderPreset::Slow => "8",
-        FfmpegH264EncoderPreset::Slower => "9",
-        FfmpegH264EncoderPreset::Veryslow => "10",
-        FfmpegH264EncoderPreset::Placebo => "11",
-    }
-}
-
 fn initialize_ffmpeg_h264_options(
     ctx: &Arc<PipelineCtx>,
     options: &FfmpegH264EncoderOptions,
@@ -256,30 +226,15 @@ fn initialize_ffmpeg_h264_options(
             ]);
         }
         _ => {
-            // Defaults the same as in x264 encoder
-            ffmpeg_options.append(&[
-                ("preset", preset_to_str(options.preset)),
-                // QP curve compression
-                ("qcomp", "0.6"),
-                //  Maximum motion vector search range
-                ("me_range", "16"),
-                // Max QP step
-                ("qdiff", "4"),
-                // Min QP
-                ("qmin", "4"),
-                // Max QP
-                ("qmax", "69"),
-                // QP factor between I and P frames
-                ("i_qfactor", "1.4"),
-                // QP factor between P and B frames
-                ("f_pb_factor", "1.3"),
-                // A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
-                ("partitions", partitions_for_preset(options.preset)),
-                // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
-                ("subq", subq_mode_for_preset(options.preset)),
-                // Auto number of threads
-                ("threads", "0"),
-            ]);
+            ffmpeg_options.append(&[("preset", preset_to_str(options.preset))]);
+            if options.low_latency {
+                ffmpeg_options.append(&[
+                    ("tune", "zerolatency"),
+                    // Disable b frames
+                    ("bf", "0"),
+                    ("thread_type", "slice"),
+                ]);
+            }
             match options.bitrate {
                 Some(bitrate) => {
                     let b = bitrate.average_bitrate;

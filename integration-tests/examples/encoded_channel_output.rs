@@ -42,6 +42,7 @@ fn main() {
                 pixel_format: OutputPixelFormat::YUV420P,
                 raw_options: vec![],
                 bitstream_format: H264BitstreamFormat::AnnexB,
+                low_latency: false,
             })),
             audio: Some(AudioEncoderOptions::Opus(OpusEncoderOptions {
                 channels: AudioChannels::Stereo,
