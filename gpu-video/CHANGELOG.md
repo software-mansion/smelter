@@ -34,6 +34,7 @@
 - Fix "green bar" artifact in H.264 decoder which appeared on Mesa drivers ([#2071](https://github.com/software-mansion/smelter/pull/2071) by @noituri)
 - Fix decoding video with a dynamic resolution ([#2080](https://github.com/software-mansion/smelter/pull/2080) by @noituri)
 - Fix vulkan validation errors produced by the encoder ([#2178](https://github.com/software-mansion/smelter/pull/2178) by @noituri)
+- Fix artifacts on AMD GPUs on Windows when multiple encoders or decoders are used at the same time ([#2249](https://github.com/software-mansion/smelter/pull/2249) by @noituri)
 
 ## [v0.4.0](https://github.com/software-mansion/smelter/releases/tag/gpu-video%2Fv0.4.0)
 

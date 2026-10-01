@@ -545,6 +545,7 @@ impl<'a> VulkanDecoder<'a> {
             self.decoding_device.allocator.clone(),
             &create_info,
             self.tracker.image_layout_tracker.clone(),
+            false,
         )?;
 
         let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
