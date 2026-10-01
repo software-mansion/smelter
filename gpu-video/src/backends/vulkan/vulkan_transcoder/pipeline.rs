@@ -1,4 +1,7 @@
-use std::{io::Cursor, sync::Arc};
+use std::{
+    io::Cursor,
+    sync::{Arc, Mutex, Weak},
+};
 
 use ash::vk;
 
@@ -6,18 +9,18 @@ use crate::{
     backends::vulkan::{
         VulkanDevice,
         vulkan_decoder::{DecodeSubmission, DecoderTrackerWaitState},
-        vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState},
+        vulkan_encoder::{EncoderTrackerWaitState, async_encoder::DynVulkanEncoder},
         vulkan_transcoder::VulkanTranscoderError,
         wrappers::{
             CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
-            Image, ImageView, PipelineLayout, ProfileInfo, SemaphoreWaitValue, ShaderModule,
+            EncodeInputImage, Image, ImageView, PipelineLayout, SemaphoreWaitValue, ShaderModule,
+            TimelineSemaphore,
         },
     },
     parameters::ScalingAlgorithm,
 };
 
 const MAX_OUTPUTS: u32 = 8;
-const MAX_FRAMES_IN_FLIGHT: u32 = 16; // The max reorder in h264
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -45,19 +48,12 @@ impl PushConstants {
     }
 }
 
-pub(crate) struct ResizingImageBundle {
-    pub(crate) image: Arc<Image>,
-    view_y: ImageView,
-    view_uv: ImageView,
+pub(crate) struct PlaneViews {
+    pub(crate) view_y: ImageView,
+    pub(crate) view_uv: ImageView,
 }
 
-pub(crate) struct ResizeSubmission {
-    pub(crate) outputs: Box<[ResizingImageBundle]>,
-    pub(crate) _input: ResizingImageBundle,
-    pub(crate) descriptors: Descriptors,
-}
-
-impl ResizingImageBundle {
+impl PlaneViews {
     fn new(image: Arc<Image>, layer: u32) -> Result<Self, VulkanTranscoderError> {
         let view_y = image.create_plane_view(
             layer,
@@ -70,89 +66,35 @@ impl ResizingImageBundle {
             vk::ImageUsageFlags::STORAGE,
         )?;
 
-        Ok(Self {
-            image,
-            view_y,
-            view_uv,
-        })
+        Ok(Self { view_y, view_uv })
     }
 }
 
-struct ImageHeap {
-    freelist: Vec<Box<[ResizingImageBundle]>>,
-    device: Arc<VulkanDevice>,
-    configs: Vec<OutputConfig>,
+pub(crate) struct InFlightResizeResources {
+    pub(crate) _input_views: PlaneViews,
+    pub(crate) _output_views: Vec<PlaneViews>,
+    pub(crate) descriptors: Option<Descriptors>,
+    pub(crate) _pipeline: Arc<ComputePipeline>,
+    pub(crate) _encoder_semaphores: Vec<Arc<TimelineSemaphore>>,
 }
 
-impl ImageHeap {
-    fn new(device: Arc<VulkanDevice>, configs: Vec<OutputConfig>) -> Self {
-        Self {
-            device,
-            freelist: Vec::new(),
-            configs,
-        }
+impl Drop for InFlightResizeResources {
+    fn drop(&mut self) {
+        let Some(descriptors) = self.descriptors.take() else {
+            return;
+        };
+
+        descriptors.release_to_pool();
     }
+}
 
-    fn free(&mut self, images: Box<[ResizingImageBundle]>) {
-        self.freelist.push(images);
-    }
-
-    fn allocate(
-        &mut self,
-        trackers: &mut [&mut EncoderTracker],
-    ) -> Result<Box<[ResizingImageBundle]>, VulkanTranscoderError> {
-        if let Some(images) = self.freelist.pop() {
-            return Ok(images);
-        }
-
-        let mut result = Vec::with_capacity(self.configs.len());
-        for (config, tracker) in self.configs.iter().zip(trackers.iter_mut()) {
-            let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
-                .profiles(std::slice::from_ref(&config.profile.profile_info));
-            let queue_indices = [
-                self.device.queues.encode.as_ref().unwrap().family_index as u32,
-                self.device.queues.compute.family_index as u32,
-            ];
-            let create_info = vk::ImageCreateInfo::default()
-                .flags(vk::ImageCreateFlags::EXTENDED_USAGE | vk::ImageCreateFlags::MUTABLE_FORMAT)
-                .image_type(vk::ImageType::TYPE_2D)
-                .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
-                .extent(vk::Extent3D {
-                    width: config.width,
-                    height: config.height,
-                    depth: 1,
-                })
-                .mip_levels(1)
-                .array_layers(1)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL)
-                .usage(vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
-                .sharing_mode(vk::SharingMode::CONCURRENT)
-                .queue_family_indices(&queue_indices)
-                .initial_layout(vk::ImageLayout::UNDEFINED)
-                .push_next(&mut profile_list_info);
-
-            let image = Arc::new(Image::new(
-                self.device.allocator.clone(),
-                &create_info,
-                tracker.image_layout_tracker.clone(),
-            )?);
-
-            self.device
-                .device
-                .set_label(image.image, Some("resize image"))?;
-
-            result.push(ResizingImageBundle::new(image, 0)?);
-        }
-
-        Ok(result.into_boxed_slice())
-    }
+pub(crate) struct ResizeSubmission {
+    pub(crate) outputs: Box<[EncodeInputImage]>,
+    pub(crate) wait_value: SemaphoreWaitValue,
+    pub(crate) in_flight_resources: InFlightResizeResources,
 }
 
 pub(crate) struct OutputConfig {
-    pub(crate) width: u32,
-    pub(crate) height: u32,
-    pub(crate) profile: ProfileInfo<'static>,
     pub(crate) scaling_algorithm: ScalingAlgorithm,
 }
 
@@ -160,11 +102,21 @@ pub(crate) struct Descriptors {
     input: DescriptorSet,
     output_y: DescriptorSet,
     output_uv: DescriptorSet,
+
+    freelist: Weak<Mutex<Vec<Descriptors>>>,
+}
+
+impl Descriptors {
+    pub(crate) fn release_to_pool(self) {
+        if let Some(freelist) = self.freelist.upgrade() {
+            freelist.lock().unwrap().push(self);
+        }
+    }
 }
 
 struct DescriptorHeap {
     pool: Arc<DescriptorPool>,
-    freelist: Vec<Descriptors>,
+    freelist: Arc<Mutex<Vec<Descriptors>>>,
     layout_input: Arc<DescriptorSetLayout>,
     layout_output: Arc<DescriptorSetLayout>,
 }
@@ -177,18 +129,14 @@ impl DescriptorHeap {
     ) -> Self {
         Self {
             pool,
-            freelist: Vec::new(),
+            freelist: Arc::new(Mutex::new(Vec::new())),
             layout_input,
             layout_output,
         }
     }
 
-    fn free(&mut self, descriptors: Descriptors) {
-        self.freelist.push(descriptors);
-    }
-
-    fn allocate(&mut self) -> Result<Descriptors, VulkanTranscoderError> {
-        if let Some(descriptors) = self.freelist.pop() {
+    fn allocate(&self) -> Result<Descriptors, VulkanTranscoderError> {
+        if let Some(descriptors) = self.freelist.lock().unwrap().pop() {
             return Ok(descriptors);
         }
 
@@ -214,15 +162,16 @@ impl DescriptorHeap {
             input,
             output_y,
             output_uv,
+            freelist: Arc::downgrade(&self.freelist),
         })
     }
 }
 
 pub(crate) struct ResizingPipeline {
     descriptor_heap: DescriptorHeap,
-    image_heap: ImageHeap,
-    pipeline: ComputePipeline,
-    buffer_pool: CommandBufferPool,
+    pipeline: Arc<ComputePipeline>,
+    pub(crate) buffer_pool: CommandBufferPool,
+    configs: Vec<OutputConfig>,
     device: Arc<VulkanDevice>,
 }
 
@@ -230,6 +179,7 @@ impl ResizingPipeline {
     pub(crate) fn new(
         device: Arc<VulkanDevice>,
         configs: Vec<OutputConfig>,
+        max_in_flight: u32,
     ) -> Result<Self, VulkanTranscoderError> {
         if configs.is_empty() || configs.len() > MAX_OUTPUTS as usize {
             return Err(VulkanTranscoderError::WrongOutputNumber {
@@ -239,11 +189,11 @@ impl ResizingPipeline {
         }
         let pool_sizes = [vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::STORAGE_IMAGE)
-            .descriptor_count((2 * MAX_OUTPUTS + 2) * MAX_FRAMES_IN_FLIGHT)];
+            .descriptor_count((2 * MAX_OUTPUTS + 2) * max_in_flight.max(1))];
         let descriptor_pool = Arc::new(DescriptorPool::new(
             device.device.clone(),
             &vk::DescriptorPoolCreateInfo::default()
-                .max_sets(3 * MAX_FRAMES_IN_FLIGHT)
+                .max_sets(3 * max_in_flight.max(1))
                 .pool_sizes(&pool_sizes),
         )?);
 
@@ -287,7 +237,6 @@ impl ResizingPipeline {
             layout_input.clone(),
             layout_output.clone(),
         );
-        let image_heap = ImageHeap::new(device.clone(), configs);
 
         let layouts = [
             layout_input.set_layout,
@@ -325,52 +274,47 @@ impl ResizingPipeline {
             .stage(shader)
             .layout(pipeline_layout.layout);
 
-        let pipeline = ComputePipeline::new(
+        let pipeline = Arc::new(ComputePipeline::new(
             device.device.clone(),
             create_info,
             pipeline_layout,
             shader_module,
-        )?;
+        )?);
 
         let buffer_pool =
             CommandBufferPool::new(device.clone(), device.queues.compute.family_index)?;
 
         Ok(Self {
-            image_heap,
             descriptor_heap,
             pipeline,
             buffer_pool,
+            configs,
             device,
         })
     }
 
-    pub(crate) fn free_submission(&mut self, submission: ResizeSubmission) {
-        self.descriptor_heap.free(submission.descriptors);
-        self.image_heap.free(submission.outputs);
-    }
-
     fn write_descriptors(
         &mut self,
-        input: &ResizingImageBundle,
-        outputs: &[ResizingImageBundle],
+        input_views: &PlaneViews,
+        output_views: &[PlaneViews],
     ) -> Result<Descriptors, VulkanTranscoderError> {
         let image_info_input_y = vk::DescriptorImageInfo::default()
-            .image_view(input.view_y.view)
+            .image_view(input_views.view_y.view)
             .image_layout(vk::ImageLayout::GENERAL);
         let image_info_input_uv = vk::DescriptorImageInfo::default()
-            .image_view(input.view_uv.view)
+            .image_view(input_views.view_uv.view)
             .image_layout(vk::ImageLayout::GENERAL);
 
-        let (image_infos_output_y, image_infos_output_uv) = outputs
+        let (image_infos_output_y, image_infos_output_uv) = output_views
             .iter()
-            .map(|bundle| {
+            .map(|views| {
                 (
                     vk::DescriptorImageInfo::default()
                         .image_layout(vk::ImageLayout::GENERAL)
-                        .image_view(bundle.view_y.view),
+                        .image_view(views.view_y.view),
                     vk::DescriptorImageInfo::default()
                         .image_layout(vk::ImageLayout::GENERAL)
-                        .image_view(bundle.view_uv.view),
+                        .image_view(views.view_uv.view),
                 )
             })
             .unzip::<_, _, Vec<_>, Vec<_>>();
@@ -418,30 +362,38 @@ impl ResizingPipeline {
     pub(crate) fn run(
         &mut self,
         input_submission: &mut DecodeSubmission,
-        encoder_trackers: &mut [&mut EncoderTracker],
         input_cropped_extent: vk::Extent2D,
+        encoders: &mut [Box<dyn DynVulkanEncoder>],
     ) -> Result<ResizeSubmission, VulkanTranscoderError> {
-        let input = ResizingImageBundle::new(
-            input_submission.decode_result.frame.image.clone(),
+        let input_image = &input_submission.decode_result.frame.image;
+        let input_views = PlaneViews::new(
+            input_image.clone(),
             input_submission.decode_result.frame.layer,
         )?;
-        let outputs = self.image_heap.allocate(encoder_trackers)?;
-        let descriptors = self.write_descriptors(&input, &outputs)?;
+        let outputs = encoders
+            .iter_mut()
+            .map(|e| e.next_input_image())
+            .collect::<Result<Box<_>, _>>()?;
+        let output_views = outputs
+            .iter()
+            .map(|output| PlaneViews::new(output.image.clone(), 0))
+            .collect::<Result<Vec<_>, _>>()?;
+        let descriptors = self.write_descriptors(&input_views, &output_views)?;
 
         let mut buffer = self.buffer_pool.begin_buffer()?;
         self.device
             .device
             .set_label(buffer.buffer(), Some("resize pipeline buffer"))?;
 
-        input.image.transition_layout_single_layer(
+        input_image.transition_layout_single_layer(
             &mut buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COMPUTE_SHADER,
             vk::AccessFlags2::NONE..vk::AccessFlags2::SHADER_STORAGE_READ,
             vk::ImageLayout::GENERAL,
             input_submission.decode_result.frame.layer,
         )?;
-        for bundle in outputs.iter() {
-            bundle.image.transition_layout_single_layer(
+        for output in outputs.iter() {
+            output.image.transition_layout_single_layer(
                 &mut buffer,
                 vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COMPUTE_SHADER,
                 vk::AccessFlags2::NONE..vk::AccessFlags2::SHADER_STORAGE_WRITE,
@@ -452,9 +404,10 @@ impl ResizingPipeline {
 
         let dispatch_size = outputs
             .iter()
-            .map(|ResizingImageBundle { image, .. }| {
-                (image.extent.width.next_multiple_of(16) * image.extent.height.next_multiple_of(16))
-                    .div_ceil(256)
+            .map(|output| {
+                (output.image.extent.width.next_multiple_of(16)
+                    * output.image.extent.height.next_multiple_of(16))
+                .div_ceil(256)
             })
             .sum::<u32>();
 
@@ -477,7 +430,7 @@ impl ResizingPipeline {
                 &[],
             );
 
-            let push_constants = PushConstants::new(&self.image_heap.configs, input_cropped_extent);
+            let push_constants = PushConstants::new(&self.configs, input_cropped_extent);
             self.device.device.cmd_push_constants(
                 buffer.buffer(),
                 self.pipeline.layout.layout,
@@ -493,14 +446,16 @@ impl ResizingPipeline {
         let buffer = buffer.end()?;
         let buffer_info = vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer());
 
-        let encoder_semaphore_submit_infos = encoder_trackers
+        let (encoder_semaphores, encoder_semaphore_submit_infos): (Vec<_>, Vec<_>) = encoders
             .iter_mut()
-            .map(|tracker| {
-                tracker
-                    .semaphore_tracker
-                    .next_submit_info(EncoderTrackerWaitState::ResizeInput)
+            .map(|e| {
+                let tracker = &mut e.tracker().semaphore_tracker;
+                (
+                    tracker.semaphore.clone(),
+                    tracker.next_submit_info(EncoderTrackerWaitState::ResizeInput),
+                )
             })
-            .collect::<Vec<_>>();
+            .unzip();
 
         let mut signals = encoder_semaphore_submit_infos
             .iter()
@@ -526,6 +481,7 @@ impl ResizingPipeline {
         signals
             .push(decoder_semaphore_submit_info.signal_info(vk::PipelineStageFlags2::ALL_COMMANDS));
 
+        let submission_wait_value = decoder_semaphore_submit_info.signal_value();
         let submit_info = vk::SubmitInfo2::default()
             .command_buffer_infos(std::slice::from_ref(&buffer_info))
             .wait_semaphore_infos(&waits)
@@ -539,7 +495,7 @@ impl ResizingPipeline {
             )?;
         }
 
-        buffer.mark_submitted(input_submission.semaphore_wait_value);
+        buffer.mark_submitted(submission_wait_value);
         for semaphore_submit_info in encoder_semaphore_submit_infos {
             semaphore_submit_info.mark_submitted();
         }
@@ -548,12 +504,14 @@ impl ResizingPipeline {
 
         Ok(ResizeSubmission {
             outputs,
-            _input: input,
-            descriptors,
+            wait_value: submission_wait_value,
+            in_flight_resources: InFlightResizeResources {
+                _input_views: input_views,
+                _output_views: output_views,
+                descriptors: Some(descriptors),
+                _pipeline: self.pipeline.clone(),
+                _encoder_semaphores: encoder_semaphores,
+            },
         })
-    }
-
-    pub(crate) fn mark_command_buffers_completed(&self, decoder_wait_value: SemaphoreWaitValue) {
-        self.buffer_pool.mark_submitted_as_free(decoder_wait_value);
     }
 }

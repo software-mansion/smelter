@@ -219,32 +219,35 @@ impl EncodeOutputBuffer {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct EncodeImagePoolConfig {
+    pub image_usages: vk::ImageUsageFlags,
+    pub queue_family_indices: Vec<u32>,
+}
+
 pub(crate) struct EncodeInputImagePool<'a> {
     freelist: Arc<Mutex<Vec<EncodeInputImage>>>,
     encoding_device: Arc<EncodingDevice>,
+    config: EncodeImagePoolConfig,
     profile: Arc<ProfileInfo<'a>>,
     extent: vk::Extent3D,
-    image_usages: vk::ImageUsageFlags,
-    queue_family_indices: Vec<u32>,
     layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
 }
 
 impl<'a> EncodeInputImagePool<'a> {
     pub(crate) fn new(
         encoding_device: Arc<EncodingDevice>,
+        config: EncodeImagePoolConfig,
         profile: Arc<ProfileInfo<'a>>,
         extent: vk::Extent3D,
-        image_usages: vk::ImageUsageFlags,
-        queue_family_indices: Vec<u32>,
         layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Self {
         Self {
             freelist: Arc::new(Mutex::new(Vec::new())),
             encoding_device,
+            config,
             profile,
             extent,
-            image_usages,
-            queue_family_indices,
             layout_tracker,
         }
     }
@@ -258,8 +261,8 @@ impl<'a> EncodeInputImagePool<'a> {
             &self.encoding_device,
             self.extent,
             &self.profile,
-            self.image_usages,
-            &self.queue_family_indices,
+            self.config.image_usages,
+            &self.config.queue_family_indices,
             self.layout_tracker.clone(),
         )?;
 
@@ -298,7 +301,7 @@ impl<'a> EncodeInputImagePool<'a> {
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
                     format: wgpu::TextureFormat::NV12,
-                    usage: wgpu::hal::vulkan::conv::map_vk_image_usage(self.image_usages),
+                    usage: wgpu::hal::vulkan::conv::map_vk_image_usage(self.config.image_usages),
                     memory_flags: wgpu::hal::MemoryFlags::empty(),
                     view_formats: Vec::new(),
                 },
@@ -319,7 +322,7 @@ impl<'a> EncodeInputImagePool<'a> {
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
                     format: wgpu::TextureFormat::NV12,
-                    usage: image_usage_to_wgpu_texture_usages(self.image_usages),
+                    usage: image_usage_to_wgpu_texture_usages(self.config.image_usages),
                     view_formats: &[],
                 },
                 wgpu::TextureUses::UNINITIALIZED,

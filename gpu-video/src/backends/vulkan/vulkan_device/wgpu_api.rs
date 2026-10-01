@@ -214,6 +214,7 @@ impl VulkanDevice {
                 parameters,
                 on_chunk_callback,
                 self.waiter_thread.clone(),
+                true,
             )?),
         })
     }
@@ -241,6 +242,7 @@ impl VulkanDevice {
                 parameters,
                 on_chunk_callback,
                 self.waiter_thread.clone(),
+                true,
             )?),
         })
     }
