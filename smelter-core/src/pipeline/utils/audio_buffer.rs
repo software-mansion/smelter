@@ -24,12 +24,81 @@ impl AudioSamplesBuffer {
         self.buffer.push_back((batch, 0));
     }
 
-    pub fn push_front(&mut self, batch: AudioSamples) {
-        self.buffer.push_front((batch, 0));
-    }
-
     pub fn clear(&mut self) {
         self.buffer.clear();
+    }
+
+    pub fn push_back_silence(&mut self, sample_count: usize) {
+        self.buffer.push_back((self.silence(sample_count), 0));
+    }
+
+    pub fn push_front_silence(&mut self, sample_count: usize) {
+        self.buffer.push_front((self.silence(sample_count), 0));
+    }
+
+    /// Fade in `len` samples starting at `start`.
+    pub fn fade_in(&mut self, start: usize, len: usize) {
+        let len = usize::min(len, self.frames().saturating_sub(start));
+        self.for_each_sample_mut(start, len, |i, sample| *sample *= fade_gain(i, len));
+    }
+
+    /// Fade out the last `len` samples.
+    pub fn fade_out_back(&mut self, len: usize) {
+        let frames = self.frames();
+        let len = usize::min(len, frames);
+        self.for_each_sample_mut(frames - len, len, |i, sample| {
+            *sample *= 1.0 - fade_gain(i, len)
+        });
+    }
+
+    /// Drop first `sample_count` samples, crossfading the dropped samples into the remaining
+    /// ones over `len` samples.
+    pub fn crossfade_drain(&mut self, sample_count: usize, len: usize) {
+        let len = usize::min(len, sample_count);
+        let dropped = match self.read_samples(len) {
+            AudioSamples::Mono(samples) => samples,
+            AudioSamples::Stereo(samples) => samples.into_iter().flat_map(|(l, r)| [l, r]).collect(),
+        };
+        self.drain_samples(sample_count - len);
+
+        let len = usize::min(len, self.frames());
+        let mut dropped = dropped.into_iter();
+        self.for_each_sample_mut(0, len, |i, sample| {
+            let gain = fade_gain(i, len);
+            *sample = dropped.next().unwrap_or(0.0) * (1.0 - gain) + *sample * gain;
+        });
+    }
+
+    /// Call `f(i, sample)` for every channel sample of frames `start..start + len`, where `i`
+    /// is the frame index relative to `start`.
+    fn for_each_sample_mut(&mut self, start: usize, len: usize, mut f: impl FnMut(usize, &mut f64)) {
+        let mut batch_start = 0;
+        for (batch, read_samples) in &mut self.buffer {
+            let batch_frames = batch.len() - *read_samples;
+            let from = usize::max(start, batch_start);
+            let to = usize::min(start + len, batch_start + batch_frames);
+            for frame in from..to {
+                let index = *read_samples + frame - batch_start;
+                match batch {
+                    AudioSamples::Mono(samples) => f(frame - start, &mut samples[index]),
+                    AudioSamples::Stereo(samples) => {
+                        f(frame - start, &mut samples[index].0);
+                        f(frame - start, &mut samples[index].1);
+                    }
+                }
+            }
+            batch_start += batch_frames;
+            if batch_start >= start + len {
+                break;
+            }
+        }
+    }
+
+    fn silence(&self, sample_count: usize) -> AudioSamples {
+        match self.channels {
+            AudioChannels::Mono => AudioSamples::Mono(vec![0.0; sample_count]),
+            AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); sample_count]),
+        }
     }
 
     pub fn drain_samples(&mut self, mut samples_to_read: usize) {
@@ -95,6 +164,11 @@ impl AudioSamplesBuffer {
         };
         samples
     }
+}
+
+/// Raised cosine gain for sample `i` of a `len` samples long fade in.
+fn fade_gain(i: usize, len: usize) -> f64 {
+    0.5 - 0.5 * f64::cos(std::f64::consts::PI * (i as f64 + 0.5) / len as f64)
 }
 
 impl Adapter<'_, f64> for AudioSamplesBuffer {

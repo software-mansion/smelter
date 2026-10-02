@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 mod input;
 mod mix;
@@ -11,6 +11,8 @@ use crate::prelude::*;
 #[derive(Debug, Clone)]
 pub struct InputSamplesSet {
     pub samples: HashMap<InputId, Vec<InputAudioSamples>>,
+    /// Inputs whose track ended in this set.
+    pub eos_inputs: HashSet<InputId>,
     pub start_pts: Timestamp,
     pub end_pts: Timestamp,
 }

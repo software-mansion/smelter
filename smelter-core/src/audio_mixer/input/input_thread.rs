@@ -24,6 +24,9 @@ pub(super) fn start_input_thread(
                 for batch in event.batches {
                     processor.write_batch(batch);
                 }
+                if event.is_eos {
+                    processor.mark_eos();
+                }
 
                 let pts_range = event.pts_range;
                 let samples = processor.get_samples(pts_range);
@@ -65,6 +68,12 @@ impl InputProcessor {
                 InputResampler::new(input_sample_rate, self.mixing_sample_rate, channels).unwrap();
         }
         resampler.write_batch(batch);
+    }
+
+    pub fn mark_eos(&mut self) {
+        if let Some(resampler) = &mut self.resampler {
+            resampler.mark_eos();
+        }
     }
 
     pub fn get_samples(&mut self, pts_range: (Timestamp, Timestamp)) -> Vec<(f64, f64)> {

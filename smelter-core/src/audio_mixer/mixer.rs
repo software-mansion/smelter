@@ -160,10 +160,11 @@ impl InternalAudioMixer {
 
         let pts_range = (samples_set.start_pts, samples_set.end_pts);
         for (input_id, input) in &mut self.inputs {
+            let is_eos = samples_set.eos_inputs.contains(input_id);
             if let Some(batches) = samples_set.samples.remove(input_id) {
-                input.process_batch(batches, pts_range);
+                input.process_batch(batches, pts_range, is_eos);
             } else {
-                input.process_batch(vec![], pts_range);
+                input.process_batch(vec![], pts_range, is_eos);
             }
         }
 

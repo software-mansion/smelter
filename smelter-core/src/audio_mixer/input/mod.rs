@@ -19,6 +19,7 @@ pub(super) struct AudioMixerInput {
 struct AudioMixerInputEvent {
     batches: Vec<InputAudioSamples>,
     pts_range: (Timestamp, Timestamp),
+    is_eos: bool,
 }
 
 #[derive(Debug)]
@@ -43,10 +44,13 @@ impl AudioMixerInput {
         &self,
         batches: Vec<InputAudioSamples>,
         pts_range: (Timestamp, Timestamp),
+        is_eos: bool,
     ) {
-        let result = self
-            .input_sender
-            .send(AudioMixerInputEvent { batches, pts_range });
+        let result = self.input_sender.send(AudioMixerInputEvent {
+            batches,
+            pts_range,
+            is_eos,
+        });
         if result.is_err() {
             trace!("Failed to send samples. Channel closed.")
         }

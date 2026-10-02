@@ -225,6 +225,12 @@ impl QueueAudioSamples {
 impl From<QueueAudioOutput> for InputSamplesSet {
     fn from(value: QueueAudioOutput) -> Self {
         Self {
+            eos_inputs: value
+                .samples
+                .iter()
+                .filter(|(_, value)| value.is_eos)
+                .map(|(key, _)| key.clone())
+                .collect(),
             samples: value
                 .samples
                 .into_iter()
