@@ -73,11 +73,9 @@ impl VideoEncoder for FfmpegVp9Encoder {
             ("frame-parallel", "1"),
             // Auto number of threads to use.
             ("threads", "0"),
-            // Min QP. QP represents the video quality.
+            // Min QP, libvpx default is 0. Prevents near-lossless frames from spending too many bits
+            // on static content in CRF mode.
             ("qmin", "4"),
-            // Max QP. Range increased compared to defaults
-            // to allow low bitrate without dropping frames.
-            ("qmax", "63"),
             // Enable row-multithreading. Allows use of up to 2x thread as tile columns. 0 = off, 1 = on.
             ("row-mt", "1"),
             // Enable error resiliency features.

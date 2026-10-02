@@ -60,18 +60,13 @@ impl VideoEncoder for FfmpegVp8Encoder {
 
         let mut ffmpeg_options = FfmpegOptions::from(&[
             // Quality/Speed ratio modifier
-            ("cpu-used", "0"),
+            ("cpu-used", "4"),
             // Time to spend encoding.
             ("deadline", "realtime"),
             // Auto threads number used.
             ("threads", "0"),
             // Zero-latency. Disables frame reordering.
             ("lag-in-frames", "0"),
-            // Min QP. QP represents the video quality.
-            ("qmin", "4"),
-            // Max QP. Range increased compared to defaults
-            // to allow low bitrate without dropping frames.
-            ("qmax", "63"),
         ]);
 
         let bitrate = options.bitrate.unwrap_or_else(|| {

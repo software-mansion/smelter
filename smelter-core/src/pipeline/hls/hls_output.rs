@@ -20,7 +20,8 @@ use crate::{
             vulkan_h264::VulkanH264Encoder,
         },
         ffmpeg_utils::{
-            FfmpegOptions, StreamMutExt, TimestampOffset, warn_unused_options, write_extradata,
+            EosState, FfmpegOptions, StreamMutExt, TimestampOffset, warn_unused_options,
+            write_extradata,
         },
         output::{Output, OutputAudio, OutputVideo},
         utils::InitializableThread,
@@ -313,34 +314,17 @@ fn run_ffmpeg_output_thread(
     stats_sender: HlsOutputStatsSender,
     mut offset: TimestampOffset,
 ) {
-    let mut received_video_eos = video_stream.as_ref().map(|_| false);
-    let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
+    let mut eos_state = EosState::new(video_stream.is_some(), audio_stream.is_some());
 
-    'packets: for packet in packets_receiver.into_iter().map(Some).chain([None]) {
+    for packet in packets_receiver.into_iter().map(Some).chain([None]) {
         let chunks = match packet {
             Some(EncodedOutputEvent::Data(chunk)) => offset.resolve(chunk),
             Some(EncodedOutputEvent::VideoEOS) => {
-                match received_video_eos {
-                    Some(false) => received_video_eos = Some(true),
-                    Some(true) => {
-                        error!("Received multiple video EOS events.");
-                    }
-                    None => {
-                        error!("Received video EOS event on non video output.");
-                    }
-                }
+                eos_state.on_video_eos();
                 offset.on_track_eos(MediaKind::Video(VideoCodec::H264))
             }
             Some(EncodedOutputEvent::AudioEOS) => {
-                match received_audio_eos {
-                    Some(false) => received_audio_eos = Some(true),
-                    Some(true) => {
-                        error!("Received multiple audio EOS events.");
-                    }
-                    None => {
-                        error!("Received audio EOS event on non audio output.");
-                    }
-                }
+                eos_state.on_audio_eos();
                 offset.on_track_eos(MediaKind::Audio(AudioCodec::Aac))
             }
             None => offset.flush(),
@@ -363,13 +347,16 @@ fn run_ffmpeg_output_thread(
                     severity: ErrorSeverity::Critical,
                 });
                 match try_write_trailer {
-                    true => break 'packets,
+                    true => {
+                        eos_state.mark_for_abort();
+                        break;
+                    }
                     false => return,
                 }
             }
         }
 
-        if received_video_eos.unwrap_or(true) && received_audio_eos.unwrap_or(true) {
+        if eos_state.is_complete() {
             break;
         }
     }
@@ -447,6 +434,9 @@ fn write_chunk(
 
     // Encoders deliver packets in their own output order (video lags behind audio by the
     // encoder delay). Interleaving by dts keeps audio in the segment of its matching video.
+    //
+    // After one track's EOS, the interleaver holds the other track's packets until the buffered
+    // dts span exceeds `max_interleave_delta` (10s by default), so the playlist lags by that much.
     packet
         .write_interleaved(output_ctx)
         .map_err(|err| match err {

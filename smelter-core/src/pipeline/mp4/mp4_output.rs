@@ -20,7 +20,8 @@ use crate::{
             vulkan_h264::VulkanH264Encoder,
         },
         ffmpeg_utils::{
-            FfmpegOptions, StreamMutExt, TimestampOffset, warn_unused_options, write_extradata,
+            EosState, FfmpegOptions, StreamMutExt, TimestampOffset, warn_unused_options,
+            write_extradata,
         },
         output::{Output, OutputAudio, OutputVideo},
     },
@@ -375,7 +376,10 @@ fn run_ffmpeg_output_thread(
                     severity: ErrorSeverity::Critical,
                 });
                 match try_write_trailer {
-                    true => eos_state.mark_for_abort(),
+                    true => {
+                        eos_state.mark_for_abort();
+                        break;
+                    }
                     false => return,
                 }
             }
@@ -437,6 +441,9 @@ fn write_chunk(
 
     // Encoders deliver packets in their own output order (video lags behind audio by the
     // encoder delay), interleave by dts so the tracks are not far apart in the file.
+    //
+    // After one track's EOS, the interleaver holds the other track's packets until the
+    // buffered dts span exceeds `max_interleave_delta` (10s by default).
     packet
         .write_interleaved(output_ctx)
         .map_err(|err| match err {
@@ -446,61 +453,6 @@ fn write_chunk(
             err => OutputMp4RuntimeError::PacketWriteError(err),
         })?;
     Ok(())
-}
-
-struct EosState {
-    received_video_eos: Option<bool>,
-    received_audio_eos: Option<bool>,
-    should_abort: bool,
-}
-
-impl EosState {
-    fn new(has_video: bool, has_audio: bool) -> Self {
-        Self {
-            received_video_eos: match has_video {
-                true => Some(false),
-                false => None,
-            },
-            received_audio_eos: match has_audio {
-                true => Some(false),
-                false => None,
-            },
-            should_abort: false,
-        }
-    }
-
-    fn on_audio_eos(&mut self) {
-        match self.received_audio_eos {
-            Some(false) => self.received_audio_eos = Some(true),
-            Some(true) => {
-                error!("Received multiple audio EOS events.");
-            }
-            None => {
-                error!("Received audio EOS event on non audio output.");
-            }
-        }
-    }
-
-    fn on_video_eos(&mut self) {
-        match self.received_video_eos {
-            Some(false) => self.received_video_eos = Some(true),
-            Some(true) => {
-                error!("Received multiple video EOS events.");
-            }
-            None => {
-                error!("Received video EOS event on non video output.");
-            }
-        }
-    }
-
-    fn mark_for_abort(&mut self) {
-        self.should_abort = true
-    }
-
-    fn is_complete(&self) -> bool {
-        (self.received_video_eos.unwrap_or(true) && self.received_audio_eos.unwrap_or(true))
-            || self.should_abort
-    }
 }
 
 struct Mp4OutputStatsSender {
