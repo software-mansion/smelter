@@ -431,6 +431,8 @@ fn write_chunk(
         NS_TIME_BASE,
         stream.time_base,
     )));
+    // Convert from timeline when single packet is a single tick, to stream time
+    // base timeline. Returns duration of single packet in time_base units.
     packet.set_duration(Rescale::rescale(
         &1,
         stream.packet_duration,
