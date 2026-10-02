@@ -102,9 +102,13 @@ impl VulkanDevice {
 
         let mut timeline_semaphore_feature =
             vk::PhysicalDeviceTimelineSemaphoreFeatures::default().timeline_semaphore(true);
+        let mut descriptor_indexing_feature =
+            vk::PhysicalDeviceDescriptorIndexingFeatures::default()
+                .descriptor_binding_partially_bound(true);
 
-        let mut device_create_info = vk::DeviceCreateInfo::default();
-        device_create_info = device_create_info.push_next(&mut timeline_semaphore_feature);
+        let device_create_info = vk::DeviceCreateInfo::default()
+            .push_next(&mut timeline_semaphore_feature)
+            .push_next(&mut descriptor_indexing_feature);
 
         let video_device =
             Self::new_from_create_info(video_adapter, &required_extensions, device_create_info)?;
@@ -146,15 +150,12 @@ impl VulkanDevice {
             vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
         let mut vk_video_maintenance1_feature =
             vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default().video_maintenance1(true);
-        let mut vk_descriptor_feature = vk::PhysicalDeviceDescriptorIndexingFeatures::default()
-            .descriptor_binding_partially_bound(true);
 
         let device_create_info = device_create_info
             .queue_create_infos(&queue_create_infos)
             .enabled_extension_names(&required_extensions_as_ptrs)
             .push_next(&mut vk_synch_2_feature)
-            .push_next(&mut vk_video_maintenance1_feature)
-            .push_next(&mut vk_descriptor_feature);
+            .push_next(&mut vk_video_maintenance1_feature);
 
         let device = unsafe {
             instance

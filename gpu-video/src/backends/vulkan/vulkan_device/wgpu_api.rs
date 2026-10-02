@@ -88,25 +88,6 @@ impl VulkanDevice {
             .family_index as u32;
         let mut required_extensions = video_adapter.required_extensions();
 
-        let wgpu_features = desc.wgpu_features
-            | wgpu::Features::TEXTURE_FORMAT_NV12
-            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-        let mut wgpu_extensions = hal_adapter.required_device_extensions(wgpu_features);
-        required_extensions.append(&mut wgpu_extensions);
-
-        let mut wgpu_physical_device_features = unsafe {
-            wgpu_adapter
-                .as_hal::<wgpu::hal::vulkan::Api>()
-                .unwrap()
-                .physical_device_features(&required_extensions, desc.wgpu_features)
-        };
-
-        let mut device_create_info = vk::DeviceCreateInfo::default();
-        device_create_info = wgpu_physical_device_features.add_to_device_create(device_create_info);
-
-        let video_device =
-            Self::new_from_create_info(video_adapter, &required_extensions, device_create_info)?;
-
         let VideoDeviceDescriptor {
             wgpu_features,
             wgpu_experimental_features,
@@ -115,11 +96,23 @@ impl VulkanDevice {
 
         let wgpu_features = wgpu_features
             | wgpu::Features::TEXTURE_FORMAT_NV12
-            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY;
+        let mut wgpu_extensions = hal_adapter.required_device_extensions(wgpu_features);
+        required_extensions.append(&mut wgpu_extensions);
+
+        let mut wgpu_physical_device_features =
+            hal_adapter.physical_device_features(&required_extensions, wgpu_features);
+
+        let mut device_create_info = vk::DeviceCreateInfo::default();
+        device_create_info = wgpu_physical_device_features.add_to_device_create(device_create_info);
+
+        let video_device =
+            Self::new_from_create_info(video_adapter, &required_extensions, device_create_info)?;
+
         let device_key_for_dropping = Arc::new(OnceLock::new());
         let device_key_for_dropping_clone = device_key_for_dropping.clone();
 
-        let hal_adapter = unsafe { wgpu_adapter.as_hal::<wgpu::hal::vulkan::Api>().unwrap() };
         let device_clone = video_device.device.clone();
         let wgpu_device = unsafe {
             hal_adapter
