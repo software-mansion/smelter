@@ -38,9 +38,8 @@ pub struct OutputWhepVideoOptions {
 pub enum WhepVideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
-        /// Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the
-        /// FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`
-        /// to configure encoder specific options.
+        /// FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed
+        /// on the system.
         ///
         /// Defaults to the H264 encoder that FFmpeg selects by default.
         encoder_name: Option<Arc<str>>,

@@ -50,7 +50,7 @@ pub fn push_input_before_start_tcp() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "ffmpeg_options": { "preset": "ultrafast" }
                 },
                 "initial": {
                     "root": {
@@ -138,7 +138,7 @@ pub fn push_input_before_start_udp() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "ffmpeg_options": { "preset": "ultrafast" }
                 },
                 "initial": {
                     "root": {
@@ -226,7 +226,7 @@ pub fn push_input_before_start_tcp_no_offset() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "ffmpeg_options": { "preset": "ultrafast" }
                 },
                 "initial": {
                     "root": {
@@ -314,7 +314,7 @@ pub fn push_input_before_start_udp_no_offset() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "ffmpeg_options": { "preset": "ultrafast" }
                 },
                 "initial": {
                     "root": {

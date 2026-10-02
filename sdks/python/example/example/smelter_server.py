@@ -97,7 +97,6 @@ def setup_pipeline(mp4_path: str | None):
                     "ffmpeg_options": {
                         "preset": "ultrafast",
                         "tune": "zerolatency",
-                        "thread_type": "slice",
                     },
                 },
                 "initial": {

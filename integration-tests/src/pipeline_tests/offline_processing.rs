@@ -83,7 +83,7 @@ pub fn offline_processing() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast",
+                    "ffmpeg_options": { "preset": "ultrafast" },
                 },
                 "initial": {
                     "root": {
@@ -237,7 +237,7 @@ pub fn offline_processing_looping_pattern() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast",
+                    "ffmpeg_options": { "preset": "ultrafast" },
                 },
                 "initial": {
                     "root": {

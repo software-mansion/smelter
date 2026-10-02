@@ -111,7 +111,6 @@ mod main_module {
                     raw_options: vec![
                         ("preset".into(), "ultrafast".into()),
                         ("tune".into(), "zerolatency".into()),
-                        ("thread_type".into(), "slice".into()),
                     ],
                     bitstream_format: H264BitstreamFormat::Avcc,
                     low_latency: false,

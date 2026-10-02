@@ -1879,7 +1879,7 @@
                   "string",
                   "null"
                 ],
-                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
+                "description": "FFmpeg encoder name, e.g. `\"libopenh264\"`. Must be available in the FFmpeg installed\non the system.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -3154,7 +3154,7 @@
                   "string",
                   "null"
                 ],
-                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
+                "description": "FFmpeg encoder name, e.g. `\"libopenh264\"`. Must be available in the FFmpeg installed\non the system.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -3707,7 +3707,7 @@
                   "string",
                   "null"
                 ],
-                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
+                "description": "FFmpeg encoder name, e.g. `\"libopenh264\"`. Must be available in the FFmpeg installed\non the system.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -5398,7 +5398,7 @@
                   "string",
                   "null"
                 ],
-                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
+                "description": "FFmpeg encoder name, e.g. `\"libopenh264\"`. Must be available in the FFmpeg installed\non the system.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -6169,7 +6169,7 @@
                   "string",
                   "null"
                 ],
-                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
+                "description": "FFmpeg encoder name, e.g. `\"libopenh264\"`. Must be available in the FFmpeg installed\non the system.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -7681,7 +7681,7 @@
                   "string",
                   "null"
                 ],
-                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
+                "description": "FFmpeg encoder name, e.g. `\"libopenh264\"`. Must be available in the FFmpeg installed\non the system.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -8109,7 +8109,7 @@
                   "string",
                   "null"
                 ],
-                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
+                "description": "FFmpeg encoder name, e.g. `\"libopenh264\"`. Must be available in the FFmpeg installed\non the system.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [

@@ -41,7 +41,6 @@ class SmelterManager {
           ffmpegOptions: {
             preset: 'ultrafast',
             tune: 'zerolatency',
-            thread_type: 'slice',
           },
         },
         resolution: {

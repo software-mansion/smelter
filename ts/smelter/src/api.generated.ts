@@ -541,7 +541,7 @@ export type RtpVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options` to configure encoder specific options.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
        * Defaults to the H264 encoder that FFmpeg selects by default.
        */
@@ -1114,7 +1114,7 @@ export type RtmpClientVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options` to configure encoder specific options.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
        * Defaults to the H264 encoder that FFmpeg selects by default.
        */
@@ -1211,7 +1211,7 @@ export type MoqClientVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options` to configure encoder specific options.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
        * Defaults to the H264 encoder that FFmpeg selects by default.
        */
@@ -1317,7 +1317,7 @@ export type Mp4VideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options` to configure encoder specific options.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
        * Defaults to the H264 encoder that FFmpeg selects by default.
        */
@@ -1363,7 +1363,7 @@ export type WhipVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options` to configure encoder specific options.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
        * Defaults to the H264 encoder that FFmpeg selects by default.
        */
@@ -1462,7 +1462,7 @@ export type WhepVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options` to configure encoder specific options.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
        * Defaults to the H264 encoder that FFmpeg selects by default.
        */
@@ -1560,7 +1560,7 @@ export type HlsVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options` to configure encoder specific options.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
        * Defaults to the H264 encoder that FFmpeg selects by default.
        */

@@ -121,7 +121,7 @@ fn client_code() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "ffmpeg_options": { "preset": "ultrafast" }
                 },
                 "initial": {
                     "root": scene1

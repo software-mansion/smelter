@@ -29,9 +29,8 @@ export type HlsVideoEncoderOptions =
        */
       keyframeIntervalMs?: number;
       /**
-       * Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the
-       * FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpegOptions`
-       * to configure encoder specific options.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed
+       * on the system.
        *
        * Defaults to the H264 encoder that FFmpeg selects by default.
        */
