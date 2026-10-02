@@ -102,7 +102,7 @@ pub async fn create_new_whep_session(
 
     state.outputs.add_session(&output_ref, &session_id, pc)?;
 
-    MediaStreamTask::new(video_stream, audio_stream, should_close).spawn();
+    MediaStreamTask::new(video_stream, audio_stream, should_close).spawn(&state.ctx.tokio_rt);
 
     Ok((session_id, sdp_answer))
 }
@@ -121,6 +121,7 @@ fn register_state_change_handler(
     let should_close = Arc::new(AtomicBool::new(false));
     let close_flag = should_close.clone();
     let weak_pc = pc.downgrade();
+    let tokio_rt = server_state.ctx.tokio_rt.clone();
 
     let cleanup_session = {
         let session_id = session_id.clone();
@@ -150,7 +151,7 @@ fn register_state_change_handler(
                     // schedule task only if none is pending, crucial in transitions failed <-> disconnected
                     let cleanup_session = cleanup_session.clone();
                     let weak_pc = weak_pc.clone();
-                    let task = tokio::spawn(async move {
+                    let task = tokio_rt.spawn(async move {
                         sleep(Duration::from_secs(60)).await;
 
                         let Some(pc) = weak_pc.upgrade() else {

@@ -35,12 +35,12 @@ pub async fn handle_register_shader(
     Path(shader_id): Path<RendererId>,
     Json(request): Json<ShaderSpec>,
 ) -> Result<Json<OkResponse>, ApiError> {
-    tokio::task::spawn_blocking(move || {
-        Pipeline::register_renderer(&api.pipeline()?, shader_id.into(), request.try_into()?)?;
-        Ok(Json(OkResponse {}))
+    let spec = request.try_into()?;
+    api.run_with_pipeline(move |pipeline| {
+        Pipeline::register_renderer(pipeline, shader_id.into(), spec)
     })
-    .await
-    .unwrap()
+    .await?;
+    Ok(Json(OkResponse {}))
 }
 
 #[utoipa::path(
@@ -64,7 +64,8 @@ pub async fn handle_unregister_shader(
 ) -> Result<Json<OkResponse>, ApiError> {
     api.schedule_or_run(request.schedule_time()?, move |pipeline| {
         pipeline.unregister_renderer(&shader_id.into(), RegistryType::Shader)
-    })?;
+    })
+    .await?;
     Ok(Json(OkResponse {}))
 }
 
@@ -86,12 +87,12 @@ pub async fn handle_register_web_renderer(
     Path(instance_id): Path<RendererId>,
     Json(request): Json<WebRendererSpec>,
 ) -> Result<Json<OkResponse>, ApiError> {
-    tokio::task::spawn_blocking(move || {
-        Pipeline::register_renderer(&api.pipeline()?, instance_id.into(), request.try_into()?)?;
-        Ok(Json(OkResponse {}))
+    let spec = request.try_into()?;
+    api.run_with_pipeline(move |pipeline| {
+        Pipeline::register_renderer(pipeline, instance_id.into(), spec)
     })
-    .await
-    .unwrap()
+    .await?;
+    Ok(Json(OkResponse {}))
 }
 
 #[utoipa::path(
@@ -115,7 +116,8 @@ pub async fn handle_unregister_web_renderer(
 ) -> Result<Json<OkResponse>, ApiError> {
     api.schedule_or_run(request.schedule_time()?, move |pipeline| {
         pipeline.unregister_renderer(&instance_id.into(), RegistryType::WebRenderer)
-    })?;
+    })
+    .await?;
     Ok(Json(OkResponse {}))
 }
 
@@ -137,12 +139,12 @@ pub async fn handle_register_image(
     Path(image_id): Path<RendererId>,
     Json(request): Json<ImageSpec>,
 ) -> Result<Json<OkResponse>, ApiError> {
-    tokio::task::spawn_blocking(move || {
-        Pipeline::register_renderer(&api.pipeline()?, image_id.into(), request.try_into()?)?;
-        Ok(Json(OkResponse {}))
+    let spec = request.try_into()?;
+    api.run_with_pipeline(move |pipeline| {
+        Pipeline::register_renderer(pipeline, image_id.into(), spec)
     })
-    .await
-    .unwrap()
+    .await?;
+    Ok(Json(OkResponse {}))
 }
 
 #[utoipa::path(
@@ -166,7 +168,8 @@ pub async fn handle_unregister_image(
 ) -> Result<Json<OkResponse>, ApiError> {
     api.schedule_or_run(request.schedule_time()?, move |pipeline| {
         pipeline.unregister_renderer(&image_id.into(), RegistryType::Image)
-    })?;
+    })
+    .await?;
     Ok(Json(OkResponse {}))
 }
 
@@ -209,13 +212,9 @@ pub async fn handle_register_font(
 
     let binary_font_source = Source::Binary(Arc::new(bytes));
 
-    tokio::task::spawn_blocking(move || {
-        api.pipeline()?
-            .lock()
-            .unwrap()
-            .register_font(binary_font_source)?;
-        Ok(Json(OkResponse {}))
+    api.run_with_pipeline(move |pipeline| {
+        pipeline.lock().unwrap().register_font(binary_font_source)
     })
-    .await
-    .unwrap()
+    .await?;
+    Ok(Json(OkResponse {}))
 }

@@ -1,21 +1,19 @@
 use std::{
+    ops::Deref,
     sync::{Arc, Weak},
     time::Duration,
 };
 
 use rand::Rng;
-use tokio::{sync::watch, time::timeout};
-use tracing::debug;
+use tokio::{runtime::Handle, sync::watch, time::timeout};
+use tracing::{debug, warn};
 use webrtc::{
     api::{
         APIBuilder,
         interceptor_registry::register_default_interceptors,
         media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9, MediaEngine},
     },
-    ice_transport::{
-        ice_candidate::RTCIceCandidateInit, ice_gatherer_state::RTCIceGathererState,
-        ice_server::RTCIceServer,
-    },
+    ice_transport::{ice_gatherer_state::RTCIceGathererState, ice_server::RTCIceServer},
     interceptor::registry::Registry,
     peer_connection::{
         RTCPeerConnection, configuration::RTCConfiguration,
@@ -34,8 +32,32 @@ use crate::pipeline::webrtc::{error::WhipWhepServerError, offer_codec_filter::co
 use crate::prelude::*;
 
 #[derive(Debug)]
-pub(crate) struct PeerConnection {
+pub(crate) struct PeerConnection(Arc<Inner>);
+
+/// Closes the peer connection when the last `PeerConnection` is dropped.
+#[derive(Debug)]
+struct Inner {
     pc: Arc<RTCPeerConnection>,
+    tokio_rt: Handle,
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        let pc = self.pc.clone();
+        self.tokio_rt.spawn(async move {
+            if let Err(err) = pc.close().await {
+                warn!(%err, "Failed to close peer connection.");
+            }
+        });
+    }
+}
+
+impl Deref for PeerConnection {
+    type Target = RTCPeerConnection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.pc
+    }
 }
 
 impl PeerConnection {
@@ -72,9 +94,10 @@ impl PeerConnection {
 
         let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
-        Ok(Self {
+        Ok(Self(Arc::new(Inner {
             pc: peer_connection,
-        })
+            tokio_rt: ctx.tokio_rt.clone(),
+        })))
     }
 
     pub async fn new_video_track(
@@ -99,7 +122,7 @@ impl PeerConnection {
             "video".to_string(),
             "webrtc".to_string(),
         ));
-        let sender = self.pc.add_track(track.clone()).await?;
+        let sender = self.0.pc.add_track(track.clone()).await?;
 
         let rtc_sender_params = sender.get_parameters().await;
         let ssrc = match rtc_sender_params.encodings.first() {
@@ -141,7 +164,7 @@ impl PeerConnection {
             }
         };
 
-        let sender = self.pc.add_track(track.clone()).await?;
+        let sender = self.0.pc.add_track(track.clone()).await?;
 
         let rtc_sender_params = sender.get_parameters().await;
         let ssrc = match rtc_sender_params.encodings.first() {
@@ -152,26 +175,8 @@ impl PeerConnection {
         Ok((track, sender, ssrc))
     }
 
-    pub async fn set_remote_description(
-        &self,
-        answer: RTCSessionDescription,
-    ) -> Result<(), WhipWhepServerError> {
-        Ok(self.pc.set_remote_description(answer).await?)
-    }
-
-    pub async fn set_local_description(
-        &self,
-        offer: RTCSessionDescription,
-    ) -> Result<(), WhipWhepServerError> {
-        Ok(self.pc.set_local_description(offer).await?)
-    }
-
-    pub async fn create_answer(&self) -> Result<RTCSessionDescription, WhipWhepServerError> {
-        Ok(self.pc.create_answer(None).await?)
-    }
-
     pub async fn local_description(&self) -> Result<RTCSessionDescription, WhipWhepServerError> {
-        match self.pc.local_description().await {
+        match self.0.pc.local_description().await {
             Some(dsc) => Ok(dsc),
             None => Err(WhipWhepServerError::InternalError(
                 "Local description is not set, cannot read it".to_string(),
@@ -190,7 +195,7 @@ impl PeerConnection {
         // allow audio/video only stream, when on second track codec wasn't succesfully negotiated
         cleanup_unnegotiated_tracks(video_sender, audio_sender).await?;
 
-        let answer = self.create_answer().await?;
+        let answer = self.create_answer(None).await?;
         self.set_local_description(answer).await?;
 
         self.wait_for_ice_candidates(Duration::from_secs(1)).await?;
@@ -206,7 +211,8 @@ impl PeerConnection {
     ) -> Result<(), WhipWhepServerError> {
         let (sender, mut receiver) = watch::channel(RTCIceGathererState::Unspecified);
 
-        self.pc
+        self.0
+            .pc
             .on_ice_gathering_state_change(Box::new(move |gatherer_state| {
                 if let Err(err) = sender.send(gatherer_state) {
                     debug!("Cannot send gathering state: {err:?}");
@@ -228,54 +234,29 @@ impl PeerConnection {
         Ok(())
     }
 
-    pub async fn add_ice_candidate(
-        &self,
-        candidate: RTCIceCandidateInit,
-    ) -> Result<(), WhipWhepServerError> {
-        Ok(self.pc.add_ice_candidate(candidate).await?)
-    }
-
-    pub fn connection_state(&self) -> RTCPeerConnectionState {
-        self.pc.connection_state()
-    }
-
     pub fn on_connection_state_change(
         &self,
         f: impl Fn(RTCPeerConnectionState) + Send + Sync + 'static,
     ) {
-        self.pc
-            .on_peer_connection_state_change(Box::new(move |state: RTCPeerConnectionState| {
+        self.0.pc.on_peer_connection_state_change(Box::new(
+            move |state: RTCPeerConnectionState| {
                 f(state);
                 Box::pin(async {})
-            }));
+            },
+        ));
     }
 
     pub fn downgrade(&self) -> WeakPeerConnection {
-        WeakPeerConnection {
-            pc: Arc::downgrade(&self.pc),
-        }
+        WeakPeerConnection(Arc::downgrade(&self.0))
     }
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct WeakPeerConnection {
-    pc: Weak<RTCPeerConnection>,
-}
+pub(crate) struct WeakPeerConnection(Weak<Inner>);
 
 impl WeakPeerConnection {
     pub fn upgrade(&self) -> Option<PeerConnection> {
-        self.pc.upgrade().map(|pc| PeerConnection { pc })
-    }
-}
-
-impl Drop for PeerConnection {
-    fn drop(&mut self) {
-        if let Ok(handle) = tokio::runtime::Handle::try_current()
-            && Arc::strong_count(&self.pc) == 1
-        {
-            let pc = self.pc.clone();
-            handle.spawn(async move { pc.close().await });
-        }
+        self.0.upgrade().map(PeerConnection)
     }
 }
 

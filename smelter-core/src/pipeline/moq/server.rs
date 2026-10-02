@@ -70,7 +70,8 @@ pub async fn spawn_moq_server(
         Err(err) => return Err(InitPipelineError::MoqServerInitError(format!("{err}"))),
     };
 
-    let accept_task = tokio::spawn(run_accept_loop(server, state.server_state.clone(), ctx));
+    let accept_task =
+        ctx.spawn_async_task(|ctx| run_accept_loop(server, state.server_state.clone(), ctx));
 
     info!(port, "MoQ server started");
 
@@ -119,9 +120,8 @@ async fn run_accept_loop(
         };
 
         let moq_inputs = moq_inputs.clone();
-        let ctx = ctx.clone();
 
-        tokio::spawn(async {
+        ctx.spawn_async_task(|ctx| async {
             if let Err(err) = handle_session(session, consumer, moq_inputs, ctx, input_ref).await {
                 warn!(
                     "Failed to handle MoQ broadcast: {}",
@@ -205,7 +205,6 @@ fn start_broadcast_handler_task(
     broadcast_ctx: BroadcastCtx,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let input_ref = input_ref.clone();
-    let rt = ctx.tokio_rt.clone();
 
     let span = span!(
         Level::INFO,
@@ -213,7 +212,7 @@ fn start_broadcast_handler_task(
         input_id = input_ref.to_string()
     );
 
-    let handle = rt.spawn(
+    let handle = ctx.spawn_async_task(|ctx| {
         async move {
             let broadcast_result =
                 handle_broadcast(ctx, input_ref.clone(), queue_input, broadcast_ctx).await;
@@ -224,8 +223,8 @@ fn start_broadcast_handler_task(
                 );
             }
         }
-        .instrument(span),
-    );
+        .instrument(span)
+    });
 
     Some(handle)
 }

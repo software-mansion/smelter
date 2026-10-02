@@ -1,10 +1,6 @@
-use std::{
-    sync::Arc,
-    thread,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
-use tokio::sync::oneshot;
+use tokio::time::timeout;
 use tracing::{Instrument, Level, debug, span};
 use url::Url;
 
@@ -73,8 +69,6 @@ impl WhepInput {
         input_ref: Ref<InputId>,
         options: WhepInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
-        let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
-
         ctx.stats_sender.send(StatsEvent::NewInput {
             input_ref: input_ref.clone(),
             kind: InputProtocolKind::Whep,
@@ -85,19 +79,16 @@ impl WhepInput {
             "WHEP client task",
             input_id = input_ref.to_string()
         );
-        let ctx_clone = ctx.clone();
-        ctx.tokio_rt.spawn(
-            async {
-                let result = init_whep_client(input_ref, ctx_clone, options).await;
-                match result {
-                    Ok(handle) => init_confirmation_sender.send(Ok(handle)),
-                    Err(err) => init_confirmation_sender.send(Err(err)),
-                }
-            }
-            .instrument(span),
-        );
-
-        wait_with_deadline(init_confirmation_receiver, WHEP_INIT_TIMEOUT)
+        let init_result = ctx.block_on_async_task(|ctx| async {
+            // timeout has to be created inside tokio runtime
+            timeout(WHEP_INIT_TIMEOUT, init_whep_client(input_ref, ctx, options))
+                .instrument(span)
+                .await
+        });
+        match init_result {
+            Ok(result) => result.map_err(|err| Box::new(err).into()),
+            Err(_) => Err(Box::new(WebrtcClientError::Timeout).into()),
+        }
     }
 }
 
@@ -109,33 +100,6 @@ impl Drop for WhepInput {
             client.delete_session(session_url).await;
         });
     }
-}
-
-fn wait_with_deadline<T>(
-    mut result_receiver: oneshot::Receiver<Result<T, WebrtcClientError>>,
-    timeout: Duration,
-) -> Result<T, InputInitError> {
-    let start_time = Instant::now();
-    while start_time.elapsed() < timeout {
-        thread::sleep(Duration::from_millis(500));
-
-        match result_receiver.try_recv() {
-            Ok(result) => match result {
-                Ok(handle) => return Ok(handle),
-                Err(err) => return Err(Box::new(err).into()),
-            },
-            Err(err) => match err {
-                oneshot::error::TryRecvError::Closed => {
-                    return Err(InputInitError::InternalServerError(
-                        "WHEP input thread failed to initialize. Result channel closed",
-                    ));
-                }
-                oneshot::error::TryRecvError::Empty => {}
-            },
-        };
-    }
-    result_receiver.close();
-    Err(Box::new(WebrtcClientError::Timeout).into())
 }
 
 async fn init_whep_client(
@@ -155,7 +119,7 @@ async fn init_whep_client(
     let _video_transceiver = pc.new_video_track(&video_codecs_params).await?;
     let _audio_transceiver = pc.new_audio_track().await?;
 
-    let offer = pc.create_offer().await?;
+    let offer = pc.create_offer(None).await?;
     debug!("SDP offer: {}", offer.sdp);
 
     let SdpAnswer {

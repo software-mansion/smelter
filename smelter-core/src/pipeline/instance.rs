@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    env,
     path::Path,
     sync::{Arc, Mutex, Weak},
     thread,
@@ -9,8 +10,8 @@ use std::{
 use crossbeam_channel::{Receiver, bounded};
 use glyphon::fontdb;
 use rtmp::RtmpServer;
-use tokio::runtime::Runtime;
-use tracing::{Level, error, info, span, trace, warn};
+use tokio::runtime::{Builder, Runtime};
+use tracing::{Level, debug, error, info, span, trace, warn};
 
 use smelter_render::{
     FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions, RendererSpec,
@@ -46,6 +47,8 @@ use crate::{
 
 use crate::prelude::*;
 
+/// Methods are blocking and may use `Runtime::block_on` internally. Do not call them from async
+/// code, use `spawn_blocking` or a regular thread instead.
 pub struct Pipeline {
     pub(super) inputs: HashMap<InputId, PipelineInput>,
     pub(super) outputs: HashMap<OutputId, PipelineOutput>,
@@ -71,6 +74,9 @@ pub struct Pipeline {
     #[allow(dead_code)]
     // triggers cleanup on drop
     udp_mux_handle: Option<UdpMuxHandle>,
+
+    /// Runtime for all async tasks of this pipeline, shut down on drop. Always `Some` until drop.
+    tokio_rt: Option<Runtime>,
 }
 
 impl Pipeline {
@@ -433,6 +439,10 @@ impl Pipeline {
 impl Drop for Pipeline {
     fn drop(&mut self) {
         info!("Stopping pipeline");
+        // Does not wait for blocking tasks, so it is safe to drop the pipeline in async code.
+        if let Some(tokio_rt) = self.tokio_rt.take() {
+            tokio_rt.shutdown_background();
+        }
     }
 }
 
@@ -612,10 +622,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         prepare_side_channel_socket_dir(dir)?;
     }
 
-    let tokio_rt = match opts.tokio_rt {
-        Some(tokio_rt) => tokio_rt,
-        None => Arc::new(Runtime::new().map_err(InitPipelineError::CreateTokioRuntime)?),
-    };
+    let tokio_rt = create_tokio_runtime().map_err(InitPipelineError::CreateTokioRuntime)?;
 
     let (stats_monitor, stats_sender) = StatsMonitor::new();
 
@@ -636,7 +643,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     let (webrtc_setting_engine, udp_mux_handle) = WebrtcSettingEngineCtx::new(
         opts.webrtc_nat_1to1_ips,
         opts.webrtc_udp_port_strategy,
-        &tokio_rt,
+        tokio_rt.handle(),
     )?;
 
     let queue = Queue::new(queue_options);
@@ -651,7 +658,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         download_dir,
         event_emitter: Arc::new(EventEmitter::new()),
         stats_sender,
-        tokio_rt: tokio_rt.clone(),
+        tokio_rt: tokio_rt.handle().clone(),
         graphics_context,
         wgpu_ctx: renderer.wgpu_ctx(),
         whip_whep_state: match opts.whip_whep_server {
@@ -678,10 +685,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     };
 
     let moq_server = match moq_state.as_ref() {
-        Some(state) => Some(
-            ctx.tokio_rt
-                .block_on(spawn_moq_server(ctx.clone(), state))?,
-        ),
+        Some(state) => Some(ctx.block_on_async_task(|ctx| spawn_moq_server(ctx, state))?),
         None => None,
     };
 
@@ -698,9 +702,33 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         rtmp_server,
         moq_server,
         udp_mux_handle,
+        tokio_rt: Some(tokio_rt),
     };
 
     Ok(pipeline)
+}
+
+/// Worker count defaults to the number of cores (or `TOKIO_WORKER_THREADS`), but at least 3.
+fn create_tokio_runtime() -> Result<Runtime, std::io::Error> {
+    const MINIMUM_WORKER_THREADS: usize = 3;
+
+    let worker_threads = if let Ok(thread_count) = env::var("TOKIO_WORKER_THREADS") {
+        match thread_count.trim().parse() {
+            Ok(t) if t > 0 => t,
+            _ => panic!("TOKIO_WORKER_THREADS must be a number greater than 0."),
+        }
+    } else if let Ok(thread_count) = thread::available_parallelism() {
+        thread_count.get()
+    } else {
+        MINIMUM_WORKER_THREADS
+    };
+    let worker_threads = usize::max(worker_threads, MINIMUM_WORKER_THREADS);
+
+    debug!(worker_threads, "Initializing Tokio runtime");
+    Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(worker_threads)
+        .build()
 }
 
 fn prepare_side_channel_socket_dir(dir: &Path) -> Result<(), InitPipelineError> {

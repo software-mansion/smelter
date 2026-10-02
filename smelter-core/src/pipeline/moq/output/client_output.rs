@@ -130,15 +130,15 @@ impl MoqClientOutput {
             origin,
         )?;
 
-        ctx.tokio_rt.clone().spawn(
+        ctx.spawn_async_task(|ctx| {
             async move {
                 run_moq_output_task(&ctx, &output_ref, state, video_receiver, audio_receiver).await;
 
                 ctx.event_emitter
                     .emit(Event::OutputDone(output_ref.id().clone()));
             }
-            .instrument(Span::current()),
-        );
+            .instrument(Span::current())
+        });
 
         Ok(Self {
             video: video_encoder_handle,
@@ -156,9 +156,13 @@ impl MoqClientOutput {
             return Err(MoqClientError::InvalidScheme(url.scheme().to_string()));
         }
 
-        let client = client_config(&url, ctx.moq_disable_tls_verification)
-            .init()
-            .map_err(|err| MoqClientError::ClientInitFailed(format!("{err}")))?;
+        let client = {
+            // Creates the QUIC endpoint on the current runtime.
+            let _guard = ctx.tokio_rt.enter();
+            client_config(&url, ctx.moq_disable_tls_verification)
+                .init()
+                .map_err(|err| MoqClientError::ClientInitFailed(format!("{err}")))?
+        };
 
         let origin = Origin::random().produce();
         let client = client.with_publish(origin.consume());

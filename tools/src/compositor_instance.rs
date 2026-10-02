@@ -42,7 +42,7 @@ impl CompositorInstance {
     pub fn start() -> Self {
         init_compositor_prerequisites();
         let mut config = read_config();
-        let mut options = pipeline_options_from_config(&config, &runtime(), &None);
+        let mut options = pipeline_options_from_config(&config, &None);
         let api_port = get_free_port();
         config.api_port = api_port;
         options.ahead_of_time_processing = true;
@@ -55,7 +55,7 @@ impl CompositorInstance {
 
         let (should_close_sender, should_close_receiver) = crossbeam_channel::bounded(1);
         let pipeline = Arc::new(Mutex::new(Pipeline::new(options).unwrap()));
-        let state = ApiState::with_pipeline(config, runtime(), None, pipeline.clone());
+        let state = ApiState::with_pipeline(config, None, pipeline.clone());
 
         let events = pipeline.lock().unwrap().subscribe_pipeline_events();
         thread::Builder::new()
@@ -154,8 +154,7 @@ fn graphics_context() -> GraphicsContext {
     .clone()
 }
 
-fn runtime() -> Arc<Runtime> {
-    static CTX: OnceLock<Arc<Runtime>> = OnceLock::new();
-    CTX.get_or_init(|| Arc::new(Runtime::new().unwrap()))
-        .clone()
+fn runtime() -> &'static Runtime {
+    static CTX: OnceLock<Runtime> = OnceLock::new();
+    CTX.get_or_init(|| Runtime::new().unwrap())
 }

@@ -1,5 +1,5 @@
 use core::panic;
-use std::{fs::File, io::Write, sync::Arc, time::Duration};
+use std::{fs::File, io::Write, time::Duration};
 
 use integration_tests::{media::TestSample, paths::integration_tests_root};
 use smelter::{config::read_config, logger, state::ApiState};
@@ -9,7 +9,6 @@ use smelter_render::{
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
 };
-use tokio::runtime::Runtime;
 
 // Start simple pipeline with output that sends encoded video/audio via Rust channel.
 //
@@ -21,8 +20,7 @@ fn main() {
     let root_dir = integration_tests_root();
     config.ahead_of_time_processing = true;
     // no chromium support, so we can ignore _event_loop
-    let runtime = Arc::new(Runtime::new().unwrap());
-    let state = ApiState::new(config, runtime).unwrap_or_else(|err| {
+    let state = ApiState::new(config).unwrap_or_else(|err| {
         panic!(
             "Failed to start compositor.\n{}",
             ErrorStack::new(&err).into_string()

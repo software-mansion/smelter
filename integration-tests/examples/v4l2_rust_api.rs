@@ -29,7 +29,6 @@ mod main_module {
         error::ErrorStack,
         scene::{Component, InputStreamComponent},
     };
-    use tokio::runtime::Runtime;
 
     const VIDEO_RESOLUTION: Resolution = Resolution {
         width: 1920,
@@ -89,7 +88,7 @@ mod main_module {
                     features: wgpu::Features::empty(),
                     force_gpu: false,
                 },
-                ..pipeline_options_from_config(config, &Arc::new(Runtime::new().unwrap()), &None)
+                ..pipeline_options_from_config(config, &None)
             })
             .unwrap_or_else(|err| {
                 panic!(

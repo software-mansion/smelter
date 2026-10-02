@@ -10,7 +10,7 @@ use smelter::{
 use std::{
     env,
     sync::{
-        Arc, OnceLock,
+        OnceLock,
         atomic::{AtomicU16, Ordering},
     },
     thread,
@@ -51,13 +51,12 @@ impl CompositorInstance {
         info!("Starting Smelter Integration Test with config:\n{config:#?}",);
 
         let (should_close_sender, should_close_receiver) = crossbeam_channel::bounded(1);
-        let runtime = Arc::new(Runtime::new().unwrap());
-        let state = ApiState::new(config, runtime.clone()).unwrap();
+        let state = ApiState::new(config).unwrap();
 
         let api_thread_handle = thread::Builder::new()
             .name("HTTP server startup thread".to_string())
             .spawn(move || {
-                run_api(state, runtime.clone(), should_close_receiver).unwrap();
+                run_api(state, &Runtime::new().unwrap(), should_close_receiver).unwrap();
             })
             .unwrap();
 

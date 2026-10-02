@@ -27,7 +27,6 @@ use smelter_render::{
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
 };
-use tokio::runtime::Runtime;
 
 const OUTPUT_PORT: u16 = 8002;
 
@@ -46,7 +45,7 @@ fn main() {
     // no chromium support, so we can ignore _event_loop
     let pipeline = Pipeline::new(PipelineOptions {
         wgpu_options: PipelineWgpuOptions::Context(ctx),
-        ..pipeline_options_from_config(&config, &Arc::new(Runtime::new().unwrap()), &None)
+        ..pipeline_options_from_config(&config, &None)
     })
     .unwrap_or_else(|err| {
         panic!(

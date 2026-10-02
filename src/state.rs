@@ -11,7 +11,6 @@ use smelter_render::{
 };
 
 use reqwest::StatusCode;
-use tokio::runtime::Runtime;
 use tracing::error;
 
 use crate::{config::Config, error::ApiError};
@@ -36,11 +35,10 @@ pub struct ApiState {
     pipeline: Mutex<PipelineState>,
     pub config: Config,
     pub chromium_context: Option<Arc<ChromiumContext>>,
-    pub runtime: Arc<Runtime>,
 }
 
 impl ApiState {
-    pub fn new(config: Config, runtime: Arc<Runtime>) -> Result<Arc<ApiState>, ApiStateInitError> {
+    pub fn new(config: Config) -> Result<Arc<ApiState>, ApiStateInitError> {
         let chromium_context = match config.web_renderer_enable && cfg!(feature = "web-renderer") {
             true => Some(ChromiumContext::new(
                 config.output_framerate,
@@ -48,28 +46,21 @@ impl ApiState {
             )?),
             false => None,
         };
-        let options = pipeline_options_from_config(&config, &runtime, &chromium_context);
+        let options = pipeline_options_from_config(&config, &chromium_context);
         let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
-        Ok(Self::with_pipeline(
-            config,
-            runtime,
-            chromium_context,
-            pipeline,
-        ))
+        Ok(Self::with_pipeline(config, chromium_context, pipeline))
     }
 
     /// Creates state around an already created pipeline. A reset still creates the new
     /// pipeline from `config`.
     pub fn with_pipeline(
         config: Config,
-        runtime: Arc<Runtime>,
         chromium_context: Option<Arc<ChromiumContext>>,
         pipeline: Arc<Mutex<Pipeline>>,
     ) -> Arc<ApiState> {
         Arc::new(ApiState {
             pipeline: Mutex::new(PipelineState::Running(pipeline)),
             config,
-            runtime,
             chromium_context,
         })
     }
@@ -90,10 +81,27 @@ impl ApiState {
         }
     }
 
+    /// Runs `f` with the current pipeline on a blocking thread. `Pipeline` methods are blocking,
+    /// so route handlers must call them through this function.
+    pub async fn run_with_pipeline<T, E>(
+        self: &Arc<Self>,
+        f: impl FnOnce(&Arc<Mutex<Pipeline>>) -> Result<T, E> + Send + 'static,
+    ) -> Result<T, ApiError>
+    where
+        T: Send + 'static,
+        ApiError: From<E>,
+    {
+        let api = self.clone();
+        tokio::task::spawn_blocking(move || Ok(f(&api.pipeline()?)?))
+            .await
+            // `unwrap()` panics only when the blocking task panicked
+            .unwrap()
+    }
+
     /// Runs `action` at `schedule_time`, or immediately when it is not set. Errors from
     /// scheduled actions cannot be returned to the caller, so they are only logged.
-    pub fn schedule_or_run<E>(
-        &self,
+    pub async fn schedule_or_run<E>(
+        self: &Arc<Self>,
         schedule_time: Option<Timestamp>,
         action: impl FnOnce(&mut Pipeline) -> Result<(), E> + Send + 'static,
     ) -> Result<(), ApiError>
@@ -101,25 +109,27 @@ impl ApiState {
         E: std::error::Error + 'static,
         ApiError: From<E>,
     {
-        let pipeline = self.pipeline()?;
-        match schedule_time {
-            Some(schedule_time) => Pipeline::schedule_event(
-                &pipeline,
-                schedule_time,
-                LateEventPolicy::Default,
-                move |pipeline| {
-                    if let Err(err) = action(pipeline) {
-                        error!(
-                            "Error while running scheduled request for pts {}ms: {}",
-                            schedule_time.as_millis(),
-                            ErrorStack::new(&err).into_string()
-                        )
-                    }
-                },
-            ),
-            None => action(&mut pipeline.lock().unwrap())?,
-        }
-        Ok(())
+        self.run_with_pipeline(move |pipeline| match schedule_time {
+            Some(schedule_time) => {
+                Pipeline::schedule_event(
+                    pipeline,
+                    schedule_time,
+                    LateEventPolicy::Default,
+                    move |pipeline| {
+                        if let Err(err) = action(pipeline) {
+                            error!(
+                                "Error while running scheduled request for pts {}ms: {}",
+                                schedule_time.as_millis(),
+                                ErrorStack::new(&err).into_string()
+                            )
+                        }
+                    },
+                );
+                Ok(())
+            }
+            None => action(&mut pipeline.lock().unwrap()),
+        })
+        .await
     }
 
     /// Replaces the pipeline with a new one. The state lock is not held while the new
@@ -138,8 +148,7 @@ impl ApiState {
             *state = PipelineState::Resetting;
         }
 
-        let options =
-            pipeline_options_from_config(&self.config, &self.runtime, &self.chromium_context);
+        let options = pipeline_options_from_config(&self.config, &self.chromium_context);
         let result = Pipeline::new(options);
 
         let mut state = self.pipeline.lock().unwrap();
@@ -158,7 +167,6 @@ impl ApiState {
 
 pub fn pipeline_options_from_config(
     opt: &Config,
-    tokio_rt: &Arc<Runtime>,
     chromium_context: &Option<Arc<ChromiumContext>>,
 ) -> PipelineOptions {
     PipelineOptions {
@@ -177,7 +185,6 @@ pub fn pipeline_options_from_config(
 
         rendering_mode: opt.rendering_mode,
         max_layouts_count: opt.render_max_layouts_count,
-        tokio_rt: Some(tokio_rt.clone()),
 
         chromium_context: chromium_context.clone(),
         wgpu_options: PipelineWgpuOptions::Options {

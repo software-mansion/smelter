@@ -56,7 +56,7 @@ pub(crate) async fn create_new_whip_session(
 
     peer_connection.set_remote_description(offer).await?;
 
-    let answer = peer_connection.create_answer().await?;
+    let answer = peer_connection.create_answer(None).await?;
     peer_connection.set_local_description(answer).await?;
 
     peer_connection

@@ -138,9 +138,6 @@ pub enum OutputInitError {
     #[error("Failed to register output. FFmpeg error: {0}.")]
     FfmpegError(ffmpeg_next::Error),
 
-    #[error("Unknown WHIP output error.")]
-    UnknownWhipError,
-
     #[error("WHIP init timeout exceeded")]
     WhipInitTimeout,
 
