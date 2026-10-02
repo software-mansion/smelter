@@ -32,6 +32,8 @@ fdk-aac-sys = "0.5.0"
 rubato = { workspace = true }
 wgpu = { workspace = true }
 gpu-video = { workspace = true }
+h264-reader = { workspace = true }
+memchr = "2.7.4"
 glyphon = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
