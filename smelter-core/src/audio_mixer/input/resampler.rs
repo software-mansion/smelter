@@ -269,8 +269,8 @@ impl InputResampler {
             "Resampler received a new batch"
         );
 
-        // If samples overlap to much drop, for lower overlap than 80ms we let
-        // squashing handle that
+        // If samples overlap too much drop, for lower overlap than 80ms we let squashing handle
+        // that.
         if start_pts + Duration::from_millis(80) < self.input_buffer_end_pts {
             debug!("Detected overlapping batches, dropping.");
             return;
@@ -405,6 +405,16 @@ impl InputResampler {
     ) -> Option<AudioSamples> {
         if !self.needs_input_resync {
             return None;
+        }
+
+        // If entire input buffer is in the past
+        // Then drop it, so it is handled like an empty buffer below
+        if self.resampler_input_buffer.frames() > 0 && self.input_buffer_end_pts <= pts_range.0 {
+            trace!(
+                end_pts = ?self.input_buffer_end_pts,
+                "Drop input buffer before first resample"
+            );
+            self.resampler_input_buffer.clear();
         }
 
         let input_buffer_start_pts = self.input_buffer_start_pts();
