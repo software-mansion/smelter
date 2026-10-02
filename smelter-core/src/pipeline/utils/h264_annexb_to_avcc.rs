@@ -21,7 +21,7 @@ fn split_annexb_nalus(data: &[u8]) -> Vec<&[u8]> {
             continue;
         };
 
-        let mut nalu_end = nalu_start + 1;
+        let mut nalu_end = nalu_start;
         while nalu_end < data.len() {
             if data[nalu_end..].starts_with(&START_CODE_4)
                 || data[nalu_end..].starts_with(&START_CODE_3)
@@ -31,15 +31,22 @@ fn split_annexb_nalus(data: &[u8]) -> Vec<&[u8]> {
             nalu_end += 1;
         }
 
-        nalus.push(&data[nalu_start..nalu_end]);
+        // Skip empty NALUs (start code directly followed by another one or by the end of data).
+        if nalu_end > nalu_start {
+            nalus.push(&data[nalu_start..nalu_end]);
+        }
         i = nalu_end;
     }
 
     nalus
 }
 
-/// Converts Annex B NALUs to AVCC format (4-byte length prefix per NALU).
-/// `data` needs to include whole NALUs
+/// Converts Annex B to AVCC with 4-byte length prefixes, matching `build_avc_decoder_config`.
+///
+/// `data` has to contain only whole NAL units, starting with a start code; bytes before the first
+/// start code are dropped and no state is carried between calls. Any number of NAL units is
+/// accepted; encoders pass one access unit per call. SPS/PPS are dropped, so they have to be
+/// delivered out-of-band (via `build_avc_decoder_config`) and must not change mid-stream.
 pub(crate) fn annexb_to_avcc(data: &[u8]) -> Bytes {
     let nalus = split_annexb_nalus(data);
     let mut out = BytesMut::new();
@@ -59,6 +66,9 @@ pub(crate) fn annexb_to_avcc(data: &[u8]) -> Bytes {
 
 /// Builds an AVCDecoderConfigurationRecord from Annex B data containing SPS and PPS.
 /// Returns `None` if no SPS or PPS is found.
+///
+/// Profile and level come from the first SPS; all SPS/PPS are included and other NAL units are
+/// ignored. Declares 4-byte NAL length prefixes, as produced by `annexb_to_avcc`.
 pub(crate) fn build_avc_decoder_config(data: &[u8]) -> Option<Bytes> {
     let nalus = split_annexb_nalus(data);
 
@@ -77,7 +87,9 @@ pub(crate) fn build_avc_decoder_config(data: &[u8]) -> Option<Bytes> {
         }
     }
 
-    let sps = sps_list.first()?;
+    let &[_, profile, compatibility, level, ..] = *sps_list.first()? else {
+        return None;
+    };
     if pps_list.is_empty() {
         return None;
     }
@@ -94,9 +106,9 @@ pub(crate) fn build_avc_decoder_config(data: &[u8]) -> Option<Bytes> {
     // - for each PPS: u16 ppsLength, pps bytes
     let mut buf = BytesMut::new();
     buf.put_u8(1); // configurationVersion
-    buf.put_u8(sps[1]); // AVCProfileIndication
-    buf.put_u8(sps[2]); // profile_compatibility
-    buf.put_u8(sps[3]); // AVCLevelIndication
+    buf.put_u8(profile); // AVCProfileIndication
+    buf.put_u8(compatibility); // profile_compatibility
+    buf.put_u8(level); // AVCLevelIndication
     buf.put_u8(0xFF); // lengthSizeMinusOne = 3 (4 bytes)
 
     buf.put_u8(0xE0 | sps_list.len() as u8);
@@ -216,6 +228,45 @@ mod tests {
     #[test]
     fn build_avc_decoder_config_returns_none_without_pps() {
         let data = [0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1E]; // SPS only
+        assert!(build_avc_decoder_config(&data).is_none());
+    }
+
+    #[test]
+    fn split_annexb_nalus_trailing_start_code() {
+        let data = [0, 0, 0, 1, 0x65, 0xAA, 0, 0, 1];
+        assert_eq!(split_annexb_nalus(&data), vec![&[0x65, 0xAA][..]]);
+
+        let data = [0, 0, 0, 1, 0x65, 0xAA, 0, 0, 0, 1];
+        assert_eq!(split_annexb_nalus(&data), vec![&[0x65, 0xAA][..]]);
+    }
+
+    #[test]
+    fn split_annexb_nalus_consecutive_start_codes() {
+        let data = [0, 0, 1, 0, 0, 1, 0x65, 0xAA];
+        assert_eq!(split_annexb_nalus(&data), vec![&[0x65, 0xAA][..]]);
+
+        let data = [0, 0, 0, 1, 0, 0, 0, 1, 0x65, 0xAA];
+        assert_eq!(split_annexb_nalus(&data), vec![&[0x65, 0xAA][..]]);
+    }
+
+    #[test]
+    fn split_annexb_nalus_ignores_leading_garbage() {
+        let data = [0xFF, 0x12, 0, 0, 1, 0x65, 0xAA];
+        assert_eq!(split_annexb_nalus(&data), vec![&[0x65, 0xAA][..]]);
+    }
+
+    #[test]
+    fn split_annexb_nalus_without_start_code() {
+        assert!(split_annexb_nalus(&[]).is_empty());
+        assert!(split_annexb_nalus(&[0x65, 0xAA, 0xBB]).is_empty());
+        assert!(split_annexb_nalus(&[0, 0, 1]).is_empty());
+    }
+
+    #[test]
+    fn build_avc_decoder_config_returns_none_for_short_sps() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0, 0, 0, 1, 0x67, 0x42]); // SPS, too short
+        data.extend_from_slice(&[0, 0, 0, 1, 0x68, 0xCE, 0x38, 0x80]); // PPS
         assert!(build_avc_decoder_config(&data).is_none());
     }
 }
