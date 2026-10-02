@@ -247,7 +247,7 @@ fn register_mp4_output(
             },
             "encoder": {
                 "type": "ffmpeg_h264",
-                "preset": "ultrafast",
+                "ffmpeg_options": { "preset": "ultrafast" },
             },
             "initial": {
                 "root": {

@@ -173,7 +173,6 @@ impl VideoEncoder {
                 "type": "ffmpeg_h264",
                 "ffmpeg_options": {
                     "tune": "zerolatency",
-                    "thread_type": "slice",
                 },
             }),
             _ => json!({

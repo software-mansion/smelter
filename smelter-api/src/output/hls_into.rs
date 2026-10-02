@@ -85,13 +85,13 @@ impl HlsVideoEncoderOptions {
     ) -> Result<core::VideoEncoderOptions, TypeError> {
         let encoder_options = match self {
             HlsVideoEncoderOptions::FfmpegH264 {
-                preset,
+                encoder_name,
                 bitrate,
                 keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
-                preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+                encoder_name: encoder_name.clone(),
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
                 keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,

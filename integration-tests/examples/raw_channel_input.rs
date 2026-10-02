@@ -67,7 +67,7 @@ fn main() {
             connection: RtmpConnectionOptions::from_url(&format!("rtmp://127.0.0.1:{OUTPUT_PORT}"))
                 .unwrap(),
             video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
-                preset: FfmpegH264EncoderPreset::Ultrafast,
+                encoder_name: None,
                 bitrate: None,
                 keyframe_interval: Duration::from_millis(5000),
                 resolution: Resolution {
@@ -75,7 +75,7 @@ fn main() {
                     height: 720,
                 },
                 pixel_format: OutputPixelFormat::YUV420P,
-                raw_options: vec![],
+                raw_options: vec![("preset".into(), "ultrafast".into())],
                 bitstream_format: H264BitstreamFormat::Avcc,
                 low_latency: false,
             })),

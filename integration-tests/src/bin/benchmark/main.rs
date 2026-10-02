@@ -157,9 +157,7 @@ fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
                 encoder: match args.disable_encoder {
                     true => EncoderOptions::Disabled,
                     false => match args.video_encoder {
-                        VideoEncoder::FfmpegH264 => {
-                            EncoderOptions::FfmpegH264(args.encoder_preset.into())
-                        }
+                        VideoEncoder::FfmpegH264 => EncoderOptions::FfmpegH264(args.encoder_preset),
                         VideoEncoder::VulkanH264 => EncoderOptions::VulkanH264,
                     },
                 },

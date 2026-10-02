@@ -52,21 +52,6 @@ pub struct OutputEndCondition {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum H264EncoderPreset {
-    Ultrafast,
-    Superfast,
-    Veryfast,
-    Faster,
-    Fast,
-    Medium,
-    Slow,
-    Slower,
-    Veryslow,
-    Placebo,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
-#[serde(rename_all = "snake_case")]
 pub enum OpusEncoderPreset {
     /// Best for broadcast/high-fidelity application where the decoded audio
     /// should be as close as possible to the input.

@@ -32,7 +32,7 @@ export default function SmelterWhepOutput(props: SmelterWhepOutputProps) {
           video: {
             encoder: {
               type: "ffmpeg_h264",
-              preset: "ultrafast"
+              ffmpegOptions: { preset: "ultrafast" }
             },
             resolution: {
               width: 1920,

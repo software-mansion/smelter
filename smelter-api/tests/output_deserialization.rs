@@ -177,7 +177,7 @@ fn rtmp_video_only() {
                     },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -247,7 +247,7 @@ fn rtmp_video_and_audio() {
                     "resolution": { "width": 1280, "height": 720 },
                     "encoder": {
                         "type": "ffmpeg_h264",
-                        "preset": "ultrafast",
+                        "encoder_name": "libopenh264",
                         "bitrate": 4000000,
                         "keyframe_interval_ms": 2000,
                         "pixel_format": "yuv420p"
@@ -277,7 +277,7 @@ fn rtmp_video_and_audio() {
                     },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Ultrafast,
+                            encoder_name: Some("libopenh264".into()),
                             bitrate: Some(smelter_core::codecs::VideoEncoderBitrate {
                                 average_bitrate: 4000000,
                                 max_bitrate: 5000000,
@@ -391,7 +391,7 @@ fn rtmp_vbr_bitrate() {
                     },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: Some(smelter_core::codecs::VideoEncoderBitrate {
                                 average_bitrate: 4000000,
                                 max_bitrate: 6000000,
@@ -444,7 +444,7 @@ fn rtmp_send_eos_when_any_of() {
                     },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -502,7 +502,7 @@ fn rtmp_send_eos_when_all_inputs() {
                     },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -632,7 +632,7 @@ fn rtp_udp_video_only() {
                     },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -679,7 +679,7 @@ fn rtp_tcp_server_video() {
                         },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -724,7 +724,7 @@ fn rtp_tcp_server_port_range() {
                         },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -898,7 +898,7 @@ fn rtp_video_and_audio() {
                 "ip": "127.0.0.1",
                 "video": {
                     "resolution": { "width": 1280, "height": 720 },
-                    "encoder": { "type": "ffmpeg_h264", "preset": "medium" },
+                    "encoder": { "type": "ffmpeg_h264", "ffmpeg_options": { "preset": "medium" } },
                     "initial": video_scene()
                 },
                 "audio": {
@@ -916,7 +916,7 @@ fn rtp_video_and_audio() {
                     },
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Medium,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -924,7 +924,7 @@ fn rtp_video_and_audio() {
                                 height: 720,
                             },
                             pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
-                            raw_options: vec![],
+                            raw_options: vec![("preset".into(), "medium".into())],
                             bitstream_format: smelter_core::codecs::H264BitstreamFormat::AnnexB,
                             low_latency: false,
                         },
@@ -1045,7 +1045,7 @@ fn mp4_video_only() {
                     "resolution": { "width": 1920, "height": 1080 },
                     "encoder": {
                         "type": "ffmpeg_h264",
-                        "preset": "slow"
+                        "encoder_name": "h264_nvenc"
                     },
                     "initial": video_scene()
                 }
@@ -1057,7 +1057,7 @@ fn mp4_video_only() {
                     output_path: Arc::from(Path::new("/tmp/output.mp4")),
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Slow,
+                            encoder_name: Some("h264_nvenc".into()),
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -1144,7 +1144,7 @@ fn mp4_video_and_audio_with_ffmpeg_options() {
                     output_path: Arc::from(Path::new("/tmp/output.mp4")),
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -1331,7 +1331,7 @@ fn whip_video_with_encoder_preferences() {
                 "video": {
                     "resolution": { "width": 1920, "height": 1080 },
                     "encoder_preferences": [
-                        { "type": "ffmpeg_h264", "preset": "fast" },
+                        { "type": "ffmpeg_h264" },
                         { "type": "ffmpeg_vp8" },
                         { "type": "any" }
                     ],
@@ -1348,7 +1348,7 @@ fn whip_video_with_encoder_preferences() {
                         encoder_preferences: vec![
                             smelter_core::protocols::WhipVideoEncoderOptions::FfmpegH264(
                                 smelter_core::codecs::FfmpegH264EncoderOptions {
-                                    preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                                    encoder_name: None,
                                     bitrate: None,
                                     keyframe_interval: default_keyframe_interval(),
                                     resolution: smelter_render::Resolution {
@@ -1529,7 +1529,7 @@ fn whep_video_only() {
                     bearer_token: None,
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -1721,8 +1721,7 @@ fn hls_video_only() {
                 "video": {
                     "resolution": { "width": 1920, "height": 1080 },
                     "encoder": {
-                        "type": "ffmpeg_h264",
-                        "preset": "veryfast"
+                        "type": "ffmpeg_h264"
                     },
                     "initial": video_scene()
                 }
@@ -1735,7 +1734,7 @@ fn hls_video_only() {
                     max_playlist_size: None,
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Veryfast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -1819,7 +1818,7 @@ fn hls_video_and_audio_with_playlist_size() {
                     max_playlist_size: Some(10),
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {
@@ -1918,7 +1917,7 @@ fn hls_video_and_audio_with_ffmpeg_options() {
                     max_playlist_size: None,
                     video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
                         smelter_core::codecs::FfmpegH264EncoderOptions {
-                            preset: smelter_core::codecs::FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             bitrate: None,
                             keyframe_interval: default_keyframe_interval(),
                             resolution: smelter_render::Resolution {

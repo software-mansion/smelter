@@ -132,7 +132,7 @@ fn generate_png(path: PathBuf, text: &str, rgba_color: &str, resolution: Resolut
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "ffmpeg_options": { "preset": "ultrafast" }
                 },
                 "initial": scene(text, rgba_color, resolution)
             },
