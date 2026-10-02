@@ -107,6 +107,18 @@ impl VideoTexture {
     /// Records a copy of both planes into `destination`, which needs the same size.
     /// wgpu cannot copy from separate plane textures into an NV12 texture.
     pub fn copy_to(&self, command_encoder: &mut wgpu::CommandEncoder, destination: &VideoTexture) {
+        // NV12 wgpu textures can't be copied per plane
+        if let Planes::Single(source) = &self.0
+            && let Planes::Single(destination) = &destination.0
+        {
+            command_encoder.copy_texture_to_texture(
+                source.as_image_copy(),
+                destination.as_image_copy(),
+                source.size(),
+            );
+            return;
+        }
+
         for (source_plane, destination_plane) in self.planes().into_iter().zip(destination.planes())
         {
             command_encoder.copy_texture_to_texture(
